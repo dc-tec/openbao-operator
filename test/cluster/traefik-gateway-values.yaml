@@ -1,0 +1,66 @@
+# Traefik Helm values for Gateway API support
+#
+# To apply these values, run:
+#   helm upgrade traefik traefik/traefik -n default -f traefik-gateway-values.yaml
+#
+# Or if installing fresh:
+#   helm install traefik traefik/traefik -n default -f traefik-gateway-values.yaml
+
+# Declare ports that will be exposed by the Traefik Service
+# This is required for the Gateway API to work
+ports:
+  web:
+    port: 80
+    expose:
+      default: true
+    exposedPort: 80
+    protocol: TCP
+  websecure:
+    port: 443
+    expose:
+      default: true
+    exposedPort: 443
+    protocol: TCP
+
+# Configure entryPoints for ports 80 and 443
+entryPoints:
+  web:
+    address: ":80/tcp"
+  websecure:
+    address: ":443/tcp"
+
+# Enable Gateway API provider
+providers:
+  kubernetesGateway:
+    enabled: true
+
+# Configure Gateway API listeners to match the entryPoints
+# The Helm chart will create and manage a Gateway resource named "traefik-gateway"
+gateway:
+  enabled: true
+  name: traefik-gateway
+  namespace: default
+  listeners:
+    web:
+      port: 80
+      protocol: HTTP
+      namespacePolicy:
+        from: All
+    websecure:
+      port: 443
+      protocol: HTTPS
+      namespacePolicy:
+        from: All
+      mode: Terminate
+      certificateRefs:
+        - kind: Secret
+          name: bao-tls
+          group: ""
+
+# Optional: Keep dashboard enabled
+ingressRoute:
+  dashboard:
+    enabled: true
+    entryPoints:
+      - web
+    matchRule: Host(`dashboard.localhost`)

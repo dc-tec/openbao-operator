@@ -1,0 +1,30 @@
+# This is a Traefik v3 ServersTransport CRD that configures Traefik to trust
+# the OpenBaoCluster CA certificate when connecting to the backend over HTTPS.
+#
+# Setup Instructions:
+#
+# 1. The OpenBaoCluster operator automatically creates a CA secret named
+#    `<cluster-name>-tls-ca` in the same namespace. This ServersTransport
+#    references that secret directly - no mounting required!
+#
+# 2. Update the secret name in rootCAsSecrets below to match your OpenBaoCluster's CA secret name.
+#    The secret name format is: <cluster-name>-tls-ca
+#    Example: openbaocluster-external-tls-ca
+#
+# 3. Apply this ServersTransport resource (update namespace and secret name as needed)
+#
+# 4. The OpenBaoCluster sample already references this transport in service annotations
+---
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: openbao-tls-transport
+  namespace: openbao-operator-system # Update to match your namespace
+spec:
+  # serverName specifies the hostname to use for SNI and certificate verification
+  # This allows Traefik to verify certificates even when connecting to pod IPs
+  serverName: openbaocluster-external-public.openbao-operator-system.svc
+  # rootCAsSecrets is a list of Kubernetes Secret names containing CA certificates
+  # Traefik will read the 'ca.crt' key from each secret
+  rootCAsSecrets:
+    - openbaocluster-external-tls-ca # Update to match your cluster's CA secret name

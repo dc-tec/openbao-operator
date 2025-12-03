@@ -1,0 +1,36 @@
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-external
+spec:
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+    extraSANs:
+      - "bao.localhost"
+  storage:
+    size: "10Gi"
+  service:
+    type: ClusterIP
+    annotations:
+      # For Traefik v3: instruct Traefik to use HTTPS when communicating with OpenBao backend
+      traefik.ingress.kubernetes.io/service.serversscheme: https
+      # Reference a ServersTransport that trusts the OpenBaoCluster CA certificate
+      # Format: <namespace>-<name>@kubernetescrd (required even for same namespace in some Traefik versions)
+      # See config/samples/traefik-servers-transport.yaml for setup instructions
+      traefik.ingress.kubernetes.io/service.serverstransport: openbao-operator-system-openbao-tls-transport@kubernetescrd
+  ingress:
+    enabled: true
+    className: "traefik"
+    host: "bao.localhost"
+    path: "/"
+    annotations:
+      # Use the websecure entrypoint (HTTPS) for TLS termination at Traefik
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  deletionPolicy: Retain

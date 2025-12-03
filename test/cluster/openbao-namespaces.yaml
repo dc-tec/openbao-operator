@@ -1,0 +1,14 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: openbaocluster-full
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: openbaocluster-gateway
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: openbaocluster-ingress

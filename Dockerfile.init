@@ -1,0 +1,26 @@
+FROM golang:1.25.5 AS builder
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /workspace
+
+COPY go.mod go.mod
+COPY go.sum go.sum
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o bao-init-config ./cmd/bao-config-init
+
+FROM gcr.io/distroless/static:nonroot
+
+# The config-init binary is designed to run as a non-root user. We align the
+# container user and group IDs with the IDs used by the operator-managed
+# StatefulSet PodSecurityContext (UID 100, GID 1000) so that volume ownership
+# and security context behave consistently across environments.
+USER 100:1000
+WORKDIR /
+
+COPY --from=builder /workspace/bao-init-config /bao-init-config
+
+ENTRYPOINT ["/bao-init-config"]

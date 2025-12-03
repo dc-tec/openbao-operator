@@ -1,0 +1,192 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: bao-gateway-selfsigned-issuer
+  namespace: openbaocluster-full
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bao-gateway-cert
+  namespace: openbaocluster-full
+spec:
+  # This secret is referenced by the Gateway HTTPS listener (certificateRefs.name: bao-tls).
+  secretName: bao-tls
+  dnsNames:
+    - bao-full.adfinis.localhost
+  issuerRef:
+    kind: Issuer
+    name: bao-gateway-selfsigned-issuer
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bao-full-root-token
+  namespace: openbaocluster-full
+type: Opaque
+data:
+  token:
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rustfs-secret
+  namespace: openbaocluster-full
+type: Opaque
+data:
+  accessKeyId: cnVzdGZzYWRtaW4= # rustfsadmin
+  secretAccessKey: cnVzdGZzYWRtaW4= # rustfsadmin
+---
+# OpenBaoCluster with:
+# - Self-initialization enabled
+# - Gateway API for external access
+# - Scheduled backups to RustFS (S3-compatible storage)
+#
+# Notes:
+# - This example assumes:
+#   * A Gateway controller is installed and managing a Gateway named "traefik-gateway" in the "default" namespace.
+#   * RustFS is installed via the rustfs-helm chart using test/cluster/rustfs-values.yaml.
+# - Backups target the in-cluster RustFS Service endpoint:
+#     http://rustfs-svc.rustfs.svc.cluster.local:9000
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  namespace: openbaocluster-full
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-full
+spec:
+  version: "2.4.3"
+  image: "openbao/openbao:2.4.3"
+  initContainer:
+    enabled: true
+    # For k3d clusters, use the k3d registry path: k3d-registry.localhost:5000/openbao-config-init:dev
+    # For other environments, use a fully qualified image reference
+    image: "k3d-registry.localhost:5000/openbao-config-init:1.0.0"
+  replicas: 3
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+  deletionPolicy: DeleteAll
+
+  # Self-initialization configuration (based on openbao_v1alpha1_openbaocluster_selfinit.yaml).
+  selfInit:
+    enabled: true
+    requests:
+      # Enable stdout audit logging (useful for debugging)
+      # - name: enable-stdout-audit
+      #   operation: update
+      #   path: sys/audit/stdout
+      #   data:
+      #     type: file
+      #     options:
+      #       file_path: /dev/stdout
+      #       log_raw: "true"
+      # Enable Kubernetes authentication
+      - name: enable-kubernetes-auth
+        operation: update
+        path: sys/auth/kubernetes
+        data:
+          type: kubernetes
+      # Configure Kubernetes auth to use in-cluster service account
+      - name: configure-kubernetes-auth
+        operation: update
+        path: auth/kubernetes/config
+        data:
+          kubernetes_host: "https://kubernetes.default.svc"
+      - name: create-kubernetes-admin-role
+        operation: update
+        path: auth/kubernetes/role/admin
+        data:
+          bound_service_account_names: openbao-admin
+          bound_service_account_namespaces: openbaocluster-full
+          policies: admin
+          ttl: 24h
+      # Create an "admin" policy with broad permissions (similar to root).
+      # This policy can be attached to tokens or identities (for example,
+      # Kubernetes auth roles) created out-of-band.
+      - name: create-admin-policy
+        operation: update
+        path: sys/policies/acl/admin
+        data:
+          policy: |
+            path "*" {
+              capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+            }
+      # Create a backup policy with read access to sys/storage/raft/snapshot.
+      - name: create-backup-policy
+        operation: update
+        path: sys/policies/acl/backup
+        data:
+          policy: |
+            path "sys/storage/raft/snapshot" {
+              capabilities = ["read"]
+            }
+      # Create a Kubernetes Auth role for backup operations.
+      # This role binds to the backup ServiceAccount (<cluster-name>-backup-serviceaccount)
+      # and grants the backup policy (read access to sys/storage/raft/snapshot).
+      - name: create-backup-kubernetes-role
+        operation: update
+        path: auth/kubernetes/role/backup
+        data:
+          bound_service_account_names: openbaocluster-full-backup-serviceaccount
+          bound_service_account_namespaces: openbaocluster-full
+          policies: backup
+          ttl: 1h
+
+  # Gateway API configuration (based on openbao_v1alpha1_openbaocluster_gateway.yaml).
+  gateway:
+    enabled: true
+    gatewayRef:
+      # Reference to an existing Gateway resource managed by Traefik (or other controller).
+      name: traefik-gateway
+      namespace: default
+    # Hostname for routing traffic to this OpenBao cluster.
+    # This will be automatically added to the server certificate SANs.
+    hostname: bao-full.adfinis.localhost
+    # Optional path prefix (defaults to "/").
+    path: /
+    # Optional annotations for the HTTPRoute.
+    annotations:
+      bao-full.adfinis.localhost/backend-protocol: HTTPS
+
+  # Scheduled backups to RustFS (S3-compatible storage).
+  backup:
+    # Run a backup every 15 minutes
+    schedule: "*/15 * * * *"
+    # Backup executor image built from Dockerfile.backup in this repository.
+    # For k3d clusters, push to the local registry; for other environments,
+    # use a fully qualified image reference.
+    executorImage: "k3d-registry.localhost:5000/openbao-backup:1.0.1"
+    target:
+      # RustFS S3 API endpoint inside the cluster.
+      endpoint: "http://rustfs-svc.rustfs.svc.cluster.local:9000"
+      # Bucket name to store backups in RustFS.
+      bucket: "openbao-backups"
+      # Optional prefix within the bucket for this cluster's backups.
+      pathPrefix: "clusters/openbaocluster-full"
+      # Reference to the Secret containing S3 credentials.
+      # Secret must be in the same namespace as the OpenBaoCluster.
+      credentialsSecretRef:
+        name: rustfs-secret
+    # Authentication method for backup operations.
+    # Preferred: Kubernetes Auth (automatically rotated tokens, better security)
+    kubernetesAuthRole: backup
+    # Fallback: Static token (only used if kubernetesAuthRole is not set)
+    # For self-init clusters (no root token Secret), configure a dedicated
+    # backup token Secret with a token that has `read` access to
+    # sys/storage/raft/snapshot.
+    # tokenSecretRef:
+    #   name: openbaocluster-full-backup-token
+    #   namespace: openbao-operator-system
+    # Retention policy: keep up to 7 backups and at most 7 days of history.
+    retention:
+      maxCount: 7
+      maxAge: "168h"
+    # Take a snapshot before any version upgrade.
+    preUpgradeSnapshot: true

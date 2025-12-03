@@ -1,0 +1,32 @@
+# This rule is not used by the project openbao-operator itself.
+# It is provided to allow the cluster admin to help manage permissions for users.
+#
+# Grants read-only access to OpenBaoCluster resources.
+# This role is intended for users who need visibility into these resources
+# without permissions to modify them. It is ideal for monitoring purposes and limited-access viewing.
+#
+# Multi-tenancy: This ClusterRole can be bound to users/groups via ClusterRoleBinding
+# for cluster-wide viewer access, or via RoleBinding for namespace-scoped viewer access.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-viewer-role
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters/status
+    verbs:
+      - get

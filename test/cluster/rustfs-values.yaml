@@ -1,0 +1,114 @@
+#
+# RustFS Helm values for OpenBao backup testing (k3d)
+#
+# These values match the upstream rustfs Helm chart at:
+#   https://github.com/majinghe/rustfs-helm/tree/main/rustfs
+# and are tuned for a simple S3-compatible endpoint inside a local k3d cluster.
+#
+# Install (from a local clone of the chart or a chart directory called `rustfs/`):
+#   helm install rustfs ./rustfs -n rustfs --create-namespace \
+#     -f test/cluster/rustfs-values.yaml
+#
+# From inside the cluster (OpenBao/OpenBaoCluster backups), the S3 endpoint URL will be:
+#   http://rustfs-svc.rustfs.svc.cluster.local:9000
+#
+# The console UI is exposed on the same Service at port 9001.
+
+replicaCount: 4
+
+image:
+  # Upstream chart defaults to rustfs/rustfs; keep that unless you need a mirror.
+  repository: rustfs/rustfs
+  pullPolicy: IfNotPresent
+  # tag: "2.0.0"   # optional override – by default uses chart appVersion
+
+mode:
+  standalone:
+    enabled: false
+  distributed:
+    enabled: true
+
+# Root S3 credentials used by RustFS; configure the same values in your OpenBao backup config.
+secret:
+  rustfs:
+    access_key: rustfsadmin
+    secret_key: rustfsadmin
+
+config:
+  rustfs:
+    # RustFS listens on these addresses inside the pod.
+    address: "0.0.0.0:9000"
+    console_address: "0.0.0.0:9001"
+    log_level: "info"
+    rust_log: "info"
+    console_enable: "true"
+    sinks_file_path: "/logs"
+    obs_log_directory: "/logs"
+
+service:
+  # When ingress is disabled (see below), the chart exposes a NodePort Service
+  # named `rustfs-svc` with these ports. In-cluster clients still use port 9000.
+  ep_port: 9000
+  console_port: 9001
+
+# Ingress setup for Traefik.
+# - Inside cluster: use http://rustfs-svc.rustfs.svc.cluster.local:9000
+# - From your host: https://rustfs.adfinis.localhost (via Traefik on k3d’s loadbalancer).
+# Adjust the host below if you prefer a different name.
+ingress:
+  enabled: true
+  className: traefik
+  traefikAnnotations:
+    traefik.ingress.kubernetes.io/service.sticky.cookie: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.httponly: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.name: rustfs
+    traefik.ingress.kubernetes.io/service.sticky.cookie.samesite: none
+    traefik.ingress.kubernetes.io/service.sticky.cookie.secure: "true"
+  nginxAnnotations:
+    nginx.ingress.kubernetes.io/affinity: cookie
+    nginx.ingress.kubernetes.io/session-cookie-expires: "3600"
+    nginx.ingress.kubernetes.io/session-cookie-hash: sha1
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "3600"
+    nginx.ingress.kubernetes.io/session-cookie-name: rustfs
+  hosts:
+    - host: rustfs.adfinis.localhost
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  # TLS for HTTPS via Traefik. The rustfs chart’s `secret-tls.yaml` template
+  # creates a Secret named `<release-name>-tls` from the chart’s `tls/` files.
+  # With a default release name `rustfs`, that Secret will be `rustfs-tls`.
+  tls:
+    - secretName: rustfs-tls
+      hosts:
+        - rustfs.adfinis.localhost
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Persistent storage for object data. k3s/k3d typically provide the `local-path`
+# StorageClass out of the box, which matches the upstream chart defaults.
+storageclass:
+  name: local-path
+  size: 10Gi

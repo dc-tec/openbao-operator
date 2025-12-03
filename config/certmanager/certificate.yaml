@@ -1,0 +1,25 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned-issuer
+  namespace: system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: serving-cert
+  namespace: system
+spec:
+  dnsNames:
+    # These are patched by config/default/kustomization.yaml replacements
+    # to match the actual webhook Service name and namespace.
+    - webhook-service.system.svc
+    - webhook-service.system.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    # The Issuer name includes the global namePrefix from config/default/kustomization.yaml.
+    # This must match the actual Issuer resource name so cert-manager can resolve it.
+    name: openbao-operator-selfsigned-issuer
+  secretName: webhook-server-cert

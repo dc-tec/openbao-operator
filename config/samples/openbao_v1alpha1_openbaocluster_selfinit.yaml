@@ -1,0 +1,50 @@
+# OpenBaoCluster with Self-Initialization
+#
+# This example demonstrates OpenBao's self-initialization feature, which allows
+# declarative cluster bootstrapping. When enabled:
+# - OpenBao initializes itself automatically on first start
+# - The root token is automatically revoked after initialization (not stored)
+# - Initial configuration (audit devices, auth methods, etc.) is applied during init
+#
+# Requires OpenBao v2.4.0 or later.
+# See: https://openbao.org/docs/configuration/self-init/
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-selfinit
+spec:
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # Self-initialization configuration
+  selfInit:
+    enabled: true
+    requests:
+      # Enable stdout audit logging (useful for debugging)
+      - name: enable-stdout-audit
+        operation: update
+        path: sys/audit/stdout
+        data:
+          type: file
+          file_path: /dev/stdout
+      # Enable Kubernetes authentication
+      - name: enable-kubernetes-auth
+        operation: update
+        path: sys/auth/kubernetes
+        data:
+          type: kubernetes
+      # Configure Kubernetes auth to use in-cluster service account
+      - name: configure-kubernetes-auth
+        operation: update
+        path: auth/kubernetes/config
+        data:
+          kubernetes_host: "https://kubernetes.default.svc"

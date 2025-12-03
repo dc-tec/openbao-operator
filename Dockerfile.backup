@@ -1,0 +1,37 @@
+# Backup executor image
+#
+# This Dockerfile builds a minimal container image for the backup executor
+# process used by the OpenBao backup Job. The executor binary is built from
+# source in a multi-stage build. The image is configured to run as a non-root
+# user, matching the PodSecurityContext used by the backup Job (UID 1000, GID 1000).
+#
+# Example build (from repo root):
+#   docker build -f Dockerfile.backup -t openbao/backup-executor:dev .
+
+FROM golang:1.25.5 AS builder
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /workspace
+
+COPY go.mod go.mod
+COPY go.sum go.sum
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o bao-backup ./cmd/bao-backup
+
+FROM gcr.io/distroless/static:nonroot
+
+# The backup executor binary is designed to run as a non-root user. We align the
+# container user and group IDs with the IDs used by the operator-managed
+# backup Job PodSecurityContext (UID 1000, GID 1000) so that volume ownership
+# and security context behave consistently across environments.
+USER 1000:1000
+WORKDIR /
+
+COPY --from=builder /workspace/bao-backup /backup-executor
+
+ENTRYPOINT ["/backup-executor"]
+

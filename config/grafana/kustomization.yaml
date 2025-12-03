@@ -1,0 +1,21 @@
+# Kustomization file for Grafana dashboard resources
+# This file can be included in your Grafana deployment kustomization
+# to automatically provision the dashboard.
+
+resources:
+  # Dashboard JSON is typically deployed as a ConfigMap
+  # Uncomment and customize the following if deploying via ConfigMap:
+  # - dashboard-configmap.yaml
+
+# Example ConfigMap for Grafana Operator:
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: openbao-operator-dashboard
+#   namespace: grafana
+#   labels:
+#     grafana_dashboard: "1"
+# data:
+#   dashboard.json: |
+#     <contents of dashboard.json>
+

@@ -1,0 +1,43 @@
+apiVersion: k3d.io/v1alpha4
+kind: Simple
+metadata:
+  name: openbao-operator-test
+servers: 1
+agents: 2
+image: rancher/k3s:v1.34.1-k3s1
+registries:
+  # Use a local k3d-managed registry for operator images.
+  # Create it once with:
+  #   k3d registry create registry.localhost --port 5000
+  # Then build and push with:
+  #   make docker-build IMG=localhost:5000/openbao-operator:dev
+  #   make docker-push  IMG=localhost:5000/openbao-operator:dev
+  # And deploy with:
+  #   make deploy IMG=k3d-registry.localhost:5000/openbao-operator:dev
+  use:
+    - k3d-registry.localhost:5000
+ports:
+  - port: 80:80
+    nodeFilters:
+      - loadbalancer
+  - port: 443:443
+    nodeFilters:
+      - loadbalancer
+  - port: 8881:8081
+    nodeFilters:
+      - loadbalancer
+  - port: 8870:8079
+    nodeFilters:
+      - loadbalancer
+  - port: 6443:6443
+    nodeFilters:
+      - loadbalancer
+options:
+  k3s:
+    extraArgs:
+      - arg: "--disable=traefik"
+        nodeFilters:
+          - server:*
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true

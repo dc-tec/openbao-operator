@@ -1,0 +1,8 @@
+## Append samples of your project ##
+resources:
+  #- openbao_v1alpha1_openbaocluster.yaml
+  #- openbao_v1alpha1_openbaocluster_ingress.yaml
+  #- openbao_v1alpha1_openbaocluster_selfinit.yaml
+  #- openbao_v1alpha1_openbaocluster_gateway.yaml
+  - openbao_v1alpha1_openbaocluster_full.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

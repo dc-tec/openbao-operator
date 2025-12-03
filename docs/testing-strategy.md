@@ -37,6 +37,7 @@ Unit tests focus on deterministic, in-process logic with no external I/O. Typica
 - TLS/PKI helpers (e.g., SAN generation, rotation-window calculations).
 - Config rendering and merge functions for `config.hcl`.
 - Static auto-unseal key management helpers.
+- Initialization helpers (e.g., parsing health responses, checking container status).
 - Upgrade state-machine helper functions that compute next actions from a given status.
 - Backup naming and path construction functions.
 
@@ -110,6 +111,12 @@ At minimum, envtest suites should cover:
     - Expected ConfigMaps and StatefulSets.
     - Correct `Status.Phase`, `ReadyReplicas`, and `Conditions` (e.g., `ConditionAvailable=True`).
 
+- **Initialization Flow:**
+  - StatefulSet starts with 1 replica when `Status.Initialized` is false.
+  - After initialization, `Status.Initialized` becomes true.
+  - Once initialized, StatefulSet scales to `Spec.Replicas`.
+  - Root token Secret (`<cluster>-root-token`) is created during initialization.
+
 - **Paused Semantics:**
   - When `spec.paused=true`, the reconciler:
     - Stops mutating StatefulSets, Secrets, and ConfigMaps.
@@ -122,7 +129,7 @@ At minimum, envtest suites should cover:
 
 - **Config Merge and Protected Stanzas:**
   - Valid user config fragments are merged.
-  - Attempts to override protected stanzas are rejected or surfaced via Conditions.
+  - Attempts to override protected stanzas are rejected at admission via CRD-level CEL validation (and, in later phases, a validating webhook), or surfaced via Status Conditions when detected during reconciliation.
 
 Where individual envtest assertions involve small decision functions, we still prefer table-driven subtests to cover multiple variations per scenario.
 
@@ -145,22 +152,54 @@ E2E tests validate real-system behavior using kind:
 
 ### 4.1 Core E2E Scenarios
 
-- **Cluster Creation:**
+- **Cluster Creation and Initialization:**
   - Apply `OpenBaoCluster` manifests and verify:
-    - StatefulSet pods become `Ready`.
+    - StatefulSet starts with 1 replica for initialization.
+    - InitManager initializes the cluster and creates `<cluster>-root-token` Secret.
+    - `Status.Initialized` becomes `true`.
+    - StatefulSet scales to desired replicas.
     - OpenBao Raft peers form a cluster.
     - Status conditions report `Available=True`.
 
 - **Raft-aware Upgrades:**
   - Bump `spec.version`/`image` and verify:
-    - Pods roll one-by-one.
-    - Leader is stepped down before upgrade.
+    - Pods roll one-by-one in reverse ordinal order.
+    - Leader is stepped down before upgrade (verify via OpenBao API logs).
+    - `Status.Upgrade` tracks progress (TargetVersion, CurrentPartition, CompletedPods).
+    - `Status.Phase` transitions: Running -> Upgrading -> Running.
     - No prolonged downtime and cluster remains healthy.
+  - Upgrade resumption:
+    - Kill Operator mid-upgrade and restart.
+    - Verify upgrade resumes from `Status.Upgrade.CurrentPartition`.
+  - Downgrade rejection:
+    - Attempt to set `spec.version` lower than `status.currentVersion`.
+    - Verify `Degraded=True` with `Reason=DowngradeBlocked`.
+  - Pre-upgrade backup:
+    - Enable `spec.backup.preUpgradeSnapshot`.
+    - Verify backup is created before pods are updated.
 
 - **Backups:**
   - Configure `backup` settings pointing to MinIO.
   - Verify scheduled backups appear in object storage.
-  - Confirm `Status.LastBackupTime` and metrics reflect successful runs.
+  - Confirm `Status.Backup` fields are updated:
+    - `LastBackupTime`, `LastBackupSize`, `LastBackupDuration`, `LastBackupName`.
+    - `NextScheduledBackup` is calculated correctly.
+  - Verify backup naming convention: `<prefix>/<namespace>/<cluster>/<timestamp>-<uuid>.snap`.
+  - Retention policy enforcement:
+    - Configure `spec.backup.retention.maxCount: 3`.
+    - Trigger multiple backups and verify older backups are deleted.
+  - Backup metrics:
+    - `openbao_backup_success_total` increments on success.
+    - `openbao_backup_failure_total` increments on failure.
+    - `openbao_backup_last_success_timestamp` is updated.
+  - Backup during upgrade:
+    - Verify scheduled backups are skipped when `Status.Upgrade != nil`.
+
+- **Self-Init Backup Authentication:**
+  - Deploy self-init cluster without backup token.
+  - Verify backups are skipped with `Reason=NoBackupToken`.
+  - Add backup token via self-init requests.
+  - Verify backups succeed with configured token.
 
 - **Multi-Tenancy:**
   - Deploy multiple `OpenBaoCluster` resources across namespaces.
@@ -191,10 +230,56 @@ As described in the TDD, we use MinIO to validate backup integration:
 - Configure `BackupTarget` in `OpenBaoCluster` to point at MinIO.
 - Validate:
   - Snapshots are streamed without buffering to disk.
-  - Object names follow the expected naming convention (cluster name + timestamp + suffix).
-  - Failures are reflected in `Status` and `openbao_backup_failure_total`.
+  - Object names follow the expected naming convention: `<prefix>/<namespace>/<cluster>/<timestamp>-<uuid>.snap`.
+  - Failures are reflected in `Status.Backup.LastFailureReason` and `openbao_backup_failure_total`.
+
+### 5.1 Backup Test Scenarios
+
+| Scenario | Expected Behavior |
+|----------|-------------------|
+| Scheduled backup | Backup appears in MinIO at scheduled time |
+| Manual trigger (future) | Backup created immediately when annotation is set |
+| Large backup (>100MB) | Multipart upload completes successfully |
+| Retention by count | Old backups deleted when MaxCount exceeded |
+| Retention by age | Old backups deleted when MaxAge exceeded |
+| Invalid credentials | Backup fails with clear error in Status |
+| MinIO unavailable | Backup fails, ConsecutiveFailures increments |
+| Backup during upgrade | Backup skipped, no error |
+
+### 5.2 Credentials Testing
+
+- **Static credentials**: Test with `accessKeyId` and `secretAccessKey` in Secret.
+- **Session tokens**: Test with temporary credentials including `sessionToken`.
+- **Missing credentials**: Verify appropriate error when credentials Secret is missing.
+- **Invalid credentials**: Verify error is surfaced in `Status.Backup.LastFailureReason`.
 
 These tests run in CI alongside other E2E scenarios.
+
+-----
+
+## 5.3 Upgrade Testing Scenarios
+
+| Scenario | Expected Behavior |
+|----------|-------------------|
+| Patch upgrade (2.4.0 -> 2.4.1) | Smooth rolling update, no warnings |
+| Minor upgrade (2.4.0 -> 2.5.0) | Smooth rolling update |
+| Major upgrade (2.x -> 3.x) | Upgrade proceeds with warning in Status |
+| Downgrade attempt | Upgrade blocked, `Degraded=True` with reason |
+| Upgrade with leader on pod-1 | Pod-2 updated first, then step-down, then pod-1, then pod-0 |
+| Upgrade paused mid-way | `spec.paused=true` halts upgrade, resume on unpause |
+| Operator restart during upgrade | Upgrade resumes from `Status.Upgrade.CurrentPartition` |
+| Degraded cluster | Upgrade blocked until quorum is healthy |
+| Pre-upgrade backup failure | Upgrade blocked with `Degraded=True` |
+| Step-down timeout | Upgrade halts, `Degraded=True` with timeout reason |
+
+### 5.4 Upgrade Unit Test Coverage
+
+Unit tests for the UpgradeManager (`internal/upgrade/*_test.go`):
+
+- **Version validation**: Table-driven tests for semver parsing and comparison.
+- **State machine transitions**: Test each phase transition with mocked Kubernetes client.
+- **Timeout handling**: Verify context deadline enforcement.
+- **Resume logic**: Test that upgrade resumes correctly from various `Status.Upgrade` states.
 
 -----
 
@@ -215,4 +300,3 @@ New functionality MUST include:
 - E2E coverage for new workflows that affect cluster lifecycle, upgrades, or backups.
 
 This layered, table-driven approach ensures that regressions are caught early and that the Operator maintains its intended behavior as the codebase evolves.
-

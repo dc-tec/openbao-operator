@@ -1,0 +1,827 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaoclusters.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoCluster
+    listKind: OpenBaoClusterList
+    plural: openbaoclusters
+    shortNames:
+    - bao
+    - baoc
+    singular: openbaocluster
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoCluster is the Schema for the openbaoclusters API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec defines the desired state of OpenBaoCluster.
+            properties:
+              audit:
+                description: |-
+                  Audit configures declarative audit devices for the OpenBao cluster.
+                  See: https://openbao.org/docs/configuration/audit/
+                items:
+                  description: |-
+                    AuditDevice defines a declarative audit device configuration.
+                    See: https://openbao.org/docs/configuration/audit/
+                  properties:
+                    description:
+                      description: Description is an optional description for the
+                        audit device.
+                      type: string
+                    options:
+                      description: |-
+                        Options contains device-specific configuration options as a map.
+                        The structure depends on the audit device type.
+                      x-kubernetes-preserve-unknown-fields: true
+                    path:
+                      description: Path is the path of the audit device in the root
+                        namespace.
+                      minLength: 1
+                      type: string
+                    type:
+                      description: Type is the type of audit device (e.g., "file",
+                        "syslog", "socket").
+                      minLength: 1
+                      type: string
+                  required:
+                  - path
+                  - type
+                  type: object
+                type: array
+              backup:
+                description: Backup configures scheduled backups for the cluster.
+                properties:
+                  executorImage:
+                    description: |-
+                      ExecutorImage is the container image to use for backup operations.
+                      Defaults to "openbao/backup-executor:v0.1.0" if not specified.
+                      This allows users to override the image for air-gapped environments or custom registries.
+                    minLength: 1
+                    type: string
+                  kubernetesAuthRole:
+                    description: |-
+                      KubernetesAuthRole is the name of the Kubernetes Auth role configured in OpenBao
+                      for backup operations. When set, the backup executor will use Kubernetes Auth
+                      (ServiceAccount token) instead of a static token. This is the preferred authentication
+                      method as tokens are automatically rotated by Kubernetes.
+
+                      The role must be configured in OpenBao and must grant the "read" capability on
+                      sys/storage/raft/snapshot. The role must bind to the backup ServiceAccount
+                      (<cluster-name>-backup-serviceaccount) in the cluster namespace.
+                    type: string
+                  preUpgradeSnapshot:
+                    description: PreUpgradeSnapshot, when true, triggers a backup
+                      before any upgrade.
+                    type: boolean
+                  retention:
+                    description: Retention defines optional backup retention policy.
+                    properties:
+                      maxAge:
+                        description: |-
+                          MaxAge is the maximum age of backups to retain, e.g., "168h" for 7 days.
+                          Backups older than this are deleted after successful new backup upload.
+                        type: string
+                      maxCount:
+                        description: MaxCount is the maximum number of backups to
+                          retain (0 = unlimited).
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
+                  schedule:
+                    description: Schedule is a cron-style schedule, for example "0
+                      3 * * *".
+                    minLength: 1
+                    type: string
+                  target:
+                    description: Target is the object storage configuration for backups.
+                    properties:
+                      bucket:
+                        description: Bucket is the bucket or container name.
+                        minLength: 1
+                        type: string
+                      credentialsSecretRef:
+                        description: CredentialsSecretRef optionally references a
+                          Secret containing credentials for the object store.
+                        properties:
+                          name:
+                            description: name is unique within a namespace to reference
+                              a secret resource.
+                            type: string
+                          namespace:
+                            description: namespace defines the space within which
+                              the secret name must be unique.
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      endpoint:
+                        description: Endpoint is the HTTP(S) endpoint for the object
+                          storage service.
+                        minLength: 1
+                        type: string
+                      pathPrefix:
+                        description: PathPrefix is an optional prefix within the bucket
+                          for this cluster's snapshots.
+                        type: string
+                      usePathStyle:
+                        default: false
+                        description: |-
+                          UsePathStyle controls whether to use path-style addressing (bucket.s3.amazonaws.com/object)
+                          or virtual-hosted-style addressing (bucket.s3.amazonaws.com/object).
+                          Set to true for MinIO and S3-compatible stores that require path-style.
+                          Set to false for AWS S3 (default, as AWS is deprecating path-style).
+                        type: boolean
+                    required:
+                    - bucket
+                    - endpoint
+                    type: object
+                  tokenSecretRef:
+                    description: |-
+                      TokenSecretRef optionally references a Secret containing an OpenBao API
+                      token to use for backup operations (fallback method).
+
+                      For standard clusters (non self-init), this is typically omitted and the
+                      operator uses the root token from <cluster>-root-token. For self-init
+                      clusters (no root token Secret), this field must reference a token with
+                      permission to read sys/storage/raft/snapshot.
+
+                      If KubernetesAuthRole is set, this field is ignored in favor of Kubernetes Auth.
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                required:
+                - schedule
+                - target
+                type: object
+              config:
+                additionalProperties:
+                  type: string
+                description: |-
+                  Config contains optional user-supplied OpenBao configuration fragments.
+                  Protected stanzas such as listener "tcp" and storage "raft" remain operator-owned.
+                type: object
+              deletionPolicy:
+                description: DeletionPolicy controls what happens to underlying resources
+                  when the CR is deleted.
+                enum:
+                - Retain
+                - DeletePVCs
+                - DeleteAll
+                type: string
+              gateway:
+                description: |-
+                  Gateway configures Kubernetes Gateway API access (alternative to Ingress).
+                  When enabled, the Operator creates an HTTPRoute that routes traffic through
+                  a user-managed Gateway resource.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations to apply to the HTTPRoute resource.
+                    type: object
+                  enabled:
+                    description: |-
+                      Enabled activates Gateway API support for this cluster.
+                      When true, the Operator creates an HTTPRoute for the cluster.
+                    type: boolean
+                  gatewayRef:
+                    description: |-
+                      GatewayRef references an existing Gateway resource that will handle
+                      traffic for this OpenBao cluster. The Gateway must already exist.
+                    properties:
+                      name:
+                        description: Name of the Gateway resource.
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: Namespace of the Gateway resource. If empty,
+                          uses the OpenBaoCluster namespace.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  hostname:
+                    description: |-
+                      Hostname for routing traffic to this OpenBao cluster.
+                      This hostname will be automatically added to the TLS SANs.
+                    minLength: 1
+                    type: string
+                  path:
+                    description: Path prefix for the HTTPRoute (defaults to "/").
+                    type: string
+                required:
+                - enabled
+                - gatewayRef
+                - hostname
+                type: object
+              image:
+                description: Image is the container image to run; defaults may be
+                  derived from Version.
+                minLength: 1
+                type: string
+              ingress:
+                description: Ingress configures optional HTTP(S) ingress in front
+                  of the OpenBao Service.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations are additional annotations to apply to
+                      the Ingress.
+                    type: object
+                  className:
+                    description: ClassName is an optional IngressClassName (for example,
+                      "nginx", "traefik").
+                    type: string
+                  enabled:
+                    description: Enabled controls whether the Operator manages an
+                      Ingress for external access.
+                    type: boolean
+                  host:
+                    description: Host is the primary host for external access, for
+                      example "bao.example.com".
+                    minLength: 1
+                    type: string
+                  path:
+                    description: Path is the HTTP path to route to OpenBao, defaulting
+                      to "/".
+                    type: string
+                  tlsSecretName:
+                    description: TLSSecretName is an optional TLS Secret name; when
+                      empty the cluster TLS Secret is used.
+                    type: string
+                required:
+                - host
+                type: object
+              initContainer:
+                description: |-
+                  InitContainer configures the init container used to render OpenBao configuration.
+                  The init container renders the final config.hcl from a template using environment
+                  variables such as HOSTNAME and POD_IP.
+                properties:
+                  enabled:
+                    default: true
+                    description: |-
+                      Enabled controls whether the init container is used to render the configuration.
+                      The operator requires the init container; disabling it is not supported.
+                    type: boolean
+                  image:
+                    description: |-
+                      Image is the container image to use for the init container.
+                      This value is required; the operator does not apply a default image.
+                      When omitted or empty, validation will reject the OpenBaoCluster.
+                    minLength: 1
+                    type: string
+                type: object
+              paused:
+                description: Paused, when true, pauses reconciliation for this OpenBaoCluster
+                  (except delete and finalizers).
+                type: boolean
+              plugins:
+                description: |-
+                  Plugins configures declarative plugins for the OpenBao cluster.
+                  See: https://openbao.org/docs/configuration/plugins/
+                items:
+                  description: |-
+                    Plugin defines a declarative plugin configuration.
+                    See: https://openbao.org/docs/configuration/plugins/
+                  properties:
+                    args:
+                      description: |-
+                        Args are arguments to pass to the running plugin.
+                        Only used if plugin_auto_register=true is set.
+                      items:
+                        type: string
+                      type: array
+                    binaryName:
+                      description: BinaryName is the name of the plugin binary file
+                        within the OCI image.
+                      minLength: 1
+                      type: string
+                    command:
+                      description: |-
+                        Command is the command name of a manually downloaded plugin.
+                        Required if Image is not set. Conflicts with Image.
+                      type: string
+                    env:
+                      description: |-
+                        Env are environment variables to pass to the running plugin.
+                        Only used if plugin_auto_register=true is set.
+                      items:
+                        type: string
+                      type: array
+                    image:
+                      description: |-
+                        Image is the OCI image URL including registry and repository.
+                        Required if Command is not set. Conflicts with Command.
+                      type: string
+                    name:
+                      description: Name is the name of the plugin.
+                      minLength: 1
+                      type: string
+                    sha256sum:
+                      description: |-
+                        SHA256Sum is the expected SHA256 checksum of the plugin binary.
+                        Must be a 64-character hexadecimal string.
+                      maxLength: 64
+                      minLength: 64
+                      pattern: ^[0-9a-fA-F]{64}$
+                      type: string
+                    type:
+                      description: Type is the plugin type (e.g., "secret", "auth").
+                      minLength: 1
+                      type: string
+                    version:
+                      description: Version is the image version or tag.
+                      minLength: 1
+                      type: string
+                  required:
+                  - binaryName
+                  - name
+                  - sha256sum
+                  - type
+                  - version
+                  type: object
+                type: array
+              replicas:
+                default: 3
+                description: Replicas is the desired number of OpenBao pods.
+                format: int32
+                minimum: 1
+                type: integer
+              selfInit:
+                description: |-
+                  SelfInit configures OpenBao's native self-initialization feature.
+                  When enabled, OpenBao initializes itself on first start using the configured
+                  requests, and the root token is automatically revoked.
+                  See: https://openbao.org/docs/configuration/self-init/
+                properties:
+                  enabled:
+                    default: false
+                    description: |-
+                      Enabled activates OpenBao's self-initialization feature.
+                      When true, the Operator injects initialize stanzas into config.hcl
+                      and does NOT create a root token Secret (root token is auto-revoked).
+                    type: boolean
+                  requests:
+                    description: |-
+                      Requests defines the API operations to execute during self-initialization.
+                      Each request becomes a named request block inside an initialize stanza.
+                    items:
+                      description: SelfInitRequest defines a single API operation
+                        to execute during self-initialization.
+                      properties:
+                        allowFailure:
+                          description: |-
+                            AllowFailure allows this request to fail without blocking initialization.
+                            Defaults to false.
+                          type: boolean
+                        data:
+                          description: |-
+                            Data contains the request payload as a structured map.
+                            This must be a JSON/YAML object whose shape matches the target API
+                            endpoint. Nested maps and lists are supported and are rendered into
+                            the initialize stanza as HCL objects (for example, the "options" map
+                            used by audit devices).
+
+                            This payload is stored in the OpenBaoCluster resource and persisted
+                            in etcd; it must not contain sensitive values such as tokens,
+                            passwords, or unseal keys.
+                          x-kubernetes-preserve-unknown-fields: true
+                        name:
+                          description: |-
+                            Name is a unique identifier for this request (used as the block name).
+                            Must match regex ^[A-Za-z_][A-Za-z0-9_-]*$
+                          maxLength: 64
+                          minLength: 1
+                          pattern: ^[A-Za-z_][A-Za-z0-9_-]*$
+                          type: string
+                        operation:
+                          description: 'Operation is the API operation type: create,
+                            read, update, delete, or list.'
+                          enum:
+                          - create
+                          - read
+                          - update
+                          - delete
+                          - list
+                          type: string
+                        path:
+                          description: Path is the API path to call (e.g., "sys/audit/stdout",
+                            "auth/kubernetes/config").
+                          minLength: 1
+                          type: string
+                      required:
+                      - name
+                      - operation
+                      - path
+                      type: object
+                    type: array
+                required:
+                - enabled
+                type: object
+              service:
+                description: Service configures the primary Service used to expose
+                  OpenBao inside or outside the cluster.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations are additional annotations to apply to
+                      the Service.
+                    type: object
+                  type:
+                    description: Type is the Kubernetes Service type, for example
+                      "ClusterIP" or "LoadBalancer".
+                    type: string
+                type: object
+              storage:
+                description: Storage configures persistent storage for the cluster.
+                properties:
+                  size:
+                    description: Size is the requested persistent volume size, for
+                      example "10Gi".
+                    minLength: 1
+                    type: string
+                  storageClassName:
+                    description: StorageClassName is an optional StorageClass for
+                      the PVCs.
+                    type: string
+                required:
+                - size
+                type: object
+              telemetry:
+                description: |-
+                  Telemetry configures telemetry reporting for the OpenBao cluster.
+                  See: https://openbao.org/docs/configuration/telemetry/
+                properties:
+                  circonusAPIApp:
+                    description: CirconusAPIApp is the API app name for Circonus.
+                    type: string
+                  circonusAPIKey:
+                    description: |-
+                      Circonus-specific options
+                      CirconusAPIKey is the API key for Circonus.
+                    type: string
+                  circonusAPIURL:
+                    description: CirconusAPIURL is the API URL for Circonus.
+                    type: string
+                  circonusBrokerID:
+                    description: CirconusBrokerID is the broker ID for Circonus.
+                    type: string
+                  circonusBrokerSelectTag:
+                    description: CirconusBrokerSelectTag is the broker select tag
+                      for Circonus.
+                    type: string
+                  circonusCheckDisplayName:
+                    description: CirconusCheckDisplayName is the display name for
+                      Circonus.
+                    type: string
+                  circonusCheckForceMetricActivation:
+                    description: CirconusCheckForceMetricActivation forces metric
+                      activation in Circonus.
+                    type: string
+                  circonusCheckID:
+                    description: CirconusCheckID is the check ID for Circonus.
+                    type: string
+                  circonusCheckInstanceID:
+                    description: CirconusCheckInstanceID is the instance ID for Circonus.
+                    type: string
+                  circonusCheckSearchTag:
+                    description: CirconusCheckSearchTag is the search tag for Circonus.
+                    type: string
+                  circonusCheckTags:
+                    description: CirconusCheckTags is the tags for Circonus.
+                    type: string
+                  circonusSubmissionInterval:
+                    description: CirconusSubmissionInterval is the submission interval
+                      for Circonus.
+                    type: string
+                  disableHostname:
+                    description: DisableHostname specifies if gauge values should
+                      be prefixed with the local hostname.
+                    type: boolean
+                  dogStatsdAddress:
+                    description: |-
+                      DogStatsD-specific options
+                      DogStatsdAddress is the address of the DogStatsD server.
+                    type: string
+                  dogStatsdTags:
+                    description: DogStatsdTags are tags to add to all metrics.
+                    items:
+                      type: string
+                    type: array
+                  enableHostnameLabel:
+                    description: EnableHostnameLabel specifies if all metric values
+                      should contain the host label.
+                    type: boolean
+                  leaseMetricsEpsilon:
+                    description: LeaseMetricsEpsilon specifies the size of the bucket
+                      used to measure future lease expiration.
+                    type: string
+                  maximumGaugeCardinality:
+                    description: MaximumGaugeCardinality is the maximum cardinality
+                      of gauge labels.
+                    format: int32
+                    type: integer
+                  metricsPrefix:
+                    description: MetricsPrefix specifies the prefix used for metric
+                      values.
+                    type: string
+                  prometheusRetentionTime:
+                    description: |-
+                      Prometheus-specific options
+                      PrometheusRetentionTime specifies how long to retain metrics in Prometheus format.
+                    type: string
+                  stackdriverDebugLogs:
+                    description: StackdriverDebugLogs specifies if OpenBao writes
+                      additional stackdriver debug logs.
+                    type: boolean
+                  stackdriverLocation:
+                    description: StackdriverLocation is the GCP or AWS region.
+                    type: string
+                  stackdriverNamespace:
+                    description: StackdriverNamespace is a namespace identifier for
+                      the telemetry data.
+                    type: string
+                  stackdriverProjectID:
+                    description: |-
+                      Stackdriver-specific options
+                      StackdriverProjectID is the Google Cloud Project ID.
+                    type: string
+                  statsdAddress:
+                    description: |-
+                      StatsD-specific options
+                      StatsdAddress is the address of the StatsD server.
+                    type: string
+                  statsiteAddress:
+                    description: |-
+                      Statsite-specific options
+                      StatsiteAddress is the address of the statsite server.
+                    type: string
+                  usageGaugePeriod:
+                    description: |-
+                      Common telemetry options
+                      UsageGaugePeriod specifies the interval at which high-cardinality usage data is collected.
+                    type: string
+                type: object
+              tls:
+                description: TLS configures TLS for the cluster.
+                properties:
+                  enabled:
+                    description: Enabled controls whether TLS is enabled for the cluster.
+                    type: boolean
+                  extraSANs:
+                    description: ExtraSANs lists additional subject alternative names
+                      to include in server certificates.
+                    items:
+                      type: string
+                    type: array
+                  rotationPeriod:
+                    description: RotationPeriod is a duration string (for example,
+                      "720h") controlling certificate rotation.
+                    minLength: 1
+                    type: string
+                required:
+                - enabled
+                - rotationPeriod
+                type: object
+              version:
+                description: |-
+                  Version is the semantic OpenBao version, used for upgrade orchestration.
+                  The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.
+                  Versions below 2.4.0 do not support the static seal feature and will fail to start.
+                minLength: 1
+                type: string
+            required:
+            - image
+            - replicas
+            - storage
+            - tls
+            - version
+            type: object
+            x-kubernetes-validations:
+            - message: 'spec.config may not contain protected stanzas: listener, storage,
+                seal'
+              rule: '!has(self.config) || self.config.all(k, v, !(k == ''listener''
+                || k == ''storage'' || k == ''seal''))'
+          status:
+            description: Status defines the observed state of OpenBaoCluster.
+            properties:
+              activeLeader:
+                description: ActiveLeader is the current Raft leader pod name, for
+                  example "prod-cluster-0".
+                type: string
+              backup:
+                description: Backup tracks the state of backups for this cluster.
+                properties:
+                  consecutiveFailures:
+                    description: ConsecutiveFailures is the number of consecutive
+                      backup failures.
+                    format: int32
+                    type: integer
+                  lastBackupDuration:
+                    description: LastBackupDuration is how long the last backup took
+                      (e.g., "45s").
+                    type: string
+                  lastBackupName:
+                    description: LastBackupName is the object key/path of the last
+                      successful backup.
+                    type: string
+                  lastBackupSize:
+                    description: LastBackupSize is the size in bytes of the last successful
+                      backup.
+                    format: int64
+                    type: integer
+                  lastBackupTime:
+                    description: LastBackupTime is the timestamp of the last successful
+                      backup.
+                    format: date-time
+                    type: string
+                  lastFailureReason:
+                    description: LastFailureReason describes why the last backup failed
+                      (if applicable).
+                    type: string
+                  nextScheduledBackup:
+                    description: NextScheduledBackup is when the next backup is scheduled.
+                    format: date-time
+                    type: string
+                type: object
+              conditions:
+                description: Conditions represent the current state of the OpenBaoCluster
+                  resource.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              currentVersion:
+                description: CurrentVersion is the OpenBao version currently running
+                  on the cluster.
+                type: string
+              initialized:
+                description: |-
+                  Initialized indicates whether the OpenBao cluster has been initialized.
+                  This is set to true after the first pod is initialized using bao operator init
+                  or after self-initialization completes.
+                type: boolean
+              lastBackupTime:
+                description: |-
+                  LastBackupTime is the timestamp of the last successful backup, if configured.
+                  Deprecated: Use Backup.LastBackupTime instead.
+                format: date-time
+                type: string
+              phase:
+                description: Phase is a high-level summary of the cluster state.
+                enum:
+                - Initializing
+                - Running
+                - Upgrading
+                - BackingUp
+                - Failed
+                type: string
+              readyReplicas:
+                description: ReadyReplicas is the number of replicas that are currently
+                  Ready.
+                format: int32
+                type: integer
+              selfInitialized:
+                description: |-
+                  SelfInitialized indicates whether the cluster was initialized using
+                  OpenBao's self-initialization feature. When true, no root token Secret
+                  exists for this cluster (the root token was auto-revoked).
+                type: boolean
+              upgrade:
+                description: |-
+                  Upgrade tracks the state of an in-progress upgrade (if any).
+                  When non-nil, an upgrade is in progress and the UpgradeManager is orchestrating
+                  the pod-by-pod rolling update with leader step-down.
+                properties:
+                  completedPods:
+                    description: CompletedPods lists ordinals of pods that have been
+                      successfully upgraded.
+                    items:
+                      format: int32
+                      type: integer
+                    type: array
+                  currentPartition:
+                    description: CurrentPartition is the current StatefulSet partition
+                      value.
+                    format: int32
+                    type: integer
+                  fromVersion:
+                    description: FromVersion is the version being upgraded from.
+                    type: string
+                  lastStepDownTime:
+                    description: LastStepDownTime records when the last leader step-down
+                      was performed.
+                    format: date-time
+                    type: string
+                  startedAt:
+                    description: StartedAt is when the upgrade began.
+                    format: date-time
+                    type: string
+                  targetVersion:
+                    description: TargetVersion is the version being upgraded to.
+                    type: string
+                required:
+                - currentPartition
+                - fromVersion
+                - targetVersion
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

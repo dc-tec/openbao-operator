@@ -1,0 +1,83 @@
+# Example: Namespace-Scoped RBAC for Multi-Tenant OpenBao Operator
+#
+# This file provides example RoleBindings that demonstrate how to grant
+# namespace-scoped permissions to teams managing OpenBaoCluster resources.
+#
+# IMPORTANT: This file is NOT applied by default. Platform administrators
+# should customize and apply these bindings according to their multi-tenancy
+# requirements.
+#
+# Use Case: Team A should only manage OpenBaoClusters in the "team-a-prod" namespace.
+#
+# The ClusterRoles (openbaocluster-admin-role, openbaocluster-editor-role,
+# openbaocluster-viewer-role) are defined cluster-wide, but binding them
+# via a RoleBinding (instead of ClusterRoleBinding) restricts the permissions
+# to the specified namespace only.
+---
+# Example: Grant editor permissions to a team in their namespace
+#
+# This allows the "team-a" group to create, update, and delete OpenBaoCluster
+# resources only in the "team-a-prod" namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-editor-team-a
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openbaocluster-editor-role
+subjects:
+  - kind: Group
+    name: team-a # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io
+# Alternatively, bind to a specific ServiceAccount:
+# - kind: ServiceAccount
+#   name: team-a-sa
+#   namespace: team-a-prod
+---
+# Example: Grant viewer permissions to a monitoring team
+#
+# This allows the "monitoring" group to view OpenBaoCluster resources
+# in the "team-a-prod" namespace for observability purposes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-viewer-monitoring
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openbaocluster-viewer-role
+subjects:
+  - kind: Group
+    name: monitoring # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io
+---
+# Example: Grant admin permissions to platform team (cluster-wide)
+#
+# This ClusterRoleBinding grants platform administrators full access
+# to OpenBaoCluster resources across all namespaces.
+#
+# CAUTION: Use sparingly. Most users should have namespace-scoped access.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openbaocluster-admin-platform
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openbaocluster-admin-role
+subjects:
+  - kind: Group
+    name: platform-team # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io

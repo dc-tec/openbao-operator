@@ -1,0 +1,97 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: bao-gateway-selfsigned-issuer
+  namespace: default
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bao-gateway-cert
+  namespace: default
+spec:
+  # This secret is referenced by the Traefik Gateway HTTPS listener in
+  # test/user/gateway-values.yaml (certificateRefs.name: bao-tls).
+  secretName: bao-tls
+  dnsNames:
+    - bao.adfinis.localhost
+  issuerRef:
+    kind: Issuer
+    name: bao-gateway-selfsigned-issuer
+---
+# OpenBaoCluster with Gateway API
+#
+# This example demonstrates using Kubernetes Gateway API for external access
+# instead of Ingress. Gateway API provides a more expressive, portable, and
+# role-oriented model for traffic management.
+#
+# Prerequisites:
+# - A Gateway controller must be installed (e.g., Envoy Gateway, Istio, Contour)
+# - A Gateway resource must exist (see example below)
+# - Gateway API CRDs must be installed in the cluster
+#
+# The Operator creates an HTTPRoute that routes traffic from the Gateway
+# to the OpenBao Service. The Gateway hostname is automatically added to
+# the TLS SANs.
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-gateway
+spec:
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  initContainer:
+    enabled: true
+    # For k3d clusters, use the k3d registry path: k3d-registry.localhost:5000/openbao-config-init:dev
+    # For other environments, use a fully qualified image reference
+    image: "k3d-registry.localhost:5000/openbao-config-init:dev-0.0.1"
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # Gateway API configuration
+  gateway:
+    enabled: true
+    gatewayRef:
+      # Reference to an existing Gateway resource
+      # The Gateway must be created separately by the platform team
+      name: traefik-gateway
+      namespace: default
+    # Hostname for routing traffic to this OpenBao cluster
+    # This will be automatically added to the server certificate SANs
+    hostname: bao.adfinis.localhost
+    # Optional path prefix (defaults to "/")
+    path: /
+    # Optional annotations for the HTTPRoute
+    annotations:
+      gateway.example.com/backend-protocol: HTTPS
+---
+# Example Gateway resource (to be deployed by platform team)
+# This is provided for reference only - the actual Gateway configuration
+# depends on your Gateway controller implementation.
+#
+# apiVersion: gateway.networking.k8s.io/v1
+# kind: Gateway
+# metadata:
+#   name: main-gateway
+#   namespace: gateway-system
+# spec:
+#   gatewayClassName: envoy
+#   listeners:
+#     - name: https
+#       port: 443
+#       protocol: HTTPS
+#       hostname: "*.example.com"
+#       tls:
+#         mode: Terminate
+#         certificateRefs:
+#           - name: wildcard-tls-secret
+#             namespace: gateway-system
