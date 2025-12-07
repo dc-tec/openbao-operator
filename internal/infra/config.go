@@ -18,61 +18,48 @@ import (
 )
 
 // ensureUnsealSecret manages the static auto-unseal Secret for the OpenBaoCluster.
+// This function implements a "blind create" pattern: it generates the key in memory
+// and attempts to create the Secret, ignoring AlreadyExists errors. This ensures
+// the operator never needs GET permission on the unseal key Secret after creation,
+// improving security by preventing the operator from reading root keys.
 func (m *Manager) ensureUnsealSecret(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	secretName := unsealSecretName(cluster)
 
-	secret := &corev1.Secret{}
-	getErr := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      secretName,
-	}, secret)
-	if getErr != nil {
-		if !apierrors.IsNotFound(getErr) {
-			return fmt.Errorf("failed to get unseal Secret %s/%s: %w", cluster.Namespace, secretName, getErr)
-		}
-
-		logger.Info("Unseal Secret not found; generating new static auto-unseal key", "secret", secretName)
-
-		key, genErr := generateUnsealKey()
-		if genErr != nil {
-			return fmt.Errorf("failed to generate unseal key for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, genErr)
-		}
-
-		secret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      secretName,
-				Namespace: cluster.Namespace,
-				Labels:    infraLabels(cluster),
-			},
-			Type:      corev1.SecretTypeOpaque,
-			Immutable: ptr.To(true), // Secure by default: prevent accidental overwrites
-			Data: map[string][]byte{
-				unsealSecretKey: key,
-			},
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, secret, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on unseal Secret %s/%s: %w", cluster.Namespace, secretName, err)
-		}
-
-		if err := m.client.Create(ctx, secret); err != nil {
-			return fmt.Errorf("failed to create unseal Secret %s/%s: %w", cluster.Namespace, secretName, err)
-		}
-
-		return nil
+	// Generate key in memory
+	key, genErr := generateUnsealKey()
+	if genErr != nil {
+		return fmt.Errorf("failed to generate unseal key for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, genErr)
 	}
 
-	// Existing Secret Logic: STRICT Validation Only
-	// Since this is a new operator, any Unseal Secret that isn't exactly 32 raw bytes
-	// is effectively corrupted or user error. We do not attempt migration or auto-rotation.
-	existingKey, ok := secret.Data[unsealSecretKey]
-
-	// If key is missing or wrong length, fail hard. Do NOT auto-rotate or migrate.
-	if !ok || len(existingKey) != unsealKeyBytes {
-		return fmt.Errorf("unseal Secret %s/%s is invalid: expected exactly 32 raw bytes (got %d); manual intervention required", cluster.Namespace, secretName, len(existingKey))
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: cluster.Namespace,
+			Labels:    infraLabels(cluster),
+		},
+		Type:      corev1.SecretTypeOpaque,
+		Immutable: ptr.To(true), // Secure by default: prevent accidental overwrites
+		Data: map[string][]byte{
+			unsealSecretKey: key,
+		},
 	}
 
+	// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
+	if err := controllerutil.SetControllerReference(cluster, secret, m.scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on unseal Secret %s/%s: %w", cluster.Namespace, secretName, err)
+	}
+
+	// Attempt CREATE - ignore AlreadyExists errors (blind create pattern)
+	if err := m.client.Create(ctx, secret); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			// Secret already exists - this is fine, we don't need to read it
+			logger.Info("Unseal Secret already exists; skipping creation", "secret", secretName)
+			return nil
+		}
+		return fmt.Errorf("failed to create unseal Secret %s/%s: %w", cluster.Namespace, secretName, err)
+	}
+
+	logger.Info("Created unseal Secret", "secret", secretName)
 	return nil
 }
 

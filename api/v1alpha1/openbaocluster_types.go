@@ -153,15 +153,57 @@ type BackupSchedule struct {
 	// Retention defines optional backup retention policy.
 	// +optional
 	Retention *BackupRetention `json:"retention,omitempty"`
-	// PreUpgradeSnapshot, when true, triggers a backup before any upgrade.
-	// +optional
-	PreUpgradeSnapshot bool `json:"preUpgradeSnapshot,omitempty"`
 	// ExecutorImage is the container image to use for backup operations.
 	// Defaults to "openbao/backup-executor:v0.1.0" if not specified.
 	// This allows users to override the image for air-gapped environments or custom registries.
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	ExecutorImage string `json:"executorImage,omitempty"`
+}
+
+// UpgradeConfig defines configuration for upgrade operations.
+type UpgradeConfig struct {
+	// PreUpgradeSnapshot, when true, triggers a backup before any upgrade.
+	// When enabled, the upgrade manager will create a backup using the backup
+	// configuration (spec.backup.target, spec.backup.executorImage, etc.) and
+	// wait for it to complete before proceeding with the upgrade.
+	//
+	// If the backup fails, the upgrade will be blocked and a Degraded condition
+	// will be set with Reason=PreUpgradeBackupFailed.
+	//
+	// Requires spec.backup to be configured with target, executorImage, and
+	// authentication (kubernetesAuthRole or tokenSecretRef).
+	// +optional
+	PreUpgradeSnapshot bool `json:"preUpgradeSnapshot,omitempty"`
+	// KubernetesAuthRole is the name of the Kubernetes Auth role configured in OpenBao
+	// for upgrade operations. When set, the upgrade manager will use Kubernetes Auth
+	// (ServiceAccount token) instead of a static token. This is the preferred authentication
+	// method as tokens are automatically rotated by Kubernetes.
+	//
+	// The role must be configured in OpenBao and must grant:
+	// - "read" capability on sys/health
+	// - "update" capability on sys/step-down
+	// - "read" capability on sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
+	// The role must bind to the operator's ServiceAccount.
+	//
+	// If not set and preUpgradeSnapshot is true, the upgrade manager will
+	// use spec.backup.kubernetesAuthRole instead (if configured).
+	// +optional
+	KubernetesAuthRole string `json:"kubernetesAuthRole,omitempty"`
+	// TokenSecretRef optionally references a Secret containing an OpenBao API
+	// token to use for upgrade operations.
+	//
+	// The token must have permission to:
+	// - read sys/health
+	// - update sys/step-down
+	// - read sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
+	//
+	// If not set and preUpgradeSnapshot is true, the upgrade manager will
+	// use spec.backup.tokenSecretRef instead (if configured).
+	//
+	// If KubernetesAuthRole is set, this field is ignored in favor of Kubernetes Auth.
+	// +optional
+	TokenSecretRef *corev1.SecretReference `json:"tokenSecretRef,omitempty"`
 }
 
 // BackupRetention defines retention policy for backups.
@@ -383,6 +425,13 @@ type OpenBaoClusterSpec struct {
 	// See: https://openbao.org/docs/configuration/telemetry/
 	// +optional
 	Telemetry *TelemetryConfig `json:"telemetry,omitempty"`
+	// Upgrade configures upgrade operations.
+	//
+	// When spec.upgrade.preUpgradeSnapshot is true, if upgrade authentication is not
+	// explicitly configured, the upgrade manager will use backup authentication
+	// (spec.backup.kubernetesAuthRole or spec.backup.tokenSecretRef) instead.
+	// +optional
+	Upgrade *UpgradeConfig `json:"upgrade,omitempty"`
 }
 
 // UpgradeProgress tracks the state of an in-progress upgrade.

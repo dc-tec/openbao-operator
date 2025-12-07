@@ -96,10 +96,6 @@ spec:
                       sys/storage/raft/snapshot. The role must bind to the backup ServiceAccount
                       (<cluster-name>-backup-serviceaccount) in the cluster namespace.
                     type: string
-                  preUpgradeSnapshot:
-                    description: PreUpgradeSnapshot, when true, triggers a backup
-                      before any upgrade.
-                    type: boolean
                   retention:
                     description: Retention defines optional backup retention policy.
                     properties:
@@ -620,6 +616,69 @@ spec:
                 required:
                 - enabled
                 - rotationPeriod
+                type: object
+              upgrade:
+                description: |-
+                  Upgrade configures upgrade operations.
+
+                  When spec.upgrade.preUpgradeSnapshot is true, if upgrade authentication is not
+                  explicitly configured, the upgrade manager will use backup authentication
+                  (spec.backup.kubernetesAuthRole or spec.backup.tokenSecretRef) instead.
+                properties:
+                  kubernetesAuthRole:
+                    description: |-
+                      KubernetesAuthRole is the name of the Kubernetes Auth role configured in OpenBao
+                      for upgrade operations. When set, the upgrade manager will use Kubernetes Auth
+                      (ServiceAccount token) instead of a static token. This is the preferred authentication
+                      method as tokens are automatically rotated by Kubernetes.
+
+                      The role must be configured in OpenBao and must grant:
+                      - "read" capability on sys/health
+                      - "update" capability on sys/step-down
+                      - "read" capability on sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
+                      The role must bind to the operator's ServiceAccount.
+
+                      If not set and preUpgradeSnapshot is true, the upgrade manager will
+                      use spec.backup.kubernetesAuthRole instead (if configured).
+                    type: string
+                  preUpgradeSnapshot:
+                    description: |-
+                      PreUpgradeSnapshot, when true, triggers a backup before any upgrade.
+                      When enabled, the upgrade manager will create a backup using the backup
+                      configuration (spec.backup.target, spec.backup.executorImage, etc.) and
+                      wait for it to complete before proceeding with the upgrade.
+
+                      If the backup fails, the upgrade will be blocked and a Degraded condition
+                      will be set with Reason=PreUpgradeBackupFailed.
+
+                      Requires spec.backup to be configured with target, executorImage, and
+                      authentication (kubernetesAuthRole or tokenSecretRef).
+                    type: boolean
+                  tokenSecretRef:
+                    description: |-
+                      TokenSecretRef optionally references a Secret containing an OpenBao API
+                      token to use for upgrade operations.
+
+                      The token must have permission to:
+                      - read sys/health
+                      - update sys/step-down
+                      - read sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
+
+                      If not set and preUpgradeSnapshot is true, the upgrade manager will
+                      use spec.backup.tokenSecretRef instead (if configured).
+
+                      If KubernetesAuthRole is set, this field is ignored in favor of Kubernetes Auth.
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
                 type: object
               version:
                 description: |-

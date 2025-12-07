@@ -220,6 +220,9 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 			if !strings.Contains(envVars["BAO_API_ADDR"], "$(POD_IP)") {
 				t.Fatalf("expected BAO_API_ADDR env var to contain $(POD_IP), got %q", envVars["BAO_API_ADDR"])
 			}
+			if envVars["UMASK"] != "0077" {
+				t.Fatalf("expected UMASK env var to be 0077, got %q", envVars["UMASK"])
+			}
 		}
 	}
 	if !containerFound {

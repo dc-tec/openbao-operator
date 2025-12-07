@@ -368,6 +368,13 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 									Name:  "BAO_API_ADDR",
 									Value: fmt.Sprintf("https://$(POD_IP):%d", openBaoContainerPort),
 								},
+								{
+									// Set umask to 0077 to ensure Raft FSM database files are created
+									// with 0600 permissions (owner read/write only) instead of 0660.
+									// This matches OpenBao's security expectations for sensitive data files.
+									Name:  "UMASK",
+									Value: "0077",
+								},
 							},
 							Ports: []corev1.ContainerPort{
 								{

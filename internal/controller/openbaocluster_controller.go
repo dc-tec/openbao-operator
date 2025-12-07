@@ -72,7 +72,9 @@ type OpenBaoClusterReconciler struct {
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch
+// Note: These annotations document the permissions needed by the operator. The actual RBAC
+// is provided by namespace-scoped Roles created by the Provisioner controller in tenant
+// namespaces. The operator no longer uses cluster-wide permissions.
 
 // Reconcile is part of the main Kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -254,7 +256,7 @@ func (r *OpenBaoClusterReconciler) reconcileInit(ctx context.Context, logger log
 
 func (r *OpenBaoClusterReconciler) reconcileUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	logger.Info("Reconciling upgrades for OpenBaoCluster")
-	manager := upgrademanager.NewManager(r.Client)
+	manager := upgrademanager.NewManager(r.Client, r.Scheme)
 	return manager.Reconcile(ctx, logger, cluster)
 }
 

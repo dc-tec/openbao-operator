@@ -978,6 +978,16 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
 				MatchLabels: podSelector,
+				// Exclude backup job pods from this NetworkPolicy.
+				// Backup jobs have different network requirements (e.g., access to object storage)
+				// and should be managed by separate NetworkPolicies if restrictions are needed.
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{
+						Key:      "openbao.org/component",
+						Operator: metav1.LabelSelectorOpNotIn,
+						Values:   []string{"backup"},
+					},
+				},
 			},
 			PolicyTypes: []networkingv1.PolicyType{
 				networkingv1.PolicyTypeIngress,

@@ -59,8 +59,8 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: openbaocluster-full
 spec:
-  version: "2.4.3"
-  image: "openbao/openbao:2.4.3"
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
   initContainer:
     enabled: true
     # For k3d clusters, use the k3d registry path: k3d-registry.localhost:5000/openbao-config-init:dev
@@ -127,6 +127,22 @@ spec:
             path "sys/storage/raft/snapshot" {
               capabilities = ["read"]
             }
+
+      - name: create-upgrade-policy
+        operation: update
+        path: sys/policies/acl/upgrade
+        data:
+          policy: |
+            path "sys/health" {
+              capabilities = ["read"]
+            }
+            path "sys/step-down" {
+              capabilities = ["update"]
+            }
+            path "sys/storage/raft/snapshot" {
+              capabilities = ["read"]
+            }
+
       # Create a Kubernetes Auth role for backup operations.
       # This role binds to the backup ServiceAccount (<cluster-name>-backup-serviceaccount)
       # and grants the backup policy (read access to sys/storage/raft/snapshot).
@@ -137,6 +153,15 @@ spec:
           bound_service_account_names: openbaocluster-full-backup-serviceaccount
           bound_service_account_namespaces: openbaocluster-full
           policies: backup
+          ttl: 1h
+
+      - name: create-upgrade-kubernetes-role
+        operation: update
+        path: auth/kubernetes/role/upgrade
+        data:
+          bound_service_account_names: openbaocluster-full-upgrade-serviceaccount
+          bound_service_account_namespaces: openbaocluster-full
+          policies: upgrade
           ttl: 1h
 
   # Gateway API configuration (based on openbao_v1alpha1_openbaocluster_gateway.yaml).
@@ -155,6 +180,10 @@ spec:
     annotations:
       bao-full.adfinis.localhost/backend-protocol: HTTPS
 
+  upgrade:
+    kubernetesAuthRole: upgrade
+    # Take a snapshot before any version upgrade.
+    preUpgradeSnapshot: true
   # Scheduled backups to RustFS (S3-compatible storage).
   backup:
     # Run a backup every 15 minutes
@@ -165,13 +194,27 @@ spec:
     executorImage: "k3d-registry.localhost:5000/openbao-backup:1.0.1"
     target:
       # RustFS S3 API endpoint inside the cluster.
+      # Use the internal ClusterIP service for in-cluster access (recommended).
+      # This avoids Ingress TLS/certificate issues and is more efficient.
+      # Alternative: Use Ingress endpoint "https://rustfs.adfinis.localhost" if accessing from outside cluster.
       endpoint: "http://rustfs-svc.rustfs.svc.cluster.local:9000"
       # Bucket name to store backups in RustFS.
       bucket: "openbao-backups"
       # Optional prefix within the bucket for this cluster's backups.
-      pathPrefix: "clusters/openbaocluster-full"
+      # The full path will be: <pathPrefix>/<namespace>/<cluster>/<timestamp>-<uuid>.snap
+      # Example: clusters/openbaocluster-full/openbaocluster-full/2025-12-07T10-45-32Z-21d31dd7.snap
+      pathPrefix: "clusters"
+      # Use path-style addressing (required for S3-compatible stores like RustFS).
+      # When false, the SDK uses virtual-hosted-style (bucket.endpoint), which causes DNS issues.
+      usePathStyle: true
       # Reference to the Secret containing S3 credentials.
       # Secret must be in the same namespace as the OpenBaoCluster.
+      # For self-signed certificates, add the CA certificate to the Secret with key "caCert":
+      #   kubectl create secret generic rustfs-secret \
+      #     --from-literal=accessKeyId=<key> \
+      #     --from-literal=secretAccessKey=<secret> \
+      #     --from-file=caCert=/path/to/ca.crt \
+      #     -n <namespace>
       credentialsSecretRef:
         name: rustfs-secret
     # Authentication method for backup operations.
@@ -188,5 +231,3 @@ spec:
     retention:
       maxCount: 7
       maxAge: "168h"
-    # Take a snapshot before any version upgrade.
-    preUpgradeSnapshot: true

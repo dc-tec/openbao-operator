@@ -2,13 +2,19 @@ kind: Namespace
 apiVersion: v1
 metadata:
   name: openbaocluster-full
+  labels:
+    openbao.org/tenant: "true"
 ---
 kind: Namespace
 apiVersion: v1
 metadata:
   name: openbaocluster-gateway
+  labels:
+    openbao.org/tenant: "true"
 ---
 kind: Namespace
 apiVersion: v1
 metadata:
   name: openbaocluster-ingress
+  labels:
+    openbao.org/tenant: "true"

@@ -6,7 +6,6 @@ resources:
   # Dashboard JSON is typically deployed as a ConfigMap
   # Uncomment and customize the following if deploying via ConfigMap:
   # - dashboard-configmap.yaml
-
 # Example ConfigMap for Grafana Operator:
 # apiVersion: v1
 # kind: ConfigMap

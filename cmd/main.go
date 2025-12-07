@@ -40,6 +40,7 @@ import (
 	certmanager "github.com/openbao/operator/internal/certs"
 	"github.com/openbao/operator/internal/controller"
 	initmanager "github.com/openbao/operator/internal/init"
+	"github.com/openbao/operator/internal/provisioner"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	// +kubebuilder:scaffold:imports
 )
@@ -207,6 +208,19 @@ func main() {
 		InitManager: initMgr,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
+		os.Exit(1)
+	}
+
+	// Create provisioner manager for namespace onboarding
+	provisionerMgr := provisioner.NewManager(mgr.GetClient(), setupLog.WithName("provisioner"))
+
+	// Register namespace provisioner controller
+	if err := (&controller.NamespaceProvisionerReconciler{
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		Provisioner: provisionerMgr,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "NamespaceProvisioner")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

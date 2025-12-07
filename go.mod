@@ -14,6 +14,7 @@ require (
 	github.com/onsi/gomega v1.36.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/stretchr/testify v1.10.0
 	github.com/zclconf/go-cty v1.17.0
 	k8s.io/api v0.34.1
 	k8s.io/apiextensions-apiserver v0.34.1

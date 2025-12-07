@@ -1,0 +1,91 @@
+---
+# ClusterRole for the Provisioner Controller
+# The Provisioner is a lightweight controller that watches for tenant namespaces
+# (labeled with openbao.org/tenant=true) and creates namespace-scoped Role and
+# RoleBinding resources to grant the operator permission to manage OpenBaoCluster
+# resources in those namespaces.
+#
+# IMPORTANT: Kubernetes RBAC requires that when creating a Role, the creator must
+# have all the permissions they are trying to grant. Therefore, the Provisioner
+# must have cluster-wide permissions for all resources it grants in tenant Roles.
+# This is a necessary security trade-off, but the Provisioner only creates
+# namespace-scoped Roles (not ClusterRoles), limiting the blast radius.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openbao-operator-provisioner-role
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/component: provisioner
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  # Watch namespaces to detect tenant labels
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+  # Create and manage Roles and RoleBindings in tenant namespaces
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+      - rolebindings
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  # Permissions required to grant in tenant Roles (Kubernetes RBAC escalation protection)
+  # The Provisioner must have these permissions to be able to grant them to others
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+      - openbaoclusters/status
+      - openbaoclusters/finalizers
+    verbs:
+      - "*"
+  - apiGroups:
+      - apps
+    resources:
+      - statefulsets
+    verbs:
+      - "*"
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - serviceaccounts
+      - services
+      - secrets
+      - pods
+      - persistentvolumeclaims
+      - endpoints
+    verbs:
+      - "*"
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - "*"
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs:
+      - "*"
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - httproutes
+    verbs:
+      - "*"

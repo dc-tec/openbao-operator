@@ -2,7 +2,9 @@ package upgrade
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -10,11 +12,16 @@ import (
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/logging"
@@ -24,14 +31,17 @@ import (
 const (
 	// tlsCASecretSuffix is the suffix for the TLS CA secret.
 	tlsCASecretSuffix = "-tls-ca"
-	// rootTokenSecretSuffix is the suffix for the root token secret.
-	rootTokenSecretSuffix = "-root-token"
-	// rootTokenSecretKey is the key in the root token secret.
-	rootTokenSecretKey = "token"
 	// headlessServiceSuffix is appended to cluster name for the headless service.
 	headlessServiceSuffix = ""
 	// openBaoContainerPort is the API port.
 	openBaoContainerPort = 8200
+	// defaultK8sTokenPath is the default path for Kubernetes ServiceAccount tokens.
+	defaultK8sTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+)
+
+var (
+	// ErrNoUpgradeToken indicates that no suitable upgrade token is configured.
+	ErrNoUpgradeToken = errors.New("no upgrade token configured: either spec.upgrade.kubernetesAuthRole, spec.upgrade.tokenSecretRef, or (when preUpgradeSnapshot is enabled) spec.backup.kubernetesAuthRole or spec.backup.tokenSecretRef must be set")
 )
 
 // OpenBaoClientFactory creates OpenBao API clients for connecting to cluster pods.
@@ -41,22 +51,25 @@ type OpenBaoClientFactory func(config openbaoapi.ClientConfig) (*openbaoapi.Clie
 // Manager reconciles version and Raft-aware upgrade behavior for an OpenBaoCluster.
 type Manager struct {
 	client        client.Client
+	scheme        *runtime.Scheme
 	clientFactory OpenBaoClientFactory
 }
 
-// NewManager constructs a Manager that uses the provided Kubernetes client.
-func NewManager(c client.Client) *Manager {
+// NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
+func NewManager(c client.Client, scheme *runtime.Scheme) *Manager {
 	return &Manager{
 		client:        c,
+		scheme:        scheme,
 		clientFactory: openbaoapi.NewClient,
 	}
 }
 
 // NewManagerWithClientFactory constructs a Manager with a custom OpenBao client factory.
 // This is primarily used for testing.
-func NewManagerWithClientFactory(c client.Client, factory OpenBaoClientFactory) *Manager {
+func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factory OpenBaoClientFactory) *Manager {
 	return &Manager{
 		client:        c,
+		scheme:        scheme,
 		clientFactory: factory,
 	}
 }
@@ -115,7 +128,28 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return err
 	}
 
-	// Phase 3: Initialize Upgrade (if not resuming)
+	// Phase 3: Pre-upgrade Snapshot (if enabled)
+	// Note: This happens after validation to ensure cluster is healthy before snapshot
+	// If backup is in progress, this will return nil to requeue, preventing upgrade initialization
+	if cluster.Status.Upgrade == nil {
+		if err := m.handlePreUpgradeSnapshot(ctx, logger, cluster); err != nil {
+			return err
+		}
+
+		// Check if backup job is still running - if so, requeue without initializing upgrade
+		existingJobName, existingJobStatus, err := m.findExistingPreUpgradeBackupJob(ctx, cluster)
+		if err != nil {
+			return fmt.Errorf("failed to check for existing pre-upgrade backup job: %w", err)
+		}
+		if existingJobName != "" && existingJobStatus == "running" {
+			// Backup job exists and is running - requeue to wait for it
+			logger.Info("Pre-upgrade backup job is still running, requeuing", "job", existingJobName)
+			return nil // Requeue - don't proceed to upgrade initialization
+		}
+	}
+
+	// Phase 4: Initialize Upgrade (if not resuming)
+	// Only reached if pre-upgrade snapshot is complete or not enabled
 	if cluster.Status.Upgrade == nil {
 		if err := m.initializeUpgrade(ctx, logger, cluster); err != nil {
 			return err
@@ -130,7 +164,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		metrics.SetTotalPods(int(cluster.Spec.Replicas))
 	}
 
-	// Phase 4: Pod-by-Pod Update
+	// Phase 5: Pod-by-Pod Update
 	completed, err := m.performPodByPodUpgrade(ctx, logger, cluster, metrics)
 	if err != nil {
 		SetUpgradeFailed(&cluster.Status, ReasonUpgradeFailed, err.Error(), cluster.Generation)
@@ -149,7 +183,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return nil
 	}
 
-	// Phase 5: Finalization
+	// Phase 6: Finalization
 	if err := m.finalizeUpgrade(ctx, logger, cluster, metrics); err != nil {
 		return err
 	}
@@ -348,6 +382,407 @@ func (m *Manager) checkPodHealth(ctx context.Context, logger logr.Logger, cluste
 	}
 
 	return healthyCount, leaderCount, nil
+}
+
+// handlePreUpgradeSnapshot checks if preUpgradeSnapshot is enabled and triggers a backup if needed.
+// Returns an error if backup fails, which will block the upgrade.
+// Returns nil if backup is in progress (requeue will happen automatically).
+// Returns nil if backup is complete or not needed.
+func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	// Check if pre-upgrade snapshot is enabled
+	if cluster.Spec.Upgrade == nil || !cluster.Spec.Upgrade.PreUpgradeSnapshot {
+		logger.V(1).Info("Pre-upgrade snapshot is not enabled")
+		return nil
+	}
+
+	// Verify backup configuration is valid
+	if err := m.validateBackupConfig(ctx, cluster); err != nil {
+		SetPreUpgradeBackupFailed(&cluster.Status, err.Error(), cluster.Generation)
+		if statusErr := m.client.Status().Update(ctx, cluster); statusErr != nil {
+			logger.Error(statusErr, "Failed to update status after pre-upgrade backup validation failure")
+		}
+		return fmt.Errorf("pre-upgrade backup configuration invalid: %w", err)
+	}
+
+	// Check if there's an existing pre-upgrade backup job (running or failed)
+	existingJobName, existingJobStatus, err := m.findExistingPreUpgradeBackupJob(ctx, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to check for existing pre-upgrade backup job: %w", err)
+	}
+
+	var jobName string
+	if existingJobName != "" {
+		// Job exists - check its status
+		jobName = existingJobName
+		logger.Info("Found existing pre-upgrade backup job, checking status", "job", jobName)
+
+		// If job failed, return error immediately
+		if existingJobStatus == "failed" {
+			SetPreUpgradeBackupFailed(&cluster.Status, fmt.Sprintf("backup job %s failed", jobName), cluster.Generation)
+			if statusErr := m.client.Status().Update(ctx, cluster); statusErr != nil {
+				logger.Error(statusErr, "Failed to update status after pre-upgrade backup failure")
+			}
+			return fmt.Errorf("pre-upgrade backup job %s failed", jobName)
+		}
+	} else {
+		// Create new job
+		jobName = m.backupJobName(cluster)
+		logger.Info("Creating pre-upgrade backup job", "job", jobName)
+
+		job, err := m.buildBackupJob(cluster, jobName)
+		if err != nil {
+			return fmt.Errorf("failed to build backup job: %w", err)
+		}
+
+		// Set OwnerReference for garbage collection
+		if m.scheme != nil {
+			if err := controllerutil.SetControllerReference(cluster, job, m.scheme); err != nil {
+				return fmt.Errorf("failed to set owner reference on backup job: %w", err)
+			}
+		}
+
+		if err := m.client.Create(ctx, job); err != nil {
+			return fmt.Errorf("failed to create backup job: %w", err)
+		}
+
+		logger.Info("Pre-upgrade backup job created", "job", jobName)
+		// Return nil to requeue - we'll check job status on next reconcile
+		return nil
+	}
+
+	// Check job status
+	job := &batchv1.Job{}
+	if err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      jobName,
+	}, job); err != nil {
+		if apierrors.IsNotFound(err) {
+			// Job was cleaned up - assume it completed successfully
+			logger.Info("Pre-upgrade backup job was cleaned up, assuming completion", "job", jobName)
+			return nil
+		}
+		return fmt.Errorf("failed to get backup job: %w", err)
+	}
+
+	// Check job status
+	if job.Status.Succeeded > 0 {
+		logger.Info("Pre-upgrade backup job completed successfully", "job", jobName)
+		return nil
+	}
+
+	if job.Status.Failed > 0 {
+		SetPreUpgradeBackupFailed(&cluster.Status, fmt.Sprintf("backup job %s failed", jobName), cluster.Generation)
+		if statusErr := m.client.Status().Update(ctx, cluster); statusErr != nil {
+			logger.Error(statusErr, "Failed to update status after pre-upgrade backup failure")
+		}
+		return fmt.Errorf("pre-upgrade backup job %s failed", jobName)
+	}
+
+	// Job is still running - return nil to requeue
+	logger.Info("Pre-upgrade backup job is still running, will requeue",
+		"job", jobName,
+		"active", job.Status.Active,
+		"succeeded", job.Status.Succeeded,
+		"failed", job.Status.Failed)
+	return nil
+}
+
+// validateBackupConfig validates that backup configuration is present and valid.
+func (m *Manager) validateBackupConfig(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	backupCfg := cluster.Spec.Backup
+	if backupCfg == nil {
+		return fmt.Errorf("backup configuration is required when preUpgradeSnapshot is enabled")
+	}
+
+	// Check if Kubernetes Auth is configured (preferred method)
+	hasKubernetesAuth := strings.TrimSpace(backupCfg.KubernetesAuthRole) != ""
+
+	// Check if static token is configured (fallback method)
+	hasTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""
+
+	// At least one authentication method must be configured
+	if !hasKubernetesAuth && !hasTokenSecret {
+		return fmt.Errorf("backup authentication is required: either kubernetesAuthRole or tokenSecretRef must be set")
+	}
+
+	// If using token secret, verify it exists
+	if hasTokenSecret {
+		secretNamespace := cluster.Namespace
+		if ns := strings.TrimSpace(backupCfg.TokenSecretRef.Namespace); ns != "" {
+			secretNamespace = ns
+		}
+
+		secretName := types.NamespacedName{
+			Namespace: secretNamespace,
+			Name:      backupCfg.TokenSecretRef.Name,
+		}
+
+		secret := &corev1.Secret{}
+		if err := m.client.Get(ctx, secretName, secret); err != nil {
+			if apierrors.IsNotFound(err) {
+				return fmt.Errorf("backup token Secret %s/%s not found", secretNamespace, backupCfg.TokenSecretRef.Name)
+			}
+			return fmt.Errorf("failed to get backup token Secret %s/%s: %w", secretNamespace, backupCfg.TokenSecretRef.Name, err)
+		}
+	}
+
+	// Verify executor image is configured
+	if strings.TrimSpace(backupCfg.ExecutorImage) == "" {
+		return fmt.Errorf("backup executor image is required (spec.backup.executorImage)")
+	}
+
+	return nil
+}
+
+// findExistingPreUpgradeBackupJob finds an existing pre-upgrade backup job for this cluster.
+// Returns the job name and status ("running", "failed", "succeeded") if found, empty strings if not found.
+func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, string, error) {
+	jobList := &batchv1.JobList{}
+	labelSelector := labels.SelectorFromSet(map[string]string{
+		"app.kubernetes.io/instance":   cluster.Name,
+		"app.kubernetes.io/managed-by": "openbao-operator",
+		"openbao.org/cluster":          cluster.Name,
+		"openbao.org/component":        "backup",
+		"openbao.org/backup-type":      "pre-upgrade",
+	})
+
+	if err := m.client.List(ctx, jobList,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabelsSelector{Selector: labelSelector},
+	); err != nil {
+		return "", "", fmt.Errorf("failed to list backup jobs: %w", err)
+	}
+
+	// Find the most recent job (prefer running, then failed, then succeeded)
+	var runningJob, failedJob, succeededJob *batchv1.Job
+	for i := range jobList.Items {
+		job := &jobList.Items[i]
+		if job.Status.Succeeded > 0 {
+			if succeededJob == nil {
+				succeededJob = job
+			}
+		} else if job.Status.Failed > 0 {
+			if failedJob == nil {
+				failedJob = job
+			}
+		} else if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
+			// Job is still running or pending
+			if runningJob == nil {
+				runningJob = job
+			}
+		}
+	}
+
+	// Return running job first, then failed, then succeeded
+	if runningJob != nil {
+		return runningJob.Name, "running", nil
+	}
+	if failedJob != nil {
+		return failedJob.Name, "failed", nil
+	}
+	if succeededJob != nil {
+		return succeededJob.Name, "succeeded", nil
+	}
+
+	// No job found
+	return "", "", nil
+}
+
+// backupJobName generates a unique name for a backup job.
+func (m *Manager) backupJobName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	// Use a fixed prefix for pre-upgrade backups so we can detect existing jobs
+	return fmt.Sprintf("pre-upgrade-backup-%s-%s", cluster.Name, time.Now().Format("20060102-150405"))
+}
+
+// buildBackupJob builds a Kubernetes Job for executing a backup.
+// This mirrors the logic from internal/backup/job.go but is adapted for pre-upgrade use.
+func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*batchv1.Job, error) {
+	backupCfg := cluster.Spec.Backup
+	if backupCfg == nil {
+		return nil, fmt.Errorf("backup configuration is required")
+	}
+
+	// Build environment variables for the backup container
+	env := []corev1.EnvVar{
+		{Name: "CLUSTER_NAMESPACE", Value: cluster.Namespace},
+		{Name: "CLUSTER_NAME", Value: cluster.Name},
+		{Name: "CLUSTER_REPLICAS", Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
+		{Name: "BACKUP_ENDPOINT", Value: backupCfg.Target.Endpoint},
+		{Name: "BACKUP_BUCKET", Value: backupCfg.Target.Bucket},
+		{Name: "BACKUP_PATH_PREFIX", Value: backupCfg.Target.PathPrefix},
+		{Name: "BACKUP_USE_PATH_STYLE", Value: fmt.Sprintf("%t", backupCfg.Target.UsePathStyle)},
+	}
+
+	// Add credentials secret reference if provided
+	if backupCfg.Target.CredentialsSecretRef != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "BACKUP_CREDENTIALS_SECRET_NAME",
+			Value: backupCfg.Target.CredentialsSecretRef.Name,
+		})
+		if backupCfg.Target.CredentialsSecretRef.Namespace != "" {
+			env = append(env, corev1.EnvVar{
+				Name:  "BACKUP_CREDENTIALS_SECRET_NAMESPACE",
+				Value: backupCfg.Target.CredentialsSecretRef.Namespace,
+			})
+		}
+	}
+
+	// Add Kubernetes Auth configuration (preferred method)
+	if backupCfg.KubernetesAuthRole != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  "BACKUP_KUBERNETES_AUTH_ROLE",
+			Value: backupCfg.KubernetesAuthRole,
+		})
+		env = append(env, corev1.EnvVar{
+			Name:  "BACKUP_AUTH_METHOD",
+			Value: "kubernetes",
+		})
+	}
+
+	// Add token secret reference if provided (fallback for token-based auth)
+	if backupCfg.TokenSecretRef != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "BACKUP_TOKEN_SECRET_NAME",
+			Value: backupCfg.TokenSecretRef.Name,
+		})
+		if backupCfg.TokenSecretRef.Namespace != "" {
+			env = append(env, corev1.EnvVar{
+				Name:  "BACKUP_TOKEN_SECRET_NAMESPACE",
+				Value: backupCfg.TokenSecretRef.Namespace,
+			})
+		}
+		// Only set auth method to token if Kubernetes Auth is not configured
+		if backupCfg.KubernetesAuthRole == "" {
+			env = append(env, corev1.EnvVar{
+				Name:  "BACKUP_AUTH_METHOD",
+				Value: "token",
+			})
+		}
+	}
+
+	backoffLimit := int32(0)               // Don't retry failed backups automatically
+	ttlSecondsAfterFinished := int32(3600) // 1 hour TTL
+
+	image := strings.TrimSpace(backupCfg.ExecutorImage)
+	if image == "" {
+		return nil, fmt.Errorf("backup executor image is required")
+	}
+
+	// Build volumes and volume mounts
+	volumes := []corev1.Volume{
+		{
+			Name: "tls-ca",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: fmt.Sprintf("%s-tls-ca", cluster.Name),
+				},
+			},
+		},
+	}
+
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "tls-ca",
+			MountPath: "/etc/bao/tls",
+			ReadOnly:  true,
+		},
+	}
+
+	// Add credentials secret volume if provided
+	if backupCfg.Target.CredentialsSecretRef != nil {
+		credentialsFileMode := int32(0400)
+		volumes = append(volumes, corev1.Volume{
+			Name: "backup-credentials",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  backupCfg.Target.CredentialsSecretRef.Name,
+					DefaultMode: &credentialsFileMode,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "backup-credentials",
+			MountPath: "/etc/bao/backup/credentials",
+			ReadOnly:  true,
+		})
+	}
+
+	// Add token secret volume if provided
+	if backupCfg.TokenSecretRef != nil {
+		tokenFileMode := int32(0400)
+		volumes = append(volumes, corev1.Volume{
+			Name: "backup-token",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  backupCfg.TokenSecretRef.Name,
+					DefaultMode: &tokenFileMode,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "backup-token",
+			MountPath: "/etc/bao/backup/token",
+			ReadOnly:  true,
+		})
+	}
+
+	// Get backup ServiceAccount name
+	backupServiceAccountName := cluster.Name + "-backup-serviceaccount"
+
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":       "openbao",
+				"app.kubernetes.io/instance":   cluster.Name,
+				"app.kubernetes.io/managed-by": "openbao-operator",
+				"openbao.org/cluster":          cluster.Name,
+				"openbao.org/component":        "backup",
+				"openbao.org/backup-type":      "pre-upgrade",
+			},
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoffLimit,
+			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app.kubernetes.io/name":       "openbao",
+						"app.kubernetes.io/instance":   cluster.Name,
+						"app.kubernetes.io/managed-by": "openbao-operator",
+						"openbao.org/cluster":          cluster.Name,
+						"openbao.org/component":        "backup",
+						"openbao.org/backup-type":      "pre-upgrade",
+					},
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: backupServiceAccountName,
+					SecurityContext: &corev1.PodSecurityContext{
+						RunAsNonRoot: ptr.To(true),
+						RunAsUser:    ptr.To(int64(1000)),
+						RunAsGroup:   ptr.To(int64(1000)),
+						FSGroup:      ptr.To(int64(1000)),
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:         "backup",
+							Image:        image,
+							Env:          env,
+							VolumeMounts: volumeMounts,
+						},
+					},
+					Volumes: volumes,
+				},
+			},
+		},
+	}
+
+	return job, nil
 }
 
 // initializeUpgrade sets up the upgrade state and locks the StatefulSet partition.
@@ -700,6 +1135,7 @@ func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, clust
 }
 
 // getClusterPods returns all pods belonging to the cluster.
+// It filters out backup job pods and other non-StatefulSet pods.
 func (m *Manager) getClusterPods(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) ([]corev1.Pod, error) {
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
@@ -715,15 +1151,37 @@ func (m *Manager) getClusterPods(ctx context.Context, cluster *openbaov1alpha1.O
 		return nil, err
 	}
 
+	// Filter out backup job pods and other non-StatefulSet pods
+	// StatefulSet pods have a name pattern: <cluster-name>-<ordinal>
+	// Backup job pods have labels like "openbao.org/component": "backup"
+	filteredPods := make([]corev1.Pod, 0, len(podList.Items))
+	statefulSetPrefix := cluster.Name + "-"
+	for _, pod := range podList.Items {
+		// Skip backup job pods (they have the backup component label)
+		if pod.Labels["openbao.org/component"] == "backup" {
+			continue
+		}
+		// Only include pods that match the StatefulSet naming pattern
+		// StatefulSet pods are named like: <cluster-name>-<ordinal>
+		if !strings.HasPrefix(pod.Name, statefulSetPrefix) {
+			continue
+		}
+		// Extract the suffix after the cluster name
+		suffix := pod.Name[len(statefulSetPrefix):]
+		// Verify the suffix is a valid ordinal (numeric)
+		if ordinal, err := strconv.Atoi(suffix); err == nil && ordinal >= 0 {
+			filteredPods = append(filteredPods, pod)
+		}
+	}
+
 	// Sort by ordinal (descending) for consistent processing order
-	pods := podList.Items
-	sort.Slice(pods, func(i, j int) bool {
-		ordinalI := extractOrdinal(pods[i].Name)
-		ordinalJ := extractOrdinal(pods[j].Name)
+	sort.Slice(filteredPods, func(i, j int) bool {
+		ordinalI := extractOrdinal(filteredPods[i].Name)
+		ordinalJ := extractOrdinal(filteredPods[j].Name)
 		return ordinalI > ordinalJ
 	})
 
-	return pods, nil
+	return filteredPods, nil
 }
 
 // getClusterCACert retrieves the cluster's CA certificate for TLS connections.
@@ -747,28 +1205,159 @@ func (m *Manager) getClusterCACert(ctx context.Context, cluster *openbaov1alpha1
 }
 
 // getOperatorToken retrieves the authentication token for OpenBao API calls.
+// It supports Kubernetes Auth (preferred) and static token authentication.
+// When spec.upgrade.preUpgradeSnapshot is true, it falls back to backup authentication
+// if upgrade authentication is not explicitly configured.
 func (m *Manager) getOperatorToken(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	secretName := cluster.Name + rootTokenSecretSuffix
-	secret := &corev1.Secret{}
+	// Determine which authentication configuration to use
+	upgradeCfg := cluster.Spec.Upgrade
+	backupCfg := cluster.Spec.Backup
+	useBackupAuth := false
 
-	if err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      secretName,
-	}, secret); err != nil {
-		if apierrors.IsNotFound(err) {
-			// For self-init clusters, there's no root token
-			// Users must configure a dedicated operator token
-			return "", fmt.Errorf("root token secret not found; for self-init clusters, configure an operator token via spec.selfInit.requests")
+	// Check if upgrade auth is explicitly configured
+	hasUpgradeKubernetesAuth := upgradeCfg != nil && strings.TrimSpace(upgradeCfg.KubernetesAuthRole) != ""
+	hasUpgradeTokenSecret := upgradeCfg != nil && upgradeCfg.TokenSecretRef != nil && strings.TrimSpace(upgradeCfg.TokenSecretRef.Name) != ""
+
+	// If upgrade auth is not configured and preUpgradeSnapshot is enabled, use backup auth
+	if !hasUpgradeKubernetesAuth && !hasUpgradeTokenSecret {
+		if upgradeCfg != nil && upgradeCfg.PreUpgradeSnapshot {
+			useBackupAuth = true
+			hasBackupKubernetesAuth := strings.TrimSpace(backupCfg.KubernetesAuthRole) != ""
+			hasBackupTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""
+
+			if !hasBackupKubernetesAuth && !hasBackupTokenSecret {
+				return "", fmt.Errorf("preUpgradeSnapshot is enabled but no backup authentication configured: %w", ErrNoUpgradeToken)
+			}
+		} else {
+			return "", ErrNoUpgradeToken
 		}
-		return "", fmt.Errorf("failed to get root token secret: %w", err)
 	}
 
-	token, ok := secret.Data[rootTokenSecretKey]
-	if !ok {
-		return "", fmt.Errorf("token key not found in secret %s", secretName)
+	// Determine which Kubernetes Auth role to use
+	var kubernetesAuthRole string
+	if hasUpgradeKubernetesAuth {
+		kubernetesAuthRole = strings.TrimSpace(upgradeCfg.KubernetesAuthRole)
+	} else if useBackupAuth && strings.TrimSpace(backupCfg.KubernetesAuthRole) != "" {
+		kubernetesAuthRole = strings.TrimSpace(backupCfg.KubernetesAuthRole)
 	}
 
-	return string(token), nil
+	// If Kubernetes Auth is configured, use it
+	if kubernetesAuthRole != "" {
+		return m.authenticateWithKubernetesAuth(ctx, cluster, kubernetesAuthRole)
+	}
+
+	// Otherwise, use static token
+	var tokenSecretRef *corev1.SecretReference
+	if hasUpgradeTokenSecret {
+		tokenSecretRef = upgradeCfg.TokenSecretRef
+	} else if useBackupAuth && backupCfg.TokenSecretRef != nil {
+		tokenSecretRef = backupCfg.TokenSecretRef
+	}
+
+	if tokenSecretRef == nil {
+		return "", ErrNoUpgradeToken
+	}
+
+	return m.getTokenFromSecret(ctx, cluster, tokenSecretRef)
+}
+
+// authenticateWithKubernetesAuth authenticates to OpenBao using Kubernetes Auth.
+func (m *Manager) authenticateWithKubernetesAuth(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, role string) (string, error) {
+	// Read ServiceAccount token
+	tokenPath := defaultK8sTokenPath
+	k8sTokenBytes, err := os.ReadFile(tokenPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read Kubernetes ServiceAccount token from %s: %w", tokenPath, err)
+	}
+	k8sToken := strings.TrimSpace(string(k8sTokenBytes))
+	if k8sToken == "" {
+		return "", fmt.Errorf("Kubernetes ServiceAccount token is empty")
+	}
+
+	// Get CA certificate for TLS
+	caCert, err := m.getClusterCACert(ctx, cluster)
+	if err != nil {
+		return "", fmt.Errorf("failed to get CA certificate: %w", err)
+	}
+
+	// Find pods to authenticate against
+	podList, err := m.getClusterPods(ctx, cluster)
+	if err != nil {
+		return "", fmt.Errorf("failed to get cluster pods: %w", err)
+	}
+
+	if len(podList) == 0 {
+		return "", fmt.Errorf("no pods found in cluster")
+	}
+
+	// Try to authenticate against each pod until one succeeds
+	var lastErr error
+	for _, pod := range podList {
+		if pod.Status.Phase != corev1.PodRunning {
+			continue
+		}
+
+		podURL := m.getPodURL(cluster, pod.Name)
+
+		// Create OpenBao client without token for authentication
+		apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
+			BaseURL: podURL,
+			CACert:  caCert,
+		})
+		if err != nil {
+			lastErr = fmt.Errorf("failed to create OpenBao client for pod %s: %w", pod.Name, err)
+			continue
+		}
+
+		// Authenticate using Kubernetes Auth
+		token, err := apiClient.KubernetesAuthLogin(ctx, role, k8sToken)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to authenticate using Kubernetes Auth against pod %s: %w", pod.Name, err)
+			continue
+		}
+
+		return token, nil
+	}
+
+	if lastErr != nil {
+		return "", fmt.Errorf("failed to authenticate against any pod: %w", lastErr)
+	}
+
+	return "", fmt.Errorf("no running pods available for authentication")
+}
+
+// getTokenFromSecret retrieves a token from a Kubernetes Secret.
+func (m *Manager) getTokenFromSecret(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, secretRef *corev1.SecretReference) (string, error) {
+	secretNamespace := cluster.Namespace
+	if ns := strings.TrimSpace(secretRef.Namespace); ns != "" {
+		secretNamespace = ns
+	}
+
+	secretName := types.NamespacedName{
+		Namespace: secretNamespace,
+		Name:      secretRef.Name,
+	}
+
+	secret := &corev1.Secret{}
+	if err := m.client.Get(ctx, secretName, secret); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", fmt.Errorf("upgrade token Secret %s/%s not found: %w", secretNamespace, secretRef.Name, ErrNoUpgradeToken)
+		}
+		return "", fmt.Errorf("failed to get upgrade token Secret %s/%s: %w", secretNamespace, secretRef.Name, err)
+	}
+
+	// Extract token from secret (default key is "token")
+	tokenKey := "token"
+	if secret.Data == nil {
+		return "", fmt.Errorf("upgrade token Secret %s/%s has no data", secretNamespace, secretRef.Name)
+	}
+
+	token, ok := secret.Data[tokenKey]
+	if !ok || len(token) == 0 {
+		return "", fmt.Errorf("upgrade token Secret %s/%s missing %q key", secretNamespace, secretRef.Name, tokenKey)
+	}
+
+	return strings.TrimSpace(string(token)), nil
 }
 
 // getPodURL returns the URL for connecting to a specific pod.

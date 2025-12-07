@@ -136,4 +136,7 @@ const (
 
 	// MessageHealthCheckFailed is the message when health checks fail.
 	MessageHealthCheckFailed = "OpenBao health check failed for pod %s: %s"
+
+	// MessagePreUpgradeBackupFailed is the message when pre-upgrade backup fails.
+	MessagePreUpgradeBackupFailed = "Pre-upgrade backup failed: %s"
 )

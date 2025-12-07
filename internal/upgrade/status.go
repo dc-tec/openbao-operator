@@ -212,6 +212,20 @@ func SetClusterNotReady(status *openbaov1alpha1.OpenBaoClusterStatus, reason str
 	})
 }
 
+// SetPreUpgradeBackupFailed sets the degraded condition when a pre-upgrade backup fails.
+func SetPreUpgradeBackupFailed(status *openbaov1alpha1.OpenBaoClusterStatus, message string, generation int64) {
+	now := metav1.Now()
+
+	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+		Type:               string(openbaov1alpha1.ConditionDegraded),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: generation,
+		LastTransitionTime: now,
+		Reason:             ReasonPreUpgradeBackupFailed,
+		Message:            fmt.Sprintf("Pre-upgrade backup failed: %s", message),
+	})
+}
+
 // IsUpgradeInProgress returns true if an upgrade is currently in progress.
 func IsUpgradeInProgress(status *openbaov1alpha1.OpenBaoClusterStatus) bool {
 	return status.Upgrade != nil

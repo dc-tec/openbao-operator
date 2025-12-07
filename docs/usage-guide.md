@@ -103,6 +103,7 @@ For a cluster named `dev-cluster` in namespace `security`, the Operator reconcil
     - Allow egress to DNS (port 53 UDP/TCP) for service discovery.
     - Allow egress to Kubernetes API server (port 443) for pod discovery (discover-k8s provider).
     - Allow egress to cluster pods on ports 8200 and 8201 for Raft communication.
+    - **Note:** Backup job pods (labeled with `openbao.org/component=backup`) are excluded from this NetworkPolicy to allow access to object storage. Users can create custom NetworkPolicies for backup jobs if additional restrictions are needed.
 - Services:
   - Headless Service `dev-cluster` (ClusterIP `None`) backing the StatefulSet.
   - Optional external Service `dev-cluster-public` when `spec.service` or `spec.ingress.enabled` is set.
@@ -922,7 +923,62 @@ spec:
 
 ### 12.3 Network Policies
 
-Isolate OpenBao clusters from each other at the network level:
+The operator automatically creates a NetworkPolicy for each OpenBaoCluster that enforces default-deny ingress and restricts egress. **Backup job pods are excluded from this NetworkPolicy** (they have the label `openbao.org/component=backup`) to allow access to object storage services.
+
+If you need to restrict backup job network access, create a custom NetworkPolicy targeting backup jobs:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backup-job-network-policy
+  namespace: team-a-prod
+spec:
+  podSelector:
+    matchLabels:
+      openbao.org/component: backup
+      openbao.org/cluster: team-a-cluster
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from operator (if needed for monitoring)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: openbao-operator
+      ports:
+        - port: 8080  # metrics port
+  egress:
+    # Allow DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow access to object storage (adjust namespace/port as needed)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: rustfs
+      ports:
+        - port: 9000
+          protocol: TCP
+    # Allow access to OpenBao cluster for snapshot API
+    - to:
+        - podSelector:
+            matchLabels:
+              openbao.org/cluster: team-a-cluster
+      ports:
+        - port: 8200
+          protocol: TCP
+```
+
+For general cluster isolation, the operator-managed NetworkPolicy provides:
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -1139,7 +1195,7 @@ Before deploying OpenBao in a multi-tenant environment, verify:
 
 - [ ] Namespace-scoped RoleBindings configured for each tenant
 - [ ] Tenants cannot read `*-root-token` and `*-unseal-key` Secrets
-- [ ] NetworkPolicies isolate OpenBao clusters from each other
+- [ ] NetworkPolicies isolate OpenBao clusters from each other (operator-managed NetworkPolicy excludes backup jobs; create custom NetworkPolicy for backup jobs if restrictions are needed)
 - [ ] ResourceQuotas limit tenant resource consumption
 - [ ] Each tenant has separate backup credentials with isolated bucket prefixes
 - [ ] Pod Security Admission configured appropriately
