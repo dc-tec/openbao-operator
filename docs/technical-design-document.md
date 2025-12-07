@@ -546,21 +546,39 @@ All controllers MUST honor `spec.paused`:
 
 ### 4.1 The CertManager (TLS Lifecycle)
 
-**Responsibility:** Bootstrap PKI and Rotate Certificates.
+**Responsibility:** Bootstrap PKI and Rotate Certificates (or wait for external Secrets in External mode).
+
+The CertManager supports two modes controlled by `spec.tls.mode`:
+
+#### OperatorManaged Mode (Default)
+
+When `spec.tls.mode` is `OperatorManaged` (or omitted), the operator generates and manages certificates:
 
   * **Logic Flow:**
-    1.  **Reconcile:** Check if `Secret/bao-tls-ca` exists.
-    2.  **Bootstrap:** If missing, generate 2048-bit RSA Root CA. Store PEM in Secret.
-    3.  **Issue:** Check if `Secret/bao-tls-server` exists and is valid (for example, expiry \> configured rotation window).
+    1.  **Reconcile:** Check if `Secret/<cluster>-tls-ca` exists.
+    2.  **Bootstrap:** If missing, generate ECDSA P-256 Root CA. Store PEM in Secret.
+    3.  **Issue:** Check if `Secret/<cluster>-tls-server` exists and is valid (for example, expiry \> configured rotation window).
     4.  **Rotate:** If the server certificate is within the rotation window, regenerate it using the CA and update the Secret atomically.
     5.  **Trigger:** Compute a SHA256 hash of the active server certificate and annotate OpenBao pods with it (for example, `openbao.org/tls-cert-hash`) so the operator and in-pod components can track which certificate each pod is using.
     6.  **Hot Reload:** When the hash changes, the operator uses a `ReloadSignaler` to update the annotation on each ready OpenBao pod. A sidecar container running in the same pod is responsible for watching this annotation or the mounted TLS volume and sending `SIGHUP` to the OpenBao process locally, avoiding the need for `pods/exec` privileges in the operator.
+
+#### External Mode
+
+When `spec.tls.mode` is `External`, the operator does not generate or rotate certificates:
+
+  * **Logic Flow:**
+    1.  **Wait:** Check if `Secret/<cluster>-tls-ca` exists. If missing, log "Waiting for external TLS CA Secret" and return (no error).
+    2.  **Wait:** Check if `Secret/<cluster>-tls-server` exists. If missing, log "Waiting for external TLS server Secret" and return (no error).
+    3.  **Monitor:** When both secrets exist, compute the SHA256 hash of the server certificate.
+    4.  **Hot Reload:** Trigger hot-reload via `ReloadSignaler` when the certificate hash changes (enables seamless rotation by cert-manager or other external providers).
+    5.  **No Rotation:** Do not check expiry or attempt to rotate certificates; assume the external provider handles this.
 
 **Reconciliation Semantics**
 
 - **Idempotency:** Re-running reconciliation with the same Spec MUST lead to the same Secrets and annotations.
 - **Backoff:** Transient errors (e.g., failed Secret update due to concurrent modification) are retried with exponential backoff.
 - **Conditions:** Failures update a `TLSReady=False` condition with a clear reason and message.
+- **External Mode:** The operator waits gracefully for external Secrets without erroring, allowing cert-manager or other tools time to provision certificates.
 
 ### 4.2 The InfrastructureManager (Config & StatefulSet)
 
@@ -573,23 +591,39 @@ All controllers MUST honor `spec.paused`:
       * **Bootstrap:** During initial cluster creation, we configure a single `retry_join` with `leader_api_addr` pointing to the deterministic DNS name of pod-0 (for example, `cluster-0.cluster-name.namespace.svc`). This ensures a stable leader for Day 0 initialization.
       * **Post-Initialization:** After the cluster is marked initialized, we switch to a Kubernetes go-discover based `retry_join` that uses `auto_join = "provider=k8s namespace=<ns> label_selector=\"openbao.org/cluster=<cluster-name>\""` so new pods can join dynamically based on labels rather than a static peer list.
 
-  * **Static Auto-Unseal Integration:**
-      * On first reconcile, checks for the existence of `Secret/bao-unseal-key` (per-cluster name).
-      * If missing, generates 32 cryptographically secure random bytes, base64-encodes them, and stores them as the unseal key in the Secret.
-      * Mounts this Secret into the StatefulSet PodSpec at a fixed path (e.g., `/etc/bao/unseal/key`).
-      * Injects a `seal "static"` stanza into `config.hcl`, for example:
-        ```hcl
-        seal "static" {
-          current_key    = "file:///etc/bao/unseal/key"
-          current_key_id = "operator-generated-v1"
-        }
-        ```
-      * Ensures that the first leader initializes and auto-unseals OpenBao using this key, and that subsequent restarts remain unsealed automatically.
+  * **Auto-Unseal Integration:**
+      * **Static Seal (Default):** If `spec.unseal` is omitted or `spec.unseal.type` is `"static"`:
+        * On first reconcile, checks for the existence of `Secret/<cluster>-unseal-key` (per-cluster name).
+        * If missing, generates 32 cryptographically secure random bytes and stores them as the unseal key in the Secret.
+        * Mounts this Secret into the StatefulSet PodSpec at `/etc/bao/unseal/key`.
+        * Injects a `seal "static"` stanza into `config.hcl`, for example:
+          ```hcl
+          seal "static" {
+            current_key    = "file:///etc/bao/unseal/key"
+            current_key_id = "operator-generated-v1"
+          }
+          ```
+      * **External KMS Seal:** If `spec.unseal.type` is set to `"awskms"`, `"gcpckms"`, `"azurekeyvault"`, or `"transit"`:
+        * Does NOT create the `<cluster>-unseal-key` Secret.
+        * Renders a `seal "<type>"` block with options from `spec.unseal.options`.
+        * If `spec.unseal.credentialsSecretRef` is provided, mounts the credentials Secret at `/etc/bao/seal-creds`.
+        * For GCP Cloud KMS (`gcpckms`), sets `GOOGLE_APPLICATION_CREDENTIALS` environment variable pointing to the mounted credentials file.
+      * Ensures that the first leader initializes and auto-unseals OpenBao using the configured seal mechanism, and that subsequent restarts remain unsealed automatically.
+
+  * **Image Verification (Supply Chain Security):**
+      * If `spec.imageVerification.enabled` is `true`, the operator verifies the container image signature using Cosign before creating or updating the StatefulSet.
+      * The verification uses the public key provided in `spec.imageVerification.publicKey`.
+      * Verification results are cached in-memory to avoid redundant network calls for the same image digest.
+      * **Failure Policy:**
+        * `Block` (default): If verification fails, sets `ConditionDegraded=True` with `Reason=ImageVerificationFailed` and blocks StatefulSet updates.
+        * `Warn`: If verification fails, logs an error and emits a Kubernetes Event but proceeds with StatefulSet updates.
+      * This ensures that only cryptographically verified images are deployed, protecting against compromised registries or man-in-the-middle attacks.
 
 **Reconciliation Semantics**
 
 - Watches `OpenBaoCluster` and all owned resources (StatefulSet, Services, ConfigMaps, Secrets, ServiceAccounts, Ingresses, NetworkPolicies).
 - Ensures the rendered `config.hcl` and StatefulSet template are consistent with Spec (including multi-tenant naming conventions).
+- Performs image signature verification before StatefulSet creation/updates when `spec.imageVerification.enabled` is `true`.
 - Automatically creates NetworkPolicies to enforce cluster isolation:
   - Default deny all ingress traffic.
   - Allow ingress from pods within the same cluster (same pod selector labels).
@@ -609,7 +643,7 @@ To avoid configuration conflicts:
 - The Operator **owns and enforces** certain protected stanzas in `config.hcl`, including:
   - `listener "tcp"` (addresses, TLS paths, ports).
   - `storage "raft"` (path, `retry_join` / `auto_join` blocks).
-  - `seal "static"` (auto-unseal configuration).
+  - `seal` (auto-unseal configuration - type and options are managed by the operator based on `spec.unseal`).
   - `api_addr` and `cluster_addr` (operator-managed based on service configuration).
   - `node_id` (operator-managed via template).
 - The Operator uses an **allowlist-based validation approach** for `spec.config`:
@@ -1516,16 +1550,16 @@ The Operator requires elevated privileges to function as a Supervisor.
   * Operator runs as non-root.
   * TLS Keys generated by the Operator never leave the cluster (stored in Secrets).
 
-**Static Auto-Unseal Security Architecture:**
+**Auto-Unseal Security Architecture:**
 
-- The Operator uses OpenBao's static auto-unseal mechanism and manages a per-cluster unseal key stored in a Kubernetes Secret (e.g., `<cluster>-unseal-key`).
-- The Root of Trust for OpenBao data is therefore anchored in Kubernetes Secrets (and ultimately etcd), rather than an external cloud KMS.
-- If an attacker can read Secrets in the OpenBao namespace, they can obtain the unseal key and decrypt OpenBao data.
-- Mitigations and expectations:
-  - Kubernetes etcd encryption at rest SHOULD be enabled and properly configured.
-  - RBAC MUST strictly limit access to Secrets in namespaces where OpenBao clusters run.
-  - Platform teams SHOULD apply additional controls such as node security hardening and audit logging for Secret access.
-  - Rotation of the static auto-unseal key is **not automated** in v0.1; any key rotation procedure is a manual, carefully planned operation that requires re-encryption of data and is out of scope for this version.
+- **Static Seal (Default):** The Operator uses OpenBao's static auto-unseal mechanism and manages a per-cluster unseal key stored in a Kubernetes Secret (e.g., `<cluster>-unseal-key`). The Root of Trust for OpenBao data is anchored in Kubernetes Secrets (and ultimately etcd). If an attacker can read Secrets in the OpenBao namespace, they can obtain the unseal key and decrypt OpenBao data.
+  - Mitigations and expectations:
+    - Kubernetes etcd encryption at rest SHOULD be enabled and properly configured.
+    - RBAC MUST strictly limit access to Secrets in namespaces where OpenBao clusters run.
+    - Platform teams SHOULD apply additional controls such as node security hardening and audit logging for Secret access.
+    - Rotation of the static auto-unseal key is **not automated** in v0.1; any key rotation procedure is a manual, carefully planned operation that requires re-encryption of data and is out of scope for this version.
+
+- **External KMS Seal:** When `spec.unseal.type` is set to an external KMS provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`), the Root of Trust shifts from Kubernetes Secrets to the cloud provider's KMS service. The operator does not generate or manage the master key for these clusters, improving security posture by removing the operator from the key management path. Credentials for the KMS provider can be provided via `spec.unseal.credentialsSecretRef` or through workload identity mechanisms (IRSA for AWS, GKE Workload Identity for GCP).
 
 **Root Token Secret:**
 

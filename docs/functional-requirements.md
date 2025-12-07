@@ -1,17 +1,27 @@
 # Functional Requirements Specification
 
 ## 1. Security (TLS Authority)
-* **FR-SEC-01:** The Operator MUST generate a self-signed Root CA if one does not exist.
-* **FR-SEC-02:** The Operator MUST issue leaf certificates for the OpenBao cluster with correct SANs (internal Kubernetes service/pod DNS names such as `*.security.svc`, `prod-cluster.security.svc`, `localhost`, and any configured IP SANs).
-* **FR-SEC-03:** The Operator MUST automatically rotate certificates 7 days (configurable) before expiry.
-* **FR-SEC-04:** The Operator MUST trigger a hot-reload signal path when certs are updated by updating pod-level metadata (for example, the `openbao.org/tls-cert-hash` annotation) that a sidecar container can use to send `SIGHUP` to OpenBao locally, without requiring `pods/exec` privileges.
+* **FR-SEC-01:** When `spec.tls.mode` is `OperatorManaged` (or omitted), the Operator MUST generate a self-signed Root CA if one does not exist.
+* **FR-SEC-02:** When `spec.tls.mode` is `OperatorManaged` (or omitted), the Operator MUST issue leaf certificates for the OpenBao cluster with correct SANs (internal Kubernetes service/pod DNS names such as `*.security.svc`, `prod-cluster.security.svc`, `localhost`, and any configured IP SANs).
+* **FR-SEC-03:** When `spec.tls.mode` is `OperatorManaged` (or omitted), the Operator MUST automatically rotate certificates 7 days (configurable) before expiry.
+* **FR-SEC-03a:** When `spec.tls.mode` is `External`, the Operator MUST NOT generate or rotate certificates, but MUST wait for external Secrets (`<cluster-name>-tls-ca` and `<cluster-name>-tls-server`) to exist and MUST trigger hot-reload when they change.
+* **FR-SEC-04:** The Operator MUST trigger a hot-reload signal path when certs are updated (in either mode) by updating pod-level metadata (for example, the `openbao.org/tls-cert-hash` annotation) that a sidecar container can use to send `SIGHUP` to OpenBao locally, without requiring `pods/exec` privileges.
+* **FR-SEC-05:** The Operator MUST support container image signature verification using Cosign when `spec.imageVerification.enabled` is `true`, verifying the image against the provided public key before creating or updating the StatefulSet.
+* **FR-SEC-05a:** The Operator MUST verify signatures against the Rekor transparency log by default (when `spec.imageVerification.ignoreTlog` is `false` or omitted) to provide non-repudiation guarantees, following OpenBao's verification guidance.
+* **FR-SEC-05b:** The Operator MUST resolve image tags to digests during verification and use the verified digest (not the mutable tag) in StatefulSets to prevent TOCTOU (Time-of-Check to Time-of-Use) attacks where a tag could be updated between verification and deployment.
+* **FR-SEC-05c:** The Operator MUST support ImagePullSecrets for private registry authentication during image verification when `spec.imageVerification.imagePullSecrets` is provided.
+* **FR-SEC-06:** When image verification fails and `spec.imageVerification.failurePolicy` is `Block`, the Operator MUST set `ConditionDegraded=True` with `Reason=ImageVerificationFailed` and MUST NOT update the StatefulSet.
+* **FR-SEC-07:** When image verification fails and `spec.imageVerification.failurePolicy` is `Warn`, the Operator MUST log an error and emit a Kubernetes Event but MAY proceed with StatefulSet updates.
+* **FR-SEC-08:** The Operator MUST support external KMS auto-unseal providers (AWS KMS, GCP Cloud KMS, Azure Key Vault, HashiCorp Vault Transit) as an alternative to static auto-unseal, shifting the Root of Trust from Kubernetes Secrets to the cloud provider's KMS service.
 
 ## 2. Infrastructure (Bootstrapping)
 * **FR-INF-01:** The Operator MUST create a StatefulSet, Service, and ConfigMap based on the CR.
 * **FR-INF-02:** The Operator MUST inject Raft discovery configuration into the ConfigMap that:
   * Uses a deterministic `retry_join` pointing to the pod-0 DNS name during initial bootstrap.
   * Uses a Kubernetes go-discover based `retry_join` with `auto_join` after initialization so that new pods can join based on the `openbao.org/cluster=<name>` label.
-* **FR-INF-03:** The cluster MUST bootstrap into a Quorum (Health status 200) without manual intervention, using static auto-unseal managed by the Operator.
+* **FR-INF-03:** The cluster MUST bootstrap into a Quorum (Health status 200) without manual intervention, using auto-unseal managed by the Operator. The operator supports:
+  * Static auto-unseal (default): A per-cluster unseal key stored in a Kubernetes Secret.
+  * External KMS auto-unseal: AWS KMS, GCP Cloud KMS, Azure Key Vault, or HashiCorp Vault Transit.
 * **FR-INF-04:** The Operator MUST automate initial cluster initialization via the OpenBao HTTP API (`PUT /v1/sys/init`) during Day 0 bootstrapping when self-initialization is disabled.
 * **FR-INF-05:** The Operator MUST store the initial root token in a per-cluster Kubernetes Secret with appropriate RBAC restrictions when self-initialization is disabled.
 * **FR-INF-06:** The Operator MUST use a single-pod bootstrapping strategy (start with 1 replica, initialize, then scale to desired replicas) to avoid split-brain during initialization.
@@ -94,4 +104,4 @@
 * **FR-COMP-01:** The Operator MUST be cloud-agnostic and not rely on provider-specific APIs for core functionality.
 * **FR-COMP-02:** The Operator MUST support generic object storage for backups (e.g., S3-compatible, GCS-compatible, Azure Blob-compatible) via configurable endpoints and credentials.
 * **FR-COMP-03:** The Operator MUST document the minimum supported Kubernetes and OpenBao versions and MUST validate unsupported versions with clear error messages in `Status.Conditions`.
-* **FR-COMP-04:** The Operator requires **OpenBao v2.4.0 or later** due to the use of static auto-unseal (`seal "static"`). Earlier versions do not support this feature and will fail to start.
+* **FR-COMP-04:** The Operator requires **OpenBao v2.4.0 or later** when using static auto-unseal (`seal "static"`). Earlier versions do not support this feature and will fail to start. External KMS seals may have different version requirements depending on the provider.

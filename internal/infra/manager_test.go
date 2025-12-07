@@ -9,24 +9,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 )
-
-// testScheme is a shared scheme used across tests.
-var testScheme = func() *runtime.Scheme {
-	scheme := runtime.NewScheme()
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = openbaov1alpha1.AddToScheme(scheme)
-	_ = gatewayv1.Install(scheme)
-	return scheme
-}()
 
 func newTestClient(t *testing.T) client.Client {
 	t.Helper()
@@ -69,7 +57,7 @@ func TestReconcileCreatesAllResources(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -162,7 +150,7 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 
 			ctx := context.Background()
 
-			if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+			if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 				t.Fatalf("Reconcile() error = %v", err)
 			}
 
@@ -214,7 +202,7 @@ func TestCleanupDeletesAllResources(t *testing.T) {
 	ctx := context.Background()
 
 	// Create all resources
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -297,10 +285,10 @@ func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 	cluster2.Status.Initialized = true
 
 	// Reconcile both clusters
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster1); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster1, ""); err != nil {
 		t.Fatalf("Reconcile() cluster1 error = %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster2); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster2, ""); err != nil {
 		t.Fatalf("Reconcile() cluster2 error = %v", err)
 	}
 
@@ -373,10 +361,10 @@ func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 	cluster2.Status.Initialized = true
 
 	// Reconcile both clusters
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster1); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster1, ""); err != nil {
 		t.Fatalf("Reconcile() cluster1 error = %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster2); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster2, ""); err != nil {
 		t.Fatalf("Reconcile() cluster2 error = %v", err)
 	}
 
@@ -430,7 +418,7 @@ func TestMultiTenancyResourceLabeling(t *testing.T) {
 	cluster := newMinimalCluster("labeled-cluster", "labeling-test")
 	cluster.Status.Initialized = true
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -498,7 +486,7 @@ func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 		t.Fatalf("failed to get cluster: %v", err)
 	}
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 

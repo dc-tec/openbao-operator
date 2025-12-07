@@ -435,3 +435,152 @@ func TestReconcileRotatesNearExpiryCertAndSignalsReload(t *testing.T) {
 		t.Fatalf("expected certificate hash to change after rotation")
 	}
 }
+
+func TestReconcileExternalModeWaitsForSecrets(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add core scheme: %v", err)
+	}
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add OpenBao scheme: %v", err)
+	}
+
+	client := fake.NewClientBuilder().WithScheme(scheme).Build()
+	manager := NewManager(client, scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "external-cluster",
+			Namespace: "security",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Image:    "openbao/openbao:2.4.4",
+			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled:        true,
+				Mode:           openbaov1alpha1.TLSModeExternal,
+				RotationPeriod: "720h",
+			},
+			Storage: openbaov1alpha1.StorageConfig{
+				Size: "10Gi",
+			},
+		},
+	}
+
+	ctx := context.Background()
+
+	// First reconcile should wait for secrets (no error, but no secrets created)
+	err := manager.Reconcile(ctx, logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v (should wait for external secrets)", err)
+	}
+
+	// Verify no secrets were created
+	caSecret := &corev1.Secret{}
+	err = client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      caSecretName(cluster),
+	}, caSecret)
+	if err == nil {
+		t.Fatalf("expected CA Secret to not exist in External mode")
+	}
+
+	serverSecret := &corev1.Secret{}
+	err = client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      serverSecretName(cluster),
+	}, serverSecret)
+	if err == nil {
+		t.Fatalf("expected server TLS Secret to not exist in External mode")
+	}
+}
+
+func TestReconcileExternalModeTriggersReloadOnExistingSecrets(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add core scheme: %v", err)
+	}
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add OpenBao scheme: %v", err)
+	}
+
+	// Create external secrets manually (simulating cert-manager or user-provided)
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "external-cluster-tls-ca",
+			Namespace: "security",
+		},
+		Data: map[string][]byte{
+			caCertKey: []byte("fake-ca-cert"),
+			caKeyKey:  []byte("fake-ca-key"),
+		},
+	}
+
+	serverSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "external-cluster-tls-server",
+			Namespace: "security",
+		},
+		Data: map[string][]byte{
+			tlsCertKey: []byte("fake-server-cert"),
+			tlsKeyKey:  []byte("fake-server-key"),
+			caCertKey:  []byte("fake-ca-cert"),
+		},
+	}
+
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(caSecret, serverSecret).Build()
+
+	reloader := &recordingReloadSignaler{}
+	manager := NewManagerWithReloader(client, scheme, reloader)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "external-cluster",
+			Namespace: "security",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Image:    "openbao/openbao:2.4.4",
+			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled:        true,
+				Mode:           openbaov1alpha1.TLSModeExternal,
+				RotationPeriod: "720h",
+			},
+			Storage: openbaov1alpha1.StorageConfig{
+				Size: "10Gi",
+			},
+		},
+	}
+
+	ctx := context.Background()
+
+	// Reconcile should find the secrets and trigger reload
+	err := manager.Reconcile(ctx, logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	// Verify reload was triggered (for hot-reload when cert-manager rotates certs)
+	if !reloader.called {
+		t.Fatalf("expected reload signaler to be called when external secrets exist")
+	}
+	if reloader.lastHash == "" {
+		t.Fatalf("expected non-empty certificate hash from reload signaler")
+	}
+
+	// Verify secrets were not modified
+	updatedServerSecret := &corev1.Secret{}
+	err = client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      serverSecretName(cluster),
+	}, updatedServerSecret)
+	if err != nil {
+		t.Fatalf("expected server Secret to still exist: %v", err)
+	}
+
+	if string(updatedServerSecret.Data[tlsCertKey]) != "fake-server-cert" {
+		t.Fatalf("expected external server Secret to not be modified by operator")
+	}
+}

@@ -23,7 +23,8 @@ import (
 )
 
 // ensureStatefulSet manages the StatefulSet for the OpenBaoCluster.
-func (m *Manager) ensureStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string) error {
+// verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
+func (m *Manager) ensureStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string, verifiedImageDigest string) error {
 	name := statefulSetName(cluster)
 
 	statefulSet := &appsv1.StatefulSet{}
@@ -40,7 +41,7 @@ func (m *Manager) ensureStatefulSet(ctx context.Context, logger logr.Logger, clu
 
 		// During initial cluster creation, start with 1 replica for initialization
 		initialized := cluster.Status.Initialized
-		desired, buildErr := buildStatefulSet(cluster, configContent, initialized)
+		desired, buildErr := buildStatefulSet(cluster, configContent, initialized, verifiedImageDigest)
 		if buildErr != nil {
 			return fmt.Errorf("failed to build StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, buildErr)
 		}
@@ -75,7 +76,7 @@ func (m *Manager) ensureStatefulSet(ctx context.Context, logger logr.Logger, clu
 			"desiredReplicas", desiredReplicas)
 	}
 
-	desired, buildErr := buildStatefulSet(cluster, configContent, initialized)
+	desired, buildErr := buildStatefulSet(cluster, configContent, initialized, verifiedImageDigest)
 	if buildErr != nil {
 		return fmt.Errorf("failed to build desired StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, buildErr)
 	}
@@ -104,6 +105,16 @@ func getInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) string {
 		return cluster.Spec.InitContainer.Image
 	}
 	return ""
+}
+
+// getContainerImage returns the container image to use for the OpenBao container.
+// If verifiedImageDigest is provided, it is used to prevent TOCTOU attacks.
+// Otherwise, cluster.Spec.Image is used.
+func getContainerImage(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) string {
+	if verifiedImageDigest != "" {
+		return verifiedImageDigest
+	}
+	return cluster.Spec.Image
 }
 
 // getOpenBaoConfigPath returns the path to the OpenBao configuration file.
@@ -183,8 +194,111 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Conta
 	}
 }
 
+// buildContainerEnv builds the environment variables for the OpenBao container.
+// It includes standard variables and conditionally adds GCP credentials path
+// when using GCP Cloud KMS seal.
+func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar {
+	env := []corev1.EnvVar{
+		{
+			Name: "HOSTNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.name",
+				},
+			},
+		},
+		{
+			Name: "POD_IP",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "status.podIP",
+				},
+			},
+		},
+		{
+			Name:  "BAO_API_ADDR",
+			Value: fmt.Sprintf("https://$(POD_IP):%d", openBaoContainerPort),
+		},
+		{
+			// Set umask to 0077 to ensure Raft FSM database files are created
+			// with 0600 permissions (owner read/write only) instead of 0660.
+			// This matches OpenBao's security expectations for sensitive data files.
+			Name:  "UMASK",
+			Value: "0077",
+		},
+	}
+
+	// Add GCP credentials environment variable when using GCP Cloud KMS
+	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type == "gcpckms" {
+		if cluster.Spec.Unseal.CredentialsSecretRef != nil {
+			// Mount GCP credentials JSON file and set GOOGLE_APPLICATION_CREDENTIALS
+			// The credentials secret must contain a key named "credentials.json" with the
+			// GCP service account JSON credentials. This will be mounted at
+			// /etc/bao/seal-creds/credentials.json and referenced by the environment variable.
+			env = append(env, corev1.EnvVar{
+				Name:  "GOOGLE_APPLICATION_CREDENTIALS",
+				Value: "/etc/bao/seal-creds/credentials.json",
+			})
+		}
+	}
+
+	return env
+}
+
+// buildContainerVolumeMounts builds the volume mounts for the OpenBao container.
+// It conditionally includes the unseal volume mount only when using static seal.
+func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, renderedConfigDir string) []corev1.VolumeMount {
+	mounts := []corev1.VolumeMount{
+		{
+			Name:      tlsVolumeName,
+			MountPath: openBaoTLSMountPath,
+			ReadOnly:  true,
+		},
+		{
+			Name:      configVolumeName,
+			MountPath: openBaoConfigMountPath,
+			ReadOnly:  true,
+		},
+		{
+			Name:      configRenderedVolumeName,
+			MountPath: renderedConfigDir,
+		},
+		{
+			Name:      dataVolumeName,
+			MountPath: openBaoDataPath,
+		},
+		{
+			Name:      tmpVolumeName,
+			MountPath: "/tmp",
+		},
+	}
+
+	// Only mount unseal volume when using static seal
+	if usesStaticSeal(cluster) {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      unsealVolumeName,
+			MountPath: openBaoUnsealMountPath,
+			ReadOnly:  true,
+		})
+	}
+
+	// Mount seal credentials volume when using external KMS with credentials
+	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" && cluster.Spec.Unseal.Type != "static" {
+		if cluster.Spec.Unseal.CredentialsSecretRef != nil {
+			mounts = append(mounts, corev1.VolumeMount{
+				Name:      "seal-creds",
+				MountPath: "/etc/bao/seal-creds",
+				ReadOnly:  true,
+			})
+		}
+	}
+
+	return mounts
+}
+
 // buildStatefulSet constructs a StatefulSet for the given OpenBaoCluster.
-func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool) (*appsv1.StatefulSet, error) {
+// verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
+func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string) (*appsv1.StatefulSet, error) {
 	labels := podSelectorLabels(cluster)
 
 	replicas := cluster.Spec.Replicas
@@ -267,6 +381,16 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 			},
 		},
 		{
+			Name: tmpVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+
+	// Only add unseal volume if using static seal
+	if usesStaticSeal(cluster) {
+		volumes = append(volumes, corev1.Volume{
 			Name: unsealVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
@@ -274,13 +398,22 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 					DefaultMode: ptr.To(secretFileMode),
 				},
 			},
-		},
-		{
-			Name: tmpVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		},
+		})
+	}
+
+	// Add seal credentials volume if using external KMS with credentials
+	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" && cluster.Spec.Unseal.Type != "static" {
+		if cluster.Spec.Unseal.CredentialsSecretRef != nil {
+			volumes = append(volumes, corev1.Volume{
+				Name: "seal-creds",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName:  cluster.Spec.Unseal.CredentialsSecretRef.Name,
+						DefaultMode: ptr.To(secretFileMode),
+					},
+				},
+			})
+		}
 	}
 
 	// If self-init is enabled, add the self-init ConfigMap volume
@@ -330,7 +463,7 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 					Containers: []corev1.Container{
 						{
 							Name:  openBaoContainerName,
-							Image: cluster.Spec.Image,
+							Image: getContainerImage(cluster, verifiedImageDigest),
 							SecurityContext: &corev1.SecurityContext{
 								// Prevent privilege escalation (sudo, setuid binaries)
 								AllowPrivilegeEscalation: ptr.To(false),
@@ -347,35 +480,7 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 								"server",
 								fmt.Sprintf("-config=%s", getOpenBaoConfigPath(cluster)),
 							},
-							Env: []corev1.EnvVar{
-								{
-									Name: "HOSTNAME",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath: "metadata.name",
-										},
-									},
-								},
-								{
-									Name: "POD_IP",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath: "status.podIP",
-										},
-									},
-								},
-								{
-									Name:  "BAO_API_ADDR",
-									Value: fmt.Sprintf("https://$(POD_IP):%d", openBaoContainerPort),
-								},
-								{
-									// Set umask to 0077 to ensure Raft FSM database files are created
-									// with 0600 permissions (owner read/write only) instead of 0660.
-									// This matches OpenBao's security expectations for sensitive data files.
-									Name:  "UMASK",
-									Value: "0077",
-								},
-							},
+							Env: buildContainerEnv(cluster),
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "api",
@@ -388,35 +493,7 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 									Protocol:      corev1.ProtocolTCP,
 								},
 							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      tlsVolumeName,
-									MountPath: openBaoTLSMountPath,
-									ReadOnly:  true,
-								},
-								{
-									Name:      configVolumeName,
-									MountPath: openBaoConfigMountPath,
-									ReadOnly:  true,
-								},
-								{
-									Name:      configRenderedVolumeName,
-									MountPath: renderedConfigDir,
-								},
-								{
-									Name:      unsealVolumeName,
-									MountPath: openBaoUnsealMountPath,
-									ReadOnly:  true,
-								},
-								{
-									Name:      dataVolumeName,
-									MountPath: openBaoDataPath,
-								},
-								{
-									Name:      tmpVolumeName,
-									MountPath: "/tmp",
-								},
-							},
+							VolumeMounts: buildContainerVolumeMounts(cluster, renderedConfigDir),
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: probeHTTPGet,

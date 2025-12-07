@@ -41,7 +41,8 @@ type InfrastructureDetails struct {
 // specification and infrastructure details.
 //
 // The generated configuration:
-//   - Always includes operator-owned listener "tcp", storage "raft", and seal "static" stanzas.
+//   - Always includes operator-owned listener "tcp" and storage "raft" stanzas.
+//   - Includes seal stanza based on spec.unseal (defaults to "static" if omitted).
 //   - Uses a Kubernetes go-discover-based retry_join block for dynamic cluster membership.
 //   - Merges user-provided spec.config entries as simple string attributes, excluding
 //     protected keys that are operator-managed.
@@ -84,11 +85,10 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	listenerBody.SetAttributeValue("tls_client_ca_file", cty.StringVal(configTLSCACertPath))
 	listenerBody.SetAttributeValue("max_request_duration", cty.StringVal(configMaxRequestDuration))
 
-	// 3. Static seal stanza (operator-owned).
-	sealBlock := body.AppendNewBlock("seal", []string{"static"})
-	sealBody := sealBlock.Body()
-	sealBody.SetAttributeValue("current_key", cty.StringVal(configUnsealKeyPath))
-	sealBody.SetAttributeValue("current_key_id", cty.StringVal(configUnsealKeyID))
+	// 3. Seal stanza (operator-owned, but type is configurable).
+	if err := renderSealStanza(body, cluster); err != nil {
+		return nil, fmt.Errorf("failed to render seal stanza: %w", err)
+	}
 
 	// 4. Storage stanza (Raft) with auto_join for dynamic cluster membership.
 	storageBlock := body.AppendNewBlock("storage", []string{"raft"})
@@ -524,4 +524,43 @@ func renderTelemetry(body *hclwrite.Body, telemetry *openbaov1alpha1.TelemetryCo
 	if telemetry.StackdriverDebugLogs {
 		telemetryBody.SetAttributeValue("stackdriver_debug_logs", cty.BoolVal(true))
 	}
+}
+
+// renderSealStanza renders the seal block based on the cluster's unseal configuration.
+// If spec.unseal is nil or type is "static" (or empty), renders the default static seal.
+// Otherwise, renders the specified seal type with options from spec.unseal.options.
+func renderSealStanza(body *hclwrite.Body, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	unsealType := "static"
+	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" {
+		unsealType = cluster.Spec.Unseal.Type
+	}
+
+	sealBlock := body.AppendNewBlock("seal", []string{unsealType})
+	sealBody := sealBlock.Body()
+
+	if unsealType == "static" {
+		// Default static seal configuration (operator-managed)
+		sealBody.SetAttributeValue("current_key", cty.StringVal(configUnsealKeyPath))
+		sealBody.SetAttributeValue("current_key_id", cty.StringVal(configUnsealKeyID))
+	} else {
+		// External KMS seal - render options from spec.unseal.options
+		if cluster.Spec.Unseal != nil && len(cluster.Spec.Unseal.Options) > 0 {
+			// Sort keys for deterministic output
+			keys := make([]string, 0, len(cluster.Spec.Unseal.Options))
+			for k := range cluster.Spec.Unseal.Options {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+
+			for _, key := range keys {
+				value := strings.TrimSpace(cluster.Spec.Unseal.Options[key])
+				if value == "" {
+					continue
+				}
+				sealBody.SetAttributeValue(key, cty.StringVal(value))
+			}
+		}
+	}
+
+	return nil
 }

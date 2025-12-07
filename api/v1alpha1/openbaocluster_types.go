@@ -67,12 +67,30 @@ const (
 	ConditionEtcdEncryptionWarning ConditionType = "EtcdEncryptionWarning"
 )
 
+// TLSMode controls who manages the certificate lifecycle.
+// +kubebuilder:validation:Enum=OperatorManaged;External
+type TLSMode string
+
+const (
+	// TLSModeOperatorManaged: The operator acts as the CA, generating keys and rotating certs (Current Behavior).
+	TLSModeOperatorManaged TLSMode = "OperatorManaged"
+	// TLSModeExternal: The operator assumes Secrets are managed by an external entity (cert-manager, user, or CSI driver).
+	// The operator will mount them but NOT modify/rotate them.
+	TLSModeExternal TLSMode = "External"
+)
+
 // TLSConfig captures TLS configuration for an OpenBaoCluster.
 type TLSConfig struct {
 	// Enabled controls whether TLS is enabled for the cluster.
 	// +kubebuilder:validation:Required
 	Enabled bool `json:"enabled"`
+	// Mode controls who manages the certificate lifecycle.
+	// +kubebuilder:validation:Enum=OperatorManaged;External
+	// +kubebuilder:default=OperatorManaged
+	// +optional
+	Mode TLSMode `json:"mode,omitempty"`
 	// RotationPeriod is a duration string (for example, "720h") controlling certificate rotation.
+	// Only used when Mode is OperatorManaged.
 	// +kubebuilder:validation:MinLength=1
 	RotationPeriod string `json:"rotationPeriod"`
 	// ExtraSANs lists additional subject alternative names to include in server certificates.
@@ -356,10 +374,62 @@ type GatewayReference struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
+// UnsealConfig defines the auto-unseal configuration for an OpenBaoCluster.
+// If omitted, defaults to "static" mode managed by the operator.
+type UnsealConfig struct {
+	// Type specifies the seal type: "static", "awskms", "gcpckms", "azurekeyvault", "transit".
+	// Defaults to "static".
+	// +kubebuilder:validation:Enum=static;awskms;gcpckms;azurekeyvault;transit
+	// +kubebuilder:default=static
+	Type string `json:"type,omitempty"`
+
+	// Options allows specifying seal-specific configuration parameters.
+	// These are rendered as attributes in the seal block of config.hcl.
+	// +optional
+	Options map[string]string `json:"options,omitempty"`
+
+	// CredentialsSecretRef references a Secret containing provider credentials
+	// (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON).
+	// If using Workload Identity (IRSA, GKE WI), this can be omitted.
+	// +optional
+	CredentialsSecretRef *corev1.SecretReference `json:"credentialsSecretRef,omitempty"`
+}
+
+// ImageVerificationConfig configures supply chain security checks for container images.
+type ImageVerificationConfig struct {
+	// Enabled controls whether image verification is enforced.
+	Enabled bool `json:"enabled"`
+
+	// PublicKey is the Cosign public key content used to verify the signature.
+	// If empty, it may default to the official OpenBao public key (future).
+	// +optional
+	PublicKey string `json:"publicKey,omitempty"`
+
+	// FailurePolicy defines behavior on verification failure.
+	// "Block" prevents StatefulSet updates when verification fails.
+	// "Warn" logs an error and emits a Kubernetes Event but proceeds.
+	// +kubebuilder:validation:Enum=Warn;Block
+	// +kubebuilder:default=Block
+	FailurePolicy string `json:"failurePolicy"`
+
+	// IgnoreTlog controls whether to verify against the Rekor transparency log.
+	// When false (default), signatures are verified against Rekor for non-repudiation.
+	// When true, only signature verification is performed without transparency log checks.
+	// +optional
+	// +kubebuilder:default=false
+	IgnoreTlog bool `json:"ignoreTlog,omitempty"`
+
+	// ImagePullSecrets is a list of references to secrets in the same namespace
+	// to use for pulling images from private registries during verification.
+	// These secrets must be of type kubernetes.io/dockerconfigjson or kubernetes.io/dockercfg.
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+}
+
 // OpenBaoClusterSpec defines the desired state of an OpenBaoCluster.
 // The Operator owns certain protected OpenBao configuration stanzas (for example,
-// listener "tcp", storage "raft", and seal "static"). Users must not override these
-// via spec.config.
+// listener "tcp", storage "raft", and seal "static" when using default unseal).
+// Users must not override these via spec.config.
 // +kubebuilder:validation:XValidation:rule="!has(self.config) || self.config.all(k, v, !(k == 'listener' || k == 'storage' || k == 'seal'))",message="spec.config may not contain protected stanzas: listener, storage, seal"
 type OpenBaoClusterSpec struct {
 	// Version is the semantic OpenBao version, used for upgrade orchestration.
@@ -432,6 +502,13 @@ type OpenBaoClusterSpec struct {
 	// (spec.backup.kubernetesAuthRole or spec.backup.tokenSecretRef) instead.
 	// +optional
 	Upgrade *UpgradeConfig `json:"upgrade,omitempty"`
+	// Unseal defines the auto-unseal configuration.
+	// If omitted, defaults to "static" mode managed by the operator.
+	// +optional
+	Unseal *UnsealConfig `json:"unseal,omitempty"`
+	// ImageVerification configures supply chain security checks.
+	// +optional
+	ImageVerification *ImageVerificationConfig `json:"imageVerification,omitempty"`
 }
 
 // UpgradeProgress tracks the state of an in-progress upgrade.

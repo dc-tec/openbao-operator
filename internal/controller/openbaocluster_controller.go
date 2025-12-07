@@ -42,6 +42,7 @@ import (
 	certmanager "github.com/openbao/operator/internal/certs"
 	inframanager "github.com/openbao/operator/internal/infra"
 	initmanager "github.com/openbao/operator/internal/init"
+	security "github.com/openbao/operator/internal/security"
 	upgrademanager "github.com/openbao/operator/internal/upgrade"
 )
 
@@ -201,8 +202,47 @@ func (r *OpenBaoClusterReconciler) reconcileCerts(ctx context.Context, logger lo
 
 func (r *OpenBaoClusterReconciler) reconcileInfra(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	logger.Info("Reconciling infrastructure for OpenBaoCluster")
+
+	// Perform image verification if enabled and get verified digest
+	var verifiedImageDigest string
+	if cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
+		digest, err := r.verifyImage(ctx, logger, cluster)
+		if err != nil {
+			now := metav1.Now()
+			failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+			if failurePolicy == "" {
+				failurePolicy = "Block" // Default to Block
+			}
+
+			if failurePolicy == "Block" {
+				// Block reconciliation and set Degraded condition
+				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+					Type:               string(openbaov1alpha1.ConditionDegraded),
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: cluster.Generation,
+					LastTransitionTime: now,
+					Reason:             "ImageVerificationFailed",
+					Message:            fmt.Sprintf("Image verification failed: %v", err),
+				})
+
+				if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
+					return fmt.Errorf("failed to update Degraded condition for OpenBaoCluster %s/%s after image verification error: %w", cluster.Namespace, cluster.Name, statusErr)
+				}
+
+				return fmt.Errorf("image verification failed (policy=Block): %w", err)
+			}
+
+			// Warn policy: log error and emit event, but proceed
+			logger.Error(err, "Image verification failed but proceeding due to Warn policy", "image", cluster.Spec.Image)
+			// TODO: Emit Kubernetes Event here
+		} else {
+			verifiedImageDigest = digest
+			logger.Info("Image verified successfully, using digest", "digest", digest)
+		}
+	}
+
 	manager := inframanager.NewManager(r.Client, r.Scheme)
-	if err := manager.Reconcile(ctx, logger, cluster); err != nil {
+	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			now := metav1.Now()
 			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
@@ -224,6 +264,29 @@ func (r *OpenBaoClusterReconciler) reconcileInfra(ctx context.Context, logger lo
 	}
 
 	return nil
+}
+
+// verifyImage verifies the container image signature using the ImageVerifier.
+// Returns the verified image digest that should be used in the StatefulSet.
+func (r *OpenBaoClusterReconciler) verifyImage(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	if cluster.Spec.ImageVerification == nil || !cluster.Spec.ImageVerification.Enabled {
+		return "", nil
+	}
+
+	if cluster.Spec.ImageVerification.PublicKey == "" {
+		return "", fmt.Errorf("image verification is enabled but public key is not provided")
+	}
+
+	ignoreTlog := cluster.Spec.ImageVerification.IgnoreTlog
+	imagePullSecrets := cluster.Spec.ImageVerification.ImagePullSecrets
+
+	verifier := security.NewImageVerifier(logger, r.Client)
+	digest, err := verifier.Verify(ctx, cluster.Spec.Image, cluster.Spec.ImageVerification.PublicKey, ignoreTlog, imagePullSecrets, cluster.Namespace)
+	if err != nil {
+		return "", err
+	}
+
+	return digest, nil
 }
 
 func (r *OpenBaoClusterReconciler) reconcileInit(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {

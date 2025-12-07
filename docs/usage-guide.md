@@ -76,17 +76,22 @@ Look for:
 
 For a cluster named `dev-cluster` in namespace `security`, the Operator reconciles:
 
-- TLS Secrets:
-  - `dev-cluster-tls-ca` – Root CA (`ca.crt`, `ca.key`).
-  - `dev-cluster-tls-server` – server cert/key and CA bundle (`tls.crt`, `tls.key`, `ca.crt`).
-- Static auto-unseal Secret:
-  - `dev-cluster-unseal-key` – raw 32-byte unseal key.
+- TLS Secrets (when `spec.tls.mode` is `OperatorManaged` or omitted):
+  - `dev-cluster-tls-ca` – Root CA (`ca.crt`, `ca.key`). Created and managed by the operator.
+  - `dev-cluster-tls-server` – server cert/key and CA bundle (`tls.crt`, `tls.key`, `ca.crt`). Created and managed by the operator.
+- TLS Secrets (when `spec.tls.mode` is `External`):
+  - `dev-cluster-tls-ca` – CA certificate (`ca.crt`, optionally `ca.key`). Must be created by an external provider (e.g., cert-manager).
+  - `dev-cluster-tls-server` – server cert/key and CA bundle (`tls.crt`, `tls.key`, `ca.crt`). Must be created by an external provider. The operator waits for these Secrets and triggers hot-reloads when they change.
+- Auto-unseal Secret (only when using static seal):
+  - `dev-cluster-unseal-key` – raw 32-byte unseal key (created only if `spec.unseal` is omitted or `spec.unseal.type` is `"static"`).
 - Root token Secret (created during initialization):
   - `dev-cluster-root-token` – initial root token (`token` key). See Security section below.
 - ConfigMap:
   - `dev-cluster-config` – rendered `config.hcl` containing:
     - `listener "tcp"` with TLS paths under `/etc/bao/tls`.
-    - `seal "static"` pointing at `/etc/bao/unseal/key`.
+    - `seal` stanza (type depends on `spec.unseal.type`):
+      - `seal "static"` pointing at `/etc/bao/unseal/key` (default).
+      - `seal "awskms"`, `seal "gcpckms"`, `seal "azurekeyvault"`, or `seal "transit"` with provider-specific options (when `spec.unseal.type` is set).
     - `storage "raft"` with `path = "/bao/data"` and:
       - a bootstrap `retry_join` targeting pod-0 for initial cluster formation.
       - a post-initialization `retry_join` using `auto_join = "provider=k8s namespace=<ns> label_selector=\"openbao.org/cluster=<name>\""` so additional pods can join dynamically.
@@ -114,7 +119,8 @@ For a cluster named `dev-cluster` in namespace `security`, the Operator reconcil
     - Volumes:
       - TLS Secret at `/etc/bao/tls`.
       - ConfigMap at `/etc/bao/config`.
-      - Unseal Secret at `/etc/bao/unseal`.
+      - Unseal Secret at `/etc/bao/unseal/key` (only when using static seal).
+      - KMS credentials at `/etc/bao/seal-creds` (when using external KMS with `spec.unseal.credentialsSecretRef`).
       - Data at `/bao/data`.
     - HTTPS liveness/readiness probes on `/v1/sys/health` (port 8200).
 
@@ -180,6 +186,60 @@ When using Traefik v3 with TLS termination at the ingress and HTTPS backend comm
    Note: If the ServersTransport is in the same namespace as the Service, use just the name. For cross-namespace references, use `<namespace>-<name>@kubernetescrd` and ensure `allowCrossNamespace` is enabled in Traefik.
 
 This ensures Traefik validates the OpenBao backend certificate using the cluster's CA, maintaining secure end-to-end TLS.
+
+### 4.2 External TLS Provider (cert-manager)
+
+For production environments that require integration with corporate PKI or cert-manager, you can configure the operator to use externally-managed TLS certificates.
+
+Set `spec.tls.mode` to `External`:
+
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+  namespace: security
+spec:
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    mode: External  # Use external certificate management
+  storage:
+    size: "10Gi"
+```
+
+**Important:** When using External mode, you must create the TLS Secrets before the operator can proceed. The operator expects:
+
+- `<cluster-name>-tls-ca` - CA certificate Secret with keys `ca.crt` and optionally `ca.key`
+- `<cluster-name>-tls-server` - Server certificate Secret with keys `tls.crt`, `tls.key`, and `ca.crt`
+
+**Example with cert-manager:**
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: prod-cluster-server
+  namespace: security
+spec:
+  secretName: prod-cluster-tls-server  # Must match operator expectation
+  dnsNames:
+    - prod-cluster.security.svc
+    - *.prod-cluster.security.svc
+    - prod-cluster-public.security.svc
+  issuerRef:
+    name: corporate-ca-issuer
+    kind: ClusterIssuer
+```
+
+The operator will:
+- Wait for the Secrets to be created (no error if missing)
+- Monitor certificate changes and trigger hot-reloads when cert-manager rotates certificates
+- Not attempt to generate or rotate certificates itself
+
+**Note:** The `rotationPeriod` field is ignored in External mode, as certificate rotation is handled by the external provider.
 
 ## 5. Self-Initialization
 
@@ -831,7 +891,9 @@ kubectl -n security get secret dev-cluster-root-token -o jsonpath='{.data.token}
   kubectl -n security delete secret dev-cluster-root-token
   ```
 
-### 11.2 Static Auto-Unseal Key
+### 11.2 Auto-Unseal Configuration
+
+#### 11.2.1 Static Auto-Unseal (Default)
 
 The Operator manages a static auto-unseal key stored in `<cluster>-unseal-key`. This key is used by OpenBao to automatically unseal on startup.
 
@@ -839,9 +901,148 @@ The Operator manages a static auto-unseal key stored in `<cluster>-unseal-key`. 
 - etcd encryption at rest is enabled in your Kubernetes cluster.
 - RBAC strictly limits access to Secrets in the OpenBao namespace.
 
-### 11.3 OpenBao Version Requirement
+**OpenBao Version Requirement:** The static auto-unseal feature requires **OpenBao v2.4.0 or later**. Earlier versions do not support the `seal "static"` configuration and will fail to start.
 
-The Operator uses OpenBao's static auto-unseal feature, which requires **OpenBao v2.4.0 or later**. Earlier versions do not support the `seal "static"` configuration and will fail to start.
+#### 11.2.2 External KMS Auto-Unseal
+
+For enhanced security, you can configure external KMS providers (AWS KMS, GCP Cloud KMS, Azure Key Vault, or HashiCorp Vault Transit) to manage the unseal key instead of storing it in Kubernetes Secrets.
+
+**Example: AWS KMS**
+
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+  namespace: security
+spec:
+  version: "2.1.0"
+  image: "openbao/openbao:2.1.0"
+  replicas: 3
+  unseal:
+    type: "awskms"
+    options:
+      kms_key_id: "arn:aws:kms:us-east-1:123456789012:key/abcd1234-5678-90ab-cdef-1234567890ab"
+      region: "us-east-1"
+    # Optional: If not using IRSA (IAM Roles for Service Accounts)
+    credentialsSecretRef:
+      name: aws-kms-credentials
+      namespace: security
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+```
+
+**Example: GCP Cloud KMS**
+
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+  namespace: security
+spec:
+  version: "2.1.0"
+  image: "openbao/openbao:2.1.0"
+  replicas: 3
+  unseal:
+    type: "gcpckms"
+    options:
+      project: "my-gcp-project"
+      region: "us-central1"
+      key_ring: "openbao-keyring"
+      crypto_key: "openbao-unseal-key"
+    # Optional: If not using GKE Workload Identity
+    credentialsSecretRef:
+      name: gcp-kms-credentials
+      namespace: security
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+```
+
+**Note:** When using external KMS, the operator does NOT create the `<cluster>-unseal-key` Secret. The Root of Trust shifts from Kubernetes Secrets to the cloud provider's KMS service. For GCP, the credentials Secret must contain a key named `credentials.json` with the GCP service account JSON credentials.
+
+### 11.3 Image Verification (Supply Chain Security)
+
+To protect against compromised registries and supply chain attacks, you can enable container image signature verification using Cosign. The operator verifies image signatures against the Rekor transparency log by default, providing strong non-repudiation guarantees.
+
+**Example: Enable Image Verification**
+
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+  namespace: security
+spec:
+  version: "2.1.0"
+  image: "openbao/openbao:2.1.0"
+  imageVerification:
+    enabled: true
+    publicKey: |
+      -----BEGIN PUBLIC KEY-----
+      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
+      -----END PUBLIC KEY-----
+    failurePolicy: Block  # or "Warn" to log but proceed
+    # ignoreTlog: false  # Set to true to disable Rekor transparency log verification
+  replicas: 3
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+```
+
+**Example: Image Verification with Private Registry**
+
+When using images from private registries, provide ImagePullSecrets for authentication:
+
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+  namespace: security
+spec:
+  version: "2.1.0"
+  image: "private-registry.example.com/openbao/openbao:2.1.0"
+  imageVerification:
+    enabled: true
+    publicKey: |
+      -----BEGIN PUBLIC KEY-----
+      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
+      -----END PUBLIC KEY-----
+    failurePolicy: Block
+    imagePullSecrets:
+      - name: registry-credentials  # Secret of type kubernetes.io/dockerconfigjson
+  replicas: 3
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+```
+
+**Configuration Options:**
+- `enabled`: Enable or disable image verification (required).
+- `publicKey`: PEM-encoded Cosign public key used to verify signatures (required when enabled).
+- `failurePolicy`: Behavior on verification failure:
+  - `Block` (default): Sets `ConditionDegraded=True` with `Reason=ImageVerificationFailed` and blocks StatefulSet updates.
+  - `Warn`: Logs an error and emits a Kubernetes Event but proceeds with deployment.
+- `ignoreTlog`: Set to `true` to disable Rekor transparency log verification (default: `false`). When `false`, signatures are verified against Rekor for non-repudiation, following OpenBao's verification guidance.
+- `imagePullSecrets`: List of ImagePullSecrets (type `kubernetes.io/dockerconfigjson` or `kubernetes.io/dockercfg`) for private registry authentication during verification.
+
+**Security Features:**
+- **TOCTOU Mitigation**: The operator resolves image tags to digests during verification and uses the verified digest in StatefulSets, preventing Time-of-Check to Time-of-Use attacks where a tag could be updated between verification and deployment.
+- **Rekor Verification**: By default, signatures are verified against the Rekor transparency log, providing strong non-repudiation guarantees as recommended by OpenBao.
+- **Private Registry Support**: ImagePullSecrets can be provided for authentication when verifying images from private registries.
+
+**Note:** Image verification results are cached in-memory keyed by image digest (not tag) and public key to avoid redundant network calls while preventing cache issues when tags change.
 
 ## 12. Multi-Tenancy Security
 

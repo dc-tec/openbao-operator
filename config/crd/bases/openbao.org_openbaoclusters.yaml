@@ -250,6 +250,60 @@ spec:
                   derived from Version.
                 minLength: 1
                 type: string
+              imageVerification:
+                description: ImageVerification configures supply chain security checks.
+                properties:
+                  enabled:
+                    description: Enabled controls whether image verification is enforced.
+                    type: boolean
+                  failurePolicy:
+                    default: Block
+                    description: |-
+                      FailurePolicy defines behavior on verification failure.
+                      "Block" prevents StatefulSet updates when verification fails.
+                      "Warn" logs an error and emits a Kubernetes Event but proceeds.
+                    enum:
+                    - Warn
+                    - Block
+                    type: string
+                  ignoreTlog:
+                    default: false
+                    description: |-
+                      IgnoreTlog controls whether to verify against the Rekor transparency log.
+                      When false (default), signatures are verified against Rekor for non-repudiation.
+                      When true, only signature verification is performed without transparency log checks.
+                    type: boolean
+                  imagePullSecrets:
+                    description: |-
+                      ImagePullSecrets is a list of references to secrets in the same namespace
+                      to use for pulling images from private registries during verification.
+                      These secrets must be of type kubernetes.io/dockerconfigjson or kubernetes.io/dockercfg.
+                    items:
+                      description: |-
+                        LocalObjectReference contains enough information to let you locate the
+                        referenced object inside the same namespace.
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                  publicKey:
+                    description: |-
+                      PublicKey is the Cosign public key content used to verify the signature.
+                      If empty, it may default to the official OpenBao public key (future).
+                    type: string
+                required:
+                - enabled
+                - failurePolicy
+                type: object
               ingress:
                 description: Ingress configures optional HTTP(S) ingress in front
                   of the OpenBao Service.
@@ -608,14 +662,67 @@ spec:
                     items:
                       type: string
                     type: array
+                  mode:
+                    allOf:
+                    - enum:
+                      - OperatorManaged
+                      - External
+                    - enum:
+                      - OperatorManaged
+                      - External
+                    default: OperatorManaged
+                    description: Mode controls who manages the certificate lifecycle.
+                    type: string
                   rotationPeriod:
-                    description: RotationPeriod is a duration string (for example,
-                      "720h") controlling certificate rotation.
+                    description: |-
+                      RotationPeriod is a duration string (for example, "720h") controlling certificate rotation.
+                      Only used when Mode is OperatorManaged.
                     minLength: 1
                     type: string
                 required:
                 - enabled
                 - rotationPeriod
+                type: object
+              unseal:
+                description: |-
+                  Unseal defines the auto-unseal configuration.
+                  If omitted, defaults to "static" mode managed by the operator.
+                properties:
+                  credentialsSecretRef:
+                    description: |-
+                      CredentialsSecretRef references a Secret containing provider credentials
+                      (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON).
+                      If using Workload Identity (IRSA, GKE WI), this can be omitted.
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  options:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Options allows specifying seal-specific configuration parameters.
+                      These are rendered as attributes in the seal block of config.hcl.
+                    type: object
+                  type:
+                    default: static
+                    description: |-
+                      Type specifies the seal type: "static", "awskms", "gcpckms", "azurekeyvault", "transit".
+                      Defaults to "static".
+                    enum:
+                    - static
+                    - awskms
+                    - gcpckms
+                    - azurekeyvault
+                    - transit
+                    type: string
                 type: object
               upgrade:
                 description: |-

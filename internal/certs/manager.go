@@ -86,12 +86,27 @@ func NewManagerWithReloader(c client.Client, scheme *runtime.Scheme, r ReloadSig
 // It bootstraps a per-cluster CA Secret and server certificate Secret, evaluates
 // rotation based on the configured rotation window, and triggers hot-reload via the
 // ReloadSignaler whenever a new server certificate is issued.
+//
+// When Mode is External, the operator does not generate or rotate certificates.
+// It only waits for external Secrets to exist and triggers hot-reload when they change.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if !cluster.Spec.TLS.Enabled {
 		logger.Info("TLS is disabled for OpenBaoCluster; skipping certificate reconciliation")
 		return nil
 	}
 
+	// Determine TLS mode, defaulting to OperatorManaged for backwards compatibility
+	mode := cluster.Spec.TLS.Mode
+	if mode == "" {
+		mode = openbaov1alpha1.TLSModeOperatorManaged
+	}
+
+	// Handle External mode: wait for secrets and trigger reload on changes
+	if mode == openbaov1alpha1.TLSModeExternal {
+		return m.reconcileExternalTLS(ctx, logger, cluster)
+	}
+
+	// OperatorManaged mode: generate and rotate certificates
 	now := time.Now()
 
 	caSecretName := caSecretName(cluster)
@@ -279,6 +294,52 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	if err := m.client.Update(ctx, serverSecret); err != nil {
 		return fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+	}
+
+	if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// reconcileExternalTLS handles TLS reconciliation when Mode is External.
+// It waits for external Secrets to exist and triggers hot-reload when certificates change.
+func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	caSecretName := caSecretName(cluster)
+	caSecret := &corev1.Secret{}
+	err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      caSecretName,
+	}, caSecret)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("Waiting for external TLS CA Secret", "secret", caSecretName)
+			return nil
+		}
+		return fmt.Errorf("failed to get CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
+	}
+
+	serverSecretName := serverSecretName(cluster)
+	serverSecret := &corev1.Secret{}
+	err = m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      serverSecretName,
+	}, serverSecret)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("Waiting for external TLS server Secret", "secret", serverSecretName)
+			return nil
+		}
+		return fmt.Errorf("failed to get server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+	}
+
+	// Both secrets exist. Calculate hash and trigger reload if needed.
+	// This enables hot-reload when cert-manager or other external tools rotate certificates.
+	serverCertPEM, ok := serverSecret.Data[tlsCertKey]
+	if !ok || len(serverCertPEM) == 0 {
+		logger.Info("External TLS server Secret exists but missing certificate; waiting for external provider to populate", "secret", serverSecretName)
+		return nil
 	}
 
 	if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {

@@ -34,9 +34,12 @@ The Operator treats `OpenBaoCluster.Spec` as the declarative source of truth and
 **Cluster Creation (Day 0) - Standard Initialization:**
 1. User creates an `OpenBaoCluster` CR in a namespace (without `spec.selfInit`).
 2. CertController bootstraps PKI (CA + leaf certs).
-3. Infrastructure/ConfigController ensures a per-cluster static auto-unseal key Secret exists (creating it if missing).
-4. ConfigController renders `config.hcl` with TLS, Raft storage, `retry_join`, and a `seal "static"` stanza that references the mounted unseal key.
-5. StatefulSetController creates the StatefulSet with **1 replica initially** (regardless of `spec.replicas`), mounting TLS and unseal Secrets.
+3. If image verification is enabled (`spec.imageVerification.enabled`), the operator verifies the container image signature using Cosign before proceeding.
+4. Infrastructure/ConfigController ensures a per-cluster auto-unseal configuration:
+   - If `spec.unseal` is omitted or `spec.unseal.type` is `"static"`, creates a static auto-unseal key Secret (`<cluster>-unseal-key`) if missing.
+   - If `spec.unseal.type` is an external KMS provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`), configures the seal with the provided options and credentials (if specified).
+5. ConfigController renders `config.hcl` with TLS, Raft storage, `retry_join`, and the appropriate `seal` stanza (static or external KMS).
+6. StatefulSetController creates the StatefulSet with **1 replica initially** (regardless of `spec.replicas`), mounting TLS and unseal Secrets (if using static seal) or KMS credentials (if using external KMS).
 6. InitController waits for pod-0 to be running, then:
    - Checks if OpenBao is already initialized via the HTTP health endpoint (`GET /v1/sys/health`).
    - If not, calls the HTTP initialization endpoint (`PUT /v1/sys/init`) against pod-0 to initialize the cluster.
@@ -51,8 +54,9 @@ When `spec.selfInit.enabled = true`, the cluster uses OpenBao's native self-init
 
 1. User creates an `OpenBaoCluster` CR with `spec.selfInit` configured.
 2. CertController bootstraps PKI (CA + leaf certs).
-3. Infrastructure/ConfigController ensures a per-cluster static auto-unseal key Secret exists.
-4. ConfigController renders `config.hcl` with TLS, Raft storage, `retry_join`, `seal "static"`, **and `initialize` stanzas** based on `spec.selfInit.requests[]`.
+3. If image verification is enabled, the operator verifies the container image signature before proceeding.
+4. Infrastructure/ConfigController ensures a per-cluster auto-unseal configuration (static seal by default, or external KMS if configured).
+5. ConfigController renders `config.hcl` with TLS, Raft storage, `retry_join`, the appropriate `seal` stanza, **and `initialize` stanzas** based on `spec.selfInit.requests[]`.
 5. StatefulSetController creates the StatefulSet with **1 replica initially**.
 6. OpenBao automatically initializes itself on first start using the `initialize` stanzas:
    - Auto-unseals using the static key.
@@ -62,9 +66,9 @@ When `spec.selfInit.enabled = true`, the cluster uses OpenBao's native self-init
 8. InfrastructureController scales the StatefulSet to the desired `spec.replicas`.
 9. Additional OpenBao pods start, auto-unseal, and join the Raft cluster.
 
-**Note:** Self-initialization requires an auto-unseal mechanism (which the Operator provides via static auto-unseal). No root token Secret is created when self-init is enabled.
+**Note:** Self-initialization requires an auto-unseal mechanism (which the Operator provides via static auto-unseal by default, or external KMS if configured). No root token Secret is created when self-init is enabled.
 
-**Note:** The static auto-unseal feature requires **OpenBao v2.4.0 or later**. Earlier versions do not support the `seal "static"` configuration.
+**Note:** The static auto-unseal feature requires **OpenBao v2.4.0 or later**. Earlier versions do not support the `seal "static"` configuration. External KMS seals may have different version requirements depending on the provider.
 
 **Cluster Operations / Upgrades (Day 2):**
 1. User updates `OpenBaoCluster.Spec.Version` and/or `Spec.Image`.
@@ -279,11 +283,15 @@ You identified this as the "Killer Feature." To implement this securely, we must
 
 #### A. The Internal CA Logic
 
-The Operator will use Go's standard `crypto/x509` library.
+The Operator supports two TLS modes controlled by `spec.tls.mode`:
+
+#### A. Operator-Managed TLS (Default)
+
+When `spec.tls.mode` is `OperatorManaged` (or omitted), the Operator uses Go's standard `crypto/x509` library.
 
 1.  **Bootstrapping:**
-      * Check for Secret `prod-cluster-ca`.
-      * If missing: Generate a 2048-bit RSA key and a Self-Signed Root CA Certificate (valid for 10 years). Save to Secret.
+      * Check for Secret `<cluster-name>-tls-ca`.
+      * If missing: Generate an ECDSA P-256 key and a Self-Signed Root CA Certificate (valid for 10 years). Save to Secret.
 2.  **Leaf Issuance:**
       * Generate a leaf certificate signed by the stored CA.
       * **Crucial Step - SANs:** You must inject specific DNS entries for K8s service discovery to work during `retry_join`.
@@ -292,20 +300,31 @@ The Operator will use Go's standard `crypto/x509` library.
           * `*.prod-cluster.security.svc` (Direct pod addressing via the headless Service)
           * `127.0.0.1` (Localhost access)
 3.  **Mounting:**
-      * The Secret `bao-tls` is mounted at `/etc/bao/tls`.
+      * The Secrets are mounted at `/etc/bao/tls`.
 
 #### B. The Rotation Loop (Reconciliation)
 
 The HLD mentions `SIGHUP`. Here is the specific technical implementation for the Reconciler:
 
-1.  **Watch:** The Controller watches the `bao-tls` Secret.
-2.  **Check:** In the loop, parse the `tls.crt`. Is `NotAfter - Now < 7 days`?
+1.  **Watch:** The Controller watches the `<cluster-name>-tls-server` Secret.
+2.  **Check:** In the loop, parse the `tls.crt`. Is `NotAfter - Now < rotationPeriod`?
 3.  **Renew:** If yes, regenerate certs and update the Secret.
 4.  **Signal:**
       * Kubernetes updates the mounted volume automatically (eventually).
       * **Optimization:** The Operator watches the Pod's *file system*? No, the Operator can't see inside.
       * **Better Approach:** The Operator compares the `ResourceVersion` of the Secret it just updated against an annotation on the Pod.
       * If different: Update the `openbao.org/tls-cert-hash` annotation on each ready OpenBao pod. A small sidecar container running in the same pod observes this change (or the underlying TLS volume updates) and sends `SIGHUP` to the OpenBao process locally, forcing it to reload the certs from disk without requiring `pods/exec` from the operator.
+
+#### C. External TLS Provider Mode
+
+When `spec.tls.mode` is `External`, the Operator does not generate or rotate certificates:
+
+1.  **Wait:** Check for Secrets `<cluster-name>-tls-ca` and `<cluster-name>-tls-server`.
+2.  **Monitor:** If both exist, compute SHA256 hash of the server certificate.
+3.  **Hot Reload:** When the hash changes (e.g., cert-manager rotates the certificate), trigger hot-reload via the same annotation mechanism as OperatorManaged mode.
+4.  **No Rotation:** Do not check expiry or attempt to rotate; assume external provider (cert-manager, corporate PKI, etc.) handles this.
+
+This mode enables integration with cert-manager, corporate PKI infrastructure, or other external certificate management systems while still benefiting from the operator's hot-reload capabilities.
 
 -----
 

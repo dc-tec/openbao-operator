@@ -17,6 +17,18 @@ import (
 	configbuilder "github.com/openbao/operator/internal/config"
 )
 
+// usesStaticSeal returns true if the cluster is configured to use the static seal
+// (either by default when unseal config is nil, or explicitly when type is "static").
+func usesStaticSeal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster.Spec.Unseal == nil {
+		return true
+	}
+	if cluster.Spec.Unseal.Type == "" {
+		return true
+	}
+	return cluster.Spec.Unseal.Type == "static"
+}
+
 // ensureUnsealSecret manages the static auto-unseal Secret for the OpenBaoCluster.
 // This function implements a "blind create" pattern: it generates the key in memory
 // and attempts to create the Secret, ignoring AlreadyExists errors. This ensures

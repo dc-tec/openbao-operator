@@ -21,7 +21,7 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -52,7 +52,7 @@ func TestEnsureServiceAccountUpdatesLabels(t *testing.T) {
 	ctx := context.Background()
 
 	// First reconcile creates the ServiceAccount
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -60,7 +60,7 @@ func TestEnsureServiceAccountUpdatesLabels(t *testing.T) {
 	cluster.Name = "infra-sa-updated"
 
 	// Second reconcile should update labels
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -85,7 +85,7 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -172,12 +172,12 @@ func TestEnsureRBACUpdatesWhenServiceAccountChanges(t *testing.T) {
 	ctx := context.Background()
 
 	// First reconcile creates RBAC
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
 	// Second reconcile should update labels
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -207,7 +207,7 @@ func TestDeleteServiceAccountDeletesServiceAccount(t *testing.T) {
 	ctx := context.Background()
 
 	// Create ServiceAccount first
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -235,7 +235,7 @@ func TestDeleteRBACDeletesRoleAndRoleBinding(t *testing.T) {
 	ctx := context.Background()
 
 	// Create RBAC first
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 

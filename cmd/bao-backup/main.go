@@ -46,10 +46,11 @@ type Config struct {
 	ClusterReplicas  int32
 
 	// Storage configuration
-	BackupEndpoint     string
-	BackupBucket       string
-	BackupPathPrefix   string
-	BackupUsePathStyle bool
+	BackupEndpoint       string
+	BackupBucket         string
+	BackupPathPrefix     string
+	BackupFilenamePrefix string // Added to support pre-upgrade prefixes
+	BackupUsePathStyle   bool
 
 	// Authentication
 	AuthMethod                    string
@@ -101,6 +102,7 @@ func loadConfig() (*Config, error) {
 	}
 
 	cfg.BackupPathPrefix = strings.TrimSpace(os.Getenv("BACKUP_PATH_PREFIX"))
+	cfg.BackupFilenamePrefix = strings.TrimSpace(os.Getenv("BACKUP_FILENAME_PREFIX"))
 
 	usePathStyleStr := strings.TrimSpace(os.Getenv("BACKUP_USE_PATH_STYLE"))
 	if usePathStyleStr != "" {
@@ -357,6 +359,7 @@ func main() {
 		cfg.BackupPathPrefix,
 		cfg.ClusterNamespace,
 		cfg.ClusterName,
+		cfg.BackupFilenamePrefix,
 		time.Now().UTC(),
 	)
 	if err != nil {

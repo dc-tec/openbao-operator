@@ -130,21 +130,15 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	// Phase 3: Pre-upgrade Snapshot (if enabled)
 	// Note: This happens after validation to ensure cluster is healthy before snapshot
-	// If backup is in progress, this will return nil to requeue, preventing upgrade initialization
+	// If backup is in progress (snapshotComplete=false), this will return nil to requeue, preventing upgrade initialization
 	if cluster.Status.Upgrade == nil {
-		if err := m.handlePreUpgradeSnapshot(ctx, logger, cluster); err != nil {
+		snapshotComplete, err := m.handlePreUpgradeSnapshot(ctx, logger, cluster)
+		if err != nil {
 			return err
 		}
-
-		// Check if backup job is still running - if so, requeue without initializing upgrade
-		existingJobName, existingJobStatus, err := m.findExistingPreUpgradeBackupJob(ctx, cluster)
-		if err != nil {
-			return fmt.Errorf("failed to check for existing pre-upgrade backup job: %w", err)
-		}
-		if existingJobName != "" && existingJobStatus == "running" {
-			// Backup job exists and is running - requeue to wait for it
-			logger.Info("Pre-upgrade backup job is still running, requeuing", "job", existingJobName)
-			return nil // Requeue - don't proceed to upgrade initialization
+		if !snapshotComplete {
+			logger.Info("Pre-upgrade snapshot in progress, waiting...")
+			return nil
 		}
 	}
 
@@ -385,14 +379,13 @@ func (m *Manager) checkPodHealth(ctx context.Context, logger logr.Logger, cluste
 }
 
 // handlePreUpgradeSnapshot checks if preUpgradeSnapshot is enabled and triggers a backup if needed.
+// Returns true if the snapshot is complete (or disabled), false if it is in progress (created or running).
 // Returns an error if backup fails, which will block the upgrade.
-// Returns nil if backup is in progress (requeue will happen automatically).
-// Returns nil if backup is complete or not needed.
-func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
 	// Check if pre-upgrade snapshot is enabled
 	if cluster.Spec.Upgrade == nil || !cluster.Spec.Upgrade.PreUpgradeSnapshot {
 		logger.V(1).Info("Pre-upgrade snapshot is not enabled")
-		return nil
+		return true, nil
 	}
 
 	// Verify backup configuration is valid
@@ -401,13 +394,13 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 		if statusErr := m.client.Status().Update(ctx, cluster); statusErr != nil {
 			logger.Error(statusErr, "Failed to update status after pre-upgrade backup validation failure")
 		}
-		return fmt.Errorf("pre-upgrade backup configuration invalid: %w", err)
+		return false, fmt.Errorf("pre-upgrade backup configuration invalid: %w", err)
 	}
 
 	// Check if there's an existing pre-upgrade backup job (running or failed)
 	existingJobName, existingJobStatus, err := m.findExistingPreUpgradeBackupJob(ctx, cluster)
 	if err != nil {
-		return fmt.Errorf("failed to check for existing pre-upgrade backup job: %w", err)
+		return false, fmt.Errorf("failed to check for existing pre-upgrade backup job: %w", err)
 	}
 
 	var jobName string
@@ -422,69 +415,43 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 			if statusErr := m.client.Status().Update(ctx, cluster); statusErr != nil {
 				logger.Error(statusErr, "Failed to update status after pre-upgrade backup failure")
 			}
-			return fmt.Errorf("pre-upgrade backup job %s failed", jobName)
-		}
-	} else {
-		// Create new job
-		jobName = m.backupJobName(cluster)
-		logger.Info("Creating pre-upgrade backup job", "job", jobName)
-
-		job, err := m.buildBackupJob(cluster, jobName)
-		if err != nil {
-			return fmt.Errorf("failed to build backup job: %w", err)
+			return false, fmt.Errorf("pre-upgrade backup job %s failed", jobName)
 		}
 
-		// Set OwnerReference for garbage collection
-		if m.scheme != nil {
-			if err := controllerutil.SetControllerReference(cluster, job, m.scheme); err != nil {
-				return fmt.Errorf("failed to set owner reference on backup job: %w", err)
-			}
+		// If job succeeded, we are done
+		if existingJobStatus == "succeeded" {
+			logger.Info("Pre-upgrade backup job completed successfully", "job", jobName)
+			return true, nil
 		}
 
-		if err := m.client.Create(ctx, job); err != nil {
-			return fmt.Errorf("failed to create backup job: %w", err)
-		}
-
-		logger.Info("Pre-upgrade backup job created", "job", jobName)
-		// Return nil to requeue - we'll check job status on next reconcile
-		return nil
+		// If job is running, we wait
+		logger.Info("Pre-upgrade backup job is still running", "job", jobName)
+		return false, nil
 	}
 
-	// Check job status
-	job := &batchv1.Job{}
-	if err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      jobName,
-	}, job); err != nil {
-		if apierrors.IsNotFound(err) {
-			// Job was cleaned up - assume it completed successfully
-			logger.Info("Pre-upgrade backup job was cleaned up, assuming completion", "job", jobName)
-			return nil
+	// No job exists - create new job
+	jobName = m.backupJobName(cluster)
+	logger.Info("Creating pre-upgrade backup job", "job", jobName)
+
+	job, err := m.buildBackupJob(cluster, jobName)
+	if err != nil {
+		return false, fmt.Errorf("failed to build backup job: %w", err)
+	}
+
+	// Set OwnerReference for garbage collection
+	if m.scheme != nil {
+		if err := controllerutil.SetControllerReference(cluster, job, m.scheme); err != nil {
+			return false, fmt.Errorf("failed to set owner reference on backup job: %w", err)
 		}
-		return fmt.Errorf("failed to get backup job: %w", err)
 	}
 
-	// Check job status
-	if job.Status.Succeeded > 0 {
-		logger.Info("Pre-upgrade backup job completed successfully", "job", jobName)
-		return nil
+	if err := m.client.Create(ctx, job); err != nil {
+		return false, fmt.Errorf("failed to create backup job: %w", err)
 	}
 
-	if job.Status.Failed > 0 {
-		SetPreUpgradeBackupFailed(&cluster.Status, fmt.Sprintf("backup job %s failed", jobName), cluster.Generation)
-		if statusErr := m.client.Status().Update(ctx, cluster); statusErr != nil {
-			logger.Error(statusErr, "Failed to update status after pre-upgrade backup failure")
-		}
-		return fmt.Errorf("pre-upgrade backup job %s failed", jobName)
-	}
-
-	// Job is still running - return nil to requeue
-	logger.Info("Pre-upgrade backup job is still running, will requeue",
-		"job", jobName,
-		"active", job.Status.Active,
-		"succeeded", job.Status.Succeeded,
-		"failed", job.Status.Failed)
-	return nil
+	logger.Info("Pre-upgrade backup job created", "job", jobName)
+	// Return false to indicate snapshot is not yet complete (it was just created)
+	return false, nil
 }
 
 // validateBackupConfig validates that backup configuration is present and valid.
@@ -610,6 +577,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 		{Name: "BACKUP_ENDPOINT", Value: backupCfg.Target.Endpoint},
 		{Name: "BACKUP_BUCKET", Value: backupCfg.Target.Bucket},
 		{Name: "BACKUP_PATH_PREFIX", Value: backupCfg.Target.PathPrefix},
+		{Name: "BACKUP_FILENAME_PREFIX", Value: "pre-upgrade"}, // Prefix filenames with "pre-upgrade-"
 		{Name: "BACKUP_USE_PATH_STYLE", Value: fmt.Sprintf("%t", backupCfg.Target.UsePathStyle)},
 	}
 

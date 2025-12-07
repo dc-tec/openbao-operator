@@ -8,55 +8,50 @@ import (
 
 func TestGenerateBackupKey(t *testing.T) {
 	tests := []struct {
-		name       string
-		pathPrefix string
-		namespace  string
-		cluster    string
-		timestamp  time.Time
-		wantPrefix string
-		wantSuffix string
+		name           string
+		pathPrefix     string
+		namespace      string
+		cluster        string
+		filenamePrefix string
+		timestamp      time.Time
+		wantPrefix     string
+		wantSuffix     string
 	}{
 		{
-			name:       "with path prefix",
-			pathPrefix: "prod/",
-			namespace:  "security",
-			cluster:    "prod-cluster",
-			timestamp:  time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC),
-			wantPrefix: "prod/security/prod-cluster/2025-01-15T03-00-00Z-",
-			wantSuffix: ".snap",
+			name:           "with path prefix",
+			pathPrefix:     "prod/",
+			namespace:      "security",
+			cluster:        "prod-cluster",
+			filenamePrefix: "",
+			timestamp:      time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC),
+			wantPrefix:     "prod/security/prod-cluster/2025-01-15T03-00-00Z-",
+			wantSuffix:     ".snap",
 		},
 		{
-			name:       "without path prefix",
-			pathPrefix: "",
-			namespace:  "default",
-			cluster:    "test",
-			timestamp:  time.Date(2025, 6, 20, 14, 30, 45, 0, time.UTC),
-			wantPrefix: "default/test/2025-06-20T14-30-45Z-",
-			wantSuffix: ".snap",
+			name:           "without path prefix",
+			pathPrefix:     "",
+			namespace:      "default",
+			cluster:        "test",
+			filenamePrefix: "",
+			timestamp:      time.Date(2025, 6, 20, 14, 30, 45, 0, time.UTC),
+			wantPrefix:     "default/test/2025-06-20T14-30-45Z-",
+			wantSuffix:     ".snap",
 		},
 		{
-			name:       "path prefix with trailing slash",
-			pathPrefix: "backups/",
-			namespace:  "vault",
-			cluster:    "main",
-			timestamp:  time.Date(2025, 12, 31, 23, 59, 59, 0, time.UTC),
-			wantPrefix: "backups/vault/main/2025-12-31T23-59-59Z-",
-			wantSuffix: ".snap",
-		},
-		{
-			name:       "path prefix without trailing slash",
-			pathPrefix: "backups",
-			namespace:  "vault",
-			cluster:    "main",
-			timestamp:  time.Date(2025, 12, 31, 23, 59, 59, 0, time.UTC),
-			wantPrefix: "backups/vault/main/2025-12-31T23-59-59Z-",
-			wantSuffix: ".snap",
+			name:           "with filename prefix",
+			pathPrefix:     "backups",
+			namespace:      "vault",
+			cluster:        "main",
+			filenamePrefix: "pre-upgrade",
+			timestamp:      time.Date(2025, 12, 31, 23, 59, 59, 0, time.UTC),
+			wantPrefix:     "backups/vault/main/pre-upgrade-2025-12-31T23-59-59Z-",
+			wantSuffix:     ".snap",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key, err := GenerateBackupKey(tt.pathPrefix, tt.namespace, tt.cluster, tt.timestamp)
+			key, err := GenerateBackupKey(tt.pathPrefix, tt.namespace, tt.cluster, tt.filenamePrefix, tt.timestamp)
 			if err != nil {
 				t.Fatalf("GenerateBackupKey() error = %v", err)
 			}
@@ -84,7 +79,7 @@ func TestGenerateBackupKey_UniquenessWithSameTimestamp(t *testing.T) {
 
 	// Generate 100 keys with the same timestamp - they should all be unique
 	for i := 0; i < 100; i++ {
-		key, err := GenerateBackupKey("test", "ns", "cluster", timestamp)
+		key, err := GenerateBackupKey("test", "ns", "cluster", "", timestamp)
 		if err != nil {
 			t.Fatalf("GenerateBackupKey() error = %v", err)
 		}
@@ -107,7 +102,7 @@ func TestParseBackupKey(t *testing.T) {
 		wantErr       bool
 	}{
 		{
-			name:          "valid key with prefix",
+			name:          "valid key with path prefix",
 			key:           "prod/security/prod-cluster/2025-01-15T03-00-00Z-a1b2c3d4.snap",
 			wantNamespace: "security",
 			wantCluster:   "prod-cluster",
@@ -116,7 +111,16 @@ func TestParseBackupKey(t *testing.T) {
 			wantErr:       false,
 		},
 		{
-			name:          "valid key without prefix",
+			name:          "valid key with filename prefix",
+			key:           "prod/security/prod-cluster/pre-upgrade-2025-01-15T03-00-00Z-a1b2c3d4.snap",
+			wantNamespace: "security",
+			wantCluster:   "prod-cluster",
+			wantTimestamp: time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC),
+			wantUUID:      "a1b2c3d4",
+			wantErr:       false,
+		},
+		{
+			name:          "valid key without path prefix",
 			key:           "default/test/2025-06-20T14-30-45Z-12345678.snap",
 			wantNamespace: "default",
 			wantCluster:   "test",
@@ -135,7 +139,7 @@ func TestParseBackupKey(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "invalid - bad timestamp",
+			name:    "invalid - bad timestamp format",
 			key:     "ns/cluster/invalid-timestamp-a1b2c3d4.snap",
 			wantErr: true,
 		},

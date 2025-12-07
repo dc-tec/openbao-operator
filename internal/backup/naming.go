@@ -17,11 +17,12 @@ const (
 )
 
 // GenerateBackupKey generates a predictable, sortable object key for a backup.
-// Format: <pathPrefix>/<namespace>/<cluster>/<timestamp>-<uuid>.snap
+// Format: <pathPrefix>/<namespace>/<cluster>/[<filenamePrefix>-]<timestamp>-<uuid>.snap
 //
 // The timestamp is RFC3339 in UTC with colons replaced by dashes for filesystem compatibility.
 // The UUID is 8 hex characters from crypto/rand to prevent collisions.
-func GenerateBackupKey(pathPrefix, namespace, cluster string, timestamp time.Time) (string, error) {
+// If filenamePrefix is provided, it is prepended to the filename with a dash separator.
+func GenerateBackupKey(pathPrefix, namespace, cluster, filenamePrefix string, timestamp time.Time) (string, error) {
 	// Generate short UUID
 	uuid, err := generateShortUUID()
 	if err != nil {
@@ -34,7 +35,12 @@ func GenerateBackupKey(pathPrefix, namespace, cluster string, timestamp time.Tim
 	ts = strings.ReplaceAll(ts, ":", "-")
 
 	// Construct filename
-	filename := fmt.Sprintf("%s-%s%s", ts, uuid, BackupExtension)
+	var filename string
+	if filenamePrefix != "" {
+		filename = fmt.Sprintf("%s-%s-%s%s", filenamePrefix, ts, uuid, BackupExtension)
+	} else {
+		filename = fmt.Sprintf("%s-%s%s", ts, uuid, BackupExtension)
+	}
 
 	// Build full path, handling optional pathPrefix
 	var keyPath string
@@ -51,6 +57,7 @@ func GenerateBackupKey(pathPrefix, namespace, cluster string, timestamp time.Tim
 
 // ParseBackupKey extracts metadata from a backup object key.
 // Returns the namespace, cluster name, timestamp, and UUID from a backup key.
+// It handles filenames with or without prefixes, as long as they end in -<timestamp>-<uuid>.snap pattern.
 func ParseBackupKey(key string) (namespace, cluster string, timestamp time.Time, uuid string, err error) {
 	// Split the path
 	parts := strings.Split(key, "/")
@@ -63,7 +70,7 @@ func ParseBackupKey(key string) (namespace, cluster string, timestamp time.Time,
 	cluster = parts[len(parts)-2]
 	namespace = parts[len(parts)-3]
 
-	// Parse filename: <timestamp>-<uuid>.snap
+	// Parse filename: [prefix-]<timestamp>-<uuid>.snap
 	if !strings.HasSuffix(filename, BackupExtension) {
 		return "", "", time.Time{}, "", fmt.Errorf("invalid backup filename extension: %s", filename)
 	}
@@ -78,7 +85,20 @@ func ParseBackupKey(key string) (namespace, cluster string, timestamp time.Time,
 	}
 
 	uuid = base[lastDash+1:]
-	tsStr := base[:lastDash]
+
+	// The part before the UUID is [prefix-]timestamp
+	// Timestamp format (RFC3339 with dashes) is 20 chars: YYYY-MM-DDTHH-MM-SSZ
+	// Example: 2025-01-15T03-00-00Z
+	// We extract the last 20 chars of the remaining string as the timestamp.
+
+	remaining := base[:lastDash]
+	const timestampLength = 20
+
+	if len(remaining) < timestampLength {
+		return "", "", time.Time{}, "", fmt.Errorf("invalid backup filename format (too short): %s", filename)
+	}
+
+	tsStr := remaining[len(remaining)-timestampLength:]
 
 	// Convert dashes back to colons in the time portion
 	// The timestamp format is: 2025-01-15T03-00-00Z

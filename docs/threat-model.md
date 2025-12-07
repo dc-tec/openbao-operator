@@ -221,9 +221,17 @@ The Operator uses the root token for these operations. For self-init clusters, u
 
 * **Threat:** Malicious image is specified in `spec.image`, deploying compromised OpenBao binary.
 * **Mitigation:**
+    * **Image Verification:** The operator supports Cosign-based image signature verification via `spec.imageVerification`. When enabled with `failurePolicy=Block`, unverified images are rejected and StatefulSet updates are blocked.
+    * **Rekor Verification:** By default, signatures are verified against the Rekor transparency log, providing non-repudiation guarantees and following OpenBao's verification guidance.
+    * **Digest Pinning:** The operator resolves image tags to digests during verification and uses the verified digest in StatefulSets, preventing TOCTOU attacks where a tag could be updated to point to a malicious image between verification and deployment.
+    * **Private Registry Support:** ImagePullSecrets can be provided for authentication when verifying images from private registries.
     * Organizations SHOULD maintain an allowlist of approved OpenBao images.
-    * Use image signing and verification (e.g., cosign, Notary).
-    * Admission controllers can enforce image policies.
+    * Admission controllers can enforce additional image policies.
+
+* **Threat:** TOCTOU (Time-of-Check to Time-of-Use) attack where an image tag is updated to point to a malicious digest between verification and deployment.
+* **Mitigation:**
+    * The operator resolves image tags to immutable digests during verification and uses the verified digest (e.g., `openbao/openbao@sha256:abc...`) in StatefulSets instead of the mutable tag.
+    * This ensures that the exact image digest that was verified is the one that gets deployed, preventing tag manipulation attacks.
 
 * **Threat:** Upgrade to vulnerable OpenBao version introduces security vulnerabilities.
 * **Mitigation:**
@@ -247,6 +255,7 @@ In multi-tenant deployments, additional threats and mitigations apply:
 * **Mitigation:**
     * Use namespace-scoped RoleBindings that do NOT grant Secret read access.
     * Deploy policy engines (OPA Gatekeeper, Kyverno) to block access to `*-root-token` and `*-unseal-key` Secrets.
+    * **External KMS:** When using external KMS auto-unseal (`spec.unseal.type` set to `awskms`, `gcpckms`, `azurekeyvault`, or `transit`), the unseal key is not stored in Kubernetes Secrets, eliminating this threat vector for the unseal key.
     * Consider using self-initialization to avoid root token Secrets entirely.
 
 * **Threat:** Tenant A's OpenBao pods communicate with Tenant B's pods.
