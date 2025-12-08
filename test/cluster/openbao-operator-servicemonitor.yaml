@@ -26,3 +26,4 @@ spec:
         # In production, use proper certificate management
         insecureSkipVerify: true
       interval: 30s
+

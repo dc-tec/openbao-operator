@@ -62,3 +62,4 @@ nodeExporter:
 
 kubeStateMetrics:
   enabled: false
+

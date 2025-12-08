@@ -14,6 +14,7 @@ resources:
   - openbao-admin-serviceaccount.yaml
   - openbao-traefik-servers-transport.yaml
   - openbao-kubernetes-auth-rbac.yaml
+  - traefik-gateway-certs.yaml
 
   # Monitoring stack
   - monitoring-namespace.yaml
