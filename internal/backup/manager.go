@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -156,10 +158,45 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 		return fmt.Errorf("cluster is initializing")
 	}
 
+	// Check if an upgrade is about to start or in progress
+	// This prevents regular backups from starting when an upgrade is detected or in progress
+	// We use the same logic as the upgrade manager to detect pending upgrades
+	// This catches upgrades before Status.Upgrade is set and before pre-upgrade jobs are visible
+	if cluster.Status.Initialized {
+		// Only check for pending upgrades if cluster is initialized
+		// (upgrade manager also skips if not initialized)
+		if cluster.Status.CurrentVersion != "" {
+			// CurrentVersion is set - check if it differs from spec
+			if cluster.Spec.Version != cluster.Status.CurrentVersion {
+				// Upgrade is about to start - check if pre-upgrade snapshot is enabled
+				if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.PreUpgradeSnapshot {
+					// Pre-upgrade snapshot is enabled - skip regular backups
+					// The upgrade manager will handle the pre-upgrade backup
+					return fmt.Errorf("upgrade pending with pre-upgrade snapshot enabled")
+				}
+				// Upgrade is about to start but no pre-upgrade snapshot - still skip regular backups
+				return fmt.Errorf("upgrade pending")
+			}
+		}
+		// If CurrentVersion is empty but cluster is initialized, this is the first reconcile after init
+		// The upgrade manager will set CurrentVersion, so no upgrade is pending yet
+	}
+
 	// Check if upgrade is in progress - skip scheduled backups during upgrades
 	// Exception: Pre-upgrade backups are triggered by the upgrade manager, not here
 	if cluster.Status.Upgrade != nil {
 		return fmt.Errorf("upgrade in progress")
+	}
+
+	// Check if a pre-upgrade backup job exists or is in progress
+	// This is a fallback check in case the version check above didn't catch it
+	// (e.g., if Status.CurrentVersion is empty or there's a timing issue)
+	hasPreUpgradeJob, err := m.hasPreUpgradeBackupJob(ctx, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to check for pre-upgrade backup job: %w", err)
+	}
+	if hasPreUpgradeJob {
+		return fmt.Errorf("pre-upgrade backup in progress")
 	}
 
 	// Check if another backup is in progress
@@ -372,6 +409,37 @@ func (m *Manager) ensureBackupServiceAccount(ctx context.Context, logger logr.Lo
 // backupServiceAccountName returns the name for the backup ServiceAccount.
 func backupServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + backupServiceAccountSuffix
+}
+
+// hasPreUpgradeBackupJob checks if there's a pre-upgrade backup job running or pending for this cluster.
+// This is used to prevent regular scheduled backups from starting when an upgrade is initiating.
+func (m *Manager) hasPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+	jobList := &batchv1.JobList{}
+	labelSelector := labels.SelectorFromSet(map[string]string{
+		"app.kubernetes.io/instance":   cluster.Name,
+		"app.kubernetes.io/managed-by": "openbao-operator",
+		"openbao.org/cluster":          cluster.Name,
+		"openbao.org/component":        "backup",
+		"openbao.org/backup-type":      "pre-upgrade",
+	})
+
+	if err := m.client.List(ctx, jobList,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabelsSelector{Selector: labelSelector},
+	); err != nil {
+		return false, fmt.Errorf("failed to list pre-upgrade backup jobs: %w", err)
+	}
+
+	// Check if there's a running or pending job (not yet succeeded or failed)
+	for i := range jobList.Items {
+		job := &jobList.Items[i]
+		// If job hasn't succeeded or failed, it's still running or pending
+		if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // setBackingUpCondition sets the BackingUp condition on the cluster status.

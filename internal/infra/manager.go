@@ -30,6 +30,8 @@ const (
 	configInitTemplatePath   = "/etc/bao/config-init/config.hcl"
 	publicServiceSuffix      = "-public"
 	httpRouteSuffix          = "-httproute"
+	tlsRouteSuffix           = "-tlsroute"
+	backendTLSPolicySuffix   = "-backend-tls-policy"
 	tlsServerSecretSuffix    = "-tls-server"
 	tlsCASecretSuffix        = "-tls-ca"
 	openBaoContainerName     = "openbao"
@@ -133,7 +135,15 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return err
 	}
 
+	if err := m.ensureTLSRoute(ctx, logger, cluster); err != nil {
+		return err
+	}
+
 	if err := m.ensureGatewayCAConfigMap(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	if err := m.ensureBackendTLSPolicy(ctx, logger, cluster); err != nil {
 		return err
 	}
 
@@ -142,12 +152,6 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	if err := m.ensureRBAC(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	// Check if Kubernetes Auth RBAC is configured (operator does not create it automatically
-	// due to security/compliance considerations - users must create it manually)
-	if err := m.checkKubernetesAuthRBAC(ctx, logger, cluster); err != nil {
 		return err
 	}
 

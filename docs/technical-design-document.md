@@ -784,9 +784,9 @@ OpenBao Pods
 
 When `spec.gateway.enabled = true`, the InfrastructureManager reconciles Gateway API resources as part of its normal flow:
 
-1. **Ensure HTTPRoute:**
+1. **Ensure HTTPRoute (when `spec.gateway.tlsPassthrough` is `false` or omitted):**
    - If Gateway API CRDs are not installed (no `HTTPRoute` kind), log an informational message and skip HTTPRoute reconciliation.
-   - If Gateway is disabled (`spec.gateway == nil` or `spec.gateway.enabled == false`), delete any existing HTTPRoute and return.
+   - If Gateway is disabled (`spec.gateway == nil` or `spec.gateway.enabled == false`) or TLS passthrough is enabled (`spec.gateway.tlsPassthrough == true`), delete any existing HTTPRoute and return.
    - If the Gateway configuration is incomplete (for example, empty `spec.gateway.hostname` or `spec.gateway.gatewayRef.name`), delete any existing HTTPRoute and return without creating a new one.
    - Otherwise, create or update an `HTTPRoute` with:
      - Name: `<cluster>-httproute`
@@ -795,12 +795,37 @@ When `spec.gateway.enabled = true`, the InfrastructureManager reconciles Gateway
      - `hostnames`: `spec.gateway.hostname`
      - `rules`: a single rule routing to the OpenBao public Service backend on port `8200` with a `PathPrefix` match on `spec.gateway.path` (default `/`).
 
-2. **Ensure Gateway CA ConfigMap:**
+2. **Ensure TLSRoute (when `spec.gateway.tlsPassthrough` is `true`):**
+   - If Gateway API CRDs are not installed (no `TLSRoute` kind), log an informational message and skip TLSRoute reconciliation.
+   - If Gateway is disabled (`spec.gateway == nil` or `spec.gateway.enabled == false`) or TLS passthrough is disabled (`spec.gateway.tlsPassthrough == false`), delete any existing TLSRoute and return.
+   - If the Gateway configuration is incomplete (for example, empty `spec.gateway.hostname` or `spec.gateway.gatewayRef.name`), delete any existing TLSRoute and return without creating a new one.
+   - Otherwise, create or update a `TLSRoute` with:
+     - Name: `<cluster>-tlsroute`
+     - Namespace: the `OpenBaoCluster` namespace
+     - `parentRefs`: pointing to the configured Gateway (`spec.gateway.gatewayRef`)
+     - `hostnames`: `spec.gateway.hostname` (used for SNI matching)
+     - `rules`: a single rule routing to the OpenBao public Service backend on port `8200`
+   - Note: TLSRoute and HTTPRoute are mutually exclusive - only one is created per cluster based on `tlsPassthrough` setting.
+
+3. **Ensure Gateway CA ConfigMap:**
    - Maintain a CA `ConfigMap` named `<cluster>-tls-ca` in the `OpenBaoCluster` namespace containing the CA certificate in the `ca.crt` key.
    - Keep the `ConfigMap` in sync with the CA Secret of the same name.
    - Delete the `ConfigMap` when Gateway support is disabled for the cluster. The `ConfigMap` also has an `OwnerReference` to the `OpenBaoCluster`, so it is garbage-collected when the cluster is deleted.
 
-3. **Update TLS SANs:**
+4. **Ensure BackendTLSPolicy:**
+   - If Gateway API CRDs are not installed (no `BackendTLSPolicy` kind), log an informational message and skip BackendTLSPolicy reconciliation.
+   - If Gateway is disabled, TLS passthrough is enabled (`spec.gateway.tlsPassthrough == true`), or BackendTLS is explicitly disabled (`spec.gateway.backendTLS.enabled == false`), delete any existing BackendTLSPolicy and return.
+   - Note: BackendTLSPolicy is not needed when TLS passthrough is enabled because the Gateway does not decrypt traffic.
+   - If TLS is not enabled (`spec.tls.enabled == false`), skip BackendTLSPolicy creation (TLS is required for backend TLS validation).
+   - Otherwise, create or update a `BackendTLSPolicy` with:
+     - Name: `<cluster>-backend-tls-policy`
+     - Namespace: the `OpenBaoCluster` namespace
+     - `targetRefs`: pointing to the OpenBao public Service (`<cluster>-public`)
+     - `validation.caCertificateRefs`: referencing the CA ConfigMap (`<cluster>-tls-ca`)
+     - `validation.hostname`: the Service DNS name (`<service-name>.<namespace>.svc`) or a custom hostname if specified in `spec.gateway.backendTLS.hostname`
+   - The BackendTLSPolicy has an `OwnerReference` to the `OpenBaoCluster`, so it is garbage-collected when the cluster is deleted.
+
+5. **Update TLS SANs:**
    - Add `spec.gateway.hostname` to the server certificate SANs when Gateway API is enabled and a non-empty hostname is configured.
    - Trigger certificate regeneration if the hostname set changes.
 
@@ -831,10 +856,12 @@ spec:
 **TLS Considerations:**
 
 - Gateway API separates TLS termination concerns from routing.
-- The Gateway resource (user-managed) handles TLS termination.
-- For end-to-end TLS, the Gateway should be configured with `BackendTLSPolicy` or equivalent to trust the OpenBao CA.
-- When Gateway API is enabled, the Operator maintains both a CA Secret and a CA ConfigMap named `<cluster>-tls-ca` that Gateway implementations (for example, Traefik) can reference for backend TLS validation.
+- **HTTPRoute (TLS Termination - Default):** The Gateway resource (user-managed) handles TLS termination. For end-to-end TLS, the Operator automatically creates a `BackendTLSPolicy` that configures the Gateway to use HTTPS and validate the backend certificate using the OpenBao CA.
+- **TLSRoute (TLS Passthrough - Optional):** When `spec.gateway.tlsPassthrough` is `true`, the Operator creates a `TLSRoute` that routes encrypted TLS traffic based on SNI without terminating TLS at the Gateway. OpenBao terminates TLS directly. No `BackendTLSPolicy` is needed because the Gateway does not decrypt traffic.
+- When Gateway API is enabled, the Operator maintains both a CA Secret and a CA ConfigMap named `<cluster>-tls-ca` that Gateway implementations (for example, Traefik) can reference for backend TLS validation (when using HTTPRoute).
+- The Operator automatically creates a `BackendTLSPolicy` named `<cluster>-backend-tls-policy` when using HTTPRoute (not TLSRoute). This can be disabled by setting `spec.gateway.backendTLS.enabled = false`.
 - The Operator ensures the hostname is in the server certificate SANs regardless of where TLS terminates.
+- TLSRoute and HTTPRoute are mutually exclusive - only one is created per cluster based on the `tlsPassthrough` setting.
 
 **Comparison with Ingress:**
 
@@ -862,28 +889,35 @@ type OpenBaoClient struct {
     httpClient *http.Client
     // BaseURL is the OpenBao API endpoint (e.g., https://pod-0.cluster.namespace.svc:8200).
     baseURL string
-    // Token for authentication (from root token Secret or dedicated operator token).
+    // Token for authentication (from upgrade ServiceAccount via Kubernetes Auth or TokenSecretRef).
     token string
 }
 ```
 
 **Authentication:**
 
-- **Primary Method:** The Operator reads the root token from the `<cluster>-root-token` Secret.
-- **Alternative (Self-Init Clusters):** For clusters using self-initialization (no root token), users MUST configure a dedicated operator token via `spec.selfInit.requests[]` with the following policy:
+The UpgradeManager requires explicit authentication configuration via `spec.upgrade.kubernetesAuthRole` or `spec.upgrade.tokenSecretRef`. There is no fallback to backup authentication.
 
-```hcl
-# Minimal policy for operator upgrade operations
-path "sys/health" {
-  capabilities = ["read"]
-}
-path "sys/step-down" {
-  capabilities = ["update"]
-}
-path "sys/storage/raft/snapshot" {
-  capabilities = ["read"]
-}
-```
+- **Kubernetes Auth (Preferred):** When `spec.upgrade.kubernetesAuthRole` is set, the operator:
+  - Automatically creates an upgrade ServiceAccount (`<cluster-name>-upgrade-serviceaccount`)
+  - Uses the Kubernetes TokenRequest API to obtain a token for this ServiceAccount
+  - Authenticates to OpenBao using the configured Kubernetes Auth role
+  
+  The role must be configured in OpenBao and must bind to the upgrade ServiceAccount. The role must grant:
+  ```hcl
+  # Minimal policy for operator upgrade operations
+  path "sys/health" {
+    capabilities = ["read"]
+  }
+  path "sys/step-down" {
+    capabilities = ["update"]
+  }
+  path "sys/storage/raft/snapshot" {
+    capabilities = ["read"]  # Required if preUpgradeSnapshot is enabled
+  }
+  ```
+
+- **Static Token (Alternative):** When `spec.upgrade.tokenSecretRef` is set, the operator reads the token from the referenced Secret. The token must have the same permissions as listed above.
 
 **TLS Configuration:**
 

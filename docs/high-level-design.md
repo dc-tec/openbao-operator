@@ -71,20 +71,24 @@ When `spec.selfInit.enabled = true`, the cluster uses OpenBao's native self-init
 **Note:** The static auto-unseal feature requires **OpenBao v2.4.0 or later**. Earlier versions do not support the `seal "static"` configuration. External KMS seals may have different version requirements depending on the provider.
 
 **Cluster Operations / Upgrades (Day 2):**
-1. User updates `OpenBaoCluster.Spec.Version` and/or `Spec.Image`.
-2. UpgradeController detects version drift and performs pre-upgrade validation:
+1. User configures upgrade authentication:
+   - **Kubernetes Auth (Preferred):** Set `spec.upgrade.kubernetesAuthRole` and configure the role in OpenBao (binds to `<cluster-name>-upgrade-serviceaccount`, automatically created by operator)
+   - **Static Token (Alternative):** Set `spec.upgrade.tokenSecretRef` pointing to a token Secret
+   - **Important:** Upgrade authentication must be explicitly configured; there is no fallback to backup authentication
+2. User updates `OpenBaoCluster.Spec.Version` and/or `Spec.Image`.
+3. UpgradeController detects version drift and performs pre-upgrade validation:
    - Validates semantic versioning (blocks downgrades by default).
    - Verifies all pods are Ready and quorum is healthy.
-   - Optionally triggers a pre-upgrade backup if `spec.backup.preUpgradeSnapshot` is enabled.
-3. UpgradeController orchestrates Raft-aware rolling updates:
+   - Optionally triggers a pre-upgrade backup if `spec.upgrade.preUpgradeSnapshot` is enabled.
+4. UpgradeController orchestrates Raft-aware rolling updates:
    - Locks StatefulSet updates using partitioning.
    - Iterates pods in reverse ordinal order.
    - Forces leader step-down before updating leader pod.
    - Waits for pod Ready, OpenBao health, and Raft sync after each update.
-4. Upgrade progress is persisted in `Status.Upgrade`, allowing resumption after Operator restart.
-5. On completion, `Status.CurrentVersion` is updated and `Status.Upgrade` is cleared.
+5. Upgrade progress is persisted in `Status.Upgrade`, allowing resumption after Operator restart.
+6. On completion, `Status.CurrentVersion` is updated and `Status.Upgrade` is cleared.
 
-**Note:** Upgrades are designed to be safe and resumable. Downgrades are blocked by default. If an upgrade fails, it halts and sets `Degraded=True`; automated rollback is not supported.
+**Note:** Upgrades are designed to be safe and resumable. Downgrades are blocked by default. If an upgrade fails, it halts and sets `Degraded=True`; automated rollback is not supported. Root tokens are not used for upgrade operations.
 
 **Maintenance / Manual Recovery:**
 1. User sets `OpenBaoCluster.Spec.Paused = true` to enter maintenance mode.

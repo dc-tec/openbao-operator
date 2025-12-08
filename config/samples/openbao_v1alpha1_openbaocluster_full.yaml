@@ -23,15 +23,6 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: bao-full-root-token
-  namespace: openbaocluster-full
-type: Opaque
-data:
-  token:
----
-apiVersion: v1
-kind: Secret
-metadata:
   name: rustfs-secret
   namespace: openbaocluster-full
 type: Opaque
@@ -67,14 +58,14 @@ spec:
   # The operator resolves image tags to digests during verification and uses the verified
   # digest in StatefulSets to prevent TOCTOU (Time-of-Check to Time-of-Use) attacks.
   imageVerification:
-    enabled: true
+    enabled: false
     # PEM-encoded Cosign public key for signature verification.
     # Download the official OpenBao public key from: https://openbao.org/docs/install/#cosign-and-rekor
-    publicKey: |
-      -----BEGIN PUBLIC KEY-----
-      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
-      -----END PUBLIC KEY-----
-    failurePolicy: Block # "Block" prevents deployment on failure; "Warn" logs but proceeds
+    # publicKey: |
+    #   -----BEGIN PUBLIC KEY-----
+    #   MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
+    #   -----END PUBLIC KEY-----
+    # failurePolicy: Block # "Block" prevents deployment on failure; "Warn" logs but proceeds
     # ignoreTlog: false  # Set to true to disable Rekor transparency log verification (not recommended)
     # imagePullSecrets:  # Optional: List of ImagePullSecrets for private registry authentication
     #   - name: registry-credentials  # Secret type: kubernetes.io/dockerconfigjson
@@ -191,6 +182,10 @@ spec:
     # Hostname for routing traffic to this OpenBao cluster.
     # This will be automatically added to the server certificate SANs.
     hostname: bao-full.adfinis.localhost
+    backendTLS:
+      enabled: true
+    # TLS passthrough mode using TLSRoute instead of HTTPRoute.
+    tlsPassthrough: false
     # Optional path prefix (defaults to "/").
     path: /
     # Optional annotations for the HTTPRoute.
@@ -201,6 +196,7 @@ spec:
     kubernetesAuthRole: upgrade
     # Take a snapshot before any version upgrade.
     preUpgradeSnapshot: true
+
   # Scheduled backups to RustFS (S3-compatible storage).
   backup:
     # Run a backup every 15 minutes
@@ -208,7 +204,7 @@ spec:
     # Backup executor image built from Dockerfile.backup in this repository.
     # For k3d clusters, push to the local registry; for other environments,
     # use a fully qualified image reference.
-    executorImage: "k3d-registry.localhost:5000/openbao-backup:1.0.1"
+    executorImage: "k3d-registry.localhost:5000/openbao-backup:1.0.2"
     target:
       # RustFS S3 API endpoint inside the cluster.
       # Use the internal ClusterIP service for in-cluster access (recommended).

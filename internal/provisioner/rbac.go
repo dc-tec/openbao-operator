@@ -92,7 +92,7 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			// 8. Gateway API
 			{
 				APIGroups: []string{"gateway.networking.k8s.io"},
-				Resources: []string{"httproutes"},
+				Resources: []string{"httproutes", "tlsroutes", "backendtlspolicies"},
 				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
 			},
 			// 9. RBAC for OpenBao pod discovery

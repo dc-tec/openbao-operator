@@ -21,6 +21,9 @@ subjects:
     name: openbaocluster-full-serviceaccount
     namespace: openbaocluster-full
   - kind: ServiceAccount
+    name: openbaocluster-full-upgrade-serviceaccount
+    namespace: openbaocluster-full
+  - kind: ServiceAccount
     name: openbaocluster-full-backup-serviceaccount
     namespace: openbaocluster-full
   - kind: ServiceAccount

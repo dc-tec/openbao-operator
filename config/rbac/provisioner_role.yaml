@@ -87,5 +87,7 @@ rules:
       - gateway.networking.k8s.io
     resources:
       - httproutes
+      - tlsroutes
+      - backendtlspolicies
     verbs:
       - "*"

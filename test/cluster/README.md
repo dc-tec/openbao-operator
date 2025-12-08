@@ -3,7 +3,8 @@ Test Cluster Setup
 
 This directory contains helper manifests and configuration for running a local
 end-to-end environment on k3d to exercise the OpenBao Operator, Gateway API,
-Traefik, cert-manager, and RustFS (S3-compatible storage for backups).
+Traefik, cert-manager, RustFS (S3-compatible storage for backups), and monitoring
+(Prometheus and Grafana).
 
 Prerequisites
 -------------
@@ -11,7 +12,7 @@ Prerequisites
 - `k3d` (or another k3s-compatible environment)
 - `kubectl`
 - `kustomize` (or `kubectl` with `-k` support)
-- `helm` (for Traefik and RustFS charts)
+- `helm` (for Traefik, RustFS, and monitoring charts)
 
 1. Create the k3d cluster
 -------------------------
@@ -49,9 +50,79 @@ and the local resources:
 - `openbao-gateway-backend-tls-policy.yaml`
 - `openbao-gateway-certificate.yaml`
 - `openbao-admin-serviceaccount.yaml`
-- `traefik-servers-transport.yaml`
+- `openbao-traefik-servers-transport.yaml`
+- `monitoring-namespace.yaml` (creates the `monitoring` namespace)
+- `openbao-operator-grafana-dashboard` ConfigMap (Grafana dashboard for operator metrics)
 
-3. Install Traefik with Gateway API support
+3. Install Prometheus and Grafana
+-----------------------------------
+
+Add the Prometheus Community Helm repo (if not already present):
+
+```sh
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+```
+
+Install the kube-prometheus-stack which includes Prometheus and Grafana:
+
+```sh
+helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  -n monitoring --create-namespace \
+  -f test/cluster/prometheus-values.yaml
+```
+
+This deploys:
+- **Prometheus** for metrics collection and storage
+- **Grafana** for visualization (default credentials: `admin`/`admin`)
+- The OpenBao Operator dashboard is automatically discovered via the ConfigMap labeled with `grafana_dashboard: "1"`
+
+Access Grafana:
+```sh
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+```
+
+Then open http://localhost:3000 in your browser and log in with `admin`/`admin`.
+
+The OpenBao Operator dashboard will be available under Dashboards → OpenBao Operator Metrics.
+
+**Note:** To scrape metrics from the OpenBao Operator, ensure you have a ServiceMonitor configured.
+The operator exposes metrics on the `/metrics` endpoint. See `config/prometheus/monitor.yaml` for an example.
+
+**Troubleshooting Metrics Collection:**
+
+If the Grafana dashboard shows no data, verify:
+
+1. **Check if the metrics service exists:**
+   ```sh
+   kubectl get svc -n openbao-operator-system -l app.kubernetes.io/name=openbao-operator
+   ```
+   Should show: `openbao-operator-controller-manager-metrics-service`
+
+2. **Check if the ServiceMonitor exists:**
+   ```sh
+   kubectl get servicemonitor -n openbao-operator-system
+   ```
+
+3. **Check Prometheus targets:**
+   ```sh
+   # Port-forward to Prometheus
+   kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090
+   # Then visit http://localhost:9090/targets and look for "openbao-operator" targets
+   ```
+
+4. **Check if metrics are being exposed:**
+   ```sh
+   kubectl port-forward -n openbao-operator-system svc/openbao-operator-controller-manager-metrics-service 8443:8443
+   curl -k https://localhost:8443/metrics | grep openbao
+   ```
+
+5. **Check Prometheus logs for scraping errors:**
+   ```sh
+   kubectl logs -n monitoring -l app.kubernetes.io/name=prometheus --tail=50 | grep -i "openbao\|error"
+   ```
+
+4. Install Traefik with Gateway API support
 -------------------------------------------
 
 Add the Traefik Helm repo (if not already present):
@@ -73,7 +144,7 @@ This creates a `Gateway` named `traefik-gateway` in the `default` namespace and
 configures listeners on ports 80/443 with TLS termination using the `bao-tls`
 certificate (from `openbao-gateway-certificate.yaml`).
 
-4. Install RustFS for backups
+5. Install RustFS for backups
 -----------------------------
 
 Add the RustFS Helm chart (from a local clone or chart registry) and install
@@ -94,7 +165,7 @@ The default credentials (for backups) are:
 - Access key: `rustfsadmin`
 - Secret key: `rustfsadmin`
 
-5. Deploy an OpenBaoCluster sample
+6. Deploy an OpenBaoCluster sample
 ----------------------------------
 
 Apply one of the example OpenBaoCluster manifests that exercises:
@@ -113,7 +184,7 @@ This sample:
 - Uses Gateway API via the `traefik-gateway` Gateway and `bao-full.adfinis.localhost`.
 - Schedules periodic backups to the RustFS bucket `openbao-backups`.
 
-6. Admin access via Kubernetes auth
+7. Admin access via Kubernetes auth
 -----------------------------------
 
 The `test/cluster/openbao-admin-serviceaccount.yaml` file creates a

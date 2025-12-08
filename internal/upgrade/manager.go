@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	authv1 "k8s.io/api/authentication/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,13 +35,13 @@ const (
 	headlessServiceSuffix = ""
 	// openBaoContainerPort is the API port.
 	openBaoContainerPort = 8200
-	// defaultK8sTokenPath is the default path for Kubernetes ServiceAccount tokens.
-	defaultK8sTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	// upgradeServiceAccountSuffix is the suffix for upgrade ServiceAccount names.
+	upgradeServiceAccountSuffix = "-upgrade-serviceaccount"
 )
 
 var (
 	// ErrNoUpgradeToken indicates that no suitable upgrade token is configured.
-	ErrNoUpgradeToken = errors.New("no upgrade token configured: either spec.upgrade.kubernetesAuthRole, spec.upgrade.tokenSecretRef, or (when preUpgradeSnapshot is enabled) spec.backup.kubernetesAuthRole or spec.backup.tokenSecretRef must be set")
+	ErrNoUpgradeToken = errors.New("no upgrade token configured: either spec.upgrade.kubernetesAuthRole or spec.upgrade.tokenSecretRef must be set")
 )
 
 // OpenBaoClientFactory creates OpenBao API clients for connecting to cluster pods.
@@ -123,6 +123,11 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		}
 	}
 
+	// Ensure upgrade ServiceAccount exists (for Kubernetes Auth)
+	if err := m.ensureUpgradeServiceAccount(ctx, logger, cluster); err != nil {
+		return fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
+	}
+
 	// Phase 2: Pre-upgrade Validation
 	if err := m.validateUpgrade(ctx, logger, cluster); err != nil {
 		return err
@@ -131,13 +136,18 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Phase 3: Pre-upgrade Snapshot (if enabled)
 	// Note: This happens after validation to ensure cluster is healthy before snapshot
 	// If backup is in progress (snapshotComplete=false), this will return nil to requeue, preventing upgrade initialization
-	if cluster.Status.Upgrade == nil {
+	// We check this even if Status.Upgrade is set to handle edge cases where upgrade was initialized
+	// but snapshot is still running (shouldn't happen, but we check defensively)
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.PreUpgradeSnapshot {
+		// Check if pre-upgrade snapshot is required and complete
 		snapshotComplete, err := m.handlePreUpgradeSnapshot(ctx, logger, cluster)
 		if err != nil {
 			return err
 		}
 		if !snapshotComplete {
 			logger.Info("Pre-upgrade snapshot in progress, waiting...")
+			// If upgrade was already initialized, we should not proceed with pod updates
+			// Return early to wait for snapshot completion
 			return nil
 		}
 	}
@@ -1174,72 +1184,40 @@ func (m *Manager) getClusterCACert(ctx context.Context, cluster *openbaov1alpha1
 
 // getOperatorToken retrieves the authentication token for OpenBao API calls.
 // It supports Kubernetes Auth (preferred) and static token authentication.
-// When spec.upgrade.preUpgradeSnapshot is true, it falls back to backup authentication
-// if upgrade authentication is not explicitly configured.
+// Upgrade authentication must be explicitly configured via spec.upgrade.kubernetesAuthRole
+// or spec.upgrade.tokenSecretRef.
 func (m *Manager) getOperatorToken(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	// Determine which authentication configuration to use
 	upgradeCfg := cluster.Spec.Upgrade
-	backupCfg := cluster.Spec.Backup
-	useBackupAuth := false
-
-	// Check if upgrade auth is explicitly configured
-	hasUpgradeKubernetesAuth := upgradeCfg != nil && strings.TrimSpace(upgradeCfg.KubernetesAuthRole) != ""
-	hasUpgradeTokenSecret := upgradeCfg != nil && upgradeCfg.TokenSecretRef != nil && strings.TrimSpace(upgradeCfg.TokenSecretRef.Name) != ""
-
-	// If upgrade auth is not configured and preUpgradeSnapshot is enabled, use backup auth
-	if !hasUpgradeKubernetesAuth && !hasUpgradeTokenSecret {
-		if upgradeCfg != nil && upgradeCfg.PreUpgradeSnapshot {
-			useBackupAuth = true
-			hasBackupKubernetesAuth := strings.TrimSpace(backupCfg.KubernetesAuthRole) != ""
-			hasBackupTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""
-
-			if !hasBackupKubernetesAuth && !hasBackupTokenSecret {
-				return "", fmt.Errorf("preUpgradeSnapshot is enabled but no backup authentication configured: %w", ErrNoUpgradeToken)
-			}
-		} else {
-			return "", ErrNoUpgradeToken
-		}
+	if upgradeCfg == nil {
+		return "", ErrNoUpgradeToken
 	}
 
-	// Determine which Kubernetes Auth role to use
-	var kubernetesAuthRole string
-	if hasUpgradeKubernetesAuth {
-		kubernetesAuthRole = strings.TrimSpace(upgradeCfg.KubernetesAuthRole)
-	} else if useBackupAuth && strings.TrimSpace(backupCfg.KubernetesAuthRole) != "" {
-		kubernetesAuthRole = strings.TrimSpace(backupCfg.KubernetesAuthRole)
+	// Check if upgrade auth is configured
+	hasUpgradeKubernetesAuth := strings.TrimSpace(upgradeCfg.KubernetesAuthRole) != ""
+	hasUpgradeTokenSecret := upgradeCfg.TokenSecretRef != nil && strings.TrimSpace(upgradeCfg.TokenSecretRef.Name) != ""
+
+	if !hasUpgradeKubernetesAuth && !hasUpgradeTokenSecret {
+		return "", ErrNoUpgradeToken
 	}
 
 	// If Kubernetes Auth is configured, use it
-	if kubernetesAuthRole != "" {
+	if hasUpgradeKubernetesAuth {
+		kubernetesAuthRole := strings.TrimSpace(upgradeCfg.KubernetesAuthRole)
 		return m.authenticateWithKubernetesAuth(ctx, cluster, kubernetesAuthRole)
 	}
 
 	// Otherwise, use static token
-	var tokenSecretRef *corev1.SecretReference
-	if hasUpgradeTokenSecret {
-		tokenSecretRef = upgradeCfg.TokenSecretRef
-	} else if useBackupAuth && backupCfg.TokenSecretRef != nil {
-		tokenSecretRef = backupCfg.TokenSecretRef
-	}
-
-	if tokenSecretRef == nil {
-		return "", ErrNoUpgradeToken
-	}
-
-	return m.getTokenFromSecret(ctx, cluster, tokenSecretRef)
+	return m.getTokenFromSecret(ctx, cluster, upgradeCfg.TokenSecretRef)
 }
 
 // authenticateWithKubernetesAuth authenticates to OpenBao using Kubernetes Auth.
+// It uses the upgrade ServiceAccount token for authentication.
 func (m *Manager) authenticateWithKubernetesAuth(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, role string) (string, error) {
-	// Read ServiceAccount token
-	tokenPath := defaultK8sTokenPath
-	k8sTokenBytes, err := os.ReadFile(tokenPath)
+	// Get token for the upgrade ServiceAccount
+	saName := upgradeServiceAccountName(cluster)
+	k8sToken, err := m.getServiceAccountToken(ctx, cluster.Namespace, saName)
 	if err != nil {
-		return "", fmt.Errorf("failed to read Kubernetes ServiceAccount token from %s: %w", tokenPath, err)
-	}
-	k8sToken := strings.TrimSpace(string(k8sTokenBytes))
-	if k8sToken == "" {
-		return "", fmt.Errorf("Kubernetes ServiceAccount token is empty")
+		return "", fmt.Errorf("failed to get upgrade ServiceAccount token: %w", err)
 	}
 
 	// Get CA certificate for TLS
@@ -1292,6 +1270,113 @@ func (m *Manager) authenticateWithKubernetesAuth(ctx context.Context, cluster *o
 	}
 
 	return "", fmt.Errorf("no running pods available for authentication")
+}
+
+// ensureUpgradeServiceAccount creates or updates the ServiceAccount for upgrade operations.
+// This ServiceAccount is used for Kubernetes Auth authentication to OpenBao.
+func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	saName := upgradeServiceAccountName(cluster)
+
+	sa := &corev1.ServiceAccount{}
+	err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      saName,
+	}, sa)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
+		}
+
+		logger.Info("Upgrade ServiceAccount not found; creating", "serviceaccount", saName)
+
+		sa = &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      saName,
+				Namespace: cluster.Namespace,
+				Labels: map[string]string{
+					"app.kubernetes.io/name":       "openbao",
+					"app.kubernetes.io/instance":   cluster.Name,
+					"app.kubernetes.io/managed-by": "openbao-operator",
+					"openbao.org/cluster":          cluster.Name,
+					"openbao.org/component":        "upgrade",
+				},
+			},
+		}
+
+		// Set OwnerReference for garbage collection
+		if err := controllerutil.SetControllerReference(cluster, sa, m.scheme); err != nil {
+			return fmt.Errorf("failed to set owner reference on upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
+		}
+
+		if err := m.client.Create(ctx, sa); err != nil {
+			return fmt.Errorf("failed to create upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
+		}
+
+		return nil
+	}
+
+	// Update labels if needed
+	if sa.Labels == nil {
+		sa.Labels = make(map[string]string)
+	}
+	needsUpdate := false
+	expectedLabels := map[string]string{
+		"app.kubernetes.io/name":       "openbao",
+		"app.kubernetes.io/instance":   cluster.Name,
+		"app.kubernetes.io/managed-by": "openbao-operator",
+		"openbao.org/cluster":          cluster.Name,
+		"openbao.org/component":        "upgrade",
+	}
+	for k, v := range expectedLabels {
+		if sa.Labels[k] != v {
+			sa.Labels[k] = v
+			needsUpdate = true
+		}
+	}
+
+	if needsUpdate {
+		if err := m.client.Update(ctx, sa); err != nil {
+			return fmt.Errorf("failed to update upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
+		}
+	}
+
+	return nil
+}
+
+// upgradeServiceAccountName returns the name for the upgrade ServiceAccount.
+func upgradeServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return cluster.Name + upgradeServiceAccountSuffix
+}
+
+// getServiceAccountToken creates a TokenRequest for the specified ServiceAccount and returns the token.
+func (m *Manager) getServiceAccountToken(ctx context.Context, namespace, saName string) (string, error) {
+	// Get the ServiceAccount first to ensure it exists
+	sa := &corev1.ServiceAccount{}
+	if err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      saName,
+	}, sa); err != nil {
+		return "", fmt.Errorf("failed to get ServiceAccount %s/%s: %w", namespace, saName, err)
+	}
+
+	// Create TokenRequest
+	tokenRequest := &authv1.TokenRequest{
+		Spec: authv1.TokenRequestSpec{
+			// Request a token with 1 hour expiration
+			ExpirationSeconds: ptr.To(int64(3600)),
+		},
+	}
+
+	// Use SubResource client to create token
+	if err := m.client.SubResource("token").Create(ctx, sa, tokenRequest); err != nil {
+		return "", fmt.Errorf("failed to create token request for ServiceAccount %s/%s: %w", namespace, saName, err)
+	}
+
+	if tokenRequest.Status.Token == "" {
+		return "", fmt.Errorf("token request succeeded but token is empty for ServiceAccount %s/%s", namespace, saName)
+	}
+
+	return tokenRequest.Status.Token, nil
 }
 
 // getTokenFromSecret retrieves a token from a Kubernetes Secret.

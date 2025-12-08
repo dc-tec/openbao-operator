@@ -4,13 +4,26 @@ kind: Kustomization
 resources:
   - openbao-namespaces.yaml
   # Core platform dependencies
-  - https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.0/standard-install.yaml
+  #- https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+  #- https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/experimental-install.yaml
   - https://raw.githubusercontent.com/traefik/traefik/v3.6/docs/content/reference/dynamic-configuration/kubernetes-gateway-rbac.yml
   - https://github.com/cert-manager/cert-manager/releases/download/v1.19.1/cert-manager.yaml
 
   # Local cluster helpers
   - openbao-operator-namespace.yaml
-  - openbao-gateway-backend-tls-policy.yaml
-  - openbao-gateway-certificate.yaml
   - openbao-admin-serviceaccount.yaml
   - openbao-traefik-servers-transport.yaml
+  - openbao-kubernetes-auth-rbac.yaml
+
+  # Monitoring stack
+  - monitoring-namespace.yaml
+  - openbao-operator-servicemonitor.yaml
+
+configMapGenerator:
+  - name: openbao-operator-grafana-dashboard
+    namespace: monitoring
+    files:
+      - grafana/dashboard.json
+    options:
+      labels:
+        grafana_dashboard: "1"

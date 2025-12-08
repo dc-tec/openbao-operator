@@ -423,11 +423,16 @@ A full sample using Gateway API (including TLS and a realistic Gateway reference
 | `gatewayRef.namespace` | Namespace of the Gateway (defaults to cluster namespace) | No |
 | `hostname` | Hostname for routing (added to TLS SANs) | Yes |
 | `path` | Path prefix for routing (defaults to `/`) | No |
-| `annotations` | Annotations for the HTTPRoute | No |
+| `annotations` | Annotations for the HTTPRoute/TLSRoute | No |
+| `tlsPassthrough` | Enable TLS passthrough using TLSRoute (defaults to `false`) | No |
 
 ### 6.4 What the Operator Creates
 
-When Gateway API is enabled, the Operator creates an `HTTPRoute`:
+When Gateway API is enabled, the Operator creates either an `HTTPRoute` (default) or a `TLSRoute` (when `tlsPassthrough: true`):
+
+**HTTPRoute (TLS Termination - Default):**
+
+When `spec.gateway.tlsPassthrough` is `false` or omitted, the Operator creates an `HTTPRoute`:
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -457,6 +462,63 @@ Verify the HTTPRoute was created:
 kubectl -n security get httproutes
 ```
 
+**TLSRoute (TLS Passthrough - Optional):**
+
+When `spec.gateway.tlsPassthrough` is `true`, the Operator creates a `TLSRoute` instead of an `HTTPRoute`:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: gateway-cluster-tlsroute
+  namespace: security
+spec:
+  parentRefs:
+    - name: main-gateway
+      namespace: gateway-system
+  hostnames:
+    - bao.example.com
+  rules:
+    - backendRefs:
+        - name: gateway-cluster-public
+          port: 8200
+```
+
+**Key Differences:**
+
+- **HTTPRoute**: Gateway terminates TLS, decrypts traffic, and forwards HTTP to OpenBao. Requires `BackendTLSPolicy` for Gateway→OpenBao HTTPS.
+- **TLSRoute**: Gateway passes encrypted TLS traffic through based on SNI. OpenBao terminates TLS directly. No `BackendTLSPolicy` needed.
+
+**Gateway Configuration for TLS Passthrough:**
+
+When using TLS passthrough, the Gateway listener must be configured with `protocol: TLS` and `mode: Passthrough`:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: main-gateway
+  namespace: gateway-system
+spec:
+  gatewayClassName: traefik
+  listeners:
+    - name: tls-passthrough
+      port: 443
+      protocol: TLS
+      hostname: "*.example.com"
+      tls:
+        mode: Passthrough
+```
+
+**When to Use TLS Passthrough:**
+
+- End-to-end encryption requirements (Gateway never decrypts traffic)
+- Client certificate authentication at OpenBao
+- Compliance requirements for no Gateway decryption
+- Performance optimization (single TLS handshake)
+
+**Note:** TLSRoute is in the Experimental channel of Gateway API. Ensure your Gateway implementation supports it.
+
 ### 6.5 Gateway API vs Ingress
 
 | Feature | Ingress | Gateway API |
@@ -471,30 +533,75 @@ You can use either Ingress or Gateway API, but not both simultaneously on the sa
 
 ### 6.6 End-to-End TLS with Gateway API
 
-For end-to-end TLS (Gateway to OpenBao), configure a `BackendTLSPolicy` to trust the OpenBao CA. The operator automatically creates:
+**HTTPRoute with TLS Termination:**
+
+For end-to-end TLS when using HTTPRoute (TLS termination at Gateway), the operator automatically creates a `BackendTLSPolicy` that configures the Gateway to use HTTPS when communicating with the OpenBao backend service and validates the backend certificate using the cluster's CA certificate.
+
+The operator automatically creates:
 
 - A CA Secret named `<cluster-name>-tls-ca` containing the CA certificate.
-- A ConfigMap with the same name containing the CA certificate in the `ca.crt` key (useful for implementations like Traefik that only support `ConfigMap` references).
+- A ConfigMap with the same name containing the CA certificate in the `ca.crt` key (required for implementations like Traefik that only support `ConfigMap` references).
+- A `BackendTLSPolicy` named `<cluster-name>-backend-tls-policy` that references the CA ConfigMap and configures TLS validation.
 
-Example `BackendTLSPolicy`:
+**Automatic BackendTLSPolicy Creation:**
+
+By default, when `spec.gateway.enabled = true` and TLS is enabled (`spec.tls.enabled = true`), the operator automatically creates the `BackendTLSPolicy`. You can disable this behavior by setting `spec.gateway.backendTLS.enabled = false`:
 
 ```yaml
-apiVersion: gateway.networking.k8s.io/v1
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: my-cluster
+spec:
+  gateway:
+    enabled: true
+    gatewayRef:
+      name: traefik-gateway
+    hostname: bao.example.com
+    backendTLS:
+      enabled: false  # Disable automatic BackendTLSPolicy creation
+```
+
+**Custom Hostname:**
+
+You can specify a custom hostname for certificate validation by setting `spec.gateway.backendTLS.hostname`. If not specified, the operator defaults to the Service DNS name (`<service-name>.<namespace>.svc`):
+
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: my-cluster
+spec:
+  gateway:
+    enabled: true
+    gatewayRef:
+      name: traefik-gateway
+    hostname: bao.example.com
+    backendTLS:
+      hostname: custom-hostname.example.com  # Custom hostname for validation
+```
+
+**Example Generated BackendTLSPolicy:**
+
+The operator creates a `BackendTLSPolicy` similar to:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1alpha3
 kind: BackendTLSPolicy
 metadata:
-  name: openbaocluster-gateway-backend-tls
-  namespace: openbao-operator-system
+  name: my-cluster-backend-tls-policy
+  namespace: default
 spec:
   targetRefs:
     - group: ""
       kind: Service
-      name: openbaocluster-gateway-public
+      name: my-cluster-public
   validation:
     caCertificateRefs:
       - group: ""
         kind: ConfigMap
-        name: openbaocluster-gateway-tls-ca
-    hostname: openbaocluster-gateway-public.openbao-operator-system.svc
+        name: my-cluster-tls-ca
+    hostname: my-cluster-public.default.svc
 ```
 
 This configuration tells the Gateway implementation to:
@@ -502,9 +609,11 @@ This configuration tells the Gateway implementation to:
 - Use HTTPS when talking to the OpenBao backend Service.
 - Validate the backend certificate using the CA published by the operator.
 
-Refer to `test/cluster/backend-tls-policy.yaml` for a complete, ready-to-apply example that matches the test cluster manifests.
+**Note:** `BackendTLSPolicy` availability (including the exact `apiVersion`) depends on your Gateway API implementation and version. The operator gracefully handles cases where the `BackendTLSPolicy` CRD is not installed.
 
-Note: `BackendTLSPolicy` availability (including the exact `apiVersion`) depends on your Gateway API implementation and version.
+**TLSRoute with TLS Passthrough:**
+
+When using TLSRoute (`spec.gateway.tlsPassthrough: true`), `BackendTLSPolicy` is not needed because the Gateway does not decrypt traffic. The Gateway simply routes encrypted TLS traffic based on SNI, and OpenBao terminates TLS directly. This provides true end-to-end encryption where the Gateway never sees decrypted content.
 
 ## 7. Advanced Configuration
 
@@ -808,13 +917,134 @@ Retention is applied after successful backup upload. Deletion failures are logge
 Enable automatic snapshots before upgrades:
 
 ```yaml
-backup:
-  preUpgradeSnapshot: true
+spec:
+  upgrade:
+    preUpgradeSnapshot: true
+  backup:
+    # Backup configuration is required when preUpgradeSnapshot is enabled
+    target:
+      endpoint: "https://s3.amazonaws.com"
+      bucket: "openbao-backups"
+    executorImage: "openbao/bao-backup:latest"
 ```
 
-This ensures you have a backup before any version upgrade begins.
+This ensures you have a backup before any version upgrade begins. The pre-upgrade backup uses the same backup configuration (`spec.backup.target`, `spec.backup.executorImage`, etc.) as regular scheduled backups.
 
-## 9. Pausing Reconciliation
+## 9. Upgrades
+
+### 9.1 Upgrade Authentication
+
+The upgrade manager requires explicit authentication configuration via `spec.upgrade.kubernetesAuthRole` or `spec.upgrade.tokenSecretRef`. There is no fallback to backup authentication.
+
+#### 9.1.1 Kubernetes Auth (Preferred)
+
+Configure Kubernetes Auth for upgrade operations:
+
+1. **Create the Kubernetes Auth role in OpenBao:**
+
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: upgrade-cluster
+spec:
+  selfInit:
+    enabled: true
+    requests:
+      # Create upgrade policy
+      - name: create-upgrade-policy
+        operation: update
+        path: sys/policies/acl/upgrade
+        data:
+          policy: |
+            path "sys/health" {
+              capabilities = ["read"]
+            }
+            path "sys/step-down" {
+              capabilities = ["update"]
+            }
+            path "sys/storage/raft/snapshot" {
+              capabilities = ["read"]
+            }
+      # Create Kubernetes Auth role for upgrades
+      # The ServiceAccount name is automatically <cluster-name>-upgrade-serviceaccount
+      - name: create-upgrade-kubernetes-role
+        operation: update
+        path: auth/kubernetes/role/upgrade
+        data:
+          bound_service_account_names: upgrade-cluster-upgrade-serviceaccount
+          bound_service_account_namespaces: openbao
+          policies: upgrade
+          ttl: 1h
+  upgrade:
+    kubernetesAuthRole: upgrade  # Reference to the role created above
+    preUpgradeSnapshot: true
+```
+
+2. **Configure the upgrade manager to use the role:**
+
+```yaml
+spec:
+  upgrade:
+    kubernetesAuthRole: upgrade
+```
+
+**Important:** The OpenBaoCluster's ServiceAccount must have the `system:auth-delegator` ClusterRole to verify ServiceAccount tokens. See `test/cluster/openbao-kubernetes-auth-rbac.yaml` for an example.
+
+#### 9.1.2 Static Token (Alternative)
+
+For clusters that cannot use Kubernetes Auth, you must create a token Secret with appropriate permissions and reference it via `spec.upgrade.tokenSecretRef`:
+
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: upgrade-cluster
+spec:
+  upgrade:
+    tokenSecretRef:
+      name: upgrade-token-secret
+      namespace: openbao-operator-system
+    preUpgradeSnapshot: true
+```
+
+The token must have permission to:
+- Read `sys/health`
+- Update `sys/step-down`
+- Read `sys/storage/raft/snapshot` (if `preUpgradeSnapshot` is enabled)
+
+### 9.2 Upgrade ServiceAccount
+
+The operator automatically creates `<cluster-name>-upgrade-serviceaccount` when upgrade authentication is configured. This ServiceAccount:
+- Is used by the upgrade manager for Kubernetes Auth
+- Has its token automatically obtained via the Kubernetes TokenRequest API
+- Is owned by the OpenBaoCluster for automatic cleanup
+
+### 9.3 Performing Upgrades
+
+To upgrade an OpenBao cluster, update the `spec.version` field:
+
+```sh
+kubectl -n security patch openbaocluster dev-cluster \
+  --type merge -p '{"spec":{"version":"2.5.0"}}'
+```
+
+The upgrade manager will:
+1. Validate the target version
+2. Perform pre-upgrade validation (cluster health, quorum, leader detection)
+3. Create a pre-upgrade snapshot (if `spec.upgrade.preUpgradeSnapshot` is enabled)
+4. Perform a rolling upgrade, pod-by-pod, with leader step-down handling
+5. Update `Status.CurrentVersion` when complete
+
+Monitor upgrade progress:
+
+```sh
+kubectl -n security get openbaocluster dev-cluster -o yaml
+```
+
+Check `Status.Upgrade` for current progress and `Status.Conditions` for upgrade state.
+
+## 10. Pausing Reconciliation
 
 Set `spec.paused` to temporarily stop reconciliation for a cluster:
 
@@ -830,7 +1060,7 @@ While paused:
 
 Set `spec.paused` back to `false` to resume reconciliation.
 
-## 10. Deletion and DeletionPolicy
+## 11. Deletion and DeletionPolicy
 
 ### 8.1 Resource Ownership
 
@@ -866,7 +1096,7 @@ Verify cleanup according to the chosen `deletionPolicy`:
 kubectl -n security get statefulsets,svc,cm,secrets,pvc -l openbao.org/cluster=dev-cluster
 ```
 
-## 11. Security Considerations
+## 12. Security Considerations
 
 ### 11.1 Root Token Secret
 

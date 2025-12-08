@@ -54,7 +54,7 @@ gateway:
       mode: Terminate
       certificateRefs:
         - kind: Secret
-          name: bao-tls
+          name: cluster-tls
           group: ""
 
 # Optional: Keep dashboard enabled

@@ -67,6 +67,8 @@ type NamespaceProvisionerReconciler struct {
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=*
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=*
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=*
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tlsroutes,verbs=*
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=backendtlspolicies,verbs=*
 
 // Reconcile is part of the main Kubernetes reconciliation loop which watches
 // for Namespace resources and provisions RBAC when a namespace is labeled

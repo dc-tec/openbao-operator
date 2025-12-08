@@ -202,10 +202,10 @@ type UpgradeConfig struct {
 	// - "read" capability on sys/health
 	// - "update" capability on sys/step-down
 	// - "read" capability on sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
-	// The role must bind to the operator's ServiceAccount.
+	// The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),
+	// which is automatically created by the operator.
 	//
-	// If not set and preUpgradeSnapshot is true, the upgrade manager will
-	// use spec.backup.kubernetesAuthRole instead (if configured).
+	// Either KubernetesAuthRole or TokenSecretRef must be set for upgrade operations.
 	// +optional
 	KubernetesAuthRole string `json:"kubernetesAuthRole,omitempty"`
 	// TokenSecretRef optionally references a Secret containing an OpenBao API
@@ -216,9 +216,7 @@ type UpgradeConfig struct {
 	// - update sys/step-down
 	// - read sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
 	//
-	// If not set and preUpgradeSnapshot is true, the upgrade manager will
-	// use spec.backup.tokenSecretRef instead (if configured).
-	//
+	// Either KubernetesAuthRole or TokenSecretRef must be set for upgrade operations.
 	// If KubernetesAuthRole is set, this field is ignored in favor of Kubernetes Auth.
 	// +optional
 	TokenSecretRef *corev1.SecretReference `json:"tokenSecretRef,omitempty"`
@@ -342,6 +340,38 @@ type GatewayConfig struct {
 	// Annotations to apply to the HTTPRoute resource.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
+	// BackendTLS configures BackendTLSPolicy for end-to-end TLS between the Gateway and OpenBao.
+	// When enabled, the Operator creates a BackendTLSPolicy that configures the Gateway to use
+	// HTTPS when communicating with the OpenBao backend service and validates the backend
+	// certificate using the cluster's CA certificate.
+	// +optional
+	BackendTLS *BackendTLSConfig `json:"backendTLS,omitempty"`
+	// TLSPassthrough enables TLS passthrough mode using TLSRoute instead of HTTPRoute.
+	// When true, the Operator creates a TLSRoute that routes encrypted TLS traffic based on SNI
+	// without terminating TLS at the Gateway. OpenBao terminates TLS directly.
+	// When false (default), the Operator creates an HTTPRoute with TLS termination at the Gateway.
+	// Note: TLSRoute and HTTPRoute are mutually exclusive - only one can be used per cluster.
+	// BackendTLSPolicy is not needed when TLSPassthrough is enabled since the Gateway does not
+	// decrypt traffic. The Gateway listener must be configured with protocol: TLS and mode: Passthrough.
+	// +optional
+	TLSPassthrough bool `json:"tlsPassthrough,omitempty"`
+}
+
+// BackendTLSConfig configures BackendTLSPolicy for Gateway API.
+type BackendTLSConfig struct {
+	// Enabled controls whether the Operator creates a BackendTLSPolicy.
+	// When true (default when Gateway is enabled), the Operator creates a BackendTLSPolicy
+	// that enables HTTPS and certificate validation for backend connections.
+	// When false, no BackendTLSPolicy is created and the Gateway will use HTTP (or rely on
+	// external configuration for TLS).
+	// +kubebuilder:default=true
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+	// Hostname is the hostname to verify in the backend certificate.
+	// If not specified, defaults to the Service DNS name: <service-name>.<namespace>.svc
+	// This should match the certificate SAN or the service DNS name.
+	// +optional
+	Hostname string `json:"hostname,omitempty"`
 }
 
 // InitContainerConfig configures the init container used to render OpenBao configuration.
@@ -498,8 +528,9 @@ type OpenBaoClusterSpec struct {
 	// Upgrade configures upgrade operations.
 	//
 	// When spec.upgrade.preUpgradeSnapshot is true, if upgrade authentication is not
-	// explicitly configured, the upgrade manager will use backup authentication
-	// (spec.backup.kubernetesAuthRole or spec.backup.tokenSecretRef) instead.
+	// Upgrade authentication must be explicitly configured via spec.upgrade.kubernetesAuthRole
+	// or spec.upgrade.tokenSecretRef. The operator automatically creates an upgrade ServiceAccount
+	// (<cluster-name>-upgrade-serviceaccount) for Kubernetes Auth authentication.
 	// +optional
 	Upgrade *UpgradeConfig `json:"upgrade,omitempty"`
 	// Unseal defines the auto-unseal configuration.

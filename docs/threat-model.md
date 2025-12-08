@@ -214,8 +214,15 @@ spec:
 The UpgradeManager requires authenticated access to OpenBao APIs:
 - `GET /v1/sys/health` - health and leader detection
 - `PUT /v1/sys/step-down` - leader step-down
+- `GET /v1/sys/storage/raft/snapshot` - pre-upgrade snapshot (if enabled)
 
-The Operator uses the root token for these operations. For self-init clusters, users must ensure appropriate permissions are configured.
+**Authentication Methods:**
+
+- **Kubernetes Auth (Preferred):** The operator automatically creates an upgrade ServiceAccount (`<cluster-name>-upgrade-serviceaccount`) and uses Kubernetes Auth with the role specified in `spec.upgrade.kubernetesAuthRole`. The role must be configured in OpenBao and must bind to the upgrade ServiceAccount.
+
+- **Static Token (Alternative):** A dedicated token Secret can be referenced via `spec.upgrade.tokenSecretRef`. The token must have minimal permissions (read `sys/health`, update `sys/step-down`, and optionally read `sys/storage/raft/snapshot`).
+
+**Important:** Root tokens are not used for upgrade operations. Upgrade authentication must be explicitly configured. There is no fallback to backup authentication.
 
 ### 5.2 Upgrade-Related Threats
 

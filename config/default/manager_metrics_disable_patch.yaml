@@ -1,0 +1,5 @@
+# This patch disables the metrics endpoint by setting --metrics-bind-address=0
+# Use this patch instead of manager_metrics_patch.yaml to disable metrics
+- op: add
+  path: /spec/template/spec/containers/0/args/-
+  value: --metrics-bind-address=0

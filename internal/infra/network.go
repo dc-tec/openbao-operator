@@ -15,6 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
+	gatewayv1alpha3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 )
@@ -377,15 +379,16 @@ func buildIngress(cluster *openbaov1alpha1.OpenBaoCluster) *networkingv1.Ingress
 }
 
 // ensureHTTPRoute manages the Gateway API HTTPRoute for the OpenBaoCluster.
-// When spec.gateway.enabled is true, it creates or updates an HTTPRoute that routes
-// traffic from the referenced Gateway to the OpenBao public Service.
+// When spec.gateway.enabled is true and spec.gateway.tlsPassthrough is false,
+// it creates or updates an HTTPRoute that routes traffic from the referenced Gateway
+// to the OpenBao public Service.
 //
 // This function gracefully handles the case where Gateway API CRDs are not installed
 // in the cluster. If the HTTPRoute CRD is not found, the function logs a warning
 // and returns nil to allow other reconciliation to continue.
 func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	gatewayCfg := cluster.Spec.Gateway
-	enabled := gatewayCfg != nil && gatewayCfg.Enabled
+	enabled := gatewayCfg != nil && gatewayCfg.Enabled && !gatewayCfg.TLSPassthrough
 
 	httpRoute := &gatewayv1.HTTPRoute{}
 	name := httpRouteName(cluster)
@@ -479,9 +482,14 @@ func isNoKindMatchError(err error) bool {
 }
 
 // buildHTTPRoute constructs an HTTPRoute for the given OpenBaoCluster.
-// Returns nil if the Gateway configuration is invalid or incomplete.
+// Returns nil if the Gateway configuration is invalid or incomplete, or if TLS passthrough is enabled.
 func buildHTTPRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.HTTPRoute {
 	if cluster.Spec.Gateway == nil || !cluster.Spec.Gateway.Enabled {
+		return nil
+	}
+
+	// Skip HTTPRoute if TLS passthrough is enabled (TLSRoute will be used instead)
+	if cluster.Spec.Gateway.TLSPassthrough {
 		return nil
 	}
 
@@ -559,6 +567,348 @@ func buildHTTPRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.HTTPRout
 // httpRouteName returns the name for the HTTPRoute resource.
 func httpRouteName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + httpRouteSuffix
+}
+
+// ensureTLSRoute manages the Gateway API TLSRoute for the OpenBaoCluster.
+// When spec.gateway.enabled is true and spec.gateway.tlsPassthrough is true,
+// it creates or updates a TLSRoute that routes encrypted TLS traffic based on SNI
+// from the referenced Gateway to the OpenBao public Service without terminating TLS.
+//
+// This function gracefully handles the case where Gateway API CRDs are not installed
+// in the cluster. If the TLSRoute CRD is not found, the function logs a warning
+// and returns nil to allow other reconciliation to continue.
+func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	gatewayCfg := cluster.Spec.Gateway
+	enabled := gatewayCfg != nil && gatewayCfg.Enabled && gatewayCfg.TLSPassthrough
+
+	tlsRoute := &gatewayv1alpha2.TLSRoute{}
+	name := tlsRouteName(cluster)
+
+	err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      name,
+	}, tlsRoute)
+	if err != nil {
+		if isNoKindMatchError(err) {
+			if enabled {
+				logger.V(1).Info("Gateway API TLSRoute CRD not installed; skipping TLSRoute reconciliation", "tlsroute", name)
+			}
+			return nil
+		}
+
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get TLSRoute %s/%s: %w", cluster.Namespace, name, err)
+		}
+
+		if !enabled {
+			return nil
+		}
+
+		logger.Info("TLSRoute not found; creating", "tlsroute", name)
+
+		newTLSRoute := buildTLSRoute(cluster)
+		if newTLSRoute == nil {
+			return nil
+		}
+
+		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
+		if err := controllerutil.SetControllerReference(cluster, newTLSRoute, m.scheme); err != nil {
+			return fmt.Errorf("failed to set owner reference on TLSRoute %s/%s: %w", cluster.Namespace, name, err)
+		}
+
+		if err := m.client.Create(ctx, newTLSRoute); err != nil {
+			if isNoKindMatchError(err) {
+				logger.V(1).Info("Gateway API TLSRoute CRD not installed; skipping TLSRoute reconciliation", "tlsroute", name)
+				return nil
+			}
+			return fmt.Errorf("failed to create TLSRoute %s/%s: %w", cluster.Namespace, name, err)
+		}
+
+		return nil
+	}
+
+	if !enabled {
+		logger.Info("TLSRoute no longer enabled; deleting", "tlsroute", name)
+		if err := m.client.Delete(ctx, tlsRoute); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete TLSRoute %s/%s: %w", cluster.Namespace, name, err)
+		}
+		return nil
+	}
+
+	desired := buildTLSRoute(cluster)
+	if desired == nil {
+		logger.Info("TLSRoute configuration invalid; deleting existing TLSRoute", "tlsroute", name)
+		if err := m.client.Delete(ctx, tlsRoute); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete TLSRoute %s/%s after invalid config: %w", cluster.Namespace, name, err)
+		}
+		return nil
+	}
+
+	updated := tlsRoute.DeepCopy()
+	updated.Labels = desired.Labels
+	updated.Annotations = desired.Annotations
+	updated.Spec = desired.Spec
+
+	if err := m.client.Update(ctx, updated); err != nil {
+		return fmt.Errorf("failed to update TLSRoute %s/%s: %w", cluster.Namespace, name, err)
+	}
+
+	return nil
+}
+
+// buildTLSRoute constructs a TLSRoute for the given OpenBaoCluster.
+// Returns nil if the Gateway configuration is invalid or incomplete, or if TLS passthrough is disabled.
+func buildTLSRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1alpha2.TLSRoute {
+	if cluster.Spec.Gateway == nil || !cluster.Spec.Gateway.Enabled {
+		return nil
+	}
+
+	// Only create TLSRoute if TLS passthrough is enabled
+	if !cluster.Spec.Gateway.TLSPassthrough {
+		return nil
+	}
+
+	gw := cluster.Spec.Gateway
+	if strings.TrimSpace(gw.Hostname) == "" {
+		return nil
+	}
+
+	if strings.TrimSpace(gw.GatewayRef.Name) == "" {
+		return nil
+	}
+
+	// Determine the Gateway namespace; defaults to the OpenBaoCluster namespace
+	gatewayNamespace := gw.GatewayRef.Namespace
+	if strings.TrimSpace(gatewayNamespace) == "" {
+		gatewayNamespace = cluster.Namespace
+	}
+
+	backendServiceName := externalServiceName(cluster)
+	hostname := gatewayv1alpha2.Hostname(gw.Hostname)
+	port := gatewayv1alpha2.PortNumber(openBaoContainerPort)
+	gatewayNS := gatewayv1alpha2.Namespace(gatewayNamespace)
+
+	tlsRoute := &gatewayv1alpha2.TLSRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        tlsRouteName(cluster),
+			Namespace:   cluster.Namespace,
+			Labels:      infraLabels(cluster),
+			Annotations: gw.Annotations,
+		},
+		Spec: gatewayv1alpha2.TLSRouteSpec{
+			CommonRouteSpec: gatewayv1alpha2.CommonRouteSpec{
+				ParentRefs: []gatewayv1alpha2.ParentReference{
+					{
+						Name:      gatewayv1alpha2.ObjectName(gw.GatewayRef.Name),
+						Namespace: &gatewayNS,
+					},
+				},
+			},
+			Hostnames: []gatewayv1alpha2.Hostname{hostname},
+			Rules: []gatewayv1alpha2.TLSRouteRule{
+				{
+					BackendRefs: []gatewayv1alpha2.BackendRef{
+						{
+							BackendObjectReference: gatewayv1alpha2.BackendObjectReference{
+								Name: gatewayv1alpha2.ObjectName(backendServiceName),
+								Port: &port,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return tlsRoute
+}
+
+// tlsRouteName returns the name for the TLSRoute resource.
+func tlsRouteName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return cluster.Name + tlsRouteSuffix
+}
+
+// ensureBackendTLSPolicy manages the Gateway API BackendTLSPolicy for the OpenBaoCluster.
+// When spec.gateway.enabled is true and spec.gateway.backendTLS.enabled is true (default),
+// it creates or updates a BackendTLSPolicy that configures the Gateway to use HTTPS when
+// communicating with the OpenBao backend service and validates the backend certificate
+// using the cluster's CA certificate.
+//
+// BackendTLSPolicy is not needed when TLS passthrough is enabled (TLSRoute) since the Gateway
+// does not decrypt traffic and therefore does not need to validate backend certificates.
+//
+// This function gracefully handles the case where Gateway API CRDs are not installed
+// in the cluster. If the BackendTLSPolicy CRD is not found, the function logs a warning
+// and returns nil to allow other reconciliation to continue.
+func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	gatewayCfg := cluster.Spec.Gateway
+	gatewayEnabled := gatewayCfg != nil && gatewayCfg.Enabled
+
+	// BackendTLSPolicy is not needed when TLS passthrough is enabled
+	if gatewayCfg != nil && gatewayCfg.TLSPassthrough {
+		logger.V(1).Info("BackendTLSPolicy not needed with TLS passthrough; skipping", "tls_passthrough", true)
+		return nil
+	}
+
+	// BackendTLS is enabled by default when Gateway is enabled
+	backendTLSEnabled := gatewayEnabled
+	if gatewayCfg != nil && gatewayCfg.BackendTLS != nil && gatewayCfg.BackendTLS.Enabled != nil {
+		backendTLSEnabled = *gatewayCfg.BackendTLS.Enabled
+	}
+
+	// BackendTLSPolicy requires TLS to be enabled
+	if backendTLSEnabled && !cluster.Spec.TLS.Enabled {
+		logger.V(1).Info("BackendTLSPolicy requires TLS to be enabled; skipping", "tls_enabled", cluster.Spec.TLS.Enabled)
+		return nil
+	}
+
+	backendTLSPolicy := &gatewayv1alpha3.BackendTLSPolicy{}
+	name := backendTLSPolicyName(cluster)
+
+	err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      name,
+	}, backendTLSPolicy)
+	if err != nil {
+		if isNoKindMatchError(err) {
+			if backendTLSEnabled {
+				logger.V(1).Info("Gateway API BackendTLSPolicy CRD not installed; skipping BackendTLSPolicy reconciliation", "backendtlspolicy", name)
+			}
+			return nil
+		}
+
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
+		}
+
+		if !backendTLSEnabled {
+			return nil
+		}
+
+		logger.Info("BackendTLSPolicy not found; creating", "backendtlspolicy", name)
+
+		newBackendTLSPolicy := buildBackendTLSPolicy(cluster)
+		if newBackendTLSPolicy == nil {
+			// Configuration invalid or TLS not enabled - will be retried on next reconciliation
+			return nil
+		}
+
+		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
+		if err := controllerutil.SetControllerReference(cluster, newBackendTLSPolicy, m.scheme); err != nil {
+			return fmt.Errorf("failed to set owner reference on BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
+		}
+
+		if err := m.client.Create(ctx, newBackendTLSPolicy); err != nil {
+			if isNoKindMatchError(err) {
+				logger.V(1).Info("Gateway API BackendTLSPolicy CRD not installed; skipping BackendTLSPolicy reconciliation", "backendtlspolicy", name)
+				return nil
+			}
+			return fmt.Errorf("failed to create BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
+		}
+
+		return nil
+	}
+
+	if !backendTLSEnabled {
+		logger.Info("BackendTLSPolicy no longer enabled; deleting", "backendtlspolicy", name)
+		if err := m.client.Delete(ctx, backendTLSPolicy); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
+		}
+		return nil
+	}
+
+	desired := buildBackendTLSPolicy(cluster)
+	if desired == nil {
+		logger.Info("BackendTLSPolicy configuration invalid; deleting existing BackendTLSPolicy", "backendtlspolicy", name)
+		if err := m.client.Delete(ctx, backendTLSPolicy); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete BackendTLSPolicy %s/%s after invalid config: %w", cluster.Namespace, name, err)
+		}
+		return nil
+	}
+
+	updated := backendTLSPolicy.DeepCopy()
+	updated.Labels = desired.Labels
+	updated.Annotations = desired.Annotations
+	updated.Spec = desired.Spec
+
+	if err := m.client.Update(ctx, updated); err != nil {
+		return fmt.Errorf("failed to update BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
+	}
+
+	return nil
+}
+
+// buildBackendTLSPolicy constructs a BackendTLSPolicy for the given OpenBaoCluster.
+// Returns nil if the Gateway configuration is invalid, incomplete, or TLS is not enabled.
+func buildBackendTLSPolicy(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1alpha3.BackendTLSPolicy {
+	gatewayCfg := cluster.Spec.Gateway
+	if gatewayCfg == nil || !gatewayCfg.Enabled {
+		return nil
+	}
+
+	// BackendTLSPolicy requires TLS to be enabled
+	if !cluster.Spec.TLS.Enabled {
+		return nil
+	}
+
+	// BackendTLS is enabled by default when Gateway is enabled
+	backendTLSEnabled := true
+	if gatewayCfg.BackendTLS != nil && gatewayCfg.BackendTLS.Enabled != nil {
+		backendTLSEnabled = *gatewayCfg.BackendTLS.Enabled
+	}
+
+	if !backendTLSEnabled {
+		return nil
+	}
+
+	backendServiceName := externalServiceName(cluster)
+	caConfigMapName := cluster.Name + tlsCASecretSuffix
+
+	// Determine hostname - use custom hostname if specified, otherwise derive from Service DNS name
+	hostname := ""
+	if gatewayCfg.BackendTLS != nil {
+		hostname = gatewayCfg.BackendTLS.Hostname
+	}
+	if strings.TrimSpace(hostname) == "" {
+		// Default to Service DNS name: <service-name>.<namespace>.svc
+		hostname = fmt.Sprintf("%s.%s.svc", backendServiceName, cluster.Namespace)
+	}
+
+	backendTLSPolicy := &gatewayv1alpha3.BackendTLSPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      backendTLSPolicyName(cluster),
+			Namespace: cluster.Namespace,
+			Labels:    infraLabels(cluster),
+		},
+		Spec: gatewayv1alpha3.BackendTLSPolicySpec{
+			TargetRefs: []gatewayv1alpha2.LocalPolicyTargetReferenceWithSectionName{
+				{
+					LocalPolicyTargetReference: gatewayv1alpha2.LocalPolicyTargetReference{
+						Group: gatewayv1alpha2.Group(""),
+						Kind:  gatewayv1alpha2.Kind("Service"),
+						Name:  gatewayv1.ObjectName(backendServiceName),
+					},
+				},
+			},
+			Validation: gatewayv1alpha3.BackendTLSPolicyValidation{
+				CACertificateRefs: []gatewayv1.LocalObjectReference{
+					{
+						Group: "",
+						Kind:  "ConfigMap",
+						Name:  gatewayv1.ObjectName(caConfigMapName),
+					},
+				},
+				Hostname: gatewayv1.PreciseHostname(hostname),
+			},
+		},
+	}
+
+	return backendTLSPolicy
+}
+
+// backendTLSPolicyName returns the name for the BackendTLSPolicy resource.
+func backendTLSPolicyName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return cluster.Name + backendTLSPolicySuffix
 }
 
 // ensureNetworkPolicy creates or updates a NetworkPolicy to enforce cluster isolation.
@@ -731,7 +1081,10 @@ func buildNetworkPolicyIngressRules(
 	}
 
 	// If Gateway is enabled, allow ingress from the Gateway namespace
-	// This enables external traffic routing through Gateway/HTTPRoute
+	// This enables external traffic routing through Gateway/HTTPRoute or TLSRoute
+	// (for TLS passthrough). NetworkPolicies operate at L3/L4, so both HTTPRoute
+	// (with TLS termination) and TLSRoute (with TLS passthrough) work the same
+	// way from a network policy perspective - both are TCP traffic on port 8200.
 	if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {
 		gatewayNamespace := cluster.Spec.Gateway.GatewayRef.Namespace
 		if strings.TrimSpace(gatewayNamespace) == "" {
@@ -818,11 +1171,11 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	// - PUT /v1/sys/step-down (upgrade manager)
 	// The operator pods are in a different namespace, so we use both NamespaceSelector
 	// and PodSelector to match pods in the operator namespace with the operator labels.
+	// The namespace selector uses the standard Kubernetes namespace name label.
 	operatorPeer := networkingv1.NetworkPolicyPeer{
 		NamespaceSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
-				"control-plane":          "controller-manager",
-				"app.kubernetes.io/name": "openbao-operator",
+				"kubernetes.io/metadata.name": "openbao-operator-system",
 			},
 		},
 		PodSelector: &metav1.LabelSelector{

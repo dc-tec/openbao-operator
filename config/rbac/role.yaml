@@ -49,7 +49,9 @@ rules:
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
+  - backendtlspolicies
   - httproutes
+  - tlsroutes
   verbs:
   - '*'
 - apiGroups:
