@@ -19,3 +19,4 @@ subjects:
   - kind: ServiceAccount
     name: controller-manager
     namespace: system
+

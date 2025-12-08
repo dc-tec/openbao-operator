@@ -25,11 +25,13 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -180,6 +182,17 @@ func main() {
 		// if you are doing or is intended to do any operation such as perform cleanups
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
+		// Disable cache for Secrets to align with RBAC permissions that only grant
+		// 'get' (not 'list' or 'watch'). This prevents secret enumeration attacks.
+		// The operator will make direct API calls (GET) for secrets instead of using
+		// the cached client, which requires list/watch permissions.
+		Client: client.Options{
+			Cache: &client.CacheOptions{
+				DisableFor: []client.Object{
+					&corev1.Secret{},
+				},
+			},
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -203,11 +216,22 @@ func main() {
 	// Create initialization manager
 	initMgr := initmanager.NewManager(config, clientset)
 
+	// Get operator namespace from POD_NAMESPACE environment variable (set by Kubernetes)
+	// Default to "openbao-operator-system" for backward compatibility
+	operatorNamespace := os.Getenv("POD_NAMESPACE")
+	if operatorNamespace == "" {
+		operatorNamespace = "openbao-operator-system"
+		setupLog.Info("POD_NAMESPACE not set, using default", "namespace", operatorNamespace)
+	} else {
+		setupLog.Info("Using operator namespace from POD_NAMESPACE", "namespace", operatorNamespace)
+	}
+
 	if err := (&controller.OpenBaoClusterReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		TLSReload:   reloadSignaler,
-		InitManager: initMgr,
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		TLSReload:         reloadSignaler,
+		InitManager:       initMgr,
+		OperatorNamespace: operatorNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
 		os.Exit(1)

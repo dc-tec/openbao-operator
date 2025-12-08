@@ -52,23 +52,25 @@ type NamespaceProvisionerReconciler struct {
 // Note: The following permissions are required because Kubernetes RBAC requires that when
 // creating a Role, the creator must have all the permissions they are trying to grant.
 // The Provisioner needs these cluster-wide permissions to grant them in namespace-scoped Roles.
-// +kubebuilder:rbac:groups=openbao.org,resources=openbaoclusters,verbs=*
-// +kubebuilder:rbac:groups=openbao.org,resources=openbaoclusters/status,verbs=*
-// +kubebuilder:rbac:groups=openbao.org,resources=openbaoclusters/finalizers,verbs=*
-// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=*
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=*
-// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=*
-// +kubebuilder:rbac:groups="",resources=services,verbs=*
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=*
-// +kubebuilder:rbac:groups="",resources=pods,verbs=*
-// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=*
-// +kubebuilder:rbac:groups="",resources=endpoints,verbs=*
-// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=*
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=*
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=*
-// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=*
-// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tlsroutes,verbs=*
-// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=backendtlspolicies,verbs=*
+// +kubebuilder:rbac:groups=openbao.org,resources=openbaoclusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=openbao.org,resources=openbaoclusters/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=openbao.org,resources=openbaoclusters/finalizers,verbs=update
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch
+// +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=get;list;watch
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tlsroutes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=backendtlspolicies,verbs=get;list;watch;create;update;patch;delete
+// SECURITY: Secrets permissions explicitly exclude 'list' and 'watch' to prevent secret scraping.
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;create;update;patch;delete
 
 // Reconcile is part of the main Kubernetes reconciliation loop which watches
 // for Namespace resources and provisions RBAC when a namespace is labeled

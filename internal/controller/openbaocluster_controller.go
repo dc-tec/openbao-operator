@@ -51,31 +51,19 @@ const openBaoClusterFinalizer = "openbao.org/openbaocluster-finalizer"
 // OpenBaoClusterReconciler reconciles a OpenBaoCluster object.
 type OpenBaoClusterReconciler struct {
 	client.Client
-	Scheme      *runtime.Scheme
-	TLSReload   certmanager.ReloadSignaler
-	InitManager *initmanager.Manager
+	Scheme            *runtime.Scheme
+	TLSReload         certmanager.ReloadSignaler
+	InitManager       *initmanager.Manager
+	OperatorNamespace string
 }
 
 // +kubebuilder:rbac:groups=openbao.org,resources=openbaoclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=openbao.org,resources=openbaoclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=openbao.org,resources=openbaoclusters/finalizers,verbs=update
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch
-// +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tlsroutes,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=backendtlspolicies,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// Note: Workload permissions (Secrets, StatefulSets, Services, etc.) are INTENTIONALLY OMITTED.
+// These permissions are granted dynamically per-namespace by the Provisioner controller via
+// namespace-scoped RoleBindings. The Operator Global Role must NOT have list/watch on Secrets.
 // Note: These annotations document the permissions needed by the operator. The actual RBAC
 // is provided by namespace-scoped Roles created by the Provisioner controller in tenant
 // namespaces. The operator no longer uses cluster-wide permissions.
@@ -244,7 +232,7 @@ func (r *OpenBaoClusterReconciler) reconcileInfra(ctx context.Context, logger lo
 		}
 	}
 
-	manager := inframanager.NewManager(r.Client, r.Scheme)
+	manager := inframanager.NewManager(r.Client, r.Scheme, r.OperatorNamespace)
 	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			now := metav1.Now()
@@ -276,15 +264,22 @@ func (r *OpenBaoClusterReconciler) verifyImage(ctx context.Context, logger logr.
 		return "", nil
 	}
 
-	if cluster.Spec.ImageVerification.PublicKey == "" {
-		return "", fmt.Errorf("image verification is enabled but public key is not provided")
+	// Validate that either PublicKey OR (Issuer and Subject) are provided
+	if cluster.Spec.ImageVerification.PublicKey == "" && (cluster.Spec.ImageVerification.Issuer == "" || cluster.Spec.ImageVerification.Subject == "") {
+		return "", fmt.Errorf("image verification is enabled but neither PublicKey nor (Issuer and Subject) are provided")
 	}
 
-	ignoreTlog := cluster.Spec.ImageVerification.IgnoreTlog
-	imagePullSecrets := cluster.Spec.ImageVerification.ImagePullSecrets
+	config := security.VerifyConfig{
+		PublicKey:        cluster.Spec.ImageVerification.PublicKey,
+		Issuer:           cluster.Spec.ImageVerification.Issuer,
+		Subject:          cluster.Spec.ImageVerification.Subject,
+		IgnoreTlog:       cluster.Spec.ImageVerification.IgnoreTlog,
+		ImagePullSecrets: cluster.Spec.ImageVerification.ImagePullSecrets,
+		Namespace:        cluster.Namespace,
+	}
 
 	verifier := security.NewImageVerifier(logger, r.Client)
-	digest, err := verifier.Verify(ctx, cluster.Spec.Image, cluster.Spec.ImageVerification.PublicKey, ignoreTlog, imagePullSecrets, cluster.Namespace)
+	digest, err := verifier.Verify(ctx, cluster.Spec.Image, config)
 	if err != nil {
 		return "", err
 	}
@@ -340,7 +335,7 @@ func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger lo
 
 	logger.Info("Applying DeletionPolicy for OpenBaoCluster", "deletionPolicy", string(policy))
 
-	infra := inframanager.NewManager(r.Client, r.Scheme)
+	infra := inframanager.NewManager(r.Client, r.Scheme, r.OperatorNamespace)
 	if err := infra.Cleanup(ctx, logger, cluster, policy); err != nil {
 		return err
 	}
@@ -557,8 +552,11 @@ func (r *OpenBaoClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		// Watch owned ConfigMaps - triggers reconcile when ConfigMap changes
 		Owns(&corev1.ConfigMap{}).
-		// Watch owned Secrets - triggers reconcile when Secret changes
-		Owns(&corev1.Secret{}).
+		// [SECURITY] Removed Owns(&corev1.Secret{})
+		// We cannot watch Secrets because we removed "list" and "watch" permissions
+		// to prevent secret scraping. The operator will only reconcile Secrets
+		// when the OpenBaoCluster changes or on periodic resync.
+		// Owns(&corev1.Secret{}). <--- DELETE OR COMMENT OUT THIS LINE
 		// Watch owned ServiceAccounts - triggers reconcile when ServiceAccount changes
 		Owns(&corev1.ServiceAccount{}).
 		// Watch owned Ingresses - triggers reconcile when Ingress changes

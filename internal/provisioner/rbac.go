@@ -27,6 +27,9 @@ type OperatorServiceAccount struct {
 // GenerateTenantRole generates a namespaced Role that grants the operator
 // the permissions needed to manage OpenBaoCluster resources in a tenant namespace.
 func GenerateTenantRole(namespace string) *rbacv1.Role {
+	// Common set of verbs for managing resources (excludes "deletecollection" for safety)
+	commonVerbs := []string{"create", "delete", "get", "list", "patch", "update", "watch"}
+
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantRoleName,
@@ -42,28 +45,25 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			{
 				APIGroups: []string{"openbao.org"},
 				Resources: []string{"openbaoclusters", "openbaoclusters/status", "openbaoclusters/finalizers"},
-				Verbs:     []string{"*"},
+				Verbs:     commonVerbs, // Changed from "*"
 			},
 			// 2. Manage Workload Infrastructure
 			{
 				APIGroups: []string{"apps"},
 				Resources: []string{"statefulsets"},
-				Verbs:     []string{"*"},
+				Verbs:     commonVerbs, // Changed from "*"
 			},
 			{
 				APIGroups: []string{""},
 				Resources: []string{"services", "configmaps", "serviceaccounts"},
-				Verbs:     []string{"*"},
+				Verbs:     commonVerbs, // Changed from "*"
 			},
-			// 3. Limited Secret Access
-			// General access for user-managed secrets (e.g., backup creds)
-			// Note: We cannot restrict to specific resourceNames for unseal keys because
-			// Kubernetes RBAC doesn't support write-only permissions. The "blind create"
-			// pattern in ensureUnsealSecret eliminates the need for GET permission.
+			// 3. Limited Secret Access (Hardened)
+			// Removed "list" and "watch" to prevent secret enumeration/scraping.
 			{
 				APIGroups: []string{""},
 				Resources: []string{"secrets"},
-				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				Verbs:     []string{"create", "delete", "get", "patch", "update"},
 			},
 			// 4. Pod access for health checks and leader detection
 			{
@@ -75,36 +75,42 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			{
 				APIGroups: []string{""},
 				Resources: []string{"persistentvolumeclaims"},
-				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				Verbs:     commonVerbs,
 			},
 			// 6. Jobs for backups
 			{
 				APIGroups: []string{"batch"},
 				Resources: []string{"jobs"},
-				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				Verbs:     commonVerbs, // Changed from "*"
 			},
 			// 7. Networking resources
 			{
 				APIGroups: []string{"networking.k8s.io"},
 				Resources: []string{"ingresses", "networkpolicies"},
-				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				Verbs:     commonVerbs, // Changed from "*"
 			},
 			// 8. Gateway API
 			{
 				APIGroups: []string{"gateway.networking.k8s.io"},
 				Resources: []string{"httproutes", "tlsroutes", "backendtlspolicies"},
-				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				Verbs:     commonVerbs, // Changed from "*"
 			},
 			// 9. RBAC for OpenBao pod discovery
 			{
 				APIGroups: []string{"rbac.authorization.k8s.io"},
 				Resources: []string{"roles", "rolebindings"},
-				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				Verbs:     commonVerbs,
 			},
 			// 10. Endpoints for service discovery
 			{
 				APIGroups: []string{""},
 				Resources: []string{"endpoints"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+			// 11. EndpointSlices for service discovery (Required for modern K8s)
+			{
+				APIGroups: []string{"discovery.k8s.io"},
+				Resources: []string{"endpointslices"},
 				Verbs:     []string{"get", "list", "watch"},
 			},
 		},
