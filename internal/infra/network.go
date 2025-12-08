@@ -8,15 +8,16 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
-	gatewayv1alpha3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 )
@@ -762,7 +763,7 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 		return nil
 	}
 
-	backendTLSPolicy := &gatewayv1alpha3.BackendTLSPolicy{}
+	backendTLSPolicy := &gatewayv1.BackendTLSPolicy{}
 	name := backendTLSPolicyName(cluster)
 
 	err := m.client.Get(ctx, types.NamespacedName{
@@ -840,7 +841,7 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 
 // buildBackendTLSPolicy constructs a BackendTLSPolicy for the given OpenBaoCluster.
 // Returns nil if the Gateway configuration is invalid, incomplete, or TLS is not enabled.
-func buildBackendTLSPolicy(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1alpha3.BackendTLSPolicy {
+func buildBackendTLSPolicy(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.BackendTLSPolicy {
 	gatewayCfg := cluster.Spec.Gateway
 	if gatewayCfg == nil || !gatewayCfg.Enabled {
 		return nil
@@ -874,23 +875,23 @@ func buildBackendTLSPolicy(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1al
 		hostname = fmt.Sprintf("%s.%s.svc", backendServiceName, cluster.Namespace)
 	}
 
-	backendTLSPolicy := &gatewayv1alpha3.BackendTLSPolicy{
+	backendTLSPolicy := &gatewayv1.BackendTLSPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      backendTLSPolicyName(cluster),
 			Namespace: cluster.Namespace,
 			Labels:    infraLabels(cluster),
 		},
-		Spec: gatewayv1alpha3.BackendTLSPolicySpec{
-			TargetRefs: []gatewayv1alpha2.LocalPolicyTargetReferenceWithSectionName{
+		Spec: gatewayv1.BackendTLSPolicySpec{
+			TargetRefs: []gatewayv1.LocalPolicyTargetReferenceWithSectionName{
 				{
-					LocalPolicyTargetReference: gatewayv1alpha2.LocalPolicyTargetReference{
-						Group: gatewayv1alpha2.Group(""),
-						Kind:  gatewayv1alpha2.Kind("Service"),
+					LocalPolicyTargetReference: gatewayv1.LocalPolicyTargetReference{
+						Group: gatewayv1.Group(""),
+						Kind:  gatewayv1.Kind("Service"),
 						Name:  gatewayv1.ObjectName(backendServiceName),
 					},
 				},
 			},
-			Validation: gatewayv1alpha3.BackendTLSPolicyValidation{
+			Validation: gatewayv1.BackendTLSPolicyValidation{
 				CACertificateRefs: []gatewayv1.LocalObjectReference{
 					{
 						Group: "",
@@ -1025,22 +1026,45 @@ func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger) (
 		}
 	}
 
-	// Get the kubernetes endpoints to find API server endpoint IPs
-	kubernetesEndpoints := &corev1.Endpoints{}
-	if err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: "default",
-		Name:      "kubernetes",
-	}, kubernetesEndpoints); err != nil {
-		// If endpoints are not available, we can still use service network CIDR
-		logger.V(1).Info("Failed to get kubernetes endpoints, using service network CIDR only", "error", err)
-		return info, nil
-	}
-
-	// Extract endpoint IPs from the endpoints resource
-	for _, subset := range kubernetesEndpoints.Subsets {
-		for _, address := range subset.Addresses {
-			if address.IP != "" {
-				info.EndpointIPs = append(info.EndpointIPs, address.IP)
+	// Get the kubernetes endpoint slices to find API server endpoint IPs
+	// EndpointSlices are labeled with kubernetes.io/service-name
+	endpointSliceList := &discoveryv1.EndpointSliceList{}
+	if err := m.client.List(ctx, endpointSliceList,
+		client.InNamespace("default"),
+		client.MatchingLabels(map[string]string{
+			"kubernetes.io/service-name": "kubernetes",
+		}),
+	); err != nil {
+		// If endpoint slices are not available, try fallback to Endpoints for compatibility
+		kubernetesEndpoints := &corev1.Endpoints{}
+		if getErr := m.client.Get(ctx, types.NamespacedName{
+			Namespace: "default",
+			Name:      "kubernetes",
+		}, kubernetesEndpoints); getErr != nil {
+			// If endpoints are also not available, we can still use service network CIDR
+			logger.V(1).Info("Failed to get kubernetes endpoint slices and endpoints, using service network CIDR only", "error", err)
+			return info, nil
+		}
+		// Fallback: Extract endpoint IPs from the endpoints resource
+		for _, subset := range kubernetesEndpoints.Subsets {
+			for _, address := range subset.Addresses {
+				if address.IP != "" {
+					info.EndpointIPs = append(info.EndpointIPs, address.IP)
+				}
+			}
+		}
+	} else {
+		// Extract endpoint IPs from the endpoint slices
+		for _, endpointSlice := range endpointSliceList.Items {
+			for _, endpoint := range endpointSlice.Endpoints {
+				// Only include ready endpoints
+				if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
+					for _, address := range endpoint.Addresses {
+						if address != "" {
+							info.EndpointIPs = append(info.EndpointIPs, address)
+						}
+					}
+				}
 			}
 		}
 	}

@@ -586,7 +586,7 @@ spec:
 The operator creates a `BackendTLSPolicy` similar to:
 
 ```yaml
-apiVersion: gateway.networking.k8s.io/v1alpha3
+apiVersion: gateway.networking.k8s.io/v1
 kind: BackendTLSPolicy
 metadata:
   name: my-cluster-backend-tls-policy

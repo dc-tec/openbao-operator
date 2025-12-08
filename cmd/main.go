@@ -43,7 +43,6 @@ import (
 	"github.com/openbao/operator/internal/provisioner"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
-	gatewayv1alpha3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -58,7 +57,6 @@ func init() {
 	utilruntime.Must(openbaov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(gatewayv1.Install(scheme))
 	utilruntime.Must(gatewayv1alpha2.AddToScheme(scheme))
-	utilruntime.Must(gatewayv1alpha3.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 

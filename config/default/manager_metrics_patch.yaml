@@ -1,5 +1,12 @@
 # This patch enables the metrics endpoint on port 8443
 # It adds --metrics-bind-address=:8443 to the container args
+# and exposes the container port 8443
 - op: add
   path: /spec/template/spec/containers/0/args/-
   value: --metrics-bind-address=:8443
+- op: add
+  path: /spec/template/spec/containers/0/ports/-
+  value:
+    name: https
+    containerPort: 8443
+    protocol: TCP

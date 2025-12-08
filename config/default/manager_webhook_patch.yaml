@@ -11,10 +11,14 @@ spec:
           args:
             - --leader-elect
             - --health-probe-bind-address=:8081
+            - --metrics-bind-address=:8443
             - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
           ports:
             - name: webhook-server
               containerPort: 9443
+              protocol: TCP
+            - name: https
+              containerPort: 8443
               protocol: TCP
           volumeMounts:
             - name: webhook-cert
