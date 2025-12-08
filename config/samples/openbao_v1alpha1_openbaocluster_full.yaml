@@ -58,14 +58,16 @@ spec:
   # The operator resolves image tags to digests during verification and uses the verified
   # digest in StatefulSets to prevent TOCTOU (Time-of-Check to Time-of-Use) attacks.
   imageVerification:
-    enabled: false
+    enabled: true
+    issuer: "https://token.actions.githubusercontent.com"
+    subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4"
     # PEM-encoded Cosign public key for signature verification.
     # Download the official OpenBao public key from: https://openbao.org/docs/install/#cosign-and-rekor
     # publicKey: |
     #   -----BEGIN PUBLIC KEY-----
     #   MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
     #   -----END PUBLIC KEY-----
-    # failurePolicy: Block # "Block" prevents deployment on failure; "Warn" logs but proceeds
+    failurePolicy: Block # "Block" prevents deployment on failure; "Warn" logs but proceeds
     # ignoreTlog: false  # Set to true to disable Rekor transparency log verification (not recommended)
     # imagePullSecrets:  # Optional: List of ImagePullSecrets for private registry authentication
     #   - name: registry-credentials  # Secret type: kubernetes.io/dockerconfigjson

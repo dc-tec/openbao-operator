@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: k3d-registry.localhost:5000/openbao-operator
-  newTag: dev-0.8.10
+  newTag: dev-0.9.6
