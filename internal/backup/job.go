@@ -258,7 +258,19 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 						{
 							Name:  "backup",
 							Image: image,
-							Env:   env,
+							SecurityContext: &corev1.SecurityContext{
+								// Prevent privilege escalation (sudo, setuid binaries)
+								AllowPrivilegeEscalation: ptr.To(false),
+								// Drop ALL capabilities.
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								// Read-only root filesystem to prevent runtime modification
+								ReadOnlyRootFilesystem: ptr.To(true),
+								// Run as non-root (inherited from PodSecurityContext, but explicit here is safe)
+								RunAsNonRoot: ptr.To(true),
+							},
+							Env: env,
 							// Mount secrets for credentials and tokens
 							VolumeMounts: buildBackupJobVolumeMounts(cluster),
 						},

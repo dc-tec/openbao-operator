@@ -169,6 +169,18 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Conta
 			// shared volume mounted at openBaoRenderedConfig.
 			// If self-init is enabled, it also appends self-init blocks
 			// for pod-0.
+			SecurityContext: &corev1.SecurityContext{
+				// Prevent privilege escalation (sudo, setuid binaries)
+				AllowPrivilegeEscalation: ptr.To(false),
+				// Drop ALL capabilities.
+				Capabilities: &corev1.Capabilities{
+					Drop: []corev1.Capability{"ALL"},
+				},
+				// Read-only root filesystem to prevent runtime modification
+				ReadOnlyRootFilesystem: ptr.To(true),
+				// Run as non-root (inherited from PodSecurityContext, but explicit here is safe)
+				RunAsNonRoot: ptr.To(true),
+			},
 			Command: []string{"/bao-init-config"},
 			Args:    args,
 			Env: []corev1.EnvVar{
