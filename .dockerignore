@@ -9,3 +9,9 @@
 # Re-include Go module files
 !go.mod
 !go.sum
+
+# Re-include embedded trusted root JSON file for keyless verification
+!internal/security/trusted_root.json
+
+# Re-include embedded trusted root JSON file for keyless verification
+!internal/security/trusted_root.json

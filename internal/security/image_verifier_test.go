@@ -30,20 +30,54 @@ func TestNewImageVerifier(t *testing.T) {
 	}
 }
 
-func TestImageVerifier_Verify_EmptyPublicKey(t *testing.T) {
+func TestImageVerifier_Verify_EmptyConfig(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
 	verifier := NewImageVerifier(logger, client)
 
 	ctx := context.Background()
-	_, err := verifier.Verify(ctx, "test-image:latest", "", false, nil, "default")
+	config := VerifyConfig{}
+	_, err := verifier.Verify(ctx, "test-image:latest", config)
 
 	if err == nil {
-		t.Error("Verify() with empty public key should return error")
+		t.Error("Verify() with empty config should return error")
 	}
 
-	if err.Error() != "public key is required for image verification" {
-		t.Errorf("Verify() error = %v, want 'public key is required for image verification'", err)
+	expectedError := "either PublicKey OR (Issuer and Subject) must be provided for image verification"
+	if err.Error() != expectedError {
+		t.Errorf("Verify() error = %v, want '%s'", err, expectedError)
+	}
+}
+
+func TestImageVerifier_Verify_KeylessMissingIssuer(t *testing.T) {
+	logger := logr.Discard()
+	client := fake.NewClientBuilder().Build()
+	verifier := NewImageVerifier(logger, client)
+
+	ctx := context.Background()
+	config := VerifyConfig{
+		Subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0",
+	}
+	_, err := verifier.Verify(ctx, "test-image:latest", config)
+
+	if err == nil {
+		t.Error("Verify() with keyless config missing issuer should return error")
+	}
+}
+
+func TestImageVerifier_Verify_KeylessMissingSubject(t *testing.T) {
+	logger := logr.Discard()
+	client := fake.NewClientBuilder().Build()
+	verifier := NewImageVerifier(logger, client)
+
+	ctx := context.Background()
+	config := VerifyConfig{
+		Issuer: "https://token.actions.githubusercontent.com",
+	}
+	_, err := verifier.Verify(ctx, "test-image:latest", config)
+
+	if err == nil {
+		t.Error("Verify() with keyless config missing subject should return error")
 	}
 }
 
@@ -54,10 +88,13 @@ func TestImageVerifier_Verify_CacheHit(t *testing.T) {
 
 	// Use a digest for cache key (as the new implementation uses digest)
 	digest := "test-image@sha256:abc123"
-	publicKey := "test-public-key"
+	config := VerifyConfig{
+		PublicKey: "test-public-key",
+	}
 
-	// Mark as verified in cache using digest
-	verifier.cache.markVerified(digest, publicKey)
+	// Mark as verified in cache using the new cache key method
+	cacheKey := verifier.cacheKey(digest, config)
+	verifier.cache.markVerifiedByKey(cacheKey)
 
 	ctx := context.Background()
 	// This should return immediately from cache without calling verifyImage
@@ -67,7 +104,7 @@ func TestImageVerifier_Verify_CacheHit(t *testing.T) {
 	// testing that the cache is checked first. However, the new implementation checks cache
 	// after verification, so this test needs to be updated.
 	// For now, we'll test that cache lookup works correctly.
-	_, err := verifier.Verify(ctx, "test-image:latest", publicKey, false, nil, "default")
+	_, err := verifier.Verify(ctx, "test-image:latest", config)
 
 	// The verification will fail, but we can test the cache separately
 	_ = err
@@ -79,12 +116,14 @@ func TestImageVerifier_Verify_CacheMiss(t *testing.T) {
 	verifier := NewImageVerifier(logger, client)
 
 	imageRef := "test-image:latest"
-	publicKey := "invalid-public-key"
+	config := VerifyConfig{
+		PublicKey: "invalid-public-key",
+	}
 
 	ctx := context.Background()
 	// This will attempt actual verification which will fail with invalid key
 	// but we're testing the cache miss path
-	_, err := verifier.Verify(ctx, imageRef, publicKey, false, nil, "default")
+	_, err := verifier.Verify(ctx, imageRef, config)
 
 	// Should fail because the key is invalid and verification will fail
 	if err == nil {
@@ -102,13 +141,15 @@ func TestImageVerifier_Verify_ContextCancellation(t *testing.T) {
 	verifier := NewImageVerifier(logger, client)
 
 	imageRef := "test-image:latest"
-	publicKey := "test-public-key"
+	config := VerifyConfig{
+		PublicKey: "test-public-key",
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
 	// Should respect context cancellation
-	_, err := verifier.Verify(ctx, imageRef, publicKey, false, nil, "default")
+	_, err := verifier.Verify(ctx, imageRef, config)
 
 	// The error might be from context cancellation or from verification failure
 	// Both are acceptable - we're testing that context is respected
@@ -117,79 +158,72 @@ func TestImageVerifier_Verify_ContextCancellation(t *testing.T) {
 	}
 }
 
-func TestVerificationCache_IsVerified(t *testing.T) {
+func TestVerificationCache_IsVerifiedByKey(t *testing.T) {
 	cache := newVerificationCache()
 
-	// Cache now uses digest instead of imageRef
-	digest := "test-image@sha256:abc123"
-	publicKey := "test-public-key"
+	cacheKey := "test-image@sha256:abc123@key:1234567890abcdef"
 
 	// Initially not verified
-	if cache.isVerified(digest, publicKey) {
-		t.Error("isVerified() should return false for unverified image")
+	if cache.isVerifiedByKey(cacheKey) {
+		t.Error("isVerifiedByKey() should return false for unverified image")
 	}
 
 	// Mark as verified
-	cache.markVerified(digest, publicKey)
+	cache.markVerifiedByKey(cacheKey)
 
 	// Should now be verified
-	if !cache.isVerified(digest, publicKey) {
-		t.Error("isVerified() should return true for verified image")
+	if !cache.isVerifiedByKey(cacheKey) {
+		t.Error("isVerifiedByKey() should return true for verified image")
 	}
 }
 
-func TestVerificationCache_MarkVerified(t *testing.T) {
+func TestVerificationCache_MarkVerifiedByKey(t *testing.T) {
 	cache := newVerificationCache()
 
-	// Cache now uses digest instead of imageRef
-	digest1 := "test-image-1@sha256:abc123"
-	digest2 := "test-image-2@sha256:def456"
-	// Use keys with different first 16 bytes to test cache key differentiation
-	publicKey1 := "key1-very-long-public-key-that-is-different-from-key2"
-	publicKey2 := "key2-very-long-public-key-that-is-different-from-key1"
+	cacheKey1 := "test-image-1@sha256:abc123@key:1234567890abcdef"
+	cacheKey2 := "test-image-2@sha256:def456@key:fedcba0987654321"
+	cacheKey3 := "test-image-1@sha256:abc123@oidc:https://token.actions.githubusercontent.com|https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0"
 
 	// Mark first image as verified
-	cache.markVerified(digest1, publicKey1)
+	cache.markVerifiedByKey(cacheKey1)
 
 	// First image should be verified
-	if !cache.isVerified(digest1, publicKey1) {
-		t.Error("markVerified() did not mark image as verified")
+	if !cache.isVerifiedByKey(cacheKey1) {
+		t.Error("markVerifiedByKey() did not mark image as verified")
 	}
 
 	// Second image should not be verified
-	if cache.isVerified(digest2, publicKey1) {
-		t.Error("markVerified() should not affect other images")
+	if cache.isVerifiedByKey(cacheKey2) {
+		t.Error("markVerifiedByKey() should not affect other images")
 	}
 
-	// Same image with different key should not be verified
-	if cache.isVerified(digest1, publicKey2) {
-		t.Error("markVerified() should be keyed by both digest and public key")
+	// Third image (same digest, different verification mode) should not be verified
+	if cache.isVerifiedByKey(cacheKey3) {
+		t.Error("markVerifiedByKey() should be keyed by both digest and verification config")
 	}
 
-	// Mark second image with different key
-	cache.markVerified(digest2, publicKey2)
+	// Mark second image
+	cache.markVerifiedByKey(cacheKey2)
 
 	// Both should now be verified
-	if !cache.isVerified(digest1, publicKey1) {
-		t.Error("markVerified() should not affect previously verified images")
+	if !cache.isVerifiedByKey(cacheKey1) {
+		t.Error("markVerifiedByKey() should not affect previously verified images")
 	}
-	if !cache.isVerified(digest2, publicKey2) {
-		t.Error("markVerified() should mark second image as verified")
+	if !cache.isVerifiedByKey(cacheKey2) {
+		t.Error("markVerifiedByKey() should mark second image as verified")
 	}
 }
 
 func TestVerificationCache_ConcurrentAccess(t *testing.T) {
 	cache := newVerificationCache()
 
-	// Cache now uses digest instead of imageRef
-	digest := "test-image@sha256:abc123"
-	publicKey := "test-public-key"
+	cacheKey := "test-image@sha256:abc123@key:1234567890abcdef"
 
 	// Test concurrent writes
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			cache.markVerified(digest, publicKey)
+			cache.markVerifiedByKey(cacheKey)
 			done <- true
 		}()
 	}
@@ -200,15 +234,15 @@ func TestVerificationCache_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Should be verified (no race condition)
-	if !cache.isVerified(digest, publicKey) {
-		t.Error("Concurrent markVerified() calls should not cause race conditions")
+	if !cache.isVerifiedByKey(cacheKey) {
+		t.Error("Concurrent markVerifiedByKey() calls should not cause race conditions")
 	}
 
 	// Test concurrent reads
 	readDone := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			_ = cache.isVerified(digest, publicKey)
+			_ = cache.isVerifiedByKey(cacheKey)
 			readDone <- true
 		}()
 	}
@@ -219,48 +253,58 @@ func TestVerificationCache_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Should still be verified
-	if !cache.isVerified(digest, publicKey) {
-		t.Error("Concurrent isVerified() calls should not cause race conditions")
+	if !cache.isVerifiedByKey(cacheKey) {
+		t.Error("Concurrent isVerifiedByKey() calls should not cause race conditions")
 	}
 }
 
-func TestCacheKey(t *testing.T) {
+func TestImageVerifier_CacheKey_StaticKey(t *testing.T) {
+	logger := logr.Discard()
+	client := fake.NewClientBuilder().Build()
+	verifier := NewImageVerifier(logger, client)
+
 	tests := []struct {
 		name       string
 		digest     string
-		publicKey  string
+		config     VerifyConfig
 		wantPrefix string
 	}{
 		{
-			name:       "simple digest and key",
-			digest:     "test-image@sha256:abc123",
-			publicKey:  "test-key",
-			wantPrefix: "test-image@sha256:abc123@",
+			name:   "simple digest and key",
+			digest: "test-image@sha256:abc123",
+			config: VerifyConfig{
+				PublicKey: "test-key",
+			},
+			wantPrefix: "test-image@sha256:abc123@key:",
 		},
 		{
-			name:       "digest with full hash",
-			digest:     "test-image@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-			publicKey:  "test-key",
-			wantPrefix: "test-image@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890@",
+			name:   "digest with full hash",
+			digest: "test-image@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+			config: VerifyConfig{
+				PublicKey: "test-key",
+			},
+			wantPrefix: "test-image@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890@key:",
 		},
 		{
-			name:       "long public key",
-			digest:     "test-image@sha256:abc123",
-			publicKey:  "very-long-public-key-that-should-be-truncated-in-cache-key",
-			wantPrefix: "test-image@sha256:abc123@",
+			name:   "long public key",
+			digest: "test-image@sha256:abc123",
+			config: VerifyConfig{
+				PublicKey: "very-long-public-key-that-should-be-truncated-in-cache-key",
+			},
+			wantPrefix: "test-image@sha256:abc123@key:",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := cacheKey(tt.digest, tt.publicKey)
+			key := verifier.cacheKey(tt.digest, tt.config)
 
 			if !startsWith(key, tt.wantPrefix) {
 				t.Errorf("cacheKey() = %v, want prefix %v", key, tt.wantPrefix)
 			}
 
 			// Key should be consistent for same inputs
-			key2 := cacheKey(tt.digest, tt.publicKey)
+			key2 := verifier.cacheKey(tt.digest, tt.config)
 			if key != key2 {
 				t.Errorf("cacheKey() should be deterministic, got %v and %v", key, key2)
 			}
@@ -268,16 +312,50 @@ func TestCacheKey(t *testing.T) {
 	}
 }
 
-func TestCacheKey_DifferentKeys(t *testing.T) {
-	digest := "test-image@sha256:abc123"
-	publicKey1 := "key1"
-	publicKey2 := "key2"
+func TestImageVerifier_CacheKey_Keyless(t *testing.T) {
+	logger := logr.Discard()
+	client := fake.NewClientBuilder().Build()
+	verifier := NewImageVerifier(logger, client)
 
-	key1 := cacheKey(digest, publicKey1)
-	key2 := cacheKey(digest, publicKey2)
+	digest := "test-image@sha256:abc123"
+	config := VerifyConfig{
+		Issuer:  "https://token.actions.githubusercontent.com",
+		Subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0",
+	}
+
+	key := verifier.cacheKey(digest, config)
+	expectedPrefix := "test-image@sha256:abc123@oidc:https://token.actions.githubusercontent.com|https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0"
+
+	if key != expectedPrefix {
+		t.Errorf("cacheKey() = %v, want %v", key, expectedPrefix)
+	}
+
+	// Key should be consistent for same inputs
+	key2 := verifier.cacheKey(digest, config)
+	if key != key2 {
+		t.Errorf("cacheKey() should be deterministic, got %v and %v", key, key2)
+	}
+}
+
+func TestImageVerifier_CacheKey_DifferentModes(t *testing.T) {
+	logger := logr.Discard()
+	client := fake.NewClientBuilder().Build()
+	verifier := NewImageVerifier(logger, client)
+
+	digest := "test-image@sha256:abc123"
+	staticKeyConfig := VerifyConfig{
+		PublicKey: "test-key",
+	}
+	keylessConfig := VerifyConfig{
+		Issuer:  "https://token.actions.githubusercontent.com",
+		Subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0",
+	}
+
+	key1 := verifier.cacheKey(digest, staticKeyConfig)
+	key2 := verifier.cacheKey(digest, keylessConfig)
 
 	if key1 == key2 {
-		t.Error("cacheKey() should generate different keys for different public keys")
+		t.Error("cacheKey() should generate different keys for static key vs keyless modes")
 	}
 }
 

@@ -431,9 +431,23 @@ type ImageVerificationConfig struct {
 	Enabled bool `json:"enabled"`
 
 	// PublicKey is the Cosign public key content used to verify the signature.
-	// If empty, it may default to the official OpenBao public key (future).
+	// Required for static key verification. If empty, keyless verification will be used
+	// (requires Issuer and Subject to be set).
 	// +optional
 	PublicKey string `json:"publicKey,omitempty"`
+
+	// Issuer is the OIDC issuer for keyless verification (e.g., https://token.actions.githubusercontent.com).
+	// Required for keyless verification when PublicKey is not provided.
+	// For official OpenBao images, use: https://token.actions.githubusercontent.com
+	// +optional
+	Issuer string `json:"issuer,omitempty"`
+
+	// Subject is the OIDC subject for keyless verification.
+	// Required for keyless verification when PublicKey is not provided.
+	// For official OpenBao images, use: https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v<VERSION>
+	// The version in the subject MUST match the image tag version.
+	// +optional
+	Subject string `json:"subject,omitempty"`
 
 	// FailurePolicy defines behavior on verification failure.
 	// "Block" prevents StatefulSet updates when verification fails.

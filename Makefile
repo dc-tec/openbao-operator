@@ -69,6 +69,18 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
+.PHONY: verify-trusted-root
+verify-trusted-root: ## Verify that trusted_root.json exists and is valid JSON.
+	@if [ ! -f internal/security/trusted_root.json ]; then \
+		echo "Error: trusted_root.json not found. Run 'make update-trusted-root' to download it."; \
+		exit 1; \
+	fi
+	@python3 -m json.tool internal/security/trusted_root.json > /dev/null 2>&1 || { \
+		echo "Error: trusted_root.json is not valid JSON. Run 'make update-trusted-root' to fix it."; \
+		exit 1; \
+	}
+	@echo "trusted_root.json is valid"
+
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:
@@ -112,8 +124,13 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 ##@ Build
 
+.PHONY: update-trusted-root
+update-trusted-root: ## Download/update the embedded trusted_root.json file for keyless verification.
+	@echo "Fetching latest trusted_root.json from Sigstore TUF repository..."
+	@go run internal/security/fetch_trusted_root.go
+
 .PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
+build: verify-trusted-root manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
 .PHONY: run

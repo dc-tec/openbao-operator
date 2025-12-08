@@ -3,6 +3,7 @@ package security
 import (
 	"context"
 	"crypto"
+	_ "embed" // Required for go:embed
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -14,10 +15,25 @@ import (
 	"github.com/sigstore/cosign/v2/pkg/cosign"
 	ociremote "github.com/sigstore/cosign/v2/pkg/oci/remote"
 	"github.com/sigstore/cosign/v2/pkg/signature"
+	"github.com/sigstore/sigstore-go/pkg/root"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+//go:embed trusted_root.json
+var embeddedTrustedRootJSON []byte
+
+// VerifyConfig holds the configuration for image verification.
+// Provide PublicKey for static verification OR Issuer/Subject for keyless.
+type VerifyConfig struct {
+	PublicKey        string
+	Issuer           string
+	Subject          string
+	IgnoreTlog       bool
+	ImagePullSecrets []corev1.LocalObjectReference
+	Namespace        string
+}
 
 // ImageVerifier verifies container image signatures using Cosign.
 // It implements a simple in-memory cache to avoid re-verifying
@@ -38,53 +54,53 @@ func NewImageVerifier(logger logr.Logger, k8sClient client.Client) *ImageVerifie
 	}
 }
 
-// Verify verifies the signature of the given image reference against the provided public key.
-// It uses an in-memory cache keyed by image digest and public key to avoid redundant network calls.
+// Verify verifies the signature of the given image reference using the provided configuration.
+// It uses an in-memory cache keyed by image digest and verification config to avoid redundant network calls.
 // Returns the resolved image digest (e.g., "openbao/openbao@sha256:abc...") and an error if verification fails.
 // The digest can be used to pin the image in StatefulSets to prevent TOCTOU attacks.
-func (v *ImageVerifier) Verify(ctx context.Context, imageRef, publicKey string, ignoreTlog bool, imagePullSecrets []corev1.LocalObjectReference, namespace string) (string, error) {
-	if publicKey == "" {
-		return "", fmt.Errorf("public key is required for image verification")
+func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config VerifyConfig) (string, error) {
+	// Validate that either PublicKey OR (Issuer and Subject) are provided
+	if config.PublicKey == "" && (config.Issuer == "" || config.Subject == "") {
+		return "", fmt.Errorf("either PublicKey OR (Issuer and Subject) must be provided for image verification")
 	}
 
 	// Perform verification and get digest
-	v.logger.Info("Verifying image signature", "image", imageRef, "ignoreTlog", ignoreTlog)
-	digest, err := v.verifyImage(ctx, imageRef, publicKey, ignoreTlog, imagePullSecrets, namespace)
+	mode := "static-key"
+	if config.PublicKey == "" {
+		mode = "keyless"
+	}
+	v.logger.Info("Verifying image signature", "image", imageRef, "mode", mode, "ignoreTlog", config.IgnoreTlog)
+	digest, err := v.verifyImage(ctx, imageRef, config)
 	if err != nil {
 		return "", fmt.Errorf("image verification failed for %q: %w", imageRef, err)
 	}
 
 	// Check cache using digest (not tag) to prevent TOCTOU issues
-	if v.cache.isVerified(digest, publicKey) {
+	cacheKey := v.cacheKey(digest, config)
+	if v.cache.isVerifiedByKey(cacheKey) {
 		v.logger.V(1).Info("Image verification cache hit", "digest", digest)
 		return digest, nil
 	}
 
 	// Cache successful verification using digest
-	v.cache.markVerified(digest, publicKey)
+	v.cache.markVerifiedByKey(cacheKey)
 	v.logger.Info("Image verification succeeded", "image", imageRef, "digest", digest)
 
 	return digest, nil
 }
 
 // verifyImage performs the actual Cosign verification and returns the resolved digest.
-func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef, publicKey string, ignoreTlog bool, imagePullSecrets []corev1.LocalObjectReference, namespace string) (string, error) {
+func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef string, config VerifyConfig) (string, error) {
 	// Parse the image reference
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse image reference: %w", err)
 	}
 
-	// Create a verifier from the public key PEM (in-memory, no file I/O required)
-	verifier, err := signature.LoadPublicKeyRaw([]byte(publicKey), crypto.SHA256)
-	if err != nil {
-		return "", fmt.Errorf("failed to create verifier from public key: %w", err)
-	}
-
 	// Build registry options with Kubernetes keychain for private registry authentication
 	var remoteOpts []ociremote.Option
-	if len(imagePullSecrets) > 0 && v.client != nil {
-		keychain, err := v.buildKeychain(ctx, imagePullSecrets, namespace)
+	if len(config.ImagePullSecrets) > 0 && v.client != nil {
+		keychain, err := v.buildKeychain(ctx, config.ImagePullSecrets, config.Namespace)
 		if err != nil {
 			return "", fmt.Errorf("failed to build keychain for image pull secrets: %w", err)
 		}
@@ -94,11 +110,38 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef, publicKey str
 		}
 	}
 
-	// Create CheckOpts with the verifier and registry options
+	// Create CheckOpts based on verification mode
 	co := &cosign.CheckOpts{
-		SigVerifier:        verifier,
-		IgnoreTlog:         ignoreTlog,
 		RegistryClientOpts: remoteOpts,
+	}
+
+	// Mode 1: Static Public Key (Custom Images)
+	if config.PublicKey != "" {
+		verifier, err := signature.LoadPublicKeyRaw([]byte(config.PublicKey), crypto.SHA256)
+		if err != nil {
+			return "", fmt.Errorf("failed to load public key: %w", err)
+		}
+		co.SigVerifier = verifier
+		co.IgnoreTlog = config.IgnoreTlog
+	} else {
+		// Mode 2: Keyless / Identity (Official OpenBao Images)
+		// Load trusted root material (Fulcio root certificates, Rekor public keys, etc.)
+		// Uses embedded trusted_root.json which is compiled into the binary at build time.
+		// This works in read-only filesystems and air-gapped environments.
+		trustedRoot, err := v.loadTrustedRoot()
+		if err != nil {
+			return "", fmt.Errorf("failed to load trusted root material for keyless verification: %w", err)
+		}
+		co.TrustedMaterial = trustedRoot
+		co.Identities = []cosign.Identity{
+			{
+				Issuer:  config.Issuer,
+				Subject: config.Subject,
+			},
+		}
+		// IMPORTANT: For keyless, we MUST verify against the Transparency Log (Rekor).
+		// Do NOT set IgnoreTlog = true here, as it would bypass the security guarantees of keyless verification.
+		co.IgnoreTlog = false
 	}
 
 	// Verify image signatures and get the resolved digest
@@ -121,8 +164,8 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef, publicKey str
 		// Resolve tag to digest
 		// Convert ociremote.Options to ggcrremote.Options for Head call
 		var ggcrOpts []ggcrremote.Option
-		if len(imagePullSecrets) > 0 && v.client != nil {
-			keychain, err := v.buildKeychain(ctx, imagePullSecrets, namespace)
+		if len(config.ImagePullSecrets) > 0 && v.client != nil {
+			keychain, err := v.buildKeychain(ctx, config.ImagePullSecrets, config.Namespace)
 			if err == nil && keychain != nil {
 				ggcrOpts = append(ggcrOpts, ggcrremote.WithAuthFromKeychain(keychain))
 			}
@@ -142,9 +185,22 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef, publicKey str
 		"digest", digestRef.String(),
 		"signatures", len(sigs),
 		"bundleVerified", bundleVerified,
-		"rekorVerified", !ignoreTlog)
+		"rekorVerified", !co.IgnoreTlog)
 
 	return digestRef.String(), nil
+}
+
+// loadTrustedRoot loads the embedded trusted root material for keyless verification.
+// The trusted root is embedded at build time from trusted_root.json and includes
+// Fulcio root certificates, Rekor public keys, and CT log keys.
+// This approach works in read-only filesystems and air-gapped environments.
+func (v *ImageVerifier) loadTrustedRoot() (root.TrustedMaterial, error) {
+	trustedRoot, err := root.NewTrustedRootFromJSON(embeddedTrustedRootJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded trusted_root.json: %w", err)
+	}
+
+	return trustedRoot, nil
 }
 
 // buildKeychain constructs a keychain from ImagePullSecrets by reading the secrets
@@ -263,30 +319,32 @@ func newVerificationCache() *verificationCache {
 	}
 }
 
-// isVerified checks if an image with the given reference and public key has been verified.
-func (c *verificationCache) isVerified(imageRef, publicKey string) bool {
+// isVerifiedByKey checks if an image has been verified using the provided cache key.
+func (c *verificationCache) isVerifiedByKey(cacheKey string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	key := cacheKey(imageRef, publicKey)
-	return c.cache[key]
+	return c.cache[cacheKey]
 }
 
-// markVerified marks an image as verified.
-func (c *verificationCache) markVerified(imageRef, publicKey string) {
+// markVerifiedByKey marks an image as verified using the provided cache key.
+func (c *verificationCache) markVerifiedByKey(cacheKey string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	key := cacheKey(imageRef, publicKey)
-	c.cache[key] = true
+	c.cache[cacheKey] = true
 }
 
-// cacheKey generates a cache key from image digest and public key.
+// cacheKey generates a cache key from image digest and verification config.
 // Uses digest (not tag) to prevent caching issues when tags change.
-func cacheKey(digest, publicKey string) string {
-	// Use a simple hash of the public key to avoid storing the full key
-	// In a production system, you might want to use a proper hash function
-	keyHash := []byte(publicKey)
-	if len(keyHash) > 16 {
-		keyHash = keyHash[:16]
+// Supports both static key and keyless verification modes.
+func (v *ImageVerifier) cacheKey(digest string, config VerifyConfig) string {
+	if config.PublicKey != "" {
+		// Static key mode: use hash of public key
+		keyHash := []byte(config.PublicKey)
+		if len(keyHash) > 16 {
+			keyHash = keyHash[:16]
+		}
+		return fmt.Sprintf("%s@key:%x", digest, keyHash)
 	}
-	return fmt.Sprintf("%s@%x", digest, keyHash)
+	// Keyless mode: use issuer and subject
+	return fmt.Sprintf("%s@oidc:%s|%s", digest, config.Issuer, config.Subject)
 }
