@@ -17,11 +17,14 @@ import (
 
 func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-init", "default")
 	cluster.Status.Initialized = false
 	cluster.Spec.Replicas = 3
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -50,11 +53,14 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 
 func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-scaled", "default")
 	cluster.Status.Initialized = true
 	cluster.Spec.Replicas = 3
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -117,11 +123,14 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k8sClient := newTestClient(t)
-			manager := NewManager(k8sClient, testScheme)
+			manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 			cluster := newMinimalCluster("test-replica", "default")
 			cluster.Spec.Replicas = tt.specReplicas
 			cluster.Status.Initialized = tt.initialized
+
+			// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+			createTLSSecretForTest(t, k8sClient, cluster)
 
 			ctx := context.Background()
 
@@ -151,12 +160,15 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 
 func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-container", "default")
 	cluster.Spec.Config = map[string]string{
 		"extra": "ui = true\n",
 	}
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -188,15 +200,82 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 				t.Fatalf("expected container to have volume mounts")
 			}
 
-			// Verify container runs bao server with rendered config path
-			if len(c.Command) == 0 {
-				t.Fatalf("expected container to have command set")
+			// Verify container runs via the wrapper and passes bao server with rendered config path.
+			if len(c.Command) != 1 || c.Command[0] != "/utils/bao-wrapper" {
+				t.Fatalf("expected container command to be /utils/bao-wrapper, got %v", c.Command)
 			}
-			if len(c.Command) < 3 || c.Command[0] != openBaoBinaryName || c.Command[1] != "server" {
-				t.Fatalf("expected container command to be %s server -config=..., got %v", openBaoBinaryName, c.Command)
+
+			foundChildCmd := false
+			for i := range c.Args {
+				if c.Args[i] == "--" && len(c.Args) > i+3 &&
+					c.Args[i+1] == openBaoBinaryName &&
+					c.Args[i+2] == "server" &&
+					strings.Contains(c.Args[i+3], "-config=") {
+					foundChildCmd = true
+					break
+				}
 			}
-			if !strings.Contains(c.Command[2], "-config=") {
-				t.Fatalf("expected container command to include -config flag, got %v", c.Command)
+			if !foundChildCmd {
+				t.Fatalf("expected wrapper args to include %s server -config=..., got %v", openBaoBinaryName, c.Args)
+			}
+
+			foundSATokenMount := false
+			for _, mount := range c.VolumeMounts {
+				if mount.MountPath == serviceAccountMountPath {
+					foundSATokenMount = true
+					break
+				}
+			}
+			if !foundSATokenMount {
+				t.Fatalf("expected ServiceAccount token mount at %s", serviceAccountMountPath)
+			}
+
+			if c.StartupProbe == nil || c.StartupProbe.Exec == nil {
+				t.Fatalf("expected container to have startup probe")
+			}
+			if c.LivenessProbe == nil || c.LivenessProbe.Exec == nil {
+				t.Fatalf("expected container to have liveness probe")
+			}
+			if c.ReadinessProbe == nil || c.ReadinessProbe.Exec == nil {
+				t.Fatalf("expected container to have readiness probe")
+			}
+
+			if len(c.StartupProbe.Exec.Command) == 0 || c.StartupProbe.Exec.Command[0] != openBaoProbeBinary {
+				t.Fatalf("expected startup probe to exec %s, got %v", openBaoProbeBinary, c.StartupProbe.Exec.Command)
+			}
+			if len(c.LivenessProbe.Exec.Command) == 0 || c.LivenessProbe.Exec.Command[0] != openBaoProbeBinary {
+				t.Fatalf("expected liveness probe to exec %s, got %v", openBaoProbeBinary, c.LivenessProbe.Exec.Command)
+			}
+			if len(c.ReadinessProbe.Exec.Command) == 0 || c.ReadinessProbe.Exec.Command[0] != openBaoProbeBinary {
+				t.Fatalf("expected readiness probe to exec %s, got %v", openBaoProbeBinary, c.ReadinessProbe.Exec.Command)
+			}
+
+			if c.StartupProbe.TimeoutSeconds != 10 {
+				t.Fatalf("expected startup probe timeout to be 10s, got %d", c.StartupProbe.TimeoutSeconds)
+			}
+
+			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
+				t.Fatalf("expected startup probe to target %s, got %v", openBaoProbeAddr, c.StartupProbe.Exec.Command)
+			}
+			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-mode=startup") {
+				t.Fatalf("expected startup probe to use startup mode, got %v", c.StartupProbe.Exec.Command)
+			}
+			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-timeout="+openBaoStartupProbeTimeout) {
+				t.Fatalf("expected startup probe to use timeout %s, got %v", openBaoStartupProbeTimeout, c.StartupProbe.Exec.Command)
+			}
+
+			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
+				t.Fatalf("expected liveness probe to target %s, got %v", openBaoProbeAddr, c.LivenessProbe.Exec.Command)
+			}
+			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-timeout="+openBaoProbeTimeout) {
+				t.Fatalf("expected liveness probe to use timeout %s, got %v", openBaoProbeTimeout, c.LivenessProbe.Exec.Command)
+			}
+
+			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
+				t.Fatalf("expected readiness probe to target %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
+			}
+			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-timeout="+openBaoProbeTimeout) {
+				t.Fatalf("expected readiness probe to use timeout %s, got %v", openBaoProbeTimeout, c.ReadinessProbe.Exec.Command)
 			}
 
 			// Verify environment variables are set correctly
@@ -213,6 +292,12 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 
 			if envVars["HOSTNAME"] != "metadata.name" {
 				t.Fatalf("expected HOSTNAME env var to reference metadata.name, got %q", envVars["HOSTNAME"])
+			}
+			if envVars["BAO_K8S_POD_NAME"] != "metadata.name" {
+				t.Fatalf("expected BAO_K8S_POD_NAME env var to reference metadata.name, got %q", envVars["BAO_K8S_POD_NAME"])
+			}
+			if envVars["BAO_K8S_NAMESPACE"] != "metadata.namespace" {
+				t.Fatalf("expected BAO_K8S_NAMESPACE env var to reference metadata.namespace, got %q", envVars["BAO_K8S_NAMESPACE"])
 			}
 			if envVars["POD_IP"] != "status.podIP" {
 				t.Fatalf("expected POD_IP env var to reference status.podIP, got %q", envVars["POD_IP"])
@@ -232,13 +317,16 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 
 func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-init-container", "default")
 	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
 		Enabled: true,
 		Image:   "openbao/openbao-config-init:latest",
 	}
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -275,12 +363,15 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 
 func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-no-init-container", "default")
 	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
 		Enabled: false,
 	}
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -304,9 +395,12 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 
 func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-volumes", "default")
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -354,7 +448,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 
 func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-delete-pvcs", "default")
 
@@ -407,5 +501,144 @@ func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
 	}, &corev1.PersistentVolumeClaim{})
 	if !apierrors.IsNotFound(err) {
 		t.Fatalf("expected PVC2 to be deleted, got error: %v", err)
+	}
+}
+
+func TestStatefulSet_ACMEMode_NoSidecar(t *testing.T) {
+	cluster := newMinimalCluster("acme-cluster", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
+		Domain:       "example.com",
+	}
+
+	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "")
+	if err != nil {
+		t.Fatalf("buildStatefulSet() error = %v", err)
+	}
+
+	// Verify no TLS reloader sidecar
+	containers := statefulSet.Spec.Template.Spec.Containers
+	hasReloader := false
+	for _, container := range containers {
+		if container.Name == "tls-reloader" {
+			hasReloader = true
+			break
+		}
+	}
+	if hasReloader {
+		t.Fatal("expected StatefulSet to NOT have tls-reloader sidecar in ACME mode")
+	}
+
+	// Verify only one container (OpenBao container)
+	if len(containers) != 1 {
+		t.Fatalf("expected StatefulSet to have 1 container in ACME mode, got %d", len(containers))
+	}
+	if containers[0].Name != "openbao" {
+		t.Fatalf("expected container name to be 'openbao', got %q", containers[0].Name)
+	}
+}
+
+func TestStatefulSet_ACMEMode_NoTLSVolume(t *testing.T) {
+	cluster := newMinimalCluster("acme-cluster", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
+		Domain:       "example.com",
+	}
+
+	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "")
+	if err != nil {
+		t.Fatalf("buildStatefulSet() error = %v", err)
+	}
+
+	// Verify no TLS volume
+	volumes := statefulSet.Spec.Template.Spec.Volumes
+	hasTLSVolume := false
+	for _, volume := range volumes {
+		if volume.Name == "tls" {
+			hasTLSVolume = true
+			break
+		}
+	}
+	if hasTLSVolume {
+		t.Fatal("expected StatefulSet to NOT have TLS volume in ACME mode")
+	}
+
+	// Verify OpenBao container doesn't mount TLS volume
+	openBaoContainer := statefulSet.Spec.Template.Spec.Containers[0]
+	hasTLSMount := false
+	for _, mount := range openBaoContainer.VolumeMounts {
+		if mount.Name == "tls" {
+			hasTLSMount = true
+			break
+		}
+	}
+	if hasTLSMount {
+		t.Fatal("expected OpenBao container to NOT mount TLS volume in ACME mode")
+	}
+}
+
+func TestStatefulSet_ACMEMode_NoShareProcessNamespace(t *testing.T) {
+	cluster := newMinimalCluster("acme-cluster", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
+		Domain:       "example.com",
+	}
+
+	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "")
+	if err != nil {
+		t.Fatalf("buildStatefulSet() error = %v", err)
+	}
+
+	// Verify ShareProcessNamespace is false (restored isolation for all modes)
+	shareProcessNamespace := statefulSet.Spec.Template.Spec.ShareProcessNamespace
+	if shareProcessNamespace == nil || *shareProcessNamespace {
+		t.Fatal("expected ShareProcessNamespace to be false (restored container isolation)")
+	}
+}
+
+func TestStatefulSet_NonACMEMode_UsesWrapper(t *testing.T) {
+	cluster := newMinimalCluster("external-cluster", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
+
+	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "")
+	if err != nil {
+		t.Fatalf("buildStatefulSet() error = %v", err)
+	}
+
+	// Verify no TLS reloader sidecar (wrapper approach eliminates need for sidecar)
+	containers := statefulSet.Spec.Template.Spec.Containers
+	hasReloader := false
+	for _, container := range containers {
+		if container.Name == "tls-reloader" {
+			hasReloader = true
+			break
+		}
+	}
+	if hasReloader {
+		t.Fatal("expected StatefulSet to NOT have tls-reloader sidecar (wrapper approach)")
+	}
+
+	// Verify only one container (OpenBao container with wrapper)
+	if len(containers) != 1 {
+		t.Fatalf("expected StatefulSet to have 1 container, got %d", len(containers))
+	}
+
+	// Verify OpenBao container uses wrapper as entrypoint
+	openBaoContainer := containers[0]
+	if len(openBaoContainer.Command) == 0 || openBaoContainer.Command[0] != "/utils/bao-wrapper" {
+		t.Fatalf("expected OpenBao container to use wrapper as entrypoint, got command: %v", openBaoContainer.Command)
+	}
+
+	// Verify ShareProcessNamespace is false (restored isolation)
+	shareProcessNamespace := statefulSet.Spec.Template.Spec.ShareProcessNamespace
+	if shareProcessNamespace == nil || *shareProcessNamespace {
+		t.Fatal("expected ShareProcessNamespace to be false (restored container isolation)")
 	}
 }

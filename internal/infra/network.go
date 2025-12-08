@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -51,8 +52,9 @@ func (m *Manager) ensureHeadlessService(ctx context.Context, logger logr.Logger,
 				Labels:    infraLabels(cluster),
 			},
 			Spec: corev1.ServiceSpec{
-				ClusterIP: corev1.ClusterIPNone,
-				Selector:  podSelectorLabels(cluster),
+				ClusterIP:                corev1.ClusterIPNone,
+				PublishNotReadyAddresses: true,
+				Selector:                 podSelectorLabels(cluster),
 				Ports: []corev1.ServicePort{
 					{
 						Name:     "api",
@@ -83,6 +85,7 @@ func (m *Manager) ensureHeadlessService(ctx context.Context, logger logr.Logger,
 		updated.Spec.Selector[k] = v
 	}
 	updated.Spec.ClusterIP = corev1.ClusterIPNone
+	updated.Spec.PublishNotReadyAddresses = true
 
 	if len(updated.Spec.Ports) == 0 {
 		updated.Spec.Ports = []corev1.ServicePort{
@@ -947,13 +950,24 @@ func (m *Manager) ensureNetworkPolicy(ctx context.Context, logger logr.Logger, c
 		logger.Info("NetworkPolicy not found; creating", "networkpolicy", name)
 
 		// Detect API server information for NetworkPolicy rules
-		apiServerInfo, err := m.detectAPIServerInfo(ctx, logger)
+		// SECURITY: We require API server detection to succeed to enforce least privilege.
+		// Falling back to permissive namespace selectors violates Zero Trust principles.
+		apiServerInfo, err := m.detectAPIServerInfo(ctx, logger, cluster)
 		if err != nil {
-			logger.V(1).Info("Failed to detect API server info, using fallback rules", "error", err)
-			// Continue with fallback - buildNetworkPolicy will handle it
+			return fmt.Errorf("failed to detect API server information for NetworkPolicy: %w. "+
+				"API server detection is required to enforce least-privilege egress rules. "+
+				"Consider explicitly configuring spec.network.apiServerCIDR if auto-detection fails", err)
+		}
+		if apiServerInfo == nil || (apiServerInfo.ServiceNetworkCIDR == "" && len(apiServerInfo.EndpointIPs) == 0) {
+			return fmt.Errorf("API server information is incomplete (no service CIDR or endpoint IPs detected). " +
+				"This is required to enforce least-privilege NetworkPolicy egress rules. " +
+				"Consider explicitly configuring spec.network.apiServerCIDR")
 		}
 
-		networkPolicy = buildNetworkPolicy(cluster, apiServerInfo)
+		networkPolicy, err = buildNetworkPolicy(cluster, apiServerInfo, m.operatorNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to build NetworkPolicy: %w", err)
+		}
 
 		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
 		if err := controllerutil.SetControllerReference(cluster, networkPolicy, m.scheme); err != nil {
@@ -969,13 +983,23 @@ func (m *Manager) ensureNetworkPolicy(ctx context.Context, logger logr.Logger, c
 
 	// NetworkPolicy exists - update it to match desired state
 	// Detect API server information for NetworkPolicy rules
-	apiServerInfo, err := m.detectAPIServerInfo(ctx, logger)
+	// SECURITY: We require API server detection to succeed to enforce least privilege.
+	apiServerInfo, err := m.detectAPIServerInfo(ctx, logger, cluster)
 	if err != nil {
-		logger.V(1).Info("Failed to detect API server info, using fallback rules", "error", err)
-		// Continue with fallback - buildNetworkPolicy will handle it
+		return fmt.Errorf("failed to detect API server information for NetworkPolicy update: %w. "+
+			"API server detection is required to enforce least-privilege egress rules. "+
+			"Consider explicitly configuring spec.network.apiServerCIDR if auto-detection fails", err)
+	}
+	if apiServerInfo == nil || (apiServerInfo.ServiceNetworkCIDR == "" && len(apiServerInfo.EndpointIPs) == 0) {
+		return fmt.Errorf("API server information is incomplete (no service CIDR or endpoint IPs detected). " +
+			"This is required to enforce least-privilege NetworkPolicy egress rules. " +
+			"Consider explicitly configuring spec.network.apiServerCIDR")
 	}
 
-	desired := buildNetworkPolicy(cluster, apiServerInfo)
+	desired, err := buildNetworkPolicy(cluster, apiServerInfo, m.operatorNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to build NetworkPolicy: %w", err)
+	}
 	updated := networkPolicy.DeepCopy()
 	updated.Labels = desired.Labels
 	updated.Spec = desired.Spec
@@ -1004,8 +1028,44 @@ type apiServerInfo struct {
 // It queries the kubernetes service and endpoints to determine:
 // - The service network CIDR (for service IP access on port 443)
 // - The API server endpoint IPs (for direct access on port 6443)
-func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger) (*apiServerInfo, error) {
+// If auto-detection fails and spec.network.apiServerCIDR is configured, it uses that as a fallback.
+func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*apiServerInfo, error) {
 	info := &apiServerInfo{}
+
+	manualCIDRConfigured := false
+	if cluster.Spec.Network != nil && strings.TrimSpace(cluster.Spec.Network.APIServerCIDR) != "" {
+		rawCIDR := strings.TrimSpace(cluster.Spec.Network.APIServerCIDR)
+		_, ipNet, err := net.ParseCIDR(rawCIDR)
+		if err != nil {
+			return nil, fmt.Errorf("invalid spec.network.apiServerCIDR %q: %w", rawCIDR, err)
+		}
+		ipNet.IP = ipNet.IP.Mask(ipNet.Mask)
+		canonicalCIDR := ipNet.String()
+		logger.V(1).Info("Using manually configured API server CIDR", "cidr", canonicalCIDR)
+		if canonicalCIDR != rawCIDR {
+			logger.V(1).Info("Normalized API server CIDR", "original", rawCIDR, "normalized", canonicalCIDR)
+		}
+		info.ServiceNetworkCIDR = canonicalCIDR
+		manualCIDRConfigured = true
+	}
+
+	if cluster.Spec.Network != nil && len(cluster.Spec.Network.APIServerEndpointIPs) > 0 {
+		for _, rawIP := range cluster.Spec.Network.APIServerEndpointIPs {
+			ip := strings.TrimSpace(rawIP)
+			if ip == "" {
+				continue
+			}
+			parsed := net.ParseIP(ip)
+			if parsed == nil {
+				return nil, fmt.Errorf("invalid spec.network.apiServerEndpointIPs entry %q: must be an IP address", rawIP)
+			}
+			info.EndpointIPs = append(info.EndpointIPs, parsed.String())
+		}
+
+		if len(info.EndpointIPs) > 0 {
+			logger.V(1).Info("Using manually configured API server endpoint IPs", "ips", info.EndpointIPs)
+		}
+	}
 
 	// Get the kubernetes service to determine service network CIDR
 	kubernetesSvc := &corev1.Service{}
@@ -1013,17 +1073,27 @@ func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger) (
 		Namespace: "default",
 		Name:      "kubernetes",
 	}, kubernetesSvc); err != nil {
-		return nil, fmt.Errorf("failed to get kubernetes service: %w", err)
+		if manualCIDRConfigured {
+			logger.V(1).Info("Failed to get kubernetes service; using manual API server CIDR only", "error", err)
+			return info, nil
+		}
+		return nil, fmt.Errorf("failed to get kubernetes service: %w. "+
+			"Consider configuring spec.network.apiServerCIDR as a fallback", err)
 	}
 
 	// Derive service network CIDR from the ClusterIP
 	// For example, if ClusterIP is 10.43.0.1, the CIDR is 10.43.0.0/16
-	if kubernetesSvc.Spec.ClusterIP != "" && kubernetesSvc.Spec.ClusterIP != "None" {
+	if !manualCIDRConfigured && kubernetesSvc.Spec.ClusterIP != "" && kubernetesSvc.Spec.ClusterIP != "None" {
 		parts := strings.Split(kubernetesSvc.Spec.ClusterIP, ".")
 		if len(parts) >= 2 {
 			info.ServiceNetworkCIDR = fmt.Sprintf("%s.%s.0.0/16", parts[0], parts[1])
 			logger.V(1).Info("Detected service network CIDR", "cidr", info.ServiceNetworkCIDR)
 		}
+	}
+
+	// If endpoint IPs are already configured explicitly, do not attempt to auto-detect them.
+	if len(info.EndpointIPs) > 0 {
+		return info, nil
 	}
 
 	// Get the kubernetes endpoint slices to find API server endpoint IPs
@@ -1151,6 +1221,22 @@ func buildNetworkPolicyIngressRules(
 		},
 	})
 
+	// If standard Ingress is enabled, we must allow traffic to the API port.
+	// Since Ingress Controllers can run anywhere (and often preserve client IPs),
+	// we allow traffic from anywhere on the API port.
+	if cluster.Spec.Ingress != nil && cluster.Spec.Ingress.Enabled {
+		rules = append(rules, networkingv1.NetworkPolicyIngressRule{
+			Ports: []networkingv1.NetworkPolicyPort{
+				{
+					Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
+					Port:     &apiPort,
+				},
+			},
+			// Empty "From" implies "Allow from anywhere"
+			From: []networkingv1.NetworkPolicyPeer{},
+		})
+	}
+
 	return rules
 }
 
@@ -1168,7 +1254,7 @@ func buildNetworkPolicyIngressRules(
 // Note: NetworkPolicies operate at L3/L4 and cannot restrict HTTP paths. The operator
 // uses specific OpenBao API endpoints (GET /v1/sys/health, PUT /v1/sys/init, etc.),
 // but endpoint-level access control is enforced by OpenBao's authentication.
-func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *apiServerInfo) *networkingv1.NetworkPolicy {
+func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *apiServerInfo, operatorNamespace string) (*networkingv1.NetworkPolicy, error) {
 	labels := infraLabels(cluster)
 	podSelector := podSelectorLabels(cluster)
 
@@ -1199,7 +1285,7 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	operatorPeer := networkingv1.NetworkPolicyPeer{
 		NamespaceSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
-				"kubernetes.io/metadata.name": "openbao-operator-system",
+				"kubernetes.io/metadata.name": operatorNamespace,
 			},
 		},
 		PodSelector: &metav1.LabelSelector{
@@ -1298,36 +1384,11 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 		}
 	}
 
-	// Fallback: If no API server info was detected, use namespace selectors
-	// This is less secure but provides basic functionality
+	// SECURITY: We no longer use permissive fallback rules. API server detection
+	// must succeed before building the NetworkPolicy. This is enforced in ensureNetworkPolicy.
+	// If we reach here without API server info, it's a programming error.
 	if apiServerInfo == nil || (apiServerInfo.ServiceNetworkCIDR == "" && len(apiServerInfo.EndpointIPs) == 0) {
-		egressRules = append(egressRules, networkingv1.NetworkPolicyEgressRule{
-			// Fallback: Allow egress to default and kube-system namespaces on port 443.
-			// This is a fallback when API server detection fails, but may not work
-			// for all cluster types (especially managed clusters).
-			To: []networkingv1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"kubernetes.io/metadata.name": "default",
-						},
-					},
-				},
-				{
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"kubernetes.io/metadata.name": "kube-system",
-						},
-					},
-				},
-			},
-			Ports: []networkingv1.NetworkPolicyPort{
-				{
-					Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
-					Port:     &kubernetesAPIPort443,
-				},
-			},
-		})
+		return nil, fmt.Errorf("API server information is required but not provided")
 	}
 
 	// Add cluster pod communication rule
@@ -1375,7 +1436,7 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 		},
 	}
 
-	return networkPolicy
+	return networkPolicy, nil
 }
 
 // networkPolicyName returns the name for the NetworkPolicy resource.

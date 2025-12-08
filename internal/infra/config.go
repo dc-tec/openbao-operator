@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"os"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -181,8 +182,32 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		return nil
 	}
 
+	// TIGHTENED: No discovery logic here. Use the struct fields.
+	var bootstrapConfig *configbuilder.OperatorBootstrapConfig
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened {
+		if m.oidcIssuer == "" {
+			return fmt.Errorf("cannot use Hardened profile: OIDC issuer could not be determined at operator startup")
+		}
+
+		operatorNS := m.operatorNamespace
+		if operatorNS == "" {
+			operatorNS = "openbao-operator-system"
+		}
+		operatorSA := os.Getenv("OPERATOR_SERVICE_ACCOUNT_NAME")
+		if operatorSA == "" {
+			operatorSA = "openbao-operator-controller"
+		}
+
+		bootstrapConfig = &configbuilder.OperatorBootstrapConfig{
+			OIDCIssuerURL: m.oidcIssuer,
+			CACertPEM:     m.oidcCABundle,
+			OperatorNS:    operatorNS,
+			OperatorSA:    operatorSA,
+		}
+	}
+
 	// Render self-init stanzas
-	initConfig, err := configbuilder.RenderSelfInitHCL(cluster)
+	initConfig, err := configbuilder.RenderSelfInitHCL(cluster, bootstrapConfig)
 	if err != nil {
 		return fmt.Errorf("failed to render self-init config.hcl for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}

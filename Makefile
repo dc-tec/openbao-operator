@@ -51,7 +51,34 @@ help: ## Display this help.
 
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	# Generate CRDs and webhooks (shared across both controllers)
+	"$(CONTROLLER_GEN)" crd webhook paths="./api/..." output:crd:artifacts:config=config/crd/bases
+	# SECURITY: Controller RBAC is manually maintained via namespace-scoped Roles created by the Provisioner.
+	# We do NOT generate Controller RBAC because:
+	# 1. The controller has NO cluster-wide permissions - it only uses namespace-scoped Roles
+	# 2. Permissions are granted dynamically per-namespace by the Provisioner in tenant namespaces
+	# 3. The controller receives permissions via RoleBindings created by the Provisioner in each tenant namespace
+	# 4. This ensures the controller cannot access resources outside of provisioned tenant namespaces
+	# The tenant Role (openbao-operator-tenant-role) is defined in internal/provisioner/rbac.go
+	# and is created by the Provisioner in each tenant namespace labeled with openbao.org/tenant=true
+	# SECURITY: Provisioner RBAC is manually maintained in config/rbac/provisioner_minimal_role.yaml.
+	# We do NOT generate Provisioner RBAC because:
+	# 1. The Provisioner uses impersonation (impersonate serviceaccounts verb), which kubebuilder cannot generate
+	# 2. The RBAC is security-critical and must be explicitly controlled
+	# 3. The Provisioner only needs: namespace watching, RBAC read access, and impersonation permission
+	# All create/update/delete operations on Roles/RoleBindings are performed via impersonation
+	# of the delegate ServiceAccount (openbao-operator-provisioner-delegate), which enforces
+	# least privilege at the API server level.
+	# Note: RoleBindings and impersonation resources are manually maintained in config/rbac/:
+	# - provisioner_minimal_role.yaml: Actual Provisioner ClusterRole (with impersonation)
+	# - provisioner_role_binding.yaml: Binds provisioner SA to provisioner ClusterRole
+	# - provisioner_delegate_clusterrole.yaml: Template role defining tenant permissions
+	# - provisioner_delegate_serviceaccount.yaml: Delegate SA for impersonation
+	# - provisioner_delegate_clusterrolebinding.yaml: Binds delegate SA to template role
+	# - provisioner_leader_election_role_binding.yaml: Binds provisioner SA to leader-election Role
+	# - leader_election_role_binding.yaml: Binds controller SA to leader-election Role
+	# - provisioner_metrics_auth_role_binding.yaml: Binds provisioner SA to metrics-auth ClusterRole
+	# - metrics_auth_role_binding.yaml: Binds controller SA to metrics-auth ClusterRole
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -130,18 +157,30 @@ update-trusted-root: ## Download/update the embedded trusted_root.json file for 
 	@go run internal/security/fetch_trusted_root.go
 
 .PHONY: build
-build: verify-trusted-root manifests generate fmt vet ## Build manager binary.
+build: verify-trusted-root manifests generate fmt vet ## Build manager binary (dispatcher for provisioner and controller).
 	go build -o bin/manager cmd/main.go
 
 .PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
+run: manifests generate fmt vet ## Run a controller from your host. Usage: make run COMMAND=provisioner or make run COMMAND=controller
+	@if [ -z "$(COMMAND)" ]; then \
+		echo "Error: COMMAND is required. Use 'make run COMMAND=provisioner' or 'make run COMMAND=controller'"; \
+		exit 1; \
+	fi
+	go run ./cmd/main.go $(COMMAND)
+
+.PHONY: run-provisioner
+run-provisioner: manifests generate fmt vet ## Run the provisioner controller from your host.
+	go run ./cmd/main.go provisioner
+
+.PHONY: run-controller
+run-controller: manifests generate fmt vet ## Run the OpenBaoCluster controller from your host.
+	go run ./cmd/main.go controller
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
-docker-build: ## Build docker image with the manager.
+docker-build: ## Build docker image with the manager (dispatcher binary for both provisioner and controller).
 	$(CONTAINER_TOOL) build -t ${IMG} .
 
 .PHONY: docker-push
@@ -172,9 +211,10 @@ docker-push-backup: ## Push docker image with the backup-executor helper.
 # - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
+# Note: The built image contains the dispatcher binary that can run as either provisioner or controller.
 PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
-docker-buildx: ## Build and push docker image for the manager for cross-platform support
+docker-buildx: ## Build and push docker image for the manager (dispatcher) for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
 	- $(CONTAINER_TOOL) buildx create --name openbao-operator-builder
@@ -184,7 +224,7 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	rm Dockerfile.cross
 
 .PHONY: build-installer
-build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
+build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployments (provisioner and controller).
 	mkdir -p dist
 	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
 	"$(KUSTOMIZE)" build config/default > dist/install.yaml
@@ -206,12 +246,12 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 	if [ -n "$$out" ]; then echo "$$out" | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -; else echo "No CRDs to delete; skipping."; fi
 
 .PHONY: deploy
-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+deploy: manifests kustomize ## Deploy both provisioner and controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
-undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+undeploy: kustomize ## Undeploy both provisioner and controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Dependencies

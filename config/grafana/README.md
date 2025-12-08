@@ -70,22 +70,12 @@ The following metrics are implemented and will display data:
   - `openbao_backup_consecutive_failures`
   - `openbao_backup_in_progress`
   - `openbao_backup_retention_deleted_total`
-
-### Planned Metrics (Not Yet Implemented)
-
-The following metrics are documented in the technical design but may not be implemented yet. Panels for these metrics will show "No data" until implemented:
-
-- **Core Metrics:**
   - `openbao_cluster_ready_replicas`
   - `openbao_cluster_phase`
   - `openbao_reconcile_duration_seconds`
   - `openbao_reconcile_errors_total`
-
-- **TLS Metrics:**
   - `openbao_tls_cert_expiry_timestamp`
   - `openbao_tls_rotation_total`
-
-If these metrics are not available, you can hide or remove the corresponding panels from the dashboard.
 
 ## Customization
 
@@ -126,7 +116,9 @@ If certain metrics show "No data", they may not be implemented yet. Refer to the
 
 ## References
 
-- [Technical Design Document](../docs/technical-design-document.md) - Section 7 (Observability & Metrics)
+- [Architecture Document](../docs/architecture.md) - Section 5 (Observability & Metrics)
 - [Prometheus Integration](../config/prometheus/) - ServiceMonitor configuration
 - [Grafana Dashboard Documentation](https://grafana.com/docs/grafana/latest/dashboards/)
+
+
 

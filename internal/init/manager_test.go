@@ -14,6 +14,98 @@ import (
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 )
 
+func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
+	tests := []struct {
+		name            string
+		podReady        bool
+		wantInitialized bool
+		wantSelfInit    bool
+	}{
+		{
+			name:            "pod not ready does not mark initialized",
+			podReady:        false,
+			wantInitialized: false,
+			wantSelfInit:    false,
+		},
+		{
+			name:            "pod ready marks initialized",
+			podReady:        true,
+			wantInitialized: true,
+			wantSelfInit:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster",
+					Namespace: "default",
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+					},
+				},
+			}
+
+			readyStatus := corev1.ConditionFalse
+			if tt.podReady {
+				readyStatus = corev1.ConditionTrue
+			}
+
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-0",
+					Namespace: "default",
+					Labels: map[string]string{
+						"app.kubernetes.io/instance":   "cluster",
+						"app.kubernetes.io/name":       "openbao",
+						"app.kubernetes.io/managed-by": "openbao-operator",
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name: "openbao",
+							State: corev1.ContainerState{
+								Running: &corev1.ContainerStateRunning{
+									StartedAt: metav1.Now(),
+								},
+							},
+						},
+					},
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodReady,
+							Status: readyStatus,
+						},
+					},
+				},
+			}
+
+			clientset := kubernetesfake.NewSimpleClientset(pod)
+			manager := &Manager{
+				config:    &rest.Config{},
+				clientset: clientset,
+			}
+
+			if err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
+				t.Fatalf("Reconcile() error = %v, want no error", err)
+			}
+
+			if cluster.Status.Initialized != tt.wantInitialized {
+				t.Fatalf("Status.Initialized = %t, want %t", cluster.Status.Initialized, tt.wantInitialized)
+			}
+
+			if cluster.Status.SelfInitialized != tt.wantSelfInit {
+				t.Fatalf("Status.SelfInitialized = %t, want %t", cluster.Status.SelfInitialized, tt.wantSelfInit)
+			}
+		})
+	}
+}
+
 func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 	tests := []struct {
 		name           string

@@ -160,6 +160,20 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 		{Name: "BACKUP_USE_PATH_STYLE", Value: fmt.Sprintf("%t", cluster.Spec.Backup.Target.UsePathStyle)},
 	}
 
+	// Add S3 upload configuration if specified
+	if cluster.Spec.Backup.Target.PartSize > 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  "BACKUP_PART_SIZE",
+			Value: fmt.Sprintf("%d", cluster.Spec.Backup.Target.PartSize),
+		})
+	}
+	if cluster.Spec.Backup.Target.Concurrency > 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  "BACKUP_CONCURRENCY",
+			Value: fmt.Sprintf("%d", cluster.Spec.Backup.Target.Concurrency),
+		})
+	}
+
 	// Add credentials secret reference if provided
 	if cluster.Spec.Backup.Target.CredentialsSecretRef != nil {
 		env = append(env, corev1.EnvVar{
@@ -174,17 +188,17 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 		}
 	}
 
-	// Add Kubernetes Auth configuration (preferred method)
-	// The executor will use Kubernetes Auth if BACKUP_KUBERNETES_AUTH_ROLE is set
-	// and the ServiceAccount token is available
-	if cluster.Spec.Backup.KubernetesAuthRole != "" {
+	// Add JWT Auth configuration (preferred method)
+	// The executor will use JWT Auth if BACKUP_JWT_AUTH_ROLE is set
+	// and the JWT token is available from the projected volume
+	if cluster.Spec.Backup.JWTAuthRole != "" {
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_KUBERNETES_AUTH_ROLE",
-			Value: cluster.Spec.Backup.KubernetesAuthRole,
+			Name:  "BACKUP_JWT_AUTH_ROLE",
+			Value: cluster.Spec.Backup.JWTAuthRole,
 		})
 		env = append(env, corev1.EnvVar{
 			Name:  "BACKUP_AUTH_METHOD",
-			Value: "kubernetes",
+			Value: "jwt",
 		})
 	}
 
@@ -200,8 +214,8 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 				Value: cluster.Spec.Backup.TokenSecretRef.Namespace,
 			})
 		}
-		// Only set auth method to token if Kubernetes Auth is not configured
-		if cluster.Spec.Backup.KubernetesAuthRole == "" {
+		// Only set auth method to token if JWT Auth is not configured
+		if cluster.Spec.Backup.JWTAuthRole == "" {
 			env = append(env, corev1.EnvVar{
 				Name:  "BACKUP_AUTH_METHOD",
 				Value: "token",
@@ -303,7 +317,16 @@ func buildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster) []corev
 		})
 	}
 
-	// Mount token secret if provided (fallback method when Kubernetes Auth is not used)
+	// Mount JWT token from projected volume (preferred method)
+	if cluster.Spec.Backup.JWTAuthRole != "" {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      "openbao-token",
+			MountPath: "/var/run/secrets/tokens",
+			ReadOnly:  true,
+		})
+	}
+
+	// Mount token secret if provided (fallback method when JWT Auth is not used)
 	if cluster.Spec.Backup.TokenSecretRef != nil {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      "backup-token",
@@ -346,7 +369,27 @@ func buildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 		})
 	}
 
-	// Token secret (fallback method when Kubernetes Auth is not used)
+	// JWT token from projected volume (preferred method)
+	if cluster.Spec.Backup.JWTAuthRole != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "openbao-token",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{
+						{
+							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+								Path:              "openbao-token",
+								ExpirationSeconds: ptr.To(int64(3600)),
+								Audience:          "openbao-internal",
+							},
+						},
+					},
+				},
+			},
+		})
+	}
+
+	// Token secret (fallback method when JWT Auth is not used)
 	// Note: Secret must be in the same namespace as the Job Pod
 	if cluster.Spec.Backup.TokenSecretRef != nil {
 		secretName := cluster.Spec.Backup.TokenSecretRef.Name

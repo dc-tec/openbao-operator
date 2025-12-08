@@ -19,7 +19,27 @@ import (
 func newTestClient(t *testing.T) client.Client {
 	t.Helper()
 
-	return fake.NewClientBuilder().WithScheme(testScheme).Build()
+	// Create the Kubernetes service that NetworkPolicy detection requires
+	kubernetesService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kubernetes",
+			Namespace: "default",
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "10.43.0.1", // Used to derive service network CIDR (10.43.0.0/16)
+			Ports: []corev1.ServicePort{
+				{
+					Name: "https",
+					Port: 443,
+				},
+			},
+		},
+	}
+
+	return fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(kubernetesService).
+		Build()
 }
 
 func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
@@ -46,14 +66,38 @@ func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 	}
 }
 
+// createTLSSecretForTest creates a minimal TLS server secret for testing.
+// This is needed because ensureStatefulSet now checks for prerequisite resources.
+func createTLSSecretForTest(t *testing.T, client client.Client, cluster *openbaov1alpha1.OpenBaoCluster) {
+	t.Helper()
+	secretName := tlsServerSecretName(cluster)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{
+			"tls.crt": []byte("test-cert"),
+			"tls.key": []byte("test-key"),
+			"ca.crt":  []byte("test-ca"),
+		},
+	}
+	if err := client.Create(context.Background(), secret); err != nil {
+		t.Fatalf("failed to create TLS secret for test: %v", err)
+	}
+}
+
 // Integration tests that verify the full Reconcile and Cleanup flows
 
 func TestReconcileCreatesAllResources(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-full", "default")
 	cluster.Status.Initialized = true
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -144,9 +188,10 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 			t.Parallel()
 
 			k8sClient := newTestClient(t)
-			manager := NewManager(k8sClient, testScheme)
+			manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 			cluster := newMinimalCluster("infra-delete", "default")
+			createTLSSecretForTest(t, k8sClient, cluster)
 
 			ctx := context.Background()
 
@@ -194,10 +239,11 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 
 func TestCleanupDeletesAllResources(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-cleanup", "default")
 	cluster.Status.Initialized = true
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -275,7 +321,7 @@ func TestCleanupDeletesAllResources(t *testing.T) {
 // sharing of Secrets, ConfigMaps, StatefulSets, and Services (FR-MT-05).
 func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 	ctx := context.Background()
 
 	// Create two clusters with different names in the same namespace
@@ -283,6 +329,8 @@ func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 	cluster1.Status.Initialized = true
 	cluster2 := newMinimalCluster("tenant-beta", "shared-ns")
 	cluster2.Status.Initialized = true
+	createTLSSecretForTest(t, k8sClient, cluster1)
+	createTLSSecretForTest(t, k8sClient, cluster2)
 
 	// Reconcile both clusters
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster1, ""); err != nil {
@@ -351,7 +399,7 @@ func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 // namespace and that clusters in different namespaces are isolated (FR-MT-01, FR-MT-02).
 func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 	ctx := context.Background()
 
 	// Create two clusters with the same name but in different namespaces
@@ -359,6 +407,8 @@ func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 	cluster1.Status.Initialized = true
 	cluster2 := newMinimalCluster("same-cluster-name", "namespace-b")
 	cluster2.Status.Initialized = true
+	createTLSSecretForTest(t, k8sClient, cluster1)
+	createTLSSecretForTest(t, k8sClient, cluster2)
 
 	// Reconcile both clusters
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster1, ""); err != nil {
@@ -412,11 +462,12 @@ func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 // cluster name to enable proper identification and deletion.
 func TestMultiTenancyResourceLabeling(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 	ctx := context.Background()
 
 	cluster := newMinimalCluster("labeled-cluster", "labeling-test")
 	cluster.Status.Initialized = true
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -462,7 +513,7 @@ func TestMultiTenancyResourceLabeling(t *testing.T) {
 
 func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 	ctx := context.Background()
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
@@ -485,6 +536,8 @@ func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 	}, cluster); err != nil {
 		t.Fatalf("failed to get cluster: %v", err)
 	}
+
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)

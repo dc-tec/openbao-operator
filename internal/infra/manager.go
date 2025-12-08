@@ -25,6 +25,8 @@ const (
 	configRenderedVolumeName = "config-rendered"
 	unsealVolumeName         = "unseal"
 	tmpVolumeName            = "tmp"
+	utilsVolumeName          = "utils"
+	kubeAPIAccessVolumeName  = "kube-api-access"
 	configFileName           = "config.hcl"
 	configTemplatePath       = "/etc/bao/config/config.hcl"
 	configInitTemplatePath   = "/etc/bao/config-init/config.hcl"
@@ -42,10 +44,18 @@ const (
 	openBaoTLSMountPath      = "/etc/bao/tls"
 	openBaoUnsealMountPath   = "/etc/bao/unseal"
 	openBaoDataPath          = "/bao/data"
+	serviceAccountMountPath  = "/var/run/secrets/kubernetes.io/serviceaccount"
+	kubeRootCAConfigMapName  = "kube-root-ca.crt"
 	openBaoBinaryName        = "bao"
-	openBaoHealthPath        = "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"
-	serviceAccountSuffix     = "-serviceaccount"
-	configHashAnnotation     = "openbao.org/config-hash"
+	// openBaoLivenessPath keeps the pod alive during bootstrap. It treats
+	// "sealed" and "uninitialized" as success so kubelet does not restart the
+	// container while OpenBao is still starting or self-initializing.
+	openBaoLivenessPath = "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"
+	// openBaoReadinessPath gates readiness on being initialized and unsealed.
+	// We still accept standby to allow all nodes to become Ready after join.
+	openBaoReadinessPath = "/v1/sys/health?standbyok=true"
+	serviceAccountSuffix = "-serviceaccount"
+	configHashAnnotation = "openbao.org/config-hash"
 
 	labelAppName        = "app.kubernetes.io/name"
 	labelAppInstance    = "app.kubernetes.io/instance"
@@ -61,20 +71,32 @@ const (
 
 	// File permissions: 0440 for secrets (owner/group read-only), 0644 for configs
 	secretFileMode = int32(0440)
+	// serviceAccountFileMode matches the secret file mode for projected tokens/CA.
+	serviceAccountFileMode = int32(0440)
+	// serviceAccountTokenExpirationSeconds is the projected token TTL.
+	serviceAccountTokenExpirationSeconds = int64(3600)
 )
 
 // Manager reconciles infrastructure resources such as ConfigMaps, StatefulSets, and Services for an OpenBaoCluster.
 type Manager struct {
-	client client.Client
-	scheme *runtime.Scheme
+	client            client.Client
+	scheme            *runtime.Scheme
+	operatorNamespace string
+	oidcIssuer        string
+	oidcCABundle      string
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
-func NewManager(c client.Client, scheme *runtime.Scheme) *Manager {
+// operatorNamespace is the namespace where the operator is deployed, used for NetworkPolicy rules.
+// oidcIssuer and oidcCABundle are the OIDC configuration discovered at operator startup.
+func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcCABundle string) *Manager {
 	return &Manager{
-		client: c,
-		scheme: scheme,
+		client:            c,
+		scheme:            scheme,
+		operatorNamespace: operatorNamespace,
+		oidcIssuer:        oidcIssuer,
+		oidcCABundle:      oidcCABundle,
 	}
 }
 
@@ -155,6 +177,9 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return err
 	}
 
+	// CRITICAL: Create NetworkPolicy BEFORE StatefulSet to ensure pods boot up
+	// in a protected state. This prevents a race condition where pods could
+	// be running without network restrictions.
 	if err := m.ensureNetworkPolicy(ctx, logger, cluster); err != nil {
 		return err
 	}
@@ -176,6 +201,12 @@ func (m *Manager) Cleanup(ctx context.Context, logger logr.Logger, cluster *open
 
 	logger = logger.WithValues("deletionPolicy", string(policy))
 	logger.Info("Cleaning up infrastructure for deleted OpenBaoCluster")
+
+	// Delete pods first to ensure they're cleaned up even if StatefulSet deletion
+	// is blocked or pods become orphaned. The operator can delete pods it manages.
+	if err := m.deletePods(ctx, logger, cluster); err != nil {
+		return fmt.Errorf("failed to delete pods for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
 
 	if err := m.deleteStatefulSet(ctx, cluster); err != nil {
 		return fmt.Errorf("failed to delete StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)

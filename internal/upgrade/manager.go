@@ -41,7 +41,7 @@ const (
 
 var (
 	// ErrNoUpgradeToken indicates that no suitable upgrade token is configured.
-	ErrNoUpgradeToken = errors.New("no upgrade token configured: either spec.upgrade.kubernetesAuthRole or spec.upgrade.tokenSecretRef must be set")
+	ErrNoUpgradeToken = errors.New("no upgrade token configured: either spec.upgrade.jwtAuthRole or spec.upgrade.tokenSecretRef must be set")
 )
 
 // OpenBaoClientFactory creates OpenBao API clients for connecting to cluster pods.
@@ -123,7 +123,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		}
 	}
 
-	// Ensure upgrade ServiceAccount exists (for Kubernetes Auth)
+	// Ensure upgrade ServiceAccount exists (for JWT Auth)
 	if err := m.ensureUpgradeServiceAccount(ctx, logger, cluster); err != nil {
 		return fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
 	}
@@ -373,10 +373,18 @@ func (m *Manager) checkPodHealth(ctx context.Context, logger logr.Logger, cluste
 			healthyCount++
 		}
 
-		isLeader, err := apiClient.IsLeader(ctx)
+		isLeader, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
 		if err != nil {
-			logger.V(1).Info("Leader check failed for pod", "pod", pod.Name, "error", err)
+			logger.V(1).Info("Invalid OpenBao leader label value", "pod", pod.Name, "error", err)
 			continue
+		}
+
+		if !present {
+			isLeader, err = apiClient.IsLeader(ctx)
+			if err != nil {
+				logger.V(1).Info("Leader check failed for pod", "pod", pod.Name, "error", err)
+				continue
+			}
 		}
 
 		if isLeader {
@@ -471,15 +479,15 @@ func (m *Manager) validateBackupConfig(ctx context.Context, cluster *openbaov1al
 		return fmt.Errorf("backup configuration is required when preUpgradeSnapshot is enabled")
 	}
 
-	// Check if Kubernetes Auth is configured (preferred method)
-	hasKubernetesAuth := strings.TrimSpace(backupCfg.KubernetesAuthRole) != ""
+	// Check if JWT Auth is configured (preferred method)
+	hasJWTAuth := strings.TrimSpace(backupCfg.JWTAuthRole) != ""
 
 	// Check if static token is configured (fallback method)
 	hasTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""
 
 	// At least one authentication method must be configured
-	if !hasKubernetesAuth && !hasTokenSecret {
-		return fmt.Errorf("backup authentication is required: either kubernetesAuthRole or tokenSecretRef must be set")
+	if !hasJWTAuth && !hasTokenSecret {
+		return fmt.Errorf("backup authentication is required: either jwtAuthRole or tokenSecretRef must be set")
 	}
 
 	// If using token secret, verify it exists
@@ -605,15 +613,15 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 		}
 	}
 
-	// Add Kubernetes Auth configuration (preferred method)
-	if backupCfg.KubernetesAuthRole != "" {
+	// Add JWT Auth configuration (preferred method)
+	if backupCfg.JWTAuthRole != "" {
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_KUBERNETES_AUTH_ROLE",
-			Value: backupCfg.KubernetesAuthRole,
+			Name:  "BACKUP_JWT_AUTH_ROLE",
+			Value: backupCfg.JWTAuthRole,
 		})
 		env = append(env, corev1.EnvVar{
 			Name:  "BACKUP_AUTH_METHOD",
-			Value: "kubernetes",
+			Value: "jwt",
 		})
 	}
 
@@ -629,8 +637,8 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 				Value: backupCfg.TokenSecretRef.Namespace,
 			})
 		}
-		// Only set auth method to token if Kubernetes Auth is not configured
-		if backupCfg.KubernetesAuthRole == "" {
+		// Only set auth method to token if JWT Auth is not configured
+		if backupCfg.JWTAuthRole == "" {
 			env = append(env, corev1.EnvVar{
 				Name:  "BACKUP_AUTH_METHOD",
 				Value: "token",
@@ -870,6 +878,22 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 
 // isPodLeader checks if a specific pod is the Raft leader.
 func (m *Manager) isPodLeader(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
+	pod := &corev1.Pod{}
+	if err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      podName,
+	}, pod); err != nil {
+		return false, fmt.Errorf("failed to get pod %s/%s: %w", cluster.Namespace, podName, err)
+	}
+
+	isLeader, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+	if err != nil {
+		return false, fmt.Errorf("invalid %q label on pod %s/%s: %w", openbaoapi.LabelActive, cluster.Namespace, podName, err)
+	}
+	if present {
+		return isLeader, nil
+	}
+
 	caCert, err := m.getClusterCACert(ctx, cluster)
 	if err != nil {
 		return false, fmt.Errorf("failed to get CA certificate: %w", err)
@@ -949,12 +973,30 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 				cluster.Generation)
 			return fmt.Errorf("step-down timeout: leadership did not transfer within %v", DefaultStepDownTimeout)
 		case <-ticker.C:
-			isStillLeader, err := apiClient.IsLeader(ctx)
-			if err != nil {
-				logger.V(1).Info("Error checking leader status after step-down", "error", err)
+			pod := &corev1.Pod{}
+			if err := m.client.Get(ctx, types.NamespacedName{
+				Namespace: cluster.Namespace,
+				Name:      podName,
+			}, pod); err != nil {
+				logger.V(1).Info("Error getting pod after step-down", "error", err)
 				continue
 			}
-			if !isStillLeader {
+
+			stillLeader, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+			if err != nil {
+				logger.V(1).Info("Invalid OpenBao leader label value after step-down", "error", err)
+				continue
+			}
+
+			if !present {
+				stillLeader, err = apiClient.IsLeader(ctx)
+				if err != nil {
+					logger.V(1).Info("Error checking leader status after step-down", "error", err)
+					continue
+				}
+			}
+
+			if !stillLeader {
 				logger.Info("Leadership transferred successfully", "previousLeader", podName)
 				SetStepDownPerformed(&cluster.Status)
 				logging.LogAuditEvent(logger, "StepDownCompleted", map[string]string{
@@ -1183,8 +1225,8 @@ func (m *Manager) getClusterCACert(ctx context.Context, cluster *openbaov1alpha1
 }
 
 // getOperatorToken retrieves the authentication token for OpenBao API calls.
-// It supports Kubernetes Auth (preferred) and static token authentication.
-// Upgrade authentication must be explicitly configured via spec.upgrade.kubernetesAuthRole
+// It supports JWT Auth (preferred) and static token authentication.
+// Upgrade authentication must be explicitly configured via spec.upgrade.jwtAuthRole
 // or spec.upgrade.tokenSecretRef.
 func (m *Manager) getOperatorToken(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
 	upgradeCfg := cluster.Spec.Upgrade
@@ -1193,29 +1235,29 @@ func (m *Manager) getOperatorToken(ctx context.Context, cluster *openbaov1alpha1
 	}
 
 	// Check if upgrade auth is configured
-	hasUpgradeKubernetesAuth := strings.TrimSpace(upgradeCfg.KubernetesAuthRole) != ""
+	hasUpgradeJWTAuth := strings.TrimSpace(upgradeCfg.JWTAuthRole) != ""
 	hasUpgradeTokenSecret := upgradeCfg.TokenSecretRef != nil && strings.TrimSpace(upgradeCfg.TokenSecretRef.Name) != ""
 
-	if !hasUpgradeKubernetesAuth && !hasUpgradeTokenSecret {
+	if !hasUpgradeJWTAuth && !hasUpgradeTokenSecret {
 		return "", ErrNoUpgradeToken
 	}
 
-	// If Kubernetes Auth is configured, use it
-	if hasUpgradeKubernetesAuth {
-		kubernetesAuthRole := strings.TrimSpace(upgradeCfg.KubernetesAuthRole)
-		return m.authenticateWithKubernetesAuth(ctx, cluster, kubernetesAuthRole)
+	// If JWT Auth is configured, use it
+	if hasUpgradeJWTAuth {
+		jwtAuthRole := strings.TrimSpace(upgradeCfg.JWTAuthRole)
+		return m.authenticateWithJWTAuth(ctx, cluster, jwtAuthRole)
 	}
 
 	// Otherwise, use static token
 	return m.getTokenFromSecret(ctx, cluster, upgradeCfg.TokenSecretRef)
 }
 
-// authenticateWithKubernetesAuth authenticates to OpenBao using Kubernetes Auth.
+// authenticateWithJWTAuth authenticates to OpenBao using JWT authentication.
 // It uses the upgrade ServiceAccount token for authentication.
-func (m *Manager) authenticateWithKubernetesAuth(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, role string) (string, error) {
+func (m *Manager) authenticateWithJWTAuth(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, role string) (string, error) {
 	// Get token for the upgrade ServiceAccount
 	saName := upgradeServiceAccountName(cluster)
-	k8sToken, err := m.getServiceAccountToken(ctx, cluster.Namespace, saName)
+	jwtToken, err := m.getServiceAccountToken(ctx, cluster.Namespace, saName)
 	if err != nil {
 		return "", fmt.Errorf("failed to get upgrade ServiceAccount token: %w", err)
 	}
@@ -1255,10 +1297,10 @@ func (m *Manager) authenticateWithKubernetesAuth(ctx context.Context, cluster *o
 			continue
 		}
 
-		// Authenticate using Kubernetes Auth
-		token, err := apiClient.KubernetesAuthLogin(ctx, role, k8sToken)
+		// Authenticate using JWT Auth
+		token, err := apiClient.LoginJWT(ctx, role, jwtToken)
 		if err != nil {
-			lastErr = fmt.Errorf("failed to authenticate using Kubernetes Auth against pod %s: %w", pod.Name, err)
+			lastErr = fmt.Errorf("failed to authenticate using JWT Auth against pod %s: %w", pod.Name, err)
 			continue
 		}
 
@@ -1273,7 +1315,7 @@ func (m *Manager) authenticateWithKubernetesAuth(ctx context.Context, cluster *o
 }
 
 // ensureUpgradeServiceAccount creates or updates the ServiceAccount for upgrade operations.
-// This ServiceAccount is used for Kubernetes Auth authentication to OpenBao.
+// This ServiceAccount is used for JWT Auth authentication to OpenBao.
 func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	saName := upgradeServiceAccountName(cluster)
 

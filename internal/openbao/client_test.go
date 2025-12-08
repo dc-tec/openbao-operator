@@ -593,7 +593,7 @@ func containsError(err error, substr string) bool {
 	return strings.Contains(err.Error(), substr)
 }
 
-func TestClient_KubernetesAuthLogin(t *testing.T) {
+func TestClient_LoginJWT(t *testing.T) {
 	tests := []struct {
 		name           string
 		role           string
@@ -609,7 +609,7 @@ func TestClient_KubernetesAuthLogin(t *testing.T) {
 			role:       "backup-role",
 			jwtToken:   "eyJhbGciOiJSUzI1NiIsImtpZCI6IiJ9.test-token",
 			statusCode: http.StatusOK,
-			responseBody: KubernetesAuthLoginResponse{
+			responseBody: JWTAuthLoginResponse{
 				Auth: struct {
 					ClientToken string `json:"client_token"`
 					LeaseID     string `json:"lease_id"`
@@ -630,14 +630,14 @@ func TestClient_KubernetesAuthLogin(t *testing.T) {
 			role:           "",
 			jwtToken:       "test-token",
 			wantErr:        true,
-			wantErrMessage: "role is required",
+			wantErrMessage: "role and jwtToken are required",
 		},
 		{
 			name:           "empty JWT token",
 			role:           "backup-role",
 			jwtToken:       "",
 			wantErr:        true,
-			wantErrMessage: "JWT token is required",
+			wantErrMessage: "role and jwtToken are required",
 		},
 		{
 			name:       "authentication failed - invalid role",
@@ -666,7 +666,7 @@ func TestClient_KubernetesAuthLogin(t *testing.T) {
 			role:       "backup-role",
 			jwtToken:   "test-token",
 			statusCode: http.StatusOK,
-			responseBody: KubernetesAuthLoginResponse{
+			responseBody: JWTAuthLoginResponse{
 				Auth: struct {
 					ClientToken string `json:"client_token"`
 					LeaseID     string `json:"lease_id"`
@@ -687,8 +687,8 @@ func TestClient_KubernetesAuthLogin(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != kubernetesAuthPath {
-					t.Errorf("unexpected path: %s", r.URL.Path)
+				if r.URL.Path != jwtAuthPath {
+					t.Errorf("unexpected path: %s, want %s", r.URL.Path, jwtAuthPath)
 				}
 				if r.Method != http.MethodPost {
 					t.Errorf("unexpected method: %s", r.Method)
@@ -728,21 +728,21 @@ func TestClient_KubernetesAuthLogin(t *testing.T) {
 				t.Fatalf("failed to create client: %v", err)
 			}
 
-			token, err := client.KubernetesAuthLogin(context.Background(), tt.role, tt.jwtToken)
+			token, err := client.LoginJWT(context.Background(), tt.role, tt.jwtToken)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("KubernetesAuthLogin() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("LoginJWT() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if tt.wantErr {
 				if tt.wantErrMessage != "" && !containsError(err, tt.wantErrMessage) {
-					t.Errorf("KubernetesAuthLogin() error = %v, want message containing %q", err, tt.wantErrMessage)
+					t.Errorf("LoginJWT() error = %v, want message containing %q", err, tt.wantErrMessage)
 				}
 				return
 			}
 
 			if token != tt.wantToken {
-				t.Errorf("KubernetesAuthLogin() token = %q, want %q", token, tt.wantToken)
+				t.Errorf("LoginJWT() token = %q, want %q", token, tt.wantToken)
 			}
 		})
 	}

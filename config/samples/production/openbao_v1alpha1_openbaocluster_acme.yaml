@@ -1,0 +1,131 @@
+# OpenBaoCluster with ACME TLS (Native OpenBao ACME Client)
+#
+# This example demonstrates using OpenBao's native ACME client for automatic
+# certificate management via the ACME protocol (e.g., Let's Encrypt).
+#
+# Key Characteristics of ACME Mode:
+# - No TLS Secrets created or mounted (certificates managed entirely by OpenBao)
+# - No TLS reload wrapper needed (ShareProcessNamespace disabled)
+# - Automatic certificate acquisition and rotation via ACME protocol
+# - Zero trust: operator never possesses private keys
+# - Compatible with Hardened security profile
+#
+# Prerequisites:
+# - OpenBao v2.4.0 or later (ACME support)
+# - Valid domain name with DNS pointing to the cluster
+# - Network access to ACME directory URL (e.g., Let's Encrypt)
+# - For internal networks, DNS challenges may be required instead of HTTP challenges
+#
+# See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-acme
+spec:
+  # Hardened profile is compatible with ACME mode
+  profile: Hardened
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  # ACME TLS mode - OpenBao manages certificates automatically
+  tls:
+    enabled: true
+    mode: ACME
+    acme:
+      # ACME directory URL (Let's Encrypt production)
+      directoryURL: "https://acme-v02.api.letsencrypt.org/directory"
+      # Domain name for which to obtain the certificate
+      domain: "openbao.example.com"
+      # Optional: Email address for CA notifications about certificate expiration
+      email: "admin@example.com"
+      # Note: For internal networks, you may need to use DNS challenges.
+      # See OpenBao's ACME documentation for advanced configuration options.
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # External KMS auto-unseal (required for Hardened profile)
+  unseal:
+    type: awskms
+    options:
+      region: us-east-1
+      kms_key_id: alias/openbao-unseal
+      # Optional: If not using IRSA (IAM Roles for Service Accounts)
+      # credentialsSecretRef:
+      #   name: aws-kms-credentials
+      #   namespace: openbaocluster-acme
+  # Self-initialization (required for Hardened profile)
+  selfInit:
+    enabled: true
+    requests:
+      # Enable file audit logging
+      - name: enable-file-audit
+        operation: update
+        path: sys/audit/file
+        data:
+          type: file
+          options:
+            file_path: /var/log/openbao/audit.log
+            format: json
+      # JWT authentication is automatically bootstrapped by the Hardened profile
+      # Backup and upgrade policies/roles are also automatically created when
+      # spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are configured
+      # Create an admin policy
+      - name: create-admin-policy
+        operation: update
+        path: sys/policies/acl/admin
+        data:
+          policy: |
+            path "*" {
+              capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+            }
+  # Image verification for supply chain security
+  imageVerification:
+    enabled: true
+    issuer: "https://token.actions.githubusercontent.com"
+    subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4"
+    # PEM-encoded Cosign public key for signature verification.
+    # Download the official OpenBao public key from: https://openbao.org/docs/install/#cosign-and-rekor
+    # publicKey: |
+    #   -----BEGIN PUBLIC KEY-----
+    #   MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
+    #   -----END PUBLIC KEY-----
+    failurePolicy: Block
+  # Scheduled backups with JWT Auth
+  backup:
+    schedule: "0 3 * * *" # Daily at 3 AM
+    executorImage: "openbao/bao-backup:latest"
+    target:
+      endpoint: "https://s3.amazonaws.com"
+      bucket: "openbao-backups"
+      pathPrefix: "clusters/openbaocluster-acme"
+      credentialsSecretRef:
+        name: s3-backup-credentials
+        namespace: openbaocluster-acme
+    jwtAuthRole: backup
+    retention:
+      maxCount: 7
+      maxAge: "168h" # 7 days
+  # Upgrade configuration with JWT Auth
+  upgrade:
+    jwtAuthRole: upgrade
+    preUpgradeSnapshot: true
+  # Optional: External access via Ingress or Gateway API
+  # The domain specified in tls.acme.domain will be used for routing
+  ingress:
+    enabled: true
+    host: "openbao.example.com"
+    path: "/"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+---
+# Note: When using ACME mode:
+# - No TLS Secrets need to be created manually
+# - OpenBao handles certificate acquisition and rotation automatically
+# - The operator creates a CA Secret (<cluster-name>-tls-ca) for cluster TLS
+#   communication, but this is separate from the ACME-managed server certificate
+# - For external access, configure Ingress or Gateway API to route to the cluster
+# - Ensure DNS is properly configured to point to your ingress/gateway

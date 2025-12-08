@@ -93,6 +93,47 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return nil
 	}
 
+	initializedLabel, hasInitializedLabel, err := openbao.ParseBoolLabel(pod.Labels, openbao.LabelInitialized)
+	if err != nil {
+		logger.V(1).Info("Invalid OpenBao initialized label value", "pod", pod.Name, "error", err)
+	}
+
+	sealedLabel, hasSealedLabel, err := openbao.ParseBoolLabel(pod.Labels, openbao.LabelSealed)
+	if err != nil {
+		logger.V(1).Info("Invalid OpenBao sealed label value", "pod", pod.Name, "error", err)
+	}
+
+	// Prefer Kubernetes service registration labels when available. This avoids
+	// direct OpenBao API calls from the operator and matches the cluster's
+	// observed state from OpenBao itself.
+	if hasInitializedLabel && hasSealedLabel {
+		if initializedLabel && !sealedLabel {
+			logger.Info("OpenBao service registration labels indicate initialized and unsealed; marking cluster as initialized", "pod", pod.Name)
+			cluster.Status.Initialized = true
+			if selfInitEnabled {
+				cluster.Status.SelfInitialized = true
+			}
+			return nil
+		}
+	}
+
+	// When self-initialization is enabled, the operator does not (and in hardened
+	// deployments often cannot) call the OpenBao API directly. Instead, we treat
+	// pod readiness as the signal that OpenBao has finished self-initializing and
+	// is unsealed. The infra manager's readiness probe is configured to only pass
+	// once OpenBao is initialized and unsealed.
+	if selfInitEnabled {
+		if isPodReady(pod) {
+			logger.Info("OpenBao pod is Ready; marking cluster as initialized", "pod", pod.Name)
+			cluster.Status.Initialized = true
+			cluster.Status.SelfInitialized = true
+			return nil
+		}
+
+		logger.Info("Self-initialization is enabled; waiting for pod to become Ready", "pod", pod.Name)
+		return nil
+	}
+
 	// Check if cluster is already initialized using the HTTP health endpoint.
 	initialized, err := m.checkInitialized(ctx, logger, cluster)
 	if err != nil {
@@ -107,13 +148,6 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		if selfInitEnabled {
 			cluster.Status.SelfInitialized = true
 		}
-		return nil
-	}
-
-	// If self-initialization is enabled, we only monitor for initialization; we don't call bao operator init.
-	// OpenBao will initialize itself using the initialize stanzas in config.hcl.
-	if selfInitEnabled {
-		logger.Info("Self-initialization is enabled; waiting for OpenBao to self-initialize", "pod", pod.Name)
 		return nil
 	}
 
@@ -150,6 +184,20 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	})
 
 	return nil
+}
+
+func isPodReady(pod *corev1.Pod) bool {
+	if pod == nil {
+		return false
+	}
+
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady {
+			return condition.Status == corev1.ConditionTrue
+		}
+	}
+
+	return false
 }
 
 // findFirstPod finds the first pod (pod-0) for the given cluster.

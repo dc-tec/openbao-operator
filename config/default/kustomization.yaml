@@ -25,9 +25,10 @@ resources:
   - ../certmanager
   # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
   #- ../prometheus
-  # [METRICS] Expose the controller manager metrics service.
-  # To disable metrics, comment out the following line (the metrics service won't be needed)
-  - metrics_service.yaml
+  # [METRICS] Expose the metrics services for both provisioner and controller.
+  # To disable metrics, comment out the following lines (the metrics services won't be needed)
+  - provisioner_metrics_service.yaml
+  - controller_metrics_service.yaml
 # [NETWORK POLICY] Protect the /metrics endpoint and Webhook Server with NetworkPolicy.
 # Only Pod(s) running a namespace labeled with 'metrics: enabled' will be able to gather the metrics.
 # Only CR(s) which requires webhooks and are applied on namespaces labeled with 'webhooks: enabled' will
@@ -63,6 +64,7 @@ patches:
   - path: manager_webhook_patch.yaml
     target:
       kind: Deployment
+      name: openbao-operator-controller
 
     # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER' prefix.
     # The following replacements add the cert-manager CA injection annotations.
@@ -163,6 +165,22 @@ replacements:
         options:
           delimiter: "."
           index: 1
+          create: true
+
+  # Ensure ClusterRoleBinding subject namespace matches kustomize namespace
+  # This is required because ClusterRoleBindings are cluster-scoped and kustomize
+  # doesn't automatically transform the namespace in the subject.
+  - source:
+      kind: ServiceAccount
+      name: provisioner-delegate
+      fieldPath: .metadata.namespace
+    targets:
+      - select:
+          kind: ClusterRoleBinding
+          name: openbao-operator-tenant-delegate-binding
+        fieldPaths:
+          - .subjects.[name=provisioner-delegate].namespace
+        options:
           create: true
 
   # [CERTMANAGER] Inject the CA bundle from the serving certificate into the

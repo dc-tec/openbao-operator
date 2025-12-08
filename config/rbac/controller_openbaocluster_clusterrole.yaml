@@ -1,0 +1,23 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openbao-operator-controller-openbaocluster-role
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  # Read-only access to OpenBaoCluster resources across the cluster.
+  # This is required for controller-runtime to establish a watch on the
+  # primary CRD using its shared cache. All write operations on
+  # OpenBaoCluster (spec/status/finalizers) remain namespace-scoped via
+  # tenant Roles created by the Provisioner.
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    verbs:
+      - get
+      - list
+      - watch
+

@@ -1,0 +1,4 @@
+resources:
+  - openbao_v1alpha1_openbaocluster.yaml
+  - openbao_v1alpha1_openbaocluster_selfinit.yaml
+

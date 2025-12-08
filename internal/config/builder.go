@@ -21,12 +21,20 @@ const (
 	configTLSKeyPath          = "/etc/bao/tls/tls.key"
 	configUnsealKeyPath       = "file:///etc/bao/unseal/key"
 	configUnsealKeyID         = "operator-generated-v1"
-	configListenerAddress     = "[::]:8200"
-	configListenerClusterAddr = "[::]:8201"
+	configListenerAddress     = "0.0.0.0:8200"
+	configListenerClusterAddr = "0.0.0.0:8201"
 	configMaxRequestDuration  = "90s"
 	configNodeIDTemplate      = "${HOSTNAME}"
 	autoJoinLabelKey          = "openbao.org/cluster"
 )
+
+// OperatorBootstrapConfig holds configuration for operator bootstrap.
+type OperatorBootstrapConfig struct {
+	OIDCIssuerURL string
+	CACertPEM     string
+	OperatorNS    string
+	OperatorSA    string
+}
 
 // InfrastructureDetails captures the pieces of topology information required to
 // render a complete config.hcl file.
@@ -80,10 +88,32 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	listenerBody.SetAttributeValue("address", cty.StringVal(configListenerAddress))
 	listenerBody.SetAttributeValue("cluster_address", cty.StringVal(configListenerClusterAddr))
 	listenerBody.SetAttributeValue("tls_disable", cty.NumberIntVal(0))
-	listenerBody.SetAttributeValue("tls_cert_file", cty.StringVal(configTLSCertPath))
-	listenerBody.SetAttributeValue("tls_key_file", cty.StringVal(configTLSKeyPath))
-	listenerBody.SetAttributeValue("tls_client_ca_file", cty.StringVal(configTLSCACertPath))
 	listenerBody.SetAttributeValue("max_request_duration", cty.StringVal(configMaxRequestDuration))
+
+	// Render TLS configuration based on mode
+	if cluster.Spec.TLS.Mode == openbaov1alpha1.TLSModeACME {
+		// ACME mode: OpenBao manages certificates via native ACME client
+		// Certificates are stored in-memory (or cached per tls_acme_cache_path).
+		// See: https://openbao.org/docs/rfcs/acme-tls-listeners/
+		if cluster.Spec.TLS.ACME == nil {
+			return nil, fmt.Errorf("ACME configuration is required when tls.mode is ACME")
+		}
+		acmeConfig := cluster.Spec.TLS.ACME
+
+		// ACME parameters are set directly on the listener, not in a nested block
+		// See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
+		listenerBody.SetAttributeValue("tls_acme_ca_directory", cty.StringVal(acmeConfig.DirectoryURL))
+		// tls_acme_domains is a list of domains
+		listenerBody.SetAttributeValue("tls_acme_domains", cty.ListVal([]cty.Value{cty.StringVal(acmeConfig.Domain)}))
+		if acmeConfig.Email != "" {
+			listenerBody.SetAttributeValue("tls_acme_email", cty.StringVal(acmeConfig.Email))
+		}
+	} else {
+		// OperatorManaged or External mode: use file-based TLS certificates
+		listenerBody.SetAttributeValue("tls_cert_file", cty.StringVal(configTLSCertPath))
+		listenerBody.SetAttributeValue("tls_key_file", cty.StringVal(configTLSKeyPath))
+		listenerBody.SetAttributeValue("tls_client_ca_file", cty.StringVal(configTLSCACertPath))
+	}
 
 	// 3. Seal stanza (operator-owned, but type is configurable).
 	if err := renderSealStanza(body, cluster); err != nil {
@@ -116,11 +146,28 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// This avoids certificate validation failures when new pods join the cluster.
 	commonTLSName := fmt.Sprintf("openbao-cluster-%s.local", cluster.Name)
 	retryJoinBody.SetAttributeValue("leader_tls_servername", cty.StringVal(commonTLSName))
-	retryJoinBody.SetAttributeValue("leader_ca_cert_file", cty.StringVal(configTLSCACertPath))
-	retryJoinBody.SetAttributeValue("leader_client_cert_file", cty.StringVal(configTLSCertPath))
-	retryJoinBody.SetAttributeValue("leader_client_key_file", cty.StringVal(configTLSKeyPath))
 
-	// 5. User-defined overrides as simple string attributes.
+	// TLS certificate file paths are only needed for OperatorManaged and External modes.
+	// In ACME mode, certificates are stored in-memory (or cached) and OpenBao handles
+	// cluster TLS automatically using the same ACME-obtained certificates.
+	// See: https://openbao.org/docs/rfcs/acme-tls-listeners/
+	if cluster.Spec.TLS.Mode != openbaov1alpha1.TLSModeACME {
+		retryJoinBody.SetAttributeValue("leader_ca_cert_file", cty.StringVal(configTLSCACertPath))
+		retryJoinBody.SetAttributeValue("leader_client_cert_file", cty.StringVal(configTLSCertPath))
+		retryJoinBody.SetAttributeValue("leader_client_key_file", cty.StringVal(configTLSKeyPath))
+	}
+
+	// 5. Kubernetes service registration (operator-owned).
+	// This causes OpenBao to label its own Pod with state such as:
+	// - openbao-active (leader)
+	// - openbao-initialized
+	// - openbao-sealed
+	// - openbao-version
+	//
+	// The operator consumes these labels to reduce reliance on direct OpenBao API access.
+	body.AppendNewBlock("service_registration", []string{"kubernetes"})
+
+	// 6. User-defined overrides as simple string attributes.
 	// Only keys that pass webhook validation (allowlist) will reach here.
 	// The webhook ensures only valid OpenBao configuration parameters are allowed.
 	if len(cluster.Spec.Config) > 0 {
@@ -142,15 +189,15 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 		}
 	}
 
-	// 6. Render audit devices if configured
+	// 7. Render audit devices if configured
 	if err := renderAuditDevices(body, cluster.Spec.Audit); err != nil {
 		return nil, fmt.Errorf("failed to render audit devices: %w", err)
 	}
 
-	// 7. Render plugins if configured
+	// 8. Render plugins if configured
 	renderPlugins(body, cluster.Spec.Plugins)
 
-	// 8. Render telemetry if configured
+	// 9. Render telemetry if configured
 	renderTelemetry(body, cluster.Spec.Telemetry)
 
 	// Note: Self-initialization stanzas are rendered separately via RenderSelfInitHCL
@@ -159,20 +206,199 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	return file.Bytes(), nil
 }
 
-// RenderSelfInitHCL renders only the self-initialization stanzas as a separate
-// HCL configuration. This is stored in a separate ConfigMap that is only mounted
-// for pod-0, since only the first pod needs to execute initialization requests.
-func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster) ([]byte, error) {
-	if cluster.Spec.SelfInit == nil || !cluster.Spec.SelfInit.Enabled {
-		// Return empty config if self-init is not enabled
-		return []byte{}, nil
-	}
-
+// RenderOperatorBootstrapHCL renders the operator bootstrap initialize block.
+// This block configures JWT auth in OpenBao for operator authentication.
+func RenderOperatorBootstrapHCL(config OperatorBootstrapConfig) ([]byte, error) {
 	file := hclwrite.NewEmptyFile()
 	body := file.Body()
 
-	if err := renderSelfInitStanzas(body, cluster.Spec.SelfInit.Requests); err != nil {
-		return nil, fmt.Errorf("failed to render self-init stanzas: %w", err)
+	// Create initialize block
+	initBlock := body.AppendNewBlock("initialize", []string{"operator-bootstrap"})
+	initBody := initBlock.Body()
+
+	// 1. Enable JWT Auth
+	enableReq := initBody.AppendNewBlock("request", []string{"enable-jwt-auth"})
+	enableReqBody := enableReq.Body()
+	enableReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+	enableReqBody.SetAttributeValue("path", cty.StringVal("sys/auth/jwt"))
+	enableReqData := enableReqBody.AppendNewBlock("data", nil)
+	enableReqData.Body().SetAttributeValue("type", cty.StringVal("jwt"))
+	enableReqData.Body().SetAttributeValue("description", cty.StringVal("Auth method for OpenBao Operator"))
+
+	// 2. Configure OIDC
+	configReq := initBody.AppendNewBlock("request", []string{"config-jwt-auth"})
+	configReqBody := configReq.Body()
+	configReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+	configReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/config"))
+	configReqData := configReqBody.AppendNewBlock("data", nil)
+	configReqData.Body().SetAttributeValue("oidc_discovery_url", cty.StringVal(config.OIDCIssuerURL))
+	configReqData.Body().SetAttributeValue("oidc_discovery_ca_pem", cty.StringVal(config.CACertPEM))
+	configReqData.Body().SetAttributeValue("bound_issuer", cty.StringVal(config.OIDCIssuerURL))
+
+	// 3. Create Policy
+	policyReq := initBody.AppendNewBlock("request", []string{"create-operator-policy"})
+	policyReqBody := policyReq.Body()
+	policyReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+	policyReqBody.SetAttributeValue("path", cty.StringVal("sys/policies/acl/openbao-operator"))
+	policyReqData := policyReqBody.AppendNewBlock("data", nil)
+	policy := `path "sys/health" { capabilities = ["read"] }
+path "sys/step-down" { capabilities = ["update"] }
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
+	policyReqData.Body().SetAttributeValue("policy", cty.StringVal(policy))
+
+	// 4. Bind Role
+	roleReq := initBody.AppendNewBlock("request", []string{"create-operator-role"})
+	roleReqBody := roleReq.Body()
+	roleReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+	roleReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/role/openbao-operator"))
+	roleReqData := roleReqBody.AppendNewBlock("data", nil)
+	roleReqData.Body().SetAttributeValue("role_type", cty.StringVal("jwt"))
+	roleReqData.Body().SetAttributeValue("bound_audiences", cty.ListVal([]cty.Value{cty.StringVal("openbao-internal")}))
+
+	// Bound claims
+	boundClaims := map[string]cty.Value{
+		"kubernetes.io/namespace":           cty.StringVal(config.OperatorNS),
+		"kubernetes.io/serviceaccount/name": cty.StringVal(config.OperatorSA),
+	}
+	roleReqData.Body().SetAttributeValue("bound_claims", cty.ObjectVal(boundClaims))
+	roleReqData.Body().SetAttributeValue("token_policies", cty.ListVal([]cty.Value{cty.StringVal("openbao-operator")}))
+	roleReqData.Body().SetAttributeValue("ttl", cty.StringVal("1h"))
+
+	return file.Bytes(), nil
+}
+
+// RenderSelfInitHCL renders only the self-initialization stanzas as a separate
+// HCL configuration. This is stored in a separate ConfigMap that is only mounted
+// for pod-0, since only the first pod needs to execute initialization requests.
+// If bootstrapConfig is provided, it will be merged with user requests.
+func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig *OperatorBootstrapConfig) ([]byte, error) {
+	file := hclwrite.NewEmptyFile()
+	body := file.Body()
+
+	// If bootstrap config provided, render it first
+	if bootstrapConfig != nil {
+		// Render bootstrap blocks directly into the body
+		initBlock := body.AppendNewBlock("initialize", []string{"operator-bootstrap"})
+		initBody := initBlock.Body()
+
+		// 1. Enable JWT Auth
+		enableReq := initBody.AppendNewBlock("request", []string{"enable-jwt-auth"})
+		enableReqBody := enableReq.Body()
+		enableReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+		enableReqBody.SetAttributeValue("path", cty.StringVal("sys/auth/jwt"))
+		enableReqData := enableReqBody.AppendNewBlock("data", nil)
+		enableReqData.Body().SetAttributeValue("type", cty.StringVal("jwt"))
+		enableReqData.Body().SetAttributeValue("description", cty.StringVal("Auth method for OpenBao Operator"))
+
+		// 2. Configure OIDC
+		configReq := initBody.AppendNewBlock("request", []string{"config-jwt-auth"})
+		configReqBody := configReq.Body()
+		configReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+		configReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/config"))
+		configReqData := configReqBody.AppendNewBlock("data", nil)
+		configReqData.Body().SetAttributeValue("oidc_discovery_url", cty.StringVal(bootstrapConfig.OIDCIssuerURL))
+		configReqData.Body().SetAttributeValue("oidc_discovery_ca_pem", cty.StringVal(bootstrapConfig.CACertPEM))
+		configReqData.Body().SetAttributeValue("bound_issuer", cty.StringVal(bootstrapConfig.OIDCIssuerURL))
+
+		// 3. Create Policy
+		policyReq := initBody.AppendNewBlock("request", []string{"create-operator-policy"})
+		policyReqBody := policyReq.Body()
+		policyReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+		policyReqBody.SetAttributeValue("path", cty.StringVal("sys/policies/acl/openbao-operator"))
+		policyReqData := policyReqBody.AppendNewBlock("data", nil)
+		policy := `path "sys/health" { capabilities = ["read"] }
+path "sys/step-down" { capabilities = ["update"] }
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
+		policyReqData.Body().SetAttributeValue("policy", cty.StringVal(policy))
+
+		// 4. Bind Role
+		roleReq := initBody.AppendNewBlock("request", []string{"create-operator-role"})
+		roleReqBody := roleReq.Body()
+		roleReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+		roleReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/role/openbao-operator"))
+		roleReqData := roleReqBody.AppendNewBlock("data", nil)
+		roleReqData.Body().SetAttributeValue("role_type", cty.StringVal("jwt"))
+		roleReqData.Body().SetAttributeValue("bound_audiences", cty.ListVal([]cty.Value{cty.StringVal("openbao-internal")}))
+
+		// Bound claims
+		boundClaims := map[string]cty.Value{
+			"kubernetes.io/namespace":           cty.StringVal(bootstrapConfig.OperatorNS),
+			"kubernetes.io/serviceaccount/name": cty.StringVal(bootstrapConfig.OperatorSA),
+		}
+		roleReqData.Body().SetAttributeValue("bound_claims", cty.ObjectVal(boundClaims))
+		roleReqData.Body().SetAttributeValue("token_policies", cty.ListVal([]cty.Value{cty.StringVal("openbao-operator")}))
+		roleReqData.Body().SetAttributeValue("ttl", cty.StringVal("1h"))
+
+		// 5. Auto-create backup policy and role if backup is configured with JWT Auth (opt-in)
+		// Only creates policies/roles when backup is explicitly configured AND uses JWTAuthRole.
+		// If backup is not configured or uses TokenSecretRef instead, nothing is created.
+		if cluster.Spec.Backup != nil && cluster.Spec.Backup.JWTAuthRole != "" {
+			// Create backup policy
+			backupPolicyReq := initBody.AppendNewBlock("request", []string{"create-backup-policy"})
+			backupPolicyReqBody := backupPolicyReq.Body()
+			backupPolicyReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+			backupPolicyReqBody.SetAttributeValue("path", cty.StringVal("sys/policies/acl/backup"))
+			backupPolicyReqData := backupPolicyReqBody.AppendNewBlock("data", nil)
+			backupPolicy := `path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
+			backupPolicyReqData.Body().SetAttributeValue("policy", cty.StringVal(backupPolicy))
+
+			// Create backup JWT role
+			backupRoleReq := initBody.AppendNewBlock("request", []string{"create-backup-jwt-role"})
+			backupRoleReqBody := backupRoleReq.Body()
+			backupRoleReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+			backupRoleReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/role/backup"))
+			backupRoleReqData := backupRoleReqBody.AppendNewBlock("data", nil)
+			backupRoleReqData.Body().SetAttributeValue("role_type", cty.StringVal("jwt"))
+			backupRoleReqData.Body().SetAttributeValue("bound_audiences", cty.ListVal([]cty.Value{cty.StringVal("openbao-internal")}))
+
+			backupBoundClaims := map[string]cty.Value{
+				"kubernetes.io/namespace":           cty.StringVal(cluster.Namespace),
+				"kubernetes.io/serviceaccount/name": cty.StringVal(fmt.Sprintf("%s-backup-serviceaccount", cluster.Name)),
+			}
+			backupRoleReqData.Body().SetAttributeValue("bound_claims", cty.ObjectVal(backupBoundClaims))
+			backupRoleReqData.Body().SetAttributeValue("token_policies", cty.ListVal([]cty.Value{cty.StringVal("backup")}))
+			backupRoleReqData.Body().SetAttributeValue("ttl", cty.StringVal("1h"))
+		}
+
+		// 6. Auto-create upgrade policy and role if upgrade is configured with JWT Auth (opt-in)
+		// Only creates policies/roles when upgrade is explicitly configured AND uses JWTAuthRole.
+		// If upgrade is not configured or uses TokenSecretRef instead, nothing is created.
+		if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.JWTAuthRole != "" {
+			// Create upgrade policy
+			upgradePolicyReq := initBody.AppendNewBlock("request", []string{"create-upgrade-policy"})
+			upgradePolicyReqBody := upgradePolicyReq.Body()
+			upgradePolicyReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+			upgradePolicyReqBody.SetAttributeValue("path", cty.StringVal("sys/policies/acl/upgrade"))
+			upgradePolicyReqData := upgradePolicyReqBody.AppendNewBlock("data", nil)
+			upgradePolicy := `path "sys/health" { capabilities = ["read"] }
+path "sys/step-down" { capabilities = ["update"] }
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
+			upgradePolicyReqData.Body().SetAttributeValue("policy", cty.StringVal(upgradePolicy))
+
+			// Create upgrade JWT role
+			upgradeRoleReq := initBody.AppendNewBlock("request", []string{"create-upgrade-jwt-role"})
+			upgradeRoleReqBody := upgradeRoleReq.Body()
+			upgradeRoleReqBody.SetAttributeValue("operation", cty.StringVal("update"))
+			upgradeRoleReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/role/upgrade"))
+			upgradeRoleReqData := upgradeRoleReqBody.AppendNewBlock("data", nil)
+			upgradeRoleReqData.Body().SetAttributeValue("role_type", cty.StringVal("jwt"))
+			upgradeRoleReqData.Body().SetAttributeValue("bound_audiences", cty.ListVal([]cty.Value{cty.StringVal("openbao-internal")}))
+
+			upgradeBoundClaims := map[string]cty.Value{
+				"kubernetes.io/namespace":           cty.StringVal(cluster.Namespace),
+				"kubernetes.io/serviceaccount/name": cty.StringVal(fmt.Sprintf("%s-upgrade-serviceaccount", cluster.Name)),
+			}
+			upgradeRoleReqData.Body().SetAttributeValue("bound_claims", cty.ObjectVal(upgradeBoundClaims))
+			upgradeRoleReqData.Body().SetAttributeValue("token_policies", cty.ListVal([]cty.Value{cty.StringVal("upgrade")}))
+			upgradeRoleReqData.Body().SetAttributeValue("ttl", cty.StringVal("1h"))
+		}
+	}
+
+	// Render user self-init requests if enabled
+	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled {
+		if err := renderSelfInitStanzas(body, cluster.Spec.SelfInit.Requests); err != nil {
+			return nil, fmt.Errorf("failed to render self-init stanzas: %w", err)
+		}
 	}
 
 	return file.Bytes(), nil

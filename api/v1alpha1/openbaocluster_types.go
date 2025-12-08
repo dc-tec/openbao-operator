@@ -27,6 +27,10 @@ import (
 type DeletionPolicy string
 
 const (
+	// OpenBaoClusterFinalizer is the finalizer used to ensure cleanup logic
+	// runs before an OpenBaoCluster is fully deleted.
+	OpenBaoClusterFinalizer = "openbao.org/openbaocluster-finalizer"
+
 	// DeletionPolicyRetain keeps StatefulSets, PVCs, and external backups.
 	DeletionPolicyRetain DeletionPolicy = "Retain"
 	// DeletionPolicyDeletePVCs deletes StatefulSets and PVCs, but retains external backups.
@@ -65,10 +69,22 @@ const (
 	// ConditionEtcdEncryptionWarning indicates that etcd encryption may not be enabled,
 	// which could expose sensitive data stored in Kubernetes Secrets.
 	ConditionEtcdEncryptionWarning ConditionType = "EtcdEncryptionWarning"
+	// ConditionSecurityRisk indicates that the cluster is using a relaxed security
+	// posture (Development profile) which may not be suitable for production.
+	ConditionSecurityRisk ConditionType = "SecurityRisk"
+	// ConditionOpenBaoInitialized reflects OpenBao's own initialization state as
+	// observed via Kubernetes service registration labels on Pods.
+	ConditionOpenBaoInitialized ConditionType = "OpenBaoInitialized"
+	// ConditionOpenBaoSealed reflects OpenBao's seal state as observed via
+	// Kubernetes service registration labels on Pods.
+	ConditionOpenBaoSealed ConditionType = "OpenBaoSealed"
+	// ConditionOpenBaoLeader reflects whether a leader could be identified via
+	// Kubernetes service registration labels on Pods.
+	ConditionOpenBaoLeader ConditionType = "OpenBaoLeader"
 )
 
 // TLSMode controls who manages the certificate lifecycle.
-// +kubebuilder:validation:Enum=OperatorManaged;External
+// +kubebuilder:validation:Enum=OperatorManaged;External;ACME
 type TLSMode string
 
 const (
@@ -77,7 +93,35 @@ const (
 	// TLSModeExternal: The operator assumes Secrets are managed by an external entity (cert-manager, user, or CSI driver).
 	// The operator will mount them but NOT modify/rotate them.
 	TLSModeExternal TLSMode = "External"
+	// TLSModeACME: OpenBao uses its native ACME client to fetch certificates.
+	// No Secrets are mounted. No sidecar is injected. Best for Zero Trust.
+	TLSModeACME TLSMode = "ACME"
 )
+
+// Profile defines the security posture for an OpenBaoCluster.
+// +kubebuilder:validation:Enum=Hardened;Development
+type Profile string
+
+const (
+	// ProfileHardened enforces strict security requirements (production-ready).
+	ProfileHardened Profile = "Hardened"
+	// ProfileDevelopment allows relaxed security for development/testing.
+	ProfileDevelopment Profile = "Development"
+)
+
+// ACMEConfig configures ACME certificate management for OpenBao.
+// See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
+type ACMEConfig struct {
+	// DirectoryURL is the ACME directory URL (e.g., "https://acme-v02.api.letsencrypt.org/directory").
+	// +kubebuilder:validation:MinLength=1
+	DirectoryURL string `json:"directoryURL"`
+	// Domain is the domain name for which to obtain the certificate.
+	// +kubebuilder:validation:MinLength=1
+	Domain string `json:"domain"`
+	// Email is the email address to use for ACME registration.
+	// +optional
+	Email string `json:"email,omitempty"`
+}
 
 // TLSConfig captures TLS configuration for an OpenBaoCluster.
 type TLSConfig struct {
@@ -85,15 +129,19 @@ type TLSConfig struct {
 	// +kubebuilder:validation:Required
 	Enabled bool `json:"enabled"`
 	// Mode controls who manages the certificate lifecycle.
-	// +kubebuilder:validation:Enum=OperatorManaged;External
+	// +kubebuilder:validation:Enum=OperatorManaged;External;ACME
 	// +kubebuilder:default=OperatorManaged
 	// +optional
 	Mode TLSMode `json:"mode,omitempty"`
+	// ACME configures settings when Mode is 'ACME'.
+	// +optional
+	ACME *ACMEConfig `json:"acme,omitempty"`
 	// RotationPeriod is a duration string (for example, "720h") controlling certificate rotation.
 	// Only used when Mode is OperatorManaged.
 	// +kubebuilder:validation:MinLength=1
 	RotationPeriod string `json:"rotationPeriod"`
 	// ExtraSANs lists additional subject alternative names to include in server certificates.
+	// Only used when Mode is OperatorManaged.
 	// +optional
 	ExtraSANs []string `json:"extraSANs,omitempty"`
 }
@@ -147,16 +195,16 @@ type BackupSchedule struct {
 	Schedule string `json:"schedule"`
 	// Target is the object storage configuration for backups.
 	Target BackupTarget `json:"target"`
-	// KubernetesAuthRole is the name of the Kubernetes Auth role configured in OpenBao
-	// for backup operations. When set, the backup executor will use Kubernetes Auth
-	// (ServiceAccount token) instead of a static token. This is the preferred authentication
+	// JWTAuthRole is the name of the JWT Auth role configured in OpenBao
+	// for backup operations. When set, the backup executor will use JWT Auth
+	// (projected ServiceAccount token) instead of a static token. This is the preferred authentication
 	// method as tokens are automatically rotated by Kubernetes.
 	//
 	// The role must be configured in OpenBao and must grant the "read" capability on
 	// sys/storage/raft/snapshot. The role must bind to the backup ServiceAccount
 	// (<cluster-name>-backup-serviceaccount) in the cluster namespace.
 	// +optional
-	KubernetesAuthRole string `json:"kubernetesAuthRole,omitempty"`
+	JWTAuthRole string `json:"jwtAuthRole,omitempty"`
 	// TokenSecretRef optionally references a Secret containing an OpenBao API
 	// token to use for backup operations (fallback method).
 	//
@@ -165,7 +213,7 @@ type BackupSchedule struct {
 	// clusters (no root token Secret), this field must reference a token with
 	// permission to read sys/storage/raft/snapshot.
 	//
-	// If KubernetesAuthRole is set, this field is ignored in favor of Kubernetes Auth.
+	// If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
 	// +optional
 	TokenSecretRef *corev1.SecretReference `json:"tokenSecretRef,omitempty"`
 	// Retention defines optional backup retention policy.
@@ -190,12 +238,12 @@ type UpgradeConfig struct {
 	// will be set with Reason=PreUpgradeBackupFailed.
 	//
 	// Requires spec.backup to be configured with target, executorImage, and
-	// authentication (kubernetesAuthRole or tokenSecretRef).
+	// authentication (jwtAuthRole or tokenSecretRef).
 	// +optional
 	PreUpgradeSnapshot bool `json:"preUpgradeSnapshot,omitempty"`
-	// KubernetesAuthRole is the name of the Kubernetes Auth role configured in OpenBao
-	// for upgrade operations. When set, the upgrade manager will use Kubernetes Auth
-	// (ServiceAccount token) instead of a static token. This is the preferred authentication
+	// JWTAuthRole is the name of the JWT Auth role configured in OpenBao
+	// for upgrade operations. When set, the upgrade manager will use JWT Auth
+	// (projected ServiceAccount token) instead of a static token. This is the preferred authentication
 	// method as tokens are automatically rotated by Kubernetes.
 	//
 	// The role must be configured in OpenBao and must grant:
@@ -205,9 +253,9 @@ type UpgradeConfig struct {
 	// The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),
 	// which is automatically created by the operator.
 	//
-	// Either KubernetesAuthRole or TokenSecretRef must be set for upgrade operations.
+	// Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
 	// +optional
-	KubernetesAuthRole string `json:"kubernetesAuthRole,omitempty"`
+	JWTAuthRole string `json:"jwtAuthRole,omitempty"`
 	// TokenSecretRef optionally references a Secret containing an OpenBao API
 	// token to use for upgrade operations.
 	//
@@ -216,8 +264,8 @@ type UpgradeConfig struct {
 	// - update sys/step-down
 	// - read sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
 	//
-	// Either KubernetesAuthRole or TokenSecretRef must be set for upgrade operations.
-	// If KubernetesAuthRole is set, this field is ignored in favor of Kubernetes Auth.
+	// Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
+	// If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
 	// +optional
 	TokenSecretRef *corev1.SecretReference `json:"tokenSecretRef,omitempty"`
 }
@@ -232,6 +280,28 @@ type BackupRetention struct {
 	// Backups older than this are deleted after successful new backup upload.
 	// +optional
 	MaxAge string `json:"maxAge,omitempty"`
+}
+
+// NetworkConfig configures network-related settings for the OpenBaoCluster.
+type NetworkConfig struct {
+	// APIServerCIDR is an optional CIDR block for the Kubernetes API server.
+	// When specified, this value is used instead of auto-detection for NetworkPolicy egress rules.
+	// This is useful in restricted multi-tenant environments where the operator may not have
+	// permissions to read Services/Endpoints in the default namespace.
+	// Example: "10.43.0.0/16" for service network or "192.168.1.0/24" for control plane nodes.
+	// +optional
+	APIServerCIDR string `json:"apiServerCIDR,omitempty"`
+
+	// APIServerEndpointIPs is an optional list of Kubernetes API server endpoint IPs.
+	// When set, the operator adds least-privilege NetworkPolicy egress rules for these IPs on port 6443.
+	// This is required on some CNI implementations where egress enforcement happens on the post-NAT
+	// destination (the API server endpoint) rather than the kubernetes Service IP (10.43.0.1:443).
+	//
+	// Use this in restricted environments where the operator cannot list EndpointSlices/Endpoints in
+	// the default namespace to auto-detect endpoint IPs.
+	// Example (k3d): ["192.168.166.2"]
+	// +optional
+	APIServerEndpointIPs []string `json:"apiServerEndpointIPs,omitempty"`
 }
 
 // BackupTarget describes a generic, cloud-agnostic object storage destination.
@@ -255,6 +325,21 @@ type BackupTarget struct {
 	// +optional
 	// +kubebuilder:default=false
 	UsePathStyle bool `json:"usePathStyle,omitempty"`
+	// PartSize is the size of each part in multipart uploads (in bytes).
+	// Defaults to 10MB (10485760 bytes). Larger values may improve performance for large snapshots
+	// on fast networks, while smaller values may be better for slow or unreliable networks.
+	// +optional
+	// +kubebuilder:default=10485760
+	// +kubebuilder:validation:Minimum=5242880
+	PartSize int64 `json:"partSize,omitempty"`
+	// Concurrency is the number of concurrent parts to upload during multipart uploads.
+	// Defaults to 3. Higher values may improve throughput on fast networks but increase
+	// memory usage and may overwhelm slower storage backends.
+	// +optional
+	// +kubebuilder:default=3
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=10
+	Concurrency int32 `json:"concurrency,omitempty"`
 }
 
 // SelfInitOperation defines valid operations for self-initialization requests.
@@ -522,6 +607,9 @@ type OpenBaoClusterSpec struct {
 	// a user-managed Gateway resource.
 	// +optional
 	Gateway *GatewayConfig `json:"gateway,omitempty"`
+	// Network configures network-related settings for the cluster.
+	// +optional
+	Network *NetworkConfig `json:"network,omitempty"`
 	// InitContainer configures the init container used to render OpenBao configuration.
 	// The init container renders the final config.hcl from a template using environment
 	// variables such as HOSTNAME and POD_IP.
@@ -542,9 +630,9 @@ type OpenBaoClusterSpec struct {
 	// Upgrade configures upgrade operations.
 	//
 	// When spec.upgrade.preUpgradeSnapshot is true, if upgrade authentication is not
-	// Upgrade authentication must be explicitly configured via spec.upgrade.kubernetesAuthRole
+	// Upgrade authentication must be explicitly configured via spec.upgrade.jwtAuthRole
 	// or spec.upgrade.tokenSecretRef. The operator automatically creates an upgrade ServiceAccount
-	// (<cluster-name>-upgrade-serviceaccount) for Kubernetes Auth authentication.
+	// (<cluster-name>-upgrade-serviceaccount) for JWT Auth authentication.
 	// +optional
 	Upgrade *UpgradeConfig `json:"upgrade,omitempty"`
 	// Unseal defines the auto-unseal configuration.
@@ -554,6 +642,17 @@ type OpenBaoClusterSpec struct {
 	// ImageVerification configures supply chain security checks.
 	// +optional
 	ImageVerification *ImageVerificationConfig `json:"imageVerification,omitempty"`
+	// Profile defines the security posture for this cluster.
+	// When set to "Hardened", the operator enforces strict security requirements:
+	// - TLS must be External (cert-manager/CSI managed)
+	// - Unseal must use external KMS (no static unseal)
+	// - SelfInit must be enabled (no root token)
+	// When set to "Development", relaxed security is allowed but a security warning
+	// condition is set.
+	// +kubebuilder:validation:Enum=Hardened;Development
+	// +kubebuilder:default=Development
+	// +optional
+	Profile Profile `json:"profile,omitempty"`
 }
 
 // UpgradeProgress tracks the state of an in-progress upgrade.

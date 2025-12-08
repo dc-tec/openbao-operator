@@ -4,4 +4,4 @@ kind: Kustomization
 resources:
 - service.yaml
 - webhook.yaml
-
+- resource-lock.yaml

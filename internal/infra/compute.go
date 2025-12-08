@@ -14,13 +14,56 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 )
+
+const (
+	openBaoProbeBinary = "/utils/bao-probe"
+	openBaoProbeAddr   = "https://localhost:8200"
+	openBaoProbeCAFile = "/etc/bao/tls/ca.crt"
+
+	openBaoProbeTimeout        = "4s"
+	openBaoStartupProbeTimeout = "2s"
+)
+
+// checkStatefulSetPrerequisites verifies that all required resources exist before creating or updating the StatefulSet.
+// This prevents pods from failing to start due to missing ConfigMaps or Secrets.
+func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	// Always check for the config ConfigMap
+	configMapName := configMapName(cluster)
+	configMap := &corev1.ConfigMap{}
+	if err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      configMapName,
+	}, configMap); err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("config ConfigMap %s/%s not found; cannot create StatefulSet", cluster.Namespace, configMapName)
+		}
+		return fmt.Errorf("failed to get config ConfigMap %s/%s: %w", cluster.Namespace, configMapName, err)
+	}
+
+	// Check for TLS secret if TLS is enabled and not in ACME mode
+	// In ACME mode, OpenBao manages certificates internally, so no secret is needed
+	if cluster.Spec.TLS.Enabled && !usesACMEMode(cluster) {
+		tlsSecretName := tlsServerSecretName(cluster)
+		tlsSecret := &corev1.Secret{}
+		if err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      tlsSecretName,
+		}, tlsSecret); err != nil {
+			if apierrors.IsNotFound(err) {
+				return fmt.Errorf("TLS server Secret %s/%s not found; cannot create StatefulSet (waiting for TLS reconciliation or external provider)", cluster.Namespace, tlsSecretName)
+			}
+			return fmt.Errorf("failed to get TLS server Secret %s/%s: %w", cluster.Namespace, tlsSecretName, err)
+		}
+	}
+
+	return nil
+}
 
 // ensureStatefulSet manages the StatefulSet for the OpenBaoCluster.
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
@@ -35,6 +78,11 @@ func (m *Manager) ensureStatefulSet(ctx context.Context, logger logr.Logger, clu
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to get StatefulSet %s/%s: %w", cluster.Namespace, name, err)
+		}
+
+		// Before creating the StatefulSet, verify all prerequisites exist
+		if err := m.checkStatefulSetPrerequisites(ctx, cluster); err != nil {
+			return err
 		}
 
 		logger.Info("StatefulSet not found; creating", "statefulset", name)
@@ -74,6 +122,12 @@ func (m *Manager) ensureStatefulSet(ctx context.Context, logger logr.Logger, clu
 			"statefulset", name,
 			"currentReplicas", *currentReplicas,
 			"desiredReplicas", desiredReplicas)
+	}
+
+	// Before updating the StatefulSet, verify all prerequisites still exist
+	// This is important for External TLS mode where secrets might be deleted/recreated
+	if err := m.checkStatefulSetPrerequisites(ctx, cluster); err != nil {
+		return err
 	}
 
 	desired, buildErr := buildStatefulSet(cluster, configContent, initialized, verifiedImageDigest)
@@ -146,6 +200,10 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Conta
 			Name:      configRenderedVolumeName,
 			MountPath: renderedConfigDir,
 		},
+		{
+			Name:      utilsVolumeName,
+			MountPath: "/utils",
+		},
 	}
 
 	// If self-init is enabled, mount the self-init ConfigMap and pass the path to the init container
@@ -181,8 +239,12 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Conta
 				// Run as non-root (inherited from PodSecurityContext, but explicit here is safe)
 				RunAsNonRoot: ptr.To(true),
 			},
+			// Use bao-init-config to copy wrapper and render config (no shell needed)
 			Command: []string{"/bao-init-config"},
-			Args:    args,
+			Args: append([]string{
+				"-copy-wrapper=/bao-wrapper",
+				"-copy-probe=/bao-probe",
+			}, args...),
 			Env: []corev1.EnvVar{
 				{
 					Name: "HOSTNAME",
@@ -216,6 +278,24 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "metadata.name",
+				},
+			},
+		},
+		{
+			// Required for OpenBao Kubernetes service registration.
+			Name: "BAO_K8S_POD_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.name",
+				},
+			},
+		},
+		{
+			// Required for OpenBao Kubernetes service registration.
+			Name: "BAO_K8S_NAMESPACE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.namespace",
 				},
 			},
 		},
@@ -257,15 +337,16 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 	return env
 }
 
+// usesACMEMode returns true if the cluster is configured to use ACME for TLS.
+func usesACMEMode(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return cluster.Spec.TLS.Enabled && cluster.Spec.TLS.Mode == openbaov1alpha1.TLSModeACME
+}
+
 // buildContainerVolumeMounts builds the volume mounts for the OpenBao container.
 // It conditionally includes the unseal volume mount only when using static seal.
+// It conditionally excludes the TLS volume mount when using ACME mode.
 func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, renderedConfigDir string) []corev1.VolumeMount {
 	mounts := []corev1.VolumeMount{
-		{
-			Name:      tlsVolumeName,
-			MountPath: openBaoTLSMountPath,
-			ReadOnly:  true,
-		},
 		{
 			Name:      configVolumeName,
 			MountPath: openBaoConfigMountPath,
@@ -283,6 +364,24 @@ func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, rendere
 			Name:      tmpVolumeName,
 			MountPath: "/tmp",
 		},
+	}
+
+	// Mount the ServiceAccount token only into the OpenBao container. We disable
+	// automounting at the Pod level and instead use an explicit projected volume
+	// to minimize token exposure.
+	mounts = append(mounts, corev1.VolumeMount{
+		Name:      kubeAPIAccessVolumeName,
+		MountPath: serviceAccountMountPath,
+		ReadOnly:  true,
+	})
+
+	// Only mount TLS volume when not using ACME mode (ACME stores certs in /bao/data)
+	if !usesACMEMode(cluster) {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      tlsVolumeName,
+			MountPath: openBaoTLSMountPath,
+			ReadOnly:  true,
+		})
 	}
 
 	// Only mount unseal volume when using static seal
@@ -305,7 +404,100 @@ func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, rendere
 		}
 	}
 
+	// Add utils volume mount (Read-Only for security)
+	mounts = append(mounts, corev1.VolumeMount{
+		Name:      utilsVolumeName,
+		MountPath: "/utils",
+		ReadOnly:  true,
+	})
+
 	return mounts
+}
+
+// buildContainers builds the container list for the OpenBao pod.
+// The OpenBao container uses a wrapper binary as the entrypoint that manages
+// the OpenBao process and watches for TLS certificate changes.
+func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string, renderedConfigDir string, startupProbeExec *corev1.ExecAction, livenessProbeExec *corev1.ExecAction, readinessProbeExec *corev1.ExecAction) []corev1.Container {
+	// Add utils volume mount (Read-Only for security)
+	mainVolumeMounts := buildContainerVolumeMounts(cluster, renderedConfigDir)
+
+	// Construct the wrapper command
+	// We pass the actual OpenBao command as arguments to the wrapper
+	cmd := []string{"/utils/bao-wrapper"}
+
+	// Configure wrapper args
+	args := []string{}
+
+	// If not using ACME, watch the TLS certificate
+	if !usesACMEMode(cluster) {
+		args = append(args, "-watch-file=/etc/bao/tls/tls.crt")
+	}
+
+	// Separator for the child command
+	args = append(args, "--")
+
+	// The actual OpenBao command
+	args = append(args, openBaoBinaryName, "server", fmt.Sprintf("-config=%s", getOpenBaoConfigPath(cluster)))
+
+	containers := []corev1.Container{
+		{
+			Name:  openBaoContainerName,
+			Image: getContainerImage(cluster, verifiedImageDigest),
+			SecurityContext: &corev1.SecurityContext{
+				// Prevent privilege escalation (sudo, setuid binaries)
+				AllowPrivilegeEscalation: ptr.To(false),
+				// Drop ALL capabilities. OpenBao does not need them if mlock is disabled.
+				Capabilities: &corev1.Capabilities{
+					Drop: []corev1.Capability{"ALL"},
+				},
+				// Read-only root filesystem. Attackers cannot write tools/scripts to the container disk.
+				// OpenBao writes to mounted volumes (/bao/data, /etc/bao/config, etc.) which are already mounted.
+				ReadOnlyRootFilesystem: ptr.To(true),
+			},
+			Command: cmd,
+			Args:    args,
+			Env:     buildContainerEnv(cluster),
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          "api",
+					ContainerPort: int32(openBaoContainerPort),
+					Protocol:      corev1.ProtocolTCP,
+				},
+				{
+					Name:          "cluster",
+					ContainerPort: int32(openBaoClusterPort),
+					Protocol:      corev1.ProtocolTCP,
+				},
+			},
+			VolumeMounts: mainVolumeMounts,
+			StartupProbe: &corev1.Probe{
+				ProbeHandler: corev1.ProbeHandler{
+					Exec: startupProbeExec,
+				},
+				TimeoutSeconds:   10,
+				PeriodSeconds:    5,
+				FailureThreshold: 60,
+			},
+			LivenessProbe: &corev1.Probe{
+				ProbeHandler: corev1.ProbeHandler{
+					Exec: livenessProbeExec,
+				},
+				TimeoutSeconds:   5,
+				PeriodSeconds:    10,
+				FailureThreshold: 6,
+			},
+			ReadinessProbe: &corev1.Probe{
+				ProbeHandler: corev1.ProbeHandler{
+					Exec: readinessProbeExec,
+				},
+				TimeoutSeconds:   5,
+				PeriodSeconds:    10,
+				FailureThreshold: 6,
+			},
+		},
+	}
+
+	return containers
 }
 
 // buildStatefulSet constructs a StatefulSet for the given OpenBaoCluster.
@@ -358,24 +550,38 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 		configHashAnnotation: configHash,
 	}
 
-	probeHTTPGet := &corev1.HTTPGetAction{
-		Path:   openBaoHealthPath,
-		Port:   intstr.FromInt(openBaoContainerPort),
-		Scheme: corev1.URISchemeHTTPS,
+	startupProbeExec := &corev1.ExecAction{
+		Command: []string{
+			openBaoProbeBinary,
+			"-mode=startup",
+			"-addr=" + openBaoProbeAddr,
+			"-timeout=" + openBaoStartupProbeTimeout,
+		},
+	}
+
+	livenessProbeExec := &corev1.ExecAction{
+		Command: []string{
+			openBaoProbeBinary,
+			"-mode=liveness",
+			"-addr=" + openBaoProbeAddr,
+			"-ca-file=" + openBaoProbeCAFile,
+			"-timeout=" + openBaoProbeTimeout,
+		},
+	}
+
+	readinessProbeExec := &corev1.ExecAction{
+		Command: []string{
+			openBaoProbeBinary,
+			"-mode=readiness",
+			"-addr=" + openBaoProbeAddr,
+			"-ca-file=" + openBaoProbeCAFile,
+			"-timeout=" + openBaoProbeTimeout,
+		},
 	}
 
 	renderedConfigDir := path.Dir(openBaoRenderedConfig)
 
 	volumes := []corev1.Volume{
-		{
-			Name: tlsVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  tlsServerSecretName(cluster),
-					DefaultMode: ptr.To(secretFileMode),
-				},
-			},
-		},
 		{
 			Name: configVolumeName,
 			VolumeSource: corev1.VolumeSource{
@@ -398,6 +604,66 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
+		{
+			Name: utilsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: kubeAPIAccessVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					DefaultMode: ptr.To(serviceAccountFileMode),
+					Sources: []corev1.VolumeProjection{
+						{
+							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+								Path:              "token",
+								ExpirationSeconds: ptr.To(serviceAccountTokenExpirationSeconds),
+							},
+						},
+						{
+							ConfigMap: &corev1.ConfigMapProjection{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: kubeRootCAConfigMapName,
+								},
+								Items: []corev1.KeyToPath{
+									{
+										Key:  "ca.crt",
+										Path: "ca.crt",
+									},
+								},
+							},
+						},
+						{
+							DownwardAPI: &corev1.DownwardAPIProjection{
+								Items: []corev1.DownwardAPIVolumeFile{
+									{
+										Path: "namespace",
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.namespace",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Only add TLS volume when not using ACME mode (ACME stores certs in /bao/data)
+	if !usesACMEMode(cluster) {
+		volumes = append(volumes, corev1.Volume{
+			Name: tlsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  tlsServerSecretName(cluster),
+					DefaultMode: ptr.To(secretFileMode),
+				},
+			},
+		})
 	}
 
 	// Only add unseal volume if using static seal
@@ -460,7 +726,15 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: serviceAccountName(cluster),
+					// RESTORE ISOLATION: Always false (safe default)
+					// The wrapper binary runs as PID 1 in the OpenBao container and manages
+					// the OpenBao process directly, eliminating the need for ShareProcessNamespace
+					// and the tls-reloader sidecar. This restores container isolation.
+					ShareProcessNamespace: ptr.To(false),
+					// SECURITY: Explicitly disable automount for all containers, then mount
+					// ServiceAccount token only where needed (OpenBao container for Kubernetes Auth)
+					AutomountServiceAccountToken: ptr.To(false),
+					ServiceAccountName:           serviceAccountName(cluster),
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: ptr.To(true),
 						RunAsUser:    ptr.To(openBaoUserID),
@@ -472,53 +746,8 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 						},
 					},
 					InitContainers: buildInitContainers(cluster),
-					Containers: []corev1.Container{
-						{
-							Name:  openBaoContainerName,
-							Image: getContainerImage(cluster, verifiedImageDigest),
-							SecurityContext: &corev1.SecurityContext{
-								// Prevent privilege escalation (sudo, setuid binaries)
-								AllowPrivilegeEscalation: ptr.To(false),
-								// Drop ALL capabilities. OpenBao does not need them if mlock is disabled.
-								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{"ALL"},
-								},
-								// Read-only root filesystem. Attackers cannot write tools/scripts to the container disk.
-								// OpenBao writes to mounted volumes (/bao/data, /etc/bao/config, etc.) which are already mounted.
-								ReadOnlyRootFilesystem: ptr.To(true),
-							},
-							Command: []string{
-								openBaoBinaryName,
-								"server",
-								fmt.Sprintf("-config=%s", getOpenBaoConfigPath(cluster)),
-							},
-							Env: buildContainerEnv(cluster),
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "api",
-									ContainerPort: int32(openBaoContainerPort),
-									Protocol:      corev1.ProtocolTCP,
-								},
-								{
-									Name:          "cluster",
-									ContainerPort: int32(openBaoClusterPort),
-									Protocol:      corev1.ProtocolTCP,
-								},
-							},
-							VolumeMounts: buildContainerVolumeMounts(cluster, renderedConfigDir),
-							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: probeHTTPGet,
-								},
-							},
-							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: probeHTTPGet,
-								},
-							},
-						},
-					},
-					Volumes: volumes,
+					Containers:     buildContainers(cluster, verifiedImageDigest, renderedConfigDir, startupProbeExec, livenessProbeExec, readinessProbeExec),
+					Volumes:        volumes,
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
@@ -546,6 +775,39 @@ func (m *Manager) deleteStatefulSet(ctx context.Context, cluster *openbaov1alpha
 
 	if err := m.client.Delete(ctx, statefulSet); err != nil && !apierrors.IsNotFound(err) {
 		return err
+	}
+
+	return nil
+}
+
+// deletePods removes all Pods associated with the OpenBaoCluster.
+// This ensures pods are cleaned up even if they become orphaned after StatefulSet deletion.
+func (m *Manager) deletePods(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	var podList corev1.PodList
+	if err := m.client.List(ctx, &podList,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabels(podSelectorLabels(cluster)),
+	); err != nil {
+		// If RBAC does not permit listing pods (for example, tenant Roles have
+		// been removed or were never provisioned), treat this as a best-effort
+		// condition rather than blocking finalizer removal. At this point the
+		// StatefulSet is being deleted and kubelet is allowed to delete pods via
+		// the resource lock webhook, so lingering pods will still be cleaned up.
+		if apierrors.IsForbidden(err) {
+			logger.Info("Skipping pod cleanup during deletion due to missing list permission",
+				"namespace", cluster.Namespace,
+				"cluster", cluster.Name)
+			return nil
+		}
+		return fmt.Errorf("failed to list pods for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
+
+	for i := range podList.Items {
+		pod := &podList.Items[i]
+		logger.Info("Deleting pod during cleanup", "pod", pod.Name)
+		if err := m.client.Delete(ctx, pod); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete pod %s/%s: %w", pod.Namespace, pod.Name, err)
+		}
 	}
 
 	return nil

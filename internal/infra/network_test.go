@@ -18,9 +18,10 @@ import (
 
 func TestEnsureHeadlessServiceCreatesAndUpdates(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-headless", "default")
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -44,6 +45,10 @@ func TestEnsureHeadlessServiceCreatesAndUpdates(t *testing.T) {
 		t.Fatalf("expected headless Service ClusterIP None, got %q", headless.Spec.ClusterIP)
 	}
 
+	if !headless.Spec.PublishNotReadyAddresses {
+		t.Fatalf("expected headless Service publishNotReadyAddresses to be true")
+	}
+
 	if len(headless.Spec.Ports) == 0 {
 		t.Fatalf("expected headless Service to have ports")
 	}
@@ -55,7 +60,7 @@ func TestEnsureHeadlessServiceCreatesAndUpdates(t *testing.T) {
 
 func TestEnsureExternalServiceCreatesWhenConfigured(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-external", "default")
 	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{
@@ -64,6 +69,7 @@ func TestEnsureExternalServiceCreatesWhenConfigured(t *testing.T) {
 			"service-annotation": "true",
 		},
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -94,12 +100,13 @@ func TestEnsureExternalServiceCreatesWhenConfigured(t *testing.T) {
 
 func TestEnsureExternalServiceDeletesWhenNotNeeded(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-external-delete", "default")
 	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{
 		Type: corev1.ServiceTypeLoadBalancer,
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -130,13 +137,14 @@ func TestEnsureExternalServiceDeletesWhenNotNeeded(t *testing.T) {
 
 func TestEnsureExternalServiceCreatedWhenIngressEnabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-external-ingress", "default")
 	cluster.Spec.Ingress = &openbaov1alpha1.IngressConfig{
 		Enabled: true,
 		Host:    "bao.example.com",
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -159,7 +167,7 @@ func TestEnsureExternalServiceCreatedWhenIngressEnabled(t *testing.T) {
 
 func TestEnsureExternalServiceCreatedWhenGatewayEnabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("gateway-external-svc", "gateway-ns")
 	cluster.Status.Initialized = true
@@ -170,6 +178,7 @@ func TestEnsureExternalServiceCreatedWhenGatewayEnabled(t *testing.T) {
 		},
 		Hostname: "bao.example.local",
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -192,7 +201,7 @@ func TestEnsureExternalServiceCreatedWhenGatewayEnabled(t *testing.T) {
 
 func TestEnsureIngressCreatesWhenEnabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	host := "bao.example.com"
 	cluster := newMinimalCluster("infra-network", "openbao")
@@ -204,6 +213,7 @@ func TestEnsureIngressCreatesWhenEnabled(t *testing.T) {
 			"ingress-annotation": "true",
 		},
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -238,13 +248,14 @@ func TestEnsureIngressCreatesWhenEnabled(t *testing.T) {
 
 func TestEnsureIngressDeletesWhenDisabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-ingress-disable", "default")
 	cluster.Spec.Ingress = &openbaov1alpha1.IngressConfig{
 		Enabled: true,
 		Host:    "bao.example.com",
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -273,7 +284,7 @@ func TestEnsureIngressDeletesWhenDisabled(t *testing.T) {
 
 func TestEnsureHTTPRouteCreatesWhenEnabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-httproute", "default")
 	cluster.Status.Initialized = true
@@ -286,6 +297,7 @@ func TestEnsureHTTPRouteCreatesWhenEnabled(t *testing.T) {
 		Hostname: "bao.example.local",
 		Path:     "/",
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -316,7 +328,7 @@ func TestEnsureHTTPRouteCreatesWhenEnabled(t *testing.T) {
 
 func TestEnsureHTTPRouteDeletesWhenDisabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-httproute-disable", "default")
 	cluster.Status.Initialized = true
@@ -327,6 +339,7 @@ func TestEnsureHTTPRouteDeletesWhenDisabled(t *testing.T) {
 		},
 		Hostname: "bao.example.local",
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -361,7 +374,7 @@ func TestEnsureHTTPRouteDeletesWhenDisabled(t *testing.T) {
 
 func TestEnsureGatewayCAConfigMapCreatesWhenGatewayEnabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-gateway-ca", "default")
 	cluster.Status.Initialized = true
@@ -372,6 +385,7 @@ func TestEnsureGatewayCAConfigMapCreatesWhenGatewayEnabled(t *testing.T) {
 		},
 		Hostname: "bao.example.local",
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -417,7 +431,7 @@ func TestEnsureGatewayCAConfigMapCreatesWhenGatewayEnabled(t *testing.T) {
 
 func TestEnsureGatewayCAConfigMapDeletesWhenGatewayDisabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-gateway-ca-disable", "default")
 	cluster.Status.Initialized = true
@@ -428,6 +442,7 @@ func TestEnsureGatewayCAConfigMapDeletesWhenGatewayDisabled(t *testing.T) {
 		},
 		Hostname: "bao.example.local",
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -476,7 +491,7 @@ func TestEnsureGatewayCAConfigMapDeletesWhenGatewayDisabled(t *testing.T) {
 
 func TestEnsureGatewayCAConfigMapUpdatesWhenCASecretChanges(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-gateway-ca-update", "default")
 	cluster.Status.Initialized = true
@@ -487,6 +502,7 @@ func TestEnsureGatewayCAConfigMapUpdatesWhenCASecretChanges(t *testing.T) {
 		},
 		Hostname: "bao.example.local",
 	}
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 

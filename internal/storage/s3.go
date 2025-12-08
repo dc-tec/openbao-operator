@@ -24,8 +24,10 @@ const (
 	DefaultUploadTimeout = 30 * time.Minute
 	// MultipartThreshold is the size above which multipart upload is used.
 	MultipartThreshold = 100 * 1024 * 1024 // 100 MB
-	// PartSize is the size of each part in multipart uploads.
-	PartSize = 10 * 1024 * 1024 // 10 MB
+	// DefaultPartSize is the default size of each part in multipart uploads.
+	DefaultPartSize = 10 * 1024 * 1024 // 10 MB
+	// DefaultConcurrency is the default number of concurrent parts to upload.
+	DefaultConcurrency = 3
 	// MaxListObjects is the maximum number of objects to return in a single list call.
 	MaxListObjects = 1000
 )
@@ -48,6 +50,12 @@ type S3ClientConfig struct {
 	CACert []byte
 	// UsePathStyle forces path-style addressing (required for MinIO and some S3-compatible stores).
 	UsePathStyle bool
+	// PartSize is the size of each part in multipart uploads (in bytes).
+	// If zero, DefaultPartSize (10MB) is used.
+	PartSize int64
+	// Concurrency is the number of concurrent parts to upload during multipart uploads.
+	// If zero, DefaultConcurrency (3) is used.
+	Concurrency int32
 }
 
 // S3Client implements ObjectStorage using AWS SDK v2 for S3-compatible storage.
@@ -105,9 +113,17 @@ func NewS3Client(ctx context.Context, cfg S3ClientConfig) (*S3Client, error) {
 	})
 
 	// Create uploader with multipart configuration
+	partSize := cfg.PartSize
+	if partSize == 0 {
+		partSize = DefaultPartSize
+	}
+	concurrency := cfg.Concurrency
+	if concurrency == 0 {
+		concurrency = DefaultConcurrency
+	}
 	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
-		u.PartSize = PartSize
-		u.Concurrency = 3
+		u.PartSize = partSize
+		u.Concurrency = int(concurrency)
 	})
 
 	return &S3Client{

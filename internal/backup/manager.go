@@ -32,9 +32,9 @@ const (
 )
 
 // ErrNoBackupToken indicates that no suitable backup token is configured for
-// the cluster. This occurs when neither Kubernetes Auth role nor backup token Secret
+// the cluster. This occurs when neither JWT Auth role nor backup token Secret
 // is provided, or the referenced Secret is missing.
-var ErrNoBackupToken = errors.New("no backup token configured: either kubernetesAuthRole or tokenSecretRef must be set")
+var ErrNoBackupToken = errors.New("no backup token configured: either jwtAuthRole or tokenSecretRef must be set")
 
 // Manager reconciles backup configuration and execution for an OpenBaoCluster.
 type Manager struct {
@@ -62,7 +62,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	logger = logger.WithValues("component", "backup")
 	metrics := NewMetrics(cluster.Namespace, cluster.Name)
 
-	// Ensure backup ServiceAccount exists (for Kubernetes Auth)
+	// Ensure backup ServiceAccount exists (for JWT Auth)
 	if err := m.ensureBackupServiceAccount(ctx, logger, cluster); err != nil {
 		return fmt.Errorf("failed to ensure backup ServiceAccount: %w", err)
 	}
@@ -206,21 +206,21 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 	}
 
 	// Check we have a token for backup.
-	// All clusters (both standard and self-init) must use either Kubernetes Auth
+	// All clusters (both standard and self-init) must use either JWT Auth
 	// or a backup token Secret. Root tokens are not used for security reasons.
 	backupCfg := cluster.Spec.Backup
 	if backupCfg == nil {
 		return ErrNoBackupToken
 	}
 
-	// Check if Kubernetes Auth is configured (preferred method)
-	hasKubernetesAuth := strings.TrimSpace(backupCfg.KubernetesAuthRole) != ""
+	// Check if JWT Auth is configured (preferred method)
+	hasJWTAuth := strings.TrimSpace(backupCfg.JWTAuthRole) != ""
 
 	// Check if static token is configured (fallback method)
 	hasTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""
 
 	// At least one authentication method must be configured
-	if !hasKubernetesAuth && !hasTokenSecret {
+	if !hasJWTAuth && !hasTokenSecret {
 		return ErrNoBackupToken
 	}
 
@@ -303,12 +303,16 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 
 	// Create storage client
 	usePathStyle := cluster.Spec.Backup.Target.UsePathStyle
+	partSize := cluster.Spec.Backup.Target.PartSize
+	concurrency := cluster.Spec.Backup.Target.Concurrency
 	storageClient, err := storage.NewS3ClientFromCredentials(
 		ctx,
 		cluster.Spec.Backup.Target.Endpoint,
 		cluster.Spec.Backup.Target.Bucket,
 		creds,
 		usePathStyle,
+		partSize,
+		concurrency,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create storage client for retention: %w", err)
@@ -336,7 +340,7 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 }
 
 // ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs.
-// This ServiceAccount is used for Kubernetes Auth authentication to OpenBao.
+// This ServiceAccount is used for JWT Auth authentication to OpenBao.
 func (m *Manager) ensureBackupServiceAccount(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	saName := backupServiceAccountName(cluster)
 

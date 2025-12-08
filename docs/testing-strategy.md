@@ -1,6 +1,8 @@
 # Testing Strategy: OpenBao Supervisor Operator
 
-This document expands on the high-level "Testing Strategy" section in `technical-design-document.md` and defines how we structure tests for the OpenBao Supervisor Operator.
+This document expands on the high-level "Testing Strategy" section in `architecture.md` and defines how we structure tests for the OpenBao Supervisor Operator.
+
+**Note:** This content has been merged into `docs/contributing.md`. See that document for the latest testing strategy and build instructions.
 
 The goals of this strategy are:
 
@@ -145,7 +147,7 @@ Where individual envtest assertions involve small decision functions, we still p
 
 E2E tests validate real-system behavior using kind:
 
-- kind cluster with Kubernetes versions from the support matrix.
+- kind cluster with Kubernetes versions from the compatibility matrix (see `docs/compatibility.md`).
 - Deployed Operator image built from the current codebase.
 - Real OpenBao image.
 - Optional MinIO deployment for backup tests.
@@ -291,7 +293,8 @@ CI should:
 - Run envtest-based controller tests on every PR to validate reconciliation behavior and CRD semantics.
 - Run E2E suites (including MinIO backup tests and multi-tenant scenarios):
   - On main branch and/or nightly.
-  - Across the supported Kubernetes versions listed in the compatibility matrix.
+  - Across the supported Kubernetes versions listed in the compatibility matrix (`docs/compatibility.md`).
+
 
 New functionality MUST include:
 

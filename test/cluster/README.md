@@ -176,7 +176,7 @@ Apply one of the example OpenBaoCluster manifests that exercises:
 For example:
 
 ```sh
-kubectl apply -f config/samples/openbao_v1alpha1_openbaocluster_full.yaml
+kubectl apply -k config/samples/production
 ```
 
 This sample:

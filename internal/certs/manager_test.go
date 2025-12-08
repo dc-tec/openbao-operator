@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -582,5 +583,103 @@ func TestReconcileExternalModeTriggersReloadOnExistingSecrets(t *testing.T) {
 
 	if string(updatedServerSecret.Data[tlsCertKey]) != "fake-server-cert" {
 		t.Fatalf("expected external server Secret to not be modified by operator")
+	}
+}
+
+func TestReconcile_ACMEMode_SkipsReconciliation(t *testing.T) {
+	k8sClient := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).Build()
+	manager := NewManager(k8sClient, clientgoscheme.Scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "acme-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Image:    "openbao/openbao:2.4.4",
+			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+				Mode:    openbaov1alpha1.TLSModeACME,
+				ACME: &openbaov1alpha1.ACMEConfig{
+					DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
+					Domain:       "example.com",
+				},
+			},
+			Storage: openbaov1alpha1.StorageConfig{
+				Size: "10Gi",
+			},
+		},
+	}
+
+	ctx := context.Background()
+
+	// Reconcile should skip TLS reconciliation for ACME mode
+	err := manager.Reconcile(ctx, logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	// Verify no CA Secret was created (ACME mode doesn't need operator-managed secrets)
+	caSecret := &corev1.Secret{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      caSecretName(cluster),
+	}, caSecret)
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("expected CA Secret to NOT exist in ACME mode, got: %v", err)
+	}
+
+	// Verify no server Secret was created
+	serverSecret := &corev1.Secret{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      serverSecretName(cluster),
+	}, serverSecret)
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("expected server Secret to NOT exist in ACME mode, got: %v", err)
+	}
+}
+
+func TestReconcile_ACMEMode_WithTLSDisabled(t *testing.T) {
+	k8sClient := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).Build()
+	manager := NewManager(k8sClient, clientgoscheme.Scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "acme-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Image:    "openbao/openbao:2.4.4",
+			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: false, // TLS disabled
+				Mode:    openbaov1alpha1.TLSModeACME,
+			},
+			Storage: openbaov1alpha1.StorageConfig{
+				Size: "10Gi",
+			},
+		},
+	}
+
+	ctx := context.Background()
+
+	// Reconcile should skip when TLS is disabled
+	err := manager.Reconcile(ctx, logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	// Verify no secrets were created
+	caSecret := &corev1.Secret{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      caSecretName(cluster),
+	}, caSecret)
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("expected CA Secret to NOT exist when TLS is disabled, got: %v", err)
 	}
 }

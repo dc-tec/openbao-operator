@@ -1,0 +1,70 @@
+# OpenBaoCluster with External TLS (cert-manager)
+#
+# This example demonstrates using externally-managed TLS certificates via cert-manager
+# or other certificate management systems. This is required for Hardened profile and
+# is recommended for production environments that need integration with corporate PKI.
+#
+# Prerequisites:
+# - cert-manager installed (or another external TLS provider)
+# - CA and server certificate Secrets must be created before deployment
+# - The operator expects these Secrets:
+#   - <cluster-name>-tls-ca: CA certificate Secret (ca.crt, optionally ca.key)
+#   - <cluster-name>-tls-server: Server certificate Secret (tls.crt, tls.key, ca.crt)
+#
+# See: docs/user-guide.md section 4.2
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-external-tls
+spec:
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  # External TLS management (required for Hardened profile)
+  tls:
+    enabled: true
+    mode: External # Use external certificate management
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+---
+# Example: Create TLS Secrets using cert-manager
+# The operator expects these Secrets to exist before deployment
+#
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: corporate-ca-issuer
+# spec:
+#   ca:
+#     secretName: corporate-ca
+# ---
+# apiVersion: cert-manager.io/v1
+# kind: Certificate
+# metadata:
+#   name: openbaocluster-external-tls-ca
+#   namespace: default
+# spec:
+#   secretName: openbaocluster-external-tls-tls-ca
+#   issuerRef:
+#     kind: ClusterIssuer
+#     name: corporate-ca-issuer
+#   commonName: openbaocluster-external-tls-ca
+# ---
+# apiVersion: cert-manager.io/v1
+# kind: Certificate
+# metadata:
+#   name: openbaocluster-external-tls-server
+#   namespace: default
+# spec:
+#   secretName: openbaocluster-external-tls-tls-server
+#   dnsNames:
+#     - openbaocluster-external-tls.default.svc
+#     - *.openbaocluster-external-tls.default.svc
+#     - openbaocluster-external-tls-public.default.svc
+#   issuerRef:
+#     kind: ClusterIssuer
+#     name: corporate-ca-issuer

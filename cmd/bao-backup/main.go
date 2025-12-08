@@ -12,6 +12,7 @@ import (
 
 	"github.com/openbao/operator/internal/backup"
 	"github.com/openbao/operator/internal/openbao"
+	"github.com/openbao/operator/internal/paths"
 	"github.com/openbao/operator/internal/storage"
 )
 
@@ -26,16 +27,17 @@ const (
 	exitVerificationError = 6
 
 	// Default paths
-	defaultTLSCAPath       = "/etc/bao/tls/ca.crt"
-	defaultTokenPath       = "/etc/bao/backup/token/token"
-	defaultCredentialsPath = "/etc/bao/backup/credentials"
-	defaultK8sTokenPath    = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	defaultTLSCAPath       = paths.TLSCACertPath
+	defaultTokenPath       = paths.BackupTokenPath
+	defaultCredentialsPath = paths.BackupCredentialsPath
+	defaultJWTTokenPath    = paths.BackupJWTTokenPath
 
 	// Default region for S3-compatible storage
 	defaultRegion = "us-east-1"
 
 	// Auth methods
-	authMethodKubernetes = "kubernetes"
+	authMethodJWT   = "jwt"
+	authMethodToken = "token"
 )
 
 // Config holds the backup executor configuration.
@@ -53,16 +55,20 @@ type Config struct {
 	BackupUsePathStyle   bool
 
 	// Authentication
-	AuthMethod                    string
-	KubernetesAuthRole            string
-	OpenBaoToken                  string
-	KubernetesServiceAccountToken string
+	AuthMethod   string
+	JWTAuthRole  string
+	OpenBaoToken string
+	JWTToken     string
 
 	// TLS
 	TLSCACert []byte
 
 	// Storage credentials
 	StorageCredentials *storage.Credentials
+
+	// S3 upload configuration
+	PartSize    int64
+	Concurrency int32
 }
 
 // loadConfig loads configuration from environment variables and mounted files.
@@ -127,30 +133,30 @@ func loadConfig() (*Config, error) {
 	// Determine authentication method
 	cfg.AuthMethod = strings.TrimSpace(os.Getenv("BACKUP_AUTH_METHOD"))
 
-	// Try to load Kubernetes ServiceAccount token
-	k8sTokenPath := defaultK8sTokenPath
-	if envPath := strings.TrimSpace(os.Getenv("K8S_TOKEN_PATH")); envPath != "" {
-		k8sTokenPath = envPath
+	// Try to load JWT token from projected volume
+	jwtTokenPath := defaultJWTTokenPath
+	if envPath := strings.TrimSpace(os.Getenv("JWT_TOKEN_PATH")); envPath != "" {
+		jwtTokenPath = envPath
 	}
-	k8sToken, err := os.ReadFile(k8sTokenPath)
-	if err == nil && len(k8sToken) > 0 {
-		cfg.KubernetesServiceAccountToken = strings.TrimSpace(string(k8sToken))
-		// If auth method not explicitly set, prefer Kubernetes Auth
+	jwtToken, err := os.ReadFile(jwtTokenPath)
+	if err == nil && len(jwtToken) > 0 {
+		cfg.JWTToken = strings.TrimSpace(string(jwtToken))
+		// If auth method not explicitly set, prefer JWT Auth
 		if cfg.AuthMethod == "" {
-			cfg.AuthMethod = authMethodKubernetes
+			cfg.AuthMethod = authMethodJWT
 		}
 	}
 
-	// Load Kubernetes Auth role if using Kubernetes Auth
-	if cfg.AuthMethod == authMethodKubernetes || (cfg.AuthMethod == "" && cfg.KubernetesServiceAccountToken != "") {
-		cfg.KubernetesAuthRole = strings.TrimSpace(os.Getenv("BACKUP_KUBERNETES_AUTH_ROLE"))
-		if cfg.KubernetesAuthRole == "" {
-			return nil, fmt.Errorf("BACKUP_KUBERNETES_AUTH_ROLE is required when using Kubernetes authentication")
+	// Load JWT Auth role if using JWT Auth
+	if cfg.AuthMethod == authMethodJWT || (cfg.AuthMethod == "" && cfg.JWTToken != "") {
+		cfg.JWTAuthRole = strings.TrimSpace(os.Getenv("BACKUP_JWT_AUTH_ROLE"))
+		if cfg.JWTAuthRole == "" {
+			return nil, fmt.Errorf("BACKUP_JWT_AUTH_ROLE is required when using JWT authentication")
 		}
-		if cfg.KubernetesServiceAccountToken == "" {
-			return nil, fmt.Errorf("kubernetes ServiceAccount token not found at %q", k8sTokenPath)
+		if cfg.JWTToken == "" {
+			return nil, fmt.Errorf("JWT token not found at %q", jwtTokenPath)
 		}
-		cfg.AuthMethod = authMethodKubernetes
+		cfg.AuthMethod = authMethodJWT
 	} else {
 		// Fall back to static token
 		tokenPath := defaultTokenPath
@@ -165,7 +171,7 @@ func loadConfig() (*Config, error) {
 		if cfg.OpenBaoToken == "" {
 			return nil, fmt.Errorf("OpenBao token is empty")
 		}
-		cfg.AuthMethod = "token"
+		cfg.AuthMethod = authMethodToken
 	}
 
 	// Load storage credentials if provided
@@ -179,6 +185,25 @@ func loadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to load storage credentials: %w", err)
 	}
 	cfg.StorageCredentials = creds
+
+	// Load S3 upload configuration (optional, with defaults)
+	partSizeStr := strings.TrimSpace(os.Getenv("BACKUP_PART_SIZE"))
+	if partSizeStr != "" {
+		partSize, err := strconv.ParseInt(partSizeStr, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid BACKUP_PART_SIZE value %q: %w", partSizeStr, err)
+		}
+		cfg.PartSize = partSize
+	}
+
+	concurrencyStr := strings.TrimSpace(os.Getenv("BACKUP_CONCURRENCY"))
+	if concurrencyStr != "" {
+		concurrency, err := strconv.ParseInt(concurrencyStr, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid BACKUP_CONCURRENCY value %q: %w", concurrencyStr, err)
+		}
+		cfg.Concurrency = int32(concurrency)
+	}
 
 	return cfg, nil
 }
@@ -246,10 +271,19 @@ func findLeader(ctx context.Context, cfg *Config) (string, error) {
 	maxRetries := 5
 	baseDelay := 1 * time.Second
 
+	// Allow the cluster DNS suffix (for example, ".cluster.local") to be configured
+	// via environment variable. When empty, we rely on Kubernetes search paths and
+	// use the short ".svc" form.
+	clusterDomainSuffix := strings.TrimSpace(os.Getenv("CLUSTER_DOMAIN_SUFFIX"))
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		for i := int32(0); i < cfg.ClusterReplicas; i++ {
 			podName := fmt.Sprintf("%s-%d", cfg.ClusterName, i)
-			podURL := fmt.Sprintf("https://%s.%s.%s.svc:8200", podName, cfg.ClusterName, cfg.ClusterNamespace)
+			host := fmt.Sprintf("%s.%s.%s.svc", podName, cfg.ClusterName, cfg.ClusterNamespace)
+			if clusterDomainSuffix != "" {
+				host = host + clusterDomainSuffix
+			}
+			podURL := fmt.Sprintf("https://%s:8200", host)
 
 			// Create a client without token for health checks
 			client, err := openbao.NewClient(openbao.ClientConfig{
@@ -292,7 +326,7 @@ func findLeader(ctx context.Context, cfg *Config) (string, error) {
 
 // authenticate authenticates to OpenBao and returns a token.
 func authenticate(ctx context.Context, cfg *Config, leaderURL string) (string, error) {
-	if cfg.AuthMethod == authMethodKubernetes {
+	if cfg.AuthMethod == authMethodJWT {
 		// Create a client without token for authentication
 		client, err := openbao.NewClient(openbao.ClientConfig{
 			BaseURL: leaderURL,
@@ -302,9 +336,9 @@ func authenticate(ctx context.Context, cfg *Config, leaderURL string) (string, e
 			return "", fmt.Errorf("failed to create OpenBao client: %w", err)
 		}
 
-		token, err := client.KubernetesAuthLogin(ctx, cfg.KubernetesAuthRole, cfg.KubernetesServiceAccountToken)
+		token, err := client.LoginJWT(ctx, cfg.JWTAuthRole, cfg.JWTToken)
 		if err != nil {
-			return "", fmt.Errorf("failed to authenticate using Kubernetes Auth: %w", err)
+			return "", fmt.Errorf("failed to authenticate using JWT Auth: %w", err)
 		}
 
 		return token, nil
@@ -393,6 +427,8 @@ func main() {
 		cfg.BackupBucket,
 		cfg.StorageCredentials,
 		cfg.BackupUsePathStyle,
+		cfg.PartSize,
+		cfg.Concurrency,
 	)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "bao-backup error: failed to create storage client: %v\n", err)

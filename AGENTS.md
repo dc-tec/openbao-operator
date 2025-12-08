@@ -143,7 +143,7 @@ When creating or managing Kubernetes resources that require RBAC permissions, yo
     ```
 * **EnvTest:** Use `envtest` (part of controller-runtime) for integration tests to verify CRD interactions.
 * **Mocks:** Prefer defining small interfaces in your consumer package and mocking those, rather than mocking entire external libraries.
-* **Testing Strategy Reference:** Follow the layered testing approach and concrete examples described in `testing-strategy.md` when adding or updating tests.
+* **Testing Strategy Reference:** Follow the layered testing approach and concrete examples described in `docs/contributing.md` when adding or updating tests.
 
 ---
 
@@ -226,10 +226,10 @@ These conventions ensure the codebase stays aligned with the design documents an
 ### 13.1 Design & Documentation Alignment
 
 * Any non-trivial change (new controllers, new CRD fields, or major behavior changes) must be reflected in:
-  * `./docs/technical-design-document.md`
-  * `./docs/high-level-design.md`
-  * `./docs/implementation-plan.md`
-  * `./docs/testing-strategy.md`
+ * `./docs/architecture.md`
+ * `./docs/security.md`
+ * `./docs/user-guide.md`
+ * `./docs/contributing.md`
 * Docs and code must remain in sync; do not introduce behavior that contradicts the current design without updating the design first.
 
 ### 13.2 Metrics & Logging Conventions

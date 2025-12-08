@@ -1,0 +1,110 @@
+# OpenBaoCluster with Backup Configuration
+#
+# This example demonstrates scheduled backups of OpenBao Raft snapshots to
+# S3-compatible object storage. Backups are executed using Kubernetes Jobs
+# with a dedicated backup executor container.
+#
+# Prerequisites:
+# - S3-compatible object storage (AWS S3, MinIO, etc.)
+# - Credentials Secret containing accessKeyId and secretAccessKey
+# - JWT authentication enabled in OpenBao (for JWT Auth method)
+#   OR a backup token Secret (for static token method)
+#
+# See: docs/user-guide.md section 9
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-backup
+spec:
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # Self-initialization with backup policy (for JWT Auth)
+  # Note: For Hardened profile clusters, backup and upgrade policies/roles are
+  # automatically created when spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole
+  # are configured. This example shows manual configuration for non-Hardened clusters.
+  selfInit:
+    enabled: true
+    requests:
+      # Enable JWT authentication (or use Hardened profile for automatic bootstrap)
+      - name: enable-jwt-auth
+        operation: update
+        path: sys/auth/jwt
+        data:
+          type: jwt
+      # Configure JWT auth with OIDC
+      - name: configure-jwt-auth
+        operation: update
+        path: auth/jwt/config
+        data:
+          oidc_discovery_url: "https://kubernetes.default.svc"
+          oidc_discovery_ca_pem: "<K8S_CA_PEM>"
+          bound_issuer: "https://kubernetes.default.svc"
+      # Create backup policy with read access to sys/storage/raft/snapshot
+      - name: create-backup-policy
+        operation: update
+        path: sys/policies/acl/backup
+        data:
+          policy: |
+            path "sys/storage/raft/snapshot" {
+              capabilities = ["read"]
+            }
+      # Create JWT Auth role for backup operations
+      # The ServiceAccount name is automatically <cluster-name>-backup-serviceaccount
+      - name: create-backup-jwt-role
+        operation: update
+        path: auth/jwt/role/backup
+        data:
+          role_type: jwt
+          bound_audiences: ["openbao-internal"]
+          bound_claims:
+            kubernetes.io/namespace: openbaocluster-backup
+            kubernetes.io/serviceaccount/name: openbaocluster-backup-backup-serviceaccount
+          token_policies: backup
+          ttl: 1h
+  # Scheduled backups configuration
+  backup:
+    schedule: "0 3 * * *" # Daily at 3 AM
+    executorImage: "openbao/backup-executor:v0.1.0" # Default, can be omitted
+    target:
+      endpoint: "https://s3.amazonaws.com"
+      bucket: "openbao-backups"
+      pathPrefix: "clusters/openbaocluster-backup"
+      credentialsSecretRef:
+        name: s3-backup-credentials
+        namespace: default
+      # Optional: Tune multipart upload performance
+      # partSize: 10485760  # 10MB (default) - larger values may improve performance on fast networks
+      # concurrency: 3  # Default - higher values may improve throughput but increase memory usage
+    # JWT Auth (preferred - automatically rotated tokens)
+    jwtAuthRole: backup
+    # Alternative: Static token (for self-init clusters without JWT Auth)
+    # tokenSecretRef:
+    #   name: backup-token-secret
+    #   namespace: default
+    # Retention policy: keep up to 7 backups and at most 7 days of history
+    retention:
+      maxCount: 7
+      maxAge: "168h" # 7 days
+---
+# Example: Create S3 credentials Secret
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: s3-backup-credentials
+#   namespace: default
+# type: Opaque
+# stringData:
+#   accessKeyId: "YOUR_ACCESS_KEY_ID"
+#   secretAccessKey: "YOUR_SECRET_ACCESS_KEY"
+#   # Optional: region
+#   # region: "us-east-1"

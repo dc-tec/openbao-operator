@@ -17,6 +17,5 @@ roleRef:
   name: openbao-operator-provisioner-role
 subjects:
   - kind: ServiceAccount
-    name: controller-manager
+    name: openbao-operator-provisioner
     namespace: system
-

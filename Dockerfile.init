@@ -10,7 +10,14 @@ RUN go mod download
 
 COPY . .
 
+# Build the init config binary
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o bao-init-config ./cmd/bao-config-init
+
+# Build the wrapper binary
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o bao-wrapper ./cmd/bao-wrapper
+
+# Build the probe binary
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o bao-probe ./cmd/bao-probe
 
 FROM gcr.io/distroless/static:nonroot
 
@@ -22,5 +29,9 @@ USER 100:1000
 WORKDIR /
 
 COPY --from=builder /workspace/bao-init-config /bao-init-config
+# Copy wrapper to the image
+COPY --from=builder /workspace/bao-wrapper /bao-wrapper
+# Copy probe to the image
+COPY --from=builder /workspace/bao-probe /bao-probe
 
 ENTRYPOINT ["/bao-init-config"]

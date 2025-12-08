@@ -89,11 +89,14 @@ func NewManagerWithReloader(c client.Client, scheme *runtime.Scheme, r ReloadSig
 //
 // When Mode is External, the operator does not generate or rotate certificates.
 // It only waits for external Secrets to exist and triggers hot-reload when they change.
+// When Mode is ACME, OpenBao manages certificates internally via its native ACME client.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if !cluster.Spec.TLS.Enabled {
 		logger.Info("TLS is disabled for OpenBaoCluster; skipping certificate reconciliation")
 		return nil
 	}
+
+	metrics := newTLSMetrics(cluster.Namespace, cluster.Name)
 
 	// Determine TLS mode, defaulting to OperatorManaged for backwards compatibility
 	mode := cluster.Spec.TLS.Mode
@@ -101,9 +104,15 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		mode = openbaov1alpha1.TLSModeOperatorManaged
 	}
 
+	// Handle ACME mode: OpenBao manages certificates internally, no operator action needed
+	if mode == openbaov1alpha1.TLSModeACME {
+		logger.Info("TLS mode is ACME; OpenBao manages certificates internally, skipping operator reconciliation")
+		return nil
+	}
+
 	// Handle External mode: wait for secrets and trigger reload on changes
 	if mode == openbaov1alpha1.TLSModeExternal {
-		return m.reconcileExternalTLS(ctx, logger, cluster)
+		return m.reconcileExternalTLS(ctx, logger, cluster, metrics)
 	}
 
 	// OperatorManaged mode: generate and rotate certificates
@@ -183,6 +192,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			return err
 		}
 
+		// Record expiry and initial rotation.
+		metrics.setServerCertExpiry(now.AddDate(0, 0, serverCertValidityDays), "OperatorManaged")
+		metrics.incrementRotation()
+
 		return nil
 	}
 
@@ -212,6 +225,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
 			return err
 		}
+
+		// Record expiry and rotation after issuing a replacement certificate.
+		metrics.setServerCertExpiry(now.AddDate(0, 0, serverCertValidityDays), "OperatorManaged")
+		metrics.incrementRotation()
 
 		return nil
 	}
@@ -272,6 +289,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	if !rotate {
+		// No rotation required; record current expiry from the existing certificate.
+		metrics.setServerCertExpiry(serverCert.NotAfter, "OperatorManaged")
 		return nil
 	}
 
@@ -300,12 +319,16 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return err
 	}
 
+	// Record expiry and rotation for the newly issued certificate.
+	metrics.setServerCertExpiry(now.AddDate(0, 0, serverCertValidityDays), "OperatorManaged")
+	metrics.incrementRotation()
+
 	return nil
 }
 
 // reconcileExternalTLS handles TLS reconciliation when Mode is External.
 // It waits for external Secrets to exist and triggers hot-reload when certificates change.
-func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *tlsMetrics) error {
 	caSecretName := caSecretName(cluster)
 	caSecret := &corev1.Secret{}
 	err := m.client.Get(ctx, types.NamespacedName{
@@ -340,6 +363,12 @@ func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, 
 	if !ok || len(serverCertPEM) == 0 {
 		logger.Info("External TLS server Secret exists but missing certificate; waiting for external provider to populate", "secret", serverSecretName)
 		return nil
+	}
+
+	// For external TLS, parse the certificate to record its expiry time.
+	serverCert, parseErr := parseCertificate(serverCertPEM)
+	if parseErr == nil {
+		metrics.setServerCertExpiry(serverCert.NotAfter, "External")
 	}
 
 	if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {

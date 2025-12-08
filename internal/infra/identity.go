@@ -97,7 +97,7 @@ func (m *Manager) ensureRBAC(ctx context.Context, logger logr.Logger, cluster *o
 				{
 					APIGroups: []string{""},
 					Resources: []string{"pods"},
-					Verbs:     []string{"list", "get"},
+					Verbs:     []string{"get", "list", "watch", "patch", "update"},
 				},
 			},
 		}

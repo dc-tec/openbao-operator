@@ -128,7 +128,24 @@ func main() {
 	templatePath := flag.String("template", "", "path to the config template file")
 	outputPath := flag.String("output", "", "path to write the rendered config file")
 	selfInitPath := flag.String("self-init", "", "optional path to self-init config file (only used for pod-0)")
+	wrapperSource := flag.String("copy-wrapper", "", "optional path to wrapper binary to copy to /utils/bao-wrapper")
+	probeSource := flag.String("copy-probe", "", "optional path to probe binary to copy to /utils/bao-probe")
 	flag.Parse()
+
+	// Copy wrapper binary if specified (before rendering config)
+	if *wrapperSource != "" {
+		if err := copyWrapper(*wrapperSource); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "bao-config-init error: failed to copy wrapper: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if *probeSource != "" {
+		if err := copyProbe(*probeSource); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "bao-config-init error: failed to copy probe: %v\n", err)
+			os.Exit(1)
+		}
+	}
 
 	if err := renderConfig(
 		*templatePath,
@@ -140,4 +157,80 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "bao-config-init error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// copyWrapper copies the wrapper binary from source to /utils/bao-wrapper
+// and sets executable permissions. This eliminates the need for shell commands
+// in the init container, allowing it to use a distroless/static image (no shell).
+func copyWrapper(sourcePath string) error {
+	const (
+		wrapperDestPath = "/utils/bao-wrapper"
+		wrapperFileMode = 0o755 // Executable permissions
+	)
+
+	// Ensure destination directory exists
+	destDir := filepath.Dir(wrapperDestPath)
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create destination directory %q: %w", destDir, err)
+	}
+
+	// Open source file
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to open source wrapper file %q: %w", sourcePath, err)
+	}
+	defer sourceFile.Close()
+
+	// Create destination file
+	destFile, err := os.OpenFile(wrapperDestPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, wrapperFileMode)
+	if err != nil {
+		return fmt.Errorf("failed to create destination wrapper file %q: %w", wrapperDestPath, err)
+	}
+	defer destFile.Close()
+
+	// Copy file contents
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		return fmt.Errorf("failed to copy wrapper binary: %w", err)
+	}
+
+	// Ensure executable permissions (even though we set them on OpenFile, chmod for safety)
+	if err := os.Chmod(wrapperDestPath, wrapperFileMode); err != nil {
+		return fmt.Errorf("failed to set executable permissions on wrapper: %w", err)
+	}
+
+	return nil
+}
+
+func copyProbe(sourcePath string) error {
+	const (
+		probeDestPath = "/utils/bao-probe"
+		probeFileMode = 0o755 // Executable permissions
+	)
+
+	destDir := filepath.Dir(probeDestPath)
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create destination directory %q: %w", destDir, err)
+	}
+
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to open source probe file %q: %w", sourcePath, err)
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.OpenFile(probeDestPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, probeFileMode)
+	if err != nil {
+		return fmt.Errorf("failed to create destination probe file %q: %w", probeDestPath, err)
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		return fmt.Errorf("failed to copy probe binary: %w", err)
+	}
+
+	if err := os.Chmod(probeDestPath, probeFileMode); err != nil {
+		return fmt.Errorf("failed to set executable permissions on probe: %w", err)
+	}
+
+	return nil
 }

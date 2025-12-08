@@ -1,0 +1,56 @@
+# OpenBaoCluster with AWS KMS Auto-Unseal
+#
+# This example demonstrates using AWS KMS for auto-unseal instead of storing
+# the unseal key in Kubernetes Secrets. This provides enhanced security by
+# shifting the root of trust to AWS KMS.
+#
+# Prerequisites:
+# - AWS KMS key created
+# - IAM permissions for the pod to access KMS (via IRSA or credentials Secret)
+# - If not using IRSA (IAM Roles for Service Accounts), create a credentials Secret
+#
+# See: docs/user-guide.md section 13.2.2
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-awskms
+spec:
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # External KMS auto-unseal (AWS KMS)
+  # No static unseal key Secret is created - the root of trust is AWS KMS
+  unseal:
+    type: awskms
+    options:
+      region: us-east-1
+      # Use KMS key ARN or alias
+      kms_key_id: alias/openbao-unseal
+      # Alternative: Use full ARN
+      # kms_key_id: "arn:aws:kms:us-east-1:123456789012:key/abcd1234-5678-90ab-cdef-1234567890ab"
+      # Optional: If not using IRSA (IAM Roles for Service Accounts)
+      # credentialsSecretRef:
+      #   name: aws-kms-credentials
+      #   namespace: openbaocluster-awskms
+---
+# Example: Create AWS KMS credentials Secret (only if not using IRSA)
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: aws-kms-credentials
+#   namespace: openbaocluster-awskms
+# type: Opaque
+# stringData:
+#   AWS_ACCESS_KEY_ID: "YOUR_ACCESS_KEY_ID"
+#   AWS_SECRET_ACCESS_KEY: "YOUR_SECRET_ACCESS_KEY"
+#   # Optional: AWS session token (for temporary credentials)
+#   # AWS_SESSION_TOKEN: "YOUR_SESSION_TOKEN"

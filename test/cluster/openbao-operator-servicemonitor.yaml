@@ -21,9 +21,7 @@ spec:
       port: https
       scheme: https
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-      tlsConfig:
-        # For test clusters, we skip TLS verification
-        # In production, use proper certificate management
-        insecureSkipVerify: true
       interval: 30s
+
+
 

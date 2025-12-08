@@ -85,11 +85,11 @@ spec:
                       This allows users to override the image for air-gapped environments or custom registries.
                     minLength: 1
                     type: string
-                  kubernetesAuthRole:
+                  jwtAuthRole:
                     description: |-
-                      KubernetesAuthRole is the name of the Kubernetes Auth role configured in OpenBao
-                      for backup operations. When set, the backup executor will use Kubernetes Auth
-                      (ServiceAccount token) instead of a static token. This is the preferred authentication
+                      JWTAuthRole is the name of the JWT Auth role configured in OpenBao
+                      for backup operations. When set, the backup executor will use JWT Auth
+                      (projected ServiceAccount token) instead of a static token. This is the preferred authentication
                       method as tokens are automatically rotated by Kubernetes.
 
                       The role must be configured in OpenBao and must grant the "read" capability on
@@ -123,6 +123,16 @@ spec:
                         description: Bucket is the bucket or container name.
                         minLength: 1
                         type: string
+                      concurrency:
+                        default: 3
+                        description: |-
+                          Concurrency is the number of concurrent parts to upload during multipart uploads.
+                          Defaults to 3. Higher values may improve throughput on fast networks but increase
+                          memory usage and may overwhelm slower storage backends.
+                        format: int32
+                        maximum: 10
+                        minimum: 1
+                        type: integer
                       credentialsSecretRef:
                         description: CredentialsSecretRef optionally references a
                           Secret containing credentials for the object store.
@@ -142,6 +152,15 @@ spec:
                           storage service.
                         minLength: 1
                         type: string
+                      partSize:
+                        default: 10485760
+                        description: |-
+                          PartSize is the size of each part in multipart uploads (in bytes).
+                          Defaults to 10MB (10485760 bytes). Larger values may improve performance for large snapshots
+                          on fast networks, while smaller values may be better for slow or unreliable networks.
+                        format: int64
+                        minimum: 5242880
+                        type: integer
                       pathPrefix:
                         description: PathPrefix is an optional prefix within the bucket
                           for this cluster's snapshots.
@@ -168,7 +187,7 @@ spec:
                       clusters (no root token Secret), this field must reference a token with
                       permission to read sys/storage/raft/snapshot.
 
-                      If KubernetesAuthRole is set, this field is ignored in favor of Kubernetes Auth.
+                      If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
                     properties:
                       name:
                         description: name is unique within a namespace to reference
@@ -405,6 +424,31 @@ spec:
                     minLength: 1
                     type: string
                 type: object
+              network:
+                description: Network configures network-related settings for the cluster.
+                properties:
+                  apiServerCIDR:
+                    description: |-
+                      APIServerCIDR is an optional CIDR block for the Kubernetes API server.
+                      When specified, this value is used instead of auto-detection for NetworkPolicy egress rules.
+                      This is useful in restricted multi-tenant environments where the operator may not have
+                      permissions to read Services/Endpoints in the default namespace.
+                      Example: "10.43.0.0/16" for service network or "192.168.1.0/24" for control plane nodes.
+                    type: string
+                  apiServerEndpointIPs:
+                    description: |-
+                      APIServerEndpointIPs is an optional list of Kubernetes API server endpoint IPs.
+                      When set, the operator adds least-privilege NetworkPolicy egress rules for these IPs on port 6443.
+                      This is required on some CNI implementations where egress enforcement happens on the post-NAT
+                      destination (the API server endpoint) rather than the kubernetes Service IP (10.43.0.1:443).
+
+                      Use this in restricted environments where the operator cannot list EndpointSlices/Endpoints in
+                      the default namespace to auto-detect endpoint IPs.
+                      Example (k3d): ["192.168.166.2"]
+                    items:
+                      type: string
+                    type: array
+                type: object
               paused:
                 description: Paused, when true, pauses reconciliation for this OpenBaoCluster
                   (except delete and finalizers).
@@ -475,6 +519,24 @@ spec:
                   - version
                   type: object
                 type: array
+              profile:
+                allOf:
+                - enum:
+                  - Hardened
+                  - Development
+                - enum:
+                  - Hardened
+                  - Development
+                default: Development
+                description: |-
+                  Profile defines the security posture for this cluster.
+                  When set to "Hardened", the operator enforces strict security requirements:
+                  - TLS must be External (cert-manager/CSI managed)
+                  - Unseal must use external KMS (no static unseal)
+                  - SelfInit must be enabled (no root token)
+                  When set to "Development", relaxed security is allowed but a security warning
+                  condition is set.
+                type: string
               replicas:
                 default: 3
                 description: Replicas is the desired number of OpenBao pods.
@@ -700,12 +762,33 @@ spec:
               tls:
                 description: TLS configures TLS for the cluster.
                 properties:
+                  acme:
+                    description: ACME configures settings when Mode is 'ACME'.
+                    properties:
+                      directoryURL:
+                        description: DirectoryURL is the ACME directory URL (e.g.,
+                          "https://acme-v02.api.letsencrypt.org/directory").
+                        minLength: 1
+                        type: string
+                      domain:
+                        description: Domain is the domain name for which to obtain
+                          the certificate.
+                        minLength: 1
+                        type: string
+                      email:
+                        description: Email is the email address to use for ACME registration.
+                        type: string
+                    required:
+                    - directoryURL
+                    - domain
+                    type: object
                   enabled:
                     description: Enabled controls whether TLS is enabled for the cluster.
                     type: boolean
                   extraSANs:
-                    description: ExtraSANs lists additional subject alternative names
-                      to include in server certificates.
+                    description: |-
+                      ExtraSANs lists additional subject alternative names to include in server certificates.
+                      Only used when Mode is OperatorManaged.
                     items:
                       type: string
                     type: array
@@ -714,9 +797,11 @@ spec:
                     - enum:
                       - OperatorManaged
                       - External
+                      - ACME
                     - enum:
                       - OperatorManaged
                       - External
+                      - ACME
                     default: OperatorManaged
                     description: Mode controls who manages the certificate lifecycle.
                     type: string
@@ -776,15 +861,15 @@ spec:
                   Upgrade configures upgrade operations.
 
                   When spec.upgrade.preUpgradeSnapshot is true, if upgrade authentication is not
-                  Upgrade authentication must be explicitly configured via spec.upgrade.kubernetesAuthRole
+                  Upgrade authentication must be explicitly configured via spec.upgrade.jwtAuthRole
                   or spec.upgrade.tokenSecretRef. The operator automatically creates an upgrade ServiceAccount
-                  (<cluster-name>-upgrade-serviceaccount) for Kubernetes Auth authentication.
+                  (<cluster-name>-upgrade-serviceaccount) for JWT Auth authentication.
                 properties:
-                  kubernetesAuthRole:
+                  jwtAuthRole:
                     description: |-
-                      KubernetesAuthRole is the name of the Kubernetes Auth role configured in OpenBao
-                      for upgrade operations. When set, the upgrade manager will use Kubernetes Auth
-                      (ServiceAccount token) instead of a static token. This is the preferred authentication
+                      JWTAuthRole is the name of the JWT Auth role configured in OpenBao
+                      for upgrade operations. When set, the upgrade manager will use JWT Auth
+                      (projected ServiceAccount token) instead of a static token. This is the preferred authentication
                       method as tokens are automatically rotated by Kubernetes.
 
                       The role must be configured in OpenBao and must grant:
@@ -794,7 +879,7 @@ spec:
                       The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),
                       which is automatically created by the operator.
 
-                      Either KubernetesAuthRole or TokenSecretRef must be set for upgrade operations.
+                      Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
                     type: string
                   preUpgradeSnapshot:
                     description: |-
@@ -807,7 +892,7 @@ spec:
                       will be set with Reason=PreUpgradeBackupFailed.
 
                       Requires spec.backup to be configured with target, executorImage, and
-                      authentication (kubernetesAuthRole or tokenSecretRef).
+                      authentication (jwtAuthRole or tokenSecretRef).
                     type: boolean
                   tokenSecretRef:
                     description: |-
@@ -819,8 +904,8 @@ spec:
                       - update sys/step-down
                       - read sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
 
-                      Either KubernetesAuthRole or TokenSecretRef must be set for upgrade operations.
-                      If KubernetesAuthRole is set, this field is ignored in favor of Kubernetes Auth.
+                      Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
+                      If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
                     properties:
                       name:
                         description: name is unique within a namespace to reference

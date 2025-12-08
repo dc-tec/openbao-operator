@@ -310,9 +310,9 @@ func TestBuildBackupJob_WithCredentialsSecret(t *testing.T) {
 	}
 }
 
-func TestBuildBackupJob_WithKubernetesAuth(t *testing.T) {
+func TestBuildBackupJob_WithJWTAuth(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	cluster.Spec.Backup.KubernetesAuthRole = "backup-role"
+	cluster.Spec.Backup.JWTAuthRole = "backup-role"
 
 	jobName := "backup-test-cluster-20250101-120000"
 	job, err := buildBackupJob(cluster, jobName)
@@ -326,12 +326,49 @@ func TestBuildBackupJob_WithKubernetesAuth(t *testing.T) {
 		envMap[env.Name] = env.Value
 	}
 
-	if envMap["BACKUP_KUBERNETES_AUTH_ROLE"] != "backup-role" {
-		t.Errorf("buildBackupJob() BACKUP_KUBERNETES_AUTH_ROLE = %v, want backup-role", envMap["BACKUP_KUBERNETES_AUTH_ROLE"])
+	if envMap["BACKUP_JWT_AUTH_ROLE"] != "backup-role" {
+		t.Errorf("buildBackupJob() BACKUP_JWT_AUTH_ROLE = %v, want backup-role", envMap["BACKUP_JWT_AUTH_ROLE"])
 	}
 
-	if envMap["BACKUP_AUTH_METHOD"] != "kubernetes" {
-		t.Errorf("buildBackupJob() BACKUP_AUTH_METHOD = %v, want kubernetes", envMap["BACKUP_AUTH_METHOD"])
+	if envMap["BACKUP_AUTH_METHOD"] != "jwt" {
+		t.Errorf("buildBackupJob() BACKUP_AUTH_METHOD = %v, want jwt", envMap["BACKUP_AUTH_METHOD"])
+	}
+
+	// Verify projected volume is mounted for JWT token
+	volumeMounts := make(map[string]bool)
+	for _, mount := range container.VolumeMounts {
+		volumeMounts[mount.Name] = true
+	}
+	if !volumeMounts["openbao-token"] {
+		t.Error("buildBackupJob() expected openbao-token volume mount for JWT auth")
+	}
+
+	// Verify projected volume exists
+	volumes := make(map[string]bool)
+	for _, vol := range job.Spec.Template.Spec.Volumes {
+		volumes[vol.Name] = true
+		if vol.Name == "openbao-token" {
+			if vol.Projected == nil {
+				t.Error("buildBackupJob() expected openbao-token volume to be projected")
+			} else if len(vol.Projected.Sources) == 0 {
+				t.Error("buildBackupJob() expected openbao-token projected volume to have sources")
+			} else {
+				sat := vol.Projected.Sources[0].ServiceAccountToken
+				if sat == nil {
+					t.Error("buildBackupJob() expected openbao-token projected volume to have ServiceAccountToken source")
+				} else {
+					if sat.Path != "openbao-token" {
+						t.Errorf("buildBackupJob() expected ServiceAccountToken path to be 'openbao-token', got %q", sat.Path)
+					}
+					if sat.Audience != "openbao-internal" {
+						t.Errorf("buildBackupJob() expected ServiceAccountToken audience to be 'openbao-internal', got %q", sat.Audience)
+					}
+				}
+			}
+		}
+	}
+	if !volumes["openbao-token"] {
+		t.Error("buildBackupJob() expected openbao-token projected volume for JWT auth")
 	}
 }
 

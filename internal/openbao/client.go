@@ -28,8 +28,8 @@ const (
 	initPath = "/v1/sys/init"
 	// snapshotPath is the OpenBao Raft snapshot endpoint.
 	snapshotPath = "/v1/sys/storage/raft/snapshot"
-	// kubernetesAuthPath is the OpenBao Kubernetes authentication endpoint.
-	kubernetesAuthPath = "/v1/auth/kubernetes/login"
+	// jwtAuthPath is the OpenBao JWT authentication endpoint.
+	jwtAuthPath = "/v1/auth/jwt/login"
 )
 
 // HealthResponse represents the response from GET /v1/sys/health.
@@ -410,8 +410,8 @@ func (c *Client) BaseURL() string {
 	return c.baseURL
 }
 
-// KubernetesAuthLoginResponse represents the response from POST /v1/auth/kubernetes/login.
-type KubernetesAuthLoginResponse struct {
+// JWTAuthLoginResponse represents the response from POST /v1/auth/jwt/login.
+type JWTAuthLoginResponse struct {
 	Auth struct {
 		ClientToken string `json:"client_token"`
 		LeaseID     string `json:"lease_id"`
@@ -420,18 +420,20 @@ type KubernetesAuthLoginResponse struct {
 	} `json:"auth"`
 }
 
-// KubernetesAuthLogin authenticates to OpenBao using Kubernetes authentication.
-// It sends a POST request to /v1/auth/kubernetes/login with the role name and JWT token.
+// LoginJWT authenticates to OpenBao using JWT authentication.
+// It sends a POST request to /v1/auth/jwt/login with the role name and JWT token.
 // Returns the OpenBao client token from the response.
+//
+// TIGHTENED: Removed retry loop. If this fails, the Controller will requeue.
+// The Kubernetes Controller runtime is a retry loop. If a login fails, return
+// the error, exit the Reconcile, and let the workqueue handle the backoff.
+// This keeps the client code dumb and the controller logic consistent.
 //
 // The role must be configured in OpenBao and must bind to the ServiceAccount
 // that issued the JWT token.
-func (c *Client) KubernetesAuthLogin(ctx context.Context, role, jwtToken string) (string, error) {
-	if role == "" {
-		return "", fmt.Errorf("role is required for Kubernetes authentication")
-	}
-	if jwtToken == "" {
-		return "", fmt.Errorf("JWT token is required for Kubernetes authentication")
+func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, error) {
+	if role == "" || jwtToken == "" {
+		return "", fmt.Errorf("role and jwtToken are required for JWT authentication")
 	}
 
 	// Build request body
@@ -441,19 +443,19 @@ func (c *Client) KubernetesAuthLogin(ctx context.Context, role, jwtToken string)
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal Kubernetes auth request: %w", err)
+		return "", fmt.Errorf("failed to marshal JWT auth request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+kubernetesAuthPath, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+jwtAuthPath, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return "", fmt.Errorf("failed to create Kubernetes auth request: %w", err)
+		return "", fmt.Errorf("failed to create JWT auth request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute Kubernetes auth request: %w", err)
+		return "", fmt.Errorf("failed to execute JWT auth request: %w", err)
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, resp.Body)
@@ -462,21 +464,21 @@ func (c *Client) KubernetesAuthLogin(ctx context.Context, role, jwtToken string)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("kubernetes auth request failed with status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("JWT auth request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read Kubernetes auth response: %w", err)
+		return "", fmt.Errorf("failed to read JWT auth response: %w", err)
 	}
 
-	var authResp KubernetesAuthLoginResponse
+	var authResp JWTAuthLoginResponse
 	if err := json.Unmarshal(respBody, &authResp); err != nil {
-		return "", fmt.Errorf("failed to parse Kubernetes auth response: %w", err)
+		return "", fmt.Errorf("failed to parse JWT auth response: %w", err)
 	}
 
 	if authResp.Auth.ClientToken == "" {
-		return "", fmt.Errorf("kubernetes auth response missing client_token")
+		return "", fmt.Errorf("JWT auth response missing client_token")
 	}
 
 	return authResp.Auth.ClientToken, nil

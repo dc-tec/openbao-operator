@@ -1,0 +1,80 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openbao-operator-provisioner-role
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/component: provisioner
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  # 1. Namespace Access (get/update/patch only - no list/watch)
+  # SECURITY: The Provisioner no longer watches namespaces. Instead, it watches
+  # OpenBaoTenant CRDs which explicitly declare target namespaces. This eliminates
+  # the ability for a compromised Provisioner to survey the cluster topology.
+  # The Provisioner only needs get/update/patch to:
+  # - Verify target namespace exists (get)
+  # - Apply Pod Security Standards labels (update/patch)
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - update
+      - patch
+
+  # 2. Impersonation
+  - apiGroups:
+      - ""
+    resources:
+      - serviceaccounts
+    verbs:
+      - impersonate
+    resourceNames:
+      # NOTE: This value must match the fully qualified name of the delegate
+      # ServiceAccount after kustomize namePrefix transformations. The
+      # ServiceAccount is defined as "provisioner-delegate" in
+      # config/rbac/provisioner_delegate_serviceaccount.yaml and kustomize
+      # applies the "openbao-operator-" prefix, resulting in the final name
+      # "openbao-operator-provisioner-delegate".
+      - openbao-operator-provisioner-delegate
+
+  # 3. ServiceAccount Access (get only - no list/watch)
+  # SECURITY: The Provisioner only needs to get a specific ServiceAccount (the delegate
+  # ServiceAccount) in the operator namespace during initialization. Cache is disabled
+  # for ServiceAccounts to prevent requiring cluster-wide list/watch permissions.
+  # This eliminates the ability for a compromised Provisioner to enumerate ServiceAccounts
+  # across the cluster. The Provisioner makes direct API calls (GET) for the specific
+  # ServiceAccount it needs instead of using the cached client.
+  - apiGroups:
+      - ""
+    resources:
+      - serviceaccounts
+    verbs:
+      - get
+
+  # 4. OpenBaoTenant CRD Management
+  # Required to watch and manage OpenBaoTenant resources which declare target namespaces.
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaotenants
+      - openbaotenants/status
+      - openbaotenants/finalizers
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+
+  # 5. RBAC Management
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+      - rolebindings
+    verbs:
+      - get
+      - list
+      - watch

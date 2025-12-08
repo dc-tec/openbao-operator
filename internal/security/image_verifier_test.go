@@ -11,7 +11,7 @@ import (
 func TestNewImageVerifier(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client)
+	verifier := NewImageVerifier(logger, client, nil)
 
 	if verifier == nil {
 		t.Fatal("NewImageVerifier() returned nil")
@@ -33,7 +33,7 @@ func TestNewImageVerifier(t *testing.T) {
 func TestImageVerifier_Verify_EmptyConfig(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client)
+	verifier := NewImageVerifier(logger, client, nil)
 
 	ctx := context.Background()
 	config := VerifyConfig{}
@@ -52,7 +52,7 @@ func TestImageVerifier_Verify_EmptyConfig(t *testing.T) {
 func TestImageVerifier_Verify_KeylessMissingIssuer(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client)
+	verifier := NewImageVerifier(logger, client, nil)
 
 	ctx := context.Background()
 	config := VerifyConfig{
@@ -68,7 +68,7 @@ func TestImageVerifier_Verify_KeylessMissingIssuer(t *testing.T) {
 func TestImageVerifier_Verify_KeylessMissingSubject(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client)
+	verifier := NewImageVerifier(logger, client, nil)
 
 	ctx := context.Background()
 	config := VerifyConfig{
@@ -84,7 +84,7 @@ func TestImageVerifier_Verify_KeylessMissingSubject(t *testing.T) {
 func TestImageVerifier_Verify_CacheHit(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client)
+	verifier := NewImageVerifier(logger, client, nil)
 
 	// Use a digest for cache key (as the new implementation uses digest)
 	digest := "test-image@sha256:abc123"
@@ -113,7 +113,7 @@ func TestImageVerifier_Verify_CacheHit(t *testing.T) {
 func TestImageVerifier_Verify_CacheMiss(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client)
+	verifier := NewImageVerifier(logger, client, nil)
 
 	imageRef := "test-image:latest"
 	config := VerifyConfig{
@@ -138,7 +138,7 @@ func TestImageVerifier_Verify_CacheMiss(t *testing.T) {
 func TestImageVerifier_Verify_ContextCancellation(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client)
+	verifier := NewImageVerifier(logger, client, nil)
 
 	imageRef := "test-image:latest"
 	config := VerifyConfig{
@@ -261,7 +261,7 @@ func TestVerificationCache_ConcurrentAccess(t *testing.T) {
 func TestImageVerifier_CacheKey_StaticKey(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client)
+	verifier := NewImageVerifier(logger, client, nil)
 
 	tests := []struct {
 		name       string
@@ -315,7 +315,7 @@ func TestImageVerifier_CacheKey_StaticKey(t *testing.T) {
 func TestImageVerifier_CacheKey_Keyless(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client)
+	verifier := NewImageVerifier(logger, client, nil)
 
 	digest := "test-image@sha256:abc123"
 	config := VerifyConfig{
@@ -340,7 +340,7 @@ func TestImageVerifier_CacheKey_Keyless(t *testing.T) {
 func TestImageVerifier_CacheKey_DifferentModes(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client)
+	verifier := NewImageVerifier(logger, client, nil)
 
 	digest := "test-image@sha256:abc123"
 	staticKeyConfig := VerifyConfig{

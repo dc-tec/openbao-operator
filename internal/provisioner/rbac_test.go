@@ -15,19 +15,19 @@ func TestGenerateTenantRole(t *testing.T) {
 			name:      "default namespace",
 			namespace: "default",
 			wantName:  TenantRoleName,
-			wantRules: 11, // Expected number of PolicyRules
+			wantRules: 12, // Expected number of PolicyRules
 		},
 		{
 			name:      "custom namespace",
 			namespace: "tenant-1",
 			wantName:  TenantRoleName,
-			wantRules: 11,
+			wantRules: 12,
 		},
 		{
 			name:      "namespace with special characters",
 			namespace: "my-namespace-123",
 			wantName:  TenantRoleName,
-			wantRules: 11,
+			wantRules: 12,
 		},
 	}
 
@@ -70,17 +70,19 @@ func TestGenerateTenantRole(t *testing.T) {
 			hasPodRule := false
 
 			for _, rule := range role.Rules {
-				// Check for OpenBaoCluster rule
+				// Check for OpenBaoCluster rule (uses commonVerbs, not "*")
 				if contains(rule.APIGroups, "openbao.org") &&
 					contains(rule.Resources, "openbaoclusters") &&
-					contains(rule.Verbs, "*") {
+					contains(rule.Verbs, "get") &&
+					contains(rule.Verbs, "create") {
 					hasOpenBaoClusterRule = true
 				}
 
-				// Check for StatefulSet rule
+				// Check for StatefulSet rule (uses commonVerbs, not "*")
 				if contains(rule.APIGroups, "apps") &&
 					contains(rule.Resources, "statefulsets") &&
-					contains(rule.Verbs, "*") {
+					contains(rule.Verbs, "get") &&
+					contains(rule.Verbs, "create") {
 					hasStatefulSetRule = true
 				}
 
@@ -92,11 +94,12 @@ func TestGenerateTenantRole(t *testing.T) {
 					hasSecretRule = true
 				}
 
-				// Check for Pod rule
+				// Check for Pod rule (includes delete for cleanup)
 				if contains(rule.APIGroups, "") &&
 					contains(rule.Resources, "pods") &&
 					contains(rule.Verbs, "get") &&
-					contains(rule.Verbs, "list") {
+					contains(rule.Verbs, "list") &&
+					contains(rule.Verbs, "delete") {
 					hasPodRule = true
 				}
 			}

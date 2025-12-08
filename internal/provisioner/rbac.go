@@ -65,11 +65,13 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 				Resources: []string{"secrets"},
 				Verbs:     []string{"create", "delete", "get", "patch", "update"},
 			},
-			// 4. Pod access for health checks and leader detection
+			// 4. Pod access for health checks, leader detection, and cleanup
+			// The operator needs delete permission to clean up pods during OpenBaoCluster deletion,
+			// especially when pods become orphaned after StatefulSet deletion is blocked by the webhook.
 			{
 				APIGroups: []string{""},
 				Resources: []string{"pods"},
-				Verbs:     []string{"get", "list", "watch", "update", "patch"},
+				Verbs:     []string{"get", "list", "watch", "update", "patch", "delete"},
 			},
 			// 5. PVC access for StatefulSets
 			{

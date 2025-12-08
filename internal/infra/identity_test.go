@@ -15,9 +15,12 @@ import (
 
 func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-sa", "default")
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -45,9 +48,12 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 
 func TestEnsureServiceAccountUpdatesLabels(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-sa-update", "default")
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -58,6 +64,9 @@ func TestEnsureServiceAccountUpdatesLabels(t *testing.T) {
 
 	// Update cluster name (simulating label change)
 	cluster.Name = "infra-sa-updated"
+
+	// Ensure TLS prerequisites exist for the new cluster name before reconciling.
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	// Second reconcile should update labels
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
@@ -79,9 +88,12 @@ func TestEnsureServiceAccountUpdatesLabels(t *testing.T) {
 
 func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-rbac", "default")
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -110,7 +122,7 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 		if len(rule.APIGroups) > 0 && rule.APIGroups[0] == "" &&
 			len(rule.Resources) > 0 && rule.Resources[0] == "pods" {
 			foundPodRule = true
-			expectedVerbs := []string{"list", "get"}
+			expectedVerbs := []string{"get", "list", "watch", "patch", "update"}
 			for _, expectedVerb := range expectedVerbs {
 				found := false
 				for _, verb := range rule.Verbs {
@@ -165,9 +177,12 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 
 func TestEnsureRBACUpdatesWhenServiceAccountChanges(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-rbac-update", "default")
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -200,9 +215,12 @@ func TestEnsureRBACUpdatesWhenServiceAccountChanges(t *testing.T) {
 
 func TestDeleteServiceAccountDeletesServiceAccount(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-sa-delete", "default")
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -228,9 +246,12 @@ func TestDeleteServiceAccountDeletesServiceAccount(t *testing.T) {
 
 func TestDeleteRBACDeletesRoleAndRoleBinding(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("infra-rbac-delete", "default")
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 

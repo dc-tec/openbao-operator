@@ -1,0 +1,164 @@
+# OpenBaoCluster with Hardened Security Profile
+#
+# This example demonstrates a production-ready OpenBao cluster using the Hardened
+# security profile. The Hardened profile enforces strict security requirements:
+# - External TLS management (cert-manager or CSI)
+# - External KMS for auto-unseal (no static keys in Kubernetes Secrets)
+# - Self-initialization enabled (no root token stored)
+# - JWT authentication automatically bootstrapped
+#
+# IMPORTANT: The Hardened profile is REQUIRED for production deployments.
+# The Development profile stores root tokens in Kubernetes Secrets, which
+# poses a significant security risk in production environments.
+#
+# Prerequisites:
+# - cert-manager installed (or another external TLS provider)
+# - AWS KMS key created (or another external KMS provider)
+# - CA and server certificate Secrets must be created before deployment
+#
+# See: https://openbao.org/docs/configuration/self-init/
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-hardened
+spec:
+  # Hardened security profile - REQUIRED for production
+  profile: Hardened
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  # External TLS management (required for Hardened profile)
+  # The operator expects these Secrets to exist:
+  # - <cluster-name>-tls-ca: CA certificate (ca.crt, optionally ca.key)
+  # - <cluster-name>-tls-server: Server certificate (tls.crt, tls.key, ca.crt)
+  tls:
+    enabled: true
+    mode: External # Required for Hardened profile
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # External KMS auto-unseal (required for Hardened profile)
+  # No static unseal key Secret is created - the root of trust is the KMS service
+  unseal:
+    type: awskms # Required: external KMS only (awskms, gcpckms, azurekeyvault, or transit)
+    options:
+      region: us-east-1
+      kms_key_id: alias/openbao-unseal
+      # Optional: If not using IRSA (IAM Roles for Service Accounts)
+      # credentialsSecretRef:
+      #   name: aws-kms-credentials
+      #   namespace: openbaocluster-hardened
+  # Self-initialization (required for Hardened profile)
+  # Root token is automatically revoked after initialization - no root token Secret is created
+  selfInit:
+    enabled: true # Required for Hardened profile
+    requests:
+      # Enable file audit logging
+      - name: enable-file-audit
+        operation: update
+        path: sys/audit/file
+        data:
+          type: file
+          options:
+            file_path: /var/log/openbao/audit.log
+            format: json
+      # JWT authentication is automatically bootstrapped by the Hardened profile
+      # Backup and upgrade policies/roles are also automatically created when
+      # spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are configured
+      # You can still add additional configuration if needed
+      # Create an admin policy with broad permissions
+      - name: create-admin-policy
+        operation: update
+        path: sys/policies/acl/admin
+        data:
+          policy: |
+            path "*" {
+              capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+            }
+  # Image verification for supply chain security
+  imageVerification:
+    enabled: true
+    issuer: "https://token.actions.githubusercontent.com"
+    subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4"
+    # PEM-encoded Cosign public key for signature verification.
+    # Download the official OpenBao public key from: https://openbao.org/docs/install/#cosign-and-rekor
+    # publicKey: |
+    #   -----BEGIN PUBLIC KEY-----
+    #   MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
+    #   -----END PUBLIC KEY-----
+    failurePolicy: Block # "Block" prevents deployment on failure; "Warn" logs but proceeds
+    # ignoreTlog: false  # Set to true to disable Rekor transparency log verification (not recommended)
+  # Scheduled backups with JWT Auth (preferred over static tokens)
+  backup:
+    schedule: "0 3 * * *" # Daily at 3 AM
+    executorImage: "openbao/bao-backup:latest"
+    target:
+      endpoint: "https://s3.amazonaws.com"
+      bucket: "openbao-backups"
+      pathPrefix: "clusters/openbaocluster-hardened"
+      credentialsSecretRef:
+        name: s3-backup-credentials
+        namespace: openbaocluster-hardened
+    # JWT Auth (automatically rotated tokens, better security)
+    jwtAuthRole: backup
+    retention:
+      maxCount: 7
+      maxAge: "168h" # 7 days
+  # Upgrade configuration with JWT Auth
+  upgrade:
+    jwtAuthRole: upgrade
+    # Take a snapshot before any version upgrade
+    preUpgradeSnapshot: true
+---
+# Example: Create TLS Secrets using cert-manager
+# The operator expects these Secrets to exist before deployment
+#
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt-prod
+# spec:
+#   acme:
+#     server: https://acme-v02.api.letsencrypt.org/directory
+#     email: admin@example.com
+#     privateKeySecretRef:
+#       name: letsencrypt-prod
+#     solvers:
+#       - http01:
+#           ingress:
+#             class: nginx
+# ---
+# apiVersion: cert-manager.io/v1
+# kind: Certificate
+# metadata:
+#   name: openbaocluster-hardened-ca
+#   namespace: openbaocluster-hardened
+# spec:
+#   secretName: openbaocluster-hardened-tls-ca
+#   issuerRef:
+#     kind: ClusterIssuer
+#     name: corporate-ca-issuer
+#   commonName: openbaocluster-hardened-ca
+# ---
+# apiVersion: cert-manager.io/v1
+# kind: Certificate
+# metadata:
+#   name: openbaocluster-hardened-server
+#   namespace: openbaocluster-hardened
+# spec:
+#   secretName: openbaocluster-hardened-tls-server
+#   dnsNames:
+#     - openbaocluster-hardened.openbaocluster-hardened.svc
+#     - *.openbaocluster-hardened.openbaocluster-hardened.svc
+#   issuerRef:
+#     kind: ClusterIssuer
+#     name: corporate-ca-issuer
+#   # Include CA certificate in the server secret
+#   additionalOutputFormats:
+#     - type: DER
+#       additionalCertificateOutputFormat:
+#         type: Certificate
+#         path: ca.crt

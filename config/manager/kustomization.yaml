@@ -1,8 +1,10 @@
 resources:
-- manager.yaml
+- provisioner.yaml
+- controller.yaml
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
 - name: controller
   newName: k3d-registry.localhost:5000/openbao-operator
-  newTag: dev-0.9.6
+  newTag: dev-0.15.4

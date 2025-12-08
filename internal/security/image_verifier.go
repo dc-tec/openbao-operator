@@ -39,18 +39,31 @@ type VerifyConfig struct {
 // It implements a simple in-memory cache to avoid re-verifying
 // the same image digest on every reconcile loop.
 type ImageVerifier struct {
-	logger logr.Logger
-	cache  *verificationCache
-	client client.Client
+	logger            logr.Logger
+	cache             *verificationCache
+	client            client.Client
+	trustedRootConfig *TrustedRootConfig
+}
+
+// TrustedRootConfig specifies where to load the trusted root material from.
+// If ConfigMapName and ConfigMapNamespace are set, the trusted root will be
+// loaded from that ConfigMap (key: "trusted_root.json"). Otherwise, the
+// embedded trusted_root.json will be used.
+type TrustedRootConfig struct {
+	ConfigMapName      string
+	ConfigMapNamespace string
 }
 
 // NewImageVerifier creates a new ImageVerifier with the provided logger and Kubernetes client.
 // The client is used to read ImagePullSecrets for private registry authentication.
-func NewImageVerifier(logger logr.Logger, k8sClient client.Client) *ImageVerifier {
+// trustedRootConfig is optional - if provided, the trusted root will be loaded from the
+// specified ConfigMap instead of using the embedded version.
+func NewImageVerifier(logger logr.Logger, k8sClient client.Client, trustedRootConfig *TrustedRootConfig) *ImageVerifier {
 	return &ImageVerifier{
-		logger: logger,
-		cache:  newVerificationCache(),
-		client: k8sClient,
+		logger:            logger,
+		cache:             newVerificationCache(),
+		client:            k8sClient,
+		trustedRootConfig: trustedRootConfig,
 	}
 }
 
@@ -126,9 +139,9 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef string, config
 	} else {
 		// Mode 2: Keyless / Identity (Official OpenBao Images)
 		// Load trusted root material (Fulcio root certificates, Rekor public keys, etc.)
-		// Uses embedded trusted_root.json which is compiled into the binary at build time.
-		// This works in read-only filesystems and air-gapped environments.
-		trustedRoot, err := v.loadTrustedRoot()
+		// First attempts to load from ConfigMap if configured, otherwise uses embedded
+		// trusted_root.json which is compiled into the binary at build time.
+		trustedRoot, err := v.loadTrustedRoot(ctx)
 		if err != nil {
 			return "", fmt.Errorf("failed to load trusted root material for keyless verification: %w", err)
 		}
@@ -190,11 +203,46 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef string, config
 	return digestRef.String(), nil
 }
 
-// loadTrustedRoot loads the embedded trusted root material for keyless verification.
-// The trusted root is embedded at build time from trusted_root.json and includes
-// Fulcio root certificates, Rekor public keys, and CT log keys.
-// This approach works in read-only filesystems and air-gapped environments.
-func (v *ImageVerifier) loadTrustedRoot() (root.TrustedMaterial, error) {
+// loadTrustedRoot loads the trusted root material for keyless verification.
+// It first attempts to load from a ConfigMap if configured, otherwise falls back
+// to the embedded trusted_root.json. The trusted root includes Fulcio root certificates,
+// Rekor public keys, and CT log keys.
+func (v *ImageVerifier) loadTrustedRoot(ctx context.Context) (root.TrustedMaterial, error) {
+	// Try loading from ConfigMap if configured
+	if v.trustedRootConfig != nil && v.trustedRootConfig.ConfigMapName != "" && v.trustedRootConfig.ConfigMapNamespace != "" {
+		if v.client != nil {
+			configMap := &corev1.ConfigMap{}
+			err := v.client.Get(ctx, types.NamespacedName{
+				Namespace: v.trustedRootConfig.ConfigMapNamespace,
+				Name:      v.trustedRootConfig.ConfigMapName,
+			}, configMap)
+			if err == nil {
+				// ConfigMap found - try to read trusted_root.json key
+				if trustedRootJSON, ok := configMap.Data["trusted_root.json"]; ok {
+					v.logger.Info("Loading trusted root from ConfigMap",
+						"configmap", v.trustedRootConfig.ConfigMapName,
+						"namespace", v.trustedRootConfig.ConfigMapNamespace)
+					trustedRoot, err := root.NewTrustedRootFromJSON([]byte(trustedRootJSON))
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse trusted_root.json from ConfigMap %s/%s: %w",
+							v.trustedRootConfig.ConfigMapNamespace, v.trustedRootConfig.ConfigMapName, err)
+					}
+					return trustedRoot, nil
+				}
+				v.logger.Info("ConfigMap found but missing 'trusted_root.json' key, falling back to embedded",
+					"configmap", v.trustedRootConfig.ConfigMapName,
+					"namespace", v.trustedRootConfig.ConfigMapNamespace)
+			} else {
+				v.logger.V(1).Info("Failed to load ConfigMap, falling back to embedded trusted root",
+					"configmap", v.trustedRootConfig.ConfigMapName,
+					"namespace", v.trustedRootConfig.ConfigMapNamespace,
+					"error", err)
+			}
+		}
+	}
+
+	// Fallback to embedded trusted root
+	v.logger.V(1).Info("Using embedded trusted_root.json")
 	trustedRoot, err := root.NewTrustedRootFromJSON(embeddedTrustedRootJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse embedded trusted_root.json: %w", err)

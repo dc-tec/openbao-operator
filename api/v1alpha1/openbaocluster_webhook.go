@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"time"
@@ -51,13 +52,57 @@ type openBaoClusterValidator struct{}
 // Ensure openBaoClusterValidator satisfies the CustomValidator interface.
 var _ webhook.CustomValidator = &openBaoClusterValidator{}
 
+// openBaoClusterDefaulter implements admission.CustomDefaulter for OpenBaoCluster.
+// It is responsible for injecting default values that are independent of
+// reconciliation logic, such as the finalizer used for cleanup.
+type openBaoClusterDefaulter struct{}
+
+// Ensure openBaoClusterDefaulter satisfies the CustomDefaulter interface.
+var _ webhook.CustomDefaulter = &openBaoClusterDefaulter{}
+
+// Default sets default values on OpenBaoCluster resources during admission.
+// It injects the OpenBaoClusterFinalizer so that all delete operations go
+// through the controller's finalizer-based cleanup path.
+func (d *openBaoClusterDefaulter) Default(_ context.Context, obj runtime.Object) error {
+	cluster, ok := obj.(*OpenBaoCluster)
+	if !ok {
+		return apierrors.NewBadRequest("expected OpenBaoCluster object for defaulting")
+	}
+
+	// During deletion, the controller must be able to remove the finalizer.
+	// If the defaulter re-adds it on update, the OpenBaoCluster will get stuck
+	// in a terminating state.
+	if cluster.DeletionTimestamp != nil && !cluster.DeletionTimestamp.IsZero() {
+		return nil
+	}
+
+	if !containsString(cluster.Finalizers, OpenBaoClusterFinalizer) {
+		cluster.Finalizers = append(cluster.Finalizers, OpenBaoClusterFinalizer)
+	}
+
+	return nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, v := range values {
+		if v == target {
+			return true
+		}
+	}
+
+	return false
+}
+
 // SetupWebhookWithManager registers the OpenBaoCluster validating webhook with the manager.
 func (r *OpenBaoCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&OpenBaoCluster{}).
 		WithValidator(&openBaoClusterValidator{}).
+		WithDefaulter(&openBaoClusterDefaulter{}).
 		Complete()
 }
+
+// +kubebuilder:webhook:path=/mutate-openbao-org-v1alpha1-openbaocluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=openbao.org,resources=openbaoclusters,verbs=create;update,versions=v1alpha1,name=mopenbaocluster.kb.io,admissionReviewVersions=v1
 
 // +kubebuilder:webhook:path=/validate-openbao-org-v1alpha1-openbaocluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=openbao.org,resources=openbaoclusters,verbs=create;update,versions=v1alpha1,name=vopenbaocluster.kb.io,admissionReviewVersions=v1
 
@@ -80,6 +125,11 @@ func (v *openBaoClusterValidator) ValidateCreate(ctx context.Context, obj runtim
 	allErrs = append(allErrs, validateAudit(cluster)...)
 	allErrs = append(allErrs, validatePlugins(cluster)...)
 	allErrs = append(allErrs, validateTelemetry(cluster)...)
+	allErrs = append(allErrs, validateTLS(cluster)...)
+	networkErrs, networkWarnings := validateNetwork(cluster)
+	allErrs = append(allErrs, networkErrs...)
+	warnings = append(warnings, networkWarnings...)
+	allErrs = append(allErrs, validateProfile(cluster)...)
 
 	backupErrs, backupWarnings := validateBackup(cluster)
 	allErrs = append(allErrs, backupErrs...)
@@ -115,6 +165,11 @@ func (v *openBaoClusterValidator) ValidateUpdate(ctx context.Context, oldObj, ne
 	allErrs = append(allErrs, validateAudit(cluster)...)
 	allErrs = append(allErrs, validatePlugins(cluster)...)
 	allErrs = append(allErrs, validateTelemetry(cluster)...)
+	allErrs = append(allErrs, validateTLS(cluster)...)
+	networkErrs, networkWarnings := validateNetwork(cluster)
+	allErrs = append(allErrs, networkErrs...)
+	warnings = append(warnings, networkWarnings...)
+	allErrs = append(allErrs, validateProfile(cluster)...)
 
 	backupErrs, backupWarnings := validateBackup(cluster)
 	allErrs = append(allErrs, backupErrs...)
@@ -511,6 +566,107 @@ func validateBackup(cluster *OpenBaoCluster) (field.ErrorList, []string) {
 	return allErrs, warnings
 }
 
+// validateTLS performs validation of TLS configuration.
+// It enforces:
+//   - ACME configuration is required when Mode is ACME.
+func validateTLS(cluster *OpenBaoCluster) field.ErrorList {
+	if !cluster.Spec.TLS.Enabled {
+		return nil
+	}
+
+	path := field.NewPath(configFieldPathRoot, "tls")
+	var allErrs field.ErrorList
+
+	// If mode is ACME, ACME config must be provided
+	if cluster.Spec.TLS.Mode == TLSModeACME {
+		if cluster.Spec.TLS.ACME == nil {
+			allErrs = append(allErrs, field.Required(
+				path.Child("acme"),
+				"ACME configuration is required when tls.mode is ACME",
+			))
+		} else {
+			acmePath := path.Child("acme")
+			if cluster.Spec.TLS.ACME.DirectoryURL == "" {
+				allErrs = append(allErrs, field.Required(
+					acmePath.Child("directoryURL"),
+					"ACME directoryURL is required",
+				))
+			}
+			if cluster.Spec.TLS.ACME.Domain == "" {
+				allErrs = append(allErrs, field.Required(
+					acmePath.Child("domain"),
+					"ACME domain is required",
+				))
+			}
+		}
+	}
+
+	return allErrs
+}
+
+// validateProfile enforces security profile requirements.
+// TIGHTENED: No check for empty string. CRD default ensures this is either
+// "Development" or "Hardened".
+func validateProfile(cluster *OpenBaoCluster) field.ErrorList {
+	// If Development, we return immediately (allow permissive mode).
+	if cluster.Spec.Profile == ProfileDevelopment {
+		return nil
+	}
+
+	path := field.NewPath(configFieldPathRoot, "profile")
+	var allErrs field.ErrorList
+
+	// Logic for Hardened profile
+	if cluster.Spec.Profile == ProfileHardened {
+		// Hardened profile requirements
+
+		// 1. TLS must be External OR ACME
+		// Both ensure the Operator never possesses the private keys.
+		if cluster.Spec.TLS.Mode != TLSModeExternal && cluster.Spec.TLS.Mode != TLSModeACME {
+			allErrs = append(allErrs, field.Invalid(
+				path,
+				cluster.Spec.Profile,
+				fmt.Sprintf("Hardened profile requires spec.tls.mode to be %q or %q, got %q", TLSModeExternal, TLSModeACME, cluster.Spec.TLS.Mode),
+			))
+		}
+
+		// 2. Unseal must be external KMS (not static)
+		unsealType := "static" // default
+		if cluster.Spec.Unseal != nil {
+			unsealType = cluster.Spec.Unseal.Type
+		}
+		if unsealType == "static" {
+			allErrs = append(allErrs, field.Invalid(
+				path,
+				cluster.Spec.Profile,
+				"Hardened profile requires external KMS unseal (awskms, gcpckms, azurekeyvault, or transit), static unseal is not allowed",
+			))
+		}
+
+		// 3. SelfInit must be enabled
+		if cluster.Spec.SelfInit == nil || !cluster.Spec.SelfInit.Enabled {
+			allErrs = append(allErrs, field.Invalid(
+				path,
+				cluster.Spec.Profile,
+				"Hardened profile requires spec.selfInit.enabled to be true (root token must be auto-revoked)",
+			))
+		}
+
+		// 4. Reject insecure unseal options
+		if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Options != nil {
+			if tlsSkipVerify, ok := cluster.Spec.Unseal.Options["tls_skip_verify"]; ok && tlsSkipVerify == "true" {
+				allErrs = append(allErrs, field.Invalid(
+					field.NewPath(configFieldPathRoot, "unseal", "options", "tls_skip_verify"),
+					tlsSkipVerify,
+					"Hardened profile does not allow tls_skip_verify=true in unseal options",
+				))
+			}
+		}
+	}
+
+	return allErrs
+}
+
 // validateAudit performs validation of audit device configurations.
 func validateAudit(cluster *OpenBaoCluster) field.ErrorList {
 	auditDevices := cluster.Spec.Audit
@@ -669,4 +825,59 @@ func validateTelemetry(cluster *OpenBaoCluster) field.ErrorList {
 	}
 
 	return allErrs
+}
+
+func validateNetwork(cluster *OpenBaoCluster) (field.ErrorList, admission.Warnings) {
+	var allErrs field.ErrorList
+	var warnings admission.Warnings
+
+	if cluster.Spec.Network == nil {
+		return allErrs, warnings
+	}
+
+	if strings.TrimSpace(cluster.Spec.Network.APIServerCIDR) != "" {
+		cidrPath := field.NewPath(configFieldPathRoot, "network", "apiServerCIDR")
+		rawCIDR := strings.TrimSpace(cluster.Spec.Network.APIServerCIDR)
+
+		_, ipNet, err := net.ParseCIDR(rawCIDR)
+		if err != nil {
+			allErrs = append(allErrs, field.Invalid(cidrPath, rawCIDR, fmt.Sprintf("must be a valid CIDR: %v", err)))
+		} else {
+			canonical := ipNet.String()
+			if canonical != rawCIDR {
+				warnings = append(warnings, fmt.Sprintf("spec.network.apiServerCIDR normalized from %q to %q", rawCIDR, canonical))
+			}
+		}
+	}
+
+	if len(cluster.Spec.Network.APIServerEndpointIPs) > 0 {
+		path := field.NewPath(configFieldPathRoot, "network", "apiServerEndpointIPs")
+		seen := make(map[string]struct{}, len(cluster.Spec.Network.APIServerEndpointIPs))
+		for i, rawIP := range cluster.Spec.Network.APIServerEndpointIPs {
+			ip := strings.TrimSpace(rawIP)
+			if ip == "" {
+				allErrs = append(allErrs, field.Invalid(path.Index(i), rawIP, "must not be empty"))
+				continue
+			}
+
+			parsed := net.ParseIP(ip)
+			if parsed == nil {
+				allErrs = append(allErrs, field.Invalid(path.Index(i), rawIP, "must be a valid IP address"))
+				continue
+			}
+
+			canonical := parsed.String()
+			if canonical != ip {
+				warnings = append(warnings, fmt.Sprintf("spec.network.apiServerEndpointIPs[%d] normalized from %q to %q", i, ip, canonical))
+			}
+
+			if _, ok := seen[canonical]; ok {
+				allErrs = append(allErrs, field.Duplicate(path.Index(i), rawIP))
+				continue
+			}
+			seen[canonical] = struct{}{}
+		}
+	}
+
+	return allErrs, warnings
 }

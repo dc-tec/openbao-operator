@@ -1,0 +1,8 @@
+resources:
+  - openbao_v1alpha1_openbaocluster_hardened.yaml
+  - openbao_v1alpha1_openbaocluster_full.yaml
+  - openbao_v1alpha1_openbaocluster_external_tls.yaml
+  - openbao_v1alpha1_openbaocluster_backup.yaml
+  - openbao_v1alpha1_openbaocluster_awskms.yaml
+  - openbao_v1alpha1_openbaocluster_acme.yaml
+

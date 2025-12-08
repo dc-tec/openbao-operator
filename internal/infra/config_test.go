@@ -2,10 +2,12 @@ package infra
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -115,7 +117,7 @@ func TestEnsureUnsealSecret_CreatesSecret(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	client := newTestClient(t)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("test-cluster", "default")
 
@@ -176,7 +178,7 @@ func TestEnsureUnsealSecret_HandlesAlreadyExists(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	client := newTestClientWithObjects(t, existingSecret)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	// Should not error when secret already exists (blind create pattern)
 	err := manager.ensureUnsealSecret(ctx, logger, cluster)
@@ -189,7 +191,7 @@ func TestEnsureConfigMap_CreatesConfigMap(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	client := newTestClient(t)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	cluster := newMinimalCluster("test-cluster", "default")
 	configContent := "test config content"
@@ -233,7 +235,7 @@ func TestEnsureConfigMap_UpdatesConfigMap(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	client := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	newConfigContent := "new config content"
 	err := manager.ensureConfigMap(ctx, logger, cluster, newConfigContent)
@@ -275,7 +277,7 @@ func TestEnsureConfigMap_SkipsUpdateWhenUnchanged(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	client := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	// Should not error and should skip update when content is the same
 	err := manager.ensureConfigMap(ctx, logger, cluster, configContent)
@@ -304,7 +306,7 @@ func TestEnsureSelfInitConfigMap_Disabled(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	client := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
 	if err != nil {
@@ -330,12 +332,82 @@ func TestEnsureSelfInitConfigMap_NotConfigured(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	client := newTestClient(t)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	// Should not error when self-init is not configured
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
 	if err != nil {
 		t.Fatalf("ensureSelfInitConfigMap() error = %v", err)
+	}
+}
+
+func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
+	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		Requests: []openbaov1alpha1.SelfInitRequest{
+			{
+				Name:      "enable-stdout-audit",
+				Operation: openbaov1alpha1.SelfInitOperationUpdate,
+				Path:      "sys/audit/stdout",
+				Data: &apiextensionsv1.JSON{
+					Raw: []byte(`{"type":"file"}`),
+				},
+			},
+		},
+	}
+
+	oidcIssuer := "https://kubernetes.default.svc"
+	oidcCABundle := "-----BEGIN CERTIFICATE-----\ntest-ca-cert\n-----END CERTIFICATE-----"
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	client := newTestClient(t)
+	manager := NewManager(client, testScheme, "openbao-operator-system", oidcIssuer, oidcCABundle)
+
+	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
+	if err != nil {
+		t.Fatalf("ensureSelfInitConfigMap() error = %v", err)
+	}
+
+	// Verify ConfigMap was created
+	cmName := configInitMapName(cluster)
+	configMap := &corev1.ConfigMap{}
+	err = client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cmName,
+	}, configMap)
+	if err != nil {
+		t.Fatalf("expected ConfigMap to exist: %v", err)
+	}
+
+	content := configMap.Data[configFileName]
+	if content == "" {
+		t.Fatal("expected ConfigMap to have config content")
+	}
+
+	// Verify bootstrap HCL is included
+	expectedSnippets := []string{
+		`initialize "operator-bootstrap"`,
+		`request "enable-jwt-auth"`,
+		`request "config-jwt-auth"`,
+		`request "create-operator-policy"`,
+		`request "create-operator-role"`,
+		`oidc_discovery_url`,
+		`bound_audiences`,
+		`openbao-internal`,
+	}
+
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(content, snippet) {
+			t.Errorf("expected ConfigMap content to contain %q, got:\n%s", snippet, content)
+		}
+	}
+
+	// Verify user requests are also included
+	if !strings.Contains(content, `initialize "enable-stdout-audit"`) {
+		t.Errorf("expected ConfigMap content to contain user request, got:\n%s", content)
 	}
 }
 
@@ -355,7 +427,7 @@ func TestDeleteConfigMap(t *testing.T) {
 
 	ctx := context.Background()
 	client := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	err := manager.deleteConfigMap(ctx, cluster)
 	if err != nil {
@@ -379,7 +451,7 @@ func TestDeleteConfigMap_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	client := newTestClient(t)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	// Should not error when ConfigMap doesn't exist
 	err := manager.deleteConfigMap(ctx, cluster)
@@ -414,7 +486,7 @@ func TestDeleteSecrets(t *testing.T) {
 
 	ctx := context.Background()
 	client := newTestClientWithObjects(t, unsealSecret, tlsCASecret, tlsServerSecret)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	err := manager.deleteSecrets(ctx, cluster)
 	if err != nil {
@@ -454,7 +526,7 @@ func TestDeleteSecrets_PartialMissing(t *testing.T) {
 
 	ctx := context.Background()
 	client := newTestClientWithObjects(t, unsealSecret)
-	manager := NewManager(client, testScheme)
+	manager := NewManager(client, testScheme, "openbao-operator-system", "", "")
 
 	// Should not error when some secrets are missing
 	err := manager.deleteSecrets(ctx, cluster)

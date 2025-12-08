@@ -1,0 +1,7 @@
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoTenant
+metadata:
+  name: openbaocluster-full-tenant
+  namespace: openbao-operator-system
+spec:
+  targetNamespace: openbaocluster-full

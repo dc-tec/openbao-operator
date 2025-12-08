@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,14 +33,37 @@ func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 }
 
 func TestEnsureTenantRBAC_CreatesRoleAndRoleBinding(t *testing.T) {
-	k8sClient := newTestClient(t)
-	logger := logr.Discard()
-	manager := NewManager(k8sClient, logger)
-
 	namespace := "test-namespace"
+	// Create namespace for Pod Security labels test
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	k8sClient := newTestClient(t, ns)
+	logger := logr.Discard()
+	manager, err := NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
 	ctx := context.Background()
 
-	err := manager.EnsureTenantRBAC(ctx, namespace)
+	// Create namespace if it doesn't exist (for Pod Security labels)
+	existingNS := &corev1.Namespace{}
+	err = k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, existingNS)
+	if err != nil && apierrors.IsNotFound(err) {
+		newNS := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		if createErr := k8sClient.Create(ctx, newNS); createErr != nil {
+			t.Fatalf("failed to create namespace: %v", createErr)
+		}
+	}
+
+	err = manager.EnsureTenantRBAC(ctx, namespace)
 	if err != nil {
 		t.Fatalf("EnsureTenantRBAC() error = %v", err)
 	}
@@ -77,10 +101,37 @@ func TestEnsureTenantRBAC_CreatesRoleAndRoleBinding(t *testing.T) {
 	if roleBinding.Namespace != namespace {
 		t.Errorf("RoleBinding namespace = %v, want %v", roleBinding.Namespace, namespace)
 	}
+
+	// Verify Pod Security labels were applied to namespace
+	nsForLabels := &corev1.Namespace{}
+	err = k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, nsForLabels)
+	if err != nil {
+		t.Fatalf("expected Namespace to exist: %v", err)
+	}
+
+	expectedLabels := map[string]string{
+		"pod-security.kubernetes.io/enforce": "restricted",
+		"pod-security.kubernetes.io/audit":   "restricted",
+		"pod-security.kubernetes.io/warn":    "restricted",
+	}
+
+	for key, expectedValue := range expectedLabels {
+		if actualValue, exists := nsForLabels.Labels[key]; !exists {
+			t.Errorf("Namespace missing Pod Security label %q", key)
+		} else if actualValue != expectedValue {
+			t.Errorf("Namespace label %q = %q, want %q", key, actualValue, expectedValue)
+		}
+	}
 }
 
 func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 	namespace := "test-namespace"
+	// Create namespace first (required for Pod Security label updates)
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
 	existingRole := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantRoleName,
@@ -95,13 +146,16 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 		},
 	}
 
-	k8sClient := newTestClient(t, existingRole)
+	k8sClient := newTestClient(t, ns, existingRole)
 	logger := logr.Discard()
-	manager := NewManager(k8sClient, logger)
+	manager, err := NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
 
 	ctx := context.Background()
 
-	err := manager.EnsureTenantRBAC(ctx, namespace)
+	err = manager.EnsureTenantRBAC(ctx, namespace)
 	if err != nil {
 		t.Fatalf("EnsureTenantRBAC() error = %v", err)
 	}
@@ -116,9 +170,9 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 		t.Fatalf("expected Role to exist: %v", err)
 	}
 
-	// Verify rules were updated (should have 11 rules now)
-	if len(role.Rules) != 11 {
-		t.Errorf("Role rules count = %v, want 11", len(role.Rules))
+	// Verify rules were updated (should have 12 rules now)
+	if len(role.Rules) != 12 {
+		t.Errorf("Role rules count = %v, want 12", len(role.Rules))
 	}
 
 	// Verify at least one rule has the expected OpenBaoCluster permissions
@@ -126,7 +180,8 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 	for _, rule := range role.Rules {
 		if contains(rule.APIGroups, "openbao.org") &&
 			contains(rule.Resources, "openbaoclusters") &&
-			contains(rule.Verbs, "*") {
+			contains(rule.Verbs, "get") &&
+			contains(rule.Verbs, "create") {
 			hasExpectedRule = true
 			break
 		}
@@ -138,6 +193,12 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 
 func TestEnsureTenantRBAC_UpdatesRoleBindingWhenSubjectsChange(t *testing.T) {
 	namespace := "test-namespace"
+	// Create namespace first (required for Pod Security label updates)
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
 	existingRoleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantRoleBindingName,
@@ -157,13 +218,16 @@ func TestEnsureTenantRBAC_UpdatesRoleBindingWhenSubjectsChange(t *testing.T) {
 		},
 	}
 
-	k8sClient := newTestClient(t, existingRoleBinding)
+	k8sClient := newTestClient(t, ns, existingRoleBinding)
 	logger := logr.Discard()
-	manager := NewManager(k8sClient, logger)
+	manager, err := NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
 
 	ctx := context.Background()
 
-	err := manager.EnsureTenantRBAC(ctx, namespace)
+	err = manager.EnsureTenantRBAC(ctx, namespace)
 	if err != nil {
 		t.Fatalf("EnsureTenantRBAC() error = %v", err)
 	}
@@ -184,8 +248,10 @@ func TestEnsureTenantRBAC_UpdatesRoleBindingWhenSubjectsChange(t *testing.T) {
 	}
 
 	subject := roleBinding.Subjects[0]
-	if subject.Name != "controller-manager" {
-		t.Errorf("RoleBinding subject.Name = %v, want controller-manager", subject.Name)
+	// NewManager uses default "openbao-operator-controller" if OPERATOR_SERVICE_ACCOUNT_NAME is not set
+	expectedName := "openbao-operator-controller"
+	if subject.Name != expectedName {
+		t.Errorf("RoleBinding subject.Name = %v, want %v", subject.Name, expectedName)
 	}
 	if subject.Namespace != "openbao-operator-system" {
 		t.Errorf("RoleBinding subject.Namespace = %v, want openbao-operator-system", subject.Namespace)
@@ -194,20 +260,29 @@ func TestEnsureTenantRBAC_UpdatesRoleBindingWhenSubjectsChange(t *testing.T) {
 
 func TestEnsureTenantRBAC_HandlesAlreadyExistsGracefully(t *testing.T) {
 	namespace := "test-namespace"
+	// Create namespace first (required for Pod Security label updates)
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
 	existingRole := GenerateTenantRole(namespace)
 	existingRoleBinding := GenerateTenantRoleBinding(namespace, OperatorServiceAccount{
 		Name:      "controller-manager",
 		Namespace: "openbao-operator-system",
 	})
 
-	k8sClient := newTestClient(t, existingRole, existingRoleBinding)
+	k8sClient := newTestClient(t, ns, existingRole, existingRoleBinding)
 	logger := logr.Discard()
-	manager := NewManager(k8sClient, logger)
+	manager, err := NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
 
 	ctx := context.Background()
 
 	// Should not error when resources already exist with correct content
-	err := manager.EnsureTenantRBAC(ctx, namespace)
+	err = manager.EnsureTenantRBAC(ctx, namespace)
 	if err != nil {
 		t.Fatalf("EnsureTenantRBAC() error = %v", err)
 	}
@@ -223,11 +298,14 @@ func TestCleanupTenantRBAC_DeletesRoleAndRoleBinding(t *testing.T) {
 
 	k8sClient := newTestClient(t, existingRole, existingRoleBinding)
 	logger := logr.Discard()
-	manager := NewManager(k8sClient, logger)
+	manager, err := NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
 
 	ctx := context.Background()
 
-	err := manager.CleanupTenantRBAC(ctx, namespace)
+	err = manager.CleanupTenantRBAC(ctx, namespace)
 	if err != nil {
 		t.Fatalf("CleanupTenantRBAC() error = %v", err)
 	}
@@ -257,14 +335,115 @@ func TestCleanupTenantRBAC_HandlesNotFoundGracefully(t *testing.T) {
 	namespace := "test-namespace"
 	k8sClient := newTestClient(t)
 	logger := logr.Discard()
-	manager := NewManager(k8sClient, logger)
+	manager, err := NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
 
 	ctx := context.Background()
 
 	// Should not error when resources don't exist
-	err := manager.CleanupTenantRBAC(ctx, namespace)
+	err = manager.CleanupTenantRBAC(ctx, namespace)
 	if err != nil {
 		t.Fatalf("CleanupTenantRBAC() error = %v", err)
+	}
+}
+
+func TestEnsureTenantRBAC_AppliesPodSecurityLabels(t *testing.T) {
+	namespace := "test-namespace"
+	// Create namespace
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+			Labels: map[string]string{
+				// Pre-existing label that should be preserved
+				"existing-label": "value",
+			},
+		},
+	}
+	k8sClient := newTestClient(t, ns)
+	logger := logr.Discard()
+	manager, err := NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	ctx := context.Background()
+
+	err = manager.EnsureTenantRBAC(ctx, namespace)
+	if err != nil {
+		t.Fatalf("EnsureTenantRBAC() error = %v", err)
+	}
+
+	// Verify Pod Security labels were applied
+	updatedNS := &corev1.Namespace{}
+	err = k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, updatedNS)
+	if err != nil {
+		t.Fatalf("expected Namespace to exist: %v", err)
+	}
+
+	expectedLabels := map[string]string{
+		"pod-security.kubernetes.io/enforce": "restricted",
+		"pod-security.kubernetes.io/audit":   "restricted",
+		"pod-security.kubernetes.io/warn":    "restricted",
+	}
+
+	for key, expectedValue := range expectedLabels {
+		if actualValue, exists := updatedNS.Labels[key]; !exists {
+			t.Errorf("Namespace missing Pod Security label %q", key)
+		} else if actualValue != expectedValue {
+			t.Errorf("Namespace label %q = %q, want %q", key, actualValue, expectedValue)
+		}
+	}
+
+	// Verify pre-existing labels are preserved
+	if updatedNS.Labels["existing-label"] != "value" {
+		t.Errorf("Namespace pre-existing label was not preserved")
+	}
+}
+
+func TestEnsureTenantRBAC_UpdatesPodSecurityLabels(t *testing.T) {
+	namespace := "test-namespace"
+	// Create namespace with incorrect Pod Security labels
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+			Labels: map[string]string{
+				"pod-security.kubernetes.io/enforce": "privileged", // Wrong value
+				"pod-security.kubernetes.io/audit":   "baseline",   // Wrong value
+				// Missing warn label
+			},
+		},
+	}
+	k8sClient := newTestClient(t, ns)
+	logger := logr.Discard()
+	manager, err := NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	ctx := context.Background()
+
+	err = manager.EnsureTenantRBAC(ctx, namespace)
+	if err != nil {
+		t.Fatalf("EnsureTenantRBAC() error = %v", err)
+	}
+
+	// Verify Pod Security labels were updated to restricted
+	updatedNS := &corev1.Namespace{}
+	err = k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, updatedNS)
+	if err != nil {
+		t.Fatalf("expected Namespace to exist: %v", err)
+	}
+
+	if updatedNS.Labels["pod-security.kubernetes.io/enforce"] != "restricted" {
+		t.Errorf("Pod Security enforce label was not updated to restricted")
+	}
+	if updatedNS.Labels["pod-security.kubernetes.io/audit"] != "restricted" {
+		t.Errorf("Pod Security audit label was not updated to restricted")
+	}
+	if updatedNS.Labels["pod-security.kubernetes.io/warn"] != "restricted" {
+		t.Errorf("Pod Security warn label was not added")
 	}
 }
 

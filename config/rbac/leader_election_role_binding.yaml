@@ -3,13 +3,15 @@ kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
-  name: leader-election-rolebinding
+  name: openbao-operator-controller-leader-election-rolebinding
+  namespace: system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: leader-election-role
 subjects:
-- kind: ServiceAccount
-  name: controller-manager
-  namespace: system
+  - kind: ServiceAccount
+    name: controller
+    namespace: system

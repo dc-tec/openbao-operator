@@ -91,11 +91,13 @@ func LoadCredentials(ctx context.Context, c client.Client, secretRef *corev1.Sec
 
 // NewS3ClientFromCredentials creates a new S3Client using loaded credentials.
 // If creds is nil, the client uses the default credential chain.
-func NewS3ClientFromCredentials(ctx context.Context, endpoint, bucket string, creds *Credentials, usePathStyle bool) (*S3Client, error) {
+func NewS3ClientFromCredentials(ctx context.Context, endpoint, bucket string, creds *Credentials, usePathStyle bool, partSize int64, concurrency int32) (*S3Client, error) {
 	cfg := S3ClientConfig{
 		Endpoint:     endpoint,
 		Bucket:       bucket,
 		UsePathStyle: usePathStyle,
+		PartSize:     partSize,
+		Concurrency:  concurrency,
 	}
 
 	if creds != nil {

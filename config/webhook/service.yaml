@@ -3,7 +3,8 @@ kind: Service
 metadata:
   name: webhook-service
   labels:
-    control-plane: controller-manager
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/component: controller
 spec:
   ports:
     - port: 443
@@ -11,5 +12,5 @@ spec:
       protocol: TCP
       name: webhook-server
   selector:
-    control-plane: controller-manager
-
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/component: controller

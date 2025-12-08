@@ -299,7 +299,7 @@ func TestNewS3ClientFromCredentials_WithCredentials(t *testing.T) {
 		// CACert is optional - omit it for this test to avoid PEM parsing issues
 	}
 
-	client, err := NewS3ClientFromCredentials(ctx, "https://s3.amazonaws.com", "test-bucket", creds, false)
+	client, err := NewS3ClientFromCredentials(ctx, "https://s3.amazonaws.com", "test-bucket", creds, false, 0, 0)
 	if err != nil {
 		t.Fatalf("NewS3ClientFromCredentials() error = %v", err)
 	}
@@ -314,7 +314,7 @@ func TestNewS3ClientFromCredentials_NilCredentials(t *testing.T) {
 
 	// When creds is nil, region is required but empty, so this should error
 	// The S3 client requires a region even when using default credential chain
-	_, err := NewS3ClientFromCredentials(ctx, "https://s3.amazonaws.com", "test-bucket", nil, false)
+	_, err := NewS3ClientFromCredentials(ctx, "https://s3.amazonaws.com", "test-bucket", nil, false, 0, 0)
 	if err == nil {
 		t.Fatal("NewS3ClientFromCredentials() with nil creds should error because region is required")
 	}
