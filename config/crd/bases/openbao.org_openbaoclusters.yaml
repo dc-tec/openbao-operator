@@ -952,6 +952,19 @@ spec:
                       backup failures.
                     format: int32
                     type: integer
+                  lastAttemptScheduledTime:
+                    description: |-
+                      LastAttemptScheduledTime is the scheduled time of the last backup attempt.
+                      It is derived from the cron schedule and used to ensure at-most-once execution
+                      per scheduled window.
+                    format: date-time
+                    type: string
+                  lastAttemptTime:
+                    description: |-
+                      LastAttemptTime is the timestamp of the last backup attempt, regardless of outcome.
+                      This is used to avoid retry loops when a scheduled backup fails.
+                    format: date-time
+                    type: string
                   lastBackupDuration:
                     description: LastBackupDuration is how long the last backup took
                       (e.g., "45s").

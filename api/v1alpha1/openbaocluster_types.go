@@ -679,6 +679,15 @@ type BackupStatus struct {
 	// LastBackupTime is the timestamp of the last successful backup.
 	// +optional
 	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
+	// LastAttemptTime is the timestamp of the last backup attempt, regardless of outcome.
+	// This is used to avoid retry loops when a scheduled backup fails.
+	// +optional
+	LastAttemptTime *metav1.Time `json:"lastAttemptTime,omitempty"`
+	// LastAttemptScheduledTime is the scheduled time of the last backup attempt.
+	// It is derived from the cron schedule and used to ensure at-most-once execution
+	// per scheduled window.
+	// +optional
+	LastAttemptScheduledTime *metav1.Time `json:"lastAttemptScheduledTime,omitempty"`
 	// LastBackupSize is the size in bytes of the last successful backup.
 	// +optional
 	LastBackupSize int64 `json:"lastBackupSize,omitempty"`

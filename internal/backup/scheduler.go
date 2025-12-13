@@ -104,16 +104,36 @@ func CalculateNextBackup(expr string, lastBackup time.Time) (time.Time, error) {
 		return time.Time{}, err
 	}
 
-	// If no previous backup, calculate from now
-	if lastBackup.IsZero() {
-		return schedule.Next(time.Now().UTC()), nil
+	return CalculateNextBackupAtSchedule(schedule, lastBackup, time.Now().UTC())
+}
+
+// CalculateNextBackupAt calculates the next scheduled backup time using an explicit
+// "now" time, which makes it deterministic and testable.
+func CalculateNextBackupAt(expr string, lastBackup, now time.Time) (time.Time, error) {
+	schedule, err := ParseSchedule(expr)
+	if err != nil {
+		return time.Time{}, err
 	}
 
-	// Calculate next run after last backup
+	return CalculateNextBackupAtSchedule(schedule, lastBackup, now)
+}
+
+func CalculateNextBackupAtSchedule(schedule cron.Schedule, lastBackup, now time.Time) (time.Time, error) {
+	if schedule == nil {
+		return time.Time{}, fmt.Errorf("schedule must not be nil")
+	}
+
+	// If there has never been a backup/attempt, schedule the first run based on now
+	// instead of running immediately. This prevents immediate execution on cluster
+	// creation and respects the cron alignment.
+	if lastBackup.IsZero() {
+		return schedule.Next(now), nil
+	}
+
+	// Calculate next run after last backup/attempt.
 	nextRun := schedule.Next(lastBackup)
 
-	// If next run is in the past, calculate from now
-	now := time.Now().UTC()
+	// If the next run is already in the past, treat it as missed and schedule from now.
 	if nextRun.Before(now) {
 		return schedule.Next(now), nil
 	}

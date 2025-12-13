@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -184,9 +185,9 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 
 	// TIGHTENED: No discovery logic here. Use the struct fields.
 	var bootstrapConfig *configbuilder.OperatorBootstrapConfig
-	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened {
+	if shouldBootstrapJWTAuth(cluster) {
 		if m.oidcIssuer == "" {
-			return fmt.Errorf("cannot use Hardened profile: OIDC issuer could not be determined at operator startup")
+			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC issuer could not be determined at operator startup")
 		}
 
 		operatorNS := m.operatorNamespace
@@ -294,6 +295,29 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 	}
 
 	return nil
+}
+
+func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster == nil {
+		return false
+	}
+
+	// Hardened clusters always bootstrap JWT auth so the operator can authenticate
+	// to OpenBao without storing static tokens.
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened {
+		return true
+	}
+
+	// In Development profile, bootstrap JWT auth when a feature explicitly opts
+	// into JWT auth (backup/upgrade).
+	if cluster.Spec.Backup != nil && strings.TrimSpace(cluster.Spec.Backup.JWTAuthRole) != "" {
+		return true
+	}
+	if cluster.Spec.Upgrade != nil && strings.TrimSpace(cluster.Spec.Upgrade.JWTAuthRole) != "" {
+		return true
+	}
+
+	return false
 }
 
 // deleteConfigMap removes the config ConfigMap for the OpenBaoCluster.

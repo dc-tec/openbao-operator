@@ -61,6 +61,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	logger = logger.WithValues("component", "backup")
 	metrics := NewMetrics(cluster.Namespace, cluster.Name)
+	now := time.Now().UTC()
 
 	// Ensure backup ServiceAccount exists (for JWT Auth)
 	if err := m.ensureBackupServiceAccount(ctx, logger, cluster); err != nil {
@@ -82,32 +83,43 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return nil // Don't return error - preconditions not met is not a reconcile failure
 	}
 
-	// Check if backup is due
-	isDue, err := m.isBackupDue(cluster)
+	schedule, err := ParseSchedule(cluster.Spec.Backup.Schedule)
 	if err != nil {
-		return fmt.Errorf("failed to check backup schedule: %w", err)
+		return fmt.Errorf("failed to parse backup schedule: %w", err)
 	}
 
-	if !isDue {
-		// Update next scheduled backup time
-		if err := m.updateNextScheduled(cluster); err != nil {
-			logger.Error(err, "Failed to update next scheduled backup time")
-		}
+	if cluster.Status.Backup.NextScheduledBackup == nil {
+		next := schedule.Next(now)
+		nextMeta := metav1.NewTime(next)
+		cluster.Status.Backup.NextScheduledBackup = &nextMeta
 		return nil
 	}
 
-	logger.Info("Backup is due, creating backup Job")
+	scheduledTime := cluster.Status.Backup.NextScheduledBackup.Time
+	if now.Before(scheduledTime) {
+		return nil
+	}
+
+	nextScheduled := schedule.Next(scheduledTime)
+	if !nextScheduled.After(now) {
+		nextScheduled = schedule.Next(now)
+	}
+
+	jobName := backupJobName(cluster, scheduledTime)
+	logger.Info("Backup is due, ensuring backup Job", "job", jobName, "scheduledTime", scheduledTime, "nextScheduled", nextScheduled)
 	metrics.SetInProgress(true)
 
 	// Create or check backup Job
-	jobInProgress, err := m.ensureBackupJob(ctx, logger, cluster)
+	jobInProgress, err := m.ensureBackupJob(ctx, logger, cluster, jobName)
 	if err != nil {
 		return fmt.Errorf("failed to ensure backup Job: %w", err)
 	}
 
+	m.recordBackupAttempt(cluster, now, scheduledTime, nextScheduled)
+
 	if jobInProgress {
 		// Job is running - process its status
-		if err := m.processBackupJobResult(ctx, logger, cluster); err != nil {
+		if err := m.processBackupJobResult(ctx, logger, cluster, jobName); err != nil {
 			return fmt.Errorf("failed to process backup Job result: %w", err)
 		}
 		// Requeue to check Job status again
@@ -115,7 +127,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	// Check if there's a completed Job to process
-	if err := m.processBackupJobResult(ctx, logger, cluster); err != nil {
+	if err := m.processBackupJobResult(ctx, logger, cluster, jobName); err != nil {
 		return fmt.Errorf("failed to process backup Job result: %w", err)
 	}
 
@@ -129,13 +141,27 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			}
 		}
 
-		// Update next scheduled backup time
-		if err := m.updateNextScheduled(cluster); err != nil {
-			logger.Error(err, "Failed to update next scheduled backup time")
-		}
+		// Next scheduled backup is set when a run becomes due; keep it up-to-date for status reporting.
+		nextScheduledMeta := metav1.NewTime(nextScheduled)
+		cluster.Status.Backup.NextScheduledBackup = &nextScheduledMeta
 	}
 
 	return nil
+}
+
+func (m *Manager) recordBackupAttempt(cluster *openbaov1alpha1.OpenBaoCluster, now time.Time, scheduledTime time.Time, nextScheduled time.Time) {
+	if cluster.Status.Backup == nil {
+		cluster.Status.Backup = &openbaov1alpha1.BackupStatus{}
+	}
+
+	nowMeta := metav1.NewTime(now)
+	cluster.Status.Backup.LastAttemptTime = &nowMeta
+
+	scheduledMeta := metav1.NewTime(scheduledTime)
+	cluster.Status.Backup.LastAttemptScheduledTime = &scheduledMeta
+
+	nextScheduledMeta := metav1.NewTime(nextScheduled)
+	cluster.Status.Backup.NextScheduledBackup = &nextScheduledMeta
 }
 
 // BackupResult contains the result of a successful backup.
@@ -250,31 +276,10 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 
 // isBackupDue checks if a backup should be executed now.
 func (m *Manager) isBackupDue(cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	schedule := cluster.Spec.Backup.Schedule
-
-	var lastBackup time.Time
-	if cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupTime != nil {
-		lastBackup = cluster.Status.Backup.LastBackupTime.Time
+	if cluster.Spec.Backup == nil || cluster.Status.Backup == nil || cluster.Status.Backup.NextScheduledBackup == nil {
+		return false, nil
 	}
-
-	return IsDue(schedule, lastBackup, time.Now().UTC())
-}
-
-// updateNextScheduled calculates and sets the next scheduled backup time.
-func (m *Manager) updateNextScheduled(cluster *openbaov1alpha1.OpenBaoCluster) error {
-	var lastBackup time.Time
-	if cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupTime != nil {
-		lastBackup = cluster.Status.Backup.LastBackupTime.Time
-	}
-
-	nextBackup, err := CalculateNextBackup(cluster.Spec.Backup.Schedule, lastBackup)
-	if err != nil {
-		return err
-	}
-
-	nextBackupMeta := metav1.NewTime(nextBackup)
-	cluster.Status.Backup.NextScheduledBackup = &nextBackupMeta
-	return nil
+	return !time.Now().UTC().Before(cluster.Status.Backup.NextScheduledBackup.Time), nil
 }
 
 // applyRetention applies the retention policy after a successful backup.

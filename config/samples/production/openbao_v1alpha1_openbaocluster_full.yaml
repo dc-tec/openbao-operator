@@ -205,7 +205,7 @@ spec:
     # Backup executor image built from Dockerfile.backup in this repository.
     # For k3d clusters, push to the local registry; for other environments,
     # use a fully qualified image reference.
-    executorImage: "k3d-registry.localhost:5000/openbao-backup:1.0.2"
+    executorImage: "k3d-registry.localhost:5000/openbao-backup:1.1.0"
     target:
       # RustFS S3 API endpoint inside the cluster.
       # Use the internal ClusterIP service for in-cluster access (recommended).

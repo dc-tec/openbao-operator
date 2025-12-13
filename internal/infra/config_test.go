@@ -411,6 +411,77 @@ func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
 	}
 }
 
+func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t *testing.T) {
+	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.Spec.Profile = openbaov1alpha1.ProfileDevelopment
+	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+		ExecutorImage: "openbao/backup-executor:v0.1.0",
+		Schedule:      "0 3 * * *",
+		JWTAuthRole:   "backup",
+		Target: openbaov1alpha1.BackupTarget{
+			Endpoint:     "https://s3.amazonaws.com",
+			Bucket:       "test-bucket",
+			PathPrefix:   "backups",
+			UsePathStyle: false,
+		},
+	}
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		Requests: []openbaov1alpha1.SelfInitRequest{
+			{
+				Name:      "create-admin-policy",
+				Operation: openbaov1alpha1.SelfInitOperationUpdate,
+				Path:      "sys/policies/acl/admin",
+				Data: &apiextensionsv1.JSON{
+					Raw: []byte(`{"policy":"path \\\"*\\\" { capabilities = [\\\"create\\\"] }"}`),
+				},
+			},
+		},
+	}
+
+	oidcIssuer := "https://kubernetes.default.svc"
+	oidcCABundle := "-----BEGIN CERTIFICATE-----\ntest-ca-cert\n-----END CERTIFICATE-----"
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	client := newTestClient(t)
+	manager := NewManager(client, testScheme, "openbao-operator-system", oidcIssuer, oidcCABundle)
+
+	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
+	if err != nil {
+		t.Fatalf("ensureSelfInitConfigMap() error = %v", err)
+	}
+
+	cmName := configInitMapName(cluster)
+	configMap := &corev1.ConfigMap{}
+	err = client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cmName,
+	}, configMap)
+	if err != nil {
+		t.Fatalf("expected ConfigMap to exist: %v", err)
+	}
+
+	content := configMap.Data[configFileName]
+	if content == "" {
+		t.Fatal("expected ConfigMap to have config content")
+	}
+
+	expectedSnippets := []string{
+		`initialize "operator-bootstrap"`,
+		`request "enable-jwt-auth"`,
+		`request "config-jwt-auth"`,
+		`auth/jwt/role/backup`,
+		`sys/policies/acl/backup`,
+	}
+
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(content, snippet) {
+			t.Errorf("expected ConfigMap content to contain %q, got:\n%s", snippet, content)
+		}
+	}
+}
+
 func TestDeleteConfigMap(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
 	cmName := configMapName(cluster)

@@ -34,8 +34,7 @@ const (
 
 // ensureBackupJob creates or updates a Kubernetes Job for executing the backup.
 // Returns true if a Job was created or is already running, false if backup should not proceed.
-func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	jobName := backupJobName(cluster)
+func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (bool, error) {
 	job := &batchv1.Job{}
 
 	err := m.client.Get(ctx, types.NamespacedName{
@@ -90,8 +89,7 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 }
 
 // processBackupJobResult processes the result of a completed backup Job and updates cluster status.
-func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	jobName := backupJobName(cluster)
+func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) error {
 	job := &batchv1.Job{}
 
 	err := m.client.Get(ctx, types.NamespacedName{
@@ -144,8 +142,8 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 	return nil
 }
 
-func backupJobName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return backupJobNamePrefix + cluster.Name + "-" + time.Now().Format("20060102-150405")
+func backupJobName(cluster *openbaov1alpha1.OpenBaoCluster, scheduledTime time.Time) string {
+	return backupJobNamePrefix + cluster.Name + "-" + scheduledTime.UTC().Format("20060102-150405")
 }
 
 func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*batchv1.Job, error) {

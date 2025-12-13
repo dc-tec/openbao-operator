@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
@@ -63,7 +64,8 @@ func newTestClusterWithBackup(name, namespace string) *openbaov1alpha1.OpenBaoCl
 
 func TestBackupJobName(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	jobName := backupJobName(cluster)
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
 
 	if !strings.HasPrefix(jobName, "backup-test-cluster-") {
 		t.Errorf("backupJobName() = %v, want prefix 'backup-test-cluster-'", jobName)
@@ -438,8 +440,10 @@ func TestEnsureBackupJob_CreatesJob(t *testing.T) {
 	manager := NewManager(client, testScheme)
 
 	cluster := newTestClusterWithBackup("test-cluster", "default")
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
 
-	created, err := manager.ensureBackupJob(ctx, logger, cluster)
+	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("ensureBackupJob() error = %v", err)
 	}
@@ -449,7 +453,6 @@ func TestEnsureBackupJob_CreatesJob(t *testing.T) {
 	}
 
 	// Verify Job was created
-	jobName := backupJobName(cluster)
 	job := &batchv1.Job{}
 	err = client.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
@@ -463,7 +466,8 @@ func TestEnsureBackupJob_CreatesJob(t *testing.T) {
 
 func TestEnsureBackupJob_JobAlreadyRunning(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	jobName := backupJobName(cluster)
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
 
 	runningJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -480,7 +484,7 @@ func TestEnsureBackupJob_JobAlreadyRunning(t *testing.T) {
 	client := newTestClient(t, runningJob)
 	manager := NewManager(client, testScheme)
 
-	created, err := manager.ensureBackupJob(ctx, logger, cluster)
+	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("ensureBackupJob() error = %v", err)
 	}
@@ -492,7 +496,8 @@ func TestEnsureBackupJob_JobAlreadyRunning(t *testing.T) {
 
 func TestEnsureBackupJob_JobCompleted(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	jobName := backupJobName(cluster)
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
 
 	completedJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -509,7 +514,7 @@ func TestEnsureBackupJob_JobCompleted(t *testing.T) {
 	client := newTestClient(t, completedJob)
 	manager := NewManager(client, testScheme)
 
-	created, err := manager.ensureBackupJob(ctx, logger, cluster)
+	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("ensureBackupJob() error = %v", err)
 	}
@@ -521,7 +526,8 @@ func TestEnsureBackupJob_JobCompleted(t *testing.T) {
 
 func TestEnsureBackupJob_JobFailed(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	jobName := backupJobName(cluster)
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
 
 	failedJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -538,7 +544,7 @@ func TestEnsureBackupJob_JobFailed(t *testing.T) {
 	client := newTestClient(t, failedJob)
 	manager := NewManager(client, testScheme)
 
-	created, err := manager.ensureBackupJob(ctx, logger, cluster)
+	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("ensureBackupJob() error = %v", err)
 	}
@@ -550,7 +556,8 @@ func TestEnsureBackupJob_JobFailed(t *testing.T) {
 
 func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	jobName := backupJobName(cluster)
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
 
 	succeededJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -567,7 +574,7 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 	client := newTestClient(t, succeededJob)
 	manager := NewManager(client, testScheme)
 
-	err := manager.processBackupJobResult(ctx, logger, cluster)
+	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
@@ -589,7 +596,8 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	cluster.Status.Backup.ConsecutiveFailures = 0
-	jobName := backupJobName(cluster)
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
 
 	failedJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -606,7 +614,7 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	client := newTestClient(t, failedJob)
 	manager := NewManager(client, testScheme)
 
-	err := manager.processBackupJobResult(ctx, logger, cluster)
+	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
@@ -623,6 +631,8 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 
 func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
 
 	ctx := context.Background()
 	logger := logr.Discard()
@@ -630,7 +640,7 @@ func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
 	manager := NewManager(client, testScheme)
 
 	// Should not error when job doesn't exist
-	err := manager.processBackupJobResult(ctx, logger, cluster)
+	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() with missing job should not error, got: %v", err)
 	}
@@ -638,7 +648,8 @@ func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
 
 func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	jobName := backupJobName(cluster)
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
 
 	runningJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -655,7 +666,7 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 	client := newTestClient(t, runningJob)
 	manager := NewManager(client, testScheme)
 
-	err := manager.processBackupJobResult(ctx, logger, cluster)
+	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
