@@ -91,7 +91,7 @@ func createTLSSecretForTest(t *testing.T, client client.Client, cluster *openbao
 
 func TestReconcileCreatesAllResources(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-full", "default")
 	cluster.Status.Initialized = true
@@ -188,7 +188,7 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 			t.Parallel()
 
 			k8sClient := newTestClient(t)
-			manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+			manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 			cluster := newMinimalCluster("infra-delete", "default")
 			createTLSSecretForTest(t, k8sClient, cluster)
@@ -239,7 +239,7 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 
 func TestCleanupDeletesAllResources(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-cleanup", "default")
 	cluster.Status.Initialized = true
@@ -321,7 +321,7 @@ func TestCleanupDeletesAllResources(t *testing.T) {
 // sharing of Secrets, ConfigMaps, StatefulSets, and Services (FR-MT-05).
 func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 	ctx := context.Background()
 
 	// Create two clusters with different names in the same namespace
@@ -399,7 +399,7 @@ func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 // namespace and that clusters in different namespaces are isolated (FR-MT-01, FR-MT-02).
 func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 	ctx := context.Background()
 
 	// Create two clusters with the same name but in different namespaces
@@ -462,7 +462,7 @@ func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 // cluster name to enable proper identification and deletion.
 func TestMultiTenancyResourceLabeling(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 	ctx := context.Background()
 
 	cluster := newMinimalCluster("labeled-cluster", "labeling-test")
@@ -513,7 +513,7 @@ func TestMultiTenancyResourceLabeling(t *testing.T) {
 
 func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 	ctx := context.Background()
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference

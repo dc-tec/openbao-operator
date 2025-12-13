@@ -31,7 +31,7 @@ const (
 // OperatorBootstrapConfig holds configuration for operator bootstrap.
 type OperatorBootstrapConfig struct {
 	OIDCIssuerURL string
-	CACertPEM     string
+	JWTKeysPEM    []string
 	OperatorNS    string
 	OperatorSA    string
 }
@@ -168,8 +168,8 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	body.AppendNewBlock("service_registration", []string{"kubernetes"})
 
 	// 6. User-defined overrides as simple string attributes.
-	// Only keys that pass webhook validation (allowlist) will reach here.
-	// The webhook ensures only valid OpenBao configuration parameters are allowed.
+	// Only keys that pass the ValidatingAdmissionPolicy allowlist will reach here.
+	// The policy ensures only valid OpenBao configuration parameters are allowed.
 	if len(cluster.Spec.Config) > 0 {
 		keys := make([]string, 0, len(cluster.Spec.Config))
 		for k := range cluster.Spec.Config {
@@ -212,6 +212,19 @@ func RenderOperatorBootstrapHCL(config OperatorBootstrapConfig) ([]byte, error) 
 	file := hclwrite.NewEmptyFile()
 	body := file.Body()
 
+	if strings.TrimSpace(config.OIDCIssuerURL) == "" {
+		return nil, fmt.Errorf("OIDC issuer URL is required to render operator bootstrap")
+	}
+	if len(config.JWTKeysPEM) == 0 {
+		return nil, fmt.Errorf("at least one JWT public key is required to render operator bootstrap")
+	}
+	if strings.TrimSpace(config.OperatorNS) == "" {
+		return nil, fmt.Errorf("operator namespace is required to render operator bootstrap")
+	}
+	if strings.TrimSpace(config.OperatorSA) == "" {
+		return nil, fmt.Errorf("operator service account name is required to render operator bootstrap")
+	}
+
 	// Create initialize block
 	initBlock := body.AppendNewBlock("initialize", []string{"operator-bootstrap"})
 	initBody := initBlock.Body()
@@ -231,9 +244,12 @@ func RenderOperatorBootstrapHCL(config OperatorBootstrapConfig) ([]byte, error) 
 	configReqBody.SetAttributeValue("operation", cty.StringVal("update"))
 	configReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/config"))
 	configReqData := configReqBody.AppendNewBlock("data", nil)
-	configReqData.Body().SetAttributeValue("oidc_discovery_url", cty.StringVal(config.OIDCIssuerURL))
-	configReqData.Body().SetAttributeValue("oidc_discovery_ca_pem", cty.StringVal(config.CACertPEM))
 	configReqData.Body().SetAttributeValue("bound_issuer", cty.StringVal(config.OIDCIssuerURL))
+	jwtKeys := make([]cty.Value, 0, len(config.JWTKeysPEM))
+	for _, k := range config.JWTKeysPEM {
+		jwtKeys = append(jwtKeys, cty.StringVal(k))
+	}
+	configReqData.Body().SetAttributeValue("jwt_validation_pubkeys", cty.ListVal(jwtKeys))
 
 	// 3. Create Policy
 	policyReq := initBody.AppendNewBlock("request", []string{"create-operator-policy"})
@@ -253,6 +269,7 @@ path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
 	roleReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/role/openbao-operator"))
 	roleReqData := roleReqBody.AppendNewBlock("data", nil)
 	roleReqData.Body().SetAttributeValue("role_type", cty.StringVal("jwt"))
+	roleReqData.Body().SetAttributeValue("user_claim", cty.StringVal("sub"))
 	roleReqData.Body().SetAttributeValue("bound_audiences", cty.ListVal([]cty.Value{cty.StringVal("openbao-internal")}))
 
 	// Bound claims
@@ -277,6 +294,19 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 
 	// If bootstrap config provided, render it first
 	if bootstrapConfig != nil {
+		if strings.TrimSpace(bootstrapConfig.OIDCIssuerURL) == "" {
+			return nil, fmt.Errorf("OIDC issuer URL is required to render operator bootstrap")
+		}
+		if len(bootstrapConfig.JWTKeysPEM) == 0 {
+			return nil, fmt.Errorf("at least one JWT public key is required to render operator bootstrap")
+		}
+		if strings.TrimSpace(bootstrapConfig.OperatorNS) == "" {
+			return nil, fmt.Errorf("operator namespace is required to render operator bootstrap")
+		}
+		if strings.TrimSpace(bootstrapConfig.OperatorSA) == "" {
+			return nil, fmt.Errorf("operator service account name is required to render operator bootstrap")
+		}
+
 		// Render bootstrap blocks directly into the body
 		initBlock := body.AppendNewBlock("initialize", []string{"operator-bootstrap"})
 		initBody := initBlock.Body()
@@ -296,9 +326,12 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 		configReqBody.SetAttributeValue("operation", cty.StringVal("update"))
 		configReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/config"))
 		configReqData := configReqBody.AppendNewBlock("data", nil)
-		configReqData.Body().SetAttributeValue("oidc_discovery_url", cty.StringVal(bootstrapConfig.OIDCIssuerURL))
-		configReqData.Body().SetAttributeValue("oidc_discovery_ca_pem", cty.StringVal(bootstrapConfig.CACertPEM))
 		configReqData.Body().SetAttributeValue("bound_issuer", cty.StringVal(bootstrapConfig.OIDCIssuerURL))
+		jwtKeys := make([]cty.Value, 0, len(bootstrapConfig.JWTKeysPEM))
+		for _, k := range bootstrapConfig.JWTKeysPEM {
+			jwtKeys = append(jwtKeys, cty.StringVal(k))
+		}
+		configReqData.Body().SetAttributeValue("jwt_validation_pubkeys", cty.ListVal(jwtKeys))
 
 		// 3. Create Policy
 		policyReq := initBody.AppendNewBlock("request", []string{"create-operator-policy"})
@@ -318,6 +351,7 @@ path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
 		roleReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/role/openbao-operator"))
 		roleReqData := roleReqBody.AppendNewBlock("data", nil)
 		roleReqData.Body().SetAttributeValue("role_type", cty.StringVal("jwt"))
+		roleReqData.Body().SetAttributeValue("user_claim", cty.StringVal("sub"))
 		roleReqData.Body().SetAttributeValue("bound_audiences", cty.ListVal([]cty.Value{cty.StringVal("openbao-internal")}))
 
 		// Bound claims
@@ -349,6 +383,7 @@ path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
 			backupRoleReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/role/backup"))
 			backupRoleReqData := backupRoleReqBody.AppendNewBlock("data", nil)
 			backupRoleReqData.Body().SetAttributeValue("role_type", cty.StringVal("jwt"))
+			backupRoleReqData.Body().SetAttributeValue("user_claim", cty.StringVal("sub"))
 			backupRoleReqData.Body().SetAttributeValue("bound_audiences", cty.ListVal([]cty.Value{cty.StringVal("openbao-internal")}))
 
 			backupBoundClaims := map[string]cty.Value{
@@ -382,6 +417,7 @@ path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
 			upgradeRoleReqBody.SetAttributeValue("path", cty.StringVal("auth/jwt/role/upgrade"))
 			upgradeRoleReqData := upgradeRoleReqBody.AppendNewBlock("data", nil)
 			upgradeRoleReqData.Body().SetAttributeValue("role_type", cty.StringVal("jwt"))
+			upgradeRoleReqData.Body().SetAttributeValue("user_claim", cty.StringVal("sub"))
 			upgradeRoleReqData.Body().SetAttributeValue("bound_audiences", cty.ListVal([]cty.Value{cty.StringVal("openbao-internal")}))
 
 			upgradeBoundClaims := map[string]cty.Value{

@@ -17,7 +17,7 @@ import (
 
 func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-init", "default")
 	cluster.Status.Initialized = false
@@ -53,7 +53,7 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 
 func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-scaled", "default")
 	cluster.Status.Initialized = true
@@ -123,7 +123,7 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k8sClient := newTestClient(t)
-			manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+			manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 			cluster := newMinimalCluster("test-replica", "default")
 			cluster.Spec.Replicas = tt.specReplicas
@@ -160,7 +160,7 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 
 func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-container", "default")
 	cluster.Spec.Config = map[string]string{
@@ -267,15 +267,15 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
 				t.Fatalf("expected liveness probe to target %s, got %v", openBaoProbeAddr, c.LivenessProbe.Exec.Command)
 			}
-			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-timeout="+openBaoProbeTimeout) {
-				t.Fatalf("expected liveness probe to use timeout %s, got %v", openBaoProbeTimeout, c.LivenessProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-timeout="+openBaoLivenessProbeTimeout) {
+				t.Fatalf("expected liveness probe to use timeout %s, got %v", openBaoLivenessProbeTimeout, c.LivenessProbe.Exec.Command)
 			}
 
 			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
 				t.Fatalf("expected readiness probe to target %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
 			}
-			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-timeout="+openBaoProbeTimeout) {
-				t.Fatalf("expected readiness probe to use timeout %s, got %v", openBaoProbeTimeout, c.ReadinessProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-timeout="+openBaoReadinessProbeTimeout) {
+				t.Fatalf("expected readiness probe to use timeout %s, got %v", openBaoReadinessProbeTimeout, c.ReadinessProbe.Exec.Command)
 			}
 
 			// Verify environment variables are set correctly
@@ -317,7 +317,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 
 func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-init-container", "default")
 	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
@@ -363,7 +363,7 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 
 func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-no-init-container", "default")
 	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
@@ -395,7 +395,7 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 
 func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-volumes", "default")
 
@@ -448,7 +448,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 
 func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-delete-pvcs", "default")
 

@@ -229,6 +229,7 @@ func TestBuildBackupJob(t *testing.T) {
 		"BACKUP_ENDPOINT":       cluster.Spec.Backup.Target.Endpoint,
 		"BACKUP_BUCKET":         cluster.Spec.Backup.Target.Bucket,
 		"BACKUP_PATH_PREFIX":    cluster.Spec.Backup.Target.PathPrefix,
+		"BACKUP_REGION":         "us-east-1",
 		"BACKUP_USE_PATH_STYLE": "false",
 	}
 
@@ -371,6 +372,69 @@ func TestBuildBackupJob_WithJWTAuth(t *testing.T) {
 	}
 	if !volumes["openbao-token"] {
 		t.Error("buildBackupJob() expected openbao-token projected volume for JWT auth")
+	}
+}
+
+func TestBuildBackupJob_WithRoleARN(t *testing.T) {
+	cluster := newTestClusterWithBackup("test-cluster", "default")
+	cluster.Spec.Backup.Target.RoleARN = "arn:aws:iam::123456789012:role/backup-role"
+
+	jobName := "backup-test-cluster-20250101-120000"
+	job, err := buildBackupJob(cluster, jobName)
+	if err != nil {
+		t.Fatalf("buildBackupJob() error = %v", err)
+	}
+
+	container := job.Spec.Template.Spec.Containers[0]
+	envMap := make(map[string]string)
+	for _, env := range container.Env {
+		envMap[env.Name] = env.Value
+	}
+
+	if envMap["AWS_ROLE_ARN"] != cluster.Spec.Backup.Target.RoleARN {
+		t.Errorf("buildBackupJob() AWS_ROLE_ARN = %v, want %v", envMap["AWS_ROLE_ARN"], cluster.Spec.Backup.Target.RoleARN)
+	}
+
+	if envMap["AWS_WEB_IDENTITY_TOKEN_FILE"] != "/var/run/secrets/aws/token" {
+		t.Errorf("buildBackupJob() AWS_WEB_IDENTITY_TOKEN_FILE = %v, want /var/run/secrets/aws/token", envMap["AWS_WEB_IDENTITY_TOKEN_FILE"])
+	}
+
+	hasTokenMount := false
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == "aws-iam-token" {
+			hasTokenMount = true
+			if mount.MountPath != "/var/run/secrets/aws" {
+				t.Errorf("buildBackupJob() aws token mount path = %v, want /var/run/secrets/aws", mount.MountPath)
+			}
+		}
+	}
+	if !hasTokenMount {
+		t.Error("buildBackupJob() expected aws-iam-token volume mount when RoleARN is set")
+	}
+
+	hasTokenVolume := false
+	for _, vol := range job.Spec.Template.Spec.Volumes {
+		if vol.Name != "aws-iam-token" {
+			continue
+		}
+		hasTokenVolume = true
+		if vol.Projected == nil || len(vol.Projected.Sources) != 1 {
+			t.Fatal("buildBackupJob() expected aws-iam-token projected volume with one source")
+		}
+
+		sat := vol.Projected.Sources[0].ServiceAccountToken
+		if sat == nil {
+			t.Fatal("buildBackupJob() expected aws-iam-token projected volume to have ServiceAccountToken source")
+		}
+		if sat.Path != "token" {
+			t.Errorf("buildBackupJob() expected aws token path to be 'token', got %q", sat.Path)
+		}
+		if sat.Audience != "sts.amazonaws.com" {
+			t.Errorf("buildBackupJob() expected aws token audience to be 'sts.amazonaws.com', got %q", sat.Audience)
+		}
+	}
+	if !hasTokenVolume {
+		t.Error("buildBackupJob() expected aws-iam-token projected volume when RoleARN is set")
 	}
 }
 

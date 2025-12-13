@@ -26,8 +26,9 @@ const (
 	openBaoProbeAddr   = "https://localhost:8200"
 	openBaoProbeCAFile = "/etc/bao/tls/ca.crt"
 
-	openBaoProbeTimeout        = "4s"
-	openBaoStartupProbeTimeout = "2s"
+	openBaoLivenessProbeTimeout  = "4s"
+	openBaoReadinessProbeTimeout = "10s"
+	openBaoStartupProbeTimeout   = "5s"
 )
 
 // checkStatefulSetPrerequisites verifies that all required resources exist before creating or updating the StatefulSet.
@@ -490,7 +491,7 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 				ProbeHandler: corev1.ProbeHandler{
 					Exec: readinessProbeExec,
 				},
-				TimeoutSeconds:   5,
+				TimeoutSeconds:   10,
 				PeriodSeconds:    10,
 				FailureThreshold: 6,
 			},
@@ -565,7 +566,7 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 			"-mode=liveness",
 			"-addr=" + openBaoProbeAddr,
 			"-ca-file=" + openBaoProbeCAFile,
-			"-timeout=" + openBaoProbeTimeout,
+			"-timeout=" + openBaoLivenessProbeTimeout,
 		},
 	}
 
@@ -575,7 +576,7 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 			"-mode=readiness",
 			"-addr=" + openBaoProbeAddr,
 			"-ca-file=" + openBaoProbeCAFile,
-			"-timeout=" + openBaoProbeTimeout,
+			"-timeout=" + openBaoReadinessProbeTimeout,
 		},
 	}
 
@@ -754,6 +755,12 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 				pvc,
 			},
 		},
+	}
+
+	if cluster.Spec.WorkloadHardening != nil && cluster.Spec.WorkloadHardening.AppArmorEnabled {
+		statefulSet.Spec.Template.Spec.SecurityContext.AppArmorProfile = &corev1.AppArmorProfile{
+			Type: corev1.AppArmorProfileTypeRuntimeDefault,
+		}
 	}
 
 	return statefulSet, nil

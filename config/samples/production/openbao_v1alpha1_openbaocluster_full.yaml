@@ -90,6 +90,8 @@ metadata:
 spec:
   # Hardened security profile - REQUIRED for production
   profile: Development
+  workloadHardening:
+    appArmorEnabled: false
   config:
     log_level: "debug"
   version: "2.4.4"

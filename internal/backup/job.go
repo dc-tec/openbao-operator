@@ -32,6 +32,25 @@ const (
 	backupGroupID = int64(1000)
 )
 
+const (
+	defaultS3Region = "us-east-1"
+
+	awsWebIdentityVolumeName     = "aws-iam-token"
+	awsWebIdentityMountPath      = "/var/run/secrets/aws"
+	awsWebIdentityTokenFile      = awsWebIdentityMountPath + "/token"
+	awsWebIdentityTokenAudience  = "sts.amazonaws.com"
+	openBaoTokenVolumeName       = "openbao-token"
+	openBaoTokenMountPath        = "/var/run/secrets/tokens"
+	openBaoTokenFileRelativePath = "openbao-token"
+	openBaoTokenAudience         = "openbao-internal"
+	backupCredentialsVolumeName  = "backup-credentials"
+	backupCredentialsMountPath   = "/etc/bao/backup/credentials"
+	backupTokenVolumeName        = "backup-token"
+	backupTokenMountPath         = "/etc/bao/backup/token"
+	backupTLSCAVolumeName        = "tls-ca"
+	backupTLSCAMountPath         = "/etc/bao/tls"
+)
+
 // ensureBackupJob creates or updates a Kubernetes Job for executing the backup.
 // Returns true if a Job was created or is already running, false if backup should not proceed.
 func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (bool, error) {
@@ -147,6 +166,11 @@ func backupJobName(cluster *openbaov1alpha1.OpenBaoCluster, scheduledTime time.T
 }
 
 func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*batchv1.Job, error) {
+	region := cluster.Spec.Backup.Target.Region
+	if region == "" {
+		region = defaultS3Region
+	}
+
 	// Build environment variables for the backup container
 	env := []corev1.EnvVar{
 		{Name: "CLUSTER_NAMESPACE", Value: cluster.Namespace},
@@ -155,7 +179,19 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 		{Name: "BACKUP_ENDPOINT", Value: cluster.Spec.Backup.Target.Endpoint},
 		{Name: "BACKUP_BUCKET", Value: cluster.Spec.Backup.Target.Bucket},
 		{Name: "BACKUP_PATH_PREFIX", Value: cluster.Spec.Backup.Target.PathPrefix},
+		{Name: "BACKUP_REGION", Value: region},
 		{Name: "BACKUP_USE_PATH_STYLE", Value: fmt.Sprintf("%t", cluster.Spec.Backup.Target.UsePathStyle)},
+	}
+
+	if cluster.Spec.Backup.Target.RoleARN != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  "AWS_ROLE_ARN",
+			Value: cluster.Spec.Backup.Target.RoleARN,
+		})
+		env = append(env, corev1.EnvVar{
+			Name:  "AWS_WEB_IDENTITY_TOKEN_FILE",
+			Value: awsWebIdentityTokenFile,
+		})
 	}
 
 	// Add S3 upload configuration if specified
@@ -256,6 +292,10 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: backupServiceAccountName(cluster),
+					// Explicitly disable default token mounts. The backup Job only mounts a
+					// projected ServiceAccount token when JWT auth and/or S3 Web Identity is
+					// configured.
+					AutomountServiceAccountToken: ptr.To(false),
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: ptr.To(true),
 						RunAsUser:    ptr.To(backupUserID),
@@ -293,6 +333,12 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 		},
 	}
 
+	if cluster.Spec.WorkloadHardening != nil && cluster.Spec.WorkloadHardening.AppArmorEnabled {
+		job.Spec.Template.Spec.SecurityContext.AppArmorProfile = &corev1.AppArmorProfile{
+			Type: corev1.AppArmorProfileTypeRuntimeDefault,
+		}
+	}
+
 	return job, nil
 }
 
@@ -301,16 +347,24 @@ func buildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster) []corev
 
 	// Mount TLS CA certificate
 	mounts = append(mounts, corev1.VolumeMount{
-		Name:      "tls-ca",
-		MountPath: "/etc/bao/tls",
+		Name:      backupTLSCAVolumeName,
+		MountPath: backupTLSCAMountPath,
 		ReadOnly:  true,
 	})
+
+	if cluster.Spec.Backup.Target.RoleARN != "" {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      awsWebIdentityVolumeName,
+			MountPath: awsWebIdentityMountPath,
+			ReadOnly:  true,
+		})
+	}
 
 	// Mount credentials secret if provided
 	if cluster.Spec.Backup.Target.CredentialsSecretRef != nil {
 		mounts = append(mounts, corev1.VolumeMount{
-			Name:      "backup-credentials",
-			MountPath: "/etc/bao/backup/credentials",
+			Name:      backupCredentialsVolumeName,
+			MountPath: backupCredentialsMountPath,
 			ReadOnly:  true,
 		})
 	}
@@ -318,8 +372,8 @@ func buildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster) []corev
 	// Mount JWT token from projected volume (preferred method)
 	if cluster.Spec.Backup.JWTAuthRole != "" {
 		mounts = append(mounts, corev1.VolumeMount{
-			Name:      "openbao-token",
-			MountPath: "/var/run/secrets/tokens",
+			Name:      openBaoTokenVolumeName,
+			MountPath: openBaoTokenMountPath,
 			ReadOnly:  true,
 		})
 	}
@@ -327,8 +381,8 @@ func buildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster) []corev
 	// Mount token secret if provided (fallback method when JWT Auth is not used)
 	if cluster.Spec.Backup.TokenSecretRef != nil {
 		mounts = append(mounts, corev1.VolumeMount{
-			Name:      "backup-token",
-			MountPath: "/etc/bao/backup/token",
+			Name:      backupTokenVolumeName,
+			MountPath: backupTokenMountPath,
 			ReadOnly:  true,
 		})
 	}
@@ -341,13 +395,32 @@ func buildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 
 	// TLS CA certificate
 	volumes = append(volumes, corev1.Volume{
-		Name: "tls-ca",
+		Name: backupTLSCAVolumeName,
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: fmt.Sprintf("%s-tls-ca", cluster.Name),
 			},
 		},
 	})
+
+	if cluster.Spec.Backup.Target.RoleARN != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: awsWebIdentityVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{
+						{
+							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+								Path:              "token",
+								ExpirationSeconds: ptr.To(int64(3600)),
+								Audience:          awsWebIdentityTokenAudience,
+							},
+						},
+					},
+				},
+			},
+		})
+	}
 
 	// Credentials secret if provided
 	// Use strict file permissions (0400) for backup credentials to prevent
@@ -357,7 +430,7 @@ func buildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 		credentialsFileMode := int32(0400) // Owner read-only
 
 		volumes = append(volumes, corev1.Volume{
-			Name: "backup-credentials",
+			Name: backupCredentialsVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  secretName,
@@ -370,15 +443,15 @@ func buildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 	// JWT token from projected volume (preferred method)
 	if cluster.Spec.Backup.JWTAuthRole != "" {
 		volumes = append(volumes, corev1.Volume{
-			Name: "openbao-token",
+			Name: openBaoTokenVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Projected: &corev1.ProjectedVolumeSource{
 					Sources: []corev1.VolumeProjection{
 						{
 							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-								Path:              "openbao-token",
+								Path:              openBaoTokenFileRelativePath,
 								ExpirationSeconds: ptr.To(int64(3600)),
-								Audience:          "openbao-internal",
+								Audience:          openBaoTokenAudience,
 							},
 						},
 					},
@@ -394,7 +467,7 @@ func buildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 
 		tokenFileMode := int32(0400) // Owner read-only for security
 		volumes = append(volumes, corev1.Volume{
-			Name: "backup-token",
+			Name: backupTokenVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  secretName,

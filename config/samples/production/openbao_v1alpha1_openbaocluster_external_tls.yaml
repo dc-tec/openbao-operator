@@ -11,7 +11,7 @@
 #   - <cluster-name>-tls-ca: CA certificate Secret (ca.crt, optionally ca.key)
 #   - <cluster-name>-tls-server: Server certificate Secret (tls.crt, tls.key, ca.crt)
 #
-# See: docs/user-guide.md section 4.2
+# See: docs/user-guide/external-access.md (section 6.2)
 apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:

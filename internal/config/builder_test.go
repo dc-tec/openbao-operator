@@ -168,7 +168,7 @@ func mustJSON(t *testing.T, v interface{}) *apiextensionsv1.JSON {
 func TestRenderOperatorBootstrapHCL(t *testing.T) {
 	config := OperatorBootstrapConfig{
 		OIDCIssuerURL: "https://kubernetes.default.svc",
-		CACertPEM:     "-----BEGIN CERTIFICATE-----\ntest-ca-cert\n-----END CERTIFICATE-----",
+		JWTKeysPEM:    []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
 		OperatorNS:    "openbao-operator-system",
 		OperatorSA:    "openbao-operator-controller",
 	}
@@ -188,9 +188,8 @@ func TestRenderOperatorBootstrapHCL(t *testing.T) {
 		`"jwt"`,
 		`request "config-jwt-auth" {`,
 		`auth/jwt/config`,
-		`oidc_discovery_url`,
-		`oidc_discovery_ca_pem`,
 		`bound_issuer`,
+		`jwt_validation_pubkeys`,
 		`request "create-operator-policy" {`,
 		`sys/policies/acl/openbao-operator`,
 		`sys/health`,
@@ -199,6 +198,8 @@ func TestRenderOperatorBootstrapHCL(t *testing.T) {
 		`request "create-operator-role" {`,
 		`auth/jwt/role/openbao-operator`,
 		`role_type`,
+		`user_claim`,
+		`"sub"`,
 		`bound_audiences`,
 		`openbao-internal`,
 		`bound_claims`,
@@ -238,7 +239,7 @@ func TestRenderSelfInitHCL_WithBootstrapConfig(t *testing.T) {
 
 	bootstrapConfig := &OperatorBootstrapConfig{
 		OIDCIssuerURL: "https://kubernetes.default.svc",
-		CACertPEM:     "test-ca-cert",
+		JWTKeysPEM:    []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
 		OperatorNS:    "openbao-operator-system",
 		OperatorSA:    "openbao-operator-controller",
 	}
@@ -291,7 +292,7 @@ func TestRenderSelfInitHCL_AutoCreatesBackupAndUpgradePolicies(t *testing.T) {
 
 	bootstrapConfig := &OperatorBootstrapConfig{
 		OIDCIssuerURL: "https://kubernetes.default.svc",
-		CACertPEM:     "test-ca-cert",
+		JWTKeysPEM:    []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
 		OperatorNS:    "openbao-operator-system",
 		OperatorSA:    "openbao-operator-controller",
 	}
@@ -350,7 +351,7 @@ func TestRenderSelfInitHCL_DoesNotCreateBackupUpgradePoliciesWhenNotConfigured(t
 
 	bootstrapConfig := &OperatorBootstrapConfig{
 		OIDCIssuerURL: "https://kubernetes.default.svc",
-		CACertPEM:     "test-ca-cert",
+		JWTKeysPEM:    []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
 		OperatorNS:    "openbao-operator-system",
 		OperatorSA:    "openbao-operator-controller",
 	}
@@ -406,7 +407,7 @@ func TestRenderSelfInitHCL_DoesNotCreatePoliciesWhenUsingTokenSecretRef(t *testi
 
 	bootstrapConfig := &OperatorBootstrapConfig{
 		OIDCIssuerURL: "https://kubernetes.default.svc",
-		CACertPEM:     "test-ca-cert",
+		JWTKeysPEM:    []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
 		OperatorNS:    "openbao-operator-system",
 		OperatorSA:    "openbao-operator-controller",
 	}

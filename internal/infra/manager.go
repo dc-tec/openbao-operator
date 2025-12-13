@@ -47,15 +47,8 @@ const (
 	serviceAccountMountPath  = "/var/run/secrets/kubernetes.io/serviceaccount"
 	kubeRootCAConfigMapName  = "kube-root-ca.crt"
 	openBaoBinaryName        = "bao"
-	// openBaoLivenessPath keeps the pod alive during bootstrap. It treats
-	// "sealed" and "uninitialized" as success so kubelet does not restart the
-	// container while OpenBao is still starting or self-initializing.
-	openBaoLivenessPath = "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"
-	// openBaoReadinessPath gates readiness on being initialized and unsealed.
-	// We still accept standby to allow all nodes to become Ready after join.
-	openBaoReadinessPath = "/v1/sys/health?standbyok=true"
-	serviceAccountSuffix = "-serviceaccount"
-	configHashAnnotation = "openbao.org/config-hash"
+	serviceAccountSuffix     = "-serviceaccount"
+	configHashAnnotation     = "openbao.org/config-hash"
 
 	labelAppName        = "app.kubernetes.io/name"
 	labelAppInstance    = "app.kubernetes.io/instance"
@@ -83,20 +76,20 @@ type Manager struct {
 	scheme            *runtime.Scheme
 	operatorNamespace string
 	oidcIssuer        string
-	oidcCABundle      string
+	oidcJWTKeys       []string
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
 // operatorNamespace is the namespace where the operator is deployed, used for NetworkPolicy rules.
-// oidcIssuer and oidcCABundle are the OIDC configuration discovered at operator startup.
-func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcCABundle string) *Manager {
+// oidcIssuer and oidcJWTKeys are the OIDC configuration discovered at operator startup.
+func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string) *Manager {
 	return &Manager{
 		client:            c,
 		scheme:            scheme,
 		operatorNamespace: operatorNamespace,
 		oidcIssuer:        oidcIssuer,
-		oidcCABundle:      oidcCABundle,
+		oidcJWTKeys:       oidcJWTKeys,
 	}
 }
 

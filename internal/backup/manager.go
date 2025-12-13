@@ -289,6 +289,23 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 		return nil
 	}
 
+	if cluster.Spec.Backup.Target.RoleARN != "" {
+		// When backups use workload identity (Web Identity / OIDC federation), the
+		// controller process is intentionally not granted object storage access.
+		// Prefer enforcing retention via storage-native lifecycle policies.
+		logger.Info("Skipping retention for workload identity backup target",
+			"cluster_namespace", cluster.Namespace,
+			"cluster_name", cluster.Name)
+		return nil
+	}
+
+	if cluster.Spec.Backup.Target.CredentialsSecretRef == nil {
+		logger.Info("Skipping retention because no storage credentials Secret is configured",
+			"cluster_namespace", cluster.Namespace,
+			"cluster_name", cluster.Name)
+		return nil
+	}
+
 	// Parse MaxAge duration
 	maxAge, err := ParseRetentionMaxAge(retention.MaxAge)
 	if err != nil {

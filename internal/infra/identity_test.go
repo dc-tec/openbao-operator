@@ -15,7 +15,7 @@ import (
 
 func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-sa", "default")
 
@@ -48,7 +48,7 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 
 func TestEnsureServiceAccountUpdatesLabels(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-sa-update", "default")
 
@@ -88,7 +88,7 @@ func TestEnsureServiceAccountUpdatesLabels(t *testing.T) {
 
 func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-rbac", "default")
 
@@ -177,7 +177,7 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 
 func TestEnsureRBACUpdatesWhenServiceAccountChanges(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-rbac-update", "default")
 
@@ -215,7 +215,7 @@ func TestEnsureRBACUpdatesWhenServiceAccountChanges(t *testing.T) {
 
 func TestDeleteServiceAccountDeletesServiceAccount(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-sa-delete", "default")
 
@@ -246,7 +246,7 @@ func TestDeleteServiceAccountDeletesServiceAccount(t *testing.T) {
 
 func TestDeleteRBACDeletesRoleAndRoleBinding(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-rbac-delete", "default")
 

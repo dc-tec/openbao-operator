@@ -22,6 +22,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"math/big"
 	"os"
@@ -35,6 +36,101 @@ import (
 
 	"k8s.io/client-go/rest"
 )
+
+func Test_pemPublicKeysFromJWKS_UsesX5C(t *testing.T) {
+	t.Helper()
+
+	cert := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "test-ca"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate rsa key: %v", err)
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("failed to create certificate: %v", err)
+	}
+
+	jwks := jwksDocument{
+		Keys: []jwkKey{
+			{
+				Kty: "RSA",
+				X5c: []string{base64.StdEncoding.EncodeToString(certDER)},
+			},
+		},
+	}
+
+	keys, err := pemPublicKeysFromJWKS(jwks)
+	if err != nil {
+		t.Fatalf("pemPublicKeysFromJWKS() error = %v", err)
+	}
+	if len(keys) != 1 {
+		t.Fatalf("pemPublicKeysFromJWKS() keys = %d, want 1", len(keys))
+	}
+	if !strings.Contains(keys[0], "BEGIN PUBLIC KEY") {
+		t.Fatalf("pemPublicKeysFromJWKS() key does not look like PEM public key, got:\n%s", keys[0])
+	}
+}
+
+func Test_fetchOIDCJWKSKeys(t *testing.T) {
+	t.Helper()
+
+	cert := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "test-ca"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate rsa key: %v", err)
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("failed to create certificate: %v", err)
+	}
+
+	jwksJSON := `{"keys":[{"kty":"RSA","x5c":["` + base64.StdEncoding.EncodeToString(certDER) + `"]}]}`
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openid/v1/jwks" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(jwksJSON))
+	}))
+	defer server.Close()
+
+	cfg := &rest.Config{
+		Host: server.URL,
+		TLSClientConfig: rest.TLSClientConfig{
+			Insecure: true,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	keys, err := fetchOIDCJWKSKeys(ctx, cfg, server.URL+"/openid/v1/jwks")
+	if err != nil {
+		t.Fatalf("fetchOIDCJWKSKeys() error = %v", err)
+	}
+	if len(keys) != 1 {
+		t.Fatalf("fetchOIDCJWKSKeys() keys = %d, want 1", len(keys))
+	}
+	if !strings.Contains(keys[0], "BEGIN PUBLIC KEY") {
+		t.Fatalf("fetchOIDCJWKSKeys() key does not look like PEM public key, got:\n%s", keys[0])
+	}
+}
 
 // Test_discoverOIDC tests the discoverOIDC function with various configurations.
 func Test_discoverOIDC(t *testing.T) {

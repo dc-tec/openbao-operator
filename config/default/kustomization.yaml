@@ -18,11 +18,7 @@ resources:
   - ../crd
   - ../rbac
   - ../manager
-  # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
-  # crd/kustomization.yaml
-  - ../webhook
-  # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'. 'WEBHOOK' components are required.
-  - ../certmanager
+  - ../policy
   # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
   #- ../prometheus
   # [METRICS] Expose the metrics services for both provisioner and controller.
@@ -59,12 +55,43 @@ patches:
   #- path: cert_metrics_manager_patch.yaml
   #  target:
   #    kind: Deployment
-  # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
-  # crd/kustomization.yaml
-  - path: manager_webhook_patch.yaml
-    target:
-      kind: Deployment
-      name: openbao-operator-controller
+patchesJson6902:
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-lock-controller-statefulset-mutations
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-lock-controller-statefulset-mutations
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-lock-managed-resource-mutations
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-lock-managed-resource-mutations
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-validate-openbaocluster
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-validate-openbaocluster
+    path: policy_strip_namespace_patch.yaml
 
     # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER' prefix.
     # The following replacements add the cert-manager CA injection annotations.
@@ -129,44 +156,6 @@ replacements:
   #         index: 1
   #         create: true
 
-  # [CERTMANAGER] Webhook DNS names are derived from the webhook Service.
-  - source: # Webhook Service name
-      kind: Service
-      version: v1
-      name: webhook-service
-      fieldPath: .metadata.name
-    targets:
-      - select:
-          kind: Certificate
-          group: cert-manager.io
-          version: v1
-          name: serving-cert
-        fieldPaths:
-          - .spec.dnsNames.0
-          - .spec.dnsNames.1
-        options:
-          delimiter: "."
-          index: 0
-          create: true
-  - source: # Webhook Service namespace
-      kind: Service
-      version: v1
-      name: webhook-service
-      fieldPath: .metadata.namespace
-    targets:
-      - select:
-          kind: Certificate
-          group: cert-manager.io
-          version: v1
-          name: serving-cert
-        fieldPaths:
-          - .spec.dnsNames.0
-          - .spec.dnsNames.1
-        options:
-          delimiter: "."
-          index: 1
-          create: true
-
   # Ensure ClusterRoleBinding subject namespace matches kustomize namespace
   # This is required because ClusterRoleBindings are cluster-scoped and kustomize
   # doesn't automatically transform the namespace in the subject.
@@ -183,38 +172,8 @@ replacements:
         options:
           create: true
 
-  # [CERTMANAGER] Inject the CA bundle from the serving certificate into the
-  # ValidatingWebhookConfiguration used by the OpenBaoCluster validating webhook.
-  - source:
-      kind: Certificate
-      group: cert-manager.io
-      version: v1
-      name: serving-cert # This name should match the one in certificate.yaml
-      fieldPath: .metadata.namespace
-    targets:
-      - select:
-          kind: ValidatingWebhookConfiguration
-        fieldPaths:
-          - .metadata.annotations.[cert-manager.io/inject-ca-from]
-        options:
-          delimiter: "/"
-          index: 0
-          create: true
-  - source:
-      kind: Certificate
-      group: cert-manager.io
-      version: v1
-      name: serving-cert
-      fieldPath: .metadata.name
-    targets:
-      - select:
-          kind: ValidatingWebhookConfiguration
-        fieldPaths:
-          - .metadata.annotations.[cert-manager.io/inject-ca-from]
-        options:
-          delimiter: "/"
-          index: 1
-          create: true
+  # Webhooks are intentionally not used by this operator. Admission control is
+  # implemented via ValidatingAdmissionPolicy and CRD structural validation.
 # - source: # Uncomment the following block if you have a DefaultingWebhook (--defaulting )
 #     kind: Certificate
 #     group: cert-manager.io

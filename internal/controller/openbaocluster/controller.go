@@ -55,7 +55,7 @@ type OpenBaoClusterReconciler struct {
 	InitManager       *initmanager.Manager
 	OperatorNamespace string
 	OIDCIssuer        string // OIDC issuer URL discovered at startup
-	OIDCCABundle      string // OIDC CA bundle discovered at startup
+	OIDCJWTKeys       []string
 }
 
 // SECURITY: RBAC is manually maintained via namespace-scoped Roles created by the Provisioner.
@@ -270,7 +270,7 @@ func (r *OpenBaoClusterReconciler) reconcileInfra(ctx context.Context, logger lo
 		}
 	}
 
-	manager := inframanager.NewManager(r.Client, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCCABundle)
+	manager := inframanager.NewManager(r.Client, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys)
 	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			now := metav1.Now()
@@ -382,7 +382,7 @@ func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger lo
 	clusterMetrics := controllermetrics.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.Clear()
 
-	infra := inframanager.NewManager(r.Client, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCCABundle)
+	infra := inframanager.NewManager(r.Client, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys)
 	if err := infra.Cleanup(ctx, logger, cluster, policy); err != nil {
 		return err
 	}

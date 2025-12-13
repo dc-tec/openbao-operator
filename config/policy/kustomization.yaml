@@ -1,0 +1,7 @@
+resources:
+  - lock-controller-statefulset-mutations.yaml
+  - lock-controller-statefulset-mutations-binding.yaml
+  - lock-managed-resource-mutations.yaml
+  - lock-managed-resource-mutations-binding.yaml
+  - validate-openbaocluster.yaml
+  - validate-openbaocluster-binding.yaml

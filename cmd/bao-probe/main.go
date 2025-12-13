@@ -74,7 +74,8 @@ func main() {
 	base := strings.TrimRight(addr, "/")
 	probeURL := base + path
 
-	client, err := newHTTPClient(caFile, serverName, timeout)
+	allowInsecureLocalFallback := serverName == "localhost"
+	client, err := newHTTPClient(caFile, serverName, timeout, allowInsecureLocalFallback)
 	if err != nil {
 		if mode == modeLiveness {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -147,9 +148,32 @@ func main() {
 	}
 }
 
-func newHTTPClient(caFile string, serverName string, timeout time.Duration) (*http.Client, error) {
+func newHTTPClient(caFile string, serverName string, timeout time.Duration, allowInsecureLocalFallback bool) (*http.Client, error) {
 	caPEM, err := os.ReadFile(caFile)
 	if err != nil {
+		// In ACME TLS mode, the operator does not mount TLS Secrets and OpenBao
+		// manages certificates internally. For localhost probes, allow a fallback
+		// to insecure TLS when the CA file is missing so readiness can still
+		// accurately reflect OpenBao health (initialized/unsealed).
+		if allowInsecureLocalFallback && os.IsNotExist(err) {
+			tlsConfig := &tls.Config{
+				MinVersion:         tls.VersionTLS12,
+				InsecureSkipVerify: true,
+			}
+			if serverName != "" {
+				tlsConfig.ServerName = serverName
+			}
+
+			transport := &http.Transport{
+				TLSClientConfig:       tlsConfig,
+				TLSHandshakeTimeout:   timeout,
+				ResponseHeaderTimeout: timeout,
+				DisableKeepAlives:     true,
+			}
+
+			return &http.Client{Transport: transport}, nil
+		}
+
 		return nil, fmt.Errorf("failed to read CA file %q: %w", caFile, err)
 	}
 

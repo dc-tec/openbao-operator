@@ -165,6 +165,19 @@ spec:
                         description: PathPrefix is an optional prefix within the bucket
                           for this cluster's snapshots.
                         type: string
+                      region:
+                        default: us-east-1
+                        description: |-
+                          Region is the AWS region to use for S3-compatible clients.
+                          For AWS, this should match the bucket region (for example, "eu-west-1").
+                          For many S3-compatible stores (MinIO/Ceph), this can be any non-empty value.
+                        type: string
+                      roleArn:
+                        description: |-
+                          RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
+                          When set, the backup Job mounts a projected ServiceAccount token and relies on the
+                          cloud provider SDK default credential chain (for example, AWS IRSA).
+                        type: string
                       usePathStyle:
                         default: false
                         description: |-
@@ -925,6 +938,17 @@ spec:
                   Versions below 2.4.0 do not support the static seal feature and will fail to start.
                 minLength: 1
                 type: string
+              workloadHardening:
+                description: WorkloadHardening configures opt-in workload hardening
+                  features.
+                properties:
+                  appArmorEnabled:
+                    description: |-
+                      AppArmorEnabled controls whether the operator sets AppArmor profiles on
+                      generated Pods and Jobs. Some Kubernetes environments do not support AppArmor;
+                      this is opt-in to avoid scheduling failures.
+                    type: boolean
+                type: object
             required:
             - image
             - replicas

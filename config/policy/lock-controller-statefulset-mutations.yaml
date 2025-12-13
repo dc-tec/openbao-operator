@@ -1,0 +1,48 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: lock-controller-statefulset-mutations
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["statefulsets"]
+  variables:
+    - name: is_controller
+      expression: >-
+        request.userInfo.username ==
+        "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
+  validations:
+    - expression: >-
+        !variables.is_controller ||
+        object.spec.template.spec.volumes == oldObject.spec.template.spec.volumes
+      message: OpenBao controller cannot modify StatefulSet volumes.
+    - expression: >-
+        !variables.is_controller ||
+        object.spec.template.spec.containers.map(c, {'name': c.name, 'command': c.command, 'args': c.args}) ==
+        oldObject.spec.template.spec.containers.map(c, {'name': c.name, 'command': c.command, 'args': c.args})
+      message: OpenBao controller cannot modify container commands or args.
+    - expression: >-
+        !variables.is_controller ||
+        (has(object.spec.template.spec.initContainers) ? object.spec.template.spec.initContainers : [])
+          .map(c, {'name': c.name, 'command': c.command, 'args': c.args}) ==
+        (has(oldObject.spec.template.spec.initContainers) ? oldObject.spec.template.spec.initContainers : [])
+          .map(c, {'name': c.name, 'command': c.command, 'args': c.args})
+      message: OpenBao controller cannot modify init container commands or args.
+    - expression: >-
+        !variables.is_controller ||
+        object.spec.template.spec.automountServiceAccountToken ==
+          oldObject.spec.template.spec.automountServiceAccountToken
+      message: OpenBao controller cannot modify automountServiceAccountToken.
+    - expression: >-
+        !variables.is_controller ||
+        object.spec.template.spec.securityContext == oldObject.spec.template.spec.securityContext
+      message: OpenBao controller cannot modify pod securityContext.
+    - expression: >-
+        !variables.is_controller ||
+        object.spec.template.spec.containers.map(c, {'name': c.name, 'securityContext': c.securityContext, 'volumeMounts': c.volumeMounts}) ==
+        oldObject.spec.template.spec.containers.map(c, {'name': c.name, 'securityContext': c.securityContext, 'volumeMounts': c.volumeMounts})
+      message: OpenBao controller cannot modify container securityContext or volumeMounts.

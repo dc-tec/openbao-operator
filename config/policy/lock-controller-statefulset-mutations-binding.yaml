@@ -1,0 +1,10 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: lock-controller-statefulset-mutations
+spec:
+  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
+  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
+  policyName: openbao-operator-lock-controller-statefulset-mutations
+  validationActions:
+    - Deny

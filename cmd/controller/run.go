@@ -18,10 +18,17 @@ package controller
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"flag"
 	"fmt"
+	"math/big"
 	"net/http"
 	"os"
 	"time"
@@ -47,14 +54,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	certmanager "github.com/openbao/operator/internal/certs"
 	openbaoclustercontroller "github.com/openbao/operator/internal/controller/openbaocluster"
 	initmanager "github.com/openbao/operator/internal/init"
-	"github.com/openbao/operator/internal/webhook/resourcelock"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )
@@ -138,13 +142,189 @@ func discoverOIDC(ctx context.Context, cfg *rest.Config, baseURL string) (issuer
 	return issuerURL, caBundle, nil
 }
 
-// Run starts the OpenBaoCluster controller manager with webhook server.
+type oidcDiscoveryDocument struct {
+	Issuer  string `json:"issuer"`
+	JWKSURI string `json:"jwks_uri"`
+}
+
+type jwksDocument struct {
+	Keys []jwkKey `json:"keys"`
+}
+
+type jwkKey struct {
+	Kty string `json:"kty"`
+
+	Crv string `json:"crv,omitempty"`
+	X   string `json:"x,omitempty"`
+	Y   string `json:"y,omitempty"`
+
+	N string `json:"n,omitempty"`
+	E string `json:"e,omitempty"`
+
+	X5c []string `json:"x5c,omitempty"`
+}
+
+func pemPublicKeysFromJWKS(jwks jwksDocument) ([]string, error) {
+	var pemKeys []string
+	seen := make(map[string]struct{}, len(jwks.Keys))
+
+	for _, key := range jwks.Keys {
+		if len(key.X5c) > 0 {
+			certDER, err := base64.StdEncoding.DecodeString(key.X5c[0])
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode jwk x5c certificate: %w", err)
+			}
+
+			cert, err := x509.ParseCertificate(certDER)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse jwk x5c certificate: %w", err)
+			}
+
+			pubDER, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal jwk x5c public key: %w", err)
+			}
+
+			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
+			if _, ok := seen[pemKey]; ok {
+				continue
+			}
+			seen[pemKey] = struct{}{}
+			pemKeys = append(pemKeys, pemKey)
+			continue
+		}
+
+		switch key.Kty {
+		case "RSA":
+			nBytes, err := base64.RawURLEncoding.DecodeString(key.N)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode rsa modulus: %w", err)
+			}
+			eBytes, err := base64.RawURLEncoding.DecodeString(key.E)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode rsa exponent: %w", err)
+			}
+			if len(eBytes) == 0 {
+				return nil, fmt.Errorf("rsa exponent is empty")
+			}
+
+			exponent := 0
+			for _, b := range eBytes {
+				exponent = exponent<<8 | int(b)
+			}
+
+			pubKey := &rsa.PublicKey{
+				N: new(big.Int).SetBytes(nBytes),
+				E: exponent,
+			}
+
+			pubDER, err := x509.MarshalPKIXPublicKey(pubKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal rsa public key: %w", err)
+			}
+
+			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
+			if _, ok := seen[pemKey]; ok {
+				continue
+			}
+			seen[pemKey] = struct{}{}
+			pemKeys = append(pemKeys, pemKey)
+		case "EC":
+			var curve elliptic.Curve
+			switch key.Crv {
+			case "P-256":
+				curve = elliptic.P256()
+			case "P-384":
+				curve = elliptic.P384()
+			case "P-521":
+				curve = elliptic.P521()
+			default:
+				return nil, fmt.Errorf("unsupported ec curve %q", key.Crv)
+			}
+
+			xBytes, err := base64.RawURLEncoding.DecodeString(key.X)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode ec x coordinate: %w", err)
+			}
+			yBytes, err := base64.RawURLEncoding.DecodeString(key.Y)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode ec y coordinate: %w", err)
+			}
+
+			pubKey := &ecdsa.PublicKey{
+				Curve: curve,
+				X:     new(big.Int).SetBytes(xBytes),
+				Y:     new(big.Int).SetBytes(yBytes),
+			}
+
+			pubDER, err := x509.MarshalPKIXPublicKey(pubKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal ec public key: %w", err)
+			}
+
+			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
+			if _, ok := seen[pemKey]; ok {
+				continue
+			}
+			seen[pemKey] = struct{}{}
+			pemKeys = append(pemKeys, pemKey)
+		default:
+			return nil, fmt.Errorf("unsupported jwk key type %q", key.Kty)
+		}
+	}
+
+	if len(pemKeys) == 0 {
+		return nil, fmt.Errorf("no public keys found in jwks")
+	}
+
+	return pemKeys, nil
+}
+
+func fetchOIDCJWKSKeys(ctx context.Context, cfg *rest.Config, jwksURL string) ([]string, error) {
+	if jwksURL == "" {
+		return nil, fmt.Errorf("jwks URL is required")
+	}
+
+	transport, err := rest.TransportFor(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transport: %w", err)
+	}
+
+	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create jwks request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch jwks endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("jwks endpoint returned status %d", resp.StatusCode)
+	}
+
+	var jwks jwksDocument
+	if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
+		return nil, fmt.Errorf("failed to parse jwks document: %w", err)
+	}
+
+	keys, err := pemPublicKeysFromJWKS(jwks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract public keys from jwks: %w", err)
+	}
+
+	return keys, nil
+}
+
+// Run starts the OpenBaoCluster controller manager.
 // The Controller is responsible for reconciling OpenBaoCluster resources,
-// managing StatefulSets, executing upgrades, and running the Validating Webhook.
+// managing StatefulSets, and executing upgrades.
 func Run() {
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
-	var webhookCertPath, webhookCertName, webhookCertKey string
 	var enableLeaderElection bool
 	var probeAddr string
 	var secureMetrics bool
@@ -158,15 +338,12 @@ func Run() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate.")
-	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
-	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
 	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
-		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+		"If set, HTTP/2 will be enabled for the metrics server")
 
 	opts := zap.Options{
 		Development: true,
@@ -190,23 +367,6 @@ func Run() {
 	if !enableHTTP2 {
 		tlsOpts = append(tlsOpts, disableHTTP2)
 	}
-
-	// Initial webhook TLS options
-	webhookTLSOpts := tlsOpts
-	webhookServerOptions := webhook.Options{
-		TLSOpts: webhookTLSOpts,
-	}
-
-	if len(webhookCertPath) > 0 {
-		setupLog.Info("Initializing webhook certificate watcher using provided certificates",
-			"webhook-cert-path", webhookCertPath, "webhook-cert-name", webhookCertName, "webhook-cert-key", webhookCertKey)
-
-		webhookServerOptions.CertDir = webhookCertPath
-		webhookServerOptions.CertName = webhookCertName
-		webhookServerOptions.KeyName = webhookCertKey
-	}
-
-	webhookServer := webhook.NewServer(webhookServerOptions)
 
 	// Metrics endpoint is enabled in 'config/default/kustomization.yaml'. The Metrics options configure the server.
 	metricsServerOptions := metricsserver.Options{
@@ -285,7 +445,6 @@ func Run() {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
-		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "openbao-controller-leader.openbao.org",
@@ -304,21 +463,6 @@ func Run() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-
-	// Register the resource locking webhook that protects managed child resources
-	// from direct mutation. This webhook is separate from the CRD validation
-	// webhook and enforces the resource locking decision matrix described in
-	// docs/security.md (see "Resource Locking Webhook").
-	resourceLockValidator := resourcelock.NewValidator(ctrl.Log)
-	// Inject the decoder from the manager's scheme to ensure proper initialization
-	decoder := admission.NewDecoder(mgr.GetScheme())
-	if err := resourceLockValidator.InjectDecoder(&decoder); err != nil {
-		setupLog.Error(err, "unable to inject decoder into resource lock validator")
-		os.Exit(1)
-	}
-	webhookServer.Register("/validate-resource-lock", &webhook.Admission{
-		Handler: resourceLockValidator,
-	})
 
 	// Create Kubernetes clientset for ReloadSignaler
 	config := mgr.GetConfig()
@@ -349,16 +493,63 @@ func Run() {
 
 	// Discover OIDC configuration immediately at startup
 	config = mgr.GetConfig()
-	issuer, caBundle, err := discoverOIDC(context.Background(), config, "")
+	issuer, _, err := discoverOIDC(context.Background(), config, "")
 	if err != nil {
 		setupLog.Error(err, "Failed to discover Kubernetes OIDC configuration. Hardened profile requires OIDC.")
 		// TIGHTENED: Do not exit; just log. If a user tries to use Hardened mode later,
 		// the Reconciler will fail then. This allows the operator to run on clusters
 		// without OIDC if they only use Development mode.
 		issuer = ""
-		caBundle = ""
 	} else {
 		setupLog.Info("Discovered Kubernetes OIDC configuration", "issuer", issuer)
+	}
+
+	// Fetch JWKS keys for configuring OpenBao JWT auth without relying on unauthenticated
+	// OIDC discovery from inside the OpenBao Pods.
+	var oidcJWKSKeys []string
+	if issuer != "" {
+		oidcWellKnownURL := "https://kubernetes.default.svc/.well-known/openid-configuration"
+		transport, err := rest.TransportFor(config)
+		if err != nil {
+			setupLog.Error(err, "Failed to create transport for OIDC discovery")
+		} else {
+			client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, oidcWellKnownURL, nil)
+			if err != nil {
+				setupLog.Error(err, "Failed to create OIDC discovery request")
+			} else {
+				resp, err := client.Do(req)
+				if err != nil {
+					setupLog.Error(err, "Failed to fetch OIDC discovery document for jwks_uri")
+				} else {
+					func() {
+						defer resp.Body.Close()
+						if resp.StatusCode != http.StatusOK {
+							setupLog.Error(fmt.Errorf("OIDC well-known endpoint returned status %d", resp.StatusCode), "Failed to fetch OIDC discovery document for jwks_uri")
+							return
+						}
+
+						var doc oidcDiscoveryDocument
+						if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+							setupLog.Error(err, "Failed to parse OIDC discovery document for jwks_uri")
+							return
+						}
+						if doc.JWKSURI == "" {
+							setupLog.Error(fmt.Errorf("OIDC config missing jwks_uri"), "Failed to fetch OIDC discovery document for jwks_uri")
+							return
+						}
+
+						keys, err := fetchOIDCJWKSKeys(context.Background(), config, doc.JWKSURI)
+						if err != nil {
+							setupLog.Error(err, "Failed to fetch JWKS keys; Hardened clusters require JWKS to configure operator auth")
+							return
+						}
+						oidcJWKSKeys = keys
+						setupLog.Info("Fetched OIDC JWKS public keys", "count", len(keys))
+					}()
+				}
+			}
+		}
 	}
 
 	// Pass these values into the Reconciler struct
@@ -369,15 +560,9 @@ func Run() {
 		InitManager:       initMgr,
 		OperatorNamespace: operatorNamespace,
 		OIDCIssuer:        issuer,
-		OIDCCABundle:      caBundle,
+		OIDCJWTKeys:       oidcJWKSKeys,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
-		os.Exit(1)
-	}
-
-	// Register webhooks
-	if err := (&openbaov1alpha1.OpenBaoCluster{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenBaoCluster")
 		os.Exit(1)
 	}
 

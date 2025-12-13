@@ -1,0 +1,97 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: validate-openbaocluster
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["openbaoclusters"]
+  variables:
+    - name: has_backup
+      expression: has(object.spec.backup)
+    - name: has_config
+      expression: has(object.spec.config)
+  validations:
+    - expression: >-
+        object.spec.profile != "Hardened" ||
+        (object.spec.tls.mode in ["External", "ACME"] &&
+          has(object.spec.unseal) &&
+          object.spec.unseal.type != "static" &&
+          has(object.spec.selfInit) &&
+          object.spec.selfInit.enabled == true &&
+          (!has(object.spec.unseal.options) ||
+            !("tls_skip_verify" in object.spec.unseal.options) ||
+            object.spec.unseal.options["tls_skip_verify"] != "true"))
+      message: Hardened profile requires TLS mode External or ACME, an external unseal (non-static), self-init enabled, and disallows unseal.options.tls_skip_verify=true.
+    - expression: >-
+        has(object.spec.initContainer) &&
+        object.spec.initContainer.enabled == true &&
+        object.spec.initContainer.image != ""
+      message: spec.initContainer is required, must be enabled, and must specify a non-empty image.
+    - expression: >-
+        !variables.has_config ||
+        (size(object.spec.config) <= 64 &&
+          object.spec.config.all(k, v,
+            size(k) > 0 &&
+            size(k) <= 128 &&
+            k.matches("^[a-z0-9_]+$") &&
+            k in [
+              "cluster_name",
+              "disable_clustering",
+              "cache_size",
+              "disable_cache",
+              "plugin_directory",
+              "plugin_file_uid",
+              "plugin_file_permissions",
+              "plugin_auto_download",
+              "plugin_auto_register",
+              "plugin_download_behavior",
+              "default_lease_ttl",
+              "max_lease_ttl",
+              "default_max_request_duration",
+              "detect_deadlocks",
+              "raw_storage_endpoint",
+              "introspection_endpoint",
+              "ui",
+              "disable_standby_reads",
+              "imprecise_lease_role_tracking",
+              "unsafe_allow_api_audit_creation",
+              "allow_audit_log_prefixing",
+              "enable_response_header_hostname",
+              "enable_response_header_raft_node_id",
+              "log_level",
+              "log_format",
+              "log_file",
+              "log_rotate_duration",
+              "log_rotate_bytes",
+              "log_rotate_max_files",
+              "pid_file"
+            ] &&
+            size(v) <= 4096))
+      message: spec.config must use an allowlisted set of keys and is limited to 64 entries (keys must be snake_case).
+    - expression: >-
+        !has(object.spec.selfInit) ||
+        object.spec.selfInit.enabled == false ||
+        (!has(object.spec.selfInit.requests) ||
+          (size(object.spec.selfInit.requests) <= 64 &&
+            object.spec.selfInit.requests.all(r,
+              object.spec.selfInit.requests.filter(x, x.name == r.name).size() == 1) &&
+            object.spec.selfInit.requests.all(r, size(r.path) <= 256)))
+      message: spec.selfInit.requests must have unique names (max 64) and request paths must be <= 256 characters.
+    - expression: >-
+        !has(object.spec.gateway) ||
+        object.spec.gateway.enabled == false ||
+        (object.spec.gateway.hostname != "" && object.spec.gateway.gatewayRef.name != "")
+      message: spec.gateway.hostname and spec.gateway.gatewayRef.name are required when Gateway is enabled.
+    - expression: >-
+        !variables.has_backup ||
+        (object.spec.backup.schedule != "" &&
+          object.spec.backup.executorImage != "" &&
+          (object.spec.backup.jwtAuthRole != "" || has(object.spec.backup.tokenSecretRef)) &&
+          (object.spec.backup.target.roleArn != "" || has(object.spec.backup.target.credentialsSecretRef)) &&
+          object.spec.backup.schedule.matches("^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$"))
+      message: spec.backup requires schedule, executorImage, OpenBao auth (jwtAuthRole or tokenSecretRef), storage auth (target.roleArn or target.credentialsSecretRef), and a 5-field cron expression.

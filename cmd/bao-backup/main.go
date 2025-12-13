@@ -53,6 +53,7 @@ type Config struct {
 	BackupPathPrefix     string
 	BackupFilenamePrefix string // Added to support pre-upgrade prefixes
 	BackupUsePathStyle   bool
+	BackupRegion         string
 
 	// Authentication
 	AuthMethod   string
@@ -109,6 +110,11 @@ func loadConfig() (*Config, error) {
 
 	cfg.BackupPathPrefix = strings.TrimSpace(os.Getenv("BACKUP_PATH_PREFIX"))
 	cfg.BackupFilenamePrefix = strings.TrimSpace(os.Getenv("BACKUP_FILENAME_PREFIX"))
+
+	cfg.BackupRegion = strings.TrimSpace(os.Getenv("BACKUP_REGION"))
+	if cfg.BackupRegion == "" {
+		cfg.BackupRegion = defaultRegion
+	}
 
 	usePathStyleStr := strings.TrimSpace(os.Getenv("BACKUP_USE_PATH_STYLE"))
 	if usePathStyleStr != "" {
@@ -414,10 +420,10 @@ func main() {
 	// Ensure region is set (required by S3 client)
 	if cfg.StorageCredentials == nil {
 		cfg.StorageCredentials = &storage.Credentials{
-			Region: defaultRegion,
+			Region: cfg.BackupRegion,
 		}
 	} else if cfg.StorageCredentials.Region == "" {
-		cfg.StorageCredentials.Region = defaultRegion
+		cfg.StorageCredentials.Region = cfg.BackupRegion
 	}
 
 	// Create storage client

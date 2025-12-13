@@ -312,9 +312,20 @@ type BackupTarget struct {
 	// Bucket is the bucket or container name.
 	// +kubebuilder:validation:MinLength=1
 	Bucket string `json:"bucket"`
+	// Region is the AWS region to use for S3-compatible clients.
+	// For AWS, this should match the bucket region (for example, "eu-west-1").
+	// For many S3-compatible stores (MinIO/Ceph), this can be any non-empty value.
+	// +optional
+	// +kubebuilder:default=us-east-1
+	Region string `json:"region,omitempty"`
 	// PathPrefix is an optional prefix within the bucket for this cluster's snapshots.
 	// +optional
 	PathPrefix string `json:"pathPrefix,omitempty"`
+	// RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
+	// When set, the backup Job mounts a projected ServiceAccount token and relies on the
+	// cloud provider SDK default credential chain (for example, AWS IRSA).
+	// +optional
+	RoleARN string `json:"roleArn,omitempty"`
 	// CredentialsSecretRef optionally references a Secret containing credentials for the object store.
 	// +optional
 	CredentialsSecretRef *corev1.SecretReference `json:"credentialsSecretRef,omitempty"`
@@ -555,6 +566,15 @@ type ImageVerificationConfig struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
+// WorkloadHardeningConfig configures optional workload hardening features.
+type WorkloadHardeningConfig struct {
+	// AppArmorEnabled controls whether the operator sets AppArmor profiles on
+	// generated Pods and Jobs. Some Kubernetes environments do not support AppArmor;
+	// this is opt-in to avoid scheduling failures.
+	// +optional
+	AppArmorEnabled bool `json:"appArmorEnabled,omitempty"`
+}
+
 // OpenBaoClusterSpec defines the desired state of an OpenBaoCluster.
 // The Operator owns certain protected OpenBao configuration stanzas (for example,
 // listener "tcp", storage "raft", and seal "static" when using default unseal).
@@ -642,6 +662,9 @@ type OpenBaoClusterSpec struct {
 	// ImageVerification configures supply chain security checks.
 	// +optional
 	ImageVerification *ImageVerificationConfig `json:"imageVerification,omitempty"`
+	// WorkloadHardening configures opt-in workload hardening features.
+	// +optional
+	WorkloadHardening *WorkloadHardeningConfig `json:"workloadHardening,omitempty"`
 	// Profile defines the security posture for this cluster.
 	// When set to "Hardened", the operator enforces strict security requirements:
 	// - TLS must be External (cert-manager/CSI managed)

@@ -189,6 +189,9 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		if m.oidcIssuer == "" {
 			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC issuer could not be determined at operator startup")
 		}
+		if len(m.oidcJWTKeys) == 0 {
+			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC JWKS public keys could not be determined at operator startup")
+		}
 
 		operatorNS := m.operatorNamespace
 		if operatorNS == "" {
@@ -201,7 +204,7 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 
 		bootstrapConfig = &configbuilder.OperatorBootstrapConfig{
 			OIDCIssuerURL: m.oidcIssuer,
-			CACertPEM:     m.oidcCABundle,
+			JWTKeysPEM:    m.oidcJWTKeys,
 			OperatorNS:    operatorNS,
 			OperatorSA:    operatorSA,
 		}

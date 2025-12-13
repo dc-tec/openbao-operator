@@ -1,0 +1,8 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: validate-openbaocluster
+spec:
+  policyName: openbao-operator-validate-openbaocluster
+  validationActions:
+    - Deny
