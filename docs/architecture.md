@@ -23,7 +23,7 @@ At a high level, the architecture consists of:
 - **Static Auto-Unseal Key:** A per-cluster unseal key managed by the Operator and stored in a Kubernetes Secret, used by OpenBao's static auto-unseal mechanism.
 - **RBAC Architecture (Least-Privilege Model):**
   - **Provisioner ServiceAccount (`openbao-operator-provisioner`):** Has minimal cluster-wide permissions to manage `OpenBaoTenant` CRDs and create Roles/RoleBindings in tenant namespaces. Cannot access workload resources directly. Does not have `list` or `watch` permissions on namespaces, preventing cluster topology enumeration.
-  - **OpenBaoCluster Controller ServiceAccount (`openbao-operator-controller`):** Has NO cluster-wide permissions. Receives permissions only via namespace-scoped Roles created by the Provisioner in tenant namespaces.
+  - **OpenBaoCluster Controller ServiceAccount (`openbao-operator-controller`):** Has cluster-wide read access to `openbaoclusters` (`get;list;watch`) and cluster-wide `create` on `tokenreviews`/`subjectaccessreviews` (for the protected metrics endpoint). All OpenBaoCluster writes and all child resources are tenant-scoped via namespace Roles created by the Provisioner.
   - **Namespace Provisioner Controller:** Watches `OpenBaoTenant` CRDs that explicitly declare target namespaces for provisioning. Creates namespace-scoped Roles and RoleBindings that grant the OpenBaoCluster Controller ServiceAccount the permissions needed to manage OpenBaoCluster resources in those namespaces.
 
 The Operator treats `OpenBaoCluster.Spec` as the declarative source of truth and continuously reconciles Kubernetes resources and OpenBao state to match this desired state.
@@ -91,18 +91,18 @@ sequenceDiagram
 
     U->>K: Create OpenBaoCluster (no selfInit)
     K-->>Op: Watch OpenBaoCluster
-	Op->>K: Create TLS Secrets (CA, server)
-	Op->>K: Create config ConfigMap (config.hcl)
-	Op->>K: Create StatefulSet (replicas=1)
-	Bao-->>K: Update Pod labels (service_registration)
-	Op->>K: Observe pod-0 labels (initialized/sealed)
-	alt labels not yet available
-	    Op->>Bao: Call /v1/sys/health (check initialized)
-	end
-	Op->>Bao: Call /v1/sys/init (initialize cluster)
-	Op->>K: Store root token Secret
-	Op->>K: Update OpenBaoCluster.status.initialized=true
-	Op->>K: Scale StatefulSet to spec.replicas
+    Op->>K: Create TLS Secrets (CA, server)
+    Op->>K: Create config ConfigMap (config.hcl)
+    Op->>K: Create StatefulSet (replicas=1)
+    Bao-->>K: Update Pod labels (service_registration)
+    Op->>K: Observe pod-0 labels (initialized/sealed)
+    alt labels not yet available
+        Op->>Bao: Call /v1/sys/health (check initialized)
+    end
+    Op->>Bao: Call /v1/sys/init (initialize cluster)
+    Op->>K: Store root token Secret
+    Op->>K: Update OpenBaoCluster.status.initialized=true
+    Op->>K: Scale StatefulSet to spec.replicas
     Bao-->>Op: Pods auto-unseal and join Raft
 ```
 
@@ -142,15 +142,15 @@ sequenceDiagram
     U->>K: Create OpenBaoCluster (selfInit.enabled=true)
     K-->>Op: Watch OpenBaoCluster
     Op->>K: Create TLS Secrets (CA, server)
-	Op->>K: Create config ConfigMap (config.hcl)
-	Op->>K: Create self-init ConfigMap (initialize blocks)
-	Op->>K: Create StatefulSet (replicas=1)
-	Bao-->>Bao: Auto-init and run initialize requests
-	Bao-->>Bao: Auto-unseal using static or KMS seal
-	Bao-->>K: Update Pod labels (service_registration)
-	Op->>K: Observe pod-0 labels (initialized/sealed)
-	Op->>K: Update OpenBaoCluster.status.initialized=true
-	Op->>K: Scale StatefulSet to spec.replicas
+    Op->>K: Create config ConfigMap (config.hcl)
+    Op->>K: Create self-init ConfigMap (initialize blocks)
+    Op->>K: Create StatefulSet (replicas=1)
+    Bao-->>Bao: Auto-init and run initialize requests
+    Bao-->>Bao: Auto-unseal using static or KMS seal
+    Bao-->>K: Update Pod labels (service_registration)
+    Op->>K: Observe pod-0 labels (initialized/sealed)
+    Op->>K: Update OpenBaoCluster.status.initialized=true
+    Op->>K: Scale StatefulSet to spec.replicas
     Bao-->>Op: Additional pods auto-unseal and join Raft
 ```
 
@@ -482,7 +482,10 @@ Backups are executed using Kubernetes Jobs that run the `bao-backup` executor co
    - Create a Kubernetes Job with a unique name: `backup-<cluster-name>-<timestamp>`
    - Job runs the backup executor image (`spec.backup.executorImage`)
    - Job Pod uses the backup ServiceAccount
-   - Job Pod mounts TLS CA certificate and storage credentials
+   - Job Pod mounts TLS CA certificate and configures object storage access:
+     - Static credentials via `spec.backup.target.credentialsSecretRef` (Secret volume mount), or
+     - Web Identity via `spec.backup.target.roleArn` (projected ServiceAccount token + AWS SDK env vars)
+   - Job passes `spec.backup.target.region` to the executor for S3-compatible clients
 
 3. **Backup Executor Workflow:**
    - Authenticates to OpenBao (JWT Auth via projected token or static token)
@@ -495,7 +498,8 @@ Backups are executed using Kubernetes Jobs that run the `bao-backup` executor co
    - On failure: Increment `ConsecutiveFailures` and set `LastFailureReason`
 
 5. **Apply Retention:**
-   - If retention policy is configured, delete old backups after successful upload
+   - If retention policy is configured and static credentials are used, delete old backups after successful upload
+   - When Web Identity is used (`spec.backup.target.roleArn`), prefer storage-native lifecycle policies for retention
 
 **Backup Naming Convention:**
 
@@ -560,7 +564,7 @@ storage "raft" {
 - The Operator owns the critical `listener "tcp"` and `storage "raft"` stanzas to guarantee mTLS and Raft stability.
 - Users may provide additional non-protected configuration settings via `spec.config` as key/value pairs, but attempts to override protected stanzas are rejected by validation enforced at admission time:
   - CRD-level CEL rules block obvious misuse (for example, top-level `listener`, `storage`, `seal` keys).
-  - A validating admission webhook performs deeper, semantic checks and enforces additional constraints on `spec.config` keys and values.
+  - A `ValidatingAdmissionPolicy` performs deeper, semantic checks and enforces additional constraints on `spec.config` keys and values.
 - The ConfigController merges user attributes into an operator-generated template in a deterministic, idempotent way, skipping any operator-owned keys.
 
 ## 5. Cross-Cutting Concerns

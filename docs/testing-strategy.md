@@ -131,7 +131,7 @@ At minimum, envtest suites should cover:
 
 - **Config Merge and Protected Stanzas:**
   - Valid user config fragments are merged.
-  - Attempts to override protected stanzas are rejected at admission via CRD-level CEL validation (and, in later phases, a validating webhook), or surfaced via Status Conditions when detected during reconciliation.
+  - Attempts to override protected stanzas are rejected at admission via CRD-level CEL validation and ValidatingAdmissionPolicy, or surfaced via Status Conditions when detected during reconciliation.
 
 Where individual envtest assertions involve small decision functions, we still prefer table-driven subtests to cover multiple variations per scenario.
 

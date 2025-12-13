@@ -39,10 +39,10 @@ The Provisioner ServiceAccount has **minimal cluster-wide permissions**:
 
 #### 2.1.2 OpenBaoCluster Controller ServiceAccount (`openbao-operator-controller`)
 
-The OpenBaoCluster Controller ServiceAccount has **NO cluster-wide permissions**:
+The OpenBaoCluster Controller ServiceAccount has **very limited cluster-wide permissions**:
 
-- **No ClusterRole:** This ServiceAccount is not bound to any ClusterRole.
-- **Tenant-Scoped Permissions Only:** Receives permissions only via namespace-scoped Roles created by the Provisioner in tenant namespaces.
+- **Cluster-wide watch on `OpenBaoCluster`:** A ClusterRole grants `get;list;watch` on `openbaoclusters` so the controller can establish a shared cache for the primary CRD.
+- **Tenant-scoped writes and all child resources:** All write operations on `OpenBaoCluster` and all managed child resources (Secrets, StatefulSets, Services, Jobs, etc.) are namespace-scoped via Roles created by the Provisioner in tenant namespaces.
 - **Namespace Isolation:** Can only access resources in namespaces where the Provisioner has created a tenant Role and RoleBinding.
 
 **Security Benefit:** The OpenBaoCluster controller cannot access any resources outside of tenant namespaces, and cannot access non-OpenBao resources within tenant namespaces (unless explicitly granted by the tenant Role).
@@ -56,11 +56,14 @@ namespaces interact under the least‑privilege, zero‑trust model:
 flowchart LR
     subgraph OperatorNS["Operator Namespace (openbao-operator-system)"]
         Psa["SA: openbao-operator-provisioner"]
+        Dsa["SA: openbao-operator-provisioner-delegate"]
         Csa["SA: openbao-operator-controller"]
         Pcr["ClusterRole: provisioner-role (minimal)"]
-        Ttmpl["ClusterRole: tenant-template (grant-only)"]
+        Ttmpl["ClusterRole: provisioner-delegate-template (grant-only)"]
+        Ccr["ClusterRole: controller-openbaocluster (read-only watch)"]
         Pcrb["ClusterRoleBinding: provisioner-rolebinding"]
-        Tbind["ClusterRoleBinding: tenant-template-binding"]
+        Tbind["ClusterRoleBinding: provisioner-delegate-template-binding"]
+        Ccrb["ClusterRoleBinding: controller-openbaocluster-binding"]
     end
 
     subgraph TenantNS["Tenant Namespace (tenant-a)"]
@@ -71,11 +74,15 @@ flowchart LR
 
     Psa --> Pcrb
     Pcrb --> Pcr
-    Psa --> Ttmpl
-    Ttmpl --> Tbind
-    Tbind -->|"SA: provisioner-delegate"| Psa
+    Dsa --> Tbind
+    Tbind --> Ttmpl
 
-    Psa -->|"Impersonate delegate"| TenantNS
+    Csa --> Ccrb
+    Ccrb --> Ccr
+
+    Psa -.->|"Impersonate delegate"| Dsa
+    Dsa -->|"Create/Update"| Trole
+    Dsa -->|"Create/Update"| Troleb
     Csa --> Troleb
     Troleb --> Trole
     Trole --> BaoSts
@@ -84,8 +91,8 @@ flowchart LR
     classDef role fill:#fbbf24,stroke:#92400e,color:#000;
     classDef sts fill:#22c55e,stroke:#166534,color:#000;
 
-    class Psa,Csa sa;
-    class Pcr,Ttmpl,Trole role;
+    class Psa,Dsa,Csa sa;
+    class Pcr,Ttmpl,Ccr,Trole role;
     class BaoSts sts;
 ```
 
@@ -133,17 +140,15 @@ Instead of watching all namespaces for labels, the Provisioner watches `OpenBaoT
 
 **Security Note:** The tenant Role explicitly excludes `list` and `watch` verbs on Secrets to prevent secret enumeration attacks. The operator uses direct `GET` requests for specific secrets it needs to access.
 
-### 2.4 Resource Locking Webhook
+### 2.4 Admission Policies (No Webhooks)
 
-In addition to RBAC, the operator enforces a **resource locking** policy using
-an admission `ValidatingWebhookConfiguration` (`openbao-resource-lock`). This
-webhook is defined under `config/webhook/resource-lock.yaml` and is deployed
-alongside the main CRD validation webhook as part of the default kustomize
-manifests.
+In addition to RBAC, the operator enforces **admission policies** using
+Kubernetes `ValidatingAdmissionPolicy` (CEL) resources. This operator does
+not deploy admission webhooks.
 
-The webhook prevents direct mutation of OpenBao‑managed child resources and
-requires all changes to flow through the parent `OpenBaoCluster` /
-`OpenBaoTenant` CRDs.
+These policies prevent direct mutation of OpenBao‑managed child resources and
+constrain what the controller ServiceAccount itself can change, reducing pivot
+risk if the controller process or its credentials are compromised.
 
 **Scope:**
 
@@ -160,40 +165,32 @@ requires all changes to flow through the parent `OpenBaoCluster` /
 |------------------------------------------------------|---------------------------------------------------------------------|-------------------------------------------------|
 | Operator controller ServiceAccount                   | Full R/W                                                            | Main reconciler path                            |
 | Provisioner / delegate ServiceAccounts (impersonation) | R/W limited to RBAC objects in tenant namespaces                   | Used for tenant Role/RoleBinding management     |
-| kube-system controllers (GC, EndpointSlice, etc.)    | Deletes and status-related updates                                  | Identified via `system:serviceaccounts:kube-system` group or SA allowlist |
-| Cert-manager ServiceAccount                          | Updates to TLS Secrets / related ConfigMaps                         | Enabled via `OPENBAO_CERTMANAGER_SA_ALLOWLIST`  |
-| Ingress / Gateway controller ServiceAccounts         | `status` subresource updates on Services/Ingress/Gateway objects    | Enabled via `OPENBAO_INGRESS_SA_ALLOWLIST`      |
-| Break-glass admin groups                             | Updates/deletes when `openbao.org/maintenance: "true"` is present   | Groups configured via `OPENBAO_BREAKGLASS_ADMIN_GROUPS` |
+| kube-system controllers (GC, EndpointSlice, etc.)    | Updates/deletes (policy allowlist)                                  | Identified via `system:serviceaccounts:kube-system` group or `kube-system` SA prefix |
+| Cert-manager ServiceAccount                          | Updates/deletes (policy allowlist)                                  | Identified via `system:serviceaccount:cert-manager:*` prefix |
+| Ingress / Gateway controller ServiceAccounts         | Status updates                                                      | Not subject to the policy (status subresources are not matched) |
+| Break-glass admins                                   | Updates/deletes when `openbao.org/maintenance: "true"` is present    | Identified via `system:masters` group |
+| OpenBao pod ServiceAccount                           | Pod label updates only                                               | Limited to the service-registration labels |
+| Kubelet node identity                                | Pod deletes only                                                     | Allows kubelet to delete managed pods |
 | Tenant users and other identities                    | **Denied**                                                          | Must modify `OpenBaoCluster` / `OpenBaoTenant`  |
 
-**Configuration knobs:**
+**Policy resources:**
 
-- The resource lock webhook is configured via environment variables on the
-  controller Deployment (`config/manager/controller.yaml`):
-  - `POD_NAMESPACE` and `OPERATOR_SERVICE_ACCOUNT_NAME` identify the operator
-    ServiceAccount at runtime (these are set explicitly in the Deployment).
-  - `OPENBAO_SYSTEM_SA_ALLOWLIST` — comma‑separated `namespace:serviceaccount`
-    for additional kube‑system controllers.
-  - `OPENBAO_CERTMANAGER_SA_ALLOWLIST` — `namespace:serviceaccount` values for
-    cert-manager.
-  - `OPENBAO_INGRESS_SA_ALLOWLIST` — `namespace:serviceaccount` values for
-    ingress/gateway controllers.
-  - `OPENBAO_BREAKGLASS_ADMIN_GROUPS` — comma‑separated RBAC groups (for
-    example, `system:masters`) allowed to use the break‑glass path.
+- `config/policy/lock-managed-resource-mutations.yaml`: denies UPDATE/DELETE of managed resources for non-operator identities.
+- `config/policy/lock-controller-statefulset-mutations.yaml`: denies controller ServiceAccount attempts to change high-risk StatefulSet fields (volumes, commands, security context, etc.).
 
 **Break‑glass semantics:**
 
 - When `metadata.annotations["openbao.org/maintenance"] == "true"` and the
-  caller belongs to a configured break‑glass admin group, the webhook permits
-  the requested mutation and logs a structured audit entry. This provides a
-  controlled emergency escape hatch without disabling the webhook.
+  caller is a cluster admin (`system:masters`), the policy permits the requested
+  mutation. This provides a controlled emergency escape hatch without disabling
+  admission control.
 
 **Failure mode and safety net:**
 
-- The webhook uses `failurePolicy: Fail` to prefer safety over availability.
+- Policies use `failurePolicy: Fail` to prefer safety over availability.
 - The `OpenBaoCluster` controller periodically requeues clusters with a
   long, jittered interval to detect and correct unexpected drift, even if
-  the webhook is temporarily misconfigured.
+  admission policies are temporarily misconfigured.
 
 #### 2.4.1 Resource Lock Admission Flow
 
@@ -202,16 +199,16 @@ sequenceDiagram
     autonumber
     participant C as Client (kubectl/operator)
     participant S as API Server
-    participant W as Resource Lock Webhook
+    participant W as ValidatingAdmissionPolicy
     participant R as OpenBao Reconciler
 
-    C->>S: UPDATE/DELETE Secret/Service/StatefulSet (managed)
-    S->>W: AdmissionReview (resource, user, operation)
-    W->>W: Determine if resource is managed (label/ownerRef)
+    C->>S: CREATE/UPDATE/DELETE managed resource
+    S->>W: Admission (resource, user, operation)
+    W->>W: Determine if resource is managed (label)
     alt unmanaged
         W-->>S: Allowed (not managed)
     else managed
-        W->>W: Check operator, system SAs, cert-manager, ingress, break-glass
+        W->>W: Check operator, kube-system controllers, cert-manager, break-glass
         alt caller in allowlist
             W-->>S: Allowed (per decision matrix)
         else caller not allowed
@@ -222,9 +219,31 @@ sequenceDiagram
         S->>R: Watch event (parent OpenBaoCluster / OpenBaoTenant)
         R->>S: Reconcile managed children via RBAC‑scoped client
     else request denied
-        S-->>C: 403 Forbidden from webhook
+        S-->>C: 403 Forbidden from admission policy
     end
 ```
+
+### 2.4.2 Controller Pivot Guard (ValidatingAdmissionPolicy)
+
+In addition to the resource lock policy (which blocks *external* actors from mutating managed resources),
+the operator deploys a Kubernetes-native `ValidatingAdmissionPolicy` to constrain what the **controller
+ServiceAccount itself** is allowed to change on long-lived workloads.
+
+The policy is defined under `config/policy/lock-controller-statefulset-mutations.yaml` and is intended
+to reduce “pivot risk” if the controller process or its credentials are compromised.
+
+**Behavior (UPDATE on StatefulSets only):**
+
+- When the request user is the controller ServiceAccount (`system:serviceaccount:openbao-operator-system:openbao-operator-controller`),
+  the API server rejects updates that attempt to change:
+  - Pod volumes
+  - Container / init container `command` and `args`
+  - Pod and container `securityContext`
+  - Container `volumeMounts`
+  - `automountServiceAccountToken`
+
+**Operational note:** If you install the operator into a different namespace or change the controller
+ServiceAccount name, update the `request.userInfo.username` check in the policy accordingly.
 
 ### 2.5 Tenant Namespace Provisioning Flow
 
@@ -264,9 +283,9 @@ sequenceDiagram
 - The OpenBaoCluster controller can only access resources in namespaces where it has been granted permissions
 - Cross-tenant access is impossible without explicit RoleBindings
 
-## 3. Validating Webhooks & Configuration Security
+## 3. Admission Validation & Configuration Security
 
-The Operator enforces a strict "Secure by Default" posture for OpenBao configuration using a Validating Admission Webhook.
+The Operator enforces a strict "Secure by Default" posture for OpenBao configuration using CRD structural validation and `ValidatingAdmissionPolicy`.
 
 ### 3.1 Configuration Allowlist
 
@@ -434,7 +453,7 @@ The Operator supports two security profiles via `spec.profile` to enforce differ
 
 ### 9.1 Hardened Profile
 
-**CRITICAL: The Hardened profile is REQUIRED for all production deployments.** The Development profile stores root tokens in Kubernetes Secrets, which creates a significant security risk. The operator enforces Hardened profile requirements via webhook validation to prevent misconfiguration.
+**CRITICAL: The Hardened profile is REQUIRED for all production deployments.** The Development profile stores root tokens in Kubernetes Secrets, which creates a significant security risk. The operator enforces Hardened profile requirements via admission policies and CRD validation to prevent misconfiguration.
 
 The `Hardened` profile enforces strict security requirements suitable for production environments:
 
@@ -451,7 +470,7 @@ The `Hardened` profile enforces strict security requirements suitable for produc
 - **External TLS:** Integrates with organizational PKI and certificate management systems (cert-manager, CSI drivers).
 - **Automatic JWT Bootstrap:** Reduces configuration errors and ensures proper authentication setup without manual intervention.
 
-**Production Requirement:** All production OpenBaoCluster resources MUST use `spec.profile: Hardened`. The validating webhook enforces these requirements to prevent accidental use of the Development profile in production.
+**Production Requirement:** All production OpenBaoCluster resources MUST use `spec.profile: Hardened`. Admission policies prevent accidental use of Development profile configurations that would violate Hardened profile requirements.
 
 ### 9.2 Development Profile
 
@@ -464,7 +483,7 @@ The `Development` profile allows relaxed security for development and testing:
 
 **CRITICAL WARNING:** Development profile clusters **MUST NOT** be used in production. The Development profile stores root tokens in Kubernetes Secrets, which can be compromised through Secret enumeration, etcd access, or RBAC misconfiguration. The SecurityRisk condition serves as a reminder to upgrade to Hardened profile before production deployment.
 
-**Recommendation:** Always use the Hardened profile for production deployments. The validating webhook prevents accidental use of Development profile configurations that would violate Hardened profile requirements.
+**Recommendation:** Always use the Hardened profile for production deployments. Admission policies prevent accidental use of Development profile configurations that would violate Hardened profile requirements.
 
 ## 10. JWT Authentication & OIDC Integration
 
@@ -555,7 +574,7 @@ This section provides a comprehensive threat analysis using the STRIDE framework
 - Operator runs as non-root.
 - **Least-Privilege RBAC Model:** The Operator uses separate ServiceAccounts:
   - **Provisioner ServiceAccount:** Has minimal cluster-wide permissions (namespace watching + RBAC management). Cannot access workload resources directly.
-  - **OpenBaoCluster Controller ServiceAccount:** Has NO cluster-wide permissions. Only receives permissions via namespace-scoped Roles in tenant namespaces.
+  - **OpenBaoCluster Controller ServiceAccount:** Has cluster-wide read access to `openbaoclusters` (`get;list;watch`) to support controller-runtime watches/caching, and cluster-wide `create` on `tokenreviews`/`subjectaccessreviews` for the protected metrics endpoint; all OpenBaoCluster writes and all child resources remain tenant-scoped via namespace Roles.
 - **Namespace Isolation:** The OpenBaoCluster controller cannot access resources outside tenant namespaces or non-OpenBao resources within tenant namespaces.
 - Operator does NOT have permission to read the *data* inside OpenBao (KV engine), only the API system endpoints.
 - **Blind Writes:** For sensitive assets like the Unseal Key Secret, the operator uses a "blind create" pattern. It attempts to create the Secret but does not require `GET` or `LIST` permissions on the generated secret data after creation, minimizing the attack surface if the operator is compromised.
@@ -604,7 +623,9 @@ This section provides a comprehensive threat analysis using the STRIDE framework
 **Mitigation:**
 
 - Use least-privilege credentials that only allow write access to the specific bucket/prefix for the cluster.
-- Prefer workload identity (IRSA, GKE Workload Identity) over static credentials where possible.
+- Prefer workload identity over static credentials where possible:
+  - Configure `spec.backup.target.roleArn` and omit `credentialsSecretRef` to use Web Identity (OIDC federation).
+  - The backup Job mounts a projected ServiceAccount token and relies on the cloud SDK default credential chain.
 - Enable audit logging for access to credentials Secrets.
 - Rotate credentials periodically.
 
@@ -703,4 +724,4 @@ For secure multi-tenant deployments, platform teams SHOULD implement:
 | Pod Security Standards | Enforce secure pod configuration | PSA labels on namespaces |
 | Audit logging | Monitor sensitive access | Kubernetes audit policy for Secrets |
 
-**Note:** The Operator implements the separate ServiceAccounts model by default. The Provisioner ServiceAccount has minimal cluster-wide permissions (namespace `get`/`update`/`patch` + OpenBaoTenant CRD management + RBAC management), while the OpenBaoCluster Controller ServiceAccount has no cluster-wide permissions and only receives permissions via namespace-scoped Roles in tenant namespaces. The Provisioner uses a governance model based on `OpenBaoTenant` CRDs, eliminating the need for `list`/`watch` permissions on namespaces and preventing cluster topology enumeration.
+**Note:** The Operator implements the separate ServiceAccounts model by default. The Provisioner ServiceAccount has minimal cluster-wide permissions (namespace `get`/`update`/`patch` + OpenBaoTenant CRD management + RBAC management), while the OpenBaoCluster Controller ServiceAccount has cluster-wide read access to `openbaoclusters` (`get;list;watch`) and cluster-wide `create` on `tokenreviews`/`subjectaccessreviews` (for the protected metrics endpoint). All OpenBaoCluster writes and all child resources are tenant-scoped via namespace Roles created by the Provisioner. The Provisioner uses a governance model based on `OpenBaoTenant` CRDs, eliminating the need for `list`/`watch` permissions on namespaces and preventing cluster topology enumeration.

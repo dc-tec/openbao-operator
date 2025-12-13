@@ -8,8 +8,8 @@ This guide helps developers get started with contributing to the OpenBao Operato
 
 - **Go:** version v1.25.5+ (check with `go version`)
 - **Docker:** version 28.3.3+ (check with `docker version`)
-- **kubectl:** version v1.11.3+ (check with `kubectl version --client`)
-- **Access to a Kubernetes cluster:** v1.11.3+ (for testing)
+- **kubectl:** version v1.33+ (check with `kubectl version --client`)
+- **Access to a Kubernetes cluster:** v1.33+ (for testing; see `docs/compatibility.md`)
 - **Kind:** For local E2E testing (optional but recommended)
 - **Make:** For running build targets
 
@@ -238,7 +238,7 @@ At minimum, envtest suites should cover:
 
 - **Config Merge and Protected Stanzas:**
   - Valid user config fragments are merged.
-  - Attempts to override protected stanzas are rejected at admission via CRD-level CEL validation (and, in later phases, a validating webhook), or surfaced via Status Conditions when detected during reconciliation.
+  - Attempts to override protected stanzas are rejected at admission via CRD-level CEL validation and ValidatingAdmissionPolicy, or surfaced via Status Conditions when detected during reconciliation.
 
 Where individual envtest assertions involve small decision functions, we still prefer table-driven subtests to cover multiple variations per scenario.
 
@@ -638,7 +638,7 @@ While we aim to reduce redundancy, we adhere to the Go proverb: **"A little copy
 * Any non-trivial change (new controllers, new CRD fields, or major behavior changes) must be reflected in:
   * `./docs/architecture.md`
   * `./docs/security.md`
-  * `./docs/user-guide.md`
+  * `./docs/user-guide/README.md`
   * `./docs/contributing.md`
 * Docs and code must remain in sync; do not introduce behavior that contradicts the current design without updating the design first.
 
