@@ -12,7 +12,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,6 +22,7 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/test/e2e/framework"
 )
 
 var _ = Describe("Basic: Development profile (operator init + operator-managed TLS)", Ordered, func() {
@@ -32,30 +32,12 @@ var _ = Describe("Basic: Development profile (operator init + operator-managed T
 		cfg    *rest.Config
 		scheme *runtime.Scheme
 		c      client.Client
+		f      *framework.Framework
 	)
 
 	const (
-		tenantNamespace = "e2e-basic-tenant"
-		tenantName      = "basic-tenant"
-		clusterName     = "basic-cluster"
+		clusterName = "basic-cluster"
 	)
-
-	createNamespace := func(name string) {
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-				Labels: map[string]string{
-					"pod-security.kubernetes.io/enforce": "restricted",
-				},
-			},
-		}
-
-		err := c.Create(ctx, ns)
-		if apierrors.IsAlreadyExists(err) {
-			return
-		}
-		Expect(err).NotTo(HaveOccurred(), "Failed to create namespace %q", name)
-	}
 
 	BeforeAll(func() {
 		var err error
@@ -69,102 +51,59 @@ var _ = Describe("Basic: Development profile (operator init + operator-managed T
 
 		c, err = client.New(cfg, client.Options{Scheme: scheme})
 		Expect(err).NotTo(HaveOccurred())
+
+		f, err = framework.New(ctx, c, "basic", operatorNamespace)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterAll(func() {
-		_ = c.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenantNamespace}})
-		_ = c.Delete(ctx, &openbaov1alpha1.OpenBaoTenant{
-			ObjectMeta: metav1.ObjectMeta{Name: tenantName, Namespace: operatorNamespace},
-		})
+		if f == nil {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+
+		_ = f.Cleanup(cleanupCtx)
 	})
 
 	It("creates a cluster with self-init disabled and produces expected Secrets", func() {
-		By(fmt.Sprintf("creating tenant namespace %q", tenantNamespace))
-		createNamespace(tenantNamespace)
-		_, _ = fmt.Fprintf(GinkgoWriter, "Created namespace %q\n", tenantNamespace)
-
-		By(fmt.Sprintf("creating OpenBaoTenant %q in namespace %q", tenantName, operatorNamespace))
-		tenant := &openbaov1alpha1.OpenBaoTenant{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      tenantName,
-				Namespace: operatorNamespace,
-			},
-			Spec: openbaov1alpha1.OpenBaoTenantSpec{
-				TargetNamespace: tenantNamespace,
-			},
-		}
-		err := c.Create(ctx, tenant)
-		if err != nil && !apierrors.IsAlreadyExists(err) {
-			Expect(err).NotTo(HaveOccurred())
-		}
-		_, _ = fmt.Fprintf(GinkgoWriter, "Created OpenBaoTenant %q\n", tenantName)
-
-		By("waiting for tenant to be provisioned")
-		Eventually(func(g Gomega) {
-			updated := &openbaov1alpha1.OpenBaoTenant{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: tenantName, Namespace: operatorNamespace}, updated)).To(Succeed())
-			_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoTenant status: Provisioned=%v, LastError=%q\n", updated.Status.Provisioned, updated.Status.LastError)
-			g.Expect(updated.Status.Provisioned).To(BeTrue())
-		}, 2*time.Minute, 2*time.Second).Should(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "Tenant %q successfully provisioned\n", tenantName)
-
 		By(fmt.Sprintf("creating OpenBaoCluster %q with Development profile (self-init disabled)", clusterName))
-		cluster := &openbaov1alpha1.OpenBaoCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterName,
-				Namespace: tenantNamespace,
-			},
-			Spec: openbaov1alpha1.OpenBaoClusterSpec{
-				Profile:  openbaov1alpha1.ProfileDevelopment,
-				Version:  openBaoVersion,
-				Image:    openBaoImage,
-				Replicas: 3,
-				InitContainer: &openbaov1alpha1.InitContainerConfig{
-					Enabled: true,
-					Image:   configInitImage,
-				},
-				TLS: openbaov1alpha1.TLSConfig{
-					Enabled:        true,
-					Mode:           openbaov1alpha1.TLSModeOperatorManaged,
-					RotationPeriod: "720h",
-				},
-				Storage: openbaov1alpha1.StorageConfig{
-					Size: "1Gi",
-				},
-				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: kindDefaultServiceCIDR,
-				},
-				DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
-			},
-		}
-		Expect(c.Create(ctx, cluster)).To(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "Created OpenBaoCluster %q\n", clusterName)
+		cluster, err := f.CreateDevelopmentCluster(ctx, framework.DevelopmentClusterConfig{
+			Name:          clusterName,
+			Replicas:      3,
+			Version:       openBaoVersion,
+			Image:         openBaoImage,
+			ConfigInitImg: configInitImage,
+			APIServerCIDR: kindDefaultServiceCIDR,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		_, _ = fmt.Fprintf(GinkgoWriter, "Created OpenBaoCluster %q in namespace %q\n", clusterName, f.Namespace)
 		DeferCleanup(func() {
 			_ = c.Delete(ctx, cluster)
 		})
 
 		By("waiting for TLS CA Secret to be created")
 		Eventually(func() error {
-			return c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-ca", Namespace: tenantNamespace}, &corev1.Secret{})
-		}, 2*time.Minute, 2*time.Second).Should(Succeed(), "expected CA Secret to exist")
+			return c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-ca", Namespace: f.Namespace}, &corev1.Secret{})
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed(), "expected CA Secret to exist")
 		_, _ = fmt.Fprintf(GinkgoWriter, "TLS CA Secret %q exists\n", clusterName+"-tls-ca")
 
 		By("waiting for TLS server Secret to be created")
 		Eventually(func() error {
-			return c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-server", Namespace: tenantNamespace}, &corev1.Secret{})
-		}, 2*time.Minute, 2*time.Second).Should(Succeed(), "expected server TLS Secret to exist")
+			return c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-server", Namespace: f.Namespace}, &corev1.Secret{})
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed(), "expected server TLS Secret to exist")
 		_, _ = fmt.Fprintf(GinkgoWriter, "TLS server Secret %q exists\n", clusterName+"-tls-server")
 
 		By("waiting for unseal key Secret to be created")
 		Eventually(func() error {
-			return c.Get(ctx, types.NamespacedName{Name: clusterName + "-unseal-key", Namespace: tenantNamespace}, &corev1.Secret{})
-		}, 2*time.Minute, 2*time.Second).Should(Succeed(), "expected unseal key Secret to exist")
+			return c.Get(ctx, types.NamespacedName{Name: clusterName + "-unseal-key", Namespace: f.Namespace}, &corev1.Secret{})
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed(), "expected unseal key Secret to exist")
 		_, _ = fmt.Fprintf(GinkgoWriter, "Unseal key Secret %q exists\n", clusterName+"-unseal-key")
 
 		By("checking cluster status and conditions before waiting for root token")
 		Eventually(func(g Gomega) {
 			updated := &openbaov1alpha1.OpenBaoCluster{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, updated)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, updated)).To(Succeed())
 
 			// Log all conditions
 			for _, cond := range updated.Status.Conditions {
@@ -184,7 +123,7 @@ var _ = Describe("Basic: Development profile (operator init + operator-managed T
 
 			// Check if StatefulSet exists
 			sts := &appsv1.StatefulSet{}
-			err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, sts)
+			err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)
 			if err != nil {
 				_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet %q not found yet: %v\n", clusterName, err)
 			} else {
@@ -194,7 +133,7 @@ var _ = Describe("Basic: Development profile (operator init + operator-managed T
 
 			// Check pod status for debugging
 			podList := &corev1.PodList{}
-			err = c.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabels{
+			err = c.List(ctx, podList, client.InNamespace(f.Namespace), client.MatchingLabels{
 				"app.kubernetes.io/instance":   clusterName,
 				"app.kubernetes.io/name":       "openbao",
 				"app.kubernetes.io/managed-by": "openbao-operator",
@@ -216,18 +155,18 @@ var _ = Describe("Basic: Development profile (operator init + operator-managed T
 					}
 				}
 			}
-		}, 1*time.Minute, 2*time.Second).Should(Succeed())
+		}, 1*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
 		By("waiting for root token Secret to be created (self-init disabled)")
 		Eventually(func(g Gomega) {
 			// Check if root token exists
-			err := c.Get(ctx, types.NamespacedName{Name: clusterName + "-root-token", Namespace: tenantNamespace}, &corev1.Secret{})
+			err := c.Get(ctx, types.NamespacedName{Name: clusterName + "-root-token", Namespace: f.Namespace}, &corev1.Secret{})
 			if err != nil {
 				_, _ = fmt.Fprintf(GinkgoWriter, "Root token Secret %q not found yet: %v\n", clusterName+"-root-token", err)
 
 				// Also check cluster status to see why it might not be created
 				updated := &openbaov1alpha1.OpenBaoCluster{}
-				if getErr := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, updated); getErr == nil {
+				if getErr := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, updated); getErr == nil {
 					_, _ = fmt.Fprintf(GinkgoWriter, "Cluster Initialized=%v SelfInitialized=%v, checking conditions...\n",
 						updated.Status.Initialized, updated.Status.SelfInitialized)
 					for _, cond := range updated.Status.Conditions {
@@ -239,7 +178,7 @@ var _ = Describe("Basic: Development profile (operator init + operator-managed T
 
 					// Check pod status for more details
 					podList := &corev1.PodList{}
-					if listErr := c.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabels{
+					if listErr := c.List(ctx, podList, client.InNamespace(f.Namespace), client.MatchingLabels{
 						"app.kubernetes.io/instance":   clusterName,
 						"app.kubernetes.io/name":       "openbao",
 						"app.kubernetes.io/managed-by": "openbao-operator",
@@ -254,7 +193,7 @@ var _ = Describe("Basic: Development profile (operator init + operator-managed T
 				}
 			}
 			g.Expect(err).NotTo(HaveOccurred())
-		}, 5*time.Minute, 3*time.Second).Should(Succeed(), "expected root token Secret to exist when self-init is disabled")
+		}, framework.DefaultLongWaitTimeout, 3*time.Second).Should(Succeed(), "expected root token Secret to exist when self-init is disabled")
 		_, _ = fmt.Fprintf(GinkgoWriter, "Root token Secret %q exists (self-init disabled)\n", clusterName+"-root-token")
 	})
 

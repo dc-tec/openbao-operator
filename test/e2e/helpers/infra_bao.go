@@ -295,8 +295,12 @@ listener "tcp" {
 	}
 
 	// Wait for pod to be running
-	deadline := time.Now().Add(2 * time.Minute)
-	for time.Now().Before(deadline) {
+	podRunningDeadline := time.NewTimer(2 * time.Minute)
+	defer podRunningDeadline.Stop()
+	podRunningTicker := time.NewTicker(1 * time.Second)
+	defer podRunningTicker.Stop()
+
+	for {
 		current := &corev1.Pod{}
 		if err := c.Get(ctx, types.NamespacedName{Name: cfg.Name, Namespace: cfg.Namespace}, current); err != nil {
 			return fmt.Errorf("failed to get infra-bao Pod %s/%s: %w", cfg.Namespace, cfg.Name, err)
@@ -306,26 +310,39 @@ listener "tcp" {
 			break
 		}
 
-		time.Sleep(1 * time.Second)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context canceled while waiting for infra-bao Pod %s/%s to be running: %w", cfg.Namespace, cfg.Name, ctx.Err())
+		case <-podRunningDeadline.C:
+			return fmt.Errorf("timed out waiting for infra-bao Pod %s/%s to be running (last phase: %s)", cfg.Namespace, cfg.Name, current.Status.Phase)
+		case <-podRunningTicker.C:
+		}
 	}
 
 	// Wait for OpenBao to be ready to accept connections (always HTTPS in production mode)
 	infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", cfg.Name, cfg.Namespace)
 
-	readinessDeadline := time.Now().Add(2 * time.Minute)
 	var lastErr error
-	for time.Now().Before(readinessDeadline) {
+	readinessTimer := time.NewTimer(2 * time.Minute)
+	defer readinessTimer.Stop()
+	readinessTicker := time.NewTicker(2 * time.Second)
+	defer readinessTicker.Stop()
+
+	for {
 		if err := checkInfraBaoReadinessLocal(ctx, cfg.Namespace, cfg.Name); err == nil {
 			lastErr = nil
 			break
 		} else {
 			lastErr = err
 		}
-		time.Sleep(2 * time.Second)
-	}
 
-	if lastErr != nil {
-		return fmt.Errorf("timed out waiting for infra-bao %s/%s to be ready: %w", cfg.Namespace, cfg.Name, lastErr)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context canceled while waiting for infra-bao %s/%s to be ready: %w", cfg.Namespace, cfg.Name, ctx.Err())
+		case <-readinessTimer.C:
+			return fmt.Errorf("timed out waiting for infra-bao %s/%s to be ready: %w", cfg.Namespace, cfg.Name, lastErr)
+		case <-readinessTicker.C:
+		}
 	}
 
 	// Initialize infra-bao if not already initialized

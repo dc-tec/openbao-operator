@@ -31,6 +31,15 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/test/utils"
 )
 
@@ -141,8 +150,15 @@ var _ = AfterSuite(func() {
 	cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", operatorNamespace, "--ignore-not-found")
 	_, _ = utils.Run(cmd)
 
-	By("undeploying the operator")
+	By("cleaning up OpenBao custom resources before undeploying")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := cleanupOpenBaoCustomResources(ctx); err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: cleanupOpenBaoCustomResources failed: %v\n", err)
+	}
+
+	By("undeploying the operator")
+	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	cmd = exec.CommandContext(ctx, "make", "undeploy", "ignore-not-found=true", "wait=false")
 	_, _ = utils.Run(cmd)
@@ -160,7 +176,7 @@ var _ = AfterSuite(func() {
 	By("uninstalling CRDs")
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd = exec.CommandContext(ctx, "make", "uninstall")
+	cmd = exec.CommandContext(ctx, "make", "uninstall", "ignore-not-found=true", "wait=false")
 	_, _ = utils.Run(cmd)
 
 	By("removing operator namespace")
@@ -178,6 +194,170 @@ var _ = AfterSuite(func() {
 	// Gateway API CRDs are managed per-test, not in AfterSuite.
 	// Individual tests that install Gateway API should clean up using UninstallGatewayAPI.
 })
+
+func cleanupOpenBaoCustomResources(ctx context.Context) error {
+	cfg, scheme, err := buildSuiteClientConfig()
+	if err != nil {
+		return err
+	}
+
+	c, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		return fmt.Errorf("failed to create cleanup client: %w", err)
+	}
+
+	if err := deleteAllOpenBaoCustomResources(ctx, c); err != nil {
+		return err
+	}
+
+	if err := waitForOpenBaoCustomResourcesDeleted(ctx, c, 45*time.Second, 2*time.Second); err == nil {
+		return nil
+	}
+
+	// If resources are stuck (usually finalizers), remove finalizers and try again.
+	if err := removeFinalizersFromOpenBaoCustomResources(ctx, c); err != nil {
+		return err
+	}
+	if err := deleteAllOpenBaoCustomResources(ctx, c); err != nil {
+		return err
+	}
+
+	if err := waitForOpenBaoCustomResourcesDeleted(ctx, c, 45*time.Second, 2*time.Second); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func buildSuiteClientConfig() (*rest.Config, *runtime.Scheme, error) {
+	cfg, err := ctrlconfig.GetConfig()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get kube config: %w", err)
+	}
+
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return nil, nil, fmt.Errorf("failed to add client-go scheme: %w", err)
+	}
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		return nil, nil, fmt.Errorf("failed to add openbao scheme: %w", err)
+	}
+
+	return cfg, scheme, nil
+}
+
+func deleteAllOpenBaoCustomResources(ctx context.Context, c client.Client) error {
+	var clusters openbaov1alpha1.OpenBaoClusterList
+	if err := c.List(ctx, &clusters); err != nil {
+		return fmt.Errorf("failed to list OpenBaoClusters: %w", err)
+	}
+	for i := range clusters.Items {
+		cluster := clusters.Items[i]
+		if err := c.Delete(ctx, &cluster); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		}
+	}
+
+	var tenants openbaov1alpha1.OpenBaoTenantList
+	if err := c.List(ctx, &tenants); err != nil {
+		return fmt.Errorf("failed to list OpenBaoTenants: %w", err)
+	}
+	for i := range tenants.Items {
+		tenant := tenants.Items[i]
+		if err := c.Delete(ctx, &tenant); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete OpenBaoTenant %s/%s: %w", tenant.Namespace, tenant.Name, err)
+		}
+	}
+
+	var namespaces corev1.NamespaceList
+	if err := c.List(ctx, &namespaces); err != nil {
+		return fmt.Errorf("failed to list namespaces: %w", err)
+	}
+	for i := range namespaces.Items {
+		ns := namespaces.Items[i]
+		if !strings.HasPrefix(ns.Name, "e2e-") {
+			continue
+		}
+		if err := c.Delete(ctx, &ns); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete namespace %q: %w", ns.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func waitForOpenBaoCustomResourcesDeleted(ctx context.Context, c client.Client, timeout time.Duration, pollInterval time.Duration) error {
+	if timeout <= 0 {
+		return fmt.Errorf("timeout must be positive")
+	}
+	if pollInterval <= 0 {
+		return fmt.Errorf("poll interval must be positive")
+	}
+
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		var clusters openbaov1alpha1.OpenBaoClusterList
+		if err := c.List(ctx, &clusters); err != nil {
+			return fmt.Errorf("failed to list OpenBaoClusters: %w", err)
+		}
+		var tenants openbaov1alpha1.OpenBaoTenantList
+		if err := c.List(ctx, &tenants); err != nil {
+			return fmt.Errorf("failed to list OpenBaoTenants: %w", err)
+		}
+
+		if len(clusters.Items) == 0 && len(tenants.Items) == 0 {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context canceled while waiting for OpenBao custom resources to be deleted: %w", ctx.Err())
+		case <-deadline.C:
+			return fmt.Errorf("timed out waiting for OpenBao custom resources to be deleted (clusters=%d tenants=%d)", len(clusters.Items), len(tenants.Items))
+		case <-ticker.C:
+		}
+	}
+}
+
+func removeFinalizersFromOpenBaoCustomResources(ctx context.Context, c client.Client) error {
+	var clusters openbaov1alpha1.OpenBaoClusterList
+	if err := c.List(ctx, &clusters); err != nil {
+		return fmt.Errorf("failed to list OpenBaoClusters for finalizer removal: %w", err)
+	}
+	for i := range clusters.Items {
+		cluster := clusters.Items[i]
+		if len(cluster.Finalizers) == 0 {
+			continue
+		}
+		original := cluster.DeepCopy()
+		cluster.Finalizers = nil
+		if err := c.Patch(ctx, &cluster, client.MergeFrom(original)); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to remove finalizers from OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		}
+	}
+
+	var tenants openbaov1alpha1.OpenBaoTenantList
+	if err := c.List(ctx, &tenants); err != nil {
+		return fmt.Errorf("failed to list OpenBaoTenants for finalizer removal: %w", err)
+	}
+	for i := range tenants.Items {
+		tenant := tenants.Items[i]
+		if len(tenant.Finalizers) == 0 {
+			continue
+		}
+		original := tenant.DeepCopy()
+		tenant.Finalizers = nil
+		if err := c.Patch(ctx, &tenant, client.MergeFrom(original)); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to remove finalizers from OpenBaoTenant %s/%s: %w", tenant.Namespace, tenant.Name, err)
+		}
+	}
+
+	return nil
+}
 
 // InstallGatewayAPI installs the Gateway API CRDs (standard and experimental).
 // This is exported so individual tests can install Gateway API when needed.

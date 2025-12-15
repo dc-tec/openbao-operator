@@ -27,6 +27,7 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/test/e2e/framework"
 	e2ehelpers "github.com/openbao/operator/test/e2e/helpers"
 )
 
@@ -37,23 +38,11 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		cfg    *rest.Config
 		scheme *runtime.Scheme
 		c      client.Client
+		f      *framework.Framework
 	)
 
-	triggerReconcile := func(cluster *openbaov1alpha1.OpenBaoCluster) {
-		original := cluster.DeepCopy()
-		annotations := cluster.GetAnnotations()
-		if annotations == nil {
-			annotations = map[string]string{}
-		}
-		annotations["e2e.openbao.org/reconcile-trigger"] = time.Now().UTC().Format(time.RFC3339Nano)
-		cluster.SetAnnotations(annotations)
-		Expect(c.Patch(ctx, cluster, client.MergeFrom(original))).To(Succeed())
-	}
-
 	const (
-		tenantNamespace = "e2e-hardened-tenant"
-		tenantName      = "hardened-tenant"
-		clusterName     = "hardened-cluster"
+		clusterName = "hardened-cluster"
 
 		infraBaoName            = "infra-bao"
 		infraBaoKeyName         = "openbao-unseal"
@@ -61,23 +50,6 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 	)
 
 	var infraBaoRootToken string
-
-	createNamespace := func(name string) {
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-				Labels: map[string]string{
-					"pod-security.kubernetes.io/enforce": "restricted",
-				},
-			},
-		}
-
-		err := c.Create(ctx, ns)
-		if apierrors.IsAlreadyExists(err) {
-			return
-		}
-		Expect(err).NotTo(HaveOccurred(), "Failed to create namespace %q", name)
-	}
 
 	BeforeAll(func() {
 		var err error
@@ -93,9 +65,9 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		c, err = client.New(cfg, client.Options{Scheme: scheme})
 		Expect(err).NotTo(HaveOccurred())
 
-		By(fmt.Sprintf("creating tenant namespace %q", tenantNamespace))
-		createNamespace(tenantNamespace)
-		_, _ = fmt.Fprintf(GinkgoWriter, "Created namespace %q\n", tenantNamespace)
+		f, err = framework.New(ctx, c, "hardened", operatorNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		_, _ = fmt.Fprintf(GinkgoWriter, "Created namespace %q\n", f.Namespace)
 
 		By(fmt.Sprintf("setting up infra-bao instance %q in namespace %q", infraBaoName, operatorNamespace))
 		infraCfg := e2ehelpers.InfraBaoConfig{
@@ -188,43 +160,30 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 	})
 
 	AfterAll(func() {
-		_ = c.Delete(ctx, &openbaov1alpha1.OpenBaoTenant{
-			ObjectMeta: metav1.ObjectMeta{Name: tenantName, Namespace: operatorNamespace},
-		})
-		_ = c.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenantNamespace}})
+		if f == nil {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+
+		_ = f.Cleanup(cleanupCtx)
 	})
 
 	It("provisions tenant RBAC via OpenBaoTenant", func() {
-		By(fmt.Sprintf("creating OpenBaoTenant %q in namespace %q", tenantName, operatorNamespace))
-		tenant := &openbaov1alpha1.OpenBaoTenant{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      tenantName,
-				Namespace: operatorNamespace,
-			},
-			Spec: openbaov1alpha1.OpenBaoTenantSpec{
-				TargetNamespace: tenantNamespace,
-			},
-		}
-		err := c.Create(ctx, tenant)
-		if err != nil && !apierrors.IsAlreadyExists(err) {
-			Expect(err).NotTo(HaveOccurred())
-		}
-		_, _ = fmt.Fprintf(GinkgoWriter, "Created OpenBaoTenant %q\n", tenantName)
-
-		By("waiting for tenant to be provisioned")
+		By("verifying OpenBaoTenant is provisioned")
 		Eventually(func(g Gomega) {
 			updated := &openbaov1alpha1.OpenBaoTenant{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: tenantName, Namespace: operatorNamespace}, updated)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: f.TenantName, Namespace: operatorNamespace}, updated)).To(Succeed())
 			_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoTenant status: Provisioned=%v, LastError=%q\n", updated.Status.Provisioned, updated.Status.LastError)
 			g.Expect(updated.Status.Provisioned).To(BeTrue())
 			g.Expect(updated.Status.LastError).To(BeEmpty())
-		}, 2*time.Minute, 2*time.Second).Should(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "Tenant %q successfully provisioned\n", tenantName)
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		_, _ = fmt.Fprintf(GinkgoWriter, "Tenant %q successfully provisioned\n", f.TenantName)
 	})
 
 	It("creates a Hardened cluster that self-initializes and stays unsealed across restarts", func() {
 		By("creating external TLS secrets required for TLS mode External")
-		Expect(e2ehelpers.EnsureExternalTLSSecrets(ctx, c, tenantNamespace, clusterName, 1)).To(Succeed())
+		Expect(e2ehelpers.EnsureExternalTLSSecrets(ctx, c, f.Namespace, clusterName, 1)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created external TLS secrets for cluster %q\n", clusterName)
 
 		By("creating transit token secret with CA certificate for TLS verification")
@@ -240,7 +199,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		tokenSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      infraBaoTokenSecretName,
-				Namespace: tenantNamespace,
+				Namespace: f.Namespace,
 			},
 			Type: corev1.SecretTypeOpaque,
 			Data: map[string][]byte{
@@ -257,7 +216,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		// Verify the token secret was created correctly
 		Eventually(func(g Gomega) {
 			created := &corev1.Secret{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoTokenSecretName, Namespace: tenantNamespace}, created)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoTokenSecretName, Namespace: f.Namespace}, created)).To(Succeed())
 			tokenValue := string(created.Data["token"])
 			g.Expect(tokenValue).To(Equal(infraBaoRootToken), "Token secret should contain the root token")
 			_, _ = fmt.Fprintf(GinkgoWriter, "Verified token secret contains root token\n")
@@ -269,7 +228,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		verifyTokenPod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "verify-transit-token-hardened",
-				Namespace: tenantNamespace,
+				Namespace: f.Namespace,
 			},
 			Spec: corev1.PodSpec{
 				RestartPolicy: corev1.RestartPolicyNever,
@@ -340,7 +299,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		Expect(err).NotTo(HaveOccurred())
 		Expect(verifyResult.Phase).To(Equal(corev1.PodSucceeded), "Token file verification failed, logs:\n%s", verifyResult.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified transit token file can be read and used to encrypt with transit key %q\n", infraBaoKeyName)
-		_ = e2ehelpers.DeletePodBestEffort(ctx, c, tenantNamespace, verifyTokenPod.Name)
+		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyTokenPod.Name)
 
 		By(fmt.Sprintf("creating Hardened OpenBaoCluster %q with External TLS and Transit auto-unseal", clusterName))
 		// Infra-bao always runs with TLS in production mode
@@ -348,7 +307,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterName,
-				Namespace: tenantNamespace,
+				Namespace: f.Namespace,
 			},
 			Spec: openbaov1alpha1.OpenBaoClusterSpec{
 				Profile:  openbaov1alpha1.ProfileHardened,
@@ -421,14 +380,14 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 		By("waiting for OpenBaoCluster to be observed by the API server")
 		Eventually(func() error {
-			return c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, &openbaov1alpha1.OpenBaoCluster{})
+			return c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, &openbaov1alpha1.OpenBaoCluster{})
 		}, 30*time.Second, 1*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoCluster %q observed by API server\n", clusterName)
 
 		By("verifying NetworkPolicy was created with custom egress rules")
 		Eventually(func(g Gomega) {
 			np := &networkingv1.NetworkPolicy{}
-			npName := types.NamespacedName{Name: clusterName + "-network-policy", Namespace: tenantNamespace}
+			npName := types.NamespacedName{Name: clusterName + "-network-policy", Namespace: f.Namespace}
 			g.Expect(c.Get(ctx, npName, np)).To(Succeed())
 
 			// Verify custom egress rule to operator namespace exists
@@ -452,7 +411,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		Eventually(func(g Gomega) {
 			// Check for ConfigMap
 			cm := &corev1.ConfigMap{}
-			cmName := types.NamespacedName{Name: clusterName + "-config", Namespace: tenantNamespace}
+			cmName := types.NamespacedName{Name: clusterName + "-config", Namespace: f.Namespace}
 			err := c.Get(ctx, cmName, cm)
 			if err != nil {
 				_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap %q not found yet: %v\n", cmName.Name, err)
@@ -462,7 +421,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 			// Check for TLS Secrets (External mode requires both CA and server secrets)
 			tlsCASecret := &corev1.Secret{}
-			tlsCASecretName := types.NamespacedName{Name: clusterName + "-tls-ca", Namespace: tenantNamespace}
+			tlsCASecretName := types.NamespacedName{Name: clusterName + "-tls-ca", Namespace: f.Namespace}
 			err = c.Get(ctx, tlsCASecretName, tlsCASecret)
 			if err != nil {
 				_, _ = fmt.Fprintf(GinkgoWriter, "TLS CA Secret %q not found yet: %v\n", tlsCASecretName.Name, err)
@@ -471,7 +430,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 			}
 
 			tlsServerSecret := &corev1.Secret{}
-			tlsServerSecretName := types.NamespacedName{Name: clusterName + "-tls-server", Namespace: tenantNamespace}
+			tlsServerSecretName := types.NamespacedName{Name: clusterName + "-tls-server", Namespace: f.Namespace}
 			err = c.Get(ctx, tlsServerSecretName, tlsServerSecret)
 			if err != nil {
 				_, _ = fmt.Fprintf(GinkgoWriter, "TLS server Secret %q not found yet: %v\n", tlsServerSecretName.Name, err)
@@ -481,7 +440,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 			// Check cluster status for errors
 			updated := &openbaov1alpha1.OpenBaoCluster{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, updated)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, updated)).To(Succeed())
 
 			// Log all conditions
 			for _, cond := range updated.Status.Conditions {
@@ -506,7 +465,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		By("waiting for StatefulSet to be created")
 		Eventually(func(g Gomega) {
 			sts := &appsv1.StatefulSet{}
-			err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, sts)
+			err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)
 			if err != nil {
 				_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet %q not found yet: %v\n", clusterName, err)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -520,7 +479,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		By("waiting for the StatefulSet pod to become Ready (proves auto-unseal worked)")
 		Eventually(func(g Gomega) {
 			sts := &appsv1.StatefulSet{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, sts)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)).To(Succeed())
 			_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet status: replicas=%d ready=%d updated=%d\n",
 				sts.Status.Replicas, sts.Status.ReadyReplicas, sts.Status.UpdatedReplicas)
 			g.Expect(sts.Status.ReadyReplicas).To(Equal(int32(1)))
@@ -530,13 +489,13 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		By("waiting for status.initialized=true (self-init, no operator init)")
 		Eventually(func(g Gomega) {
 			updated := &openbaov1alpha1.OpenBaoCluster{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, updated)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, updated)).To(Succeed())
 			_, _ = fmt.Fprintf(GinkgoWriter, "Cluster status: Initialized=%v SelfInitialized=%v ReadyReplicas=%d\n",
 				updated.Status.Initialized, updated.Status.SelfInitialized, updated.Status.ReadyReplicas)
 
 			// Check StatefulSet status for debugging
 			sts := &appsv1.StatefulSet{}
-			if err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, sts); err == nil {
+			if err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts); err == nil {
 				var specReplicas int32
 				if sts.Spec.Replicas != nil {
 					specReplicas = *sts.Spec.Replicas
@@ -561,28 +520,26 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		// Trigger a reconcile to ensure status is updated promptly after all replicas are ready.
 		// The controller now has requeue logic, but this ensures immediate status update in tests.
 		By("triggering reconcile to ensure status is updated")
-		cluster = &openbaov1alpha1.OpenBaoCluster{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, cluster)).To(Succeed())
-		triggerReconcile(cluster)
+		Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Triggered reconcile for cluster %q\n", clusterName)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Cluster %q is initialized via self-init\n", clusterName)
 
 		By("asserting root token and static unseal secrets do NOT exist")
 		Consistently(func() bool {
-			err := c.Get(ctx, types.NamespacedName{Name: clusterName + "-root-token", Namespace: tenantNamespace}, &corev1.Secret{})
+			err := c.Get(ctx, types.NamespacedName{Name: clusterName + "-root-token", Namespace: f.Namespace}, &corev1.Secret{})
 			return apierrors.IsNotFound(err)
 		}, 15*time.Second, 1*time.Second).Should(BeTrue())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified root-token Secret does not exist (as expected for self-init)\n")
 
 		Consistently(func() bool {
-			err := c.Get(ctx, types.NamespacedName{Name: clusterName + "-unseal-key", Namespace: tenantNamespace}, &corev1.Secret{})
+			err := c.Get(ctx, types.NamespacedName{Name: clusterName + "-unseal-key", Namespace: f.Namespace}, &corev1.Secret{})
 			return apierrors.IsNotFound(err)
 		}, 15*time.Second, 1*time.Second).Should(BeTrue())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified unseal-key Secret does not exist (using Transit auto-unseal)\n")
 
 		By("restarting via OpenBaoCluster scale-down/up to respect admission policy")
 		clusterObj := &openbaov1alpha1.OpenBaoCluster{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, clusterObj)).To(Succeed())
+		Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, clusterObj)).To(Succeed())
 		originalReplicas := clusterObj.Spec.Replicas
 
 		// Scale down to 1 (min allowed) to recycle pods without violating validation (replicas>=1)
@@ -593,7 +550,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		// Wait for old pods to go away (statefulset will converge to 1)
 		Eventually(func(g Gomega) {
 			podList := &corev1.PodList{}
-			err := c.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabels{
+			err := c.List(ctx, podList, client.InNamespace(f.Namespace), client.MatchingLabels{
 				"app.kubernetes.io/instance":   clusterName,
 				"app.kubernetes.io/name":       "openbao",
 				"app.kubernetes.io/managed-by": "openbao-operator",
@@ -604,7 +561,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 		// Scale back up via the CR
 		clusterObj = &openbaov1alpha1.OpenBaoCluster{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, clusterObj)).To(Succeed())
+		Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, clusterObj)).To(Succeed())
 		clusterObj.Spec.Replicas = originalReplicas
 		Expect(c.Update(ctx, clusterObj)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Scaled OpenBaoCluster %q back up to %d replicas\n", clusterName, originalReplicas)
@@ -612,7 +569,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		// Wait for pods to become Ready
 		Eventually(func(g Gomega) {
 			sts := &appsv1.StatefulSet{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, sts)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)).To(Succeed())
 			_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet status after restart: replicas=%d ready=%d\n",
 				sts.Status.Replicas, sts.Status.ReadyReplicas)
 			g.Expect(sts.Status.ReadyReplicas).To(Equal(originalReplicas))

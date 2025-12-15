@@ -23,14 +23,13 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/test/e2e/framework"
 	e2ehelpers "github.com/openbao/operator/test/e2e/helpers"
 )
 
 const (
 	impersonatedUser  = "jane-developer"
 	impersonatedGroup = "e2e-developers"
-
-	maintenanceAnnotationKey = "openbao.org/maintenance"
 )
 
 var _ = Describe("Chaos and Security", Ordered, func() {
@@ -41,23 +40,6 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 		scheme *runtime.Scheme
 		admin  client.Client
 	)
-
-	createNamespace := func(name string) {
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-				Labels: map[string]string{
-					"pod-security.kubernetes.io/enforce": "restricted",
-				},
-			},
-		}
-
-		err := admin.Create(ctx, ns)
-		if apierrors.IsAlreadyExists(err) {
-			return
-		}
-		Expect(err).NotTo(HaveOccurred(), "Failed to create namespace %q", name)
-	}
 
 	createRoleBindingForGroup := func(namespace string, role *rbacv1.Role) {
 		err := admin.Create(ctx, role)
@@ -107,7 +89,7 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 		const guardrailsNamespace = "e2e-guardrails"
 
 		BeforeAll(func() {
-			createNamespace(guardrailsNamespace)
+			Expect(framework.EnsureRestrictedNamespace(ctx, admin, guardrailsNamespace)).To(Succeed())
 
 			role := &rbacv1.Role{
 				ObjectMeta: metav1.ObjectMeta{
@@ -213,36 +195,20 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 	})
 
 	Context("Resource Locking (anti-tamper)", func() {
-		const tenantNamespace = "e2e-tenant-locks"
-
 		var (
-			tenant      *openbaov1alpha1.OpenBaoTenant
-			victim      *openbaov1alpha1.OpenBaoCluster
-			unsealName  string
-			statefulSet string
+			tenantNamespace string
+			tenantFW        *framework.Framework
+			victim          *openbaov1alpha1.OpenBaoCluster
+			unsealName      string
+			statefulSet     string
 		)
 
 		BeforeAll(func() {
-			createNamespace(tenantNamespace)
+			var err error
 
-			tenant = &openbaov1alpha1.OpenBaoTenant{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "tenant-locks",
-					Namespace: operatorNamespace,
-				},
-				Spec: openbaov1alpha1.OpenBaoTenantSpec{
-					TargetNamespace: tenantNamespace,
-				},
-			}
-			Expect(admin.Create(ctx, tenant)).To(Succeed())
-
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoTenant{}
-				err := admin.Get(ctx, types.NamespacedName{Name: tenant.Name, Namespace: operatorNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updated.Status.Provisioned).To(BeTrue())
-				g.Expect(updated.Status.LastError).To(BeEmpty())
-			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+			tenantFW, err = framework.New(ctx, admin, "tenant-locks", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
 
 			role := &rbacv1.Role{
 				ObjectMeta: metav1.ObjectMeta{
@@ -338,13 +304,13 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 		})
 
 		AfterAll(func() {
-			if victim != nil {
-				_ = admin.Delete(ctx, victim)
+			if tenantFW == nil {
+				return
 			}
-			if tenant != nil {
-				_ = admin.Delete(ctx, tenant)
-			}
-			_ = admin.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenantNamespace}})
+			cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancel()
+
+			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
 		It("prevents unauthorized deletion of the unseal Secret", func() {
@@ -387,33 +353,18 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 	})
 
 	Context("Controller resilience (chaos)", func() {
-		const tenantNamespace = "e2e-tenant-chaos"
-
 		var (
-			tenant *openbaov1alpha1.OpenBaoTenant
-			chaos  *openbaov1alpha1.OpenBaoCluster
+			tenantNamespace string
+			tenantFW        *framework.Framework
+			chaos           *openbaov1alpha1.OpenBaoCluster
 		)
 
 		BeforeAll(func() {
-			createNamespace(tenantNamespace)
+			var err error
 
-			tenant = &openbaov1alpha1.OpenBaoTenant{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "tenant-chaos",
-					Namespace: operatorNamespace,
-				},
-				Spec: openbaov1alpha1.OpenBaoTenantSpec{
-					TargetNamespace: tenantNamespace,
-				},
-			}
-			Expect(admin.Create(ctx, tenant)).To(Succeed())
-
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoTenant{}
-				err := admin.Get(ctx, types.NamespacedName{Name: tenant.Name, Namespace: operatorNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updated.Status.Provisioned).To(BeTrue())
-			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+			tenantFW, err = framework.New(ctx, admin, "tenant-chaos", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
 
 			chaos = &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -450,17 +401,17 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 
 			Eventually(func() error {
 				return admin.Get(ctx, types.NamespacedName{Name: chaos.Name + "-config", Namespace: tenantNamespace}, &corev1.ConfigMap{})
-			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
 		AfterAll(func() {
-			if chaos != nil {
-				_ = admin.Delete(ctx, chaos)
+			if tenantFW == nil {
+				return
 			}
-			if tenant != nil {
-				_ = admin.Delete(ctx, tenant)
-			}
-			_ = admin.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenantNamespace}})
+			cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancel()
+
+			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
 		It("prevents deletion of managed ConfigMap (policy enforcement)", func() {
@@ -499,33 +450,18 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 	})
 
 	Context("Bad configuration handling", func() {
-		const tenantNamespace = "e2e-tenant-bad-config"
-
 		var (
-			tenant *openbaov1alpha1.OpenBaoTenant
-			bad    *openbaov1alpha1.OpenBaoCluster
+			tenantNamespace string
+			tenantFW        *framework.Framework
+			bad             *openbaov1alpha1.OpenBaoCluster
 		)
 
 		BeforeAll(func() {
-			createNamespace(tenantNamespace)
+			var err error
 
-			tenant = &openbaov1alpha1.OpenBaoTenant{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "tenant-bad-config",
-					Namespace: operatorNamespace,
-				},
-				Spec: openbaov1alpha1.OpenBaoTenantSpec{
-					TargetNamespace: tenantNamespace,
-				},
-			}
-			Expect(admin.Create(ctx, tenant)).To(Succeed())
-
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoTenant{}
-				err := admin.Get(ctx, types.NamespacedName{Name: tenant.Name, Namespace: operatorNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updated.Status.Provisioned).To(BeTrue())
-			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+			tenantFW, err = framework.New(ctx, admin, "tenant-bad-config", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
 
 			bad = &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -569,13 +505,13 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 		})
 
 		AfterAll(func() {
-			if bad != nil {
-				_ = admin.Delete(ctx, bad)
+			if tenantFW == nil {
+				return
 			}
-			if tenant != nil {
-				_ = admin.Delete(ctx, tenant)
-			}
-			_ = admin.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenantNamespace}})
+			cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancel()
+
+			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
 		It("reports Degraded when Gateway API CRDs are missing", func() {

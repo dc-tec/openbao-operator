@@ -46,10 +46,14 @@ func RunPodUntilCompletion(ctx context.Context, cfg *rest.Config, c client.Clien
 		return nil, fmt.Errorf("failed to create pod %s/%s: %w", pod.Namespace, pod.Name, err)
 	}
 
-	deadline := time.Now().Add(timeout)
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
 	var lastPhase corev1.PodPhase
 
-	for time.Now().Before(deadline) {
+	for {
 		current := &corev1.Pod{}
 		if err := c.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, current); err != nil {
 			return nil, fmt.Errorf("failed to get pod %s/%s: %w", pod.Namespace, pod.Name, err)
@@ -69,12 +73,16 @@ func RunPodUntilCompletion(ctx context.Context, cfg *rest.Config, c client.Clien
 				Phase:     current.Status.Phase,
 				Logs:      logs,
 			}, nil
-		default:
-			time.Sleep(1 * time.Second)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("context canceled while waiting for pod %s/%s to complete: %w", pod.Namespace, pod.Name, ctx.Err())
+		case <-deadline.C:
+			return nil, fmt.Errorf("timed out waiting for pod %s/%s to complete (last phase: %s)", pod.Namespace, pod.Name, lastPhase)
+		case <-ticker.C:
 		}
 	}
-
-	return nil, fmt.Errorf("timed out waiting for pod %s/%s to complete (last phase: %s)", pod.Namespace, pod.Name, lastPhase)
 }
 
 func getPodLogs(ctx context.Context, cfg *rest.Config, namespace string, name string) (string, error) {

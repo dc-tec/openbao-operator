@@ -27,6 +27,7 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/test/e2e/framework"
 	e2ehelpers "github.com/openbao/operator/test/e2e/helpers"
 )
 
@@ -37,12 +38,11 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		cfg    *rest.Config
 		scheme *runtime.Scheme
 		c      client.Client
+		f      *framework.Framework
 	)
 
 	const (
-		tenantNamespace = "e2e-acme-tenant"
-		tenantName      = "acme-tenant"
-		clusterName     = "acme-cluster"
+		clusterName = "acme-cluster"
 
 		infraBaoName            = "infra-bao"
 		infraBaoKeyName         = "openbao-unseal"
@@ -54,23 +54,6 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		infraBaoCASecret  *corev1.Secret
 		infraBaoPKICA     []byte
 	)
-
-	createNamespace := func(name string) {
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-				Labels: map[string]string{
-					"pod-security.kubernetes.io/enforce": "restricted",
-				},
-			},
-		}
-
-		err := c.Create(ctx, ns)
-		if apierrors.IsAlreadyExists(err) {
-			return
-		}
-		Expect(err).NotTo(HaveOccurred(), "Failed to create namespace %q", name)
-	}
 
 	BeforeAll(func() {
 		var err error
@@ -86,9 +69,9 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		c, err = client.New(cfg, client.Options{Scheme: scheme})
 		Expect(err).NotTo(HaveOccurred())
 
-		By(fmt.Sprintf("creating tenant namespace %q", tenantNamespace))
-		createNamespace(tenantNamespace)
-		_, _ = fmt.Fprintf(GinkgoWriter, "Created namespace %q\n", tenantNamespace)
+		f, err = framework.New(ctx, c, "acme", operatorNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		_, _ = fmt.Fprintf(GinkgoWriter, "Created namespace %q\n", f.Namespace)
 
 		By(fmt.Sprintf("setting up infra-bao instance %q in namespace %q (production mode with TLS)", infraBaoName, operatorNamespace))
 		infraCfg := e2ehelpers.InfraBaoConfig{
@@ -144,37 +127,24 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		_ = c.Delete(ctx, &openbaov1alpha1.OpenBaoTenant{
-			ObjectMeta: metav1.ObjectMeta{Name: tenantName, Namespace: operatorNamespace},
-		})
-		_ = c.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenantNamespace}})
+		if f == nil {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+
+		_ = f.Cleanup(cleanupCtx)
 	})
 
 	It("provisions tenant RBAC via OpenBaoTenant", func() {
-		By(fmt.Sprintf("creating OpenBaoTenant %q in namespace %q", tenantName, operatorNamespace))
-		tenant := &openbaov1alpha1.OpenBaoTenant{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      tenantName,
-				Namespace: operatorNamespace,
-			},
-			Spec: openbaov1alpha1.OpenBaoTenantSpec{
-				TargetNamespace: tenantNamespace,
-			},
-		}
-		err := c.Create(ctx, tenant)
-		if err != nil && !apierrors.IsAlreadyExists(err) {
-			Expect(err).NotTo(HaveOccurred())
-		}
-		_, _ = fmt.Fprintf(GinkgoWriter, "Created OpenBaoTenant %q\n", tenantName)
-
-		By("waiting for tenant to be provisioned")
+		By("verifying OpenBaoTenant is provisioned")
 		Eventually(func(g Gomega) {
 			updated := &openbaov1alpha1.OpenBaoTenant{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: tenantName, Namespace: operatorNamespace}, updated)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: f.TenantName, Namespace: operatorNamespace}, updated)).To(Succeed())
 			_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoTenant status: Provisioned=%v, LastError=%q\n", updated.Status.Provisioned, updated.Status.LastError)
 			g.Expect(updated.Status.Provisioned).To(BeTrue())
-		}, 2*time.Minute, 2*time.Second).Should(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "Tenant %q successfully provisioned\n", tenantName)
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		_, _ = fmt.Fprintf(GinkgoWriter, "Tenant %q successfully provisioned\n", f.TenantName)
 	})
 
 	It("creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)", func() {
@@ -189,14 +159,14 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		// Create a dedicated service at port 443 to support standard ACME TLS-ALPN-01 validation.
 		// The service forwards 443 -> 8200 (OpenBao listener port).
 		acmeServiceName := clusterName + "-acme"
-		acmeDomain := fmt.Sprintf("%s.%s.svc", acmeServiceName, tenantNamespace)
+		acmeDomain := fmt.Sprintf("%s.%s.svc", acmeServiceName, f.Namespace)
 		_, _ = fmt.Fprintf(GinkgoWriter, "ACME directory URL: %q, domain: %q\n", acmeDirectoryURL, acmeDomain)
 
 		By(fmt.Sprintf("creating ACME service %q on ports 80 and 443", acmeServiceName))
 		acmeSvc := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      acmeServiceName,
-				Namespace: tenantNamespace,
+				Namespace: f.Namespace,
 				Labels: map[string]string{
 					"app.kubernetes.io/name": "openbao-acme",
 				},
@@ -241,7 +211,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		tokenSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      infraBaoTokenSecretName,
-				Namespace: tenantNamespace,
+				Namespace: f.Namespace,
 			},
 			Type: corev1.SecretTypeOpaque,
 			Data: map[string][]byte{
@@ -263,7 +233,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		verifyTokenPod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "verify-transit-token-acme",
-				Namespace: tenantNamespace,
+				Namespace: f.Namespace,
 			},
 			Spec: corev1.PodSpec{
 				RestartPolicy: corev1.RestartPolicyNever,
@@ -305,13 +275,13 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(verifyResult.Phase).To(Equal(corev1.PodSucceeded), "Token verification failed, logs:\n%s", verifyResult.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified transit token can encrypt with transit key %q\n", infraBaoKeyName)
-		_ = e2ehelpers.DeletePodBestEffort(ctx, c, tenantNamespace, verifyTokenPod.Name)
+		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyTokenPod.Name)
 
 		By(fmt.Sprintf("creating OpenBaoCluster %q with ACME TLS mode", clusterName))
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterName,
-				Namespace: tenantNamespace,
+				Namespace: f.Namespace,
 			},
 			Spec: openbaov1alpha1.OpenBaoClusterSpec{
 				Profile:  openbaov1alpha1.ProfileHardened,
@@ -414,19 +384,19 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 
 		By("waiting for OpenBaoCluster to be observed by the API server")
 		Eventually(func() error {
-			return c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, &openbaov1alpha1.OpenBaoCluster{})
+			return c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, &openbaov1alpha1.OpenBaoCluster{})
 		}, 30*time.Second, 1*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoCluster %q observed by API server\n", clusterName)
 
 		By("verifying TLS secrets are NOT created (ACME mode)")
 		Consistently(func() bool {
-			err := c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-server", Namespace: tenantNamespace}, &corev1.Secret{})
+			err := c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-server", Namespace: f.Namespace}, &corev1.Secret{})
 			return apierrors.IsNotFound(err)
 		}, 30*time.Second, 2*time.Second).Should(BeTrue(), "tls-server Secret should not exist in ACME mode")
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified tls-server Secret does not exist (as expected for ACME mode)\n")
 
 		Consistently(func() bool {
-			err := c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-ca", Namespace: tenantNamespace}, &corev1.Secret{})
+			err := c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-ca", Namespace: f.Namespace}, &corev1.Secret{})
 			return apierrors.IsNotFound(err)
 		}, 30*time.Second, 2*time.Second).Should(BeTrue(), "tls-ca Secret should not exist in ACME mode")
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified tls-ca Secret does not exist (as expected for ACME mode)\n")
@@ -435,7 +405,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		Eventually(func(g Gomega) {
 			// Check for ConfigMap (required before StatefulSet creation)
 			cm := &corev1.ConfigMap{}
-			cmName := types.NamespacedName{Name: clusterName + "-config", Namespace: tenantNamespace}
+			cmName := types.NamespacedName{Name: clusterName + "-config", Namespace: f.Namespace}
 			err := c.Get(ctx, cmName, cm)
 			if err != nil {
 				_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap %q not found yet: %v\n", cmName.Name, err)
@@ -445,7 +415,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 
 			// Check cluster status for errors
 			updated := &openbaov1alpha1.OpenBaoCluster{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, updated)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, updated)).To(Succeed())
 
 			// Log all conditions
 			for _, cond := range updated.Status.Conditions {
@@ -470,7 +440,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		By("waiting for StatefulSet to be created")
 		Eventually(func(g Gomega) {
 			sts := &appsv1.StatefulSet{}
-			err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, sts)
+			err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)
 			if err != nil {
 				_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet %q not found yet: %v\n", clusterName, err)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -484,7 +454,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		By("waiting for StatefulSet pods to become Ready")
 		Eventually(func(g Gomega) {
 			sts := &appsv1.StatefulSet{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, sts)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)).To(Succeed())
 			_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet status: replicas=%d ready=%d updated=%d\n",
 				sts.Status.Replicas, sts.Status.ReadyReplicas, sts.Status.UpdatedReplicas)
 			g.Expect(sts.Status.ReadyReplicas).To(Equal(int32(1)))
@@ -498,7 +468,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		// which must contain the tls_acme settings when TLS mode is ACME.
 		Eventually(func(g Gomega) {
 			cm := &corev1.ConfigMap{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-config", Namespace: tenantNamespace}, cm)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-config", Namespace: f.Namespace}, cm)).To(Succeed())
 			cfgText := cm.Data["config.hcl"]
 			_, _ = fmt.Fprintf(GinkgoWriter, "Checking config.hcl for ACME parameters...\n")
 			g.Expect(cfgText).To(ContainSubstring("tls_acme_ca_directory"))
