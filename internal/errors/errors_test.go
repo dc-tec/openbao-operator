@@ -694,7 +694,7 @@ func TestIsTransientConnection_RealNetworkError(t *testing.T) {
 	// Try to dial a non-existent address
 	conn, err := net.DialTimeout("tcp", "127.0.0.1:99999", 10*time.Millisecond)
 	if conn != nil {
-		conn.Close()
+		_ = conn.Close()
 	}
 	if err != nil {
 		if !IsTransientConnection(err) {

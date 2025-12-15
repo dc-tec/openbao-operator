@@ -4,7 +4,7 @@
 
 Once you have basic cluster creation working:
 
-- Experiment with `spec.config` to inject additional, non-protected OpenBao configuration (validated via allowlist).
+- Configure OpenBao server settings via `spec.configuration` for structured configuration (UI, logging, plugin, lease/TTL, cache, advanced features, listener, raft, ACME CA root).
 - Configure audit devices via `spec.audit` for declarative audit logging.
 - Configure plugins via `spec.plugins` for OCI-based plugin management.
 - Configure telemetry via `spec.telemetry` for metrics and observability.

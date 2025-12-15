@@ -115,9 +115,9 @@ spec:
     enabled: true
   unseal:
     type: awskms
-    options:
+    awskms:
       region: us-east-1
-      kms_key_id: alias/openbao-unseal
+      kmsKeyID: alias/openbao-unseal
 ```
 
 **Key Characteristics of ACME Mode:**

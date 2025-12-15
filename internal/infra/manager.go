@@ -180,9 +180,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 //
 // The resource must have TypeMeta, ObjectMeta (with Name and Namespace), and the desired Spec set.
 // Owner references are set automatically if the resource supports them.
-//
-// fieldOwner identifies the operator as the manager of this resource (used for conflict resolution).
-func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster, fieldOwner string) error {
+func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	// Set owner reference for garbage collection
 	if err := controllerutil.SetControllerReference(cluster, obj, m.scheme); err != nil {
 		return fmt.Errorf("failed to set owner reference: %w", err)
@@ -191,7 +189,7 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 	// Use Server-Side Apply with ForceOwnership to ensure the operator manages this resource
 	patchOpts := []client.PatchOption{
 		client.ForceOwnership,
-		client.FieldOwner(fieldOwner),
+		client.FieldOwner("openbao-operator"),
 	}
 
 	if err := m.client.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {

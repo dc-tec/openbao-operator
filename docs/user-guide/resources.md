@@ -25,14 +25,14 @@ For a cluster named `dev-cluster` in namespace `security`, the Operator reconcil
       - ACME parameters (`tls_acme_ca_directory`, `tls_acme_domains`, etc.) when `spec.tls.mode` is `ACME`
     - `seal` stanza (type depends on `spec.unseal.type`):
       - `seal "static"` pointing at `/etc/bao/unseal/key` (default).
-      - `seal "awskms"`, `seal "gcpckms"`, `seal "azurekeyvault"`, or `seal "transit"` with provider-specific options (when `spec.unseal.type` is set).
+      - `seal "awskms"`, `seal "gcpckms"`, `seal "azurekeyvault"`, `seal "transit"`, `seal "kmip"`, `seal "ocikms"`, or `seal "pkcs11"` with structured provider-specific configuration (when `spec.unseal.type` is set and the corresponding seal config is provided, e.g., `spec.unseal.transit`, `spec.unseal.awskms`, etc.).
     - `storage "raft"` with `path = "/bao/data"` and:
       - a bootstrap `retry_join` targeting pod-0 for initial cluster formation.
       - a post-initialization `retry_join` using `auto_join = "provider=k8s namespace=<ns> label_selector=\"openbao.org/cluster=<name>\""` so additional pods can join dynamically.
       - TLS certificate file paths in `retry_join` (when `spec.tls.mode` is `OperatorManaged` or `External`)
       - No TLS file paths in `retry_join` when `spec.tls.mode` is `ACME` (OpenBao handles cluster TLS automatically)
     - `service_registration "kubernetes"` (so OpenBao can update Pod labels like `openbao-active`, `openbao-initialized`, and `openbao-sealed`)
-    - Any additional non-protected attributes from `spec.config` as string key/value pairs (validated via allowlist).
+    - Structured configuration from `spec.configuration` (UI, logging, plugin, lease/TTL, cache, advanced features, listener, raft, ACME CA root).
     - Audit device blocks from `spec.audit` (if configured).
     - Plugin blocks from `spec.plugins` (if configured).
     - Telemetry block from `spec.telemetry` (if configured).

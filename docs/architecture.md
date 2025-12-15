@@ -334,9 +334,9 @@ When `spec.tls.mode` is `ACME`, OpenBao manages certificates internally via its 
     - If missing, generates 32 cryptographically secure random bytes and stores them as the unseal key in the Secret.
     - Mounts this Secret into the StatefulSet PodSpec at `/etc/bao/unseal/key`.
     - Injects a `seal "static"` stanza into `config.hcl`.
-  - **External KMS Seal:** If `spec.unseal.type` is set to `"awskms"`, `"gcpckms"`, `"azurekeyvault"`, or `"transit"`:
+  - **External KMS Seal:** If `spec.unseal.type` is set to `"awskms"`, `"gcpckms"`, `"azurekeyvault"`, `"transit"`, `"kmip"`, `"ocikms"`, or `"pkcs11"`:
     - Does NOT create the `<cluster>-unseal-key` Secret.
-    - Renders a `seal "<type>"` block with options from `spec.unseal.options`.
+    - Renders a `seal "<type>"` block with structured configuration from the corresponding seal config (e.g., `spec.unseal.transit`, `spec.unseal.awskms`, etc.).
     - If `spec.unseal.credentialsSecretRef` is provided, mounts the credentials Secret at `/etc/bao/seal-creds`.
     - For GCP Cloud KMS (`gcpckms`), sets `GOOGLE_APPLICATION_CREDENTIALS` environment variable pointing to the mounted credentials file.
 

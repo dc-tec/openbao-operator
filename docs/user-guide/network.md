@@ -119,9 +119,9 @@ metadata:
 spec:
   unseal:
     type: transit
-    options:
+    transit:
       address: "http://infra-bao.openbao-operator-system.svc:8200"
-      # ... other options ...
+      # ... other transit configuration ...
   network:
     egressRules:
       - to:

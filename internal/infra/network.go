@@ -59,7 +59,7 @@ func (m *Manager) ensureHeadlessService(ctx context.Context, _ logr.Logger, clus
 		},
 	}
 
-	if err := m.applyResource(ctx, service, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, service, cluster); err != nil {
 		return fmt.Errorf("failed to ensure headless Service %s/%s: %w", cluster.Namespace, svcName, err)
 	}
 
@@ -134,7 +134,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger,
 		},
 	}
 
-	if err := m.applyResource(ctx, service, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, service, cluster); err != nil {
 		return fmt.Errorf("failed to ensure external Service %s/%s: %w", cluster.Namespace, svcName, err)
 	}
 
@@ -197,7 +197,7 @@ func (m *Manager) ensureIngress(ctx context.Context, logger logr.Logger, cluster
 		APIVersion: "networking.k8s.io/v1",
 	}
 
-	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, desired, cluster); err != nil {
 		return fmt.Errorf("failed to ensure Ingress %s/%s: %w", cluster.Namespace, name, err)
 	}
 
@@ -347,7 +347,7 @@ func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, clust
 	}
 
 	// Use SSA to create or update, handling CRD missing errors gracefully
-	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, desired, cluster); err != nil {
 		if operatorerrors.IsCRDMissingError(err) {
 			logger.Info("Gateway API CRDs not installed; HTTPRoute reconciliation will be marked as degraded", "httproute", name)
 			return ErrGatewayAPIMissing
@@ -516,7 +516,7 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 	}
 
 	// Use SSA to create or update, handling CRD missing errors gracefully
-	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, desired, cluster); err != nil {
 		if operatorerrors.IsCRDMissingError(err) {
 			logger.V(1).Info("Gateway API TLSRoute CRD not installed; skipping TLSRoute reconciliation", "tlsroute", name)
 			return nil
@@ -692,7 +692,7 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 	}
 
 	// Use SSA to create or update, handling CRD missing errors gracefully
-	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, desired, cluster); err != nil {
 		if operatorerrors.IsCRDMissingError(err) {
 			logger.V(1).Info("Gateway API BackendTLSPolicy CRD not installed; skipping BackendTLSPolicy reconciliation", "backendtlspolicy", name)
 			return nil
@@ -824,7 +824,7 @@ func (m *Manager) ensureNetworkPolicy(ctx context.Context, logger logr.Logger, c
 		APIVersion: "networking.k8s.io/v1",
 	}
 
-	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, desired, cluster); err != nil {
 		return fmt.Errorf("failed to ensure NetworkPolicy %s/%s: %w", cluster.Namespace, name, err)
 	}
 
@@ -1345,7 +1345,7 @@ func (m *Manager) ensureGatewayCAConfigMap(ctx context.Context, logger logr.Logg
 		},
 	}
 
-	if err := m.applyResource(ctx, configMap, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, configMap, cluster); err != nil {
 		return fmt.Errorf("failed to ensure Gateway CA ConfigMap %s/%s: %w", cluster.Namespace, configMapName, err)
 	}
 

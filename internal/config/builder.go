@@ -95,50 +95,11 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	listenerBody.SetAttributeValue("max_request_duration", cty.StringVal(configMaxRequestDuration))
 
 	// Apply user configuration (if present)
-	if cluster.Spec.Configuration != nil && cluster.Spec.Configuration.Listener != nil {
-		if cluster.Spec.Configuration.Listener.ProxyProtocolBehavior != "" {
-			listenerBody.SetAttributeValue("proxy_protocol_behavior", cty.StringVal(cluster.Spec.Configuration.Listener.ProxyProtocolBehavior))
-		}
-		// Note: TLSDisable is typically managed by the operator based on spec.tls.enabled,
-		// but we allow it to be overridden if explicitly set
-		if cluster.Spec.Configuration.Listener.TLSDisable != nil {
-			if *cluster.Spec.Configuration.Listener.TLSDisable {
-				listenerBody.SetAttributeValue("tls_disable", cty.NumberIntVal(1))
-			} else {
-				listenerBody.SetAttributeValue("tls_disable", cty.NumberIntVal(0))
-			}
-		}
-	}
+	renderListenerConfiguration(listenerBody, cluster.Spec.Configuration)
 
 	// Render TLS configuration based on mode
-	if cluster.Spec.TLS.Mode == openbaov1alpha1.TLSModeACME {
-		// ACME mode: OpenBao manages certificates via native ACME client
-		// Certificates are stored in-memory (or cached per tls_acme_cache_path).
-		// See: https://openbao.org/docs/rfcs/acme-tls-listeners/
-		if cluster.Spec.TLS.ACME == nil {
-			return nil, fmt.Errorf("ACME configuration is required when tls.mode is ACME")
-		}
-		acmeConfig := cluster.Spec.TLS.ACME
-
-		// ACME parameters are set directly on the listener, not in a nested block
-		// See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
-		listenerBody.SetAttributeValue("tls_acme_ca_directory", cty.StringVal(acmeConfig.DirectoryURL))
-		// tls_acme_domains is a list of domains. Use exactly what is provided; do not inject localhost,
-		// to avoid ACME challenges against loopback.
-		acmeDomains := []cty.Value{cty.StringVal(acmeConfig.Domain)}
-		listenerBody.SetAttributeValue("tls_acme_domains", cty.ListVal(acmeDomains))
-		if acmeConfig.Email != "" {
-			listenerBody.SetAttributeValue("tls_acme_email", cty.StringVal(acmeConfig.Email))
-		}
-		// ACME CA root (if specified in configuration)
-		if cluster.Spec.Configuration != nil && cluster.Spec.Configuration.ACMECARoot != "" {
-			listenerBody.SetAttributeValue("tls_acme_ca_root", cty.StringVal(cluster.Spec.Configuration.ACMECARoot))
-		}
-	} else {
-		// OperatorManaged or External mode: use file-based TLS certificates
-		listenerBody.SetAttributeValue("tls_cert_file", cty.StringVal(constants.PathTLSServerCert))
-		listenerBody.SetAttributeValue("tls_key_file", cty.StringVal(constants.PathTLSServerKey))
-		listenerBody.SetAttributeValue("tls_client_ca_file", cty.StringVal(constants.PathTLSCACert))
+	if err := renderTLSConfiguration(listenerBody, cluster.Spec.TLS, cluster.Spec.Configuration); err != nil {
+		return nil, err
 	}
 
 	// 3. Seal stanza (operator-owned, but type is configurable).
@@ -202,146 +163,7 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	body.AppendNewBlock("service_registration", []string{"kubernetes"})
 
 	// 6. Apply additional user configuration from structured fields.
-	if cluster.Spec.Configuration != nil {
-		// Log level
-		if cluster.Spec.Configuration.LogLevel != "" {
-			body.SetAttributeValue("log_level", cty.StringVal(cluster.Spec.Configuration.LogLevel))
-		}
-
-		// Logging configuration
-		if cluster.Spec.Configuration.Logging != nil {
-			if cluster.Spec.Configuration.Logging.Format != "" {
-				body.SetAttributeValue("log_format", cty.StringVal(cluster.Spec.Configuration.Logging.Format))
-			}
-			if cluster.Spec.Configuration.Logging.File != "" {
-				body.SetAttributeValue("log_file", cty.StringVal(cluster.Spec.Configuration.Logging.File))
-			}
-			if cluster.Spec.Configuration.Logging.RotateDuration != "" {
-				body.SetAttributeValue("log_rotate_duration", cty.StringVal(cluster.Spec.Configuration.Logging.RotateDuration))
-			}
-			if cluster.Spec.Configuration.Logging.RotateBytes != nil {
-				body.SetAttributeValue("log_rotate_bytes", cty.NumberIntVal(*cluster.Spec.Configuration.Logging.RotateBytes))
-			}
-			if cluster.Spec.Configuration.Logging.RotateMaxFiles != nil {
-				body.SetAttributeValue("log_rotate_max_files", cty.NumberIntVal(int64(*cluster.Spec.Configuration.Logging.RotateMaxFiles)))
-			}
-			if cluster.Spec.Configuration.Logging.PIDFile != "" {
-				body.SetAttributeValue("pid_file", cty.StringVal(cluster.Spec.Configuration.Logging.PIDFile))
-			}
-		}
-
-		// Plugin configuration
-		if cluster.Spec.Configuration.Plugin != nil {
-			if cluster.Spec.Configuration.Plugin.FileUID != nil {
-				body.SetAttributeValue("plugin_file_uid", cty.NumberIntVal(*cluster.Spec.Configuration.Plugin.FileUID))
-			}
-			if cluster.Spec.Configuration.Plugin.FilePermissions != "" {
-				body.SetAttributeValue("plugin_file_permissions", cty.StringVal(cluster.Spec.Configuration.Plugin.FilePermissions))
-			}
-			if cluster.Spec.Configuration.Plugin.AutoDownload != nil {
-				if *cluster.Spec.Configuration.Plugin.AutoDownload {
-					body.SetAttributeValue("plugin_auto_download", cty.BoolVal(true))
-				} else {
-					body.SetAttributeValue("plugin_auto_download", cty.BoolVal(false))
-				}
-			}
-			if cluster.Spec.Configuration.Plugin.AutoRegister != nil {
-				if *cluster.Spec.Configuration.Plugin.AutoRegister {
-					body.SetAttributeValue("plugin_auto_register", cty.BoolVal(true))
-				} else {
-					body.SetAttributeValue("plugin_auto_register", cty.BoolVal(false))
-				}
-			}
-			if cluster.Spec.Configuration.Plugin.DownloadBehavior != "" {
-				body.SetAttributeValue("plugin_download_behavior", cty.StringVal(cluster.Spec.Configuration.Plugin.DownloadBehavior))
-			}
-		}
-
-		// Lease/TTL configuration
-		if cluster.Spec.Configuration.DefaultLeaseTTL != "" {
-			body.SetAttributeValue("default_lease_ttl", cty.StringVal(cluster.Spec.Configuration.DefaultLeaseTTL))
-		}
-		if cluster.Spec.Configuration.MaxLeaseTTL != "" {
-			body.SetAttributeValue("max_lease_ttl", cty.StringVal(cluster.Spec.Configuration.MaxLeaseTTL))
-		}
-
-		// Cache configuration
-		if cluster.Spec.Configuration.CacheSize != nil {
-			body.SetAttributeValue("cache_size", cty.NumberIntVal(*cluster.Spec.Configuration.CacheSize))
-		}
-		if cluster.Spec.Configuration.DisableCache != nil {
-			if *cluster.Spec.Configuration.DisableCache {
-				body.SetAttributeValue("disable_cache", cty.BoolVal(true))
-			} else {
-				body.SetAttributeValue("disable_cache", cty.BoolVal(false))
-			}
-		}
-
-		// Advanced/experimental features
-		if cluster.Spec.Configuration.DetectDeadlocks != nil {
-			if *cluster.Spec.Configuration.DetectDeadlocks {
-				body.SetAttributeValue("detect_deadlocks", cty.BoolVal(true))
-			} else {
-				body.SetAttributeValue("detect_deadlocks", cty.BoolVal(false))
-			}
-		}
-		if cluster.Spec.Configuration.RawStorageEndpoint != nil {
-			if *cluster.Spec.Configuration.RawStorageEndpoint {
-				body.SetAttributeValue("raw_storage_endpoint", cty.BoolVal(true))
-			} else {
-				body.SetAttributeValue("raw_storage_endpoint", cty.BoolVal(false))
-			}
-		}
-		if cluster.Spec.Configuration.IntrospectionEndpoint != nil {
-			if *cluster.Spec.Configuration.IntrospectionEndpoint {
-				body.SetAttributeValue("introspection_endpoint", cty.BoolVal(true))
-			} else {
-				body.SetAttributeValue("introspection_endpoint", cty.BoolVal(false))
-			}
-		}
-		if cluster.Spec.Configuration.DisableStandbyReads != nil {
-			if *cluster.Spec.Configuration.DisableStandbyReads {
-				body.SetAttributeValue("disable_standby_reads", cty.BoolVal(true))
-			} else {
-				body.SetAttributeValue("disable_standby_reads", cty.BoolVal(false))
-			}
-		}
-		if cluster.Spec.Configuration.ImpreciseLeaseRoleTracking != nil {
-			if *cluster.Spec.Configuration.ImpreciseLeaseRoleTracking {
-				body.SetAttributeValue("imprecise_lease_role_tracking", cty.BoolVal(true))
-			} else {
-				body.SetAttributeValue("imprecise_lease_role_tracking", cty.BoolVal(false))
-			}
-		}
-		if cluster.Spec.Configuration.UnsafeAllowAPIAuditCreation != nil {
-			if *cluster.Spec.Configuration.UnsafeAllowAPIAuditCreation {
-				body.SetAttributeValue("unsafe_allow_api_audit_creation", cty.BoolVal(true))
-			} else {
-				body.SetAttributeValue("unsafe_allow_api_audit_creation", cty.BoolVal(false))
-			}
-		}
-		if cluster.Spec.Configuration.AllowAuditLogPrefixing != nil {
-			if *cluster.Spec.Configuration.AllowAuditLogPrefixing {
-				body.SetAttributeValue("allow_audit_log_prefixing", cty.BoolVal(true))
-			} else {
-				body.SetAttributeValue("allow_audit_log_prefixing", cty.BoolVal(false))
-			}
-		}
-		if cluster.Spec.Configuration.EnableResponseHeaderHostname != nil {
-			if *cluster.Spec.Configuration.EnableResponseHeaderHostname {
-				body.SetAttributeValue("enable_response_header_hostname", cty.BoolVal(true))
-			} else {
-				body.SetAttributeValue("enable_response_header_hostname", cty.BoolVal(false))
-			}
-		}
-		if cluster.Spec.Configuration.EnableResponseHeaderRaftNodeID != nil {
-			if *cluster.Spec.Configuration.EnableResponseHeaderRaftNodeID {
-				body.SetAttributeValue("enable_response_header_raft_node_id", cty.BoolVal(true))
-			} else {
-				body.SetAttributeValue("enable_response_header_raft_node_id", cty.BoolVal(false))
-			}
-		}
-	}
+	renderUserConfiguration(body, cluster.Spec.Configuration)
 
 	// 7. Render audit devices if configured
 	if err := renderAuditDevices(body, cluster.Spec.Audit); err != nil {
@@ -930,6 +752,157 @@ func renderTelemetry(body *hclwrite.Body, telemetry *openbaov1alpha1.TelemetryCo
 
 	if telemetry.StackdriverDebugLogs {
 		telemetryBody.SetAttributeValue("stackdriver_debug_logs", cty.BoolVal(true))
+	}
+}
+
+// renderListenerConfiguration renders user-provided listener configuration.
+func renderListenerConfiguration(listenerBody *hclwrite.Body, config *openbaov1alpha1.OpenBaoConfiguration) {
+	if config == nil || config.Listener == nil {
+		return
+	}
+	if config.Listener.ProxyProtocolBehavior != "" {
+		listenerBody.SetAttributeValue("proxy_protocol_behavior", cty.StringVal(config.Listener.ProxyProtocolBehavior))
+	}
+	// Note: TLSDisable is typically managed by the operator based on spec.tls.enabled,
+	// but we allow it to be overridden if explicitly set
+	if config.Listener.TLSDisable != nil {
+		if *config.Listener.TLSDisable {
+			listenerBody.SetAttributeValue("tls_disable", cty.NumberIntVal(1))
+		} else {
+			listenerBody.SetAttributeValue("tls_disable", cty.NumberIntVal(0))
+		}
+	}
+}
+
+// renderTLSConfiguration renders TLS configuration based on the TLS mode.
+func renderTLSConfiguration(listenerBody *hclwrite.Body, tlsSpec openbaov1alpha1.TLSConfig, config *openbaov1alpha1.OpenBaoConfiguration) error {
+	if tlsSpec.Mode == openbaov1alpha1.TLSModeACME {
+		// ACME mode: OpenBao manages certificates via native ACME client
+		// Certificates are stored in-memory (or cached per tls_acme_cache_path).
+		// See: https://openbao.org/docs/rfcs/acme-tls-listeners/
+		if tlsSpec.ACME == nil {
+			return fmt.Errorf("ACME configuration is required when tls.mode is ACME")
+		}
+		acmeConfig := tlsSpec.ACME
+
+		// ACME parameters are set directly on the listener, not in a nested block
+		// See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
+		listenerBody.SetAttributeValue("tls_acme_ca_directory", cty.StringVal(acmeConfig.DirectoryURL))
+		// tls_acme_domains is a list of domains. Use exactly what is provided; do not inject localhost,
+		// to avoid ACME challenges against loopback.
+		acmeDomains := []cty.Value{cty.StringVal(acmeConfig.Domain)}
+		listenerBody.SetAttributeValue("tls_acme_domains", cty.ListVal(acmeDomains))
+		if acmeConfig.Email != "" {
+			listenerBody.SetAttributeValue("tls_acme_email", cty.StringVal(acmeConfig.Email))
+		}
+		// ACME CA root (if specified in configuration)
+		if config != nil && config.ACMECARoot != "" {
+			listenerBody.SetAttributeValue("tls_acme_ca_root", cty.StringVal(config.ACMECARoot))
+		}
+	} else {
+		// OperatorManaged or External mode: use file-based TLS certificates
+		listenerBody.SetAttributeValue("tls_cert_file", cty.StringVal(constants.PathTLSServerCert))
+		listenerBody.SetAttributeValue("tls_key_file", cty.StringVal(constants.PathTLSServerKey))
+		listenerBody.SetAttributeValue("tls_client_ca_file", cty.StringVal(constants.PathTLSCACert))
+	}
+	return nil
+}
+
+// renderUserConfiguration renders additional user configuration from structured fields.
+func renderUserConfiguration(body *hclwrite.Body, config *openbaov1alpha1.OpenBaoConfiguration) {
+	if config == nil {
+		return
+	}
+
+	// Log level
+	if config.LogLevel != "" {
+		body.SetAttributeValue("log_level", cty.StringVal(config.LogLevel))
+	}
+
+	// Logging configuration
+	if config.Logging != nil {
+		if config.Logging.Format != "" {
+			body.SetAttributeValue("log_format", cty.StringVal(config.Logging.Format))
+		}
+		if config.Logging.File != "" {
+			body.SetAttributeValue("log_file", cty.StringVal(config.Logging.File))
+		}
+		if config.Logging.RotateDuration != "" {
+			body.SetAttributeValue("log_rotate_duration", cty.StringVal(config.Logging.RotateDuration))
+		}
+		if config.Logging.RotateBytes != nil {
+			body.SetAttributeValue("log_rotate_bytes", cty.NumberIntVal(*config.Logging.RotateBytes))
+		}
+		if config.Logging.RotateMaxFiles != nil {
+			body.SetAttributeValue("log_rotate_max_files", cty.NumberIntVal(int64(*config.Logging.RotateMaxFiles)))
+		}
+		if config.Logging.PIDFile != "" {
+			body.SetAttributeValue("pid_file", cty.StringVal(config.Logging.PIDFile))
+		}
+	}
+
+	// Plugin configuration
+	if config.Plugin != nil {
+		if config.Plugin.FileUID != nil {
+			body.SetAttributeValue("plugin_file_uid", cty.NumberIntVal(*config.Plugin.FileUID))
+		}
+		if config.Plugin.FilePermissions != "" {
+			body.SetAttributeValue("plugin_file_permissions", cty.StringVal(config.Plugin.FilePermissions))
+		}
+		if config.Plugin.AutoDownload != nil {
+			body.SetAttributeValue("plugin_auto_download", cty.BoolVal(*config.Plugin.AutoDownload))
+		}
+		if config.Plugin.AutoRegister != nil {
+			body.SetAttributeValue("plugin_auto_register", cty.BoolVal(*config.Plugin.AutoRegister))
+		}
+		if config.Plugin.DownloadBehavior != "" {
+			body.SetAttributeValue("plugin_download_behavior", cty.StringVal(config.Plugin.DownloadBehavior))
+		}
+	}
+
+	// Lease/TTL configuration
+	if config.DefaultLeaseTTL != "" {
+		body.SetAttributeValue("default_lease_ttl", cty.StringVal(config.DefaultLeaseTTL))
+	}
+	if config.MaxLeaseTTL != "" {
+		body.SetAttributeValue("max_lease_ttl", cty.StringVal(config.MaxLeaseTTL))
+	}
+
+	// Cache configuration
+	if config.CacheSize != nil {
+		body.SetAttributeValue("cache_size", cty.NumberIntVal(*config.CacheSize))
+	}
+	if config.DisableCache != nil {
+		body.SetAttributeValue("disable_cache", cty.BoolVal(*config.DisableCache))
+	}
+
+	// Advanced/experimental features
+	if config.DetectDeadlocks != nil {
+		body.SetAttributeValue("detect_deadlocks", cty.BoolVal(*config.DetectDeadlocks))
+	}
+	if config.RawStorageEndpoint != nil {
+		body.SetAttributeValue("raw_storage_endpoint", cty.BoolVal(*config.RawStorageEndpoint))
+	}
+	if config.IntrospectionEndpoint != nil {
+		body.SetAttributeValue("introspection_endpoint", cty.BoolVal(*config.IntrospectionEndpoint))
+	}
+	if config.DisableStandbyReads != nil {
+		body.SetAttributeValue("disable_standby_reads", cty.BoolVal(*config.DisableStandbyReads))
+	}
+	if config.ImpreciseLeaseRoleTracking != nil {
+		body.SetAttributeValue("imprecise_lease_role_tracking", cty.BoolVal(*config.ImpreciseLeaseRoleTracking))
+	}
+	if config.UnsafeAllowAPIAuditCreation != nil {
+		body.SetAttributeValue("unsafe_allow_api_audit_creation", cty.BoolVal(*config.UnsafeAllowAPIAuditCreation))
+	}
+	if config.AllowAuditLogPrefixing != nil {
+		body.SetAttributeValue("allow_audit_log_prefixing", cty.BoolVal(*config.AllowAuditLogPrefixing))
+	}
+	if config.EnableResponseHeaderHostname != nil {
+		body.SetAttributeValue("enable_response_header_hostname", cty.BoolVal(*config.EnableResponseHeaderHostname))
+	}
+	if config.EnableResponseHeaderRaftNodeID != nil {
+		body.SetAttributeValue("enable_response_header_raft_node_id", cty.BoolVal(*config.EnableResponseHeaderRaftNodeID))
 	}
 }
 

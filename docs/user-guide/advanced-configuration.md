@@ -2,7 +2,66 @@
 
 [Back to User Guide index](README.md)
 
-### 9.1 Audit Devices
+### 9.1 Structured Configuration
+
+Configure OpenBao server settings using the structured `spec.configuration` API. This provides type safety, `kubectl explain` support, and better IDE autocomplete compared to the legacy `spec.config` map.
+
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: config-cluster
+spec:
+  # ... other spec fields ...
+  configuration:
+    # UI configuration
+    ui: true
+    # Log level (trace, debug, info, warn, err)
+    logLevel: "info"
+    # Logging configuration
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
+      rotateBytes: 10485760 # 10MB
+      rotateMaxFiles: 7
+    # Listener configuration
+    listener:
+      proxyProtocolBehavior: "use_proxy_protocol"
+    # Raft storage configuration
+    raft:
+      performanceMultiplier: 2
+    # Plugin configuration
+    plugin:
+      autoDownload: true
+      autoRegister: false
+      downloadBehavior: "direct"
+    # Lease/TTL configuration
+    defaultLeaseTTL: "720h" # 30 days
+    maxLeaseTTL: "8760h" # 1 year
+    # Cache configuration
+    cacheSize: 134217728 # 128MB
+    disableCache: false
+    # ACME CA root (for ACME TLS mode)
+    acmeCARoot: "/etc/bao/seal-creds/ca.crt"
+```
+
+**Available Configuration Options:**
+
+- **UI**: Enable/disable the web interface
+- **LogLevel**: Set log verbosity (trace, debug, info, warn, err)
+- **Listener**: Configure proxy protocol behavior and TLS settings
+- **Raft**: Tune Raft storage performance multiplier
+- **Logging**: Configure log format, file, rotation settings, and PID file
+- **Plugin**: Configure plugin file permissions, auto-download, auto-register, and download behavior
+- **DefaultLeaseTTL / MaxLeaseTTL**: Configure lease TTLs
+- **CacheSize / DisableCache**: Configure caching behavior
+- **ACMECARoot**: Path to ACME CA root certificate (for ACME TLS mode)
+- **Advanced Features**: Detect deadlocks, raw storage endpoint, introspection endpoint, disable standby reads, imprecise lease role tracking, unsafe allow API audit creation, allow audit log prefixing, enable response header hostname/raft node ID
+
+See `config/samples/production/openbao_v1alpha1_openbaocluster_structured_config.yaml` for a comprehensive example.
+
+### 9.2 Audit Devices
 
 Configure declarative audit devices for OpenBao clusters. Audit devices are created automatically on server startup and SIGHUP events.
 
@@ -30,7 +89,7 @@ spec:
 
 See the [OpenBao audit documentation](https://openbao.org/docs/configuration/audit/) for available audit device types and options.
 
-### 9.2 Plugins
+### 9.3 Plugins
 
 Configure declarative plugins for OCI-based plugin management. Plugins are automatically downloaded and registered on server startup.
 
@@ -58,7 +117,7 @@ spec:
 
 See the [OpenBao plugin documentation](https://openbao.org/docs/configuration/plugins/) for more details.
 
-### 9.3 Telemetry
+### 9.4 Telemetry
 
 Configure telemetry reporting for metrics and observability.
 
@@ -86,7 +145,7 @@ spec:
 
 See the [OpenBao telemetry documentation](https://openbao.org/docs/configuration/telemetry/) for all available options.
 
-### 9.4 Custom Container Images
+### 9.5 Custom Container Images
 
 Override default container images for air-gapped environments or custom registries:
 

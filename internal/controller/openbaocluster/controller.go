@@ -40,8 +40,7 @@ import (
 	backupmanager "github.com/openbao/operator/internal/backup"
 	certmanager "github.com/openbao/operator/internal/certs"
 	"github.com/openbao/operator/internal/constants"
-	controllermetrics "github.com/openbao/operator/internal/controller"
-	controllerpredicates "github.com/openbao/operator/internal/controller"
+	controllerutil "github.com/openbao/operator/internal/controller"
 	operatorerrors "github.com/openbao/operator/internal/errors"
 	inframanager "github.com/openbao/operator/internal/infra"
 	initmanager "github.com/openbao/operator/internal/init"
@@ -194,7 +193,7 @@ type OpenBaoClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.4/pkg/reconcile
 func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	reconcileMetrics := controllermetrics.NewReconcileMetrics(req.Namespace, req.Name, "openbaocluster")
+	reconcileMetrics := controllerutil.NewReconcileMetrics(req.Namespace, req.Name, "openbaocluster")
 	startTime := time.Now()
 	var reconcileErr error
 	defer func() {
@@ -453,7 +452,7 @@ func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger lo
 	logger.Info("Applying DeletionPolicy for OpenBaoCluster", "deletionPolicy", string(policy))
 
 	// Clear per-cluster metrics to avoid leaving stale series after deletion.
-	clusterMetrics := controllermetrics.NewClusterMetrics(cluster.Namespace, cluster.Name)
+	clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.Clear()
 
 	infra := inframanager.NewManager(r.Client, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys)
@@ -545,7 +544,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 
 	// Update per-cluster metrics for ready replicas and phase. Metrics are
 	// derived from the status view and do not influence reconciliation logic.
-	clusterMetrics := controllermetrics.NewClusterMetrics(cluster.Namespace, cluster.Name)
+	clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.SetReadyReplicas(readyReplicas)
 
 	// Set initial CurrentVersion if empty (first reconcile after initialization)
@@ -868,7 +867,7 @@ func (r *OpenBaoClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// explicit requeues in the reconciliation logic.
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoCluster{}).
-		WithEventFilter(controllerpredicates.OpenBaoClusterPredicate())
+		WithEventFilter(controllerutil.OpenBaoClusterPredicate())
 
 	return builder.
 		WithOptions(controller.Options{

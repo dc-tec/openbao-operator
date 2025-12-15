@@ -126,7 +126,7 @@ func (m *Manager) ensureStatefulSet(ctx context.Context, logger logr.Logger, clu
 	// UpdateStrategy (including RollingUpdate.Partition) for rollout orchestration.
 	// SSA will preserve the existing UpdateStrategy if it's not specified in our desired object.
 
-	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, desired, cluster); err != nil {
 		return fmt.Errorf("failed to ensure StatefulSet %s/%s: %w", cluster.Namespace, name, err)
 	}
 

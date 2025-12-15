@@ -55,8 +55,8 @@ spec:
   replicas: 3
   unseal:
     type: "awskms"
-    options:
-      kms_key_id: "arn:aws:kms:us-east-1:123456789012:key/abcd1234-5678-90ab-cdef-1234567890ab"
+    awskms:
+      kmsKeyID: "arn:aws:kms:us-east-1:123456789012:key/abcd1234-5678-90ab-cdef-1234567890ab"
       region: "us-east-1"
     # Optional: If not using IRSA (IAM Roles for Service Accounts)
     credentialsSecretRef:
@@ -83,10 +83,10 @@ spec:
   replicas: 3
   unseal:
     type: "gcpckms"
-    options:
+    gcpCloudKMS:
       project: "my-gcp-project"
       region: "us-central1"
-      key_ring: "openbao-keyring"
+      keyRing: "openbao-keyring"
       crypto_key: "openbao-unseal-key"
     # Optional: If not using GKE Workload Identity
     credentialsSecretRef:

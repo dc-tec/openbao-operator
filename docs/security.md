@@ -471,7 +471,7 @@ The `Hardened` profile enforces strict security requirements suitable for produc
 - **TLS Requirements:** `spec.tls.mode` MUST be `External` (cert-manager or CSI managed) OR `ACME` (OpenBao native ACME client). Operator-managed certificates are rejected.
 - **Unseal Requirements:** MUST use external KMS unseal (`awskms`, `gcpckms`, `azurekeyvault`, or `transit`). Static unseal is rejected.
 - **Self-Init Requirements:** `spec.selfInit.enabled` MUST be `true`. Root tokens are never created.
-- **TLS Verification:** `tls_skip_verify` in unseal options is rejected to ensure proper certificate validation.
+- **TLS Verification:** `tlsSkipVerify=true` in seal configuration (e.g., `spec.unseal.transit.tlsSkipVerify` or `spec.unseal.kmip.tlsSkipVerify`) is rejected to ensure proper certificate validation.
 - **JWT Authentication:** JWT authentication is automatically bootstrapped during self-init, eliminating the need for manual configuration.
 
 **Security Benefits:**

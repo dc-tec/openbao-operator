@@ -60,9 +60,9 @@ spec:
     mode: External  # Required for Hardened profile
   unseal:
     type: awskms  # Required: external KMS only
-    options:
+    awskms:
       region: us-east-1
-      kms_key_id: alias/openbao-unseal
+      kmsKeyID: alias/openbao-unseal
   selfInit:
     enabled: true  # Required for Hardened profile
     requests:
@@ -80,7 +80,7 @@ spec:
 - `spec.tls.mode` MUST be `External` (cert-manager or CSI managed) OR `ACME` (OpenBao native ACME client)
 - `spec.unseal.type` MUST be external KMS (`awskms`, `gcpckms`, `azurekeyvault`, or `transit`)
 - `spec.selfInit.enabled` MUST be `true` (no root token)
-- `tls_skip_verify` in unseal options is rejected
+- `tlsSkipVerify=true` in seal configuration (e.g., `spec.unseal.transit.tlsSkipVerify` or `spec.unseal.kmip.tlsSkipVerify`) is rejected
 
 **Automatic Features:**
 - JWT authentication is automatically bootstrapped during self-init

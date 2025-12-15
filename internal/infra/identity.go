@@ -31,7 +31,7 @@ func (m *Manager) ensureServiceAccount(ctx context.Context, _ logr.Logger, clust
 		},
 	}
 
-	if err := m.applyResource(ctx, sa, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, sa, cluster); err != nil {
 		return fmt.Errorf("failed to ensure ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
 	}
 
@@ -66,7 +66,7 @@ func (m *Manager) ensureRBAC(ctx context.Context, _ logr.Logger, cluster *openba
 		},
 	}
 
-	if err := m.applyResource(ctx, role, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, role, cluster); err != nil {
 		return fmt.Errorf("failed to ensure Role %s/%s: %w", cluster.Namespace, roleName, err)
 	}
 
@@ -95,7 +95,7 @@ func (m *Manager) ensureRBAC(ctx context.Context, _ logr.Logger, cluster *openba
 		},
 	}
 
-	if err := m.applyResource(ctx, roleBinding, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, roleBinding, cluster); err != nil {
 		return fmt.Errorf("failed to ensure RoleBinding %s/%s: %w", cluster.Namespace, roleBindingName, err)
 	}
 

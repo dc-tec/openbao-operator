@@ -109,7 +109,7 @@ func (m *Manager) ensureConfigMap(ctx context.Context, _ logr.Logger, cluster *o
 		},
 	}
 
-	if err := m.applyResource(ctx, configMap, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, configMap, cluster); err != nil {
 		return fmt.Errorf("failed to ensure config ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
 	}
 
@@ -214,7 +214,7 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		},
 	}
 
-	if err := m.applyResource(ctx, configMap, cluster, "openbao-operator"); err != nil {
+	if err := m.applyResource(ctx, configMap, cluster); err != nil {
 		return fmt.Errorf("failed to ensure self-init ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
 	}
 

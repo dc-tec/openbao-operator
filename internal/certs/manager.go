@@ -356,7 +356,7 @@ func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("Waiting for external TLS CA Secret", "secret", caSecretName)
-			return false, nil
+			return true, nil
 		}
 		return false, fmt.Errorf("failed to get CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 	}
@@ -370,7 +370,7 @@ func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("Waiting for external TLS server Secret", "secret", serverSecretName)
-			return false, nil
+			return true, nil
 		}
 		return false, fmt.Errorf("failed to get server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 	}
@@ -380,7 +380,7 @@ func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, 
 	serverCertPEM, ok := serverSecret.Data[tlsCertKey]
 	if !ok || len(serverCertPEM) == 0 {
 		logger.Info("External TLS server Secret exists but missing certificate; waiting for external provider to populate", "secret", serverSecretName)
-		return false, nil
+		return true, nil
 	}
 
 	// For external TLS, parse the certificate to record its expiry time.

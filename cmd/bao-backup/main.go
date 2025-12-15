@@ -435,7 +435,11 @@ func main() {
 	// Start snapshot in a goroutine, writing to the pipe writer
 	snapshotErrCh := make(chan error, 1)
 	go func() {
-		defer pw.Close()
+		defer func() {
+			if err := pw.Close(); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "bao-backup warning: failed to close pipe writer: %v\n", err)
+			}
+		}()
 		snapshotErrCh <- baoClient.Snapshot(ctx, pw)
 	}()
 

@@ -70,18 +70,14 @@ func IsTransientConnection(err error) bool {
 	// Check for net.Error types that indicate transient issues
 	var netErr net.Error
 	if errors.As(err, &netErr) {
-		if netErr.Timeout() || netErr.Temporary() {
+		if netErr.Timeout() {
 			return true
 		}
 	}
 
 	// Check for DNS errors
 	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
-		return true
-	}
-
-	return false
+	return errors.As(err, &dnsErr)
 }
 
 // IsTransientKubernetesAPI checks if an error is a transient Kubernetes API error.
