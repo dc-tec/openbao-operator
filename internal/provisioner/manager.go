@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	operatorerrors "github.com/openbao/operator/internal/errors"
 )
 
 // Manager handles the provisioning of RBAC resources for tenant namespaces.
@@ -159,6 +161,10 @@ func (m *Manager) EnsureTenantRBAC(ctx context.Context, namespace string) error 
 		// SECURITY: Use impersonated client to enforce least privilege
 		// The API server will check if the delegate has permission to create this Role
 		if err := m.impersonatedClient.Create(ctx, role); err != nil {
+			// Wrap transient Kubernetes API errors
+			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+				return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create Role %s/%s (via impersonation): %w", namespace, TenantRoleName, err))
+			}
 			return fmt.Errorf("failed to create Role %s/%s (via impersonation): %w", namespace, TenantRoleName, err)
 		}
 	} else {
@@ -176,6 +182,10 @@ func (m *Manager) EnsureTenantRBAC(ctx context.Context, namespace string) error 
 			}
 			// SECURITY: Use impersonated client to enforce least privilege
 			if err := m.impersonatedClient.Update(ctx, existingRole); err != nil {
+				// Wrap transient Kubernetes API errors
+				if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+					return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update Role %s/%s (via impersonation): %w", namespace, TenantRoleName, err))
+				}
 				return fmt.Errorf("failed to update Role %s/%s (via impersonation): %w", namespace, TenantRoleName, err)
 			}
 		}
@@ -197,6 +207,10 @@ func (m *Manager) EnsureTenantRBAC(ctx context.Context, namespace string) error 
 			"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
 		// SECURITY: Use impersonated client to enforce least privilege
 		if err := m.impersonatedClient.Create(ctx, roleBinding); err != nil {
+			// Wrap transient Kubernetes API errors
+			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+				return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create RoleBinding %s/%s (via impersonation): %w", namespace, TenantRoleBindingName, err))
+			}
 			return fmt.Errorf("failed to create RoleBinding %s/%s (via impersonation): %w", namespace, TenantRoleBindingName, err)
 		}
 	} else {
@@ -240,6 +254,10 @@ func (m *Manager) EnsureTenantRBAC(ctx context.Context, namespace string) error 
 				"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
 			// SECURITY: Use impersonated client to enforce least privilege
 			if err := m.impersonatedClient.Update(ctx, existingRoleBinding); err != nil {
+				// Wrap transient Kubernetes API errors
+				if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+					return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update RoleBinding %s/%s (via impersonation): %w", namespace, TenantRoleBindingName, err))
+				}
 				if apierrors.IsForbidden(err) {
 					return fmt.Errorf("failed to update RoleBinding %s/%s (via impersonation): %w. "+
 						"Ensure the delegate ServiceAccount %s/%s exists and is bound to the tenant-template ClusterRole "+

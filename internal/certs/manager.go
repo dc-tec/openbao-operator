@@ -26,6 +26,7 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	operatorerrors "github.com/openbao/operator/internal/errors"
 )
 
 const (
@@ -145,6 +146,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		}
 
 		if err := m.client.Create(ctx, caSecret); err != nil {
+			// Wrap transient Kubernetes API errors
+			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+				return false, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err))
+			}
 			return false, fmt.Errorf("failed to create CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 		}
 	}
@@ -187,6 +192,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		}
 
 		if err := m.client.Create(ctx, serverSecret); err != nil {
+			// Wrap transient Kubernetes API errors
+			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+				return false, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
+			}
 			return false, fmt.Errorf("failed to create server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 		if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
@@ -220,6 +229,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		serverSecret.Data[caCertKey] = caCertPEM
 
 		if err := m.client.Update(ctx, serverSecret); err != nil {
+			// Wrap transient Kubernetes API errors
+			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+				return false, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
+			}
 			return false, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 
@@ -274,6 +287,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		serverSecret.Data[caCertKey] = caCertPEM
 
 		if err := m.client.Update(ctx, serverSecret); err != nil {
+			// Wrap transient Kubernetes API errors
+			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+				return false, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
+			}
 			return false, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 

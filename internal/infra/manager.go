@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -12,6 +13,7 @@ import (
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	configbuilder "github.com/openbao/operator/internal/config"
 	"github.com/openbao/operator/internal/constants"
+	operatorerrors "github.com/openbao/operator/internal/errors"
 )
 
 const (
@@ -193,6 +195,14 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 	}
 
 	if err := m.client.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
+		// Wrap transient Kubernetes API errors (rate limiting, temporary failures)
+		if operatorerrors.IsTransientKubernetesAPI(err) {
+			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
+		}
+		// Check for conflict errors which are typically transient
+		if apierrors.IsConflict(err) {
+			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
+		}
 		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
 	}
 

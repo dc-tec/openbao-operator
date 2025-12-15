@@ -19,6 +19,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	operatorerrors "github.com/openbao/operator/internal/errors"
 )
 
 //go:embed trusted_root.json
@@ -160,6 +162,10 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef string, config
 	// Verify image signatures and get the resolved digest
 	sigs, bundleVerified, err := cosign.VerifyImageSignatures(ctx, ref, co)
 	if err != nil {
+		// Wrap connection/network errors as transient (registry connection issues)
+		if operatorerrors.IsTransientConnection(err) {
+			return "", operatorerrors.WrapTransientConnection(fmt.Errorf("image signature verification failed: %w", err))
+		}
 		return "", fmt.Errorf("image signature verification failed: %w", err)
 	}
 
@@ -185,6 +191,10 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef string, config
 		}
 		desc, err := ggcrremote.Head(ref, ggcrOpts...)
 		if err != nil {
+			// Wrap connection/network errors as transient
+			if operatorerrors.IsTransientConnection(err) {
+				return "", operatorerrors.WrapTransientConnection(fmt.Errorf("failed to resolve image digest: %w", err))
+			}
 			return "", fmt.Errorf("failed to resolve image digest: %w", err)
 		}
 		digestRef, err = name.NewDigest(fmt.Sprintf("%s@%s", ref.Context().Name(), desc.Digest.String()))

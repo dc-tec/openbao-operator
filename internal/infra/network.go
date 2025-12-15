@@ -21,6 +21,7 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	operatorerrors "github.com/openbao/operator/internal/errors"
 )
 
 // ErrGatewayAPIMissing indicates that Gateway API CRDs are not installed in the
@@ -297,7 +298,7 @@ func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, clust
 			Name:      name,
 		}, httpRoute)
 		if err != nil {
-			if isNoKindMatchError(err) {
+			if operatorerrors.IsCRDMissingError(err) {
 				return nil // CRD not installed, nothing to do
 			}
 			if apierrors.IsNotFound(err) {
@@ -323,7 +324,7 @@ func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, clust
 			Name:      name,
 		}, httpRoute)
 		if err != nil {
-			if isNoKindMatchError(err) {
+			if operatorerrors.IsCRDMissingError(err) {
 				return nil // CRD not installed, nothing to do
 			}
 			if apierrors.IsNotFound(err) {
@@ -347,7 +348,7 @@ func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, clust
 
 	// Use SSA to create or update, handling CRD missing errors gracefully
 	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
-		if isNoKindMatchError(err) {
+		if operatorerrors.IsCRDMissingError(err) {
 			logger.Info("Gateway API CRDs not installed; HTTPRoute reconciliation will be marked as degraded", "httproute", name)
 			return ErrGatewayAPIMissing
 		}
@@ -355,18 +356,6 @@ func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, clust
 	}
 
 	return nil
-}
-
-// isNoKindMatchError checks if the error is a "no kind match" error, which occurs
-// when trying to interact with a CRD that doesn't exist (e.g., Gateway API not installed).
-func isNoKindMatchError(err error) bool {
-	if err == nil {
-		return false
-	}
-	// Check if the error message indicates the CRD is not installed
-	errStr := err.Error()
-	return strings.Contains(errStr, "no matches for kind") ||
-		strings.Contains(errStr, "no kind is registered for the type")
 }
 
 // buildHTTPRoute constructs an HTTPRoute for the given OpenBaoCluster.
@@ -478,7 +467,7 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 			Name:      name,
 		}, tlsRoute)
 		if err != nil {
-			if isNoKindMatchError(err) {
+			if operatorerrors.IsCRDMissingError(err) {
 				return nil // CRD not installed, nothing to do
 			}
 			if apierrors.IsNotFound(err) {
@@ -504,7 +493,7 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 			Name:      name,
 		}, tlsRoute)
 		if err != nil {
-			if isNoKindMatchError(err) {
+			if operatorerrors.IsCRDMissingError(err) {
 				return nil // CRD not installed, nothing to do
 			}
 			if apierrors.IsNotFound(err) {
@@ -528,7 +517,7 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 
 	// Use SSA to create or update, handling CRD missing errors gracefully
 	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
-		if isNoKindMatchError(err) {
+		if operatorerrors.IsCRDMissingError(err) {
 			logger.V(1).Info("Gateway API TLSRoute CRD not installed; skipping TLSRoute reconciliation", "tlsroute", name)
 			return nil
 		}
@@ -654,7 +643,7 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 			Name:      name,
 		}, backendTLSPolicy)
 		if err != nil {
-			if isNoKindMatchError(err) {
+			if operatorerrors.IsCRDMissingError(err) {
 				return nil // CRD not installed, nothing to do
 			}
 			if apierrors.IsNotFound(err) {
@@ -680,7 +669,7 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 			Name:      name,
 		}, backendTLSPolicy)
 		if err != nil {
-			if isNoKindMatchError(err) {
+			if operatorerrors.IsCRDMissingError(err) {
 				return nil // CRD not installed, nothing to do
 			}
 			if apierrors.IsNotFound(err) {
@@ -704,7 +693,7 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 
 	// Use SSA to create or update, handling CRD missing errors gracefully
 	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
-		if isNoKindMatchError(err) {
+		if operatorerrors.IsCRDMissingError(err) {
 			logger.V(1).Info("Gateway API BackendTLSPolicy CRD not installed; skipping BackendTLSPolicy reconciliation", "backendtlspolicy", name)
 			return nil
 		}
@@ -1420,7 +1409,7 @@ func (m *Manager) deleteHTTPRoute(ctx context.Context, cluster *openbaov1alpha1.
 		Name:      httpRouteName(cluster),
 	}, httpRoute)
 	if err != nil {
-		if apierrors.IsNotFound(err) || isNoKindMatchError(err) {
+		if apierrors.IsNotFound(err) || operatorerrors.IsCRDMissingError(err) {
 			return nil
 		}
 		return err

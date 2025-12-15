@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	operatorerrors "github.com/openbao/operator/internal/errors"
 )
 
 const (
@@ -49,6 +50,10 @@ func (k *KubernetesReloadSignaler) SignalReload(ctx context.Context, logger logr
 		}).String(),
 	})
 	if err != nil {
+		// Wrap transient Kubernetes API errors
+		if operatorerrors.IsTransientKubernetesAPI(err) {
+			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to list pods for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
+		}
 		return fmt.Errorf("failed to list pods for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 

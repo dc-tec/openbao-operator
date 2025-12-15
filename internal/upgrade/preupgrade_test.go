@@ -421,7 +421,6 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
 
-
 	// Mock Client Factory that uses MockClusterActions to avoid HTTP servers
 	// verifyClusterHealth expects: healthyCount >= quorum, leaderCount == 1.
 	// We need 1 leader, 2 standbys.

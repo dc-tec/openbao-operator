@@ -42,6 +42,7 @@ import (
 	"github.com/openbao/operator/internal/constants"
 	controllermetrics "github.com/openbao/operator/internal/controller"
 	controllerpredicates "github.com/openbao/operator/internal/controller"
+	operatorerrors "github.com/openbao/operator/internal/errors"
 	inframanager "github.com/openbao/operator/internal/infra"
 	initmanager "github.com/openbao/operator/internal/init"
 	openbaolabels "github.com/openbao/operator/internal/openbao"
@@ -314,6 +315,26 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				}
 			}
 
+			// Handle structured errors: transient errors should requeue, permanent errors should not
+			if operatorerrors.IsTransient(err) {
+				shouldRequeue, requeueAfter := operatorerrors.ShouldRequeue(err)
+				if shouldRequeue {
+					logger.Info("Transient error encountered; will requeue", "error", err, "requeueAfter", requeueAfter)
+					if requeueAfter > 0 {
+						return ctrl.Result{RequeueAfter: requeueAfter}, nil
+					}
+					return ctrl.Result{Requeue: true}, nil
+				}
+			}
+
+			// Permanent errors should not requeue - wait for user intervention
+			if operatorerrors.IsPermanent(err) {
+				logger.Info("Permanent error encountered; not requeuing", "error", err)
+				reconcileErr = err
+				return ctrl.Result{}, reconcileErr
+			}
+
+			// For unknown errors, default to returning the error (controller-runtime will handle backoff)
 			reconcileErr = err
 			return ctrl.Result{}, reconcileErr
 		}

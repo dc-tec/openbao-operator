@@ -17,6 +17,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+
+	operatorerrors "github.com/openbao/operator/internal/errors"
 )
 
 const (
@@ -96,6 +98,10 @@ func NewS3Client(ctx context.Context, cfg S3ClientConfig) (*S3Client, error) {
 	// Configure custom HTTP client for TLS
 	httpClient, err := buildHTTPClient(cfg.CACert)
 	if err != nil {
+		// Wrap connection errors as transient
+		if operatorerrors.IsTransientConnection(err) {
+			return nil, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create HTTP client: %w", err))
+		}
 		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 	opts = append(opts, config.WithHTTPClient(httpClient))
@@ -103,6 +109,10 @@ func NewS3Client(ctx context.Context, cfg S3ClientConfig) (*S3Client, error) {
 	// Load AWS config
 	awsCfg, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
+		// Wrap connection errors as transient
+		if operatorerrors.IsTransientConnection(err) {
+			return nil, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to load AWS config: %w", err))
+		}
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 

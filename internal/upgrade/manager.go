@@ -25,6 +25,7 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	operatorerrors "github.com/openbao/operator/internal/errors"
 	"github.com/openbao/operator/internal/logging"
 	openbaoapi "github.com/openbao/operator/internal/openbao"
 )
@@ -914,6 +915,10 @@ func (m *Manager) isPodLeader(ctx context.Context, cluster *openbaov1alpha1.Open
 		CACert:  caCert,
 	})
 	if err != nil {
+		// Wrap connection errors as transient
+		if operatorerrors.IsTransientConnection(err) {
+			return false, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client: %w", err))
+		}
 		return false, fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
 
@@ -939,6 +944,10 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		Token:   token,
 	})
 	if err != nil {
+		// Wrap connection errors as transient
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client: %w", err))
+		}
 		return fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
 
@@ -1101,6 +1110,10 @@ func (m *Manager) waitForPodHealthy(ctx context.Context, logger logr.Logger, clu
 		CACert:  caCert,
 	})
 	if err != nil {
+		// Wrap connection errors as transient
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client: %w", err))
+		}
 		return fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
 
@@ -1305,14 +1318,24 @@ func (m *Manager) authenticateWithJWTAuth(ctx context.Context, cluster *openbaov
 			CACert:  caCert,
 		})
 		if err != nil {
-			lastErr = fmt.Errorf("failed to create OpenBao client for pod %s: %w", pod.Name, err)
+			// Wrap connection errors as transient
+			if operatorerrors.IsTransientConnection(err) {
+				lastErr = operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client for pod %s: %w", pod.Name, err))
+			} else {
+				lastErr = fmt.Errorf("failed to create OpenBao client for pod %s: %w", pod.Name, err)
+			}
 			continue
 		}
 
 		// Authenticate using JWT Auth
 		token, err := apiClient.LoginJWT(ctx, role, jwtToken)
 		if err != nil {
-			lastErr = fmt.Errorf("failed to authenticate using JWT Auth against pod %s: %w", pod.Name, err)
+			// Wrap connection errors as transient
+			if operatorerrors.IsTransientConnection(err) {
+				lastErr = operatorerrors.WrapTransientConnection(fmt.Errorf("failed to authenticate using JWT Auth against pod %s: %w", pod.Name, err))
+			} else {
+				lastErr = fmt.Errorf("failed to authenticate using JWT Auth against pod %s: %w", pod.Name, err)
+			}
 			continue
 		}
 

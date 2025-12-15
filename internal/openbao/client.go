@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/openbao/operator/internal/constants"
+	operatorerrors "github.com/openbao/operator/internal/errors"
 )
 
 const (
@@ -191,6 +192,10 @@ func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		// Wrap connection errors as transient to allow retry
+		if operatorerrors.IsTransientConnection(err) {
+			return nil, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to query health endpoint: %w", err))
+		}
 		return nil, fmt.Errorf("failed to query health endpoint: %w", err)
 	}
 	defer func() {
@@ -252,6 +257,10 @@ func (c *Client) StepDown(ctx context.Context) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		// Wrap connection errors as transient to allow retry
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute step-down request: %w", err))
+		}
 		return fmt.Errorf("failed to execute step-down request: %w", err)
 	}
 	defer func() {
@@ -345,6 +354,10 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 
 	resp, err := snapshotClient.Do(req)
 	if err != nil {
+		// Wrap connection errors as transient to allow retry
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute snapshot request: %w", err))
+		}
 		return fmt.Errorf("failed to execute snapshot request: %w", err)
 	}
 	defer func() {
@@ -389,6 +402,10 @@ func (c *Client) Init(ctx context.Context, req InitRequest) (*InitResponse, erro
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
+		// Wrap connection errors as transient to allow retry
+		if operatorerrors.IsTransientConnection(err) {
+			return nil, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute init request: %w", err))
+		}
 		return nil, fmt.Errorf("failed to execute init request: %w", err)
 	}
 	defer func() {
@@ -469,6 +486,10 @@ func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, e
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		// Wrap connection errors as transient to allow retry
+		if operatorerrors.IsTransientConnection(err) {
+			return "", operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute JWT auth request: %w", err))
+		}
 		return "", fmt.Errorf("failed to execute JWT auth request: %w", err)
 	}
 	defer func() {

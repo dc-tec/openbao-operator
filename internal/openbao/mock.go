@@ -70,4 +70,3 @@ func (m *MockClusterActions) LoginJWT(ctx context.Context, role, jwtToken string
 	}
 	return "mock-token", nil
 }
-

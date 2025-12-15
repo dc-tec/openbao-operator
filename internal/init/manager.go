@@ -2,6 +2,7 @@ package init
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	operatorerrors "github.com/openbao/operator/internal/errors"
 	"github.com/openbao/operator/internal/logging"
 	"github.com/openbao/operator/internal/openbao"
 )
@@ -29,7 +31,8 @@ const (
 
 // errRetryLater is a sentinel error indicating that initialization should be retried
 // on the next reconcile, rather than being treated as a failure or success.
-var errRetryLater = fmt.Errorf("initialization retry required")
+// This is kept for backward compatibility but new code should use operatorerrors.WrapTransientConnection.
+var errRetryLater = operatorerrors.ErrTransientConnection
 
 // Manager handles OpenBao cluster initialization.
 type Manager struct {
@@ -121,7 +124,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			logger.Info("OpenBao service registration labels indicate initialized and unsealed; marking cluster as initialized", "pod", pod.Name)
 			cluster.Status.Initialized = true
 			cluster.Status.SelfInitialized = true
-			return false, nil
+			// Request requeue so InfraReconciler can run again to scale up StatefulSet
+			return true, nil
 		}
 	}
 
@@ -135,7 +139,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			logger.Info("OpenBao pod is Ready; marking cluster as initialized", "pod", pod.Name)
 			cluster.Status.Initialized = true
 			cluster.Status.SelfInitialized = true
-			return false, nil
+			// Request requeue so InfraReconciler can run again to scale up StatefulSet
+			return true, nil
 		}
 
 		logger.Info("Self-initialization is enabled; waiting for pod to become Ready", "pod", pod.Name)
@@ -171,7 +176,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if err := m.initializeCluster(ctx, logger, cluster); err != nil {
 		// If initialization should be retried later (e.g., pod not ready), return nil
 		// to allow the reconciliation loop to requeue without marking as failed.
-		if err == errRetryLater {
+		if operatorerrors.IsTransientConnection(err) || errors.Is(err, errRetryLater) {
 			logger.Info("Initialization will be retried on next reconcile", "cluster", cluster.Name)
 			return false, nil
 		}
@@ -197,7 +202,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		"self_init_enabled": fmt.Sprintf("%t", selfInitEnabled),
 	})
 
-	return false, nil
+	// Request requeue so InfraReconciler can run again to scale up StatefulSet
+	return true, nil
 }
 
 func isPodReady(pod *corev1.Pod) bool {
@@ -262,20 +268,17 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 	healthResp, healthErr := client.Health(healthCtx)
 	if healthErr != nil {
 		// If health check fails with any error (timeout, connection, etc.), the endpoint isn't ready yet.
-		// Return errRetryLater to allow retry on the next reconcile.
+		// Wrap as transient connection error to allow retry on the next reconcile.
 		// We require a successful health check before attempting initialization to ensure the HTTPS
 		// endpoint is ready to accept connections.
-		healthErrStr := healthErr.Error()
-		if contains(healthErrStr, "context deadline exceeded") || contains(healthErrStr, "timeout") ||
-			contains(healthErrStr, "connection") || contains(healthErrStr, "connection refused") ||
-			contains(healthErrStr, "no such host") || contains(healthErrStr, "i/o timeout") {
+		if operatorerrors.IsTransientConnection(healthErr) {
 			logger.Info("OpenBao HTTPS endpoint not ready yet; will retry on next reconcile", "cluster", cluster.Name, "error", healthErr)
-			return errRetryLater
+			return operatorerrors.WrapTransientConnection(healthErr)
 		}
 		// For other errors (like TLS errors), we should also retry as they indicate the endpoint
 		// isn't ready or properly configured yet.
 		logger.Info("Health check failed; will retry on next reconcile", "cluster", cluster.Name, "error", healthErr)
-		return errRetryLater
+		return operatorerrors.WrapTransientConnection(healthErr)
 	}
 
 	// Health check succeeded - verify OpenBao is in the expected state (not initialized)
@@ -309,10 +312,10 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 		}
 
 		// Timeout errors indicate the pod isn't ready to accept connections yet.
-		// Return errRetryLater to allow retry on the next reconcile rather than failing.
-		if contains(err.Error(), "context deadline exceeded") || contains(err.Error(), "timeout") {
+		// Wrap as transient connection error to allow retry on the next reconcile rather than failing.
+		if operatorerrors.IsTransientConnection(err) {
 			logger.Info("OpenBao pod not ready to accept connections yet; will retry on next reconcile", "cluster", cluster.Name, "error", err)
-			return errRetryLater
+			return operatorerrors.WrapTransientConnection(err)
 		}
 
 		return fmt.Errorf("failed to initialize OpenBao via HTTP API: %w", err)

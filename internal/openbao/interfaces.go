@@ -38,4 +38,3 @@ type ClusterActions interface {
 	// Returns the OpenBao client token on success, or an error if authentication fails.
 	LoginJWT(ctx context.Context, role, jwtToken string) (string, error)
 }
-
