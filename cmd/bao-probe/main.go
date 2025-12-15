@@ -13,6 +13,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/openbao/operator/internal/constants"
 )
 
 const (
@@ -20,8 +22,12 @@ const (
 	modeLiveness  = "liveness"
 	modeReadiness = "readiness"
 
-	livenessPath  = "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"
-	readinessPath = "/v1/sys/health?standbyok=true"
+	livenessPath  = constants.APIPathSysHealth + "?standbyok=true&sealedcode=204&uninitcode=204"
+	readinessPath = constants.APIPathSysHealth + "?standbyok=true"
+
+	loopbackHost = "localhost"
+
+	caFileUsage = "Path to the CA certificate used to verify OpenBao TLS (empty to use system roots)"
 )
 
 func main() {
@@ -34,9 +40,10 @@ func main() {
 	)
 
 	flag.StringVar(&mode, "mode", "", "Probe mode: liveness or readiness")
-	flag.StringVar(&addr, "addr", "https://localhost:8200",
+	defaultAddr := fmt.Sprintf("https://%s:%d", loopbackHost, constants.PortAPI)
+	flag.StringVar(&addr, "addr", defaultAddr,
 		"Base address for OpenBao (must be reachable from inside the pod)")
-	flag.StringVar(&caFile, "ca-file", "/etc/bao/tls/ca.crt", "Path to the CA certificate used to verify OpenBao TLS (empty to use system roots)")
+	flag.StringVar(&caFile, "ca-file", constants.PathTLSCACert, caFileUsage)
 	flag.StringVar(&serverName, "servername", "", "TLS SNI server name (overrides hostname from addr)")
 	flag.DurationVar(&timeout, "timeout", 4*time.Second,
 		"Timeout for the HTTP request (should be less than the Kubernetes probe timeoutSeconds)")
@@ -155,7 +162,12 @@ func main() {
 	}
 }
 
-func newHTTPClient(caFile string, serverName string, timeout time.Duration, allowInsecureLoopbackFallback bool) (*http.Client, error) {
+func newHTTPClient(
+	caFile string,
+	serverName string,
+	timeout time.Duration,
+	allowInsecureLoopbackFallback bool,
+) (*http.Client, error) {
 	var roots *x509.CertPool
 
 	if caFile == "" {
@@ -183,7 +195,7 @@ func newHTTPClient(caFile string, serverName string, timeout time.Duration, allo
 				if serverName != "" {
 					tlsConfig.ServerName = serverName
 				} else {
-					tlsConfig.ServerName = "localhost"
+					tlsConfig.ServerName = loopbackHost
 				}
 
 				transport := &http.Transport{
@@ -216,7 +228,7 @@ func newHTTPClient(caFile string, serverName string, timeout time.Duration, allo
 		tlsConfig.ServerName = serverName
 	} else if allowInsecureLoopbackFallback {
 		// Fallback for backward compatibility: use "localhost" for loopback when no explicit serverName
-		tlsConfig.ServerName = "localhost"
+		tlsConfig.ServerName = loopbackHost
 	}
 	// If neither condition is met, let Go handle SNI automatically
 
@@ -264,7 +276,7 @@ func parseAddr(rawAddr string) (serverName string, hostPort string, isLoopback b
 		return "", hostPort, ip != nil && ip.IsLoopback(), nil
 	}
 
-	return host, hostPort, host == "localhost", nil
+	return host, hostPort, host == loopbackHost, nil
 }
 
 func verifyLoopbackCertificate(rawCerts [][]byte) error {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	"github.com/openbao/operator/internal/constants"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -53,8 +54,8 @@ func TestEnsureHeadlessServiceCreatesAndUpdates(t *testing.T) {
 		t.Fatalf("expected headless Service to have ports")
 	}
 
-	if headless.Spec.Ports[0].Port != openBaoContainerPort {
-		t.Fatalf("expected headless Service port %d, got %d", openBaoContainerPort, headless.Spec.Ports[0].Port)
+	if headless.Spec.Ports[0].Port != constants.PortAPI {
+		t.Fatalf("expected headless Service port %d, got %d", constants.PortAPI, headless.Spec.Ports[0].Port)
 	}
 }
 
@@ -413,7 +414,7 @@ func TestEnsureGatewayCAConfigMapCreatesWhenGatewayEnabled(t *testing.T) {
 	configMap := &corev1.ConfigMap{}
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name + tlsCASecretSuffix,
+		Name:      cluster.Name + constants.SuffixTLSCA,
 	}, configMap)
 	if err != nil {
 		t.Fatalf("expected Gateway CA ConfigMap to exist: %v", err)
@@ -482,7 +483,7 @@ func TestEnsureGatewayCAConfigMapDeletesWhenGatewayDisabled(t *testing.T) {
 	// Verify ConfigMap is deleted
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name + tlsCASecretSuffix,
+		Name:      cluster.Name + constants.SuffixTLSCA,
 	}, &corev1.ConfigMap{})
 	if !apierrors.IsNotFound(err) {
 		t.Fatalf("expected Gateway CA ConfigMap to be deleted, got error: %v", err)
@@ -546,7 +547,7 @@ func TestEnsureGatewayCAConfigMapUpdatesWhenCASecretChanges(t *testing.T) {
 	configMap := &corev1.ConfigMap{}
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name + tlsCASecretSuffix,
+		Name:      cluster.Name + constants.SuffixTLSCA,
 	}, configMap)
 	if err != nil {
 		t.Fatalf("expected Gateway CA ConfigMap to exist: %v", err)

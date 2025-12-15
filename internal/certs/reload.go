@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 )
 
 const (
@@ -42,9 +43,9 @@ func (k *KubernetesReloadSignaler) SignalReload(ctx context.Context, logger logr
 	// List all pods for this cluster using the same labels as the StatefulSet
 	podList, err := k.clientset.CoreV1().Pods(cluster.Namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(map[string]string{
-			"app.kubernetes.io/instance":   cluster.Name,
-			"app.kubernetes.io/name":       "openbao",
-			"app.kubernetes.io/managed-by": "openbao-operator",
+			constants.LabelAppInstance:  cluster.Name,
+			constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+			constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 		}).String(),
 	})
 	if err != nil {

@@ -51,7 +51,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(openbaov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(gatewayv1.Install(scheme))
-	utilruntime.Must(gatewayv1alpha2.AddToScheme(scheme))
+	utilruntime.Must(gatewayv1alpha2.Install(scheme))
 }
 
 // Run starts the Provisioner controller manager.

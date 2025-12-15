@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/openbao/operator/internal/constants"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,6 +27,8 @@ var testScheme = func() *runtime.Scheme {
 	return scheme
 }()
 
+const testBackupJobName = "backup-test-cluster-20250101-120000"
+
 func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 	t.Helper()
 	builder := fake.NewClientBuilder().WithScheme(testScheme)
@@ -35,6 +38,7 @@ func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 	return builder.Build()
 }
 
+//nolint:unparam // Keeping parameters makes tests easier to expand later.
 func newTestClusterWithBackup(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 	return &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -160,7 +164,7 @@ func TestGetBackupExecutorImage(t *testing.T) {
 
 func TestBuildBackupJob(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	jobName := "backup-test-cluster-20250101-120000"
+	jobName := testBackupJobName
 
 	job, err := buildBackupJob(cluster, jobName)
 	if err != nil {
@@ -181,11 +185,11 @@ func TestBuildBackupJob(t *testing.T) {
 
 	// Verify labels
 	expectedLabels := map[string]string{
-		"app.kubernetes.io/name":       "openbao",
-		"app.kubernetes.io/instance":   cluster.Name,
-		"app.kubernetes.io/managed-by": "openbao-operator",
-		"openbao.org/cluster":          cluster.Name,
-		"openbao.org/component":        "backup",
+		constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:      cluster.Name,
+		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:   cluster.Name,
+		constants.LabelOpenBaoComponent: "backup",
 	}
 	for k, v := range expectedLabels {
 		if job.Labels[k] != v {
@@ -223,14 +227,14 @@ func TestBuildBackupJob(t *testing.T) {
 	}
 
 	expectedEnv := map[string]string{
-		"CLUSTER_NAMESPACE":     cluster.Namespace,
-		"CLUSTER_NAME":          cluster.Name,
-		"CLUSTER_REPLICAS":      "3",
-		"BACKUP_ENDPOINT":       cluster.Spec.Backup.Target.Endpoint,
-		"BACKUP_BUCKET":         cluster.Spec.Backup.Target.Bucket,
-		"BACKUP_PATH_PREFIX":    cluster.Spec.Backup.Target.PathPrefix,
-		"BACKUP_REGION":         "us-east-1",
-		"BACKUP_USE_PATH_STYLE": "false",
+		constants.EnvClusterNamespace:   cluster.Namespace,
+		constants.EnvClusterName:        cluster.Name,
+		constants.EnvClusterReplicas:    "3",
+		constants.EnvBackupEndpoint:     cluster.Spec.Backup.Target.Endpoint,
+		constants.EnvBackupBucket:       cluster.Spec.Backup.Target.Bucket,
+		constants.EnvBackupPathPrefix:   cluster.Spec.Backup.Target.PathPrefix,
+		constants.EnvBackupRegion:       "us-east-1",
+		constants.EnvBackupUsePathStyle: "false",
 	}
 
 	for k, v := range expectedEnv {
@@ -249,23 +253,23 @@ func TestBuildBackupJob(t *testing.T) {
 		t.Error("buildBackupJob() RunAsNonRoot should be true")
 	}
 
-	if securityContext.RunAsUser == nil || *securityContext.RunAsUser != backupUserID {
-		t.Errorf("buildBackupJob() RunAsUser = %v, want %v", securityContext.RunAsUser, backupUserID)
+	if securityContext.RunAsUser == nil || *securityContext.RunAsUser != constants.UserBackup {
+		t.Errorf("buildBackupJob() RunAsUser = %v, want %v", securityContext.RunAsUser, constants.UserBackup)
 	}
 
-	if securityContext.RunAsGroup == nil || *securityContext.RunAsGroup != backupGroupID {
-		t.Errorf("buildBackupJob() RunAsGroup = %v, want %v", securityContext.RunAsGroup, backupGroupID)
+	if securityContext.RunAsGroup == nil || *securityContext.RunAsGroup != constants.GroupBackup {
+		t.Errorf("buildBackupJob() RunAsGroup = %v, want %v", securityContext.RunAsGroup, constants.GroupBackup)
 	}
 }
 
 func TestBuildBackupJob_WithCredentialsSecret(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	cluster.Spec.Backup.Target.CredentialsSecretRef = &corev1.SecretReference{
-		Name:      "backup-credentials",
+		Name:      backupCredentialsVolumeName,
 		Namespace: "default",
 	}
 
-	jobName := "backup-test-cluster-20250101-120000"
+	jobName := testBackupJobName
 	job, err := buildBackupJob(cluster, jobName)
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
@@ -277,17 +281,21 @@ func TestBuildBackupJob_WithCredentialsSecret(t *testing.T) {
 		envMap[env.Name] = env.Value
 	}
 
-	if envMap["BACKUP_CREDENTIALS_SECRET_NAME"] != "backup-credentials" {
-		t.Errorf("buildBackupJob() BACKUP_CREDENTIALS_SECRET_NAME = %v, want backup-credentials", envMap["BACKUP_CREDENTIALS_SECRET_NAME"])
+	if envMap[constants.EnvBackupCredentialsSecretName] != backupCredentialsVolumeName {
+		t.Errorf(
+			"buildBackupJob() BACKUP_CREDENTIALS_SECRET_NAME = %v, want %s",
+			envMap[constants.EnvBackupCredentialsSecretName],
+			backupCredentialsVolumeName,
+		)
 	}
 
 	// Verify volume mount
 	hasCredentialsMount := false
 	for _, mount := range container.VolumeMounts {
-		if mount.Name == "backup-credentials" {
+		if mount.Name == backupCredentialsVolumeName {
 			hasCredentialsMount = true
-			if mount.MountPath != "/etc/bao/backup/credentials" {
-				t.Errorf("buildBackupJob() credentials mount path = %v, want /etc/bao/backup/credentials", mount.MountPath)
+			if mount.MountPath != constants.PathBackupCredentials {
+				t.Errorf("buildBackupJob() credentials mount path = %v, want %s", mount.MountPath, constants.PathBackupCredentials)
 			}
 		}
 	}
@@ -298,10 +306,14 @@ func TestBuildBackupJob_WithCredentialsSecret(t *testing.T) {
 	// Verify volume
 	hasCredentialsVolume := false
 	for _, volume := range job.Spec.Template.Spec.Volumes {
-		if volume.Name == "backup-credentials" {
+		if volume.Name == backupCredentialsVolumeName {
 			hasCredentialsVolume = true
-			if volume.Secret.SecretName != "backup-credentials" {
-				t.Errorf("buildBackupJob() credentials volume secret name = %v, want backup-credentials", volume.Secret.SecretName)
+			if volume.Secret.SecretName != backupCredentialsVolumeName {
+				t.Errorf(
+					"buildBackupJob() credentials volume secret name = %v, want %s",
+					volume.Secret.SecretName,
+					backupCredentialsVolumeName,
+				)
 			}
 			if volume.Secret.DefaultMode == nil || *volume.Secret.DefaultMode != 0400 {
 				t.Errorf("buildBackupJob() credentials volume mode = %v, want 0400", volume.Secret.DefaultMode)
@@ -317,7 +329,7 @@ func TestBuildBackupJob_WithJWTAuth(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	cluster.Spec.Backup.JWTAuthRole = "backup-role"
 
-	jobName := "backup-test-cluster-20250101-120000"
+	jobName := testBackupJobName
 	job, err := buildBackupJob(cluster, jobName)
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
@@ -329,12 +341,12 @@ func TestBuildBackupJob_WithJWTAuth(t *testing.T) {
 		envMap[env.Name] = env.Value
 	}
 
-	if envMap["BACKUP_JWT_AUTH_ROLE"] != "backup-role" {
-		t.Errorf("buildBackupJob() BACKUP_JWT_AUTH_ROLE = %v, want backup-role", envMap["BACKUP_JWT_AUTH_ROLE"])
+	if envMap[constants.EnvBackupJWTAuthRole] != "backup-role" {
+		t.Errorf("buildBackupJob() BACKUP_JWT_AUTH_ROLE = %v, want backup-role", envMap[constants.EnvBackupJWTAuthRole])
 	}
 
-	if envMap["BACKUP_AUTH_METHOD"] != "jwt" {
-		t.Errorf("buildBackupJob() BACKUP_AUTH_METHOD = %v, want jwt", envMap["BACKUP_AUTH_METHOD"])
+	if envMap[constants.EnvBackupAuthMethod] != constants.BackupAuthMethodJWT {
+		t.Errorf("buildBackupJob() BACKUP_AUTH_METHOD = %v, want %s", envMap[constants.EnvBackupAuthMethod], constants.BackupAuthMethodJWT)
 	}
 
 	// Verify projected volume is mounted for JWT token
@@ -379,7 +391,7 @@ func TestBuildBackupJob_WithRoleARN(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	cluster.Spec.Backup.Target.RoleARN = "arn:aws:iam::123456789012:role/backup-role"
 
-	jobName := "backup-test-cluster-20250101-120000"
+	jobName := testBackupJobName
 	job, err := buildBackupJob(cluster, jobName)
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
@@ -391,12 +403,12 @@ func TestBuildBackupJob_WithRoleARN(t *testing.T) {
 		envMap[env.Name] = env.Value
 	}
 
-	if envMap["AWS_ROLE_ARN"] != cluster.Spec.Backup.Target.RoleARN {
-		t.Errorf("buildBackupJob() AWS_ROLE_ARN = %v, want %v", envMap["AWS_ROLE_ARN"], cluster.Spec.Backup.Target.RoleARN)
+	if envMap[constants.EnvAWSRoleARN] != cluster.Spec.Backup.Target.RoleARN {
+		t.Errorf("buildBackupJob() AWS_ROLE_ARN = %v, want %v", envMap[constants.EnvAWSRoleARN], cluster.Spec.Backup.Target.RoleARN)
 	}
 
-	if envMap["AWS_WEB_IDENTITY_TOKEN_FILE"] != "/var/run/secrets/aws/token" {
-		t.Errorf("buildBackupJob() AWS_WEB_IDENTITY_TOKEN_FILE = %v, want /var/run/secrets/aws/token", envMap["AWS_WEB_IDENTITY_TOKEN_FILE"])
+	if envMap[constants.EnvAWSWebIdentityTokenFile] != awsWebIdentityTokenFile {
+		t.Errorf("buildBackupJob() AWS_WEB_IDENTITY_TOKEN_FILE = %v, want %s", envMap[constants.EnvAWSWebIdentityTokenFile], awsWebIdentityTokenFile)
 	}
 
 	hasTokenMount := false
@@ -445,7 +457,7 @@ func TestBuildBackupJob_WithTokenSecret(t *testing.T) {
 		Namespace: "default",
 	}
 
-	jobName := "backup-test-cluster-20250101-120000"
+	jobName := testBackupJobName
 	job, err := buildBackupJob(cluster, jobName)
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
@@ -457,12 +469,12 @@ func TestBuildBackupJob_WithTokenSecret(t *testing.T) {
 		envMap[env.Name] = env.Value
 	}
 
-	if envMap["BACKUP_TOKEN_SECRET_NAME"] != "backup-token" {
-		t.Errorf("buildBackupJob() BACKUP_TOKEN_SECRET_NAME = %v, want backup-token", envMap["BACKUP_TOKEN_SECRET_NAME"])
+	if envMap[constants.EnvBackupTokenSecretName] != "backup-token" {
+		t.Errorf("buildBackupJob() BACKUP_TOKEN_SECRET_NAME = %v, want backup-token", envMap[constants.EnvBackupTokenSecretName])
 	}
 
-	if envMap["BACKUP_AUTH_METHOD"] != "token" {
-		t.Errorf("buildBackupJob() BACKUP_AUTH_METHOD = %v, want token", envMap["BACKUP_AUTH_METHOD"])
+	if envMap[constants.EnvBackupAuthMethod] != constants.BackupAuthMethodToken {
+		t.Errorf("buildBackupJob() BACKUP_AUTH_METHOD = %v, want %s", envMap[constants.EnvBackupAuthMethod], constants.BackupAuthMethodToken)
 	}
 
 	// Verify volume mount
@@ -481,7 +493,7 @@ func TestBuildBackupJob_MissingExecutorImage(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	cluster.Spec.Backup.ExecutorImage = ""
 
-	jobName := "backup-test-cluster-20250101-120000"
+	jobName := testBackupJobName
 	job, err := buildBackupJob(cluster, jobName)
 
 	if err == nil {
@@ -500,8 +512,8 @@ func TestBuildBackupJob_MissingExecutorImage(t *testing.T) {
 func TestEnsureBackupJob_CreatesJob(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t)
-	manager := NewManager(client, testScheme)
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme)
 
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
@@ -518,7 +530,7 @@ func TestEnsureBackupJob_CreatesJob(t *testing.T) {
 
 	// Verify Job was created
 	job := &batchv1.Job{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      jobName,
 	}, job)
@@ -545,8 +557,8 @@ func TestEnsureBackupJob_JobAlreadyRunning(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t, runningJob)
-	manager := NewManager(client, testScheme)
+	k8sClient := newTestClient(t, runningJob)
+	manager := NewManager(k8sClient, testScheme)
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -575,8 +587,8 @@ func TestEnsureBackupJob_JobCompleted(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t, completedJob)
-	manager := NewManager(client, testScheme)
+	k8sClient := newTestClient(t, completedJob)
+	manager := NewManager(k8sClient, testScheme)
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -605,8 +617,8 @@ func TestEnsureBackupJob_JobFailed(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t, failedJob)
-	manager := NewManager(client, testScheme)
+	k8sClient := newTestClient(t, failedJob)
+	manager := NewManager(k8sClient, testScheme)
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -635,8 +647,8 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t, succeededJob)
-	manager := NewManager(client, testScheme)
+	k8sClient := newTestClient(t, succeededJob)
+	manager := NewManager(k8sClient, testScheme)
 
 	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -675,8 +687,8 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t, failedJob)
-	manager := NewManager(client, testScheme)
+	k8sClient := newTestClient(t, failedJob)
+	manager := NewManager(k8sClient, testScheme)
 
 	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -700,8 +712,8 @@ func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t)
-	manager := NewManager(client, testScheme)
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme)
 
 	// Should not error when job doesn't exist
 	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
@@ -727,8 +739,8 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t, runningJob)
-	manager := NewManager(client, testScheme)
+	k8sClient := newTestClient(t, runningJob)
+	manager := NewManager(k8sClient, testScheme)
 
 	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {

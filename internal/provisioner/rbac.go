@@ -3,6 +3,8 @@ package provisioner
 import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openbao/operator/internal/constants"
 )
 
 const (
@@ -35,9 +37,9 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			Name:      TenantRoleName,
 			Namespace: namespace,
 			Labels: map[string]string{
-				"app.kubernetes.io/name":       "openbao-operator",
-				"app.kubernetes.io/component":  "provisioner",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
+				constants.LabelAppComponent:  "provisioner",
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -127,9 +129,9 @@ func GenerateTenantRoleBinding(namespace string, operatorSA OperatorServiceAccou
 			Name:      TenantRoleBindingName,
 			Namespace: namespace,
 			Labels: map[string]string{
-				"app.kubernetes.io/name":       "openbao-operator",
-				"app.kubernetes.io/component":  "provisioner",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
+				constants.LabelAppComponent:  "provisioner",
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{

@@ -39,6 +39,7 @@ import (
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	backupmanager "github.com/openbao/operator/internal/backup"
 	certmanager "github.com/openbao/operator/internal/certs"
+	"github.com/openbao/operator/internal/constants"
 	controllermetrics "github.com/openbao/operator/internal/controller"
 	inframanager "github.com/openbao/operator/internal/infra"
 	initmanager "github.com/openbao/operator/internal/init"
@@ -226,11 +227,8 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// have bypassed admission controls (for example, if the resource locking
 	// webhook is temporarily disabled). The interval is long to minimize API
 	// load and does not change the core reconciliation semantics.
-	const safetyNetBase = 20 * time.Minute
-	const safetyNetJitter = 5 * time.Minute
-
-	jitterNanos := time.Now().UnixNano() % int64(safetyNetJitter)
-	requeueAfter := safetyNetBase + time.Duration(jitterNanos)
+	jitterNanos := time.Now().UnixNano() % int64(constants.RequeueSafetyNetJitter)
+	requeueAfter := constants.RequeueSafetyNetBase + time.Duration(jitterNanos)
 
 	logger.V(1).Info("Reconciliation complete; scheduling safety net requeue", "requeueAfter", requeueAfter)
 
@@ -322,7 +320,7 @@ func (r *OpenBaoClusterReconciler) reconcileInfra(ctx context.Context, logger lo
 
 			// Requeue with a short delay to retry once prerequisites are ready
 			logger.Info("StatefulSet prerequisites missing; requeuing reconciliation", "error", err)
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 		return ctrl.Result{}, err
 	}
@@ -402,7 +400,7 @@ func (r *OpenBaoClusterReconciler) reconcileInit(ctx context.Context, logger log
 	if !cluster.Status.Initialized {
 		return ctrl.Result{
 			Requeue:      true,
-			RequeueAfter: 5 * time.Second,
+			RequeueAfter: constants.RequeueShort,
 		}, nil
 	}
 
@@ -487,6 +485,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 	return nil
 }
 
+//nolint:gocyclo // Status computation is intentionally explicit to keep reconciliation readable and auditable.
 func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
 	// Fetch the StatefulSet to observe actual ready replicas
 	statefulSet := &appsv1.StatefulSet{}
@@ -547,9 +546,9 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	now := metav1.Now()
 
 	podSelector := map[string]string{
-		"app.kubernetes.io/instance":   cluster.Name,
-		"app.kubernetes.io/name":       "openbao",
-		"app.kubernetes.io/managed-by": "openbao-operator",
+		constants.LabelAppInstance:  cluster.Name,
+		constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+		constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 	}
 
 	var pods corev1.PodList
@@ -796,9 +795,8 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	if !available && readyReplicas > 0 {
 		// Requeue after a short delay to allow StatefulSet status to update
 		// The delay is short enough to be responsive but long enough to avoid excessive API calls
-		const replicaCheckInterval = 5 * time.Second
 		logger.V(1).Info("Not all replicas are ready; requeuing to check status", "readyReplicas", readyReplicas, "desiredReplicas", cluster.Spec.Replicas)
-		return ctrl.Result{RequeueAfter: replicaCheckInterval}, nil
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	return ctrl.Result{}, nil

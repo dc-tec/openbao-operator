@@ -276,13 +276,13 @@ func TestCopyWrapper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open source: %v", err)
 	}
-	defer sourceFile.Close()
+	defer func() { _ = sourceFile.Close() }()
 
 	destFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 	if err != nil {
 		t.Fatalf("failed to create destination: %v", err)
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	if _, err := io.Copy(destFile, sourceFile); err != nil {
 		t.Fatalf("failed to copy: %v", err)

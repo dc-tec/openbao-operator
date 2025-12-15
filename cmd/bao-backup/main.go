@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/openbao/operator/internal/backup"
+	"github.com/openbao/operator/internal/constants"
 	"github.com/openbao/operator/internal/openbao"
-	"github.com/openbao/operator/internal/paths"
 	"github.com/openbao/operator/internal/storage"
 )
 
@@ -27,17 +27,13 @@ const (
 	exitVerificationError = 6
 
 	// Default paths
-	defaultTLSCAPath       = paths.TLSCACertPath
-	defaultTokenPath       = paths.BackupTokenPath
-	defaultCredentialsPath = paths.BackupCredentialsPath
-	defaultJWTTokenPath    = paths.BackupJWTTokenPath
+	defaultTLSCAPath       = constants.PathTLSCACert
+	defaultTokenPath       = constants.PathBackupToken
+	defaultCredentialsPath = constants.PathBackupCredentials
+	defaultJWTTokenPath    = constants.PathBackupJWTToken
 
 	// Default region for S3-compatible storage
-	defaultRegion = "us-east-1"
-
-	// Auth methods
-	authMethodJWT   = "jwt"
-	authMethodToken = "token"
+	defaultRegion = constants.DefaultS3Region
 )
 
 // Config holds the backup executor configuration.
@@ -77,19 +73,19 @@ func loadConfig() (*Config, error) {
 	cfg := &Config{}
 
 	// Load cluster information
-	cfg.ClusterNamespace = strings.TrimSpace(os.Getenv("CLUSTER_NAMESPACE"))
+	cfg.ClusterNamespace = strings.TrimSpace(os.Getenv(constants.EnvClusterNamespace))
 	if cfg.ClusterNamespace == "" {
-		return nil, fmt.Errorf("CLUSTER_NAMESPACE environment variable is required")
+		return nil, fmt.Errorf("%s environment variable is required", constants.EnvClusterNamespace)
 	}
 
-	cfg.ClusterName = strings.TrimSpace(os.Getenv("CLUSTER_NAME"))
+	cfg.ClusterName = strings.TrimSpace(os.Getenv(constants.EnvClusterName))
 	if cfg.ClusterName == "" {
-		return nil, fmt.Errorf("CLUSTER_NAME environment variable is required")
+		return nil, fmt.Errorf("%s environment variable is required", constants.EnvClusterName)
 	}
 
-	replicasStr := strings.TrimSpace(os.Getenv("CLUSTER_REPLICAS"))
+	replicasStr := strings.TrimSpace(os.Getenv(constants.EnvClusterReplicas))
 	if replicasStr == "" {
-		return nil, fmt.Errorf("CLUSTER_REPLICAS environment variable is required")
+		return nil, fmt.Errorf("%s environment variable is required", constants.EnvClusterReplicas)
 	}
 	replicas, err := strconv.ParseInt(replicasStr, 10, 32)
 	if err != nil {
@@ -98,25 +94,25 @@ func loadConfig() (*Config, error) {
 	cfg.ClusterReplicas = int32(replicas)
 
 	// Load storage configuration
-	cfg.BackupEndpoint = strings.TrimSpace(os.Getenv("BACKUP_ENDPOINT"))
+	cfg.BackupEndpoint = strings.TrimSpace(os.Getenv(constants.EnvBackupEndpoint))
 	if cfg.BackupEndpoint == "" {
-		return nil, fmt.Errorf("BACKUP_ENDPOINT environment variable is required")
+		return nil, fmt.Errorf("%s environment variable is required", constants.EnvBackupEndpoint)
 	}
 
-	cfg.BackupBucket = strings.TrimSpace(os.Getenv("BACKUP_BUCKET"))
+	cfg.BackupBucket = strings.TrimSpace(os.Getenv(constants.EnvBackupBucket))
 	if cfg.BackupBucket == "" {
-		return nil, fmt.Errorf("BACKUP_BUCKET environment variable is required")
+		return nil, fmt.Errorf("%s environment variable is required", constants.EnvBackupBucket)
 	}
 
-	cfg.BackupPathPrefix = strings.TrimSpace(os.Getenv("BACKUP_PATH_PREFIX"))
-	cfg.BackupFilenamePrefix = strings.TrimSpace(os.Getenv("BACKUP_FILENAME_PREFIX"))
+	cfg.BackupPathPrefix = strings.TrimSpace(os.Getenv(constants.EnvBackupPathPrefix))
+	cfg.BackupFilenamePrefix = strings.TrimSpace(os.Getenv(constants.EnvBackupFilenamePrefix))
 
-	cfg.BackupRegion = strings.TrimSpace(os.Getenv("BACKUP_REGION"))
+	cfg.BackupRegion = strings.TrimSpace(os.Getenv(constants.EnvBackupRegion))
 	if cfg.BackupRegion == "" {
 		cfg.BackupRegion = defaultRegion
 	}
 
-	usePathStyleStr := strings.TrimSpace(os.Getenv("BACKUP_USE_PATH_STYLE"))
+	usePathStyleStr := strings.TrimSpace(os.Getenv(constants.EnvBackupUsePathStyle))
 	if usePathStyleStr != "" {
 		var err error
 		cfg.BackupUsePathStyle, err = strconv.ParseBool(usePathStyleStr)
@@ -127,7 +123,7 @@ func loadConfig() (*Config, error) {
 
 	// Load TLS CA certificate
 	caCertPath := defaultTLSCAPath
-	if envPath := strings.TrimSpace(os.Getenv("TLS_CA_PATH")); envPath != "" {
+	if envPath := strings.TrimSpace(os.Getenv(constants.EnvTLSCAPath)); envPath != "" {
 		caCertPath = envPath
 	}
 	caCert, err := os.ReadFile(caCertPath)
@@ -137,11 +133,11 @@ func loadConfig() (*Config, error) {
 	cfg.TLSCACert = caCert
 
 	// Determine authentication method
-	cfg.AuthMethod = strings.TrimSpace(os.Getenv("BACKUP_AUTH_METHOD"))
+	cfg.AuthMethod = strings.TrimSpace(os.Getenv(constants.EnvBackupAuthMethod))
 
 	// Try to load JWT token from projected volume
 	jwtTokenPath := defaultJWTTokenPath
-	if envPath := strings.TrimSpace(os.Getenv("JWT_TOKEN_PATH")); envPath != "" {
+	if envPath := strings.TrimSpace(os.Getenv(constants.EnvJWTTokenPath)); envPath != "" {
 		jwtTokenPath = envPath
 	}
 	jwtToken, err := os.ReadFile(jwtTokenPath)
@@ -149,24 +145,24 @@ func loadConfig() (*Config, error) {
 		cfg.JWTToken = strings.TrimSpace(string(jwtToken))
 		// If auth method not explicitly set, prefer JWT Auth
 		if cfg.AuthMethod == "" {
-			cfg.AuthMethod = authMethodJWT
+			cfg.AuthMethod = constants.BackupAuthMethodJWT
 		}
 	}
 
 	// Load JWT Auth role if using JWT Auth
-	if cfg.AuthMethod == authMethodJWT || (cfg.AuthMethod == "" && cfg.JWTToken != "") {
-		cfg.JWTAuthRole = strings.TrimSpace(os.Getenv("BACKUP_JWT_AUTH_ROLE"))
+	if cfg.AuthMethod == constants.BackupAuthMethodJWT || (cfg.AuthMethod == "" && cfg.JWTToken != "") {
+		cfg.JWTAuthRole = strings.TrimSpace(os.Getenv(constants.EnvBackupJWTAuthRole))
 		if cfg.JWTAuthRole == "" {
 			return nil, fmt.Errorf("BACKUP_JWT_AUTH_ROLE is required when using JWT authentication")
 		}
 		if cfg.JWTToken == "" {
 			return nil, fmt.Errorf("JWT token not found at %q", jwtTokenPath)
 		}
-		cfg.AuthMethod = authMethodJWT
+		cfg.AuthMethod = constants.BackupAuthMethodJWT
 	} else {
 		// Fall back to static token
 		tokenPath := defaultTokenPath
-		if envPath := strings.TrimSpace(os.Getenv("BACKUP_TOKEN_PATH")); envPath != "" {
+		if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupTokenPath)); envPath != "" {
 			tokenPath = envPath
 		}
 		token, err := os.ReadFile(tokenPath)
@@ -177,12 +173,12 @@ func loadConfig() (*Config, error) {
 		if cfg.OpenBaoToken == "" {
 			return nil, fmt.Errorf("OpenBao token is empty")
 		}
-		cfg.AuthMethod = authMethodToken
+		cfg.AuthMethod = constants.BackupAuthMethodToken
 	}
 
 	// Load storage credentials if provided
 	credsPath := defaultCredentialsPath
-	if envPath := strings.TrimSpace(os.Getenv("BACKUP_CREDENTIALS_PATH")); envPath != "" {
+	if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupCredentialsPath)); envPath != "" {
 		credsPath = envPath
 	}
 
@@ -193,7 +189,7 @@ func loadConfig() (*Config, error) {
 	cfg.StorageCredentials = creds
 
 	// Load S3 upload configuration (optional, with defaults)
-	partSizeStr := strings.TrimSpace(os.Getenv("BACKUP_PART_SIZE"))
+	partSizeStr := strings.TrimSpace(os.Getenv(constants.EnvBackupPartSize))
 	if partSizeStr != "" {
 		partSize, err := strconv.ParseInt(partSizeStr, 10, 64)
 		if err != nil {
@@ -202,7 +198,7 @@ func loadConfig() (*Config, error) {
 		cfg.PartSize = partSize
 	}
 
-	concurrencyStr := strings.TrimSpace(os.Getenv("BACKUP_CONCURRENCY"))
+	concurrencyStr := strings.TrimSpace(os.Getenv(constants.EnvBackupConcurrency))
 	if concurrencyStr != "" {
 		concurrency, err := strconv.ParseInt(concurrencyStr, 10, 32)
 		if err != nil {
@@ -289,7 +285,7 @@ func findLeader(ctx context.Context, cfg *Config) (string, error) {
 			if clusterDomainSuffix != "" {
 				host = host + clusterDomainSuffix
 			}
-			podURL := fmt.Sprintf("https://%s:8200", host)
+			podURL := fmt.Sprintf("https://%s:%d", host, constants.PortAPI)
 
 			// Create a client without token for health checks
 			client, err := openbao.NewClient(openbao.ClientConfig{
@@ -332,7 +328,7 @@ func findLeader(ctx context.Context, cfg *Config) (string, error) {
 
 // authenticate authenticates to OpenBao and returns a token.
 func authenticate(ctx context.Context, cfg *Config, leaderURL string) (string, error) {
-	if cfg.AuthMethod == authMethodJWT {
+	if cfg.AuthMethod == constants.BackupAuthMethodJWT {
 		// Create a client without token for authentication
 		client, err := openbao.NewClient(openbao.ClientConfig{
 			BaseURL: leaderURL,

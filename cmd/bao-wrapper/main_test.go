@@ -40,7 +40,7 @@ func Test_getFileHash(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to open file for verification: %v", err)
 				}
-				defer f.Close()
+				defer func() { _ = f.Close() }()
 
 				h := sha256.New()
 				if _, err := io.Copy(h, f); err != nil {
@@ -109,7 +109,7 @@ func Test_getFileHash(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to open file for verification: %v", err)
 				}
-				defer f.Close()
+				defer func() { _ = f.Close() }()
 
 				h := sha256.New()
 				if _, err := io.Copy(h, f); err != nil {
@@ -153,7 +153,7 @@ func Test_getFileHash_Consistency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	content := []byte("consistent content")
 	if _, err := tmpFile.Write(content); err != nil {
@@ -186,7 +186,7 @@ func Test_getFileHash_DetectsChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	content1 := []byte("original content")
 	if _, err := tmpFile.Write(content1); err != nil {
@@ -251,7 +251,7 @@ func Test_getFileHash_DifferentFilesProduceDifferentHashes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create temp file: %v", err)
 		}
-		defer os.Remove(tmpFile.Name())
+		defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 		if _, err := tmpFile.Write(tt.content); err != nil {
 			t.Fatalf("failed to write to temp file: %v", err)
@@ -268,7 +268,12 @@ func Test_getFileHash_DifferentFilesProduceDifferentHashes(t *testing.T) {
 		// Check for collisions with previous hashes
 		for prevName, prevHash := range hashes {
 			if bytes.Equal(hash, prevHash) {
-				t.Errorf("getFileHash() produced same hash for different contents: %s and %s both produce %x", prevName, tt.name, hash)
+				t.Errorf(
+					"getFileHash() produced same hash for different contents: %s and %s both produce %x",
+					prevName,
+					tt.name,
+					hash,
+				)
 			}
 		}
 

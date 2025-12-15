@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openbao/operator/internal/constants"
 	"k8s.io/utils/ptr"
 )
 
@@ -151,7 +152,7 @@ func TestClient_Health(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != healthPath {
+				if r.URL.Path != constants.APIPathSysHealth {
 					t.Errorf("unexpected path: %s", r.URL.Path)
 				}
 				if r.Method != http.MethodGet {
@@ -320,7 +321,7 @@ func TestClient_StepDown(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != stepDownPath {
+				if r.URL.Path != constants.APIPathSysStepDown {
 					t.Errorf("unexpected path: %s", r.URL.Path)
 				}
 				if r.Method != http.MethodPut {
@@ -534,7 +535,7 @@ func TestClient_Init(t *testing.T) {
 			var serverInitErr error
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != initPath {
+				if r.URL.Path != constants.APIPathSysInit {
 					t.Errorf("unexpected path: %s", r.URL.Path)
 				}
 				if r.Method != http.MethodPut {
@@ -687,8 +688,8 @@ func TestClient_LoginJWT(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != jwtAuthPath {
-					t.Errorf("unexpected path: %s, want %s", r.URL.Path, jwtAuthPath)
+				if r.URL.Path != constants.APIPathAuthJWTLogin {
+					t.Errorf("unexpected path: %s, want %s", r.URL.Path, constants.APIPathAuthJWTLogin)
 				}
 				if r.Method != http.MethodPost {
 					t.Errorf("unexpected method: %s", r.Method)

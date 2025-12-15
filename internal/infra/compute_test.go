@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	"github.com/openbao/operator/internal/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -158,6 +159,7 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 	}
 }
 
+//nolint:gocyclo // This is a comprehensive, table-free assertion test for container configuration.
 func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
@@ -191,7 +193,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 
 	containerFound := false
 	for _, c := range statefulSet.Spec.Template.Spec.Containers {
-		if c.Name == openBaoContainerName {
+		if c.Name == constants.ContainerNameOpenBao {
 			containerFound = true
 			if c.Image != cluster.Spec.Image {
 				t.Fatalf("expected container image %q, got %q", cluster.Spec.Image, c.Image)
@@ -290,20 +292,20 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 				}
 			}
 
-			if envVars["HOSTNAME"] != "metadata.name" {
-				t.Fatalf("expected HOSTNAME env var to reference metadata.name, got %q", envVars["HOSTNAME"])
+			if envVars[constants.EnvHostname] != "metadata.name" {
+				t.Fatalf("expected %s env var to reference metadata.name, got %q", constants.EnvHostname, envVars[constants.EnvHostname])
 			}
-			if envVars["BAO_K8S_POD_NAME"] != "metadata.name" {
-				t.Fatalf("expected BAO_K8S_POD_NAME env var to reference metadata.name, got %q", envVars["BAO_K8S_POD_NAME"])
+			if envVars[constants.EnvBaoK8sPodName] != "metadata.name" {
+				t.Fatalf("expected %s env var to reference metadata.name, got %q", constants.EnvBaoK8sPodName, envVars[constants.EnvBaoK8sPodName])
 			}
-			if envVars["BAO_K8S_NAMESPACE"] != "metadata.namespace" {
-				t.Fatalf("expected BAO_K8S_NAMESPACE env var to reference metadata.namespace, got %q", envVars["BAO_K8S_NAMESPACE"])
+			if envVars[constants.EnvBaoK8sNamespace] != "metadata.namespace" {
+				t.Fatalf("expected %s env var to reference metadata.namespace, got %q", constants.EnvBaoK8sNamespace, envVars[constants.EnvBaoK8sNamespace])
 			}
-			if envVars["POD_IP"] != "status.podIP" {
-				t.Fatalf("expected POD_IP env var to reference status.podIP, got %q", envVars["POD_IP"])
+			if envVars[constants.EnvPodIP] != "status.podIP" {
+				t.Fatalf("expected %s env var to reference status.podIP, got %q", constants.EnvPodIP, envVars[constants.EnvPodIP])
 			}
-			if !strings.Contains(envVars["BAO_API_ADDR"], "$(POD_IP)") {
-				t.Fatalf("expected BAO_API_ADDR env var to contain $(POD_IP), got %q", envVars["BAO_API_ADDR"])
+			if !strings.Contains(envVars[constants.EnvBaoAPIAddr], "$("+constants.EnvPodIP+")") {
+				t.Fatalf("expected %s env var to contain $(%s), got %q", constants.EnvBaoAPIAddr, constants.EnvPodIP, envVars[constants.EnvBaoAPIAddr])
 			}
 			if envVars["UMASK"] != "0077" {
 				t.Fatalf("expected UMASK env var to be 0077, got %q", envVars["UMASK"])
@@ -311,7 +313,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 		}
 	}
 	if !containerFound {
-		t.Fatalf("expected StatefulSet to have container %q", openBaoContainerName)
+		t.Fatalf("expected StatefulSet to have container %q", constants.ContainerNameOpenBao)
 	}
 }
 
@@ -367,7 +369,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 
 	var probesFound bool
 	for _, c := range statefulSet.Spec.Template.Spec.Containers {
-		if c.Name != openBaoContainerName {
+		if c.Name != constants.ContainerNameOpenBao {
 			continue
 		}
 		probesFound = true
@@ -379,9 +381,9 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 		if !strings.Contains(cmd, "-servername=acme-probe.default.svc") {
 			t.Fatalf("expected readiness probe to set SNI to ACME domain, got %v", c.ReadinessProbe.Exec.Command)
 		}
-		// In ACME mode with tls_acme_ca_root configured, probes should use the ACME CA file
-		if !strings.Contains(cmd, "-ca-file=/etc/bao/seal-creds/ca.crt") {
-			t.Fatalf("expected readiness probe to use ACME CA file from tls_acme_ca_root, got %v", c.ReadinessProbe.Exec.Command)
+		// In ACME mode with tls_acme_ca_root configured, probes should use the PKI CA file derived from it.
+		if !strings.Contains(cmd, "-ca-file=/etc/bao/seal-creds/pki-ca.crt") {
+			t.Fatalf("expected readiness probe to use derived PKI CA file from tls_acme_ca_root, got %v", c.ReadinessProbe.Exec.Command)
 		}
 	}
 	if !probesFound {
@@ -417,7 +419,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 
 	var probesFound bool
 	for _, c := range statefulSet.Spec.Template.Spec.Containers {
-		if c.Name != openBaoContainerName {
+		if c.Name != constants.ContainerNameOpenBao {
 			continue
 		}
 		probesFound = true
@@ -551,7 +553,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 
 	containerFound := false
 	for _, c := range statefulSet.Spec.Template.Spec.Containers {
-		if c.Name == openBaoContainerName {
+		if c.Name == constants.ContainerNameOpenBao {
 			containerFound = true
 			volumeMountNames := make(map[string]bool)
 			for _, vm := range c.VolumeMounts {
@@ -566,7 +568,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 		}
 	}
 	if !containerFound {
-		t.Fatalf("expected StatefulSet to have container %q", openBaoContainerName)
+		t.Fatalf("expected StatefulSet to have container %q", constants.ContainerNameOpenBao)
 	}
 }
 
@@ -584,7 +586,7 @@ func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
 			Name:      "data-infra-delete-pvcs-0",
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				labelOpenBaoCluster: cluster.Name,
+				constants.LabelOpenBaoCluster: cluster.Name,
 			},
 		},
 	}
@@ -593,7 +595,7 @@ func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
 			Name:      "data-infra-delete-pvcs-1",
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				labelOpenBaoCluster: cluster.Name,
+				constants.LabelOpenBaoCluster: cluster.Name,
 			},
 		},
 	}
@@ -659,8 +661,8 @@ func TestStatefulSet_ACMEMode_NoSidecar(t *testing.T) {
 	if len(containers) != 1 {
 		t.Fatalf("expected StatefulSet to have 1 container in ACME mode, got %d", len(containers))
 	}
-	if containers[0].Name != "openbao" {
-		t.Fatalf("expected container name to be 'openbao', got %q", containers[0].Name)
+	if containers[0].Name != constants.ContainerNameOpenBao {
+		t.Fatalf("expected container name to be %q, got %q", constants.ContainerNameOpenBao, containers[0].Name)
 	}
 }
 

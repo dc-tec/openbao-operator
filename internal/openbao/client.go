@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/openbao/operator/internal/constants"
 )
 
 const (
@@ -21,16 +23,6 @@ const (
 	DefaultRequestTimeout = 10 * time.Second
 	// DefaultSnapshotTimeout is the default timeout for snapshot operations.
 	DefaultSnapshotTimeout = 30 * time.Minute
-	// healthPath is the OpenBao health endpoint.
-	healthPath = "/v1/sys/health"
-	// stepDownPath is the OpenBao leader step-down endpoint.
-	stepDownPath = "/v1/sys/step-down"
-	// initPath is the OpenBao initialization endpoint.
-	initPath = "/v1/sys/init"
-	// snapshotPath is the OpenBao Raft snapshot endpoint.
-	snapshotPath = "/v1/sys/storage/raft/snapshot"
-	// jwtAuthPath is the OpenBao JWT authentication endpoint.
-	jwtAuthPath = "/v1/auth/jwt/login"
 )
 
 // HealthResponse represents the response from GET /v1/sys/health.
@@ -187,7 +179,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 // We parse the response body regardless of status code since it contains
 // the health information we need.
 func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+healthPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+constants.APIPathSysHealth, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create health request: %w", err)
 	}
@@ -251,7 +243,7 @@ func (c *Client) StepDown(ctx context.Context) error {
 		return fmt.Errorf("authentication token required for step-down operation")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+stepDownPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+constants.APIPathSysStepDown, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create step-down request: %w", err)
 	}
@@ -330,7 +322,7 @@ func (c *Client) Snapshot(ctx context.Context) (*SnapshotResponse, error) {
 		return nil, fmt.Errorf("authentication token required for snapshot operation")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+snapshotPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+constants.APIPathRaftSnapshot, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snapshot request: %w", err)
 	}
@@ -378,7 +370,7 @@ func (c *Client) Init(ctx context.Context, req InitRequest) (*InitResponse, erro
 		return nil, fmt.Errorf("failed to marshal init request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+initPath, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+constants.APIPathSysInit, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create init request: %w", err)
 	}
@@ -459,7 +451,7 @@ func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, e
 		return "", fmt.Errorf("failed to marshal JWT auth request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+jwtAuthPath, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+constants.APIPathAuthJWTLogin, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return "", fmt.Errorf("failed to create JWT auth request: %w", err)
 	}

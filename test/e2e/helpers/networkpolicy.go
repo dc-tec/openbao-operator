@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/openbao/operator/internal/constants"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +16,13 @@ import (
 // AllowEgressToOperatorNamespace patches the NetworkPolicy for the given cluster
 // to allow egress to the operator namespace. This is needed for e2e tests where
 // transit seal backends (infra-bao) run in the operator namespace.
-func AllowEgressToOperatorNamespace(ctx context.Context, c client.Client, clusterName, clusterNamespace, operatorNamespace string) error {
+func AllowEgressToOperatorNamespace(
+	ctx context.Context,
+	c client.Client,
+	clusterName string,
+	clusterNamespace string,
+	operatorNamespace string,
+) error {
 	networkPolicyName := clusterName + "-network-policy"
 	networkPolicy := &networkingv1.NetworkPolicy{}
 
@@ -35,7 +42,7 @@ func AllowEgressToOperatorNamespace(ctx context.Context, c client.Client, cluste
 		},
 	}
 
-	apiPort := intstr.FromInt(8200)
+	apiPort := intstr.FromInt(constants.PortAPI)
 	egressRule := networkingv1.NetworkPolicyEgressRule{
 		// Allow egress to operator namespace on OpenBao API port (for transit seal in e2e tests)
 		To: []networkingv1.NetworkPolicyPeer{operatorNamespacePeer},

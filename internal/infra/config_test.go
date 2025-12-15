@@ -116,8 +116,8 @@ func TestGenerateUnsealKey(t *testing.T) {
 func TestEnsureUnsealSecret_CreatesSecret(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("test-cluster", "default")
 
@@ -129,7 +129,7 @@ func TestEnsureUnsealSecret_CreatesSecret(t *testing.T) {
 	// Verify Secret was created
 	secretName := unsealSecretName(cluster)
 	secret := &corev1.Secret{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      secretName,
 	}, secret)
@@ -177,8 +177,8 @@ func TestEnsureUnsealSecret_HandlesAlreadyExists(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClientWithObjects(t, existingSecret)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClientWithObjects(t, existingSecret)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	// Should not error when secret already exists (blind create pattern)
 	err := manager.ensureUnsealSecret(ctx, logger, cluster)
@@ -190,8 +190,8 @@ func TestEnsureUnsealSecret_HandlesAlreadyExists(t *testing.T) {
 func TestEnsureConfigMap_CreatesConfigMap(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("test-cluster", "default")
 	configContent := "test config content"
@@ -204,7 +204,7 @@ func TestEnsureConfigMap_CreatesConfigMap(t *testing.T) {
 	// Verify ConfigMap was created
 	cmName := configMapName(cluster)
 	configMap := &corev1.ConfigMap{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      cmName,
 	}, configMap)
@@ -234,8 +234,8 @@ func TestEnsureConfigMap_UpdatesConfigMap(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClientWithObjects(t, existingConfigMap)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	newConfigContent := "new config content"
 	err := manager.ensureConfigMap(ctx, logger, cluster, newConfigContent)
@@ -245,7 +245,7 @@ func TestEnsureConfigMap_UpdatesConfigMap(t *testing.T) {
 
 	// Verify ConfigMap was updated
 	configMap := &corev1.ConfigMap{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      cmName,
 	}, configMap)
@@ -276,8 +276,8 @@ func TestEnsureConfigMap_SkipsUpdateWhenUnchanged(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClientWithObjects(t, existingConfigMap)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	// Should not error and should skip update when content is the same
 	err := manager.ensureConfigMap(ctx, logger, cluster, configContent)
@@ -305,8 +305,8 @@ func TestEnsureSelfInitConfigMap_Disabled(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClientWithObjects(t, existingConfigMap)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
 	if err != nil {
@@ -315,7 +315,7 @@ func TestEnsureSelfInitConfigMap_Disabled(t *testing.T) {
 
 	// Verify ConfigMap was deleted
 	configMap := &corev1.ConfigMap{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      cmName,
 	}, configMap)
@@ -331,8 +331,8 @@ func TestEnsureSelfInitConfigMap_NotConfigured(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	// Should not error when self-init is not configured
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
@@ -363,8 +363,8 @@ func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t)
-	manager := NewManager(client, testScheme, "openbao-operator-system", oidcIssuer, oidcJWTKeys)
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", oidcIssuer, oidcJWTKeys)
 
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
 	if err != nil {
@@ -374,7 +374,7 @@ func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
 	// Verify ConfigMap was created
 	cmName := configInitMapName(cluster)
 	configMap := &corev1.ConfigMap{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      cmName,
 	}, configMap)
@@ -445,8 +445,8 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t)
-	manager := NewManager(client, testScheme, "openbao-operator-system", oidcIssuer, oidcJWTKeys)
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", oidcIssuer, oidcJWTKeys)
 
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
 	if err != nil {
@@ -455,7 +455,7 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 
 	cmName := configInitMapName(cluster)
 	configMap := &corev1.ConfigMap{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      cmName,
 	}, configMap)
@@ -498,8 +498,8 @@ func TestDeleteConfigMap(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClientWithObjects(t, existingConfigMap)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	err := manager.deleteConfigMap(ctx, cluster)
 	if err != nil {
@@ -508,7 +508,7 @@ func TestDeleteConfigMap(t *testing.T) {
 
 	// Verify ConfigMap was deleted
 	configMap := &corev1.ConfigMap{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      cmName,
 	}, configMap)
@@ -522,8 +522,8 @@ func TestDeleteConfigMap_NotFound(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
 
 	ctx := context.Background()
-	client := newTestClient(t)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	// Should not error when ConfigMap doesn't exist
 	err := manager.deleteConfigMap(ctx, cluster)
@@ -557,8 +557,8 @@ func TestDeleteSecrets(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := newTestClientWithObjects(t, unsealSecret, tlsCASecret, tlsServerSecret)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClientWithObjects(t, unsealSecret, tlsCASecret, tlsServerSecret)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	err := manager.deleteSecrets(ctx, cluster)
 	if err != nil {
@@ -574,7 +574,7 @@ func TestDeleteSecrets(t *testing.T) {
 
 	for _, secretName := range secrets {
 		secret := &corev1.Secret{}
-		err = client.Get(ctx, types.NamespacedName{
+		err = k8sClient.Get(ctx, types.NamespacedName{
 			Namespace: cluster.Namespace,
 			Name:      secretName,
 		}, secret)
@@ -597,8 +597,8 @@ func TestDeleteSecrets_PartialMissing(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := newTestClientWithObjects(t, unsealSecret)
-	manager := NewManager(client, testScheme, "openbao-operator-system", "", nil)
+	k8sClient := newTestClientWithObjects(t, unsealSecret)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	// Should not error when some secrets are missing
 	err := manager.deleteSecrets(ctx, cluster)

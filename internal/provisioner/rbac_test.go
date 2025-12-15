@@ -2,6 +2,8 @@ package provisioner
 
 import (
 	"testing"
+
+	"github.com/openbao/operator/internal/constants"
 )
 
 func TestGenerateTenantRole(t *testing.T) {
@@ -53,9 +55,9 @@ func TestGenerateTenantRole(t *testing.T) {
 
 			// Verify labels
 			expectedLabels := map[string]string{
-				"app.kubernetes.io/name":       "openbao-operator",
-				"app.kubernetes.io/component":  "provisioner",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
+				constants.LabelAppComponent:  "provisioner",
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			}
 			for k, v := range expectedLabels {
 				if role.Labels[k] != v {
@@ -192,9 +194,9 @@ func TestGenerateTenantRoleBinding(t *testing.T) {
 
 			// Verify labels
 			expectedLabels := map[string]string{
-				"app.kubernetes.io/name":       "openbao-operator",
-				"app.kubernetes.io/component":  "provisioner",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
+				constants.LabelAppComponent:  "provisioner",
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			}
 			for k, v := range expectedLabels {
 				if roleBinding.Labels[k] != v {

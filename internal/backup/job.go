@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 )
 
 const (
@@ -24,17 +25,6 @@ const (
 )
 
 const (
-	// Backup executor images are built to run as a non-root user with stable
-	// UID/GID. The Job security context pins these IDs so that the backup
-	// container always runs as non-root even if the image metadata defaults to
-	// root.
-	backupUserID  = int64(1000)
-	backupGroupID = int64(1000)
-)
-
-const (
-	defaultS3Region = "us-east-1"
-
 	awsWebIdentityVolumeName     = "aws-iam-token"
 	awsWebIdentityMountPath      = "/var/run/secrets/aws"
 	awsWebIdentityTokenFile      = awsWebIdentityMountPath + "/token"
@@ -48,7 +38,6 @@ const (
 	backupTokenVolumeName        = "backup-token"
 	backupTokenMountPath         = "/etc/bao/backup/token"
 	backupTLSCAVolumeName        = "tls-ca"
-	backupTLSCAMountPath         = "/etc/bao/tls"
 )
 
 // ensureBackupJob creates or updates a Kubernetes Job for executing the backup.
@@ -168,28 +157,28 @@ func backupJobName(cluster *openbaov1alpha1.OpenBaoCluster, scheduledTime time.T
 func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*batchv1.Job, error) {
 	region := cluster.Spec.Backup.Target.Region
 	if region == "" {
-		region = defaultS3Region
+		region = constants.DefaultS3Region
 	}
 
 	// Build environment variables for the backup container
 	env := []corev1.EnvVar{
-		{Name: "CLUSTER_NAMESPACE", Value: cluster.Namespace},
-		{Name: "CLUSTER_NAME", Value: cluster.Name},
-		{Name: "CLUSTER_REPLICAS", Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
-		{Name: "BACKUP_ENDPOINT", Value: cluster.Spec.Backup.Target.Endpoint},
-		{Name: "BACKUP_BUCKET", Value: cluster.Spec.Backup.Target.Bucket},
-		{Name: "BACKUP_PATH_PREFIX", Value: cluster.Spec.Backup.Target.PathPrefix},
-		{Name: "BACKUP_REGION", Value: region},
-		{Name: "BACKUP_USE_PATH_STYLE", Value: fmt.Sprintf("%t", cluster.Spec.Backup.Target.UsePathStyle)},
+		{Name: constants.EnvClusterNamespace, Value: cluster.Namespace},
+		{Name: constants.EnvClusterName, Value: cluster.Name},
+		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
+		{Name: constants.EnvBackupEndpoint, Value: cluster.Spec.Backup.Target.Endpoint},
+		{Name: constants.EnvBackupBucket, Value: cluster.Spec.Backup.Target.Bucket},
+		{Name: constants.EnvBackupPathPrefix, Value: cluster.Spec.Backup.Target.PathPrefix},
+		{Name: constants.EnvBackupRegion, Value: region},
+		{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", cluster.Spec.Backup.Target.UsePathStyle)},
 	}
 
 	if cluster.Spec.Backup.Target.RoleARN != "" {
 		env = append(env, corev1.EnvVar{
-			Name:  "AWS_ROLE_ARN",
+			Name:  constants.EnvAWSRoleARN,
 			Value: cluster.Spec.Backup.Target.RoleARN,
 		})
 		env = append(env, corev1.EnvVar{
-			Name:  "AWS_WEB_IDENTITY_TOKEN_FILE",
+			Name:  constants.EnvAWSWebIdentityTokenFile,
 			Value: awsWebIdentityTokenFile,
 		})
 	}
@@ -197,13 +186,13 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 	// Add S3 upload configuration if specified
 	if cluster.Spec.Backup.Target.PartSize > 0 {
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_PART_SIZE",
+			Name:  constants.EnvBackupPartSize,
 			Value: fmt.Sprintf("%d", cluster.Spec.Backup.Target.PartSize),
 		})
 	}
 	if cluster.Spec.Backup.Target.Concurrency > 0 {
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_CONCURRENCY",
+			Name:  constants.EnvBackupConcurrency,
 			Value: fmt.Sprintf("%d", cluster.Spec.Backup.Target.Concurrency),
 		})
 	}
@@ -211,12 +200,12 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 	// Add credentials secret reference if provided
 	if cluster.Spec.Backup.Target.CredentialsSecretRef != nil {
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_CREDENTIALS_SECRET_NAME",
+			Name:  constants.EnvBackupCredentialsSecretName,
 			Value: cluster.Spec.Backup.Target.CredentialsSecretRef.Name,
 		})
 		if cluster.Spec.Backup.Target.CredentialsSecretRef.Namespace != "" {
 			env = append(env, corev1.EnvVar{
-				Name:  "BACKUP_CREDENTIALS_SECRET_NAMESPACE",
+				Name:  constants.EnvBackupCredentialsSecretNamespace,
 				Value: cluster.Spec.Backup.Target.CredentialsSecretRef.Namespace,
 			})
 		}
@@ -227,32 +216,32 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 	// and the JWT token is available from the projected volume
 	if cluster.Spec.Backup.JWTAuthRole != "" {
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_JWT_AUTH_ROLE",
+			Name:  constants.EnvBackupJWTAuthRole,
 			Value: cluster.Spec.Backup.JWTAuthRole,
 		})
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_AUTH_METHOD",
-			Value: "jwt",
+			Name:  constants.EnvBackupAuthMethod,
+			Value: constants.BackupAuthMethodJWT,
 		})
 	}
 
 	// Add token secret reference if provided (fallback for token-based auth)
 	if cluster.Spec.Backup.TokenSecretRef != nil {
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_TOKEN_SECRET_NAME",
+			Name:  constants.EnvBackupTokenSecretName,
 			Value: cluster.Spec.Backup.TokenSecretRef.Name,
 		})
 		if cluster.Spec.Backup.TokenSecretRef.Namespace != "" {
 			env = append(env, corev1.EnvVar{
-				Name:  "BACKUP_TOKEN_SECRET_NAMESPACE",
+				Name:  constants.EnvBackupTokenSecretNamespace,
 				Value: cluster.Spec.Backup.TokenSecretRef.Namespace,
 			})
 		}
 		// Only set auth method to token if JWT Auth is not configured
 		if cluster.Spec.Backup.JWTAuthRole == "" {
 			env = append(env, corev1.EnvVar{
-				Name:  "BACKUP_AUTH_METHOD",
-				Value: "token",
+				Name:  constants.EnvBackupAuthMethod,
+				Value: constants.BackupAuthMethodToken,
 			})
 		}
 	}
@@ -270,11 +259,11 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 			Name:      jobName,
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				"app.kubernetes.io/name":       "openbao",
-				"app.kubernetes.io/instance":   cluster.Name,
-				"app.kubernetes.io/managed-by": "openbao-operator",
-				"openbao.org/cluster":          cluster.Name,
-				"openbao.org/component":        "backup",
+				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:      cluster.Name,
+				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:   cluster.Name,
+				constants.LabelOpenBaoComponent: "backup",
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -283,11 +272,11 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app.kubernetes.io/name":       "openbao",
-						"app.kubernetes.io/instance":   cluster.Name,
-						"app.kubernetes.io/managed-by": "openbao-operator",
-						"openbao.org/cluster":          cluster.Name,
-						"openbao.org/component":        "backup",
+						constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+						constants.LabelAppInstance:      cluster.Name,
+						constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+						constants.LabelOpenBaoCluster:   cluster.Name,
+						constants.LabelOpenBaoComponent: "backup",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -298,9 +287,9 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 					AutomountServiceAccountToken: ptr.To(false),
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: ptr.To(true),
-						RunAsUser:    ptr.To(backupUserID),
-						RunAsGroup:   ptr.To(backupGroupID),
-						FSGroup:      ptr.To(backupGroupID),
+						RunAsUser:    ptr.To(constants.UserBackup),
+						RunAsGroup:   ptr.To(constants.GroupBackup),
+						FSGroup:      ptr.To(constants.GroupBackup),
 						SeccompProfile: &corev1.SeccompProfile{
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
@@ -348,7 +337,7 @@ func buildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster) []corev
 	// Mount TLS CA certificate
 	mounts = append(mounts, corev1.VolumeMount{
 		Name:      backupTLSCAVolumeName,
-		MountPath: backupTLSCAMountPath,
+		MountPath: constants.PathTLS,
 		ReadOnly:  true,
 	})
 
@@ -398,7 +387,7 @@ func buildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 		Name: backupTLSCAVolumeName,
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
-				SecretName: fmt.Sprintf("%s-tls-ca", cluster.Name),
+				SecretName: cluster.Name + constants.SuffixTLSCA,
 			},
 		},
 	})

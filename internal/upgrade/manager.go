@@ -24,19 +24,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 	"github.com/openbao/operator/internal/logging"
 	openbaoapi "github.com/openbao/operator/internal/openbao"
 )
 
 const (
-	// tlsCASecretSuffix is the suffix for the TLS CA secret.
-	tlsCASecretSuffix = "-tls-ca"
 	// headlessServiceSuffix is appended to cluster name for the headless service.
 	headlessServiceSuffix = ""
-	// openBaoContainerPort is the API port.
-	openBaoContainerPort = 8200
-	// upgradeServiceAccountSuffix is the suffix for upgrade ServiceAccount names.
-	upgradeServiceAccountSuffix = "-upgrade-serviceaccount"
 )
 
 var (
@@ -524,11 +519,11 @@ func (m *Manager) validateBackupConfig(ctx context.Context, cluster *openbaov1al
 func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, string, error) {
 	jobList := &batchv1.JobList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
-		"app.kubernetes.io/instance":   cluster.Name,
-		"app.kubernetes.io/managed-by": "openbao-operator",
-		"openbao.org/cluster":          cluster.Name,
-		"openbao.org/component":        "backup",
-		"openbao.org/backup-type":      "pre-upgrade",
+		constants.LabelAppInstance:    cluster.Name,
+		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster: cluster.Name,
+		"openbao.org/component":       "backup",
+		"openbao.org/backup-type":     "pre-upgrade",
 	})
 
 	if err := m.client.List(ctx, jobList,
@@ -589,25 +584,25 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 
 	// Build environment variables for the backup container
 	env := []corev1.EnvVar{
-		{Name: "CLUSTER_NAMESPACE", Value: cluster.Namespace},
-		{Name: "CLUSTER_NAME", Value: cluster.Name},
-		{Name: "CLUSTER_REPLICAS", Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
-		{Name: "BACKUP_ENDPOINT", Value: backupCfg.Target.Endpoint},
-		{Name: "BACKUP_BUCKET", Value: backupCfg.Target.Bucket},
-		{Name: "BACKUP_PATH_PREFIX", Value: backupCfg.Target.PathPrefix},
-		{Name: "BACKUP_FILENAME_PREFIX", Value: "pre-upgrade"}, // Prefix filenames with "pre-upgrade-"
-		{Name: "BACKUP_USE_PATH_STYLE", Value: fmt.Sprintf("%t", backupCfg.Target.UsePathStyle)},
+		{Name: constants.EnvClusterNamespace, Value: cluster.Namespace},
+		{Name: constants.EnvClusterName, Value: cluster.Name},
+		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
+		{Name: constants.EnvBackupEndpoint, Value: backupCfg.Target.Endpoint},
+		{Name: constants.EnvBackupBucket, Value: backupCfg.Target.Bucket},
+		{Name: constants.EnvBackupPathPrefix, Value: backupCfg.Target.PathPrefix},
+		{Name: constants.EnvBackupFilenamePrefix, Value: "pre-upgrade"}, // Prefix filenames with "pre-upgrade-"
+		{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", backupCfg.Target.UsePathStyle)},
 	}
 
 	// Add credentials secret reference if provided
 	if backupCfg.Target.CredentialsSecretRef != nil {
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_CREDENTIALS_SECRET_NAME",
+			Name:  constants.EnvBackupCredentialsSecretName,
 			Value: backupCfg.Target.CredentialsSecretRef.Name,
 		})
 		if backupCfg.Target.CredentialsSecretRef.Namespace != "" {
 			env = append(env, corev1.EnvVar{
-				Name:  "BACKUP_CREDENTIALS_SECRET_NAMESPACE",
+				Name:  constants.EnvBackupCredentialsSecretNamespace,
 				Value: backupCfg.Target.CredentialsSecretRef.Namespace,
 			})
 		}
@@ -616,32 +611,32 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 	// Add JWT Auth configuration (preferred method)
 	if backupCfg.JWTAuthRole != "" {
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_JWT_AUTH_ROLE",
+			Name:  constants.EnvBackupJWTAuthRole,
 			Value: backupCfg.JWTAuthRole,
 		})
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_AUTH_METHOD",
-			Value: "jwt",
+			Name:  constants.EnvBackupAuthMethod,
+			Value: constants.BackupAuthMethodJWT,
 		})
 	}
 
 	// Add token secret reference if provided (fallback for token-based auth)
 	if backupCfg.TokenSecretRef != nil {
 		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_TOKEN_SECRET_NAME",
+			Name:  constants.EnvBackupTokenSecretName,
 			Value: backupCfg.TokenSecretRef.Name,
 		})
 		if backupCfg.TokenSecretRef.Namespace != "" {
 			env = append(env, corev1.EnvVar{
-				Name:  "BACKUP_TOKEN_SECRET_NAMESPACE",
+				Name:  constants.EnvBackupTokenSecretNamespace,
 				Value: backupCfg.TokenSecretRef.Namespace,
 			})
 		}
 		// Only set auth method to token if JWT Auth is not configured
 		if backupCfg.JWTAuthRole == "" {
 			env = append(env, corev1.EnvVar{
-				Name:  "BACKUP_AUTH_METHOD",
-				Value: "token",
+				Name:  constants.EnvBackupAuthMethod,
+				Value: constants.BackupAuthMethodToken,
 			})
 		}
 	}
@@ -660,7 +655,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 			Name: "tls-ca",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: fmt.Sprintf("%s-tls-ca", cluster.Name),
+					SecretName: cluster.Name + constants.SuffixTLSCA,
 				},
 			},
 		},
@@ -669,7 +664,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 	volumeMounts := []corev1.VolumeMount{
 		{
 			Name:      "tls-ca",
-			MountPath: "/etc/bao/tls",
+			MountPath: constants.PathTLS,
 			ReadOnly:  true,
 		},
 	}
@@ -688,7 +683,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "backup-credentials",
-			MountPath: "/etc/bao/backup/credentials",
+			MountPath: constants.PathBackupCredentials,
 			ReadOnly:  true,
 		})
 	}
@@ -713,19 +708,19 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 	}
 
 	// Get backup ServiceAccount name
-	backupServiceAccountName := cluster.Name + "-backup-serviceaccount"
+	backupServiceAccountName := cluster.Name + constants.SuffixBackupServiceAccount
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				"app.kubernetes.io/name":       "openbao",
-				"app.kubernetes.io/instance":   cluster.Name,
-				"app.kubernetes.io/managed-by": "openbao-operator",
-				"openbao.org/cluster":          cluster.Name,
-				"openbao.org/component":        "backup",
-				"openbao.org/backup-type":      "pre-upgrade",
+				constants.LabelAppName:           constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:       cluster.Name,
+				constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:    cluster.Name,
+				constants.LabelOpenBaoComponent:  "backup",
+				constants.LabelOpenBaoBackupType: "pre-upgrade",
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -734,21 +729,21 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app.kubernetes.io/name":       "openbao",
-						"app.kubernetes.io/instance":   cluster.Name,
-						"app.kubernetes.io/managed-by": "openbao-operator",
-						"openbao.org/cluster":          cluster.Name,
-						"openbao.org/component":        "backup",
-						"openbao.org/backup-type":      "pre-upgrade",
+						constants.LabelAppName:           constants.LabelValueAppNameOpenBao,
+						constants.LabelAppInstance:       cluster.Name,
+						constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+						constants.LabelOpenBaoCluster:    cluster.Name,
+						constants.LabelOpenBaoComponent:  "backup",
+						constants.LabelOpenBaoBackupType: "pre-upgrade",
 					},
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: backupServiceAccountName,
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: ptr.To(true),
-						RunAsUser:    ptr.To(int64(1000)),
-						RunAsGroup:   ptr.To(int64(1000)),
-						FSGroup:      ptr.To(int64(1000)),
+						RunAsUser:    ptr.To(constants.UserBackup),
+						RunAsGroup:   ptr.To(constants.GroupBackup),
+						FSGroup:      ptr.To(constants.GroupBackup),
 						SeccompProfile: &corev1.SeccompProfile{
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
@@ -1159,9 +1154,9 @@ func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, clust
 func (m *Manager) getClusterPods(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) ([]corev1.Pod, error) {
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
-		"app.kubernetes.io/instance":   cluster.Name,
-		"app.kubernetes.io/name":       "openbao",
-		"app.kubernetes.io/managed-by": "openbao-operator",
+		constants.LabelAppInstance:  cluster.Name,
+		constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+		constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 	})
 
 	if err := m.client.List(ctx, podList,
@@ -1178,7 +1173,7 @@ func (m *Manager) getClusterPods(ctx context.Context, cluster *openbaov1alpha1.O
 	statefulSetPrefix := cluster.Name + "-"
 	for _, pod := range podList.Items {
 		// Skip backup job pods (they have the backup component label)
-		if pod.Labels["openbao.org/component"] == "backup" {
+		if pod.Labels[constants.LabelOpenBaoComponent] == "backup" {
 			continue
 		}
 		// Only include pods that match the StatefulSet naming pattern
@@ -1206,7 +1201,7 @@ func (m *Manager) getClusterPods(ctx context.Context, cluster *openbaov1alpha1.O
 
 // getClusterCACert retrieves the cluster's CA certificate for TLS connections.
 func (m *Manager) getClusterCACert(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) ([]byte, error) {
-	secretName := cluster.Name + tlsCASecretSuffix
+	secretName := cluster.Name + constants.SuffixTLSCA
 	secret := &corev1.Secret{}
 
 	if err := m.client.Get(ctx, types.NamespacedName{
@@ -1336,11 +1331,11 @@ func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, logger logr.L
 				Name:      saName,
 				Namespace: cluster.Namespace,
 				Labels: map[string]string{
-					"app.kubernetes.io/name":       "openbao",
-					"app.kubernetes.io/instance":   cluster.Name,
-					"app.kubernetes.io/managed-by": "openbao-operator",
-					"openbao.org/cluster":          cluster.Name,
-					"openbao.org/component":        "upgrade",
+					constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+					constants.LabelAppInstance:      cluster.Name,
+					constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+					constants.LabelOpenBaoCluster:   cluster.Name,
+					constants.LabelOpenBaoComponent: "upgrade",
 				},
 			},
 		}
@@ -1363,11 +1358,11 @@ func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, logger logr.L
 	}
 	needsUpdate := false
 	expectedLabels := map[string]string{
-		"app.kubernetes.io/name":       "openbao",
-		"app.kubernetes.io/instance":   cluster.Name,
-		"app.kubernetes.io/managed-by": "openbao-operator",
-		"openbao.org/cluster":          cluster.Name,
-		"openbao.org/component":        "upgrade",
+		constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:      cluster.Name,
+		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:   cluster.Name,
+		constants.LabelOpenBaoComponent: "upgrade",
 	}
 	for k, v := range expectedLabels {
 		if sa.Labels[k] != v {
@@ -1387,7 +1382,7 @@ func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, logger logr.L
 
 // upgradeServiceAccountName returns the name for the upgrade ServiceAccount.
 func upgradeServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + upgradeServiceAccountSuffix
+	return cluster.Name + constants.SuffixUpgradeServiceAccount
 }
 
 // getServiceAccountToken creates a TokenRequest for the specified ServiceAccount and returns the token.
@@ -1461,7 +1456,7 @@ func (m *Manager) getPodURL(cluster *openbaov1alpha1.OpenBaoCluster, podName str
 	// Format: <pod-name>.<service-name>.<namespace>.svc:<port>
 	serviceName := cluster.Name + headlessServiceSuffix
 	return fmt.Sprintf("https://%s.%s.%s.svc:%d",
-		podName, serviceName, cluster.Namespace, openBaoContainerPort)
+		podName, serviceName, cluster.Namespace, constants.PortAPI)
 }
 
 // isPodReady checks if a pod has the Ready condition set to True.

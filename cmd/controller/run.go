@@ -26,6 +26,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
 	"math/big"
@@ -72,7 +73,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(openbaov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(gatewayv1.Install(scheme))
-	utilruntime.Must(gatewayv1alpha2.AddToScheme(scheme))
+	utilruntime.Must(gatewayv1alpha2.Install(scheme))
 }
 
 // discoverOIDC fetches the Kubernetes OIDC issuer configuration at operator startup.
@@ -83,7 +84,11 @@ func init() {
 //	https://kubernetes.default.svc
 //
 // Returns empty strings if discovery fails (operator can still run for Development profile clusters).
-func discoverOIDC(ctx context.Context, cfg *rest.Config, baseURL string) (issuerURL string, caBundle string, err error) {
+func discoverOIDC(
+	ctx context.Context,
+	cfg *rest.Config,
+	baseURL string,
+) (issuerURL string, caBundle string, err error) {
 	// 1. Try well-known endpoint using K8s client transport
 	if baseURL == "" {
 		baseURL = "https://kubernetes.default.svc"
@@ -95,18 +100,18 @@ func discoverOIDC(ctx context.Context, cfg *rest.Config, baseURL string) (issuer
 		return "", "", fmt.Errorf("failed to create transport: %w", err)
 	}
 
-	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+	httpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, wellKnownURL, nil)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create OIDC discovery request: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		// TIGHTENED: Return error instead of fallback
 		return "", "", fmt.Errorf("failed to fetch OIDC well-known endpoint: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", "", fmt.Errorf("OIDC well-known endpoint returned status %d", resp.StatusCode)
@@ -290,17 +295,17 @@ func fetchOIDCJWKSKeys(ctx context.Context, cfg *rest.Config, jwksURL string) ([
 		return nil, fmt.Errorf("failed to create transport: %w", err)
 	}
 
-	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+	httpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create jwks request: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch jwks endpoint: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("jwks endpoint returned status %d", resp.StatusCode)
@@ -435,7 +440,6 @@ func Run() {
 		&corev1.ServiceAccount{},
 		&corev1.Pod{},
 		&corev1.PersistentVolumeClaim{},
-		&corev1.Endpoints{},
 		&discoveryv1.EndpointSlice{},
 		&gatewayv1.HTTPRoute{},
 		&gatewayv1alpha2.TLSRoute{},
@@ -513,19 +517,20 @@ func Run() {
 		if err != nil {
 			setupLog.Error(err, "Failed to create transport for OIDC discovery")
 		} else {
-			client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+			httpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, oidcWellKnownURL, nil)
 			if err != nil {
 				setupLog.Error(err, "Failed to create OIDC discovery request")
 			} else {
-				resp, err := client.Do(req)
+				resp, err := httpClient.Do(req)
 				if err != nil {
 					setupLog.Error(err, "Failed to fetch OIDC discovery document for jwks_uri")
 				} else {
 					func() {
-						defer resp.Body.Close()
+						defer func() { _ = resp.Body.Close() }()
 						if resp.StatusCode != http.StatusOK {
-							setupLog.Error(fmt.Errorf("OIDC well-known endpoint returned status %d", resp.StatusCode), "Failed to fetch OIDC discovery document for jwks_uri")
+							statusErr := fmt.Errorf("OIDC well-known endpoint returned status %d", resp.StatusCode)
+							setupLog.Error(statusErr, "Failed to fetch OIDC discovery document for jwks_uri")
 							return
 						}
 
@@ -535,7 +540,8 @@ func Run() {
 							return
 						}
 						if doc.JWKSURI == "" {
-							setupLog.Error(fmt.Errorf("OIDC config missing jwks_uri"), "Failed to fetch OIDC discovery document for jwks_uri")
+							missingJWKSURI := errors.New("OIDC config missing jwks_uri")
+							setupLog.Error(missingJWKSURI, "Failed to fetch OIDC discovery document for jwks_uri")
 							return
 						}
 

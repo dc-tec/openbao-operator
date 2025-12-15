@@ -8,6 +8,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+const testImageDigest = "test-image@sha256:abc123"
+
 func TestNewImageVerifier(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
@@ -87,7 +89,7 @@ func TestImageVerifier_Verify_CacheHit(t *testing.T) {
 	verifier := NewImageVerifier(logger, client, nil)
 
 	// Use a digest for cache key (as the new implementation uses digest)
-	digest := "test-image@sha256:abc123"
+	digest := testImageDigest
 	config := VerifyConfig{
 		PublicKey: "test-public-key",
 	}
@@ -161,7 +163,7 @@ func TestImageVerifier_Verify_ContextCancellation(t *testing.T) {
 func TestVerificationCache_IsVerifiedByKey(t *testing.T) {
 	cache := newVerificationCache()
 
-	cacheKey := "test-image@sha256:abc123@key:1234567890abcdef"
+	cacheKey := testImageDigest + "@key:1234567890abcdef"
 
 	// Initially not verified
 	if cache.isVerifiedByKey(cacheKey) {
@@ -217,7 +219,7 @@ func TestVerificationCache_MarkVerifiedByKey(t *testing.T) {
 func TestVerificationCache_ConcurrentAccess(t *testing.T) {
 	cache := newVerificationCache()
 
-	cacheKey := "test-image@sha256:abc123@key:1234567890abcdef"
+	cacheKey := testImageDigest + "@key:1234567890abcdef"
 
 	// Test concurrent writes
 	done := make(chan bool, 10)
@@ -271,11 +273,11 @@ func TestImageVerifier_CacheKey_StaticKey(t *testing.T) {
 	}{
 		{
 			name:   "simple digest and key",
-			digest: "test-image@sha256:abc123",
+			digest: testImageDigest,
 			config: VerifyConfig{
 				PublicKey: "test-key",
 			},
-			wantPrefix: "test-image@sha256:abc123@key:",
+			wantPrefix: testImageDigest + "@key:",
 		},
 		{
 			name:   "digest with full hash",
@@ -287,11 +289,11 @@ func TestImageVerifier_CacheKey_StaticKey(t *testing.T) {
 		},
 		{
 			name:   "long public key",
-			digest: "test-image@sha256:abc123",
+			digest: testImageDigest,
 			config: VerifyConfig{
 				PublicKey: "very-long-public-key-that-should-be-truncated-in-cache-key",
 			},
-			wantPrefix: "test-image@sha256:abc123@key:",
+			wantPrefix: testImageDigest + "@key:",
 		},
 	}
 
@@ -317,14 +319,14 @@ func TestImageVerifier_CacheKey_Keyless(t *testing.T) {
 	client := fake.NewClientBuilder().Build()
 	verifier := NewImageVerifier(logger, client, nil)
 
-	digest := "test-image@sha256:abc123"
+	digest := testImageDigest
 	config := VerifyConfig{
 		Issuer:  "https://token.actions.githubusercontent.com",
 		Subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0",
 	}
 
 	key := verifier.cacheKey(digest, config)
-	expectedPrefix := "test-image@sha256:abc123@oidc:https://token.actions.githubusercontent.com|https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0"
+	expectedPrefix := testImageDigest + "@oidc:https://token.actions.githubusercontent.com|https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0"
 
 	if key != expectedPrefix {
 		t.Errorf("cacheKey() = %v, want %v", key, expectedPrefix)
@@ -342,7 +344,7 @@ func TestImageVerifier_CacheKey_DifferentModes(t *testing.T) {
 	client := fake.NewClientBuilder().Build()
 	verifier := NewImageVerifier(logger, client, nil)
 
-	digest := "test-image@sha256:abc123"
+	digest := testImageDigest
 	staticKeyConfig := VerifyConfig{
 		PublicKey: "test-key",
 	}

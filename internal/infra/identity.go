@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 )
 
 // ensureServiceAccount manages the ServiceAccount for the OpenBaoCluster.
@@ -206,7 +207,7 @@ func (m *Manager) ensureRBAC(ctx context.Context, logger logr.Logger, cluster *o
 
 // serviceAccountName returns the name for the ServiceAccount resource.
 func serviceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + serviceAccountSuffix
+	return cluster.Name + constants.SuffixServiceAccount
 }
 
 // deleteServiceAccount removes the ServiceAccount for the OpenBaoCluster.

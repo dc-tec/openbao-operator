@@ -12,7 +12,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 )
+
+const testCertHash = "test-hash-123"
 
 func newTestClientset(pods ...*corev1.Pod) kubernetes.Interface {
 	objects := []runtime.Object{}
@@ -22,6 +25,7 @@ func newTestClientset(pods ...*corev1.Pod) kubernetes.Interface {
 	return fake.NewSimpleClientset(objects...)
 }
 
+//nolint:unparam // Keeping parameters makes tests easier to expand later.
 func newTestCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 	return &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -69,9 +73,9 @@ func TestSignalReload_AnnotatesReadyPods(t *testing.T) {
 			Name:      "test-cluster-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				"app.kubernetes.io/instance":   "test-cluster",
-				"app.kubernetes.io/name":       "openbao",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppInstance:  "test-cluster",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
 		Status: corev1.PodStatus{
@@ -90,7 +94,7 @@ func TestSignalReload_AnnotatesReadyPods(t *testing.T) {
 
 	cluster := newTestCluster("test-cluster", "default")
 	ctx := context.Background()
-	certHash := "test-hash-123"
+	certHash := testCertHash
 
 	err := signaler.SignalReload(ctx, logger, cluster, certHash)
 	if err != nil {
@@ -114,9 +118,9 @@ func TestSignalReload_SkipsNonReadyPods(t *testing.T) {
 			Name:      "test-cluster-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				"app.kubernetes.io/instance":   "test-cluster",
-				"app.kubernetes.io/name":       "openbao",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppInstance:  "test-cluster",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
 		Status: corev1.PodStatus{
@@ -135,7 +139,7 @@ func TestSignalReload_SkipsNonReadyPods(t *testing.T) {
 
 	cluster := newTestCluster("test-cluster", "default")
 	ctx := context.Background()
-	certHash := "test-hash-123"
+	certHash := testCertHash
 
 	err := signaler.SignalReload(ctx, logger, cluster, certHash)
 	if err != nil {
@@ -159,12 +163,12 @@ func TestSignalReload_SkipsPodsWithCurrentHash(t *testing.T) {
 			Name:      "test-cluster-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				"app.kubernetes.io/instance":   "test-cluster",
-				"app.kubernetes.io/name":       "openbao",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppInstance:  "test-cluster",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 			Annotations: map[string]string{
-				tlsCertHashAnnotation: "test-hash-123",
+				tlsCertHashAnnotation: testCertHash,
 			},
 		},
 		Status: corev1.PodStatus{
@@ -183,7 +187,7 @@ func TestSignalReload_SkipsPodsWithCurrentHash(t *testing.T) {
 
 	cluster := newTestCluster("test-cluster", "default")
 	ctx := context.Background()
-	certHash := "test-hash-123" // Same hash
+	certHash := testCertHash // Same hash
 
 	err := signaler.SignalReload(ctx, logger, cluster, certHash)
 	if err != nil {
@@ -207,9 +211,9 @@ func TestSignalReload_UpdatesMultiplePods(t *testing.T) {
 			Name:      "test-cluster-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				"app.kubernetes.io/instance":   "test-cluster",
-				"app.kubernetes.io/name":       "openbao",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppInstance:  "test-cluster",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
 		Status: corev1.PodStatus{
@@ -227,9 +231,9 @@ func TestSignalReload_UpdatesMultiplePods(t *testing.T) {
 			Name:      "test-cluster-1",
 			Namespace: "default",
 			Labels: map[string]string{
-				"app.kubernetes.io/instance":   "test-cluster",
-				"app.kubernetes.io/name":       "openbao",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppInstance:  "test-cluster",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
 		Status: corev1.PodStatus{
@@ -248,7 +252,7 @@ func TestSignalReload_UpdatesMultiplePods(t *testing.T) {
 
 	cluster := newTestCluster("test-cluster", "default")
 	ctx := context.Background()
-	certHash := "test-hash-123"
+	certHash := testCertHash
 
 	err := signaler.SignalReload(ctx, logger, cluster, certHash)
 	if err != nil {

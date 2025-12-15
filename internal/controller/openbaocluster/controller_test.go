@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 )
 
 var _ = Describe("OpenBaoCluster Controller", func() {
@@ -220,14 +221,14 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 
 			caSecret := &corev1.Secret{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      cluster.Name + "-tls-ca",
+				Name:      cluster.Name + constants.SuffixTLSCA,
 				Namespace: cluster.Namespace,
 			}, caSecret)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 
 			serverSecret := &corev1.Secret{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      cluster.Name + "-tls-server",
+				Name:      cluster.Name + constants.SuffixTLSServer,
 				Namespace: cluster.Namespace,
 			}, serverSecret)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
@@ -251,7 +252,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 
 			caSecret := &corev1.Secret{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      cluster.Name + "-tls-ca",
+				Name:      cluster.Name + constants.SuffixTLSCA,
 				Namespace: cluster.Namespace,
 			}, caSecret)
 			Expect(err).NotTo(HaveOccurred())
@@ -260,7 +261,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 
 			serverSecret := &corev1.Secret{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      cluster.Name + "-tls-server",
+				Name:      cluster.Name + constants.SuffixTLSServer,
 				Namespace: cluster.Namespace,
 			}, serverSecret)
 			Expect(err).NotTo(HaveOccurred())
@@ -624,7 +625,7 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 			// Verify cluster A has its own resources in tenant-a namespace
 			caSecretA := &corev1.Secret{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      clusterA.Name + "-tls-ca",
+				Name:      clusterA.Name + constants.SuffixTLSCA,
 				Namespace: "tenant-a",
 			}, caSecretA)
 			Expect(err).NotTo(HaveOccurred())
@@ -632,7 +633,7 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 			// Verify cluster B has its own resources in tenant-b namespace
 			caSecretB := &corev1.Secret{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      clusterB.Name + "-tls-ca",
+				Name:      clusterB.Name + constants.SuffixTLSCA,
 				Namespace: "tenant-b",
 			}, caSecretB)
 			Expect(err).NotTo(HaveOccurred())
@@ -690,7 +691,7 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 			}
 
 			// Verify uniquely named resources exist in each namespace
-			resourceSuffixes := []string{"-tls-ca", "-tls-server", "-unseal-key", "-config"}
+			resourceSuffixes := []string{constants.SuffixTLSCA, constants.SuffixTLSServer, constants.SuffixUnsealKey, constants.SuffixConfigMap}
 			for _, suffix := range resourceSuffixes {
 				var resourceA, resourceB client.Object
 				if suffix == "-config" {

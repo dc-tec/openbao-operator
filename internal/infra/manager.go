@@ -10,17 +10,16 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	configbuilder "github.com/openbao/operator/internal/config"
+	"github.com/openbao/operator/internal/constants"
 )
 
 const (
-	configMapSuffix          = "-config"
 	configInitMapSuffix      = "-config-init"
-	unsealSecretSuffix       = "-unseal-key"
 	unsealSecretKey          = "key"
 	unsealKeyBytes           = 32
-	dataVolumeName           = "data"
-	tlsVolumeName            = "tls"
-	configVolumeName         = "config"
+	dataVolumeName           = constants.VolumeData
+	tlsVolumeName            = constants.VolumeTLS
+	configVolumeName         = constants.VolumeConfig
 	configInitVolumeName     = "config-init"
 	configRenderedVolumeName = "config-rendered"
 	unsealVolumeName         = "unseal"
@@ -34,33 +33,22 @@ const (
 	httpRouteSuffix          = "-httproute"
 	tlsRouteSuffix           = "-tlsroute"
 	backendTLSPolicySuffix   = "-backend-tls-policy"
-	tlsServerSecretSuffix    = "-tls-server"
-	tlsCASecretSuffix        = "-tls-ca"
-	openBaoContainerName     = "openbao"
-	openBaoContainerPort     = 8200
-	openBaoClusterPort       = 8201
-	openBaoConfigMountPath   = "/etc/bao/config"
+	openBaoConfigMountPath   = constants.PathConfig
 	openBaoRenderedConfig    = "/etc/bao/rendered-config/config.hcl"
-	openBaoTLSMountPath      = "/etc/bao/tls"
+	openBaoTLSMountPath      = constants.PathTLS
 	openBaoUnsealMountPath   = "/etc/bao/unseal"
-	openBaoDataPath          = "/bao/data"
+	openBaoDataPath          = constants.PathData
 	serviceAccountMountPath  = "/var/run/secrets/kubernetes.io/serviceaccount"
 	kubeRootCAConfigMapName  = "kube-root-ca.crt"
-	openBaoBinaryName        = "bao"
-	serviceAccountSuffix     = "-serviceaccount"
+	openBaoBinaryName        = constants.BinaryNameOpenBao
 	configHashAnnotation     = "openbao.org/config-hash"
-
-	labelAppName        = "app.kubernetes.io/name"
-	labelAppInstance    = "app.kubernetes.io/instance"
-	labelAppManagedBy   = "app.kubernetes.io/managed-by"
-	labelOpenBaoCluster = "openbao.org/cluster"
 
 	// OpenBao images are built to run as a non-root user with stable UID/GID.
 	// The StatefulSet security context pins these IDs so that both the main
 	// OpenBao container and the config-init container run as non-root even if
 	// the image metadata defaults to root.
-	openBaoUserID  = int64(100)
-	openBaoGroupID = int64(1000)
+	openBaoUserID  = constants.UserOpenBao
+	openBaoGroupID = constants.GroupOpenBao
 
 	// File permissions: 0440 for secrets (owner/group read-only), 0644 for configs
 	secretFileMode = int32(0440)
@@ -114,8 +102,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	infraDetails := configbuilder.InfrastructureDetails{
 		HeadlessServiceName: headlessServiceName(cluster),
 		Namespace:           cluster.Namespace,
-		APIPort:             openBaoContainerPort,
-		ClusterPort:         openBaoClusterPort,
+		APIPort:             constants.PortAPI,
+		ClusterPort:         constants.PortCluster,
 	}
 
 	renderedConfig, err := configbuilder.RenderHCL(cluster, infraDetails)
@@ -260,10 +248,10 @@ func (m *Manager) Cleanup(ctx context.Context, logger logr.Logger, cluster *open
 
 func infraLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
 	return map[string]string{
-		labelAppName:        "openbao",
-		labelAppInstance:    cluster.Name,
-		labelAppManagedBy:   "openbao-operator",
-		labelOpenBaoCluster: cluster.Name,
+		constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:    cluster.Name,
+		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster: cluster.Name,
 	}
 }
 
@@ -272,11 +260,11 @@ func podSelectorLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]strin
 }
 
 func unsealSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + unsealSecretSuffix
+	return cluster.Name + constants.SuffixUnsealKey
 }
 
 func configMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + configMapSuffix
+	return cluster.Name + constants.SuffixConfigMap
 }
 
 func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -284,11 +272,11 @@ func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 }
 
 func tlsServerSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + tlsServerSecretSuffix
+	return cluster.Name + constants.SuffixTLSServer
 }
 
 func tlsCASecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + tlsCASecretSuffix
+	return cluster.Name + constants.SuffixTLSCA
 }
 
 func headlessServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {

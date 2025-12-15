@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/openbao/operator/internal/constants"
 )
 
 const (
@@ -41,7 +43,7 @@ func renderConfig(templatePath, outputPath, hostname, podIP, selfInitPath string
 		// Wait briefly for POD_IP to become available (up to 5 seconds)
 		for i := 0; i < 10; i++ {
 			time.Sleep(500 * time.Millisecond)
-			podIP = strings.TrimSpace(os.Getenv("POD_IP"))
+			podIP = strings.TrimSpace(os.Getenv(constants.EnvPodIP))
 			if podIP != "" {
 				break
 			}
@@ -150,8 +152,8 @@ func main() {
 	if err := renderConfig(
 		*templatePath,
 		*outputPath,
-		os.Getenv("HOSTNAME"),
-		os.Getenv("POD_IP"),
+		os.Getenv(constants.EnvHostname),
+		os.Getenv(constants.EnvPodIP),
 		*selfInitPath,
 	); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "bao-config-init error: %v\n", err)
@@ -165,71 +167,45 @@ func main() {
 func copyWrapper(sourcePath string) error {
 	const (
 		wrapperDestPath = "/utils/bao-wrapper"
-		wrapperFileMode = 0o755 // Executable permissions
 	)
 
-	// Ensure destination directory exists
-	destDir := filepath.Dir(wrapperDestPath)
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create destination directory %q: %w", destDir, err)
-	}
-
-	// Open source file
-	sourceFile, err := os.Open(sourcePath)
-	if err != nil {
-		return fmt.Errorf("failed to open source wrapper file %q: %w", sourcePath, err)
-	}
-	defer sourceFile.Close()
-
-	// Create destination file
-	destFile, err := os.OpenFile(wrapperDestPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, wrapperFileMode)
-	if err != nil {
-		return fmt.Errorf("failed to create destination wrapper file %q: %w", wrapperDestPath, err)
-	}
-	defer destFile.Close()
-
-	// Copy file contents
-	if _, err := io.Copy(destFile, sourceFile); err != nil {
-		return fmt.Errorf("failed to copy wrapper binary: %w", err)
-	}
-
-	// Ensure executable permissions (even though we set them on OpenFile, chmod for safety)
-	if err := os.Chmod(wrapperDestPath, wrapperFileMode); err != nil {
-		return fmt.Errorf("failed to set executable permissions on wrapper: %w", err)
-	}
-
-	return nil
+	return copyBinary(sourcePath, wrapperDestPath)
 }
 
 func copyProbe(sourcePath string) error {
 	const (
 		probeDestPath = "/utils/bao-probe"
-		probeFileMode = 0o755 // Executable permissions
 	)
 
-	destDir := filepath.Dir(probeDestPath)
+	return copyBinary(sourcePath, probeDestPath)
+}
+
+func copyBinary(sourcePath string, destPath string) error {
+	const fileMode = 0o755
+
+	destDir := filepath.Dir(destPath)
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination directory %q: %w", destDir, err)
 	}
 
 	sourceFile, err := os.Open(sourcePath)
 	if err != nil {
-		return fmt.Errorf("failed to open source probe file %q: %w", sourcePath, err)
+		return fmt.Errorf("failed to open source file %q: %w", sourcePath, err)
 	}
-	defer sourceFile.Close()
+	defer func() { _ = sourceFile.Close() }()
 
-	destFile, err := os.OpenFile(probeDestPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, probeFileMode)
+	destFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fileMode)
 	if err != nil {
-		return fmt.Errorf("failed to create destination probe file %q: %w", probeDestPath, err)
+		return fmt.Errorf("failed to create destination file %q: %w", destPath, err)
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	if _, err := io.Copy(destFile, sourceFile); err != nil {
-		return fmt.Errorf("failed to copy probe binary: %w", err)
+		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
-	if err := os.Chmod(probeDestPath, probeFileMode); err != nil {
-		return fmt.Errorf("failed to set executable permissions on probe: %w", err)
+	if err := os.Chmod(destPath, fileMode); err != nil {
+		return fmt.Errorf("failed to set executable permissions on file %q: %w", destPath, err)
 	}
 
 	return nil

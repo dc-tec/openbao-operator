@@ -13,6 +13,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/openbao/operator/internal/constants"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,9 +22,6 @@ import (
 )
 
 const (
-	tlsCASecretSuffix     = "-tls-ca"
-	tlsServerSecretSuffix = "-tls-server"
-
 	caCertKey = "ca.crt"
 	caKeyKey  = "ca.key"
 
@@ -37,7 +35,13 @@ const (
 //
 // The SANs match the operator-generated certificate shape closely enough to
 // satisfy probes (localhost) and in-cluster DNS names.
-func EnsureExternalTLSSecrets(ctx context.Context, c client.Client, namespace string, clusterName string, replicas int32) error {
+func EnsureExternalTLSSecrets(
+	ctx context.Context,
+	c client.Client,
+	namespace string,
+	clusterName string,
+	replicas int32,
+) error {
 	if c == nil {
 		return fmt.Errorf("kubernetes client is required")
 	}
@@ -56,13 +60,19 @@ func EnsureExternalTLSSecrets(ctx context.Context, c client.Client, namespace st
 		return err
 	}
 
-	serverCertPEM, serverKeyPEM, err := generateServerCert(namespace, clusterName, replicas, caCertPEM, caKeyPEM)
+	serverCertPEM, serverKeyPEM, err := generateServerCert(
+		namespace,
+		clusterName,
+		replicas,
+		caCertPEM,
+		caKeyPEM,
+	)
 	if err != nil {
 		return err
 	}
 
-	caSecretName := clusterName + tlsCASecretSuffix
-	serverSecretName := clusterName + tlsServerSecretSuffix
+	caSecretName := clusterName + constants.SuffixTLSCA
+	serverSecretName := clusterName + constants.SuffixTLSServer
 
 	caSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -103,7 +113,11 @@ func EnsureExternalTLSSecrets(ctx context.Context, c client.Client, namespace st
 	if err := c.Get(ctx, types.NamespacedName{Name: caSecretName, Namespace: namespace}, &corev1.Secret{}); err != nil {
 		return fmt.Errorf("failed to read back external TLS CA Secret %s/%s: %w", namespace, caSecretName, err)
 	}
-	if err := c.Get(ctx, types.NamespacedName{Name: serverSecretName, Namespace: namespace}, &corev1.Secret{}); err != nil {
+	if err := c.Get(
+		ctx,
+		types.NamespacedName{Name: serverSecretName, Namespace: namespace},
+		&corev1.Secret{},
+	); err != nil {
 		return fmt.Errorf("failed to read back external TLS server Secret %s/%s: %w", namespace, serverSecretName, err)
 	}
 
@@ -150,7 +164,13 @@ func generateCA(clusterName string) ([]byte, []byte, error) {
 	return certPEM, keyPEM, nil
 }
 
-func generateServerCert(namespace string, clusterName string, replicas int32, caCertPEM []byte, caKeyPEM []byte) ([]byte, []byte, error) {
+func generateServerCert(
+	namespace string,
+	clusterName string,
+	replicas int32,
+	caCertPEM []byte,
+	caKeyPEM []byte,
+) ([]byte, []byte, error) {
 	caCert, caKey, err := parseCA(caCertPEM, caKeyPEM)
 	if err != nil {
 		return nil, nil, err

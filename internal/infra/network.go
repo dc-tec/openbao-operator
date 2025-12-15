@@ -21,6 +21,7 @@ import (
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 )
 
 // ErrGatewayAPIMissing indicates that Gateway API CRDs are not installed in the
@@ -58,7 +59,7 @@ func (m *Manager) ensureHeadlessService(ctx context.Context, logger logr.Logger,
 				Ports: []corev1.ServicePort{
 					{
 						Name:     "api",
-						Port:     openBaoContainerPort,
+						Port:     constants.PortAPI,
 						Protocol: corev1.ProtocolTCP,
 					},
 				},
@@ -91,13 +92,13 @@ func (m *Manager) ensureHeadlessService(ctx context.Context, logger logr.Logger,
 		updated.Spec.Ports = []corev1.ServicePort{
 			{
 				Name:     "api",
-				Port:     openBaoContainerPort,
+				Port:     constants.PortAPI,
 				Protocol: corev1.ProtocolTCP,
 			},
 		}
 	} else {
 		updated.Spec.Ports[0].Name = "api"
-		updated.Spec.Ports[0].Port = openBaoContainerPort
+		updated.Spec.Ports[0].Port = constants.PortAPI
 		updated.Spec.Ports[0].Protocol = corev1.ProtocolTCP
 	}
 
@@ -168,7 +169,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger,
 				Ports: []corev1.ServicePort{
 					{
 						Name:     "api",
-						Port:     openBaoContainerPort,
+						Port:     constants.PortAPI,
 						Protocol: corev1.ProtocolTCP,
 					},
 				},
@@ -218,7 +219,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger,
 	updated.Spec.Ports = []corev1.ServicePort{
 		{
 			Name:     "api",
-			Port:     openBaoContainerPort,
+			Port:     constants.PortAPI,
 			Protocol: corev1.ProtocolTCP,
 		},
 	}
@@ -341,7 +342,7 @@ func buildIngress(cluster *openbaov1alpha1.OpenBaoCluster) *networkingv1.Ingress
 							Service: &networkingv1.IngressServiceBackend{
 								Name: backendServiceName,
 								Port: networkingv1.ServiceBackendPort{
-									Number: openBaoContainerPort,
+									Number: constants.PortAPI,
 								},
 							},
 						},
@@ -520,7 +521,7 @@ func buildHTTPRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.HTTPRout
 	backendServiceName := externalServiceName(cluster)
 	hostname := gatewayv1.Hostname(gw.Hostname)
 	pathType := gatewayv1.PathMatchPathPrefix
-	port := gatewayv1.PortNumber(openBaoContainerPort)
+	port := gatewayv1.PortNumber(constants.PortAPI)
 	gatewayNS := gatewayv1.Namespace(gatewayNamespace)
 
 	httpRoute := &gatewayv1.HTTPRoute{
@@ -689,7 +690,7 @@ func buildTLSRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1alpha2.TLS
 
 	backendServiceName := externalServiceName(cluster)
 	hostname := gatewayv1alpha2.Hostname(gw.Hostname)
-	port := gatewayv1alpha2.PortNumber(openBaoContainerPort)
+	port := gatewayv1alpha2.PortNumber(constants.PortAPI)
 	gatewayNS := gatewayv1alpha2.Namespace(gatewayNamespace)
 
 	tlsRoute := &gatewayv1alpha2.TLSRoute{
@@ -866,7 +867,7 @@ func buildBackendTLSPolicy(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.B
 	}
 
 	backendServiceName := externalServiceName(cluster)
-	caConfigMapName := cluster.Name + tlsCASecretSuffix
+	caConfigMapName := cluster.Name + constants.SuffixTLSCA
 
 	// Determine hostname - use custom hostname if specified, otherwise derive from Service DNS name
 	hostname := ""
@@ -1105,24 +1106,10 @@ func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger, c
 			"kubernetes.io/service-name": "kubernetes",
 		}),
 	); err != nil {
-		// If endpoint slices are not available, try fallback to Endpoints for compatibility
-		kubernetesEndpoints := &corev1.Endpoints{}
-		if getErr := m.client.Get(ctx, types.NamespacedName{
-			Namespace: "default",
-			Name:      "kubernetes",
-		}, kubernetesEndpoints); getErr != nil {
-			// If endpoints are also not available, we can still use service network CIDR
-			logger.V(1).Info("Failed to get kubernetes endpoint slices and endpoints, using service network CIDR only", "error", err)
-			return info, nil
-		}
-		// Fallback: Extract endpoint IPs from the endpoints resource
-		for _, subset := range kubernetesEndpoints.Subsets {
-			for _, address := range subset.Addresses {
-				if address.IP != "" {
-					info.EndpointIPs = append(info.EndpointIPs, address.IP)
-				}
-			}
-		}
+		// If EndpointSlices are not available or cannot be listed, fall back to using the
+		// service network CIDR only (API server endpoints remain empty).
+		logger.V(1).Info("Failed to list kubernetes EndpointSlices, using service network CIDR only", "error", err)
+		return info, nil
 	} else {
 		// Extract endpoint IPs from the endpoint slices
 		for _, endpointSlice := range endpointSliceList.Items {
@@ -1292,11 +1279,11 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 		},
 		PodSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
-				"app.kubernetes.io/name": "openbao-operator",
+				constants.LabelAppName: constants.LabelValueAppNameOpenBaoOperator,
 			},
 			MatchExpressions: []metav1.LabelSelectorRequirement{
 				{
-					Key:      "app.kubernetes.io/component",
+					Key:      constants.LabelAppComponent,
 					Operator: metav1.LabelSelectorOpIn,
 					Values:   []string{"controller", "provisioner"},
 				},
@@ -1314,8 +1301,8 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	kubernetesAPIPort6443 := intstr.FromInt(6443) // Direct endpoint port
 
 	// Cluster communication egress - allow communication to other cluster pods
-	apiPort := intstr.FromInt(openBaoContainerPort)
-	clusterPort := intstr.FromInt(openBaoClusterPort)
+	apiPort := intstr.FromInt(constants.PortAPI)
+	clusterPort := intstr.FromInt(constants.PortCluster)
 
 	// Build egress rules dynamically based on detected API server information
 	egressRules := []networkingv1.NetworkPolicyEgressRule{
@@ -1474,7 +1461,7 @@ func (m *Manager) ensureGatewayCAConfigMap(ctx context.Context, logger logr.Logg
 	gatewayCfg := cluster.Spec.Gateway
 	enabled := gatewayCfg != nil && gatewayCfg.Enabled
 
-	configMapName := cluster.Name + tlsCASecretSuffix
+	configMapName := cluster.Name + constants.SuffixTLSCA
 	configMap := &corev1.ConfigMap{}
 
 	err := m.client.Get(ctx, types.NamespacedName{
@@ -1494,7 +1481,7 @@ func (m *Manager) ensureGatewayCAConfigMap(ctx context.Context, logger logr.Logg
 	}
 
 	// Gateway is enabled - ensure ConfigMap exists with CA certificate
-	caSecretName := cluster.Name + tlsCASecretSuffix
+	caSecretName := cluster.Name + constants.SuffixTLSCA
 	caSecret := &corev1.Secret{}
 	if err := m.client.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,

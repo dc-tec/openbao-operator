@@ -12,7 +12,14 @@ import (
 // RunWithImpersonation runs the provided action as the specified user/group(s)
 // using Kubernetes impersonation. This is used in E2E tests to validate RBAC and
 // ValidatingAdmissionPolicy enforcement without relying on system:masters.
-func RunWithImpersonation(ctx context.Context, baseConfig *rest.Config, scheme *runtime.Scheme, username string, groups []string, action func(c client.Client) error) error {
+func RunWithImpersonation(
+	ctx context.Context,
+	baseConfig *rest.Config,
+	scheme *runtime.Scheme,
+	username string,
+	groups []string,
+	action func(c client.Client) error,
+) error {
 	if baseConfig == nil {
 		return fmt.Errorf("base Kubernetes REST config is required")
 	}

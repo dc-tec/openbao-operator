@@ -32,10 +32,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 	"github.com/openbao/operator/internal/provisioner"
 )
-
-const openBaoTenantFinalizer = "openbao.org/openbaotenant-finalizer"
 
 // NamespaceProvisionerReconciler reconciles OpenBaoTenant objects to provision
 // RBAC resources for tenant namespaces.
@@ -89,14 +88,14 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 
 	// Handle deletion
 	if !tenant.DeletionTimestamp.IsZero() {
-		if containsFinalizer(tenant.Finalizers, openBaoTenantFinalizer) {
+		if containsFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
 			logger.Info("OpenBaoTenant is being deleted; cleaning up tenant RBAC", "target_namespace", targetNS)
 			if err := r.Provisioner.CleanupTenantRBAC(ctx, targetNS); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to cleanup tenant RBAC for namespace %s: %w", targetNS, err)
 			}
 
 			// Remove finalizer
-			tenant.Finalizers = removeFinalizer(tenant.Finalizers, openBaoTenantFinalizer)
+			tenant.Finalizers = removeFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer)
 			if err := r.Update(ctx, tenant); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from OpenBaoTenant %s: %w", req.NamespacedName, err)
 			}
@@ -105,13 +104,13 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	// Add finalizer if not present
-	if !containsFinalizer(tenant.Finalizers, openBaoTenantFinalizer) {
-		tenant.Finalizers = append(tenant.Finalizers, openBaoTenantFinalizer)
+	if !containsFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
+		tenant.Finalizers = append(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer)
 		if err := r.Update(ctx, tenant); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to add finalizer to OpenBaoTenant %s: %w", req.NamespacedName, err)
 		}
 		// Requeue to observe the resource with the finalizer attached
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	// Verify target namespace exists
@@ -125,7 +124,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 				return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
 			}
 			logger.Info("Target namespace not found; will retry", "target_namespace", targetNS)
-			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+			return ctrl.Result{RequeueAfter: constants.RequeueStandard}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get namespace %s: %w", targetNS, err)
 	}

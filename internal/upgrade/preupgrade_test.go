@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 	openbaoapi "github.com/openbao/operator/internal/openbao"
 )
 
@@ -169,8 +170,8 @@ func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
 			Name:      "pre-upgrade-backup-test-cluster-20251207-120000",
 			Namespace: "test-ns",
 			Labels: map[string]string{
-				"app.kubernetes.io/instance":   "test-cluster",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppInstance:  "test-cluster",
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 				"openbao.org/cluster":          "test-cluster",
 				"openbao.org/component":        "backup",
 				"openbao.org/backup-type":      "pre-upgrade",
@@ -229,8 +230,8 @@ func TestHandlePreUpgradeSnapshot_JobCompleted(t *testing.T) {
 			Name:      "pre-upgrade-backup-test-cluster-20251207-120000",
 			Namespace: "test-ns",
 			Labels: map[string]string{
-				"app.kubernetes.io/instance":   "test-cluster",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppInstance:  "test-cluster",
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 				"openbao.org/cluster":          "test-cluster",
 				"openbao.org/component":        "backup",
 				"openbao.org/backup-type":      "pre-upgrade",
@@ -289,8 +290,8 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 			Name:      "pre-upgrade-backup-test-cluster-20251207-120000",
 			Namespace: "test-ns",
 			Labels: map[string]string{
-				"app.kubernetes.io/instance":   "test-cluster",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppInstance:  "test-cluster",
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 				"openbao.org/cluster":          "test-cluster",
 				"openbao.org/component":        "backup",
 				"openbao.org/backup-type":      "pre-upgrade",
@@ -352,8 +353,8 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 			Name:      "pre-upgrade-backup-test-cluster-20251207-120000",
 			Namespace: "test-ns",
 			Labels: map[string]string{
-				"app.kubernetes.io/instance":   "test-cluster",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppInstance:  "test-cluster",
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 				"openbao.org/cluster":          "test-cluster",
 				"openbao.org/component":        "backup",
 				"openbao.org/backup-type":      "pre-upgrade",
@@ -402,9 +403,9 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 				Name:      fmt.Sprintf("test-cluster-%d", i),
 				Namespace: "test-ns",
 				Labels: map[string]string{
-					"app.kubernetes.io/instance":   "test-cluster",
-					"app.kubernetes.io/name":       "openbao",
-					"app.kubernetes.io/managed-by": "openbao-operator",
+					constants.LabelAppInstance:  "test-cluster",
+					constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+					constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 				},
 			},
 			Status: corev1.PodStatus{
@@ -425,7 +426,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 	// Create a mock OpenBao server to handle health checks
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Mock healthy response for all pods
-		if r.URL.Path == "/v1/sys/health" {
+		if r.URL.Path == constants.APIPathSysHealth {
 			w.WriteHeader(http.StatusOK)
 			// Return leader for one pod, standby for others to satisfy quorum and leader checks
 			// Since we don't know easily which client is calling, we'll return initialized=true, sealed=false
@@ -437,7 +438,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 			// We need to differentiate.
 			// We can differentiate based on the Host header or assume the test environment doesn't check host.
 			// A simpler way: The client factory can configure the response.
-			w.Write([]byte(`{"initialized": true, "sealed": false, "standby": false}`))
+			_, _ = w.Write([]byte(`{"initialized": true, "sealed": false, "standby": false}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -455,12 +456,12 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 
 		// Create a specific server for this client to control response
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/v1/sys/health" {
+			if r.URL.Path == constants.APIPathSysHealth {
 				w.WriteHeader(http.StatusOK)
 				if isLeader {
-					w.Write([]byte(`{"initialized": true, "sealed": false, "standby": false}`))
+					_, _ = w.Write([]byte(`{"initialized": true, "sealed": false, "standby": false}`))
 				} else {
-					w.Write([]byte(`{"initialized": true, "sealed": false, "standby": true}`))
+					_, _ = w.Write([]byte(`{"initialized": true, "sealed": false, "standby": true}`))
 				}
 				return
 			}

@@ -38,6 +38,8 @@ type InfraBaoConfig struct {
 // EnsureInfraBao creates (or reuses) a production-mode OpenBao pod + service with TLS.
 // The service is reachable at https://<name>.<namespace>.svc:8200.
 // Infra-bao always runs in production mode with TLS (never dev mode).
+//
+//nolint:gocyclo // End-to-end provisioning must be explicit to simplify troubleshooting in CI.
 func EnsureInfraBao(ctx context.Context, c client.Client, cfg InfraBaoConfig) error {
 	if c == nil {
 		return fmt.Errorf("kubernetes client is required")
@@ -312,9 +314,19 @@ listener "tcp" {
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("context canceled while waiting for infra-bao Pod %s/%s to be running: %w", cfg.Namespace, cfg.Name, ctx.Err())
+			return fmt.Errorf(
+				"context canceled while waiting for infra-bao Pod %s/%s to be running: %w",
+				cfg.Namespace,
+				cfg.Name,
+				ctx.Err(),
+			)
 		case <-podRunningDeadline.C:
-			return fmt.Errorf("timed out waiting for infra-bao Pod %s/%s to be running (last phase: %s)", cfg.Namespace, cfg.Name, current.Status.Phase)
+			return fmt.Errorf(
+				"timed out waiting for infra-bao Pod %s/%s to be running (last phase: %s)",
+				cfg.Namespace,
+				cfg.Name,
+				current.Status.Phase,
+			)
 		case <-podRunningTicker.C:
 		}
 	}
@@ -329,16 +341,20 @@ listener "tcp" {
 	defer readinessTicker.Stop()
 
 	for {
-		if err := checkInfraBaoReadinessLocal(ctx, cfg.Namespace, cfg.Name); err == nil {
-			lastErr = nil
-			break
-		} else {
+		if err := checkInfraBaoReadinessLocal(ctx, cfg.Namespace, cfg.Name); err != nil {
 			lastErr = err
+		} else {
+			break
 		}
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("context canceled while waiting for infra-bao %s/%s to be ready: %w", cfg.Namespace, cfg.Name, ctx.Err())
+			return fmt.Errorf(
+				"context canceled while waiting for infra-bao %s/%s to be ready: %w",
+				cfg.Namespace,
+				cfg.Name,
+				ctx.Err(),
+			)
 		case <-readinessTimer.C:
 			return fmt.Errorf("timed out waiting for infra-bao %s/%s to be ready: %w", cfg.Namespace, cfg.Name, lastErr)
 		case <-readinessTicker.C:
@@ -360,11 +376,31 @@ func CleanupInfraBao(ctx context.Context, c client.Client, cfg InfraBaoConfig) {
 	// Order: pod -> service -> secrets/configmap
 	_ = c.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: cfg.Name, Namespace: cfg.Namespace}})
 	_ = c.Delete(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: cfg.Name, Namespace: cfg.Namespace}})
-	_ = c.Delete(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: cfg.Name + "-tls-server", Namespace: cfg.Namespace}})
+	_ = c.Delete(ctx, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cfg.Name + "-tls-server",
+			Namespace: cfg.Namespace,
+		},
+	})
 	_ = c.Delete(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: cfg.Name + "-tls-ca", Namespace: cfg.Namespace}})
-	_ = c.Delete(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: cfg.Name + "-unseal-key", Namespace: cfg.Namespace}})
-	_ = c.Delete(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: cfg.Name + "-root-token", Namespace: cfg.Namespace}})
-	_ = c.Delete(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: cfg.Name + "-config", Namespace: cfg.Namespace}})
+	_ = c.Delete(ctx, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cfg.Name + "-unseal-key",
+			Namespace: cfg.Namespace,
+		},
+	})
+	_ = c.Delete(ctx, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cfg.Name + "-root-token",
+			Namespace: cfg.Namespace,
+		},
+	})
+	_ = c.Delete(ctx, &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cfg.Name + "-config",
+			Namespace: cfg.Namespace,
+		},
+	})
 }
 
 // checkInfraBaoReadinessLocal checks readiness from inside the pod via kubectl exec.
@@ -391,6 +427,8 @@ func checkInfraBaoReadinessLocal(ctx context.Context, namespace, name string) er
 // initializeInfraBao initializes infra-bao if it's not already initialized.
 // It uses the static auto-unseal configuration, so no secret_shares or secret_threshold
 // are needed. The root token is stored in a Secret for later use.
+//
+//nolint:unparam // infraAddr is retained to keep call sites explicit and for future HTTPS verification improvements.
 func initializeInfraBao(ctx context.Context, c client.Client, infraAddr string, cfg InfraBaoConfig) error {
 	// Initialize infra-bao using bao operator init command inside the pod
 	// This is simpler and more reliable than HTTP API calls
@@ -455,7 +493,11 @@ func initializeInfraBao(ctx context.Context, c client.Client, infraAddr string, 
 	// If secret already exists, update it with the new token
 	if apierrors.IsAlreadyExists(err) {
 		existingSecret := &corev1.Secret{}
-		if getErr := c.Get(ctx, types.NamespacedName{Name: secretName, Namespace: cfg.Namespace}, existingSecret); getErr != nil {
+		if getErr := c.Get(
+			ctx,
+			types.NamespacedName{Name: secretName, Namespace: cfg.Namespace},
+			existingSecret,
+		); getErr != nil {
 			return fmt.Errorf("failed to get existing root token Secret: %w", getErr)
 		}
 		existingSecret.Data["token"] = []byte(initResult.RootToken)
@@ -469,7 +511,16 @@ func initializeInfraBao(ctx context.Context, c client.Client, infraAddr string, 
 
 // ConfigureInfraBaoTransit enables the transit secrets engine and ensures the
 // given key exists. It runs a short-lived client pod (bao CLI) and returns its logs.
-func ConfigureInfraBaoTransit(ctx context.Context, restCfg *rest.Config, c client.Client, namespace string, clientImage string, infraBaoAddress string, rootToken string, keyName string) (*PodResult, error) {
+func ConfigureInfraBaoTransit(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	namespace string,
+	clientImage string,
+	infraBaoAddress string,
+	rootToken string,
+	keyName string,
+) (*PodResult, error) {
 	if infraBaoAddress == "" {
 		return nil, fmt.Errorf("infra-bao address is required")
 	}
@@ -551,7 +602,16 @@ echo "ok"
 
 // ConfigureInfraBaoPKIACME enables the PKI secrets engine and ACME support on infra-bao.
 // It is safe to call multiple times.
-func ConfigureInfraBaoPKIACME(ctx context.Context, restCfg *rest.Config, c client.Client, namespace string, clientImage string, infraBaoAddress string, rootToken string, clusterPath string) (*PodResult, error) {
+func ConfigureInfraBaoPKIACME(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	namespace string,
+	clientImage string,
+	infraBaoAddress string,
+	rootToken string,
+	clusterPath string,
+) (*PodResult, error) {
 	if infraBaoAddress == "" {
 		return nil, fmt.Errorf("infra-bao address is required")
 	}
@@ -605,7 +665,11 @@ bao status >/dev/null
 if ! bao secrets list -format=json | grep -q '"pki/"'; then
   bao secrets enable pki >/dev/null
 fi
-bao secrets tune -allowed-response-headers=Location -allowed-response-headers=Replay-Nonce -allowed-response-headers=Link pki/ >/dev/null
+bao secrets tune \
+  -allowed-response-headers=Location \
+  -allowed-response-headers=Replay-Nonce \
+  -allowed-response-headers=Link \
+  pki/ >/dev/null
 if ! bao read -format=json pki/cert/ca >/dev/null 2>&1; then
   bao write -format=json pki/root/generate/internal common_name="E2E ACME Root CA" ttl=87600h >/dev/null
 fi
@@ -636,7 +700,14 @@ echo "ok"
 
 // FetchInfraBaoPKICA fetches the PKI CA certificate from infra-bao.
 // This is the CA that signs ACME certificates, which is different from the TLS CA.
-func FetchInfraBaoPKICA(ctx context.Context, restCfg *rest.Config, c client.Client, namespace string, clientImage string, infraBaoAddress string) ([]byte, error) {
+func FetchInfraBaoPKICA(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	namespace string,
+	clientImage string,
+	infraBaoAddress string,
+) ([]byte, error) {
 	if infraBaoAddress == "" {
 		return nil, fmt.Errorf("infra-bao address is required")
 	}
@@ -765,7 +836,12 @@ func generateInfraBaoCA(name string) ([]byte, []byte, error) {
 }
 
 // generateInfraBaoServerCert generates a server certificate for infra-bao signed by the given CA.
-func generateInfraBaoServerCert(namespace string, name string, caCertPEM []byte, caKeyPEM []byte) ([]byte, []byte, error) {
+func generateInfraBaoServerCert(
+	namespace string,
+	name string,
+	caCertPEM []byte,
+	caKeyPEM []byte,
+) ([]byte, []byte, error) {
 	// Parse CA
 	caBlock, _ := pem.Decode(caCertPEM)
 	if caBlock == nil || caBlock.Type != "CERTIFICATE" {

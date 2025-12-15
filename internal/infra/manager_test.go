@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	"github.com/openbao/operator/internal/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -68,7 +69,7 @@ func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 
 // createTLSSecretForTest creates a minimal TLS server secret for testing.
 // This is needed because ensureStatefulSet now checks for prerequisite resources.
-func createTLSSecretForTest(t *testing.T, client client.Client, cluster *openbaov1alpha1.OpenBaoCluster) {
+func createTLSSecretForTest(t *testing.T, k8sClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster) {
 	t.Helper()
 	secretName := tlsServerSecretName(cluster)
 	secret := &corev1.Secret{
@@ -82,7 +83,7 @@ func createTLSSecretForTest(t *testing.T, client client.Client, cluster *openbao
 			"ca.crt":  []byte("test-ca"),
 		},
 	}
-	if err := client.Create(context.Background(), secret); err != nil {
+	if err := k8sClient.Create(context.Background(), secret); err != nil {
 		t.Fatalf("failed to create TLS secret for test: %v", err)
 	}
 }
@@ -204,7 +205,7 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 					Name:      "data-infra-delete-0",
 					Namespace: cluster.Namespace,
 					Labels: map[string]string{
-						labelOpenBaoCluster: cluster.Name,
+						constants.LabelOpenBaoCluster: cluster.Name,
 					},
 				},
 			}
@@ -350,7 +351,7 @@ func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 			getResource: func(name string) error {
 				return k8sClient.Get(ctx, types.NamespacedName{
 					Namespace: "shared-ns",
-					Name:      name + configMapSuffix,
+					Name:      name + constants.SuffixConfigMap,
 				}, &corev1.ConfigMap{})
 			},
 		},
@@ -359,7 +360,7 @@ func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 			getResource: func(name string) error {
 				return k8sClient.Get(ctx, types.NamespacedName{
 					Namespace: "shared-ns",
-					Name:      name + unsealSecretSuffix,
+					Name:      name + constants.SuffixUnsealKey,
 				}, &corev1.Secret{})
 			},
 		},
@@ -444,7 +445,7 @@ func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 	cm1 := &corev1.ConfigMap{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: "namespace-a",
-		Name:      "same-cluster-name" + configMapSuffix,
+		Name:      "same-cluster-name" + constants.SuffixConfigMap,
 	}, cm1); err != nil {
 		t.Errorf("expected ConfigMap to exist in namespace-a: %v", err)
 	}
@@ -452,7 +453,7 @@ func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 	cm2 := &corev1.ConfigMap{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: "namespace-b",
-		Name:      "same-cluster-name" + configMapSuffix,
+		Name:      "same-cluster-name" + constants.SuffixConfigMap,
 	}, cm2); err != nil {
 		t.Errorf("expected ConfigMap to exist in namespace-b: %v", err)
 	}
@@ -483,10 +484,10 @@ func TestMultiTenancyResourceLabeling(t *testing.T) {
 	}
 
 	expectedLabels := map[string]string{
-		labelAppName:        "openbao",
-		labelAppInstance:    cluster.Name,
-		labelAppManagedBy:   "openbao-operator",
-		labelOpenBaoCluster: cluster.Name,
+		constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:    cluster.Name,
+		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster: cluster.Name,
 	}
 
 	for key, expectedVal := range expectedLabels {
@@ -499,7 +500,7 @@ func TestMultiTenancyResourceLabeling(t *testing.T) {
 	cm := &corev1.ConfigMap{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name + configMapSuffix,
+		Name:      cluster.Name + constants.SuffixConfigMap,
 	}, cm); err != nil {
 		t.Fatalf("expected ConfigMap to exist: %v", err)
 	}
@@ -585,7 +586,7 @@ func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 	cm := &corev1.ConfigMap{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name + configMapSuffix,
+		Name:      cluster.Name + constants.SuffixConfigMap,
 	}, cm); err != nil {
 		t.Fatalf("expected ConfigMap to exist: %v", err)
 	}
@@ -605,7 +606,7 @@ func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 	secret := &corev1.Secret{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name + unsealSecretSuffix,
+		Name:      cluster.Name + constants.SuffixUnsealKey,
 	}, secret); err != nil {
 		t.Fatalf("expected unseal Secret to exist: %v", err)
 	}
@@ -615,7 +616,7 @@ func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 	sa := &corev1.ServiceAccount{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name + serviceAccountSuffix,
+		Name:      cluster.Name + constants.SuffixServiceAccount,
 	}, sa); err != nil {
 		t.Fatalf("expected ServiceAccount to exist: %v", err)
 	}

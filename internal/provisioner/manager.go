@@ -139,6 +139,8 @@ func createImpersonatedClient(baseConfig *rest.Config, scheme *runtime.Scheme, n
 
 // EnsureTenantRBAC ensures that a Role and RoleBinding exist in the given namespace
 // for the operator to manage OpenBaoCluster resources.
+//
+//nolint:gocyclo // Explicit validation and update paths improve auditability for security-sensitive RBAC.
 func (m *Manager) EnsureTenantRBAC(ctx context.Context, namespace string) error {
 	// Ensure Role exists
 	role := GenerateTenantRole(namespace)

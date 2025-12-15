@@ -24,7 +24,13 @@ type PodResult struct {
 
 // RunPodUntilCompletion creates the given Pod and waits until it completes
 // (Succeeded or Failed), then returns its logs.
-func RunPodUntilCompletion(ctx context.Context, cfg *rest.Config, c client.Client, pod *corev1.Pod, timeout time.Duration) (*PodResult, error) {
+func RunPodUntilCompletion(
+	ctx context.Context,
+	cfg *rest.Config,
+	c client.Client,
+	pod *corev1.Pod,
+	timeout time.Duration,
+) (*PodResult, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rest config is required")
 	}
@@ -77,9 +83,19 @@ func RunPodUntilCompletion(ctx context.Context, cfg *rest.Config, c client.Clien
 
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("context canceled while waiting for pod %s/%s to complete: %w", pod.Namespace, pod.Name, ctx.Err())
+			return nil, fmt.Errorf(
+				"context canceled while waiting for pod %s/%s to complete: %w",
+				pod.Namespace,
+				pod.Name,
+				ctx.Err(),
+			)
 		case <-deadline.C:
-			return nil, fmt.Errorf("timed out waiting for pod %s/%s to complete (last phase: %s)", pod.Namespace, pod.Name, lastPhase)
+			return nil, fmt.Errorf(
+				"timed out waiting for pod %s/%s to complete (last phase: %s)",
+				pod.Namespace,
+				pod.Name,
+				lastPhase,
+			)
 		case <-ticker.C:
 		}
 	}

@@ -74,14 +74,14 @@ func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t, namespace, tenant)
-	provisionerManager, err := provisioner.NewManager(client, nil, logger)
+	k8sClient := newTestClient(t, namespace, tenant)
+	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
-		Client:      client,
+		Client:      k8sClient,
 		Scheme:      testScheme,
 		Provisioner: provisionerManager,
 	}
@@ -99,7 +99,7 @@ func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
 	}
 
 	// First reconcile should add finalizer and requeue
-	if !result.Requeue {
+	if result.RequeueAfter == 0 {
 		t.Error("Reconcile() should requeue after adding finalizer")
 	}
 
@@ -109,13 +109,13 @@ func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
-	if result.Requeue {
+	if result.RequeueAfter > 0 {
 		t.Error("Reconcile() should not requeue after successful provisioning")
 	}
 
 	// Verify Role was created
 	role := &rbacv1.Role{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: "tenant-ns",
 		Name:      provisioner.TenantRoleName,
 	}, role)
@@ -125,7 +125,7 @@ func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
 
 	// Verify RoleBinding was created
 	roleBinding := &rbacv1.RoleBinding{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: "tenant-ns",
 		Name:      provisioner.TenantRoleBindingName,
 	}, roleBinding)
@@ -135,7 +135,7 @@ func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
 
 	// Verify status was updated
 	updatedTenant := &openbaov1alpha1.OpenBaoTenant{}
-	err = client.Get(ctx, req.NamespacedName, updatedTenant)
+	err = k8sClient.Get(ctx, req.NamespacedName, updatedTenant)
 	if err != nil {
 		t.Fatalf("failed to get updated tenant: %v", err)
 	}
@@ -158,14 +158,14 @@ func TestNamespaceProvisionerReconcile_TargetNamespaceNotFound(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t, tenant)
-	provisionerManager, err := provisioner.NewManager(client, nil, logger)
+	k8sClient := newTestClient(t, tenant)
+	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
-		Client:      client,
+		Client:      k8sClient,
 		Scheme:      testScheme,
 		Provisioner: provisionerManager,
 	}
@@ -182,7 +182,7 @@ func TestNamespaceProvisionerReconcile_TargetNamespaceNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
-	if !result.Requeue {
+	if result.RequeueAfter == 0 {
 		t.Error("Reconcile() should requeue after adding finalizer")
 	}
 
@@ -198,7 +198,7 @@ func TestNamespaceProvisionerReconcile_TargetNamespaceNotFound(t *testing.T) {
 
 	// Verify status was updated with error
 	updatedTenant := &openbaov1alpha1.OpenBaoTenant{}
-	err = client.Get(ctx, req.NamespacedName, updatedTenant)
+	err = k8sClient.Get(ctx, req.NamespacedName, updatedTenant)
 	if err != nil {
 		t.Fatalf("failed to get updated tenant: %v", err)
 	}
@@ -213,14 +213,14 @@ func TestNamespaceProvisionerReconcile_TargetNamespaceNotFound(t *testing.T) {
 func TestNamespaceProvisionerReconcile_OpenBaoTenantDeleted(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t)
-	provisionerManager, err := provisioner.NewManager(client, nil, logger)
+	k8sClient := newTestClient(t)
+	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
-		Client:      client,
+		Client:      k8sClient,
 		Scheme:      testScheme,
 		Provisioner: provisionerManager,
 	}
@@ -237,7 +237,7 @@ func TestNamespaceProvisionerReconcile_OpenBaoTenantDeleted(t *testing.T) {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
-	if result.Requeue {
+	if result.RequeueAfter > 0 {
 		t.Error("Reconcile() should not requeue for deleted OpenBaoTenant")
 	}
 
@@ -274,7 +274,7 @@ func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
 			Name:              "test-tenant",
 			Namespace:         "openbao-operator-system",
 			DeletionTimestamp: &now,
-			Finalizers:        []string{openBaoTenantFinalizer},
+			Finalizers:        []string{openbaov1alpha1.OpenBaoTenantFinalizer},
 		},
 		Spec: openbaov1alpha1.OpenBaoTenantSpec{
 			TargetNamespace: "tenant-ns",
@@ -283,14 +283,14 @@ func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	client := newTestClient(t, namespace, tenant, existingRole, existingRoleBinding)
-	provisionerManager, err := provisioner.NewManager(client, nil, logger)
+	k8sClient := newTestClient(t, namespace, tenant, existingRole, existingRoleBinding)
+	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
-		Client:      client,
+		Client:      k8sClient,
 		Scheme:      testScheme,
 		Provisioner: provisionerManager,
 	}
@@ -307,13 +307,13 @@ func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
-	if result.Requeue {
+	if result.RequeueAfter > 0 {
 		t.Error("Reconcile() should not requeue after cleanup")
 	}
 
 	// Verify Role was deleted
 	role := &rbacv1.Role{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: "tenant-ns",
 		Name:      provisioner.TenantRoleName,
 	}, role)
@@ -323,7 +323,7 @@ func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
 
 	// Verify RoleBinding was deleted
 	roleBinding := &rbacv1.RoleBinding{}
-	err = client.Get(ctx, types.NamespacedName{
+	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: "tenant-ns",
 		Name:      provisioner.TenantRoleBindingName,
 	}, roleBinding)
@@ -333,10 +333,10 @@ func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
 
 	// Verify finalizer was removed
 	updatedTenant := &openbaov1alpha1.OpenBaoTenant{}
-	err = client.Get(ctx, req.NamespacedName, updatedTenant)
+	err = k8sClient.Get(ctx, req.NamespacedName, updatedTenant)
 	if err == nil {
 		for _, f := range updatedTenant.Finalizers {
-			if f == openBaoTenantFinalizer {
+			if f == openbaov1alpha1.OpenBaoTenantFinalizer {
 				t.Error("expected finalizer to be removed")
 				break
 			}

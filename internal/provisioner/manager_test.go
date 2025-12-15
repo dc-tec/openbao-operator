@@ -23,6 +23,9 @@ var testScheme = func() *runtime.Scheme {
 	return scheme
 }()
 
+const testNamespace = "test-namespace"
+const podSecurityRestrictedLevel = "restricted"
+
 func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 	t.Helper()
 	builder := fake.NewClientBuilder().WithScheme(testScheme)
@@ -33,7 +36,7 @@ func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 }
 
 func TestEnsureTenantRBAC_CreatesRoleAndRoleBinding(t *testing.T) {
-	namespace := "test-namespace"
+	namespace := testNamespace
 	// Create namespace for Pod Security labels test
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -110,9 +113,9 @@ func TestEnsureTenantRBAC_CreatesRoleAndRoleBinding(t *testing.T) {
 	}
 
 	expectedLabels := map[string]string{
-		"pod-security.kubernetes.io/enforce": "restricted",
-		"pod-security.kubernetes.io/audit":   "restricted",
-		"pod-security.kubernetes.io/warn":    "restricted",
+		"pod-security.kubernetes.io/enforce": podSecurityRestrictedLevel,
+		"pod-security.kubernetes.io/audit":   podSecurityRestrictedLevel,
+		"pod-security.kubernetes.io/warn":    podSecurityRestrictedLevel,
 	}
 
 	for key, expectedValue := range expectedLabels {
@@ -125,7 +128,7 @@ func TestEnsureTenantRBAC_CreatesRoleAndRoleBinding(t *testing.T) {
 }
 
 func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
-	namespace := "test-namespace"
+	namespace := testNamespace
 	// Create namespace first (required for Pod Security label updates)
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -192,7 +195,7 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 }
 
 func TestEnsureTenantRBAC_UpdatesRoleBindingWhenSubjectsChange(t *testing.T) {
-	namespace := "test-namespace"
+	namespace := testNamespace
 	// Create namespace first (required for Pod Security label updates)
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -259,7 +262,7 @@ func TestEnsureTenantRBAC_UpdatesRoleBindingWhenSubjectsChange(t *testing.T) {
 }
 
 func TestEnsureTenantRBAC_HandlesAlreadyExistsGracefully(t *testing.T) {
-	namespace := "test-namespace"
+	namespace := testNamespace
 	// Create namespace first (required for Pod Security label updates)
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -289,7 +292,7 @@ func TestEnsureTenantRBAC_HandlesAlreadyExistsGracefully(t *testing.T) {
 }
 
 func TestCleanupTenantRBAC_DeletesRoleAndRoleBinding(t *testing.T) {
-	namespace := "test-namespace"
+	namespace := testNamespace
 	existingRole := GenerateTenantRole(namespace)
 	existingRoleBinding := GenerateTenantRoleBinding(namespace, OperatorServiceAccount{
 		Name:      "controller-manager",
@@ -332,7 +335,7 @@ func TestCleanupTenantRBAC_DeletesRoleAndRoleBinding(t *testing.T) {
 }
 
 func TestCleanupTenantRBAC_HandlesNotFoundGracefully(t *testing.T) {
-	namespace := "test-namespace"
+	namespace := testNamespace
 	k8sClient := newTestClient(t)
 	logger := logr.Discard()
 	manager, err := NewManager(k8sClient, nil, logger)
@@ -350,7 +353,7 @@ func TestCleanupTenantRBAC_HandlesNotFoundGracefully(t *testing.T) {
 }
 
 func TestEnsureTenantRBAC_AppliesPodSecurityLabels(t *testing.T) {
-	namespace := "test-namespace"
+	namespace := testNamespace
 	// Create namespace
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -383,9 +386,9 @@ func TestEnsureTenantRBAC_AppliesPodSecurityLabels(t *testing.T) {
 	}
 
 	expectedLabels := map[string]string{
-		"pod-security.kubernetes.io/enforce": "restricted",
-		"pod-security.kubernetes.io/audit":   "restricted",
-		"pod-security.kubernetes.io/warn":    "restricted",
+		"pod-security.kubernetes.io/enforce": podSecurityRestrictedLevel,
+		"pod-security.kubernetes.io/audit":   podSecurityRestrictedLevel,
+		"pod-security.kubernetes.io/warn":    podSecurityRestrictedLevel,
 	}
 
 	for key, expectedValue := range expectedLabels {
@@ -403,7 +406,7 @@ func TestEnsureTenantRBAC_AppliesPodSecurityLabels(t *testing.T) {
 }
 
 func TestEnsureTenantRBAC_UpdatesPodSecurityLabels(t *testing.T) {
-	namespace := "test-namespace"
+	namespace := testNamespace
 	// Create namespace with incorrect Pod Security labels
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -436,13 +439,13 @@ func TestEnsureTenantRBAC_UpdatesPodSecurityLabels(t *testing.T) {
 		t.Fatalf("expected Namespace to exist: %v", err)
 	}
 
-	if updatedNS.Labels["pod-security.kubernetes.io/enforce"] != "restricted" {
+	if updatedNS.Labels["pod-security.kubernetes.io/enforce"] != podSecurityRestrictedLevel {
 		t.Errorf("Pod Security enforce label was not updated to restricted")
 	}
-	if updatedNS.Labels["pod-security.kubernetes.io/audit"] != "restricted" {
+	if updatedNS.Labels["pod-security.kubernetes.io/audit"] != podSecurityRestrictedLevel {
 		t.Errorf("Pod Security audit label was not updated to restricted")
 	}
-	if updatedNS.Labels["pod-security.kubernetes.io/warn"] != "restricted" {
+	if updatedNS.Labels["pod-security.kubernetes.io/warn"] != podSecurityRestrictedLevel {
 		t.Errorf("Pod Security warn label was not added")
 	}
 }

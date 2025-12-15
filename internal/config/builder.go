@@ -10,22 +10,20 @@ import (
 
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 	"github.com/zclconf/go-cty/cty"
 )
 
 const (
 	configPluginDirectoryPath = "/openbao/plugins"
-	configStoragePath         = "/bao/data"
-	configTLSCACertPath       = "/etc/bao/tls/ca.crt"
-	configTLSCertPath         = "/etc/bao/tls/tls.crt"
-	configTLSKeyPath          = "/etc/bao/tls/tls.key"
 	configUnsealKeyPath       = "file:///etc/bao/unseal/key"
 	configUnsealKeyID         = "operator-generated-v1"
-	configListenerAddress     = "0.0.0.0:8200"
-	configListenerClusterAddr = "0.0.0.0:8201"
 	configMaxRequestDuration  = "90s"
 	configNodeIDTemplate      = "${HOSTNAME}"
-	autoJoinLabelKey          = "openbao.org/cluster"
+
+	jwtPolicyHealthStepDownSnapshot = `path "sys/health" { capabilities = ["read"] }
+path "sys/step-down" { capabilities = ["update"] }
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
 )
 
 // OperatorBootstrapConfig holds configuration for operator bootstrap.
@@ -85,8 +83,8 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// 2. Listener stanza (operator-owned).
 	listenerBlock := body.AppendNewBlock("listener", []string{"tcp"})
 	listenerBody := listenerBlock.Body()
-	listenerBody.SetAttributeValue("address", cty.StringVal(configListenerAddress))
-	listenerBody.SetAttributeValue("cluster_address", cty.StringVal(configListenerClusterAddr))
+	listenerBody.SetAttributeValue("address", cty.StringVal(fmt.Sprintf("0.0.0.0:%d", constants.PortAPI)))
+	listenerBody.SetAttributeValue("cluster_address", cty.StringVal(fmt.Sprintf("0.0.0.0:%d", constants.PortCluster)))
 	listenerBody.SetAttributeValue("tls_disable", cty.NumberIntVal(0))
 	listenerBody.SetAttributeValue("max_request_duration", cty.StringVal(configMaxRequestDuration))
 
@@ -112,9 +110,9 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 		}
 	} else {
 		// OperatorManaged or External mode: use file-based TLS certificates
-		listenerBody.SetAttributeValue("tls_cert_file", cty.StringVal(configTLSCertPath))
-		listenerBody.SetAttributeValue("tls_key_file", cty.StringVal(configTLSKeyPath))
-		listenerBody.SetAttributeValue("tls_client_ca_file", cty.StringVal(configTLSCACertPath))
+		listenerBody.SetAttributeValue("tls_cert_file", cty.StringVal(constants.PathTLSServerCert))
+		listenerBody.SetAttributeValue("tls_key_file", cty.StringVal(constants.PathTLSServerKey))
+		listenerBody.SetAttributeValue("tls_client_ca_file", cty.StringVal(constants.PathTLSCACert))
 	}
 
 	// 3. Seal stanza (operator-owned, but type is configurable).
@@ -125,7 +123,7 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// 4. Storage stanza (Raft) with auto_join for dynamic cluster membership.
 	storageBlock := body.AppendNewBlock("storage", []string{"raft"})
 	storageBody := storageBlock.Body()
-	storageBody.SetAttributeValue("path", cty.StringVal(configStoragePath))
+	storageBody.SetAttributeValue("path", cty.StringVal(constants.PathData))
 	storageBody.SetAttributeValue("node_id", cty.StringVal(configNodeIDTemplate))
 
 	// Use Kubernetes go-discover for dynamic cluster membership. This allows pods
@@ -134,7 +132,7 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	autoJoinExpr := fmt.Sprintf(
 		`provider=k8s namespace=%s label_selector="%s=%s"`,
 		namespace,
-		autoJoinLabelKey,
+		constants.LabelOpenBaoCluster,
 		cluster.Name,
 	)
 
@@ -154,9 +152,9 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// cluster TLS automatically using the same ACME-obtained certificates.
 	// See: https://openbao.org/docs/rfcs/acme-tls-listeners/
 	if cluster.Spec.TLS.Mode != openbaov1alpha1.TLSModeACME {
-		retryJoinBody.SetAttributeValue("leader_ca_cert_file", cty.StringVal(configTLSCACertPath))
-		retryJoinBody.SetAttributeValue("leader_client_cert_file", cty.StringVal(configTLSCertPath))
-		retryJoinBody.SetAttributeValue("leader_client_key_file", cty.StringVal(configTLSKeyPath))
+		retryJoinBody.SetAttributeValue("leader_ca_cert_file", cty.StringVal(constants.PathTLSCACert))
+		retryJoinBody.SetAttributeValue("leader_client_cert_file", cty.StringVal(constants.PathTLSServerCert))
+		retryJoinBody.SetAttributeValue("leader_client_key_file", cty.StringVal(constants.PathTLSServerKey))
 	}
 
 	// 5. Kubernetes service registration (operator-owned).
@@ -265,10 +263,7 @@ func RenderOperatorBootstrapHCL(config OperatorBootstrapConfig) ([]byte, error) 
 	policyReqBody.SetAttributeValue("operation", cty.StringVal("update"))
 	policyReqBody.SetAttributeValue("path", cty.StringVal("sys/policies/acl/openbao-operator"))
 	policyReqData := policyReqBody.AppendNewBlock("data", nil)
-	policy := `path "sys/health" { capabilities = ["read"] }
-path "sys/step-down" { capabilities = ["update"] }
-path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
-	policyReqData.Body().SetAttributeValue("policy", cty.StringVal(policy))
+	policyReqData.Body().SetAttributeValue("policy", cty.StringVal(jwtPolicyHealthStepDownSnapshot))
 
 	// 4. Bind Role
 	roleReq := initBody.AppendNewBlock("request", []string{"create-operator-role"})
@@ -347,10 +342,7 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 		policyReqBody.SetAttributeValue("operation", cty.StringVal("update"))
 		policyReqBody.SetAttributeValue("path", cty.StringVal("sys/policies/acl/openbao-operator"))
 		policyReqData := policyReqBody.AppendNewBlock("data", nil)
-		policy := `path "sys/health" { capabilities = ["read"] }
-path "sys/step-down" { capabilities = ["update"] }
-path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
-		policyReqData.Body().SetAttributeValue("policy", cty.StringVal(policy))
+		policyReqData.Body().SetAttributeValue("policy", cty.StringVal(jwtPolicyHealthStepDownSnapshot))
 
 		// 4. Bind Role
 		roleReq := initBody.AppendNewBlock("request", []string{"create-operator-role"})
@@ -413,10 +405,7 @@ path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
 			upgradePolicyReqBody.SetAttributeValue("operation", cty.StringVal("update"))
 			upgradePolicyReqBody.SetAttributeValue("path", cty.StringVal("sys/policies/acl/upgrade"))
 			upgradePolicyReqData := upgradePolicyReqBody.AppendNewBlock("data", nil)
-			upgradePolicy := `path "sys/health" { capabilities = ["read"] }
-path "sys/step-down" { capabilities = ["update"] }
-path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
-			upgradePolicyReqData.Body().SetAttributeValue("policy", cty.StringVal(upgradePolicy))
+			upgradePolicyReqData.Body().SetAttributeValue("policy", cty.StringVal(jwtPolicyHealthStepDownSnapshot))
 
 			// Create upgrade JWT role
 			upgradeRoleReq := initBody.AppendNewBlock("request", []string{"create-upgrade-jwt-role"})
@@ -799,6 +788,8 @@ func renderTelemetry(body *hclwrite.Body, telemetry *openbaov1alpha1.TelemetryCo
 // renderSealStanza renders the seal block based on the cluster's unseal configuration.
 // If spec.unseal is nil or type is "static" (or empty), renders the default static seal.
 // Otherwise, renders the specified seal type with options from spec.unseal.options.
+//
+//nolint:unparam // Kept as error-returning for future seal validation and to keep call sites consistent.
 func renderSealStanza(body *hclwrite.Body, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	unsealType := "static"
 	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" {

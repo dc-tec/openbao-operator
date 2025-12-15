@@ -20,18 +20,24 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 )
 
 const (
-	openBaoProbeBinary = "/utils/bao-probe"
-	// Use 127.0.0.1 instead of localhost to force IPv4, avoiding IPv6 resolution issues
-	// where localhost might resolve to ::1 but OpenBao only listens on IPv4
-	openBaoProbeAddr   = "https://127.0.0.1:8200"
-	openBaoProbeCAFile = "/etc/bao/tls/ca.crt"
-
+	openBaoProbeBinary           = "/utils/bao-probe"
 	openBaoLivenessProbeTimeout  = "4s"
 	openBaoReadinessProbeTimeout = "10s"
 	openBaoStartupProbeTimeout   = "5s"
+
+	unsealTypeStatic = "static"
+)
+
+var (
+	// Use 127.0.0.1 instead of localhost to force IPv4, avoiding IPv6 resolution issues
+	// where localhost might resolve to ::1 but OpenBao only listens on IPv4.
+	openBaoProbeAddr = fmt.Sprintf("https://127.0.0.1:%d", constants.PortAPI)
+
+	openBaoProbeCAFile = constants.PathTLSCACert
 )
 
 // ErrStatefulSetPrerequisitesMissing indicates that required prerequisites (ConfigMap or TLS Secret)
@@ -258,7 +264,7 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Conta
 			}, args...),
 			Env: []corev1.EnvVar{
 				{
-					Name: "HOSTNAME",
+					Name: constants.EnvHostname,
 					ValueFrom: &corev1.EnvVarSource{
 						FieldRef: &corev1.ObjectFieldSelector{
 							FieldPath: "metadata.name",
@@ -266,7 +272,7 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Conta
 					},
 				},
 				{
-					Name: "POD_IP",
+					Name: constants.EnvPodIP,
 					ValueFrom: &corev1.EnvVarSource{
 						FieldRef: &corev1.ObjectFieldSelector{
 							FieldPath: "status.podIP",
@@ -285,7 +291,7 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Conta
 func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar {
 	env := []corev1.EnvVar{
 		{
-			Name: "HOSTNAME",
+			Name: constants.EnvHostname,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "metadata.name",
@@ -294,7 +300,7 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 		},
 		{
 			// Required for OpenBao Kubernetes service registration.
-			Name: "BAO_K8S_POD_NAME",
+			Name: constants.EnvBaoK8sPodName,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "metadata.name",
@@ -303,7 +309,7 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 		},
 		{
 			// Required for OpenBao Kubernetes service registration.
-			Name: "BAO_K8S_NAMESPACE",
+			Name: constants.EnvBaoK8sNamespace,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "metadata.namespace",
@@ -311,7 +317,7 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 			},
 		},
 		{
-			Name: "POD_IP",
+			Name: constants.EnvPodIP,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "status.podIP",
@@ -319,8 +325,8 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 			},
 		},
 		{
-			Name:  "BAO_API_ADDR",
-			Value: fmt.Sprintf("https://$(POD_IP):%d", openBaoContainerPort),
+			Name:  constants.EnvBaoAPIAddr,
+			Value: fmt.Sprintf("https://$(%s):%d", constants.EnvPodIP, constants.PortAPI),
 		},
 		{
 			// Set umask to 0077 to ensure Raft FSM database files are created
@@ -433,7 +439,7 @@ func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, rendere
 	}
 
 	// Mount seal credentials volume when using external KMS with credentials
-	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" && cluster.Spec.Unseal.Type != "static" {
+	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" && cluster.Spec.Unseal.Type != unsealTypeStatic {
 		if cluster.Spec.Unseal.CredentialsSecretRef != nil {
 			mounts = append(mounts, corev1.VolumeMount{
 				Name:      "seal-creds",
@@ -469,7 +475,7 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 
 	// If not using ACME, watch the TLS certificate
 	if !usesACMEMode(cluster) {
-		args = append(args, "-watch-file=/etc/bao/tls/tls.crt")
+		args = append(args, fmt.Sprintf("-watch-file=%s/tls.crt", constants.PathTLS))
 	}
 
 	// Separator for the child command
@@ -480,7 +486,7 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 
 	containers := []corev1.Container{
 		{
-			Name:  openBaoContainerName,
+			Name:  constants.ContainerNameOpenBao,
 			Image: getContainerImage(cluster, verifiedImageDigest),
 			SecurityContext: &corev1.SecurityContext{
 				// Prevent privilege escalation (sudo, setuid binaries)
@@ -499,12 +505,12 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 			Ports: []corev1.ContainerPort{
 				{
 					Name:          "api",
-					ContainerPort: int32(openBaoContainerPort),
+					ContainerPort: int32(constants.PortAPI),
 					Protocol:      corev1.ProtocolTCP,
 				},
 				{
 					Name:          "cluster",
-					ContainerPort: int32(openBaoClusterPort),
+					ContainerPort: int32(constants.PortCluster),
 					Protocol:      corev1.ProtocolTCP,
 				},
 			},
@@ -756,7 +762,7 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 	}
 
 	// Add seal credentials volume if using external KMS with credentials
-	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" && cluster.Spec.Unseal.Type != "static" {
+	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" && cluster.Spec.Unseal.Type != unsealTypeStatic {
 		if cluster.Spec.Unseal.CredentialsSecretRef != nil {
 			volumes = append(volumes, corev1.Volume{
 				Name: "seal-creds",
@@ -901,7 +907,7 @@ func (m *Manager) deletePVCs(ctx context.Context, cluster *openbaov1alpha1.OpenB
 	if err := m.client.List(ctx, &pvcList,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabels(map[string]string{
-			labelOpenBaoCluster: cluster.Name,
+			constants.LabelOpenBaoCluster: cluster.Name,
 		}),
 	); err != nil {
 		return err

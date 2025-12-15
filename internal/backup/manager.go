@@ -23,12 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 	"github.com/openbao/operator/internal/storage"
-)
-
-const (
-	// backupServiceAccountSuffix is the suffix for backup ServiceAccount names.
-	backupServiceAccountSuffix = "-backup-serviceaccount"
 )
 
 // ErrNoBackupToken indicates that no suitable backup token is configured for
@@ -274,14 +270,6 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 	return nil
 }
 
-// isBackupDue checks if a backup should be executed now.
-func (m *Manager) isBackupDue(cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	if cluster.Spec.Backup == nil || cluster.Status.Backup == nil || cluster.Status.Backup.NextScheduledBackup == nil {
-		return false, nil
-	}
-	return !time.Now().UTC().Before(cluster.Status.Backup.NextScheduledBackup.Time), nil
-}
-
 // applyRetention applies the retention policy after a successful backup.
 func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *Metrics) error {
 	retention := cluster.Spec.Backup.Retention
@@ -383,11 +371,11 @@ func (m *Manager) ensureBackupServiceAccount(ctx context.Context, logger logr.Lo
 				Name:      saName,
 				Namespace: cluster.Namespace,
 				Labels: map[string]string{
-					"app.kubernetes.io/name":       "openbao",
-					"app.kubernetes.io/instance":   cluster.Name,
-					"app.kubernetes.io/managed-by": "openbao-operator",
-					"openbao.org/cluster":          cluster.Name,
-					"openbao.org/component":        "backup",
+					constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+					constants.LabelAppInstance:      cluster.Name,
+					constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+					constants.LabelOpenBaoCluster:   cluster.Name,
+					constants.LabelOpenBaoComponent: "backup",
 				},
 			},
 		}
@@ -410,11 +398,11 @@ func (m *Manager) ensureBackupServiceAccount(ctx context.Context, logger logr.Lo
 	}
 	needsUpdate := false
 	expectedLabels := map[string]string{
-		"app.kubernetes.io/name":       "openbao",
-		"app.kubernetes.io/instance":   cluster.Name,
-		"app.kubernetes.io/managed-by": "openbao-operator",
-		"openbao.org/cluster":          cluster.Name,
-		"openbao.org/component":        "backup",
+		constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:      cluster.Name,
+		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:   cluster.Name,
+		constants.LabelOpenBaoComponent: "backup",
 	}
 	for k, v := range expectedLabels {
 		if sa.Labels[k] != v {
@@ -434,7 +422,7 @@ func (m *Manager) ensureBackupServiceAccount(ctx context.Context, logger logr.Lo
 
 // backupServiceAccountName returns the name for the backup ServiceAccount.
 func backupServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + backupServiceAccountSuffix
+	return cluster.Name + constants.SuffixBackupServiceAccount
 }
 
 // hasPreUpgradeBackupJob checks if there's a pre-upgrade backup job running or pending for this cluster.
@@ -442,11 +430,11 @@ func backupServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 func (m *Manager) hasPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
 	jobList := &batchv1.JobList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
-		"app.kubernetes.io/instance":   cluster.Name,
-		"app.kubernetes.io/managed-by": "openbao-operator",
-		"openbao.org/cluster":          cluster.Name,
-		"openbao.org/component":        "backup",
-		"openbao.org/backup-type":      "pre-upgrade",
+		constants.LabelAppInstance:       cluster.Name,
+		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:    cluster.Name,
+		constants.LabelOpenBaoComponent:  "backup",
+		constants.LabelOpenBaoBackupType: "pre-upgrade",
 	})
 
 	if err := m.client.List(ctx, jobList,

@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 )
 
 func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
@@ -59,21 +60,22 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 					Name:      "cluster-0",
 					Namespace: "default",
 					Labels: map[string]string{
-						"app.kubernetes.io/instance":   "cluster",
-						"app.kubernetes.io/name":       "openbao",
-						"app.kubernetes.io/managed-by": "openbao-operator",
+						constants.LabelAppInstance:  "cluster",
+						constants.LabelAppName:     constants.LabelValueAppNameOpenBao,
+						constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 					},
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
 						{
-							Name: "openbao",
+							Name: constants.ContainerNameOpenBao,
 							State: corev1.ContainerState{
 								Running: &corev1.ContainerStateRunning{
 									StartedAt: metav1.Now(),
 								},
 							},
+							Started: ptrTo(true),
 						},
 					},
 					Conditions: []corev1.PodCondition{
@@ -106,6 +108,10 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 	}
 }
 
+func ptrTo(v bool) *bool {
+	return &v
+}
+
 func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -120,9 +126,9 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 			Name:      "cluster-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				"app.kubernetes.io/instance":   "cluster",
-				"app.kubernetes.io/name":       "openbao",
-				"app.kubernetes.io/managed-by": "openbao-operator",
+				constants.LabelAppInstance:  "cluster",
+				constants.LabelAppName:     constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 				"openbao-initialized":          "true",
 				"openbao-sealed":               "false",
 			},
@@ -131,7 +137,7 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
 				{
-					Name: "openbao",
+					Name: constants.ContainerNameOpenBao,
 					State: corev1.ContainerState{
 						Running: &corev1.ContainerStateRunning{
 							StartedAt: metav1.Now(),

@@ -30,9 +30,9 @@ func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 
 func TestLoadCredentials_NilSecretRef(t *testing.T) {
 	ctx := context.Background()
-	client := newTestClient(t)
+	k8sClient := newTestClient(t)
 
-	creds, err := LoadCredentials(ctx, client, nil, "default")
+	creds, err := LoadCredentials(ctx, k8sClient, nil, "default")
 	if err != nil {
 		t.Fatalf("LoadCredentials() with nil secretRef should not error, got: %v", err)
 	}
@@ -55,13 +55,13 @@ func TestLoadCredentials_ValidCredentials(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := newTestClient(t, secret)
+	k8sClient := newTestClient(t, secret)
 	secretRef := &corev1.SecretReference{
 		Name:      "test-credentials",
 		Namespace: "default",
 	}
 
-	creds, err := LoadCredentials(ctx, client, secretRef, "default")
+	creds, err := LoadCredentials(ctx, k8sClient, secretRef, "default")
 	if err != nil {
 		t.Fatalf("LoadCredentials() error = %v", err)
 	}
@@ -95,13 +95,13 @@ func TestLoadCredentials_WithOptionalFields(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := newTestClient(t, secret)
+	k8sClient := newTestClient(t, secret)
 	secretRef := &corev1.SecretReference{
 		Name:      "test-credentials",
 		Namespace: "default",
 	}
 
-	creds, err := LoadCredentials(ctx, client, secretRef, "default")
+	creds, err := LoadCredentials(ctx, k8sClient, secretRef, "default")
 	if err != nil {
 		t.Fatalf("LoadCredentials() error = %v", err)
 	}
@@ -132,13 +132,13 @@ func TestLoadCredentials_DefaultNamespace(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := newTestClient(t, secret)
+	k8sClient := newTestClient(t, secret)
 	secretRef := &corev1.SecretReference{
 		Name:      "test-credentials",
 		Namespace: "", // Empty namespace should use default
 	}
 
-	creds, err := LoadCredentials(ctx, client, secretRef, "default")
+	creds, err := LoadCredentials(ctx, k8sClient, secretRef, "default")
 	if err != nil {
 		t.Fatalf("LoadCredentials() error = %v", err)
 	}
@@ -150,13 +150,13 @@ func TestLoadCredentials_DefaultNamespace(t *testing.T) {
 
 func TestLoadCredentials_MissingSecret(t *testing.T) {
 	ctx := context.Background()
-	client := newTestClient(t)
+	k8sClient := newTestClient(t)
 	secretRef := &corev1.SecretReference{
 		Name:      "missing-secret",
 		Namespace: "default",
 	}
 
-	creds, err := LoadCredentials(ctx, client, secretRef, "default")
+	creds, err := LoadCredentials(ctx, k8sClient, secretRef, "default")
 	if err == nil {
 		t.Error("LoadCredentials() with missing secret should return error")
 	}
@@ -179,7 +179,7 @@ func TestLoadCredentials_MissingAccessKeyID(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := newTestClient(t, secret)
+	k8sClient := newTestClient(t, secret)
 	secretRef := &corev1.SecretReference{
 		Name:      "test-credentials",
 		Namespace: "default",
@@ -187,7 +187,7 @@ func TestLoadCredentials_MissingAccessKeyID(t *testing.T) {
 
 	// When only one key is present, LoadCredentials should return an error
 	// Both keys must be present or both must be missing (for workload identity)
-	_, err := LoadCredentials(ctx, client, secretRef, "default")
+	_, err := LoadCredentials(ctx, k8sClient, secretRef, "default")
 	if err == nil {
 		t.Fatal("LoadCredentials() with missing AccessKeyID should error when only SecretAccessKey is present")
 	}
@@ -299,12 +299,12 @@ func TestNewS3ClientFromCredentials_WithCredentials(t *testing.T) {
 		// CACert is optional - omit it for this test to avoid PEM parsing issues
 	}
 
-	client, err := NewS3ClientFromCredentials(ctx, "https://s3.amazonaws.com", "test-bucket", creds, false, 0, 0)
+	s3Client, err := NewS3ClientFromCredentials(ctx, "https://s3.amazonaws.com", "test-bucket", creds, false, 0, 0)
 	if err != nil {
 		t.Fatalf("NewS3ClientFromCredentials() error = %v", err)
 	}
 
-	if client == nil {
+	if s3Client == nil {
 		t.Fatal("NewS3ClientFromCredentials() should return client")
 	}
 }

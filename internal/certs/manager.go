@@ -25,12 +25,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 )
 
 const (
-	caSecretSuffix     = "-tls-ca"
-	serverSecretSuffix = "-tls-server"
-
 	caCertKey  = "ca.crt"
 	caKeyKey   = "ca.key"
 	tlsCertKey = "tls.crt"
@@ -90,6 +88,8 @@ func NewManagerWithReloader(c client.Client, scheme *runtime.Scheme, r ReloadSig
 // When Mode is External, the operator does not generate or rotate certificates.
 // It only waits for external Secrets to exist and triggers hot-reload when they change.
 // When Mode is ACME, OpenBao manages certificates internally via its native ACME client.
+//
+//nolint:gocyclo // Reconcile handles multiple TLS modes and k8s object flows; kept linear for readability.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if !cluster.Spec.TLS.Enabled {
 		logger.Info("TLS is disabled for OpenBaoCluster; skipping certificate reconciliation")
@@ -379,11 +379,11 @@ func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, 
 }
 
 func caSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + caSecretSuffix
+	return cluster.Name + constants.SuffixTLSCA
 }
 
 func serverSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + serverSecretSuffix
+	return cluster.Name + constants.SuffixTLSServer
 }
 
 func generateCA(cluster *openbaov1alpha1.OpenBaoCluster, now time.Time) ([]byte, []byte, error) {

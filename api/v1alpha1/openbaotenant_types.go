@@ -20,6 +20,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// OpenBaoTenantFinalizer is added to OpenBaoTenant resources to ensure tenant RBAC
+// cleanup logic runs before the resource is deleted.
+const OpenBaoTenantFinalizer = "openbao.org/openbaotenant-finalizer"
+
 // OpenBaoTenantSpec defines the desired state of OpenBaoTenant.
 type OpenBaoTenantSpec struct {
 	// TargetNamespace is the name of the namespace to provision with tenant RBAC.
