@@ -1,4 +1,21 @@
 ---
+# [SECURITY NOTICE]
+# This ClusterRole defines the MAXIMUM permissions that can be delegated to a Tenant.
+# It is bound to the 'delegate' ServiceAccount, which is never used directly.
+# The Provisioner impersonates this account ONLY to create scoped Roles in Tenant namespaces.
+#
+# Trivy/Scanner Alerts regarding Secret/Role access here are FALSE POSITIVES relative to
+# the architecture: these permissions are required to satisfy Kubernetes RBAC escalation
+# checks when generating tenant-scoped policies.
+#
+# Architecture Context:
+# - Delegation: The Provisioner uses 'impersonate' to create Roles for tenants.
+# - K8s RBAC Rule: A user (or ServiceAccount) cannot create a Role granting permissions
+#   they do not possess themselves.
+# - Conclusion: The Delegate *must* hold the union of all permissions that *any* tenant
+#   might need. Removing "Secrets" access here would prevent the operator from allowing
+#   Tenants to manage their own secrets.
+#
 # Template ClusterRole that defines exactly what a tenant should be allowed to do.
 # This is bound to the delegate ServiceAccount, which the Provisioner impersonates
 # when creating tenant Roles/RoleBindings. The API server enforces that the delegate

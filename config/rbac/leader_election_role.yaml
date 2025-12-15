@@ -7,18 +7,10 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: leader-election-role
 rules:
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
+# [FIX] Removed ConfigMap permissions as we use Leases for leader election
+# Modern controller-runtime defaults to using the Lease API (coordination.k8s.io)
+# for leader election, which is the recommended approach and aligns with
+# Kubernetes 1.33+ deprecation of ConfigMap locking.
 - apiGroups:
   - coordination.k8s.io
   resources:

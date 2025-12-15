@@ -34,4 +34,7 @@ COPY --from=builder /workspace/bao-wrapper /bao-wrapper
 # Copy probe to the image
 COPY --from=builder /workspace/bao-probe /bao-probe
 
+# Disable Docker-native healthchecks as this is a short-lived Init container
+HEALTHCHECK NONE
+
 ENTRYPOINT ["/bao-init-config"]

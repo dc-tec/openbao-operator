@@ -28,4 +28,7 @@ WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532
 
+# Disable Docker-native healthchecks as we rely on Kubernetes Probes (Manager)
+HEALTHCHECK NONE
+
 ENTRYPOINT ["/manager"]

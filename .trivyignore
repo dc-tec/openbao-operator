@@ -1,0 +1,12 @@
+# Trivy ignore file for intentional security configurations
+#
+# This file documents security findings that are intentional and required
+# for the OpenBao Operator architecture.
+
+# Skip misconfig checks for the provisioner delegate template
+# This ClusterRole is a template that defines maximum permissions that can
+# be delegated to tenants. The broad permissions are architecturally required
+# due to Kubernetes RBAC escalation checks. See the security notice in
+# config/rbac/provisioner_delegate_clusterrole.yaml for details.
+config/rbac/provisioner_delegate_clusterrole.yaml
+
