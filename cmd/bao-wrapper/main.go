@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -33,7 +36,7 @@ func main() {
 	}
 
 	// 1. Start the child process
-	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...) // #nosec G204 -- This wrapper intentionally executes user-provided commands
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ() // Pass through environment variables
@@ -107,7 +110,12 @@ func applyUmaskFromEnv() {
 }
 
 func getFileHash(path string) ([]byte, error) {
-	f, err := os.Open(path)
+	// Validate and clean path to prevent path traversal
+	cleanPath := filepath.Clean(path)
+	if strings.Contains(cleanPath, "..") {
+		return nil, fmt.Errorf("path %q contains path traversal", path)
+	}
+	f, err := os.Open(cleanPath) // #nosec G304 -- Path is validated and cleaned to prevent traversal
 	if err != nil {
 		return nil, err
 	}

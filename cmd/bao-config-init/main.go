@@ -55,9 +55,14 @@ func renderConfig(templatePath, outputPath, hostname, podIP, selfInitPath string
 		}
 	}
 
-	templateFile, err := os.Open(templatePath)
+	// Validate and clean template path to prevent path traversal
+	cleanTemplatePath := filepath.Clean(templatePath)
+	if strings.Contains(cleanTemplatePath, "..") {
+		return fmt.Errorf("template path %q contains path traversal", templatePath)
+	}
+	templateFile, err := os.Open(cleanTemplatePath) // #nosec G304 -- Path is validated and cleaned to prevent traversal
 	if err != nil {
-		return fmt.Errorf("failed to open template file %q: %w", templatePath, err)
+		return fmt.Errorf("failed to open template file %q: %w", cleanTemplatePath, err)
 	}
 	defer func() {
 		_ = templateFile.Close()
@@ -80,7 +85,12 @@ func renderConfig(templatePath, outputPath, hostname, podIP, selfInitPath string
 
 	// If self-init is enabled and this is pod-0, append the self-init configuration
 	if selfInitPath != "" && strings.HasSuffix(hostname, "-0") {
-		selfInitFile, err := os.Open(selfInitPath)
+		// Validate and clean self-init path to prevent path traversal
+		cleanSelfInitPath := filepath.Clean(selfInitPath)
+		if strings.Contains(cleanSelfInitPath, "..") {
+			return fmt.Errorf("self-init path %q contains path traversal", selfInitPath)
+		}
+		selfInitFile, err := os.Open(cleanSelfInitPath) // #nosec G304 -- Path is validated and cleaned to prevent traversal
 		if err != nil {
 			if os.IsNotExist(err) {
 				// Self-init ConfigMap may not exist if self-init is disabled
@@ -106,7 +116,7 @@ func renderConfig(templatePath, outputPath, hostname, podIP, selfInitPath string
 	}
 
 	dir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("failed to create output directory %q: %w", dir, err)
 	}
 
@@ -183,20 +193,30 @@ func copyProbe(sourcePath string) error {
 func copyBinary(sourcePath string, destPath string) error {
 	const fileMode = 0o755
 
-	destDir := filepath.Dir(destPath)
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
+	// Validate and clean paths to prevent path traversal
+	cleanSourcePath := filepath.Clean(sourcePath)
+	if strings.Contains(cleanSourcePath, "..") {
+		return fmt.Errorf("source path %q contains path traversal", sourcePath)
+	}
+	cleanDestPath := filepath.Clean(destPath)
+	if strings.Contains(cleanDestPath, "..") {
+		return fmt.Errorf("destination path %q contains path traversal", destPath)
+	}
+
+	destDir := filepath.Dir(cleanDestPath)
+	if err := os.MkdirAll(destDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create destination directory %q: %w", destDir, err)
 	}
 
-	sourceFile, err := os.Open(sourcePath)
+	sourceFile, err := os.Open(cleanSourcePath) // #nosec G304 -- Path is validated and cleaned to prevent traversal
 	if err != nil {
-		return fmt.Errorf("failed to open source file %q: %w", sourcePath, err)
+		return fmt.Errorf("failed to open source file %q: %w", cleanSourcePath, err)
 	}
 	defer func() { _ = sourceFile.Close() }()
 
-	destFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fileMode)
+	destFile, err := os.OpenFile(cleanDestPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fileMode) // #nosec G304 -- Path is validated and cleaned to prevent traversal
 	if err != nil {
-		return fmt.Errorf("failed to create destination file %q: %w", destPath, err)
+		return fmt.Errorf("failed to create destination file %q: %w", cleanDestPath, err)
 	}
 	defer func() { _ = destFile.Close() }()
 

@@ -95,11 +95,15 @@ func ApplyRetention(
 	keysToDelete := make([]string, 0)
 	now := time.Now().UTC()
 
-	for i, backup := range backups {
+	// Use int32 for loop index to match MaxCount type and avoid overflow
+	// #nosec G115 -- len(backups) is bounded by practical limits (< 2^31), conversion is safe
+	backupsLen := int32(len(backups))
+	for i := int32(0); i < backupsLen; i++ {
+		backup := backups[i]
 		shouldDelete := false
 
 		// Check MaxCount
-		if policy.MaxCount > 0 && int32(i) >= policy.MaxCount {
+		if policy.MaxCount > 0 && i >= policy.MaxCount {
 			shouldDelete = true
 			result.DeletedByCount++
 		}

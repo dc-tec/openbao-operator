@@ -23,7 +23,7 @@ const (
 
 // Backup executor mounted file paths.
 const (
-	PathBackupToken       = "/etc/bao/backup/token/token"
-	PathBackupCredentials = "/etc/bao/backup/credentials"
-	PathBackupJWTToken    = "/var/run/secrets/tokens/openbao-token"
+	PathBackupToken       = "/etc/bao/backup/token/token"           // #nosec G101 -- This is a file path constant, not a credential
+	PathBackupCredentials = "/etc/bao/backup/credentials"           // #nosec G101 -- This is a file path constant, not a credential
+	PathBackupJWTToken    = "/var/run/secrets/tokens/openbao-token" // #nosec G101 -- This is a file path constant, not a credential
 )

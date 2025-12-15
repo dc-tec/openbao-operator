@@ -31,18 +31,18 @@ const (
 	EnvBackupAuthMethod  = "BACKUP_AUTH_METHOD"
 	EnvBackupJWTAuthRole = "BACKUP_JWT_AUTH_ROLE"
 
-	EnvBackupTokenPath       = "BACKUP_TOKEN_PATH"
-	EnvBackupCredentialsPath = "BACKUP_CREDENTIALS_PATH"
-	EnvJWTTokenPath          = "JWT_TOKEN_PATH"
+	EnvBackupTokenPath       = "BACKUP_TOKEN_PATH"       // #nosec G101 -- This is an environment variable name constant, not a credential
+	EnvBackupCredentialsPath = "BACKUP_CREDENTIALS_PATH" // #nosec G101 -- This is an environment variable name constant, not a credential
+	EnvJWTTokenPath          = "JWT_TOKEN_PATH"          // #nosec G101 -- This is an environment variable name constant, not a credential
 	EnvTLSCAPath             = "TLS_CA_PATH"
 
-	EnvBackupCredentialsSecretName      = "BACKUP_CREDENTIALS_SECRET_NAME"
-	EnvBackupCredentialsSecretNamespace = "BACKUP_CREDENTIALS_SECRET_NAMESPACE"
+	EnvBackupCredentialsSecretName      = "BACKUP_CREDENTIALS_SECRET_NAME"      // #nosec G101 -- This is an environment variable name constant, not a credential
+	EnvBackupCredentialsSecretNamespace  = "BACKUP_CREDENTIALS_SECRET_NAMESPACE"  // #nosec G101 -- This is an environment variable name constant, not a credential
 	EnvBackupTokenSecretName            = "BACKUP_TOKEN_SECRET_NAME"
 	EnvBackupTokenSecretNamespace       = "BACKUP_TOKEN_SECRET_NAMESPACE"
 
 	EnvAWSRoleARN              = "AWS_ROLE_ARN"
-	EnvAWSWebIdentityTokenFile = "AWS_WEB_IDENTITY_TOKEN_FILE"
+	EnvAWSWebIdentityTokenFile = "AWS_WEB_IDENTITY_TOKEN_FILE" // #nosec G101 -- This is an environment variable name constant, not a credential
 )
 
 // Backup authentication method values.

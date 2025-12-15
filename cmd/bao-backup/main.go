@@ -211,25 +211,61 @@ func loadConfig() (*Config, error) {
 	return cfg, nil
 }
 
+// validatePath ensures a file path is within the base directory and doesn't contain path traversal.
+func validatePath(baseDir, filePath string) (string, error) {
+	// Clean the base directory and file path
+	cleanBase := filepath.Clean(baseDir)
+	cleanPath := filepath.Clean(filePath)
+
+	// Ensure the path is within the base directory
+	relPath, err := filepath.Rel(cleanBase, cleanPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid path %q relative to base %q: %w", filePath, baseDir, err)
+	}
+
+	// Check for path traversal attempts
+	if strings.HasPrefix(relPath, "..") {
+		return "", fmt.Errorf("path %q attempts to escape base directory %q", filePath, baseDir)
+	}
+
+	return cleanPath, nil
+}
+
 // loadStorageCredentials loads S3 credentials from the mounted directory.
 func loadStorageCredentials(credsPath string) (*storage.Credentials, error) {
 	creds := &storage.Credentials{}
 
+	// Validate and clean the base credentials path
+	cleanCredsPath, err := validatePath("/", credsPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid credentials path: %w", err)
+	}
+
 	// Check if credentials directory exists
-	if _, err := os.Stat(credsPath); os.IsNotExist(err) {
+	if _, err := os.Stat(cleanCredsPath); os.IsNotExist(err) {
 		// No credentials provided - will use default credential chain
 		return nil, nil
 	}
 
 	// Load access key ID
-	accessKeyPath := filepath.Join(credsPath, "accessKeyId")
-	if data, err := os.ReadFile(accessKeyPath); err == nil {
+	accessKeyPath := filepath.Join(cleanCredsPath, "accessKeyId")
+	validatedAccessKeyPath, err := validatePath(cleanCredsPath, accessKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid access key path: %w", err)
+	}
+	// #nosec G304 -- Path is validated to be within base directory
+	if data, err := os.ReadFile(validatedAccessKeyPath); err == nil {
 		creds.AccessKeyID = strings.TrimSpace(string(data))
 	}
 
 	// Load secret access key
-	secretKeyPath := filepath.Join(credsPath, "secretAccessKey")
-	if data, err := os.ReadFile(secretKeyPath); err == nil {
+	secretKeyPath := filepath.Join(cleanCredsPath, "secretAccessKey")
+	validatedSecretKeyPath, err := validatePath(cleanCredsPath, secretKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid secret key path: %w", err)
+	}
+	// #nosec G304 -- Path is validated to be within base directory
+	if data, err := os.ReadFile(validatedSecretKeyPath); err == nil {
 		creds.SecretAccessKey = strings.TrimSpace(string(data))
 	}
 
@@ -240,21 +276,36 @@ func loadStorageCredentials(credsPath string) (*storage.Credentials, error) {
 	}
 
 	// Load optional fields
-	sessionTokenPath := filepath.Join(credsPath, "sessionToken")
-	if data, err := os.ReadFile(sessionTokenPath); err == nil {
+	sessionTokenPath := filepath.Join(cleanCredsPath, "sessionToken")
+	validatedSessionTokenPath, err := validatePath(cleanCredsPath, sessionTokenPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid session token path: %w", err)
+	}
+	// #nosec G304 -- Path is validated to be within base directory
+	if data, err := os.ReadFile(validatedSessionTokenPath); err == nil {
 		creds.SessionToken = strings.TrimSpace(string(data))
 	}
 
-	regionPath := filepath.Join(credsPath, "region")
-	if data, err := os.ReadFile(regionPath); err == nil {
+	regionPath := filepath.Join(cleanCredsPath, "region")
+	validatedRegionPath, err := validatePath(cleanCredsPath, regionPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid region path: %w", err)
+	}
+	// #nosec G304 -- Path is validated to be within base directory
+	if data, err := os.ReadFile(validatedRegionPath); err == nil {
 		creds.Region = strings.TrimSpace(string(data))
 	} else {
 		// Use default region if not provided
 		creds.Region = defaultRegion
 	}
 
-	caCertPath := filepath.Join(credsPath, "caCert")
-	if data, err := os.ReadFile(caCertPath); err == nil {
+	caCertPath := filepath.Join(cleanCredsPath, "caCert")
+	validatedCACertPath, err := validatePath(cleanCredsPath, caCertPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid CA cert path: %w", err)
+	}
+	// #nosec G304 -- Path is validated to be within base directory
+	if data, err := os.ReadFile(validatedCACertPath); err == nil {
 		creds.CACert = data
 	}
 

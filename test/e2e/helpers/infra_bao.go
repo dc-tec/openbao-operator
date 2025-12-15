@@ -439,7 +439,7 @@ func initializeInfraBao(ctx context.Context, c client.Client, _ string, cfg Infr
 	// For static seal, we don't need to pass secret_shares or secret_threshold
 	// Set BAO_ADDR to use HTTPS with the local address (since we're inside the pod)
 	// Use -tls-skip-verify since we're using self-signed certs in tests
-	cmd := exec.CommandContext(initCtx, "kubectl", "exec",
+	cmd := exec.CommandContext(initCtx, "kubectl", "exec", // #nosec G204 -- E2E test helper, command and arguments are controlled
 		"-n", cfg.Namespace,
 		cfg.Name,
 		"--",

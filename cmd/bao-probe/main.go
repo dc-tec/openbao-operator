@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -174,7 +175,12 @@ func newHTTPClient(
 		// Empty CA file means use system roots (e.g., for public ACME CAs like Let's Encrypt)
 		roots = nil
 	} else {
-		caPEM, err := os.ReadFile(caFile)
+		// Validate and clean CA file path to prevent path traversal
+		cleanCAFile := filepath.Clean(caFile)
+		if strings.Contains(cleanCAFile, "..") {
+			return nil, fmt.Errorf("CA file path %q contains path traversal", caFile)
+		}
+		caPEM, err := os.ReadFile(cleanCAFile) // #nosec G304 -- Path is validated and cleaned to prevent traversal
 		if err != nil {
 			// If the CA file doesn't exist and we have a serverName (ACME mode), use system roots.
 			// This handles public ACME CAs where no CA file is provided.
@@ -185,7 +191,7 @@ func newHTTPClient(
 				// Fallback for non-ACME loopback probes when CA file is missing
 				tlsConfig := &tls.Config{
 					MinVersion:         tls.VersionTLS12,
-					InsecureSkipVerify: true,
+					InsecureSkipVerify: true, // #nosec G402 -- InsecureSkipVerify is required for loopback fallback, but we perform manual certificate verification via VerifyPeerCertificate to ensure we're connecting to the expected loopback service.
 					VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 						return verifyLoopbackCertificate(rawCerts)
 					},

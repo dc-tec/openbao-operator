@@ -27,16 +27,16 @@ const (
 const (
 	awsWebIdentityVolumeName     = "aws-iam-token"
 	awsWebIdentityMountPath      = "/var/run/secrets/aws"
-	awsWebIdentityTokenFile      = awsWebIdentityMountPath + "/token"
-	awsWebIdentityTokenAudience  = "sts.amazonaws.com"
+	awsWebIdentityTokenFile      = "/var/run/secrets/aws/token" // #nosec G101 -- This is a mount path constant, not a credential
+	awsWebIdentityTokenAudience  = "sts.amazonaws.com"          // #nosec G101 -- This is a constant, not a credential
 	openBaoTokenVolumeName       = "openbao-token"
-	openBaoTokenMountPath        = "/var/run/secrets/tokens"
+	openBaoTokenMountPath        = "/var/run/secrets/tokens" // #nosec G101 -- This is a mount path constant, not a credential
 	openBaoTokenFileRelativePath = "openbao-token"
 	openBaoTokenAudience         = "openbao-internal"
-	backupCredentialsVolumeName  = "backup-credentials"
-	backupCredentialsMountPath   = "/etc/bao/backup/credentials"
+	backupCredentialsVolumeName  = "backup-credentials"          // #nosec G101 -- This is a volume name constant, not a credential
+	backupCredentialsMountPath   = "/etc/bao/backup/credentials" // #nosec G101 -- This is a mount path constant, not a credential
 	backupTokenVolumeName        = "backup-token"
-	backupTokenMountPath         = "/etc/bao/backup/token"
+	backupTokenMountPath         = "/etc/bao/backup/token" // #nosec G101 -- This is a mount path constant, not a credential
 	backupTLSCAVolumeName        = "tls-ca"
 )
 
