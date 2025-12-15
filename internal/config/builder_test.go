@@ -2,6 +2,8 @@ package config
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -54,25 +56,7 @@ func TestRenderHCLIncludesCoreStanzas(t *testing.T) {
 		t.Fatalf("RenderHCL() error = %v", err)
 	}
 
-	content := string(got)
-	expected := []string{
-		`listener "tcp"`,
-		`address              = "0.0.0.0:8200"`,
-		`cluster_address      = "0.0.0.0:8201"`,
-		`seal "static"`,
-		`storage "raft"`,
-		`service_registration "kubernetes"`,
-		`node_id = "$${HOSTNAME}"`,
-		`https://$${HOSTNAME}.config-hcl.security.svc:8200`,
-		`https://$${HOSTNAME}.config-hcl.security.svc:8201`,
-		`cluster_name     = "config-hcl"`,
-	}
-
-	for _, snippet := range expected {
-		if !strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered config.hcl to contain %q, got:\n%s", snippet, content)
-		}
-	}
+	compareGolden(t, "render_hcl_core_stanzas", got)
 }
 
 func TestRenderHCLIncludesLeaderTLSServerNameForAutoJoin(t *testing.T) {
@@ -85,27 +69,12 @@ func TestRenderHCLIncludesLeaderTLSServerNameForAutoJoin(t *testing.T) {
 		ClusterPort:         8201,
 	}
 
-	// Test auto_join configuration
 	got, err := RenderHCL(cluster, infraDetails)
 	if err != nil {
 		t.Fatalf("RenderHCL() error = %v", err)
 	}
 
-	content := string(got)
-
-	// Verify that auto_join is present
-	if !strings.Contains(content, `auto_join`) {
-		t.Fatalf("expected rendered config.hcl to contain auto_join, got:\n%s", content)
-	}
-
-	// Verify that leader_tls_servername is present with the correct value
-	// HCL formatting may vary, so check for both the key and value separately
-	if !strings.Contains(content, `leader_tls_servername`) {
-		t.Fatalf("expected rendered config.hcl to contain leader_tls_servername, got:\n%s", content)
-	}
-	if !strings.Contains(content, `openbao-cluster-test-cluster.local`) {
-		t.Fatalf("expected rendered config.hcl to contain openbao-cluster-test-cluster.local, got:\n%s", content)
-	}
+	compareGolden(t, "render_hcl_auto_join", got)
 }
 
 func TestRenderHCLWithSelfInitRequests(t *testing.T) {
@@ -133,25 +102,7 @@ func TestRenderHCLWithSelfInitRequests(t *testing.T) {
 		t.Fatalf("RenderSelfInitHCL() error = %v", err)
 	}
 
-	content := string(got)
-
-	expectedSnippets := []string{
-		`initialize "enable-stdout-audit" {`,
-		`request "enable-stdout-audit-request" {`,
-		`operation = "update"`,
-		`path      = "sys/audit/stdout"`,
-		`data = {`,
-		`options = {`,
-		`file_path = "/dev/stdout"`,
-		`log_raw   = true`,
-		`type = "file"`,
-	}
-
-	for _, snippet := range expectedSnippets {
-		if !strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered self-init config.hcl to contain %q, got:\n%s", snippet, content)
-		}
-	}
+	compareGolden(t, "render_self_init_requests", got)
 }
 
 func mustJSON(t *testing.T, v interface{}) *apiextensionsv1.JSON {
@@ -163,6 +114,80 @@ func mustJSON(t *testing.T, v interface{}) *apiextensionsv1.JSON {
 	}
 
 	return &apiextensionsv1.JSON{Raw: raw}
+}
+
+// goldenFile reads the golden file for the given test name.
+// If UPDATE_GOLDEN is set to "true", it writes the provided content to the golden file instead.
+func goldenFile(t *testing.T, name string, got []byte) []byte {
+	t.Helper()
+
+	goldenPath := filepath.Join("testdata", name+".hcl")
+
+	// If UPDATE_GOLDEN is set, write the current output to the golden file
+	if os.Getenv("UPDATE_GOLDEN") == "true" {
+		if err := os.WriteFile(goldenPath, got, 0644); err != nil {
+			t.Fatalf("failed to write golden file %q: %v", goldenPath, err)
+		}
+		t.Logf("updated golden file: %s", goldenPath)
+		return got
+	}
+
+	// Read the expected golden file
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("failed to read golden file %q: %v. Set UPDATE_GOLDEN=true to generate it.", goldenPath, err)
+	}
+
+	return want
+}
+
+// compareGolden compares the generated HCL with the golden file and reports differences.
+func compareGolden(t *testing.T, name string, got []byte) {
+	t.Helper()
+
+	want := goldenFile(t, name, got)
+
+	gotStr := string(got)
+	wantStr := string(want)
+
+	if gotStr != wantStr {
+		t.Errorf("HCL output does not match golden file %q", name)
+		t.Errorf("To update the golden file, run: UPDATE_GOLDEN=true go test ./internal/config -run %s", t.Name())
+
+		// Show a simple line-by-line diff for better readability
+		gotLines := strings.Split(gotStr, "\n")
+		wantLines := strings.Split(wantStr, "\n")
+
+		maxLines := len(gotLines)
+		if len(wantLines) > maxLines {
+			maxLines = len(wantLines)
+		}
+
+		diffCount := 0
+		for i := 0; i < maxLines && diffCount < 10; i++ {
+			var gotLine, wantLine string
+			if i < len(gotLines) {
+				gotLine = gotLines[i]
+			}
+			if i < len(wantLines) {
+				wantLine = wantLines[i]
+			}
+
+			if gotLine != wantLine {
+				diffCount++
+				t.Errorf("Line %d:\n  Got:  %q\n  Want: %q", i+1, gotLine, wantLine)
+			}
+		}
+
+		if diffCount >= 10 {
+			t.Errorf("... (showing first 10 differences, %d total lines differ)", maxLines)
+		}
+
+		// Also show full output for small diffs (less than 50 lines)
+		if maxLines < 50 {
+			t.Errorf("\n--- Full Got output:\n%s\n--- Full Want output:\n%s", gotStr, wantStr)
+		}
+	}
 }
 
 func TestRenderOperatorBootstrapHCL(t *testing.T) {
@@ -178,46 +203,7 @@ func TestRenderOperatorBootstrapHCL(t *testing.T) {
 		t.Fatalf("RenderOperatorBootstrapHCL() error = %v", err)
 	}
 
-	content := string(got)
-
-	expectedSnippets := []string{
-		`initialize "operator-bootstrap" {`,
-		`request "enable-jwt-auth" {`,
-		`sys/auth/jwt`,
-		`type`,
-		`"jwt"`,
-		`request "config-jwt-auth" {`,
-		`auth/jwt/config`,
-		`bound_issuer`,
-		`jwt_validation_pubkeys`,
-		`request "create-operator-policy" {`,
-		`sys/policies/acl/openbao-operator`,
-		`sys/health`,
-		`sys/step-down`,
-		`sys/storage/raft/snapshot`,
-		`request "create-operator-role" {`,
-		`auth/jwt/role/openbao-operator`,
-		`role_type`,
-		`user_claim`,
-		`"sub"`,
-		`bound_audiences`,
-		`openbao-internal`,
-		`bound_claims`,
-		`kubernetes.io/namespace`,
-		`openbao-operator-system`,
-		`kubernetes.io/serviceaccount/name`,
-		`openbao-operator-controller`,
-		`token_policies`,
-		`openbao-operator`,
-		`ttl`,
-		`"1h"`,
-	}
-
-	for _, snippet := range expectedSnippets {
-		if !strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered bootstrap HCL to contain %q, got:\n%s", snippet, content)
-		}
-	}
+	compareGolden(t, "render_operator_bootstrap", got)
 }
 
 func TestRenderSelfInitHCL_WithBootstrapConfig(t *testing.T) {
@@ -249,27 +235,7 @@ func TestRenderSelfInitHCL_WithBootstrapConfig(t *testing.T) {
 		t.Fatalf("RenderSelfInitHCL() error = %v", err)
 	}
 
-	content := string(got)
-
-	// Verify bootstrap blocks are present
-	bootstrapSnippets := []string{
-		`initialize "operator-bootstrap" {`,
-		`request "enable-jwt-auth" {`,
-		`request "config-jwt-auth" {`,
-		`request "create-operator-policy" {`,
-		`request "create-operator-role" {`,
-	}
-
-	for _, snippet := range bootstrapSnippets {
-		if !strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered self-init HCL with bootstrap to contain %q, got:\n%s", snippet, content)
-		}
-	}
-
-	// Verify user requests are also present
-	if !strings.Contains(content, `initialize "enable-stdout-audit"`) {
-		t.Fatalf("expected rendered self-init HCL to contain user request, got:\n%s", content)
-	}
+	compareGolden(t, "render_self_init_with_bootstrap", got)
 }
 
 func TestRenderSelfInitHCL_AutoCreatesBackupAndUpgradePolicies(t *testing.T) {
@@ -302,43 +268,7 @@ func TestRenderSelfInitHCL_AutoCreatesBackupAndUpgradePolicies(t *testing.T) {
 		t.Fatalf("RenderSelfInitHCL() error = %v", err)
 	}
 
-	content := string(got)
-
-	// Verify backup policy and role are automatically created
-	backupSnippets := []string{
-		`request "create-backup-policy" {`,
-		`sys/policies/acl/backup`,
-		`sys/storage/raft/snapshot`,
-		`request "create-backup-jwt-role" {`,
-		`auth/jwt/role/backup`,
-		`hardened-cluster-backup-serviceaccount`,
-		`"backup"`,
-	}
-
-	for _, snippet := range backupSnippets {
-		if !strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered self-init HCL to contain backup bootstrap %q, got:\n%s", snippet, content)
-		}
-	}
-
-	// Verify upgrade policy and role are automatically created
-	upgradeSnippets := []string{
-		`request "create-upgrade-policy" {`,
-		`sys/policies/acl/upgrade`,
-		`sys/health`,
-		`sys/step-down`,
-		`sys/storage/raft/snapshot`,
-		`request "create-upgrade-jwt-role" {`,
-		`auth/jwt/role/upgrade`,
-		`hardened-cluster-upgrade-serviceaccount`,
-		`"upgrade"`,
-	}
-
-	for _, snippet := range upgradeSnippets {
-		if !strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered self-init HCL to contain upgrade bootstrap %q, got:\n%s", snippet, content)
-		}
-	}
+	compareGolden(t, "render_self_init_backup_upgrade_policies", got)
 }
 
 func TestRenderSelfInitHCL_DoesNotCreateBackupUpgradePoliciesWhenNotConfigured(t *testing.T) {
@@ -361,21 +291,7 @@ func TestRenderSelfInitHCL_DoesNotCreateBackupUpgradePoliciesWhenNotConfigured(t
 		t.Fatalf("RenderSelfInitHCL() error = %v", err)
 	}
 
-	content := string(got)
-
-	// Verify backup and upgrade policies/roles are NOT created when not configured
-	shouldNotContain := []string{
-		`request "create-backup-policy"`,
-		`request "create-backup-jwt-role"`,
-		`request "create-upgrade-policy"`,
-		`request "create-upgrade-jwt-role"`,
-	}
-
-	for _, snippet := range shouldNotContain {
-		if strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered self-init HCL to NOT contain %q when backup/upgrade not configured, got:\n%s", snippet, content)
-		}
-	}
+	compareGolden(t, "render_self_init_no_backup_upgrade", got)
 }
 
 func TestRenderSelfInitHCL_DoesNotCreatePoliciesWhenUsingTokenSecretRef(t *testing.T) {
@@ -417,22 +333,7 @@ func TestRenderSelfInitHCL_DoesNotCreatePoliciesWhenUsingTokenSecretRef(t *testi
 		t.Fatalf("RenderSelfInitHCL() error = %v", err)
 	}
 
-	content := string(got)
-
-	// Verify backup and upgrade policies/roles are NOT created when using TokenSecretRef
-	// (opt-in behavior: only creates when JWTAuthRole is explicitly set)
-	shouldNotContain := []string{
-		`request "create-backup-policy"`,
-		`request "create-backup-jwt-role"`,
-		`request "create-upgrade-policy"`,
-		`request "create-upgrade-jwt-role"`,
-	}
-
-	for _, snippet := range shouldNotContain {
-		if strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered self-init HCL to NOT contain %q when using TokenSecretRef (not JWTAuthRole), got:\n%s", snippet, content)
-		}
-	}
+	compareGolden(t, "render_self_init_token_secret_ref", got)
 }
 
 func TestRenderHCL_ACMEMode_RendersACMEConfig(t *testing.T) {
@@ -456,37 +357,7 @@ func TestRenderHCL_ACMEMode_RendersACMEConfig(t *testing.T) {
 		t.Fatalf("RenderHCL() error = %v", err)
 	}
 
-	content := string(got)
-
-	// Verify ACME parameters are present
-	expected := []string{
-		`tls_acme_ca_directory`,
-		`"https://acme-v02.api.letsencrypt.org/directory"`,
-		`tls_acme_domains`,
-		`"example.com"`,
-		`tls_acme_email`,
-		`"admin@example.com"`,
-	}
-
-	for _, snippet := range expected {
-		if !strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered config.hcl to contain %q, got:\n%s", snippet, content)
-		}
-	}
-
-	// Verify file-based TLS paths are NOT present
-	shouldNotContain := []string{
-		`tls_cert_file`,
-		`tls_key_file`,
-		`tls_client_ca_file`,
-		`/etc/bao/tls/`,
-	}
-
-	for _, snippet := range shouldNotContain {
-		if strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered config.hcl to NOT contain %q (ACME mode), got:\n%s", snippet, content)
-		}
-	}
+	compareGolden(t, "render_hcl_acme_mode", got)
 }
 
 func TestRenderHCL_ACMEMode_NoRetryJoinTLSFiles(t *testing.T) {
@@ -509,28 +380,7 @@ func TestRenderHCL_ACMEMode_NoRetryJoinTLSFiles(t *testing.T) {
 		t.Fatalf("RenderHCL() error = %v", err)
 	}
 
-	content := string(got)
-
-	// Verify retry_join does NOT have TLS file paths in ACME mode
-	shouldNotContain := []string{
-		`leader_ca_cert_file`,
-		`leader_client_cert_file`,
-		`leader_client_key_file`,
-	}
-
-	for _, snippet := range shouldNotContain {
-		if strings.Contains(content, snippet) {
-			t.Fatalf("expected rendered config.hcl to NOT contain %q in retry_join (ACME mode), got:\n%s", snippet, content)
-		}
-	}
-
-	// Verify retry_join still has auto_join and leader_tls_servername
-	if !strings.Contains(content, `auto_join`) {
-		t.Fatalf("expected rendered config.hcl to contain auto_join, got:\n%s", content)
-	}
-	if !strings.Contains(content, `leader_tls_servername`) {
-		t.Fatalf("expected rendered config.hcl to contain leader_tls_servername, got:\n%s", content)
-	}
+	compareGolden(t, "render_hcl_acme_mode_no_email", got)
 }
 
 func TestRenderHCL_ACMEMode_RequiresACMEConfig(t *testing.T) {

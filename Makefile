@@ -71,6 +71,10 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
+.PHONY: test-update-golden
+test-update-golden: ## Update golden files for HCL generation tests. Run this when modifying internal/config/builder.go or related config generation logic.
+	UPDATE_GOLDEN=true go test ./internal/config/... -v
+
 .PHONY: verify-trusted-root
 verify-trusted-root: ## Verify that trusted_root.json exists and is valid JSON.
 	@if [ ! -f internal/security/trusted_root.json ]; then \

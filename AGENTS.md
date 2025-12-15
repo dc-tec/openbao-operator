@@ -141,6 +141,7 @@ When creating or managing Kubernetes resources that require RBAC permissions, yo
         // ... loop ...
     }
     ```
+* **Golden File Testing:** HCL configuration generation tests use golden files stored in `internal/config/testdata/` to ensure exact output matching. When modifying `internal/config/builder.go` or related HCL generation logic, you **must** update golden files by running `make test-update-golden` or `UPDATE_GOLDEN=true go test ./internal/config/... -v`. Review the generated golden files carefully before committing.
 * **EnvTest:** Use `envtest` (part of controller-runtime) for integration tests to verify CRD interactions.
 * **Mocks:** Prefer defining small interfaces in your consumer package and mocking those, rather than mocking entire external libraries.
 * **Testing Strategy Reference:** Follow the layered testing approach and concrete examples described in `docs/contributing.md` when adding or updating tests.

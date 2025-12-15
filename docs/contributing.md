@@ -202,6 +202,30 @@ Or for a specific package:
 go test ./internal/certs/...
 ```
 
+#### Golden File Testing for HCL Generation
+
+The HCL configuration generation tests (`internal/config/builder_test.go`) use golden files to ensure exact output matching. Golden files are stored in `internal/config/testdata/` and contain the expected HCL output for each test scenario.
+
+**When to update golden files:**
+
+- After modifying `internal/config/builder.go` or related HCL generation logic
+- When the expected HCL output changes due to feature additions or bug fixes
+- When refactoring config generation that affects output formatting
+
+**To update golden files:**
+
+```sh
+make test-update-golden
+```
+
+Or manually:
+
+```sh
+UPDATE_GOLDEN=true go test ./internal/config/... -v
+```
+
+This will regenerate all golden files based on the current implementation. Review the changes in the golden files carefully before committing, as they represent the actual HCL configuration that will be generated for OpenBao clusters.
+
 ### 3.2 Controller / Integration Tests (envtest)
 
 Controller-level tests validate reconciliation behavior using `envtest`:
@@ -672,6 +696,7 @@ While we aim to reduce redundancy, we adhere to the Go proverb: **"A little copy
 #### 6.11.5 Testing Expectations Per Change
 
 * New logic in `internal/` packages MUST have table-driven unit tests.
+* Changes to HCL generation (`internal/config/builder.go`) MUST update golden files by running `make test-update-golden` and reviewing the changes.
 * New reconciliation flows MUST have at least one envtest-based integration test.
 * Changes to upgrade or backup behavior SHOULD be accompanied by at least one E2E scenario update (kind + KUTTL/Ginkgo).
 
@@ -685,14 +710,19 @@ While we aim to reduce redundancy, we adhere to the Go proverb: **"A little copy
 1. **Fork the repository** and create a feature branch.
 2. **Make your changes** following the coding standards.
 3. **Add tests** for new functionality (unit, integration, and E2E as appropriate).
-4. **Run tests locally** to ensure everything passes:
+4. **Update golden files** if you modified HCL generation logic (`internal/config/builder.go`):
+   ```sh
+   make test-update-golden
+   ```
+   Review the changes in `internal/config/testdata/*.hcl` files carefully before committing.
+5. **Run tests locally** to ensure everything passes:
    ```sh
    make test
    make lint
    ```
-5. **Update documentation** if your changes affect user-facing behavior.
-6. **Commit your changes** with clear, descriptive commit messages.
-7. **Push to your fork** and open a pull request.
+6. **Update documentation** if your changes affect user-facing behavior.
+7. **Commit your changes** with clear, descriptive commit messages.
+8. **Push to your fork** and open a pull request.
 
 ## 8. Additional Resources
 
