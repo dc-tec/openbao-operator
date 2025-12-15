@@ -34,3 +34,11 @@ spec:
       # Use the websecure entrypoint (HTTPS) for TLS termination at Traefik
       traefik.ingress.kubernetes.io/router.entrypoints: websecure
   deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"

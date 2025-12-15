@@ -304,17 +304,17 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 						Email:        "e2e@example.invalid",
 					},
 				},
-				Config: map[string]string{
-					"tls_acme_ca_root": "/etc/bao/seal-creds/ca.crt", // TLS CA for verifying ACME directory server (infra-bao)
+				Configuration: &openbaov1alpha1.OpenBaoConfiguration{
+					ACMECARoot: "/etc/bao/seal-creds/ca.crt", // TLS CA for verifying ACME directory server (infra-bao)
 				},
 				Unseal: &openbaov1alpha1.UnsealConfig{
 					Type: "transit",
-					Options: map[string]string{
-						"address":     infraAddr,
-						"mount_path":  "transit",
-						"key_name":    infraBaoKeyName,
-						"token_file":  "/etc/bao/seal-creds/token",
-						"tls_ca_file": "/etc/bao/seal-creds/ca.crt",
+					Transit: &openbaov1alpha1.TransitSealConfig{
+						Address:   infraAddr,
+						MountPath: "transit",
+						KeyName:   infraBaoKeyName,
+						Token:     "", // Token is provided via token_file in Secret
+						TLSCACert: "/etc/bao/seal-creds/ca.crt",
 						// Note: tls_skip_verify is not set because:
 						// 1. Hardened profile validation policy disallows tls_skip_verify=true
 						// 2. When using HTTP (not HTTPS), TLS verification is not applicable

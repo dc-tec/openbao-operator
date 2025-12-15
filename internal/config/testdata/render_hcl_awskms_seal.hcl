@@ -1,7 +1,7 @@
 ui               = true
-cluster_name     = "config-hcl"
-api_addr         = "https://$${HOSTNAME}.config-hcl.security.svc:8200"
-cluster_addr     = "https://$${HOSTNAME}.config-hcl.security.svc:8201"
+cluster_name     = "awskms-seal"
+api_addr         = "https://$${HOSTNAME}.awskms-seal.default.svc:8200"
+cluster_addr     = "https://$${HOSTNAME}.awskms-seal.default.svc:8201"
 plugin_directory = "/openbao/plugins"
 listener "tcp" {
   address              = "0.0.0.0:8200"
@@ -12,16 +12,17 @@ listener "tcp" {
   tls_key_file         = "/etc/bao/tls/tls.key"
   tls_client_ca_file   = "/etc/bao/tls/ca.crt"
 }
-seal "static" {
-  current_key    = "file:///etc/bao/unseal/key"
-  current_key_id = "operator-generated-v1"
+seal "awskms" {
+  region     = "us-east-1"
+  kms_key_id = "alias/my-key"
+  endpoint   = "https://kms.us-east-1.amazonaws.com"
 }
 storage "raft" {
   path    = "/bao/data"
   node_id = "$${HOSTNAME}"
   retry_join {
-    auto_join               = "provider=k8s namespace=security label_selector=\"openbao.org/cluster=config-hcl\""
-    leader_tls_servername   = "openbao-cluster-config-hcl.local"
+    auto_join               = "provider=k8s namespace=default label_selector=\"openbao.org/cluster=awskms-seal\""
+    leader_tls_servername   = "openbao-cluster-awskms-seal.local"
     leader_ca_cert_file     = "/etc/bao/tls/ca.crt"
     leader_client_cert_file = "/etc/bao/tls/tls.crt"
     leader_client_key_file  = "/etc/bao/tls/tls.key"
@@ -29,4 +30,3 @@ storage "raft" {
 }
 service_registration "kubernetes" {
 }
-log_level = "debug"

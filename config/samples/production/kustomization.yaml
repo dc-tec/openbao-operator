@@ -5,4 +5,11 @@ resources:
   - openbao_v1alpha1_openbaocluster_backup.yaml
   - openbao_v1alpha1_openbaocluster_awskms.yaml
   - openbao_v1alpha1_openbaocluster_acme.yaml
+  - openbao_v1alpha1_openbaocluster_transit.yaml
+  - openbao_v1alpha1_openbaocluster_azure.yaml
+  - openbao_v1alpha1_openbaocluster_gcp.yaml
+  - openbao_v1alpha1_openbaocluster_kmip.yaml
+  - openbao_v1alpha1_openbaocluster_oci.yaml
+  - openbao_v1alpha1_openbaocluster_pkcs11.yaml
+  - openbao_v1alpha1_openbaocluster_structured_config.yaml
 

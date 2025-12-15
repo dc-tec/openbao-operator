@@ -165,8 +165,9 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
 	cluster := newMinimalCluster("infra-container", "default")
-	cluster.Spec.Config = map[string]string{
-		"extra": "ui = true\n",
+	uiEnabled := true
+	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
+		UI: &uiEnabled,
 	}
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
@@ -329,8 +330,8 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 		Email:        "e2e@example.invalid",
 	}
 	// Configure tls_acme_ca_root to use the ACME CA for certificate verification
-	cluster.Spec.Config = map[string]string{
-		"tls_acme_ca_root": "/etc/bao/seal-creds/ca.crt",
+	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
+		ACMECARoot: "/etc/bao/seal-creds/ca.crt",
 	}
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
 		Type: "transit",

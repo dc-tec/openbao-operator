@@ -15,3 +15,9 @@ spec:
   storage:
     size: "10Gi"
   deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    # Enable web UI
+    ui: true
+    # Log level
+    logLevel: "info"

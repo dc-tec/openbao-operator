@@ -25,6 +25,13 @@ spec:
   storage:
     size: "10Gi"
   deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "standard"
+      file: "/var/log/openbao/openbao.log"
   # Self-initialization configuration
   selfInit:
     enabled: true

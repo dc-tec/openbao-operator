@@ -541,23 +541,306 @@ type GatewayReference struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
+// TransitSealConfig configures the Transit seal type.
+// See: https://openbao.org/docs/configuration/seal/transit/
+type TransitSealConfig struct {
+	// Address is the full address to the OpenBao cluster.
+	// +kubebuilder:validation:MinLength=1
+	Address string `json:"address"`
+
+	// Token is the OpenBao token to use for authentication.
+	// Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly.
+	// +optional
+	Token string `json:"token,omitempty"`
+
+	// KeyName is the transit key to use for encryption and decryption.
+	// +kubebuilder:validation:MinLength=1
+	KeyName string `json:"keyName"`
+
+	// MountPath is the mount path to the transit secret engine.
+	// +kubebuilder:validation:MinLength=1
+	MountPath string `json:"mountPath"`
+
+	// Namespace is the namespace path to the transit secret engine.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// DisableRenewal disables automatic token renewal.
+	// Set to true if token lifecycle is managed externally (e.g., by OpenBao Agent).
+	// +optional
+	DisableRenewal *bool `json:"disableRenewal,omitempty"`
+
+	// TLSCACert is the path to the CA certificate file for TLS communication.
+	// +optional
+	TLSCACert string `json:"tlsCACert,omitempty"`
+
+	// TLSClientCert is the path to the client certificate for TLS communication.
+	// +optional
+	TLSClientCert string `json:"tlsClientCert,omitempty"`
+
+	// TLSClientKey is the path to the private key for TLS communication.
+	// +optional
+	TLSClientKey string `json:"tlsClientKey,omitempty"`
+
+	// TLSServerName is the SNI host name to use when connecting via TLS.
+	// +optional
+	TLSServerName string `json:"tlsServerName,omitempty"`
+
+	// TLSSkipVerify disables verification of TLS certificates.
+	// Using this option is highly discouraged and decreases security.
+	// +optional
+	TLSSkipVerify *bool `json:"tlsSkipVerify,omitempty"`
+}
+
+// AWSKMSSealConfig configures the AWS KMS seal type.
+// See: https://openbao.org/docs/configuration/seal/awskms/
+type AWSKMSSealConfig struct {
+	// Region is the AWS region where the encryption key lives.
+	// +kubebuilder:validation:MinLength=1
+	Region string `json:"region"`
+
+	// KMSKeyID is the AWS KMS key ID or ARN to use for encryption and decryption.
+	// An alias in the format "alias/key-alias-name" may also be used.
+	// +kubebuilder:validation:MinLength=1
+	KMSKeyID string `json:"kmsKeyID"`
+
+	// Endpoint is the KMS API endpoint to be used for AWS KMS requests.
+	// Useful when connecting to KMS over a VPC Endpoint.
+	// +optional
+	Endpoint string `json:"endpoint,omitempty"`
+
+	// AccessKey is the AWS access key ID to use.
+	// Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity (IRSA) instead.
+	// +optional
+	AccessKey string `json:"accessKey,omitempty"`
+
+	// SecretKey is the AWS secret access key to use.
+	// Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity (IRSA) instead.
+	// +optional
+	SecretKey string `json:"secretKey,omitempty"`
+
+	// SessionToken specifies the AWS session token.
+	// +optional
+	SessionToken string `json:"sessionToken,omitempty"`
+}
+
+// AzureKeyVaultSealConfig configures the Azure Key Vault seal type.
+// See: https://openbao.org/docs/configuration/seal/azurekeyvault/
+type AzureKeyVaultSealConfig struct {
+	// VaultName is the name of the Azure Key Vault.
+	// +kubebuilder:validation:MinLength=1
+	VaultName string `json:"vaultName"`
+
+	// KeyName is the name of the key in the Azure Key Vault.
+	// +kubebuilder:validation:MinLength=1
+	KeyName string `json:"keyName"`
+
+	// TenantID is the Azure tenant ID.
+	// +optional
+	TenantID string `json:"tenantID,omitempty"`
+
+	// ClientID is the Azure client ID.
+	// +optional
+	ClientID string `json:"clientID,omitempty"`
+
+	// ClientSecret is the Azure client secret.
+	// Note: It is strongly recommended to use CredentialsSecretRef or Managed Service Identity instead.
+	// +optional
+	ClientSecret string `json:"clientSecret,omitempty"`
+
+	// Resource is the Azure AD resource endpoint.
+	// For Managed HSM, this should usually be "managedhsm.azure.net".
+	// +optional
+	Resource string `json:"resource,omitempty"`
+
+	// Environment is the Azure environment (e.g., "AzurePublicCloud", "AzureUSGovernmentCloud").
+	// +optional
+	Environment string `json:"environment,omitempty"`
+}
+
+// GCPCloudKMSSealConfig configures the GCP Cloud KMS seal type.
+// See: https://openbao.org/docs/configuration/seal/gcpckms/
+type GCPCloudKMSSealConfig struct {
+	// Project is the GCP project ID.
+	// +kubebuilder:validation:MinLength=1
+	Project string `json:"project"`
+
+	// Region is the GCP region where the key ring lives.
+	// +kubebuilder:validation:MinLength=1
+	Region string `json:"region"`
+
+	// KeyRing is the name of the GCP KMS key ring.
+	// +kubebuilder:validation:MinLength=1
+	KeyRing string `json:"keyRing"`
+
+	// CryptoKey is the name of the GCP KMS crypto key.
+	// +kubebuilder:validation:MinLength=1
+	CryptoKey string `json:"cryptoKey"`
+
+	// Credentials is the path to the GCP credentials JSON file.
+	// Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity instead.
+	// +optional
+	Credentials string `json:"credentials,omitempty"`
+}
+
+// KMIPSealConfig configures the KMIP seal type.
+// See: https://openbao.org/docs/configuration/seal/kmip/
+type KMIPSealConfig struct {
+	// Address is the address of the KMIP server.
+	// +kubebuilder:validation:MinLength=1
+	Address string `json:"address"`
+
+	// Certificate is the path to the client certificate for KMIP communication.
+	// +optional
+	Certificate string `json:"certificate,omitempty"`
+
+	// Key is the path to the private key for KMIP communication.
+	// +optional
+	Key string `json:"key,omitempty"`
+
+	// CACert is the path to the CA certificate for KMIP communication.
+	// +optional
+	CACert string `json:"caCert,omitempty"`
+
+	// TLSServerName is the SNI host name to use when connecting via TLS.
+	// +optional
+	TLSServerName string `json:"tlsServerName,omitempty"`
+
+	// TLSSkipVerify disables verification of TLS certificates.
+	// +optional
+	TLSSkipVerify *bool `json:"tlsSkipVerify,omitempty"`
+}
+
+// OCIKMSSealConfig configures the OCI KMS seal type.
+// See: https://openbao.org/docs/configuration/seal/ocikms/
+type OCIKMSSealConfig struct {
+	// KeyID is the OCID of the master encryption key.
+	// +kubebuilder:validation:MinLength=1
+	KeyID string `json:"keyID"`
+
+	// CryptoEndpoint is the OCI KMS crypto endpoint.
+	// +kubebuilder:validation:MinLength=1
+	CryptoEndpoint string `json:"cryptoEndpoint"`
+
+	// ManagementEndpoint is the OCI KMS management endpoint.
+	// +kubebuilder:validation:MinLength=1
+	ManagementEndpoint string `json:"managementEndpoint"`
+
+	// AuthType is the authentication type (e.g., "instance_principal", "user_principal").
+	// +optional
+	AuthType string `json:"authType,omitempty"`
+
+	// CompartmentID is the OCID of the compartment containing the key.
+	// +optional
+	CompartmentID string `json:"compartmentID,omitempty"`
+}
+
+// PKCS11SealConfig configures the PKCS#11 seal type.
+// See: https://openbao.org/docs/configuration/seal/pkcs11/
+type PKCS11SealConfig struct {
+	// Lib is the path to the PKCS#11 library provided by the HSM vendor.
+	// +kubebuilder:validation:MinLength=1
+	Lib string `json:"lib"`
+
+	// Slot is the slot number where the HSM token is located.
+	// +optional
+	Slot string `json:"slot,omitempty"`
+
+	// PIN is the PIN for accessing the HSM token.
+	// Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly.
+	// +optional
+	PIN string `json:"pin,omitempty"`
+
+	// KeyLabel is the label for the encryption key used by OpenBao.
+	// +kubebuilder:validation:MinLength=1
+	KeyLabel string `json:"keyLabel"`
+
+	// HMACKeyLabel is the label for the HMAC key used by OpenBao.
+	// +optional
+	HMACKeyLabel string `json:"hmacKeyLabel,omitempty"`
+
+	// GenerateKey indicates whether OpenBao should generate the key if it doesn't exist.
+	// +optional
+	GenerateKey *bool `json:"generateKey,omitempty"`
+
+	// RSAEncryptLocal allows performing encryption locally for HSMs that don't support encryption for RSA keys.
+	// +optional
+	RSAEncryptLocal *bool `json:"rsaEncryptLocal,omitempty"`
+
+	// RSAOAEPHash specifies the hash algorithm to use for RSA with OAEP padding.
+	// Valid values: sha1, sha224, sha256, sha384, sha512.
+	// +kubebuilder:validation:Enum=sha1;sha224;sha256;sha384;sha512
+	// +optional
+	RSAOAEPHash string `json:"rsaOAEPHash,omitempty"`
+}
+
+// StaticSealConfig configures the static seal type.
+// This is the default seal type managed by the operator.
+// See: https://openbao.org/docs/configuration/seal/static-key/
+type StaticSealConfig struct {
+	// CurrentKey is the path to the static unseal key file.
+	// Defaults to "file:///etc/bao/unseal/key" (operator-managed).
+	// +optional
+	CurrentKey string `json:"currentKey,omitempty"`
+
+	// CurrentKeyID is the identifier for the current unseal key.
+	// Defaults to "operator-generated-v1" (operator-managed).
+	// +optional
+	CurrentKeyID string `json:"currentKeyID,omitempty"`
+}
+
 // UnsealConfig defines the auto-unseal configuration for an OpenBaoCluster.
 // If omitted, defaults to "static" mode managed by the operator.
 type UnsealConfig struct {
-	// Type specifies the seal type: "static", "awskms", "gcpckms", "azurekeyvault", "transit".
+	// Type specifies the seal type.
 	// Defaults to "static".
-	// +kubebuilder:validation:Enum=static;awskms;gcpckms;azurekeyvault;transit
+	// +kubebuilder:validation:Enum=static;awskms;gcpckms;azurekeyvault;transit;kmip;ocikms;pkcs11
 	// +kubebuilder:default=static
 	Type string `json:"type,omitempty"`
 
-	// Options allows specifying seal-specific configuration parameters.
-	// These are rendered as attributes in the seal block of config.hcl.
+	// Static configures the static seal type.
+	// Optional when Type is "static" (operator provides defaults if omitted).
 	// +optional
-	Options map[string]string `json:"options,omitempty"`
+	Static *StaticSealConfig `json:"static,omitempty"`
+
+	// Transit configures the Transit seal type.
+	// Required when Type is "transit".
+	// +optional
+	Transit *TransitSealConfig `json:"transit,omitempty"`
+
+	// AWSKMS configures the AWS KMS seal type.
+	// Required when Type is "awskms".
+	// +optional
+	AWSKMS *AWSKMSSealConfig `json:"awskms,omitempty"`
+
+	// AzureKeyVault configures the Azure Key Vault seal type.
+	// Required when Type is "azurekeyvault".
+	// +optional
+	AzureKeyVault *AzureKeyVaultSealConfig `json:"azureKeyVault,omitempty"`
+
+	// GCPCloudKMS configures the GCP Cloud KMS seal type.
+	// Required when Type is "gcpckms".
+	// +optional
+	GCPCloudKMS *GCPCloudKMSSealConfig `json:"gcpCloudKMS,omitempty"`
+
+	// KMIP configures the KMIP seal type.
+	// Required when Type is "kmip".
+	// +optional
+	KMIP *KMIPSealConfig `json:"kmip,omitempty"`
+
+	// OCIKMS configures the OCI KMS seal type.
+	// Required when Type is "ocikms".
+	// +optional
+	OCIKMS *OCIKMSSealConfig `json:"ocikms,omitempty"`
+
+	// PKCS11 configures the PKCS#11 seal type.
+	// Required when Type is "pkcs11".
+	// +optional
+	PKCS11 *PKCS11SealConfig `json:"pkcs11,omitempty"`
 
 	// CredentialsSecretRef references a Secret containing provider credentials
-	// (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON).
-	// If using Workload Identity (IRSA, GKE WI), this can be omitted.
+	// (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON, Azure client secret, etc.).
+	// If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
 	// +optional
 	CredentialsSecretRef *corev1.SecretReference `json:"credentialsSecretRef,omitempty"`
 }
@@ -616,11 +899,191 @@ type WorkloadHardeningConfig struct {
 	AppArmorEnabled bool `json:"appArmorEnabled,omitempty"`
 }
 
+// OpenBaoConfiguration defines the server configuration for OpenBao.
+type OpenBaoConfiguration struct {
+	// UI enables the built-in web interface.
+	// +kubebuilder:default=true
+	// +optional
+	UI *bool `json:"ui,omitempty"`
+
+	// LogLevel specifies the log level.
+	// +kubebuilder:validation:Enum=trace;debug;info;warn;err
+	// +kubebuilder:default=info
+	// +optional
+	LogLevel string `json:"logLevel,omitempty"`
+
+	// Listener allows tuning the TCP listener.
+	// Note: Address and ClusterAddress are managed by the operator and cannot be changed.
+	// +optional
+	Listener *ListenerConfig `json:"listener,omitempty"`
+
+	// Raft allows tuning the Raft storage backend.
+	// +optional
+	Raft *RaftConfig `json:"raft,omitempty"`
+
+	// ACMECARoot is the path to the ACME CA root certificate file.
+	// This is used when TLS mode is ACME to specify a custom CA root for ACME certificate validation.
+	// +optional
+	ACMECARoot string `json:"acmeCARoot,omitempty"`
+
+	// Logging allows configuring logging behavior.
+	// +optional
+	Logging *LoggingConfig `json:"logging,omitempty"`
+
+	// Plugin allows configuring plugin behavior.
+	// Note: This is separate from spec.plugins which defines plugin instances.
+	// +optional
+	Plugin *PluginConfig `json:"plugin,omitempty"`
+
+	// DefaultLeaseTTL is the default lease TTL for tokens and secrets (e.g., "720h", "30m").
+	// If not specified, OpenBao uses its default.
+	// +optional
+	DefaultLeaseTTL string `json:"defaultLeaseTTL,omitempty"`
+
+	// MaxLeaseTTL is the maximum lease TTL for tokens and secrets (e.g., "8760h", "1y").
+	// This must be greater than or equal to DefaultLeaseTTL.
+	// If not specified, OpenBao uses its default.
+	// +optional
+	MaxLeaseTTL string `json:"maxLeaseTTL,omitempty"`
+
+	// CacheSize is the size of the cache in bytes.
+	// If not specified, OpenBao uses its default cache size.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	CacheSize *int64 `json:"cacheSize,omitempty"`
+
+	// DisableCache disables the cache entirely.
+	// When true, all caching is disabled.
+	// +optional
+	DisableCache *bool `json:"disableCache,omitempty"`
+
+	// DetectDeadlocks enables deadlock detection in OpenBao.
+	// This is an experimental feature for debugging.
+	// +optional
+	DetectDeadlocks *bool `json:"detectDeadlocks,omitempty"`
+
+	// RawStorageEndpoint enables the raw storage endpoint.
+	// This is an experimental feature that exposes raw storage operations.
+	// +optional
+	RawStorageEndpoint *bool `json:"rawStorageEndpoint,omitempty"`
+
+	// IntrospectionEndpoint enables the introspection endpoint.
+	// This is an experimental feature for debugging and introspection.
+	// +optional
+	IntrospectionEndpoint *bool `json:"introspectionEndpoint,omitempty"`
+
+	// DisableStandbyReads disables reads from standby nodes.
+	// When true, all reads must go to the active node.
+	// +optional
+	DisableStandbyReads *bool `json:"disableStandbyReads,omitempty"`
+
+	// ImpreciseLeaseRoleTracking enables imprecise lease role tracking.
+	// This is an experimental feature that may improve performance in some scenarios.
+	// +optional
+	ImpreciseLeaseRoleTracking *bool `json:"impreciseLeaseRoleTracking,omitempty"`
+
+	// UnsafeAllowAPIAuditCreation allows API-based audit device creation.
+	// This bypasses the normal audit device configuration validation.
+	// Use with caution.
+	// +optional
+	UnsafeAllowAPIAuditCreation *bool `json:"unsafeAllowAPIAuditCreation,omitempty"`
+
+	// AllowAuditLogPrefixing allows audit log prefixing.
+	// This enables custom prefixes in audit log entries.
+	// +optional
+	AllowAuditLogPrefixing *bool `json:"allowAuditLogPrefixing,omitempty"`
+
+	// EnableResponseHeaderHostname enables the hostname in response headers.
+	// When true, OpenBao includes the hostname in HTTP response headers.
+	// +optional
+	EnableResponseHeaderHostname *bool `json:"enableResponseHeaderHostname,omitempty"`
+
+	// EnableResponseHeaderRaftNodeID enables the Raft node ID in response headers.
+	// When true, OpenBao includes the Raft node ID in HTTP response headers.
+	// +optional
+	EnableResponseHeaderRaftNodeID *bool `json:"enableResponseHeaderRaftNodeID,omitempty"`
+}
+
+// ListenerConfig allows tuning the TCP listener configuration.
+type ListenerConfig struct {
+	// TLSDisable controls TLS on the listener.
+	// Note: This is typically managed by the operator based on spec.tls.enabled.
+	// +optional
+	TLSDisable *bool `json:"tlsDisable,omitempty"`
+
+	// ProxyProtocolBehavior allows configuring proxy protocol (e.g. for LoadBalancers).
+	// +kubebuilder:validation:Enum=use_always;allow_any;deny_unauthorized
+	// +optional
+	ProxyProtocolBehavior string `json:"proxyProtocolBehavior,omitempty"`
+}
+
+// RaftConfig allows tuning the Raft storage backend.
+type RaftConfig struct {
+	// PerformanceMultiplier scales the Raft timing parameters.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	PerformanceMultiplier *int32 `json:"performanceMultiplier,omitempty"`
+}
+
+// LoggingConfig allows configuring logging behavior for OpenBao.
+type LoggingConfig struct {
+	// Format specifies the log format.
+	// +kubebuilder:validation:Enum=standard;json
+	// +optional
+	Format string `json:"format,omitempty"`
+
+	// File is the path to the log file.
+	// If not specified, logs are written to stderr.
+	// +optional
+	File string `json:"file,omitempty"`
+
+	// RotateDuration specifies how often to rotate logs (e.g., "24h", "7d").
+	// +optional
+	RotateDuration string `json:"rotateDuration,omitempty"`
+
+	// RotateBytes specifies the maximum size in bytes before rotating logs.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	RotateBytes *int64 `json:"rotateBytes,omitempty"`
+
+	// RotateMaxFiles is the maximum number of rotated log files to keep.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	RotateMaxFiles *int32 `json:"rotateMaxFiles,omitempty"`
+
+	// PIDFile is the path to write the PID file.
+	// +optional
+	PIDFile string `json:"pidFile,omitempty"`
+}
+
+// PluginConfig allows configuring plugin behavior.
+type PluginConfig struct {
+	// FileUID is the UID to use for plugin files.
+	// +optional
+	FileUID *int64 `json:"fileUID,omitempty"`
+
+	// FilePermissions are the file permissions for plugin files (e.g., "0755").
+	// +optional
+	FilePermissions string `json:"filePermissions,omitempty"`
+
+	// AutoDownload controls automatic plugin downloads from OCI registries.
+	// +optional
+	AutoDownload *bool `json:"autoDownload,omitempty"`
+
+	// AutoRegister controls automatic plugin registration.
+	// +optional
+	AutoRegister *bool `json:"autoRegister,omitempty"`
+
+	// DownloadBehavior specifies how plugins are downloaded.
+	// +kubebuilder:validation:Enum=standard;direct
+	// +optional
+	DownloadBehavior string `json:"downloadBehavior,omitempty"`
+}
+
 // OpenBaoClusterSpec defines the desired state of an OpenBaoCluster.
 // The Operator owns certain protected OpenBao configuration stanzas (for example,
 // listener "tcp", storage "raft", and seal "static" when using default unseal).
-// Users must not override these via spec.config.
-// +kubebuilder:validation:XValidation:rule="!has(self.config) || self.config.all(k, v, !(k == 'listener' || k == 'storage' || k == 'seal'))",message="spec.config may not contain protected stanzas: listener, storage, seal"
+// Users must not override these via spec.configuration.
 // +kubebuilder:validation:XValidation:rule="self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod) > 0",message="spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged"
 type OpenBaoClusterSpec struct {
 	// Version is the semantic OpenBao version, used for upgrade orchestration.
@@ -648,10 +1111,9 @@ type OpenBaoClusterSpec struct {
 	// Ingress configures optional HTTP(S) ingress in front of the OpenBao Service.
 	// +optional
 	Ingress *IngressConfig `json:"ingress,omitempty"`
-	// Config contains optional user-supplied OpenBao configuration fragments.
-	// Protected stanzas such as listener "tcp" and storage "raft" remain operator-owned.
+	// Configuration defines the server configuration.
 	// +optional
-	Config map[string]string `json:"config,omitempty"`
+	Configuration *OpenBaoConfiguration `json:"configuration,omitempty"`
 	// Backup configures scheduled backups for the cluster.
 	// +optional
 	Backup *BackupSchedule `json:"backup,omitempty"`

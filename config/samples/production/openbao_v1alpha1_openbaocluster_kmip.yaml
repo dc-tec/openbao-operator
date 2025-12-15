@@ -1,0 +1,84 @@
+# OpenBaoCluster with KMIP Auto-Unseal
+#
+# This example demonstrates using a KMIP (Key Management Interoperability Protocol)
+# server for auto-unseal. KMIP is a standard protocol for key management operations.
+#
+# Prerequisites:
+# - KMIP server accessible from the cluster
+# - Client certificate and key for authenticating to the KMIP server
+# - CA certificate for verifying the KMIP server's TLS certificate
+#
+# See: https://openbao.org/docs/configuration/seal/kmip/
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-kmip
+spec:
+  profile: Hardened
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    mode: External
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
+  # KMIP seal configuration
+  unseal:
+    type: kmip
+    kmip:
+      # Address of the KMIP server
+      address: "kmip.example.com:5696"
+      # Path to client certificate for KMIP communication
+      certificate: "/etc/kmip/cert.pem"
+      # Path to private key for KMIP communication
+      key: "/etc/kmip/key.pem"
+      # Path to CA certificate for KMIP communication
+      caCert: "/etc/kmip/ca.pem"
+      # Optional: SNI server name for TLS
+      # tlsServerName: "kmip.example.com"
+      # Optional: Skip TLS verification (NOT RECOMMENDED for production)
+      # tlsSkipVerify: false
+    # Optional: Reference to Secret containing KMIP certificates
+    # credentialsSecretRef:
+    #   name: kmip-certificates
+    #   namespace: openbaocluster-kmip
+  # Self-initialization (required for Hardened profile)
+  selfInit:
+    enabled: true
+---
+# Example: Create KMIP certificates Secret
+# The Secret should contain the client certificate, key, and CA certificate
+#
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: kmip-certificates
+#   namespace: openbaocluster-kmip
+# type: Opaque
+# stringData:
+#   cert.pem: |
+#     -----BEGIN CERTIFICATE-----
+#     ...
+#     -----END CERTIFICATE-----
+#   key.pem: |
+#     -----BEGIN PRIVATE KEY-----
+#     ...
+#     -----END PRIVATE KEY-----
+#   ca.pem: |
+#     -----BEGIN CERTIFICATE-----
+#     ...
+#     -----END CERTIFICATE-----
+

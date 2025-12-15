@@ -1,0 +1,91 @@
+# OpenBaoCluster with Transit Auto-Unseal
+#
+# This example demonstrates using OpenBao's Transit Secret Engine for auto-unseal.
+# This is useful when you want to use an existing OpenBao cluster as the root of trust
+# for sealing/unsealing another OpenBao cluster.
+#
+# Prerequisites:
+# - An existing OpenBao cluster (infra-bao) with Transit secret engine enabled
+# - A transit key created in the infra-bao cluster
+# - A token with encrypt/decrypt permissions on the transit key
+# - TLS certificates for connecting to infra-bao (if using HTTPS)
+#
+# See: https://openbao.org/docs/configuration/seal/transit/
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-transit
+spec:
+  profile: Hardened
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    mode: External
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
+  # Transit seal configuration
+  unseal:
+    type: transit
+    transit:
+      # Address of the infra-bao cluster (the OpenBao cluster providing Transit seal)
+      address: "https://infra-bao.infra-bao.svc:8200"
+      # Transit key name in the infra-bao cluster
+      keyName: "openbao-unseal-key"
+      # Mount path of the Transit secret engine in infra-bao
+      mountPath: "transit/"
+      # Optional: Namespace path in infra-bao (if using namespaces)
+      # namespace: "ns1/"
+      # Optional: Disable automatic token renewal (if token lifecycle is managed externally)
+      # disableRenewal: false
+      # TLS configuration for connecting to infra-bao
+      tlsCACert: "/etc/bao/seal-creds/ca.crt"
+      # Optional: Client certificate for mTLS
+      # tlsClientCert: "/etc/bao/seal-creds/client.crt"
+      # tlsClientKey: "/etc/bao/seal-creds/client.key"
+      # Optional: SNI server name
+      # tlsServerName: "infra-bao.example.com"
+      # Optional: Skip TLS verification (NOT RECOMMENDED for production)
+      # tlsSkipVerify: false
+    # Token for authenticating to infra-bao
+    # It is STRONGLY recommended to use CredentialsSecretRef instead of setting token directly
+    # The token should be an orphan token with encrypt/decrypt permissions on the transit key
+    credentialsSecretRef:
+      name: transit-seal-token
+      namespace: openbaocluster-transit
+  # Self-initialization (required for Hardened profile)
+  selfInit:
+    enabled: true
+---
+# Example: Create Transit seal token Secret
+# The token must have the following permissions on the transit key:
+#   path "transit/encrypt/openbao-unseal-key" { capabilities = ["update"] }
+#   path "transit/decrypt/openbao-unseal-key" { capabilities = ["update"] }
+#
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: transit-seal-token
+#   namespace: openbaocluster-transit
+# type: Opaque
+# stringData:
+#   VAULT_TOKEN: "s.Qf1s5zigZ4OX6akYjQXJC1jY"
+#   # Optional: CA certificate for TLS verification
+#   # ca.crt: |
+#   #   -----BEGIN CERTIFICATE-----
+#   #   ...
+#   #   -----END CERTIFICATE-----
+

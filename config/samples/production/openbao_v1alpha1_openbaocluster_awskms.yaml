@@ -27,20 +27,30 @@ spec:
   storage:
     size: "10Gi"
   deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
   # External KMS auto-unseal (AWS KMS)
   # No static unseal key Secret is created - the root of trust is AWS KMS
   unseal:
     type: awskms
-    options:
+    awskms:
       region: us-east-1
       # Use KMS key ARN or alias
-      kms_key_id: alias/openbao-unseal
+      kmsKeyID: alias/openbao-unseal
       # Alternative: Use full ARN
-      # kms_key_id: "arn:aws:kms:us-east-1:123456789012:key/abcd1234-5678-90ab-cdef-1234567890ab"
-      # Optional: If not using IRSA (IAM Roles for Service Accounts)
-      # credentialsSecretRef:
-      #   name: aws-kms-credentials
-      #   namespace: openbaocluster-awskms
+      # kmsKeyID: "arn:aws:kms:us-east-1:123456789012:key/abcd1234-5678-90ab-cdef-1234567890ab"
+      # Optional: Custom KMS endpoint (for VPC endpoints)
+      # endpoint: "https://kms.us-east-1.amazonaws.com"
+    # Optional: If not using IRSA (IAM Roles for Service Accounts)
+    # credentialsSecretRef:
+    #   name: aws-kms-credentials
+    #   namespace: openbaocluster-awskms
 ---
 # Example: Create AWS KMS credentials Secret (only if not using IRSA)
 # apiVersion: v1

@@ -57,6 +57,14 @@ spec:
   storage:
     size: "10Gi"
   deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
   # Gateway API configuration
   gateway:
     enabled: true

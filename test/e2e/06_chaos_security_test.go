@@ -112,10 +112,11 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 			_ = admin.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: guardrailsNamespace}})
 		})
 
-		It("rejects disallowed spec.config keys (allowlist enforcement)", func() {
+		It("accepts structured configuration (protected stanzas cannot be overridden)", func() {
+			uiEnabled := true
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "invalid-config",
+					Name:      "valid-structured-config",
 					Namespace: guardrailsNamespace,
 				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -137,8 +138,9 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 					Network: &openbaov1alpha1.NetworkConfig{
 						APIServerCIDR: kindDefaultServiceCIDR,
 					},
-					Config: map[string]string{
-						"listener": `tcp { address = "0.0.0.0:9999" }`,
+					Configuration: &openbaov1alpha1.OpenBaoConfiguration{
+						UI:       &uiEnabled,
+						LogLevel: "debug",
 					},
 				},
 			}
@@ -146,9 +148,10 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
 				return c.Create(ctx, cluster)
 			})
-			Expect(err).To(HaveOccurred())
-			// CRD XValidation runs first and returns this message for protected stanzas
-			Expect(err.Error()).To(ContainSubstring("spec.config may not contain protected stanzas"))
+			Expect(err).NotTo(HaveOccurred())
+			// Note: Protected stanzas (listener, storage, seal) cannot be overridden
+			// because they are not part of the structured Configuration API.
+			// The operator enforces these values directly.
 		})
 
 		It("enforces Hardened profile invariants", func() {

@@ -1,0 +1,77 @@
+# OpenBaoCluster with PKCS#11 Auto-Unseal (HSM)
+#
+# This example demonstrates using a Hardware Security Module (HSM) via PKCS#11
+# for auto-unseal. This provides the highest level of security by using dedicated
+# hardware for key management.
+#
+# Prerequisites:
+# - HSM device accessible from the cluster
+# - PKCS#11 library provided by the HSM vendor
+# - HSM slot configured with appropriate keys
+# - PIN for accessing the HSM (stored securely)
+#
+# See: https://openbao.org/docs/configuration/seal/pkcs11/
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-pkcs11
+spec:
+  profile: Hardened
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    mode: External
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
+  # PKCS#11 seal configuration
+  unseal:
+    type: pkcs11
+    pkcs11:
+      # Path to the PKCS#11 library provided by the HSM vendor
+      lib: "/usr/lib/libpkcs11.so"
+      # Optional: Slot number where the HSM token is located
+      # slot: "0"
+      # Optional: PIN for accessing the HSM token (STRONGLY recommended to use CredentialsSecretRef)
+      # pin: "your-hsm-pin"
+      # Label for the encryption key used by OpenBao
+      keyLabel: "vault-key"
+      # Optional: Label for the HMAC key used by OpenBao
+      # hmacKeyLabel: "vault-hmac-key"
+      # Optional: Generate key if it doesn't exist (default: false)
+      # generateKey: false
+      # Optional: Perform RSA encryption locally (for HSMs that don't support encryption for RSA keys)
+      # rsaEncryptLocal: false
+      # Optional: Hash algorithm for RSA with OAEP padding (sha1, sha224, sha256, sha384, sha512)
+      # rsaOAEPHash: "sha256"
+    # Optional: Reference to Secret containing HSM PIN
+    # credentialsSecretRef:
+    #   name: pkcs11-pin
+    #   namespace: openbaocluster-pkcs11
+  # Self-initialization (required for Hardened profile)
+  selfInit:
+    enabled: true
+---
+# Example: Create PKCS#11 PIN Secret
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: pkcs11-pin
+#   namespace: openbaocluster-pkcs11
+# type: Opaque
+# stringData:
+#   VAULT_HSM_PIN: "your-hsm-pin"
+

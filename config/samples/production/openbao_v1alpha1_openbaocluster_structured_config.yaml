@@ -1,0 +1,85 @@
+# OpenBaoCluster with Structured Configuration Options
+#
+# This example demonstrates using the structured configuration API to configure
+# various OpenBao settings. All configuration options are type-safe and validated
+# by the Kubernetes API server.
+#
+# Benefits of structured configuration:
+# - Type safety and validation
+# - kubectl explain support
+# - Better IDE autocomplete
+# - Clear documentation of available options
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-structured-config
+spec:
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # Structured configuration options
+  configuration:
+    # UI configuration
+    ui: true
+    # Log level (trace, debug, info, warn, error)
+    logLevel: "info"
+    # Logging configuration
+    logging:
+      format: "json" # json or standard
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
+      rotateBytes: 10485760 # 10MB
+      rotateMaxFiles: 7
+      pidFile: "/var/run/openbao/openbao.pid"
+    # Listener configuration
+    listener:
+      # Proxy protocol behavior (use_proxy_protocol, allow_authorized, deny_unauthorized)
+      proxyProtocolBehavior: "use_proxy_protocol"
+      # TLS disable (typically managed by operator based on spec.tls.enabled)
+      # tlsDisable: false
+    # Raft storage configuration
+    raft:
+      # Performance multiplier for Raft operations (1-10, default: 1)
+      performanceMultiplier: 2
+    # Plugin configuration
+    plugin:
+      fileUID: 1000
+      filePermissions: "0755"
+      autoDownload: true
+      autoRegister: false
+      downloadBehavior: "direct" # direct or plugin
+    # Lease/TTL configuration
+    defaultLeaseTTL: "720h" # 30 days
+    maxLeaseTTL: "8760h" # 1 year
+    # Cache configuration
+    cacheSize: 134217728 # 128MB
+    disableCache: false
+    # Advanced/experimental features
+    detectDeadlocks: false
+    rawStorageEndpoint: false
+    introspectionEndpoint: false
+    disableStandbyReads: false
+    impreciseLeaseRoleTracking: false
+    unsafeAllowAPIAuditCreation: false
+    allowAuditLogPrefixing: true
+    enableResponseHeaderHostname: true
+    enableResponseHeaderRaftNodeID: false
+    # ACME CA root (for verifying ACME directory server)
+    # acmeCARoot: "/etc/bao/seal-creds/ca.crt"
+  # Static seal (default - operator-managed)
+  # You can customize the static seal configuration:
+  # unseal:
+  #   type: static
+  #   static:
+  #     currentKey: "file:///custom/path/key"
+  #     currentKeyID: "custom-key-v1"
+

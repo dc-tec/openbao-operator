@@ -1,0 +1,78 @@
+# OpenBaoCluster with OCI KMS Auto-Unseal
+#
+# This example demonstrates using Oracle Cloud Infrastructure (OCI) Key Management Service
+# for auto-unseal instead of storing the unseal key in Kubernetes Secrets.
+#
+# Prerequisites:
+# - OCI KMS vault and master encryption key created
+# - OCI compartment with appropriate permissions
+# - Instance Principal configured (for OKE) OR User Principal credentials
+#
+# See: https://openbao.org/docs/configuration/seal/ocikms/
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-oci
+spec:
+  profile: Hardened
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    mode: External
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
+  # OCI KMS seal configuration
+  unseal:
+    type: ocikms
+    ocikms:
+      # OCID of the master encryption key
+      keyID: "ocid1.key.oc1.us-ashburn-1.example.uniqueid"
+      # OCI KMS crypto endpoint
+      cryptoEndpoint: "https://kms.us-ashburn-1.oraclecloud.com"
+      # OCI KMS management endpoint
+      managementEndpoint: "https://kms.us-ashburn-1.oraclecloud.com"
+      # Optional: Authentication type (e.g., "instance_principal", "user_principal")
+      # Defaults to instance_principal when running on OKE
+      # authType: "instance_principal"
+      # Optional: OCID of the compartment containing the key
+      # compartmentID: "ocid1.compartment.oc1..example"
+    # Optional: If using user_principal authentication
+    # credentialsSecretRef:
+    #   name: oci-kms-credentials
+    #   namespace: openbaocluster-oci
+  # Self-initialization (required for Hardened profile)
+  selfInit:
+    enabled: true
+---
+# Example: Create OCI KMS credentials Secret (only if using user_principal auth)
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: oci-kms-credentials
+#   namespace: openbaocluster-oci
+# type: Opaque
+# stringData:
+#   OCI_PRIVATE_KEY: |
+#     -----BEGIN RSA PRIVATE KEY-----
+#     ...
+#     -----END RSA PRIVATE KEY-----
+#   OCI_PRIVATE_KEY_PASSPHRASE: "your-passphrase"
+#   OCI_TENANCY_OCID: "ocid1.tenancy.oc1..example"
+#   OCI_USER_OCID: "ocid1.user.oc1..example"
+#   OCI_FINGERPRINT: "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
+#   OCI_REGION: "us-ashburn-1"
+

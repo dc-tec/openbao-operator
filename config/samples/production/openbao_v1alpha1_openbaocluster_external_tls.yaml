@@ -30,6 +30,14 @@ spec:
   storage:
     size: "10Gi"
   deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
 ---
 # Example: Create TLS Secrets using cert-manager
 # The operator expects these Secrets to exist before deployment

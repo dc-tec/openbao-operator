@@ -333,10 +333,11 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("rejects OpenBaoCluster with protected stanzas in spec.config", func() {
+		It("accepts OpenBaoCluster with structured configuration", func() {
+			uiEnabled := true
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-protected-config",
+					Name:      "test-structured-config",
 					Namespace: "default",
 				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -350,15 +351,15 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 					Storage: openbaov1alpha1.StorageConfig{
 						Size: "10Gi",
 					},
-					Config: map[string]string{
-						"listener": "tcp",
+					Configuration: &openbaov1alpha1.OpenBaoConfiguration{
+						UI:       &uiEnabled,
+						LogLevel: "debug",
 					},
 				},
 			}
 
 			err := k8sClient.Create(ctx, cluster)
-			Expect(err).To(HaveOccurred())
-			Expect(apierrors.IsInvalid(err)).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("rotates the server certificate and signals reload when within the rotation window", func() {

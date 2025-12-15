@@ -216,12 +216,187 @@ spec:
                 - schedule
                 - target
                 type: object
-              config:
-                additionalProperties:
-                  type: string
-                description: |-
-                  Config contains optional user-supplied OpenBao configuration fragments.
-                  Protected stanzas such as listener "tcp" and storage "raft" remain operator-owned.
+              configuration:
+                description: Configuration defines the server configuration.
+                properties:
+                  acmeCARoot:
+                    description: |-
+                      ACMECARoot is the path to the ACME CA root certificate file.
+                      This is used when TLS mode is ACME to specify a custom CA root for ACME certificate validation.
+                    type: string
+                  allowAuditLogPrefixing:
+                    description: |-
+                      AllowAuditLogPrefixing allows audit log prefixing.
+                      This enables custom prefixes in audit log entries.
+                    type: boolean
+                  cacheSize:
+                    description: |-
+                      CacheSize is the size of the cache in bytes.
+                      If not specified, OpenBao uses its default cache size.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  defaultLeaseTTL:
+                    description: |-
+                      DefaultLeaseTTL is the default lease TTL for tokens and secrets (e.g., "720h", "30m").
+                      If not specified, OpenBao uses its default.
+                    type: string
+                  detectDeadlocks:
+                    description: |-
+                      DetectDeadlocks enables deadlock detection in OpenBao.
+                      This is an experimental feature for debugging.
+                    type: boolean
+                  disableCache:
+                    description: |-
+                      DisableCache disables the cache entirely.
+                      When true, all caching is disabled.
+                    type: boolean
+                  disableStandbyReads:
+                    description: |-
+                      DisableStandbyReads disables reads from standby nodes.
+                      When true, all reads must go to the active node.
+                    type: boolean
+                  enableResponseHeaderHostname:
+                    description: |-
+                      EnableResponseHeaderHostname enables the hostname in response headers.
+                      When true, OpenBao includes the hostname in HTTP response headers.
+                    type: boolean
+                  enableResponseHeaderRaftNodeID:
+                    description: |-
+                      EnableResponseHeaderRaftNodeID enables the Raft node ID in response headers.
+                      When true, OpenBao includes the Raft node ID in HTTP response headers.
+                    type: boolean
+                  impreciseLeaseRoleTracking:
+                    description: |-
+                      ImpreciseLeaseRoleTracking enables imprecise lease role tracking.
+                      This is an experimental feature that may improve performance in some scenarios.
+                    type: boolean
+                  introspectionEndpoint:
+                    description: |-
+                      IntrospectionEndpoint enables the introspection endpoint.
+                      This is an experimental feature for debugging and introspection.
+                    type: boolean
+                  listener:
+                    description: |-
+                      Listener allows tuning the TCP listener.
+                      Note: Address and ClusterAddress are managed by the operator and cannot be changed.
+                    properties:
+                      proxyProtocolBehavior:
+                        description: ProxyProtocolBehavior allows configuring proxy
+                          protocol (e.g. for LoadBalancers).
+                        enum:
+                        - use_always
+                        - allow_any
+                        - deny_unauthorized
+                        type: string
+                      tlsDisable:
+                        description: |-
+                          TLSDisable controls TLS on the listener.
+                          Note: This is typically managed by the operator based on spec.tls.enabled.
+                        type: boolean
+                    type: object
+                  logLevel:
+                    default: info
+                    description: LogLevel specifies the log level.
+                    enum:
+                    - trace
+                    - debug
+                    - info
+                    - warn
+                    - err
+                    type: string
+                  logging:
+                    description: Logging allows configuring logging behavior.
+                    properties:
+                      file:
+                        description: |-
+                          File is the path to the log file.
+                          If not specified, logs are written to stderr.
+                        type: string
+                      format:
+                        description: Format specifies the log format.
+                        enum:
+                        - standard
+                        - json
+                        type: string
+                      pidFile:
+                        description: PIDFile is the path to write the PID file.
+                        type: string
+                      rotateBytes:
+                        description: RotateBytes specifies the maximum size in bytes
+                          before rotating logs.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      rotateDuration:
+                        description: RotateDuration specifies how often to rotate
+                          logs (e.g., "24h", "7d").
+                        type: string
+                      rotateMaxFiles:
+                        description: RotateMaxFiles is the maximum number of rotated
+                          log files to keep.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
+                  maxLeaseTTL:
+                    description: |-
+                      MaxLeaseTTL is the maximum lease TTL for tokens and secrets (e.g., "8760h", "1y").
+                      This must be greater than or equal to DefaultLeaseTTL.
+                      If not specified, OpenBao uses its default.
+                    type: string
+                  plugin:
+                    description: |-
+                      Plugin allows configuring plugin behavior.
+                      Note: This is separate from spec.plugins which defines plugin instances.
+                    properties:
+                      autoDownload:
+                        description: AutoDownload controls automatic plugin downloads
+                          from OCI registries.
+                        type: boolean
+                      autoRegister:
+                        description: AutoRegister controls automatic plugin registration.
+                        type: boolean
+                      downloadBehavior:
+                        description: DownloadBehavior specifies how plugins are downloaded.
+                        enum:
+                        - standard
+                        - direct
+                        type: string
+                      filePermissions:
+                        description: FilePermissions are the file permissions for
+                          plugin files (e.g., "0755").
+                        type: string
+                      fileUID:
+                        description: FileUID is the UID to use for plugin files.
+                        format: int64
+                        type: integer
+                    type: object
+                  raft:
+                    description: Raft allows tuning the Raft storage backend.
+                    properties:
+                      performanceMultiplier:
+                        description: PerformanceMultiplier scales the Raft timing
+                          parameters.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
+                  rawStorageEndpoint:
+                    description: |-
+                      RawStorageEndpoint enables the raw storage endpoint.
+                      This is an experimental feature that exposes raw storage operations.
+                    type: boolean
+                  ui:
+                    default: true
+                    description: UI enables the built-in web interface.
+                    type: boolean
+                  unsafeAllowAPIAuditCreation:
+                    description: |-
+                      UnsafeAllowAPIAuditCreation allows API-based audit device creation.
+                      This bypasses the normal audit device configuration validation.
+                      Use with caution.
+                    type: boolean
                 type: object
               deletionPolicy:
                 description: DeletionPolicy controls what happens to underlying resources
@@ -1244,11 +1419,87 @@ spec:
                   Unseal defines the auto-unseal configuration.
                   If omitted, defaults to "static" mode managed by the operator.
                 properties:
+                  awskms:
+                    description: |-
+                      AWSKMS configures the AWS KMS seal type.
+                      Required when Type is "awskms".
+                    properties:
+                      accessKey:
+                        description: |-
+                          AccessKey is the AWS access key ID to use.
+                          Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity (IRSA) instead.
+                        type: string
+                      endpoint:
+                        description: |-
+                          Endpoint is the KMS API endpoint to be used for AWS KMS requests.
+                          Useful when connecting to KMS over a VPC Endpoint.
+                        type: string
+                      kmsKeyID:
+                        description: |-
+                          KMSKeyID is the AWS KMS key ID or ARN to use for encryption and decryption.
+                          An alias in the format "alias/key-alias-name" may also be used.
+                        minLength: 1
+                        type: string
+                      region:
+                        description: Region is the AWS region where the encryption
+                          key lives.
+                        minLength: 1
+                        type: string
+                      secretKey:
+                        description: |-
+                          SecretKey is the AWS secret access key to use.
+                          Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity (IRSA) instead.
+                        type: string
+                      sessionToken:
+                        description: SessionToken specifies the AWS session token.
+                        type: string
+                    required:
+                    - kmsKeyID
+                    - region
+                    type: object
+                  azureKeyVault:
+                    description: |-
+                      AzureKeyVault configures the Azure Key Vault seal type.
+                      Required when Type is "azurekeyvault".
+                    properties:
+                      clientID:
+                        description: ClientID is the Azure client ID.
+                        type: string
+                      clientSecret:
+                        description: |-
+                          ClientSecret is the Azure client secret.
+                          Note: It is strongly recommended to use CredentialsSecretRef or Managed Service Identity instead.
+                        type: string
+                      environment:
+                        description: Environment is the Azure environment (e.g., "AzurePublicCloud",
+                          "AzureUSGovernmentCloud").
+                        type: string
+                      keyName:
+                        description: KeyName is the name of the key in the Azure Key
+                          Vault.
+                        minLength: 1
+                        type: string
+                      resource:
+                        description: |-
+                          Resource is the Azure AD resource endpoint.
+                          For Managed HSM, this should usually be "managedhsm.azure.net".
+                        type: string
+                      tenantID:
+                        description: TenantID is the Azure tenant ID.
+                        type: string
+                      vaultName:
+                        description: VaultName is the name of the Azure Key Vault.
+                        minLength: 1
+                        type: string
+                    required:
+                    - keyName
+                    - vaultName
+                    type: object
                   credentialsSecretRef:
                     description: |-
                       CredentialsSecretRef references a Secret containing provider credentials
-                      (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON).
-                      If using Workload Identity (IRSA, GKE WI), this can be omitted.
+                      (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON, Azure client secret, etc.).
+                      If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
                     properties:
                       name:
                         description: name is unique within a namespace to reference
@@ -1260,17 +1511,229 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
-                  options:
-                    additionalProperties:
-                      type: string
+                  gcpCloudKMS:
                     description: |-
-                      Options allows specifying seal-specific configuration parameters.
-                      These are rendered as attributes in the seal block of config.hcl.
+                      GCPCloudKMS configures the GCP Cloud KMS seal type.
+                      Required when Type is "gcpckms".
+                    properties:
+                      credentials:
+                        description: |-
+                          Credentials is the path to the GCP credentials JSON file.
+                          Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity instead.
+                        type: string
+                      cryptoKey:
+                        description: CryptoKey is the name of the GCP KMS crypto key.
+                        minLength: 1
+                        type: string
+                      keyRing:
+                        description: KeyRing is the name of the GCP KMS key ring.
+                        minLength: 1
+                        type: string
+                      project:
+                        description: Project is the GCP project ID.
+                        minLength: 1
+                        type: string
+                      region:
+                        description: Region is the GCP region where the key ring lives.
+                        minLength: 1
+                        type: string
+                    required:
+                    - cryptoKey
+                    - keyRing
+                    - project
+                    - region
+                    type: object
+                  kmip:
+                    description: |-
+                      KMIP configures the KMIP seal type.
+                      Required when Type is "kmip".
+                    properties:
+                      address:
+                        description: Address is the address of the KMIP server.
+                        minLength: 1
+                        type: string
+                      caCert:
+                        description: CACert is the path to the CA certificate for
+                          KMIP communication.
+                        type: string
+                      certificate:
+                        description: Certificate is the path to the client certificate
+                          for KMIP communication.
+                        type: string
+                      key:
+                        description: Key is the path to the private key for KMIP communication.
+                        type: string
+                      tlsServerName:
+                        description: TLSServerName is the SNI host name to use when
+                          connecting via TLS.
+                        type: string
+                      tlsSkipVerify:
+                        description: TLSSkipVerify disables verification of TLS certificates.
+                        type: boolean
+                    required:
+                    - address
+                    type: object
+                  ocikms:
+                    description: |-
+                      OCIKMS configures the OCI KMS seal type.
+                      Required when Type is "ocikms".
+                    properties:
+                      authType:
+                        description: AuthType is the authentication type (e.g., "instance_principal",
+                          "user_principal").
+                        type: string
+                      compartmentID:
+                        description: CompartmentID is the OCID of the compartment
+                          containing the key.
+                        type: string
+                      cryptoEndpoint:
+                        description: CryptoEndpoint is the OCI KMS crypto endpoint.
+                        minLength: 1
+                        type: string
+                      keyID:
+                        description: KeyID is the OCID of the master encryption key.
+                        minLength: 1
+                        type: string
+                      managementEndpoint:
+                        description: ManagementEndpoint is the OCI KMS management
+                          endpoint.
+                        minLength: 1
+                        type: string
+                    required:
+                    - cryptoEndpoint
+                    - keyID
+                    - managementEndpoint
+                    type: object
+                  pkcs11:
+                    description: |-
+                      PKCS11 configures the PKCS#11 seal type.
+                      Required when Type is "pkcs11".
+                    properties:
+                      generateKey:
+                        description: GenerateKey indicates whether OpenBao should
+                          generate the key if it doesn't exist.
+                        type: boolean
+                      hmacKeyLabel:
+                        description: HMACKeyLabel is the label for the HMAC key used
+                          by OpenBao.
+                        type: string
+                      keyLabel:
+                        description: KeyLabel is the label for the encryption key
+                          used by OpenBao.
+                        minLength: 1
+                        type: string
+                      lib:
+                        description: Lib is the path to the PKCS#11 library provided
+                          by the HSM vendor.
+                        minLength: 1
+                        type: string
+                      pin:
+                        description: |-
+                          PIN is the PIN for accessing the HSM token.
+                          Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly.
+                        type: string
+                      rsaEncryptLocal:
+                        description: RSAEncryptLocal allows performing encryption
+                          locally for HSMs that don't support encryption for RSA keys.
+                        type: boolean
+                      rsaOAEPHash:
+                        description: |-
+                          RSAOAEPHash specifies the hash algorithm to use for RSA with OAEP padding.
+                          Valid values: sha1, sha224, sha256, sha384, sha512.
+                        enum:
+                        - sha1
+                        - sha224
+                        - sha256
+                        - sha384
+                        - sha512
+                        type: string
+                      slot:
+                        description: Slot is the slot number where the HSM token is
+                          located.
+                        type: string
+                    required:
+                    - keyLabel
+                    - lib
+                    type: object
+                  static:
+                    description: |-
+                      Static configures the static seal type.
+                      Optional when Type is "static" (operator provides defaults if omitted).
+                    properties:
+                      currentKey:
+                        description: |-
+                          CurrentKey is the path to the static unseal key file.
+                          Defaults to "file:///etc/bao/unseal/key" (operator-managed).
+                        type: string
+                      currentKeyID:
+                        description: |-
+                          CurrentKeyID is the identifier for the current unseal key.
+                          Defaults to "operator-generated-v1" (operator-managed).
+                        type: string
+                    type: object
+                  transit:
+                    description: |-
+                      Transit configures the Transit seal type.
+                      Required when Type is "transit".
+                    properties:
+                      address:
+                        description: Address is the full address to the OpenBao cluster.
+                        minLength: 1
+                        type: string
+                      disableRenewal:
+                        description: |-
+                          DisableRenewal disables automatic token renewal.
+                          Set to true if token lifecycle is managed externally (e.g., by OpenBao Agent).
+                        type: boolean
+                      keyName:
+                        description: KeyName is the transit key to use for encryption
+                          and decryption.
+                        minLength: 1
+                        type: string
+                      mountPath:
+                        description: MountPath is the mount path to the transit secret
+                          engine.
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: Namespace is the namespace path to the transit
+                          secret engine.
+                        type: string
+                      tlsCACert:
+                        description: TLSCACert is the path to the CA certificate file
+                          for TLS communication.
+                        type: string
+                      tlsClientCert:
+                        description: TLSClientCert is the path to the client certificate
+                          for TLS communication.
+                        type: string
+                      tlsClientKey:
+                        description: TLSClientKey is the path to the private key for
+                          TLS communication.
+                        type: string
+                      tlsServerName:
+                        description: TLSServerName is the SNI host name to use when
+                          connecting via TLS.
+                        type: string
+                      tlsSkipVerify:
+                        description: |-
+                          TLSSkipVerify disables verification of TLS certificates.
+                          Using this option is highly discouraged and decreases security.
+                        type: boolean
+                      token:
+                        description: |-
+                          Token is the OpenBao token to use for authentication.
+                          Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly.
+                        type: string
+                    required:
+                    - address
+                    - keyName
+                    - mountPath
                     type: object
                   type:
                     default: static
                     description: |-
-                      Type specifies the seal type: "static", "awskms", "gcpckms", "azurekeyvault", "transit".
+                      Type specifies the seal type.
                       Defaults to "static".
                     enum:
                     - static
@@ -1278,6 +1741,9 @@ spec:
                     - gcpckms
                     - azurekeyvault
                     - transit
+                    - kmip
+                    - ocikms
+                    - pkcs11
                     type: string
                 type: object
               upgrade:
@@ -1368,10 +1834,6 @@ spec:
             - version
             type: object
             x-kubernetes-validations:
-            - message: 'spec.config may not contain protected stanzas: listener, storage,
-                seal'
-              rule: '!has(self.config) || self.config.all(k, v, !(k == ''listener''
-                || k == ''storage'' || k == ''seal''))'
             - message: spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged
               rule: self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod)
                 > 0

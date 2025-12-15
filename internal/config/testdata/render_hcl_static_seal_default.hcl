@@ -1,7 +1,7 @@
 ui               = true
-cluster_name     = "config-hcl"
-api_addr         = "https://$${HOSTNAME}.config-hcl.security.svc:8200"
-cluster_addr     = "https://$${HOSTNAME}.config-hcl.security.svc:8201"
+cluster_name     = "static-seal"
+api_addr         = "https://$${HOSTNAME}.static-seal.default.svc:8200"
+cluster_addr     = "https://$${HOSTNAME}.static-seal.default.svc:8201"
 plugin_directory = "/openbao/plugins"
 listener "tcp" {
   address              = "0.0.0.0:8200"
@@ -20,8 +20,8 @@ storage "raft" {
   path    = "/bao/data"
   node_id = "$${HOSTNAME}"
   retry_join {
-    auto_join               = "provider=k8s namespace=security label_selector=\"openbao.org/cluster=config-hcl\""
-    leader_tls_servername   = "openbao-cluster-config-hcl.local"
+    auto_join               = "provider=k8s namespace=default label_selector=\"openbao.org/cluster=static-seal\""
+    leader_tls_servername   = "openbao-cluster-static-seal.local"
     leader_ca_cert_file     = "/etc/bao/tls/ca.crt"
     leader_client_cert_file = "/etc/bao/tls/tls.crt"
     leader_client_key_file  = "/etc/bao/tls/tls.key"
@@ -29,4 +29,3 @@ storage "raft" {
 }
 service_registration "kubernetes" {
 }
-log_level = "debug"

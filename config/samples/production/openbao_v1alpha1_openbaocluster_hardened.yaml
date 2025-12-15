@@ -40,17 +40,35 @@ spec:
   storage:
     size: "10Gi"
   deletionPolicy: Retain
+  # Structured configuration for production use
+  configuration:
+    # Log level for production (warn is less verbose than debug)
+    logLevel: "warn"
+    # Structured logging for better log aggregation
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
+      rotateBytes: 10485760 # 10MB
+      rotateMaxFiles: 7
+    # Lease/TTL configuration for production
+    defaultLeaseTTL: "720h" # 30 days
+    maxLeaseTTL: "8760h" # 1 year
+    # UI enabled for management
+    ui: true
   # External KMS auto-unseal (required for Hardened profile)
   # No static unseal key Secret is created - the root of trust is the KMS service
   unseal:
-    type: awskms # Required: external KMS only (awskms, gcpckms, azurekeyvault, or transit)
-    options:
+    type: awskms # Required: external KMS only (awskms, gcpckms, azurekeyvault, transit, kmip, ocikms, or pkcs11)
+    awskms:
       region: us-east-1
-      kms_key_id: alias/openbao-unseal
-      # Optional: If not using IRSA (IAM Roles for Service Accounts)
-      # credentialsSecretRef:
-      #   name: aws-kms-credentials
-      #   namespace: openbaocluster-hardened
+      kmsKeyID: alias/openbao-unseal
+      # Optional: Custom KMS endpoint (for VPC endpoints)
+      # endpoint: "https://kms.us-east-1.amazonaws.com"
+    # Optional: If not using IRSA (IAM Roles for Service Accounts)
+    # credentialsSecretRef:
+    #   name: aws-kms-credentials
+    #   namespace: openbaocluster-hardened
   # Self-initialization (required for Hardened profile)
   # Root token is automatically revoked after initialization - no root token Secret is created
   selfInit:

@@ -28,6 +28,16 @@ spec:
   storage:
     size: "10Gi"
   deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
+      rotateBytes: 10485760 # 10MB
+      rotateMaxFiles: 7
   # Self-initialization with backup policy (for JWT Auth)
   # Note: For Hardened profile clusters, backup and upgrade policies/roles are
   # automatically created when spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole

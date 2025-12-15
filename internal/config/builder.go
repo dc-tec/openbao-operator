@@ -70,7 +70,12 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	}
 
 	// 1. General configuration.
-	body.SetAttributeValue("ui", cty.BoolVal(true))
+	// UI defaults to true, but can be overridden by user configuration
+	uiEnabled := true
+	if cluster.Spec.Configuration != nil && cluster.Spec.Configuration.UI != nil {
+		uiEnabled = *cluster.Spec.Configuration.UI
+	}
+	body.SetAttributeValue("ui", cty.BoolVal(uiEnabled))
 	body.SetAttributeValue("cluster_name", cty.StringVal(cluster.Name))
 
 	apiAddr := fmt.Sprintf("https://${HOSTNAME}.%s.%s.svc:%d", headlessSvcName, namespace, infra.APIPort)
@@ -83,10 +88,27 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// 2. Listener stanza (operator-owned).
 	listenerBlock := body.AppendNewBlock("listener", []string{"tcp"})
 	listenerBody := listenerBlock.Body()
+	// Enforce operator defaults (immutable)
 	listenerBody.SetAttributeValue("address", cty.StringVal(fmt.Sprintf("0.0.0.0:%d", constants.PortAPI)))
 	listenerBody.SetAttributeValue("cluster_address", cty.StringVal(fmt.Sprintf("0.0.0.0:%d", constants.PortCluster)))
 	listenerBody.SetAttributeValue("tls_disable", cty.NumberIntVal(0))
 	listenerBody.SetAttributeValue("max_request_duration", cty.StringVal(configMaxRequestDuration))
+
+	// Apply user configuration (if present)
+	if cluster.Spec.Configuration != nil && cluster.Spec.Configuration.Listener != nil {
+		if cluster.Spec.Configuration.Listener.ProxyProtocolBehavior != "" {
+			listenerBody.SetAttributeValue("proxy_protocol_behavior", cty.StringVal(cluster.Spec.Configuration.Listener.ProxyProtocolBehavior))
+		}
+		// Note: TLSDisable is typically managed by the operator based on spec.tls.enabled,
+		// but we allow it to be overridden if explicitly set
+		if cluster.Spec.Configuration.Listener.TLSDisable != nil {
+			if *cluster.Spec.Configuration.Listener.TLSDisable {
+				listenerBody.SetAttributeValue("tls_disable", cty.NumberIntVal(1))
+			} else {
+				listenerBody.SetAttributeValue("tls_disable", cty.NumberIntVal(0))
+			}
+		}
+	}
 
 	// Render TLS configuration based on mode
 	if cluster.Spec.TLS.Mode == openbaov1alpha1.TLSModeACME {
@@ -108,6 +130,10 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 		if acmeConfig.Email != "" {
 			listenerBody.SetAttributeValue("tls_acme_email", cty.StringVal(acmeConfig.Email))
 		}
+		// ACME CA root (if specified in configuration)
+		if cluster.Spec.Configuration != nil && cluster.Spec.Configuration.ACMECARoot != "" {
+			listenerBody.SetAttributeValue("tls_acme_ca_root", cty.StringVal(cluster.Spec.Configuration.ACMECARoot))
+		}
 	} else {
 		// OperatorManaged or External mode: use file-based TLS certificates
 		listenerBody.SetAttributeValue("tls_cert_file", cty.StringVal(constants.PathTLSServerCert))
@@ -123,8 +149,16 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// 4. Storage stanza (Raft) with auto_join for dynamic cluster membership.
 	storageBlock := body.AppendNewBlock("storage", []string{"raft"})
 	storageBody := storageBlock.Body()
+	// Enforce operator defaults (immutable)
 	storageBody.SetAttributeValue("path", cty.StringVal(constants.PathData))
 	storageBody.SetAttributeValue("node_id", cty.StringVal(configNodeIDTemplate))
+
+	// Apply user configuration (if present)
+	if cluster.Spec.Configuration != nil && cluster.Spec.Configuration.Raft != nil {
+		if cluster.Spec.Configuration.Raft.PerformanceMultiplier != nil {
+			storageBody.SetAttributeValue("performance_multiplier", cty.NumberIntVal(int64(*cluster.Spec.Configuration.Raft.PerformanceMultiplier)))
+		}
+	}
 
 	// Use Kubernetes go-discover for dynamic cluster membership. This allows pods
 	// to discover and join the Raft cluster based on labels, without requiring
@@ -167,31 +201,145 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// The operator consumes these labels to reduce reliance on direct OpenBao API access.
 	body.AppendNewBlock("service_registration", []string{"kubernetes"})
 
-	// 6. User-defined overrides as simple string attributes.
-	// Only keys that pass the ValidatingAdmissionPolicy allowlist will reach here.
-	// The policy ensures only valid OpenBao configuration parameters are allowed.
-	if len(cluster.Spec.Config) > 0 {
-		keys := make([]string, 0, len(cluster.Spec.Config))
-		for k := range cluster.Spec.Config {
-			keys = append(keys, k)
+	// 6. Apply additional user configuration from structured fields.
+	if cluster.Spec.Configuration != nil {
+		// Log level
+		if cluster.Spec.Configuration.LogLevel != "" {
+			body.SetAttributeValue("log_level", cty.StringVal(cluster.Spec.Configuration.LogLevel))
 		}
-		sort.Strings(keys)
 
-		for _, key := range keys {
-			value := strings.TrimSpace(cluster.Spec.Config[key])
-			if value == "" {
-				continue
+		// Logging configuration
+		if cluster.Spec.Configuration.Logging != nil {
+			if cluster.Spec.Configuration.Logging.Format != "" {
+				body.SetAttributeValue("log_format", cty.StringVal(cluster.Spec.Configuration.Logging.Format))
 			}
-
-			// ACME listener-specific keys must live on the listener block.
-			if strings.HasPrefix(key, "tls_acme_") {
-				listenerBody.SetAttributeValue(key, cty.StringVal(value))
-				continue
+			if cluster.Spec.Configuration.Logging.File != "" {
+				body.SetAttributeValue("log_file", cty.StringVal(cluster.Spec.Configuration.Logging.File))
 			}
+			if cluster.Spec.Configuration.Logging.RotateDuration != "" {
+				body.SetAttributeValue("log_rotate_duration", cty.StringVal(cluster.Spec.Configuration.Logging.RotateDuration))
+			}
+			if cluster.Spec.Configuration.Logging.RotateBytes != nil {
+				body.SetAttributeValue("log_rotate_bytes", cty.NumberIntVal(*cluster.Spec.Configuration.Logging.RotateBytes))
+			}
+			if cluster.Spec.Configuration.Logging.RotateMaxFiles != nil {
+				body.SetAttributeValue("log_rotate_max_files", cty.NumberIntVal(int64(*cluster.Spec.Configuration.Logging.RotateMaxFiles)))
+			}
+			if cluster.Spec.Configuration.Logging.PIDFile != "" {
+				body.SetAttributeValue("pid_file", cty.StringVal(cluster.Spec.Configuration.Logging.PIDFile))
+			}
+		}
 
-			// All keys here have already been validated by the webhook allowlist,
-			// so we can safely add them to the configuration.
-			body.SetAttributeValue(key, cty.StringVal(value))
+		// Plugin configuration
+		if cluster.Spec.Configuration.Plugin != nil {
+			if cluster.Spec.Configuration.Plugin.FileUID != nil {
+				body.SetAttributeValue("plugin_file_uid", cty.NumberIntVal(*cluster.Spec.Configuration.Plugin.FileUID))
+			}
+			if cluster.Spec.Configuration.Plugin.FilePermissions != "" {
+				body.SetAttributeValue("plugin_file_permissions", cty.StringVal(cluster.Spec.Configuration.Plugin.FilePermissions))
+			}
+			if cluster.Spec.Configuration.Plugin.AutoDownload != nil {
+				if *cluster.Spec.Configuration.Plugin.AutoDownload {
+					body.SetAttributeValue("plugin_auto_download", cty.BoolVal(true))
+				} else {
+					body.SetAttributeValue("plugin_auto_download", cty.BoolVal(false))
+				}
+			}
+			if cluster.Spec.Configuration.Plugin.AutoRegister != nil {
+				if *cluster.Spec.Configuration.Plugin.AutoRegister {
+					body.SetAttributeValue("plugin_auto_register", cty.BoolVal(true))
+				} else {
+					body.SetAttributeValue("plugin_auto_register", cty.BoolVal(false))
+				}
+			}
+			if cluster.Spec.Configuration.Plugin.DownloadBehavior != "" {
+				body.SetAttributeValue("plugin_download_behavior", cty.StringVal(cluster.Spec.Configuration.Plugin.DownloadBehavior))
+			}
+		}
+
+		// Lease/TTL configuration
+		if cluster.Spec.Configuration.DefaultLeaseTTL != "" {
+			body.SetAttributeValue("default_lease_ttl", cty.StringVal(cluster.Spec.Configuration.DefaultLeaseTTL))
+		}
+		if cluster.Spec.Configuration.MaxLeaseTTL != "" {
+			body.SetAttributeValue("max_lease_ttl", cty.StringVal(cluster.Spec.Configuration.MaxLeaseTTL))
+		}
+
+		// Cache configuration
+		if cluster.Spec.Configuration.CacheSize != nil {
+			body.SetAttributeValue("cache_size", cty.NumberIntVal(*cluster.Spec.Configuration.CacheSize))
+		}
+		if cluster.Spec.Configuration.DisableCache != nil {
+			if *cluster.Spec.Configuration.DisableCache {
+				body.SetAttributeValue("disable_cache", cty.BoolVal(true))
+			} else {
+				body.SetAttributeValue("disable_cache", cty.BoolVal(false))
+			}
+		}
+
+		// Advanced/experimental features
+		if cluster.Spec.Configuration.DetectDeadlocks != nil {
+			if *cluster.Spec.Configuration.DetectDeadlocks {
+				body.SetAttributeValue("detect_deadlocks", cty.BoolVal(true))
+			} else {
+				body.SetAttributeValue("detect_deadlocks", cty.BoolVal(false))
+			}
+		}
+		if cluster.Spec.Configuration.RawStorageEndpoint != nil {
+			if *cluster.Spec.Configuration.RawStorageEndpoint {
+				body.SetAttributeValue("raw_storage_endpoint", cty.BoolVal(true))
+			} else {
+				body.SetAttributeValue("raw_storage_endpoint", cty.BoolVal(false))
+			}
+		}
+		if cluster.Spec.Configuration.IntrospectionEndpoint != nil {
+			if *cluster.Spec.Configuration.IntrospectionEndpoint {
+				body.SetAttributeValue("introspection_endpoint", cty.BoolVal(true))
+			} else {
+				body.SetAttributeValue("introspection_endpoint", cty.BoolVal(false))
+			}
+		}
+		if cluster.Spec.Configuration.DisableStandbyReads != nil {
+			if *cluster.Spec.Configuration.DisableStandbyReads {
+				body.SetAttributeValue("disable_standby_reads", cty.BoolVal(true))
+			} else {
+				body.SetAttributeValue("disable_standby_reads", cty.BoolVal(false))
+			}
+		}
+		if cluster.Spec.Configuration.ImpreciseLeaseRoleTracking != nil {
+			if *cluster.Spec.Configuration.ImpreciseLeaseRoleTracking {
+				body.SetAttributeValue("imprecise_lease_role_tracking", cty.BoolVal(true))
+			} else {
+				body.SetAttributeValue("imprecise_lease_role_tracking", cty.BoolVal(false))
+			}
+		}
+		if cluster.Spec.Configuration.UnsafeAllowAPIAuditCreation != nil {
+			if *cluster.Spec.Configuration.UnsafeAllowAPIAuditCreation {
+				body.SetAttributeValue("unsafe_allow_api_audit_creation", cty.BoolVal(true))
+			} else {
+				body.SetAttributeValue("unsafe_allow_api_audit_creation", cty.BoolVal(false))
+			}
+		}
+		if cluster.Spec.Configuration.AllowAuditLogPrefixing != nil {
+			if *cluster.Spec.Configuration.AllowAuditLogPrefixing {
+				body.SetAttributeValue("allow_audit_log_prefixing", cty.BoolVal(true))
+			} else {
+				body.SetAttributeValue("allow_audit_log_prefixing", cty.BoolVal(false))
+			}
+		}
+		if cluster.Spec.Configuration.EnableResponseHeaderHostname != nil {
+			if *cluster.Spec.Configuration.EnableResponseHeaderHostname {
+				body.SetAttributeValue("enable_response_header_hostname", cty.BoolVal(true))
+			} else {
+				body.SetAttributeValue("enable_response_header_hostname", cty.BoolVal(false))
+			}
+		}
+		if cluster.Spec.Configuration.EnableResponseHeaderRaftNodeID != nil {
+			if *cluster.Spec.Configuration.EnableResponseHeaderRaftNodeID {
+				body.SetAttributeValue("enable_response_header_raft_node_id", cty.BoolVal(true))
+			} else {
+				body.SetAttributeValue("enable_response_header_raft_node_id", cty.BoolVal(false))
+			}
 		}
 	}
 
@@ -787,7 +935,7 @@ func renderTelemetry(body *hclwrite.Body, telemetry *openbaov1alpha1.TelemetryCo
 
 // renderSealStanza renders the seal block based on the cluster's unseal configuration.
 // If spec.unseal is nil or type is "static" (or empty), renders the default static seal.
-// Otherwise, renders the specified seal type with options from spec.unseal.options.
+// Otherwise, renders the specified seal type with options from structured fields.
 //
 //nolint:unparam // Kept as error-returning for future seal validation and to keep call sites consistent.
 func renderSealStanza(body *hclwrite.Body, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -800,28 +948,190 @@ func renderSealStanza(body *hclwrite.Body, cluster *openbaov1alpha1.OpenBaoClust
 	sealBody := sealBlock.Body()
 
 	if unsealType == "static" {
-		// Default static seal configuration (operator-managed)
-		sealBody.SetAttributeValue("current_key", cty.StringVal(configUnsealKeyPath))
-		sealBody.SetAttributeValue("current_key_id", cty.StringVal(configUnsealKeyID))
-	} else {
-		// External KMS seal - render options from spec.unseal.options
-		if cluster.Spec.Unseal != nil && len(cluster.Spec.Unseal.Options) > 0 {
-			// Sort keys for deterministic output
-			keys := make([]string, 0, len(cluster.Spec.Unseal.Options))
-			for k := range cluster.Spec.Unseal.Options {
-				keys = append(keys, k)
+		// Render static seal configuration (operator-managed defaults if not specified)
+		currentKey := configUnsealKeyPath
+		currentKeyID := configUnsealKeyID
+		if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Static != nil {
+			if cluster.Spec.Unseal.Static.CurrentKey != "" {
+				currentKey = cluster.Spec.Unseal.Static.CurrentKey
 			}
-			sort.Strings(keys)
-
-			for _, key := range keys {
-				value := strings.TrimSpace(cluster.Spec.Unseal.Options[key])
-				if value == "" {
-					continue
-				}
-				sealBody.SetAttributeValue(key, cty.StringVal(value))
+			if cluster.Spec.Unseal.Static.CurrentKeyID != "" {
+				currentKeyID = cluster.Spec.Unseal.Static.CurrentKeyID
+			}
+		}
+		sealBody.SetAttributeValue("current_key", cty.StringVal(currentKey))
+		sealBody.SetAttributeValue("current_key_id", cty.StringVal(currentKeyID))
+	} else if cluster.Spec.Unseal != nil {
+		// Render structured seal configuration based on type
+		switch unsealType {
+		case "transit":
+			if cluster.Spec.Unseal.Transit != nil {
+				renderTransitSeal(sealBody, cluster.Spec.Unseal.Transit)
+			}
+		case "awskms":
+			if cluster.Spec.Unseal.AWSKMS != nil {
+				renderAWSKMSSeal(sealBody, cluster.Spec.Unseal.AWSKMS)
+			}
+		case "azurekeyvault":
+			if cluster.Spec.Unseal.AzureKeyVault != nil {
+				renderAzureKeyVaultSeal(sealBody, cluster.Spec.Unseal.AzureKeyVault)
+			}
+		case "gcpckms":
+			if cluster.Spec.Unseal.GCPCloudKMS != nil {
+				renderGCPCloudKMSSeal(sealBody, cluster.Spec.Unseal.GCPCloudKMS)
+			}
+		case "kmip":
+			if cluster.Spec.Unseal.KMIP != nil {
+				renderKMIPSeal(sealBody, cluster.Spec.Unseal.KMIP)
+			}
+		case "ocikms":
+			if cluster.Spec.Unseal.OCIKMS != nil {
+				renderOCIKMSSeal(sealBody, cluster.Spec.Unseal.OCIKMS)
+			}
+		case "pkcs11":
+			if cluster.Spec.Unseal.PKCS11 != nil {
+				renderPKCS11Seal(sealBody, cluster.Spec.Unseal.PKCS11)
 			}
 		}
 	}
 
 	return nil
+}
+
+// renderTransitSeal renders Transit seal configuration.
+func renderTransitSeal(sealBody *hclwrite.Body, config *openbaov1alpha1.TransitSealConfig) {
+	sealBody.SetAttributeValue("address", cty.StringVal(config.Address))
+	if config.Token != "" {
+		sealBody.SetAttributeValue("token", cty.StringVal(config.Token))
+	}
+	sealBody.SetAttributeValue("key_name", cty.StringVal(config.KeyName))
+	sealBody.SetAttributeValue("mount_path", cty.StringVal(config.MountPath))
+	if config.Namespace != "" {
+		sealBody.SetAttributeValue("namespace", cty.StringVal(config.Namespace))
+	}
+	if config.DisableRenewal != nil {
+		sealBody.SetAttributeValue("disable_renewal", cty.StringVal(fmt.Sprintf("%t", *config.DisableRenewal)))
+	}
+	if config.TLSCACert != "" {
+		sealBody.SetAttributeValue("tls_ca_cert", cty.StringVal(config.TLSCACert))
+	}
+	if config.TLSClientCert != "" {
+		sealBody.SetAttributeValue("tls_client_cert", cty.StringVal(config.TLSClientCert))
+	}
+	if config.TLSClientKey != "" {
+		sealBody.SetAttributeValue("tls_client_key", cty.StringVal(config.TLSClientKey))
+	}
+	if config.TLSServerName != "" {
+		sealBody.SetAttributeValue("tls_server_name", cty.StringVal(config.TLSServerName))
+	}
+	if config.TLSSkipVerify != nil {
+		sealBody.SetAttributeValue("tls_skip_verify", cty.StringVal(fmt.Sprintf("%t", *config.TLSSkipVerify)))
+	}
+}
+
+// renderAWSKMSSeal renders AWS KMS seal configuration.
+func renderAWSKMSSeal(sealBody *hclwrite.Body, config *openbaov1alpha1.AWSKMSSealConfig) {
+	sealBody.SetAttributeValue("region", cty.StringVal(config.Region))
+	sealBody.SetAttributeValue("kms_key_id", cty.StringVal(config.KMSKeyID))
+	if config.Endpoint != "" {
+		sealBody.SetAttributeValue("endpoint", cty.StringVal(config.Endpoint))
+	}
+	if config.AccessKey != "" {
+		sealBody.SetAttributeValue("access_key", cty.StringVal(config.AccessKey))
+	}
+	if config.SecretKey != "" {
+		sealBody.SetAttributeValue("secret_key", cty.StringVal(config.SecretKey))
+	}
+	if config.SessionToken != "" {
+		sealBody.SetAttributeValue("session_token", cty.StringVal(config.SessionToken))
+	}
+}
+
+// renderAzureKeyVaultSeal renders Azure Key Vault seal configuration.
+func renderAzureKeyVaultSeal(sealBody *hclwrite.Body, config *openbaov1alpha1.AzureKeyVaultSealConfig) {
+	sealBody.SetAttributeValue("vault_name", cty.StringVal(config.VaultName))
+	sealBody.SetAttributeValue("key_name", cty.StringVal(config.KeyName))
+	if config.TenantID != "" {
+		sealBody.SetAttributeValue("tenant_id", cty.StringVal(config.TenantID))
+	}
+	if config.ClientID != "" {
+		sealBody.SetAttributeValue("client_id", cty.StringVal(config.ClientID))
+	}
+	if config.ClientSecret != "" {
+		sealBody.SetAttributeValue("client_secret", cty.StringVal(config.ClientSecret))
+	}
+	if config.Resource != "" {
+		sealBody.SetAttributeValue("resource", cty.StringVal(config.Resource))
+	}
+	if config.Environment != "" {
+		sealBody.SetAttributeValue("environment", cty.StringVal(config.Environment))
+	}
+}
+
+// renderGCPCloudKMSSeal renders GCP Cloud KMS seal configuration.
+func renderGCPCloudKMSSeal(sealBody *hclwrite.Body, config *openbaov1alpha1.GCPCloudKMSSealConfig) {
+	sealBody.SetAttributeValue("project", cty.StringVal(config.Project))
+	sealBody.SetAttributeValue("region", cty.StringVal(config.Region))
+	sealBody.SetAttributeValue("key_ring", cty.StringVal(config.KeyRing))
+	sealBody.SetAttributeValue("crypto_key", cty.StringVal(config.CryptoKey))
+	if config.Credentials != "" {
+		sealBody.SetAttributeValue("credentials", cty.StringVal(config.Credentials))
+	}
+}
+
+// renderKMIPSeal renders KMIP seal configuration.
+func renderKMIPSeal(sealBody *hclwrite.Body, config *openbaov1alpha1.KMIPSealConfig) {
+	sealBody.SetAttributeValue("address", cty.StringVal(config.Address))
+	if config.Certificate != "" {
+		sealBody.SetAttributeValue("certificate", cty.StringVal(config.Certificate))
+	}
+	if config.Key != "" {
+		sealBody.SetAttributeValue("key", cty.StringVal(config.Key))
+	}
+	if config.CACert != "" {
+		sealBody.SetAttributeValue("ca_cert", cty.StringVal(config.CACert))
+	}
+	if config.TLSServerName != "" {
+		sealBody.SetAttributeValue("tls_server_name", cty.StringVal(config.TLSServerName))
+	}
+	if config.TLSSkipVerify != nil {
+		sealBody.SetAttributeValue("tls_skip_verify", cty.StringVal(fmt.Sprintf("%t", *config.TLSSkipVerify)))
+	}
+}
+
+// renderOCIKMSSeal renders OCI KMS seal configuration.
+func renderOCIKMSSeal(sealBody *hclwrite.Body, config *openbaov1alpha1.OCIKMSSealConfig) {
+	sealBody.SetAttributeValue("key_id", cty.StringVal(config.KeyID))
+	sealBody.SetAttributeValue("crypto_endpoint", cty.StringVal(config.CryptoEndpoint))
+	sealBody.SetAttributeValue("management_endpoint", cty.StringVal(config.ManagementEndpoint))
+	if config.AuthType != "" {
+		sealBody.SetAttributeValue("auth_type", cty.StringVal(config.AuthType))
+	}
+	if config.CompartmentID != "" {
+		sealBody.SetAttributeValue("compartment_id", cty.StringVal(config.CompartmentID))
+	}
+}
+
+// renderPKCS11Seal renders PKCS#11 seal configuration.
+func renderPKCS11Seal(sealBody *hclwrite.Body, config *openbaov1alpha1.PKCS11SealConfig) {
+	sealBody.SetAttributeValue("lib", cty.StringVal(config.Lib))
+	if config.Slot != "" {
+		sealBody.SetAttributeValue("slot", cty.StringVal(config.Slot))
+	}
+	if config.PIN != "" {
+		sealBody.SetAttributeValue("pin", cty.StringVal(config.PIN))
+	}
+	sealBody.SetAttributeValue("key_label", cty.StringVal(config.KeyLabel))
+	if config.HMACKeyLabel != "" {
+		sealBody.SetAttributeValue("hmac_key_label", cty.StringVal(config.HMACKeyLabel))
+	}
+	if config.GenerateKey != nil {
+		sealBody.SetAttributeValue("generate_key", cty.StringVal(fmt.Sprintf("%t", *config.GenerateKey)))
+	}
+	if config.RSAEncryptLocal != nil {
+		sealBody.SetAttributeValue("rsa_encrypt_local", cty.StringVal(fmt.Sprintf("%t", *config.RSAEncryptLocal)))
+	}
+	if config.RSAOAEPHash != "" {
+		sealBody.SetAttributeValue("rsa_oaep_hash", cty.StringVal(config.RSAOAEPHash))
+	}
 }

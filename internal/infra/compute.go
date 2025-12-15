@@ -572,10 +572,10 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 		// If tls_acme_ca_root is configured, derive the PKI CA path from it (same directory,
 		// filename pki-ca.crt). This allows users to provide the PKI CA in the same volume.
 		// If not available, use system roots (for public ACME CAs like Let's Encrypt).
-		if acmeCARoot, ok := cluster.Spec.Config["tls_acme_ca_root"]; ok && acmeCARoot != "" {
+		if cluster.Spec.Configuration != nil && cluster.Spec.Configuration.ACMECARoot != "" {
 			// Derive PKI CA path from tls_acme_ca_root: same directory, filename pki-ca.crt
 			// e.g., /etc/bao/seal-creds/ca.crt -> /etc/bao/seal-creds/pki-ca.crt
-			acmeCARootDir := path.Dir(acmeCARoot)
+			acmeCARootDir := path.Dir(cluster.Spec.Configuration.ACMECARoot)
 			probeCAFile = path.Join(acmeCARootDir, "pki-ca.crt")
 		} else {
 			// No tls_acme_ca_root configured - use system roots for public ACME CAs

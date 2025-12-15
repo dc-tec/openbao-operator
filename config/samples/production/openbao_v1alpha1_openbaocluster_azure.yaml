@@ -1,0 +1,77 @@
+# OpenBaoCluster with Azure Key Vault Auto-Unseal
+#
+# This example demonstrates using Azure Key Vault for auto-unseal instead of storing
+# the unseal key in Kubernetes Secrets. This provides enhanced security by shifting
+# the root of trust to Azure Key Vault.
+#
+# Prerequisites:
+# - Azure Key Vault (or Managed HSM) created
+# - Key created in the Key Vault
+# - Azure AD application with permissions to access the Key Vault
+# - Managed Service Identity (MSI) configured OR credentials Secret
+#
+# See: https://openbao.org/docs/configuration/seal/azurekeyvault/
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-azure
+spec:
+  profile: Hardened
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    mode: External
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
+  # Azure Key Vault seal configuration
+  unseal:
+    type: azurekeyvault
+    azureKeyVault:
+      # Name of the Azure Key Vault
+      vaultName: "my-openbao-vault"
+      # Name of the key in the Key Vault
+      keyName: "openbao-unseal-key"
+      # Optional: Azure tenant ID (required if not using MSI)
+      # tenantID: "12345678-1234-1234-1234-123456789012"
+      # Optional: Azure client ID (required if not using MSI)
+      # clientID: "87654321-4321-4321-4321-210987654321"
+      # Optional: Azure client secret (STRONGLY recommended to use CredentialsSecretRef or MSI)
+      # clientSecret: "your-client-secret"
+      # Optional: Azure AD resource endpoint (for Managed HSM, use "managedhsm.azure.net")
+      # resource: "managedhsm.azure.net"
+      # Optional: Azure environment (e.g., "AzurePublicCloud", "AzureUSGovernmentCloud")
+      # environment: "AzurePublicCloud"
+    # Optional: If not using Managed Service Identity (MSI)
+    # credentialsSecretRef:
+    #   name: azure-keyvault-credentials
+    #   namespace: openbaocluster-azure
+  # Self-initialization (required for Hardened profile)
+  selfInit:
+    enabled: true
+---
+# Example: Create Azure Key Vault credentials Secret (only if not using MSI)
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: azure-keyvault-credentials
+#   namespace: openbaocluster-azure
+# type: Opaque
+# stringData:
+#   AZURE_CLIENT_ID: "87654321-4321-4321-4321-210987654321"
+#   AZURE_CLIENT_SECRET: "your-client-secret"
+#   AZURE_TENANT_ID: "12345678-1234-1234-1234-123456789012"
+

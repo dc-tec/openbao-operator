@@ -327,13 +327,12 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 				},
 				Unseal: &openbaov1alpha1.UnsealConfig{
 					Type: "transit",
-					Options: map[string]string{
-						"address":    infraAddr,
-						"mount_path": "transit",
-						"key_name":   infraBaoKeyName,
-						// Configure TLS CA file for certificate verification (required for hardened profile)
-						// The CA certificate is mounted from the credentials secret at /etc/bao/seal-creds/ca.crt
-						"tls_ca_file": "/etc/bao/seal-creds/ca.crt",
+					Transit: &openbaov1alpha1.TransitSealConfig{
+						Address:   infraAddr,
+						MountPath: "transit",
+						KeyName:   infraBaoKeyName,
+						Token:     "", // Token is provided via VAULT_TOKEN environment variable
+						TLSCACert: "/etc/bao/seal-creds/ca.crt",
 						// Note: token is provided via VAULT_TOKEN environment variable
 						// (set by the operator from CredentialsSecretRef) to avoid issues
 						// with trailing newlines in mounted Secret files.

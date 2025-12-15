@@ -1,0 +1,83 @@
+# OpenBaoCluster with GCP Cloud KMS Auto-Unseal
+#
+# This example demonstrates using Google Cloud Platform (GCP) Cloud KMS for auto-unseal
+# instead of storing the unseal key in Kubernetes Secrets. This provides enhanced security
+# by shifting the root of trust to GCP Cloud KMS.
+#
+# Prerequisites:
+# - GCP project with Cloud KMS API enabled
+# - Key ring and crypto key created in GCP Cloud KMS
+# - Service account with Cloud KMS permissions OR Workload Identity configured
+# - GCP credentials JSON file (if not using Workload Identity)
+#
+# See: https://openbao.org/docs/configuration/seal/gcpckms/
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-gcp
+spec:
+  profile: Hardened
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
+  replicas: 3
+  tls:
+    enabled: true
+    mode: External
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  # Structured configuration
+  configuration:
+    logLevel: "info"
+    ui: true
+    logging:
+      format: "json"
+      file: "/var/log/openbao/openbao.log"
+      rotateDuration: "24h"
+  # GCP Cloud KMS seal configuration
+  unseal:
+    type: gcpckms
+    gcpCloudKMS:
+      # GCP project ID
+      project: "my-gcp-project"
+      # GCP region where the key ring lives
+      region: "us-central1"
+      # Name of the GCP KMS key ring
+      keyRing: "openbao-keyring"
+      # Name of the GCP KMS crypto key
+      cryptoKey: "openbao-unseal-key"
+      # Optional: Path to GCP credentials JSON file (STRONGLY recommended to use CredentialsSecretRef or Workload Identity)
+      # credentials: "/etc/gcp/credentials.json"
+    # Optional: If not using Workload Identity (GKE Workload Identity)
+    # credentialsSecretRef:
+    #   name: gcp-kms-credentials
+    #   namespace: openbaocluster-gcp
+  # Self-initialization (required for Hardened profile)
+  selfInit:
+    enabled: true
+---
+# Example: Create GCP KMS credentials Secret (only if not using Workload Identity)
+# The Secret should contain the GCP service account JSON key file
+#
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: gcp-kms-credentials
+#   namespace: openbaocluster-gcp
+# type: Opaque
+# stringData:
+#   GOOGLE_CREDENTIALS: |
+#     {
+#       "type": "service_account",
+#       "project_id": "my-gcp-project",
+#       "private_key_id": "...",
+#       "private_key": "...",
+#       "client_email": "...",
+#       "client_id": "...",
+#       "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+#       "token_uri": "https://oauth2.googleapis.com/token"
+#     }
+
