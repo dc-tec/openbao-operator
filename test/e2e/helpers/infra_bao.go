@@ -429,7 +429,7 @@ func checkInfraBaoReadinessLocal(ctx context.Context, namespace, name string) er
 // are needed. The root token is stored in a Secret for later use.
 //
 //nolint:unparam // infraAddr is retained to keep call sites explicit and for future HTTPS verification improvements.
-func initializeInfraBao(ctx context.Context, c client.Client, infraAddr string, cfg InfraBaoConfig) error {
+func initializeInfraBao(ctx context.Context, c client.Client, _ string, cfg InfraBaoConfig) error {
 	// Initialize infra-bao using bao operator init command inside the pod
 	// This is simpler and more reliable than HTTP API calls
 	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
