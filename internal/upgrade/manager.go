@@ -41,7 +41,7 @@ var (
 
 // OpenBaoClientFactory creates OpenBao API clients for connecting to cluster pods.
 // This is primarily used for testing to inject mock clients.
-type OpenBaoClientFactory func(config openbaoapi.ClientConfig) (*openbaoapi.Client, error)
+type OpenBaoClientFactory func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error)
 
 // Manager reconciles version and Raft-aware upgrade behavior for an OpenBaoCluster.
 type Manager struct {
@@ -53,9 +53,11 @@ type Manager struct {
 // NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
 func NewManager(c client.Client, scheme *runtime.Scheme) *Manager {
 	return &Manager{
-		client:        c,
-		scheme:        scheme,
-		clientFactory: openbaoapi.NewClient,
+		client: c,
+		scheme: scheme,
+		clientFactory: func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+			return openbaoapi.NewClient(config)
+		},
 	}
 }
 
@@ -953,7 +955,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	})
 
 	// Execute step-down
-	if err := apiClient.StepDown(ctx); err != nil {
+	if err := apiClient.StepDownLeader(ctx); err != nil {
 		metrics.IncrementStepDownFailures()
 		logging.LogAuditEvent(logger, "StepDownFailed", map[string]string{
 			"cluster_namespace": cluster.Namespace,

@@ -3,8 +3,6 @@ package upgrade
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -423,56 +421,22 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
 
-	// Create a mock OpenBao server to handle health checks
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Mock healthy response for all pods
-		if r.URL.Path == constants.APIPathSysHealth {
-			w.WriteHeader(http.StatusOK)
-			// Return leader for one pod, standby for others to satisfy quorum and leader checks
-			// Since we don't know easily which client is calling, we'll return initialized=true, sealed=false
-			// and standby=false (Leader) for simplicity. This satisfies "single leader" check if called sequentially,
-			// but verifyClusterHealth might complain about multiple leaders if called for all 3.
-			// However, verifyClusterHealth iterates.
-			// Let's make it smarter or just simple for now:
-			// If verifyClusterHealth sees 3 leaders, it errors with "multiple leaders detected".
-			// We need to differentiate.
-			// We can differentiate based on the Host header or assume the test environment doesn't check host.
-			// A simpler way: The client factory can configure the response.
-			_, _ = w.Write([]byte(`{"initialized": true, "sealed": false, "standby": false}`))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer ts.Close()
 
-	// Mock Client Factory that returns a client pointing to our test server
-	// AND handles the "single leader" constraint by toggling response based on config.BaseURL if possible,
-	// or we just make sure verifyClusterHealth sees what it expects.
+	// Mock Client Factory that uses MockClusterActions to avoid HTTP servers
 	// verifyClusterHealth expects: healthyCount >= quorum, leaderCount == 1.
 	// We need 1 leader, 2 standbys.
-	mockFactory := func(config openbaoapi.ClientConfig) (*openbaoapi.Client, error) {
+	mockFactory := func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		// Determine if this should be the leader based on the pod name in BaseURL
 		isLeader := strings.Contains(config.BaseURL, "-0.")
 
-		// Create a specific server for this client to control response
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == constants.APIPathSysHealth {
-				w.WriteHeader(http.StatusOK)
-				if isLeader {
-					_, _ = w.Write([]byte(`{"initialized": true, "sealed": false, "standby": false}`))
-				} else {
-					_, _ = w.Write([]byte(`{"initialized": true, "sealed": false, "standby": true}`))
-				}
-				return
-			}
-			w.WriteHeader(http.StatusOK)
-		}))
-		// Note: leaking server here for simplicity in test, will be cleaned up on process exit
-
-		// Override URL to point to this pod's mock server
-		config.BaseURL = server.URL
-		config.CACert = nil // Disable TLS for mock server
-		return openbaoapi.NewClient(config)
+		return &openbaoapi.MockClusterActions{
+			IsHealthyFunc: func(ctx context.Context) (bool, error) {
+				return true, nil
+			},
+			IsLeaderFunc: func(ctx context.Context) (bool, error) {
+				return isLeader, nil
+			},
+		}, nil
 	}
 
 	manager := NewManagerWithClientFactory(k8sClient, scheme, mockFactory)

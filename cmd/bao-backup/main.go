@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -403,16 +404,6 @@ func main() {
 		os.Exit(exitConfigError)
 	}
 
-	// Stream snapshot
-	snapshotResp, err := baoClient.Snapshot(ctx)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "bao-backup error: failed to get snapshot: %v\n", err)
-		os.Exit(exitSnapshotError)
-	}
-	defer func() {
-		_ = snapshotResp.Body.Close()
-	}()
-
 	// Ensure region is set (required by S3 client)
 	if cfg.StorageCredentials == nil {
 		cfg.StorageCredentials = &storage.Credentials{
@@ -437,10 +428,31 @@ func main() {
 		os.Exit(exitStorageError)
 	}
 
-	// Upload to storage
-	if err := storageClient.Upload(ctx, backupKey, snapshotResp.Body, snapshotResp.ContentLength); err != nil {
+	// Stream snapshot directly to storage using a pipe
+	// The Snapshot method writes to a writer, and Upload reads from a reader
+	pr, pw := io.Pipe()
+
+	// Start snapshot in a goroutine, writing to the pipe writer
+	snapshotErrCh := make(chan error, 1)
+	go func() {
+		defer pw.Close()
+		snapshotErrCh <- baoClient.Snapshot(ctx, pw)
+	}()
+
+	// Upload to storage, reading from the pipe reader
+	// This will block until the snapshot is complete or an error occurs
+	if err := storageClient.Upload(ctx, backupKey, pr, -1); err != nil {
+		_ = pr.Close()
+		_ = pw.Close()
 		_, _ = fmt.Fprintf(os.Stderr, "bao-backup error: failed to upload backup: %v\n", err)
 		os.Exit(exitStorageError)
+	}
+
+	// Close the reader and check for snapshot errors
+	_ = pr.Close()
+	if err := <-snapshotErrCh; err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "bao-backup error: failed to get snapshot: %v\n", err)
+		os.Exit(exitSnapshotError)
 	}
 
 	// Verify upload

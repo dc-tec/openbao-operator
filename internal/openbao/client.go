@@ -279,12 +279,21 @@ func (c *Client) IsHealthy(ctx context.Context) (bool, error) {
 	return health.Initialized && !health.Sealed, nil
 }
 
-// SnapshotResponse wraps the snapshot response stream.
-type SnapshotResponse struct {
-	// Body is the snapshot data stream. The caller must close it after reading.
-	Body io.ReadCloser
-	// ContentLength is the expected size of the snapshot, or -1 if unknown.
-	ContentLength int64
+// IsSealed checks if the OpenBao cluster is sealed.
+// This implements the ClusterActions interface.
+func (c *Client) IsSealed(ctx context.Context) (bool, error) {
+	health, err := c.Health(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return health.Sealed, nil
+}
+
+// StepDownLeader requests the leader to step down and trigger a new election.
+// This is a wrapper around StepDown that implements the ClusterActions interface.
+func (c *Client) StepDownLeader(ctx context.Context) error {
+	return c.StepDown(ctx)
 }
 
 // InitRequest represents the payload sent to PUT /v1/sys/init.
@@ -309,22 +318,20 @@ type InitResponse struct {
 	RootToken     string   `json:"root_token"`
 }
 
-// Snapshot retrieves a Raft snapshot from the leader.
-// This streams the snapshot data directly from OpenBao without buffering.
-// The caller is responsible for closing the returned SnapshotResponse.Body.
-//
+// Snapshot implements the ClusterActions interface by writing the snapshot to the provided writer.
+// This streams the snapshot data directly from OpenBao to the writer without buffering.
 // The snapshot endpoint requires authentication with a token that has
 // read capability on sys/storage/raft/snapshot.
 //
 // This method should be called on the leader node for best results.
-func (c *Client) Snapshot(ctx context.Context) (*SnapshotResponse, error) {
+func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 	if c.token == "" {
-		return nil, fmt.Errorf("authentication token required for snapshot operation")
+		return fmt.Errorf("authentication token required for snapshot operation")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+constants.APIPathRaftSnapshot, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create snapshot request: %w", err)
+		return fmt.Errorf("failed to create snapshot request: %w", err)
 	}
 
 	req.Header.Set("X-Vault-Token", c.token)
@@ -338,23 +345,25 @@ func (c *Client) Snapshot(ctx context.Context) (*SnapshotResponse, error) {
 
 	resp, err := snapshotClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute snapshot request: %w", err)
+		return fmt.Errorf("failed to execute snapshot request: %w", err)
 	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
 
 	// Check for non-success status codes
 	if resp.StatusCode != http.StatusOK {
-		defer func() {
-			_, _ = io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
-		}()
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("snapshot request failed with status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("snapshot request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	return &SnapshotResponse{
-		Body:          resp.Body,
-		ContentLength: resp.ContentLength,
-	}, nil
+	// Stream the snapshot data directly to the writer
+	if _, err := io.Copy(writer, resp.Body); err != nil {
+		return fmt.Errorf("failed to write snapshot data: %w", err)
+	}
+
+	return nil
 }
 
 // Init initializes an OpenBao cluster by calling PUT /v1/sys/init.
