@@ -361,7 +361,7 @@ func TestReconcile_NotInitialized(t *testing.T) {
 	}
 
 	m := &Manager{}
-	err := m.Reconcile(context.Background(), testLogger(), cluster)
+	_, err := m.Reconcile(context.Background(), testLogger(), cluster)
 
 	// Should return nil without doing anything
 	if err != nil {
@@ -386,7 +386,7 @@ func TestReconcile_NoUpgradeNeeded(t *testing.T) {
 	}
 
 	m := &Manager{}
-	err := m.Reconcile(context.Background(), testLogger(), cluster)
+	_, err := m.Reconcile(context.Background(), testLogger(), cluster)
 
 	// Should return nil without doing anything
 	if err != nil {

@@ -213,7 +213,7 @@ func TestReconcileCreatesCAAndServerSecrets(t *testing.T) {
 		},
 	}
 
-	err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
+	_, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
@@ -298,7 +298,7 @@ func TestReconcileTriggersReloadOnNewServerCert(t *testing.T) {
 		},
 	}
 
-	err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
+	_, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
@@ -347,7 +347,7 @@ func TestReconcileRotatesNearExpiryCertAndSignalsReload(t *testing.T) {
 	ctx := context.Background()
 
 	// First reconcile bootstraps CA and server certificate and triggers a reload.
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if _, err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("initial Reconcile() error = %v", err)
 	}
 	if !reloader.called || reloader.lastHash == "" {
@@ -422,7 +422,7 @@ func TestReconcileRotatesNearExpiryCertAndSignalsReload(t *testing.T) {
 
 	// Second reconcile should detect that the certificate is within the rotation
 	// window, rotate it, and signal reload with a new hash.
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
+	if _, err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("second Reconcile() error = %v", err)
 	}
 
@@ -472,7 +472,7 @@ func TestReconcileExternalModeWaitsForSecrets(t *testing.T) {
 	ctx := context.Background()
 
 	// First reconcile should wait for secrets (no error, but no secrets created)
-	err := manager.Reconcile(ctx, logr.Discard(), cluster)
+	_, err := manager.Reconcile(ctx, logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v (should wait for external secrets)", err)
 	}
@@ -558,7 +558,7 @@ func TestReconcileExternalModeTriggersReloadOnExistingSecrets(t *testing.T) {
 	ctx := context.Background()
 
 	// Reconcile should find the secrets and trigger reload
-	err := manager.Reconcile(ctx, logr.Discard(), cluster)
+	_, err := manager.Reconcile(ctx, logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
@@ -616,7 +616,7 @@ func TestReconcile_ACMEMode_SkipsReconciliation(t *testing.T) {
 	ctx := context.Background()
 
 	// Reconcile should skip TLS reconciliation for ACME mode
-	err := manager.Reconcile(ctx, logr.Discard(), cluster)
+	_, err := manager.Reconcile(ctx, logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
@@ -668,7 +668,7 @@ func TestReconcile_ACMEMode_WithTLSDisabled(t *testing.T) {
 	ctx := context.Background()
 
 	// Reconcile should skip when TLS is disabled
-	err := manager.Reconcile(ctx, logr.Discard(), cluster)
+	_, err := manager.Reconcile(ctx, logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}

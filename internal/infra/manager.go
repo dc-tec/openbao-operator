@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	configbuilder "github.com/openbao/operator/internal/config"
@@ -167,6 +168,32 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	if err := m.ensureStatefulSet(ctx, logger, cluster, configContent, verifiedImageDigest); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// applyResource uses Server-Side Apply to create or update a Kubernetes resource.
+// This eliminates the need for Get-then-Create-or-Update logic and manual diffing.
+//
+// The resource must have TypeMeta, ObjectMeta (with Name and Namespace), and the desired Spec set.
+// Owner references are set automatically if the resource supports them.
+//
+// fieldOwner identifies the operator as the manager of this resource (used for conflict resolution).
+func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster, fieldOwner string) error {
+	// Set owner reference for garbage collection
+	if err := controllerutil.SetControllerReference(cluster, obj, m.scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference: %w", err)
+	}
+
+	// Use Server-Side Apply with ForceOwnership to ensure the operator manages this resource
+	patchOpts := []client.PatchOption{
+		client.ForceOwnership,
+		client.FieldOwner(fieldOwner),
+	}
+
+	if err := m.client.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
+		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
 	}
 
 	return nil

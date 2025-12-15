@@ -16,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
@@ -31,94 +30,42 @@ import (
 var ErrGatewayAPIMissing = errors.New("gateway API CRDs not installed")
 
 // ensureHeadlessService manages the headless service for stable network IDs.
-func (m *Manager) ensureHeadlessService(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+// ensureHeadlessService manages the headless Service for the OpenBaoCluster using Server-Side Apply.
+func (m *Manager) ensureHeadlessService(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	svcName := headlessServiceName(cluster)
 
-	service := &corev1.Service{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      svcName,
-	}, service)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get headless Service %s/%s: %w", cluster.Namespace, svcName, err)
-		}
-
-		logger.Info("Headless Service not found; creating", "service", svcName)
-
-		service = &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      svcName,
-				Namespace: cluster.Namespace,
-				Labels:    infraLabels(cluster),
-			},
-			Spec: corev1.ServiceSpec{
-				ClusterIP:                corev1.ClusterIPNone,
-				PublishNotReadyAddresses: true,
-				Selector:                 podSelectorLabels(cluster),
-				Ports: []corev1.ServicePort{
-					{
-						Name:     "api",
-						Port:     constants.PortAPI,
-						Protocol: corev1.ProtocolTCP,
-					},
+	service := &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      svcName,
+			Namespace: cluster.Namespace,
+			Labels:    infraLabels(cluster),
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP:                corev1.ClusterIPNone,
+			PublishNotReadyAddresses: true,
+			Selector:                 podSelectorLabels(cluster),
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "api",
+					Port:     constants.PortAPI,
+					Protocol: corev1.ProtocolTCP,
 				},
 			},
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, service, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on headless Service %s/%s: %w", cluster.Namespace, svcName, err)
-		}
-
-		if err := m.client.Create(ctx, service); err != nil {
-			return fmt.Errorf("failed to create headless Service %s/%s: %w", cluster.Namespace, svcName, err)
-		}
-
-		return nil
+		},
 	}
 
-	updated := service.DeepCopy()
-	if updated.Spec.Selector == nil {
-		updated.Spec.Selector = map[string]string{}
-	}
-	for k, v := range podSelectorLabels(cluster) {
-		updated.Spec.Selector[k] = v
-	}
-	updated.Spec.ClusterIP = corev1.ClusterIPNone
-	updated.Spec.PublishNotReadyAddresses = true
-
-	if len(updated.Spec.Ports) == 0 {
-		updated.Spec.Ports = []corev1.ServicePort{
-			{
-				Name:     "api",
-				Port:     constants.PortAPI,
-				Protocol: corev1.ProtocolTCP,
-			},
-		}
-	} else {
-		updated.Spec.Ports[0].Name = "api"
-		updated.Spec.Ports[0].Port = constants.PortAPI
-		updated.Spec.Ports[0].Protocol = corev1.ProtocolTCP
-	}
-
-	if labels := infraLabels(cluster); len(labels) > 0 {
-		if updated.Labels == nil {
-			updated.Labels = map[string]string{}
-		}
-		for k, v := range labels {
-			updated.Labels[k] = v
-		}
-	}
-
-	if err := m.client.Update(ctx, updated); err != nil {
-		return fmt.Errorf("failed to update headless Service %s/%s: %w", cluster.Namespace, svcName, err)
+	if err := m.applyResource(ctx, service, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure headless Service %s/%s: %w", cluster.Namespace, svcName, err)
 	}
 
 	return nil
 }
 
-// ensureExternalService manages the external-facing Service for the OpenBaoCluster.
+// ensureExternalService manages the external-facing Service for the OpenBaoCluster using Server-Side Apply.
 func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	serviceCfg := cluster.Spec.Service
 	ingressCfg := cluster.Spec.Ingress
@@ -129,66 +76,20 @@ func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger,
 		(gatewayCfg != nil && gatewayCfg.Enabled)
 	svcName := externalServiceName(cluster)
 
-	service := &corev1.Service{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      svcName,
-	}, service)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
+	// If service is not needed, check if it exists and delete it
+	if !needsService {
+		service := &corev1.Service{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      svcName,
+		}, service)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
+			}
 			return fmt.Errorf("failed to get external Service %s/%s: %w", cluster.Namespace, svcName, err)
 		}
 
-		if !needsService {
-			return nil
-		}
-
-		logger.Info("External Service not found; creating", "service", svcName)
-
-		svcType := corev1.ServiceTypeClusterIP
-		annotations := map[string]string{}
-		if serviceCfg != nil {
-			if serviceCfg.Type != "" {
-				svcType = serviceCfg.Type
-			}
-			for k, v := range serviceCfg.Annotations {
-				annotations[k] = v
-			}
-		}
-
-		service = &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        svcName,
-				Namespace:   cluster.Namespace,
-				Labels:      infraLabels(cluster),
-				Annotations: annotations,
-			},
-			Spec: corev1.ServiceSpec{
-				Type:     svcType,
-				Selector: podSelectorLabels(cluster),
-				Ports: []corev1.ServicePort{
-					{
-						Name:     "api",
-						Port:     constants.PortAPI,
-						Protocol: corev1.ProtocolTCP,
-					},
-				},
-			},
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, service, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on external Service %s/%s: %w", cluster.Namespace, svcName, err)
-		}
-
-		if err := m.client.Create(ctx, service); err != nil {
-			return fmt.Errorf("failed to create external Service %s/%s: %w", cluster.Namespace, svcName, err)
-		}
-
-		return nil
-	}
-
-	if !needsService {
 		logger.Info("External Service no longer needed; deleting", "service", svcName)
 		if err := m.client.Delete(ctx, service); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete external Service %s/%s: %w", cluster.Namespace, svcName, err)
@@ -196,14 +97,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger,
 		return nil
 	}
 
-	updated := service.DeepCopy()
-	if updated.Spec.Selector == nil {
-		updated.Spec.Selector = map[string]string{}
-	}
-	for k, v := range podSelectorLabels(cluster) {
-		updated.Spec.Selector[k] = v
-	}
-
+	// Build the desired service spec
 	svcType := corev1.ServiceTypeClusterIP
 	annotations := map[string]string{}
 	if serviceCfg != nil {
@@ -215,73 +109,57 @@ func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger,
 		}
 	}
 
-	updated.Spec.Type = svcType
-	updated.Spec.Ports = []corev1.ServicePort{
-		{
-			Name:     "api",
-			Port:     constants.PortAPI,
-			Protocol: corev1.ProtocolTCP,
+	service := &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        svcName,
+			Namespace:   cluster.Namespace,
+			Labels:      infraLabels(cluster),
+			Annotations: annotations,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     svcType,
+			Selector: podSelectorLabels(cluster),
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "api",
+					Port:     constants.PortAPI,
+					Protocol: corev1.ProtocolTCP,
+				},
+			},
 		},
 	}
-	updated.Annotations = annotations
 
-	if labels := infraLabels(cluster); len(labels) > 0 {
-		if updated.Labels == nil {
-			updated.Labels = map[string]string{}
-		}
-		for k, v := range labels {
-			updated.Labels[k] = v
-		}
-	}
-
-	if err := m.client.Update(ctx, updated); err != nil {
-		return fmt.Errorf("failed to update external Service %s/%s: %w", cluster.Namespace, svcName, err)
+	if err := m.applyResource(ctx, service, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure external Service %s/%s: %w", cluster.Namespace, svcName, err)
 	}
 
 	return nil
 }
 
-// ensureIngress manages external access via Ingress.
+// ensureIngress manages external access via Ingress using Server-Side Apply.
 func (m *Manager) ensureIngress(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	ingressCfg := cluster.Spec.Ingress
 	enabled := ingressCfg != nil && ingressCfg.Enabled
-
-	ingress := &networkingv1.Ingress{}
 	name := cluster.Name
 
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      name,
-	}, ingress)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
+	// If Ingress is disabled, check if it exists and delete it
+	if !enabled {
+		ingress := &networkingv1.Ingress{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      name,
+		}, ingress)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
+			}
 			return fmt.Errorf("failed to get Ingress %s/%s: %w", cluster.Namespace, name, err)
 		}
 
-		if !enabled {
-			return nil
-		}
-
-		logger.Info("Ingress not found; creating", "ingress", name)
-
-		newIngress := buildIngress(cluster)
-		if newIngress == nil {
-			return nil
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, newIngress, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on Ingress %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		if err := m.client.Create(ctx, newIngress); err != nil {
-			return fmt.Errorf("failed to create Ingress %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		return nil
-	}
-
-	if !enabled {
 		logger.Info("Ingress no longer enabled; deleting", "ingress", name)
 		if err := m.client.Delete(ctx, ingress); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete Ingress %s/%s: %w", cluster.Namespace, name, err)
@@ -289,8 +167,22 @@ func (m *Manager) ensureIngress(ctx context.Context, logger logr.Logger, cluster
 		return nil
 	}
 
+	// Build the desired Ingress
 	desired := buildIngress(cluster)
 	if desired == nil {
+		// Configuration invalid, check if Ingress exists and delete it
+		ingress := &networkingv1.Ingress{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      name,
+		}, ingress)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
+			}
+			return fmt.Errorf("failed to get Ingress %s/%s: %w", cluster.Namespace, name, err)
+		}
+
 		logger.Info("Ingress configuration invalid; deleting existing Ingress", "ingress", name)
 		if err := m.client.Delete(ctx, ingress); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete Ingress %s/%s after invalid config: %w", cluster.Namespace, name, err)
@@ -298,13 +190,14 @@ func (m *Manager) ensureIngress(ctx context.Context, logger logr.Logger, cluster
 		return nil
 	}
 
-	updated := ingress.DeepCopy()
-	updated.Labels = desired.Labels
-	updated.Annotations = desired.Annotations
-	updated.Spec = desired.Spec
+	// Set TypeMeta for SSA
+	desired.TypeMeta = metav1.TypeMeta{
+		Kind:       "Ingress",
+		APIVersion: "networking.k8s.io/v1",
+	}
 
-	if err := m.client.Update(ctx, updated); err != nil {
-		return fmt.Errorf("failed to update Ingress %s/%s: %w", cluster.Namespace, name, err)
+	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure Ingress %s/%s: %w", cluster.Namespace, name, err)
 	}
 
 	return nil
@@ -394,58 +287,25 @@ func buildIngress(cluster *openbaov1alpha1.OpenBaoCluster) *networkingv1.Ingress
 func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	gatewayCfg := cluster.Spec.Gateway
 	enabled := gatewayCfg != nil && gatewayCfg.Enabled && !gatewayCfg.TLSPassthrough
-
-	httpRoute := &gatewayv1.HTTPRoute{}
 	name := httpRouteName(cluster)
 
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      name,
-	}, httpRoute)
-	if err != nil {
-		if isNoKindMatchError(err) {
-			if enabled {
-				logger.Info("Gateway API CRDs not installed; HTTPRoute reconciliation will be marked as degraded", "httproute", name)
-				return ErrGatewayAPIMissing
+	// If HTTPRoute is disabled, check if it exists and delete it
+	if !enabled {
+		httpRoute := &gatewayv1.HTTPRoute{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      name,
+		}, httpRoute)
+		if err != nil {
+			if isNoKindMatchError(err) {
+				return nil // CRD not installed, nothing to do
 			}
-			return nil
-		}
-
-		if !apierrors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
+			}
 			return fmt.Errorf("failed to get HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
 		}
 
-		if !enabled {
-			return nil
-		}
-
-		logger.Info("HTTPRoute not found; creating", "httproute", name)
-
-		newHTTPRoute := buildHTTPRoute(cluster)
-		if newHTTPRoute == nil {
-			return nil
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, newHTTPRoute, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		if err := m.client.Create(ctx, newHTTPRoute); err != nil {
-			if isNoKindMatchError(err) {
-				if enabled {
-					logger.Info("Gateway API CRDs not installed; HTTPRoute reconciliation will be marked as degraded", "httproute", name)
-					return ErrGatewayAPIMissing
-				}
-				return nil
-			}
-			return fmt.Errorf("failed to create HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		return nil
-	}
-
-	if !enabled {
 		logger.Info("HTTPRoute no longer enabled; deleting", "httproute", name)
 		if err := m.client.Delete(ctx, httpRoute); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
@@ -453,8 +313,25 @@ func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, clust
 		return nil
 	}
 
+	// Build the desired HTTPRoute
 	desired := buildHTTPRoute(cluster)
 	if desired == nil {
+		// Configuration invalid, check if HTTPRoute exists and delete it
+		httpRoute := &gatewayv1.HTTPRoute{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      name,
+		}, httpRoute)
+		if err != nil {
+			if isNoKindMatchError(err) {
+				return nil // CRD not installed, nothing to do
+			}
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
+			}
+			return fmt.Errorf("failed to get HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
+		}
+
 		logger.Info("HTTPRoute configuration invalid; deleting existing HTTPRoute", "httproute", name)
 		if err := m.client.Delete(ctx, httpRoute); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete HTTPRoute %s/%s after invalid config: %w", cluster.Namespace, name, err)
@@ -462,13 +339,19 @@ func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, clust
 		return nil
 	}
 
-	updated := httpRoute.DeepCopy()
-	updated.Labels = desired.Labels
-	updated.Annotations = desired.Annotations
-	updated.Spec = desired.Spec
+	// Set TypeMeta for SSA
+	desired.TypeMeta = metav1.TypeMeta{
+		Kind:       "HTTPRoute",
+		APIVersion: "gateway.networking.k8s.io/v1",
+	}
 
-	if err := m.client.Update(ctx, updated); err != nil {
-		return fmt.Errorf("failed to update HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
+	// Use SSA to create or update, handling CRD missing errors gracefully
+	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+		if isNoKindMatchError(err) {
+			logger.Info("Gateway API CRDs not installed; HTTPRoute reconciliation will be marked as degraded", "httproute", name)
+			return ErrGatewayAPIMissing
+		}
+		return fmt.Errorf("failed to ensure HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
 	}
 
 	return nil
@@ -574,7 +457,7 @@ func httpRouteName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + httpRouteSuffix
 }
 
-// ensureTLSRoute manages the Gateway API TLSRoute for the OpenBaoCluster.
+// ensureTLSRoute manages the Gateway API TLSRoute for the OpenBaoCluster using Server-Side Apply.
 // When spec.gateway.enabled is true and spec.gateway.tlsPassthrough is true,
 // it creates or updates a TLSRoute that routes encrypted TLS traffic based on SNI
 // from the referenced Gateway to the OpenBao public Service without terminating TLS.
@@ -585,54 +468,25 @@ func httpRouteName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	gatewayCfg := cluster.Spec.Gateway
 	enabled := gatewayCfg != nil && gatewayCfg.Enabled && gatewayCfg.TLSPassthrough
-
-	tlsRoute := &gatewayv1alpha2.TLSRoute{}
 	name := tlsRouteName(cluster)
 
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      name,
-	}, tlsRoute)
-	if err != nil {
-		if isNoKindMatchError(err) {
-			if enabled {
-				logger.V(1).Info("Gateway API TLSRoute CRD not installed; skipping TLSRoute reconciliation", "tlsroute", name)
+	// If TLSRoute is disabled, check if it exists and delete it
+	if !enabled {
+		tlsRoute := &gatewayv1alpha2.TLSRoute{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      name,
+		}, tlsRoute)
+		if err != nil {
+			if isNoKindMatchError(err) {
+				return nil // CRD not installed, nothing to do
 			}
-			return nil
-		}
-
-		if !apierrors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
+			}
 			return fmt.Errorf("failed to get TLSRoute %s/%s: %w", cluster.Namespace, name, err)
 		}
 
-		if !enabled {
-			return nil
-		}
-
-		logger.Info("TLSRoute not found; creating", "tlsroute", name)
-
-		newTLSRoute := buildTLSRoute(cluster)
-		if newTLSRoute == nil {
-			return nil
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, newTLSRoute, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on TLSRoute %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		if err := m.client.Create(ctx, newTLSRoute); err != nil {
-			if isNoKindMatchError(err) {
-				logger.V(1).Info("Gateway API TLSRoute CRD not installed; skipping TLSRoute reconciliation", "tlsroute", name)
-				return nil
-			}
-			return fmt.Errorf("failed to create TLSRoute %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		return nil
-	}
-
-	if !enabled {
 		logger.Info("TLSRoute no longer enabled; deleting", "tlsroute", name)
 		if err := m.client.Delete(ctx, tlsRoute); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete TLSRoute %s/%s: %w", cluster.Namespace, name, err)
@@ -640,8 +494,25 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 		return nil
 	}
 
+	// Build the desired TLSRoute
 	desired := buildTLSRoute(cluster)
 	if desired == nil {
+		// Configuration invalid, check if TLSRoute exists and delete it
+		tlsRoute := &gatewayv1alpha2.TLSRoute{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      name,
+		}, tlsRoute)
+		if err != nil {
+			if isNoKindMatchError(err) {
+				return nil // CRD not installed, nothing to do
+			}
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
+			}
+			return fmt.Errorf("failed to get TLSRoute %s/%s: %w", cluster.Namespace, name, err)
+		}
+
 		logger.Info("TLSRoute configuration invalid; deleting existing TLSRoute", "tlsroute", name)
 		if err := m.client.Delete(ctx, tlsRoute); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete TLSRoute %s/%s after invalid config: %w", cluster.Namespace, name, err)
@@ -649,13 +520,19 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 		return nil
 	}
 
-	updated := tlsRoute.DeepCopy()
-	updated.Labels = desired.Labels
-	updated.Annotations = desired.Annotations
-	updated.Spec = desired.Spec
+	// Set TypeMeta for SSA
+	desired.TypeMeta = metav1.TypeMeta{
+		Kind:       "TLSRoute",
+		APIVersion: "gateway.networking.k8s.io/v1alpha2",
+	}
 
-	if err := m.client.Update(ctx, updated); err != nil {
-		return fmt.Errorf("failed to update TLSRoute %s/%s: %w", cluster.Namespace, name, err)
+	// Use SSA to create or update, handling CRD missing errors gracefully
+	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+		if isNoKindMatchError(err) {
+			logger.V(1).Info("Gateway API TLSRoute CRD not installed; skipping TLSRoute reconciliation", "tlsroute", name)
+			return nil
+		}
+		return fmt.Errorf("failed to ensure TLSRoute %s/%s: %w", cluster.Namespace, name, err)
 	}
 
 	return nil
@@ -767,54 +644,25 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 		return nil
 	}
 
-	backendTLSPolicy := &gatewayv1.BackendTLSPolicy{}
 	name := backendTLSPolicyName(cluster)
 
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      name,
-	}, backendTLSPolicy)
-	if err != nil {
-		if isNoKindMatchError(err) {
-			if backendTLSEnabled {
-				logger.V(1).Info("Gateway API BackendTLSPolicy CRD not installed; skipping BackendTLSPolicy reconciliation", "backendtlspolicy", name)
+	// If BackendTLSPolicy is disabled, check if it exists and delete it
+	if !backendTLSEnabled {
+		backendTLSPolicy := &gatewayv1.BackendTLSPolicy{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      name,
+		}, backendTLSPolicy)
+		if err != nil {
+			if isNoKindMatchError(err) {
+				return nil // CRD not installed, nothing to do
 			}
-			return nil
-		}
-
-		if !apierrors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
+			}
 			return fmt.Errorf("failed to get BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
 		}
 
-		if !backendTLSEnabled {
-			return nil
-		}
-
-		logger.Info("BackendTLSPolicy not found; creating", "backendtlspolicy", name)
-
-		newBackendTLSPolicy := buildBackendTLSPolicy(cluster)
-		if newBackendTLSPolicy == nil {
-			// Configuration invalid or TLS not enabled - will be retried on next reconciliation
-			return nil
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, newBackendTLSPolicy, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		if err := m.client.Create(ctx, newBackendTLSPolicy); err != nil {
-			if isNoKindMatchError(err) {
-				logger.V(1).Info("Gateway API BackendTLSPolicy CRD not installed; skipping BackendTLSPolicy reconciliation", "backendtlspolicy", name)
-				return nil
-			}
-			return fmt.Errorf("failed to create BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		return nil
-	}
-
-	if !backendTLSEnabled {
 		logger.Info("BackendTLSPolicy no longer enabled; deleting", "backendtlspolicy", name)
 		if err := m.client.Delete(ctx, backendTLSPolicy); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
@@ -822,8 +670,25 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 		return nil
 	}
 
+	// Build the desired BackendTLSPolicy
 	desired := buildBackendTLSPolicy(cluster)
 	if desired == nil {
+		// Configuration invalid, check if BackendTLSPolicy exists and delete it
+		backendTLSPolicy := &gatewayv1.BackendTLSPolicy{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      name,
+		}, backendTLSPolicy)
+		if err != nil {
+			if isNoKindMatchError(err) {
+				return nil // CRD not installed, nothing to do
+			}
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
+			}
+			return fmt.Errorf("failed to get BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
+		}
+
 		logger.Info("BackendTLSPolicy configuration invalid; deleting existing BackendTLSPolicy", "backendtlspolicy", name)
 		if err := m.client.Delete(ctx, backendTLSPolicy); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete BackendTLSPolicy %s/%s after invalid config: %w", cluster.Namespace, name, err)
@@ -831,13 +696,19 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 		return nil
 	}
 
-	updated := backendTLSPolicy.DeepCopy()
-	updated.Labels = desired.Labels
-	updated.Annotations = desired.Annotations
-	updated.Spec = desired.Spec
+	// Set TypeMeta for SSA
+	desired.TypeMeta = metav1.TypeMeta{
+		Kind:       "BackendTLSPolicy",
+		APIVersion: "gateway.networking.k8s.io/v1",
+	}
 
-	if err := m.client.Update(ctx, updated); err != nil {
-		return fmt.Errorf("failed to update BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
+	// Use SSA to create or update, handling CRD missing errors gracefully
+	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+		if isNoKindMatchError(err) {
+			logger.V(1).Info("Gateway API BackendTLSPolicy CRD not installed; skipping BackendTLSPolicy reconciliation", "backendtlspolicy", name)
+			return nil
+		}
+		return fmt.Errorf("failed to ensure BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
 	}
 
 	return nil
@@ -934,60 +805,16 @@ func backendTLSPolicyName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 //
 // This enforces the network isolation described in the threat model and prevents
 // unauthorized pods from accessing OpenBao cluster pods.
+// ensureNetworkPolicy creates or updates a NetworkPolicy to enforce cluster isolation using Server-Side Apply.
 func (m *Manager) ensureNetworkPolicy(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	networkPolicy := &networkingv1.NetworkPolicy{}
 	name := networkPolicyName(cluster)
 
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      name,
-	}, networkPolicy)
-
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get NetworkPolicy %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		logger.Info("NetworkPolicy not found; creating", "networkpolicy", name)
-
-		// Detect API server information for NetworkPolicy rules
-		// SECURITY: We require API server detection to succeed to enforce least privilege.
-		// Falling back to permissive namespace selectors violates Zero Trust principles.
-		apiServerInfo, err := m.detectAPIServerInfo(ctx, logger, cluster)
-		if err != nil {
-			return fmt.Errorf("failed to detect API server information for NetworkPolicy: %w. "+
-				"API server detection is required to enforce least-privilege egress rules. "+
-				"Consider explicitly configuring spec.network.apiServerCIDR if auto-detection fails", err)
-		}
-		if apiServerInfo == nil || (apiServerInfo.ServiceNetworkCIDR == "" && len(apiServerInfo.EndpointIPs) == 0) {
-			return fmt.Errorf("API server information is incomplete (no service CIDR or endpoint IPs detected). " +
-				"This is required to enforce least-privilege NetworkPolicy egress rules. " +
-				"Consider explicitly configuring spec.network.apiServerCIDR")
-		}
-
-		networkPolicy, err = buildNetworkPolicy(cluster, apiServerInfo, m.operatorNamespace)
-		if err != nil {
-			return fmt.Errorf("failed to build NetworkPolicy: %w", err)
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, networkPolicy, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on NetworkPolicy %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		if err := m.client.Create(ctx, networkPolicy); err != nil {
-			return fmt.Errorf("failed to create NetworkPolicy %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		return nil
-	}
-
-	// NetworkPolicy exists - update it to match desired state
 	// Detect API server information for NetworkPolicy rules
 	// SECURITY: We require API server detection to succeed to enforce least privilege.
+	// Falling back to permissive namespace selectors violates Zero Trust principles.
 	apiServerInfo, err := m.detectAPIServerInfo(ctx, logger, cluster)
 	if err != nil {
-		return fmt.Errorf("failed to detect API server information for NetworkPolicy update: %w. "+
+		return fmt.Errorf("failed to detect API server information for NetworkPolicy: %w. "+
 			"API server detection is required to enforce least-privilege egress rules. "+
 			"Consider explicitly configuring spec.network.apiServerCIDR if auto-detection fails", err)
 	}
@@ -1001,12 +828,15 @@ func (m *Manager) ensureNetworkPolicy(ctx context.Context, logger logr.Logger, c
 	if err != nil {
 		return fmt.Errorf("failed to build NetworkPolicy: %w", err)
 	}
-	updated := networkPolicy.DeepCopy()
-	updated.Labels = desired.Labels
-	updated.Spec = desired.Spec
 
-	if err := m.client.Update(ctx, updated); err != nil {
-		return fmt.Errorf("failed to update NetworkPolicy %s/%s: %w", cluster.Namespace, name, err)
+	// Set TypeMeta for SSA
+	desired.TypeMeta = metav1.TypeMeta{
+		Kind:       "NetworkPolicy",
+		APIVersion: "networking.k8s.io/v1",
+	}
+
+	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure NetworkPolicy %s/%s: %w", cluster.Namespace, name, err)
 	}
 
 	return nil
@@ -1462,25 +1292,30 @@ func (m *Manager) ensureGatewayCAConfigMap(ctx context.Context, logger logr.Logg
 	enabled := gatewayCfg != nil && gatewayCfg.Enabled
 
 	configMapName := cluster.Name + constants.SuffixTLSCA
-	configMap := &corev1.ConfigMap{}
-
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      configMapName,
-	}, configMap)
 
 	if !enabled {
 		// If Gateway is disabled and ConfigMap exists, delete it
-		if err == nil {
-			logger.Info("Gateway disabled; deleting CA ConfigMap", "configmap", configMapName)
-			if deleteErr := m.client.Delete(ctx, configMap); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
-				return fmt.Errorf("failed to delete Gateway CA ConfigMap %s/%s: %w", cluster.Namespace, configMapName, deleteErr)
+		configMap := &corev1.ConfigMap{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      configMapName,
+		}, configMap)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
 			}
+			return fmt.Errorf("failed to get Gateway CA ConfigMap %s/%s: %w", cluster.Namespace, configMapName, err)
+		}
+
+		logger.Info("Gateway disabled; deleting CA ConfigMap", "configmap", configMapName)
+		if deleteErr := m.client.Delete(ctx, configMap); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
+			return fmt.Errorf("failed to delete Gateway CA ConfigMap %s/%s: %w", cluster.Namespace, configMapName, deleteErr)
 		}
 		return nil
 	}
 
 	// Gateway is enabled - ensure ConfigMap exists with CA certificate
+	// First, get the CA Secret to extract the certificate
 	caSecretName := cluster.Name + constants.SuffixTLSCA
 	caSecret := &corev1.Secret{}
 	if err := m.client.Get(ctx, types.NamespacedName{
@@ -1505,52 +1340,24 @@ func (m *Manager) ensureGatewayCAConfigMap(ctx context.Context, logger logr.Logg
 	// Convert []byte to string for ConfigMap data
 	caCertString := string(caCertPEM)
 
-	if apierrors.IsNotFound(err) {
-		// ConfigMap doesn't exist - create it
-		logger.Info("Creating Gateway CA ConfigMap", "configmap", configMapName)
-
-		configMap = &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configMapName,
-				Namespace: cluster.Namespace,
-				Labels:    infraLabels(cluster),
-			},
-			Data: map[string]string{
-				"ca.crt": caCertString,
-			},
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, configMap, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on Gateway CA ConfigMap %s/%s: %w", cluster.Namespace, configMapName, err)
-		}
-
-		if err := m.client.Create(ctx, configMap); err != nil {
-			return fmt.Errorf("failed to create Gateway CA ConfigMap %s/%s: %w", cluster.Namespace, configMapName, err)
-		}
-
-		return nil
+	// Use SSA to create or update the ConfigMap
+	configMap := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configMapName,
+			Namespace: cluster.Namespace,
+			Labels:    infraLabels(cluster),
+		},
+		Data: map[string]string{
+			"ca.crt": caCertString,
+		},
 	}
 
-	if err != nil {
-		return fmt.Errorf("failed to get Gateway CA ConfigMap %s/%s: %w", cluster.Namespace, configMapName, err)
-	}
-
-	// ConfigMap exists - update it if the CA certificate has changed
-	existingCACert, exists := configMap.Data["ca.crt"]
-	if !exists || existingCACert != caCertString {
-		logger.Info("Updating Gateway CA ConfigMap with new CA certificate", "configmap", configMapName)
-
-		updated := configMap.DeepCopy()
-		if updated.Data == nil {
-			updated.Data = make(map[string]string)
-		}
-		updated.Data["ca.crt"] = caCertString
-		updated.Labels = infraLabels(cluster)
-
-		if err := m.client.Update(ctx, updated); err != nil {
-			return fmt.Errorf("failed to update Gateway CA ConfigMap %s/%s: %w", cluster.Namespace, configMapName, err)
-		}
+	if err := m.applyResource(ctx, configMap, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure Gateway CA ConfigMap %s/%s: %w", cluster.Namespace, configMapName, err)
 	}
 
 	return nil

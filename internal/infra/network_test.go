@@ -59,6 +59,46 @@ func TestEnsureHeadlessServiceCreatesAndUpdates(t *testing.T) {
 	}
 }
 
+func TestEnsureHeadlessService_IsIdempotent(t *testing.T) {
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+
+	cluster := newMinimalCluster("infra-headless-idempotent", "default")
+	createTLSSecretForTest(t, k8sClient, cluster)
+
+	ctx := context.Background()
+
+	// First reconcile creates the headless Service
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+		if errors.Is(err, ErrGatewayAPIMissing) {
+			t.Skip("Skipping test: Gateway API CRDs not installed in test environment")
+		}
+		t.Fatalf("Reconcile() first call error = %v", err)
+	}
+
+	// Second reconcile should be idempotent (SSA)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+		if errors.Is(err, ErrGatewayAPIMissing) {
+			t.Skip("Skipping test: Gateway API CRDs not installed in test environment")
+		}
+		t.Fatalf("Reconcile() second call error = %v", err)
+	}
+
+	// Verify Service still exists and has correct configuration
+	headless := &corev1.Service{}
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      headlessServiceName(cluster),
+	}, headless)
+	if err != nil {
+		t.Fatalf("expected headless Service to exist after idempotent applies: %v", err)
+	}
+
+	if headless.Spec.ClusterIP != corev1.ClusterIPNone {
+		t.Fatalf("expected headless Service ClusterIP None after idempotent applies, got %q", headless.Spec.ClusterIP)
+	}
+}
+
 func TestEnsureExternalServiceCreatesWhenConfigured(t *testing.T) {
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)

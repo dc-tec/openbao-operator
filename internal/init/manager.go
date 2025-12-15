@@ -59,11 +59,11 @@ func NewManager(config *rest.Config, clientset kubernetes.Interface) *Manager {
 //
 // This should only be called during initial cluster creation. Once initialized, subsequent
 // reconciles will skip this step.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
 	// If already initialized, nothing to do
 	if cluster.Status.Initialized {
 		logger.V(1).Info("OpenBao cluster is already initialized; skipping initialization")
-		return nil
+		return false, nil
 	}
 
 	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
@@ -75,12 +75,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Find the first pod (should be pod-0 during initial creation)
 	pod, err := m.findFirstPod(ctx, cluster)
 	if err != nil {
-		return fmt.Errorf("failed to find pod for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		return false, fmt.Errorf("failed to find pod for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
 	if pod == nil {
 		logger.Info("No pods found; waiting for pod to be created")
-		return nil
+		return false, nil
 	}
 
 	logger.Info("Found pod for initialization", "pod", pod.Name, "phase", pod.Status.Phase)
@@ -100,7 +100,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			}
 		}
 		logger.Info("Container not ready for initialization yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase)
-		return nil
+		return false, nil
 	}
 
 	initializedLabel, hasInitializedLabel, err := openbao.ParseBoolLabel(pod.Labels, openbao.LabelInitialized)
@@ -121,7 +121,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			logger.Info("OpenBao service registration labels indicate initialized and unsealed; marking cluster as initialized", "pod", pod.Name)
 			cluster.Status.Initialized = true
 			cluster.Status.SelfInitialized = true
-			return nil
+			return false, nil
 		}
 	}
 
@@ -135,11 +135,11 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			logger.Info("OpenBao pod is Ready; marking cluster as initialized", "pod", pod.Name)
 			cluster.Status.Initialized = true
 			cluster.Status.SelfInitialized = true
-			return nil
+			return false, nil
 		}
 
 		logger.Info("Self-initialization is enabled; waiting for pod to become Ready", "pod", pod.Name)
-		return nil
+		return false, nil
 	}
 
 	// Before attempting to connect, verify that TLS server secret exists.
@@ -149,10 +149,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("TLS server Secret not found yet; waiting for TLS reconciliation", "pod", pod.Name, "secret", tlsServerSecretName)
-			return nil // Don't fail, will retry on next reconcile once TLS secret is ready
+			return false, nil // Don't fail, will retry on next reconcile once TLS secret is ready
 		}
 		logger.Info("Failed to check TLS server Secret (will retry)", "pod", pod.Name, "secret", tlsServerSecretName, "error", err)
-		return nil // Don't fail, will retry on next reconcile
+		return false, nil // Don't fail, will retry on next reconcile
 	}
 
 	// Always attempt to initialize via the operator to ensure we capture the root token.
@@ -173,7 +173,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		// to allow the reconciliation loop to requeue without marking as failed.
 		if err == errRetryLater {
 			logger.Info("Initialization will be retried on next reconcile", "cluster", cluster.Name)
-			return nil
+			return false, nil
 		}
 
 		logger.Error(err, "Failed to initialize OpenBao cluster")
@@ -182,7 +182,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			"cluster_name":      cluster.Name,
 			"error":             err.Error(),
 		})
-		return fmt.Errorf("failed to initialize OpenBao cluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		return false, fmt.Errorf("failed to initialize OpenBao cluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
 	// Mark cluster as initialized only if initialization actually succeeded
@@ -197,7 +197,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		"self_init_enabled": fmt.Sprintf("%t", selfInitEnabled),
 	})
 
-	return nil
+	return false, nil
 }
 
 func isPodReady(pod *corev1.Pod) bool {

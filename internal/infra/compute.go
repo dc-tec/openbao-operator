@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
@@ -82,89 +81,53 @@ func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *op
 	return nil
 }
 
-// ensureStatefulSet manages the StatefulSet for the OpenBaoCluster.
+// ensureStatefulSet manages the StatefulSet for the OpenBaoCluster using Server-Side Apply.
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
+//
+// Note: UpdateStrategy is intentionally not set here to allow UpgradeManager to manage it.
+// SSA will preserve fields not specified in the desired object.
 func (m *Manager) ensureStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string, verifiedImageDigest string) error {
 	name := statefulSetName(cluster)
 
-	statefulSet := &appsv1.StatefulSet{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      name,
-	}, statefulSet)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get StatefulSet %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		// Before creating the StatefulSet, verify all prerequisites exist
-		if err := m.checkStatefulSetPrerequisites(ctx, cluster); err != nil {
-			return err
-		}
-
-		logger.Info("StatefulSet not found; creating", "statefulset", name)
-
-		// During initial cluster creation, start with 1 replica for initialization
-		initialized := cluster.Status.Initialized
-		desired, buildErr := buildStatefulSet(cluster, configContent, initialized, verifiedImageDigest)
-		if buildErr != nil {
-			return fmt.Errorf("failed to build StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, buildErr)
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, desired, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on StatefulSet %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		if err := m.client.Create(ctx, desired); err != nil {
-			return fmt.Errorf("failed to create StatefulSet %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		return nil
+	// Before creating/updating the StatefulSet, verify all prerequisites exist
+	// This is important for External TLS mode where secrets might be deleted/recreated
+	if err := m.checkStatefulSetPrerequisites(ctx, cluster); err != nil {
+		return err
 	}
 
 	initialized := cluster.Status.Initialized
 	desiredReplicas := cluster.Spec.Replicas
-	currentReplicas := int32Ptr(1)
-	if statefulSet.Spec.Replicas != nil {
-		currentReplicas = statefulSet.Spec.Replicas
-	}
 
 	// If not initialized, keep at 1 replica until initialization completes
 	if !initialized {
 		desiredReplicas = 1
 		logger.Info("Cluster not yet initialized; keeping StatefulSet at 1 replica", "statefulset", name)
 	} else {
-		logger.Info("Cluster initialized; scaling StatefulSet to desired replicas",
+		logger.Info("Cluster initialized; ensuring StatefulSet has desired replicas",
 			"statefulset", name,
-			"currentReplicas", *currentReplicas,
 			"desiredReplicas", desiredReplicas)
-	}
-
-	// Before updating the StatefulSet, verify all prerequisites still exist
-	// This is important for External TLS mode where secrets might be deleted/recreated
-	if err := m.checkStatefulSetPrerequisites(ctx, cluster); err != nil {
-		return err
 	}
 
 	desired, buildErr := buildStatefulSet(cluster, configContent, initialized, verifiedImageDigest)
 	if buildErr != nil {
-		return fmt.Errorf("failed to build desired StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, buildErr)
+		return fmt.Errorf("failed to build StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, buildErr)
 	}
 
-	// The UpgradeManager owns StatefulSet update strategy (including
-	// RollingUpdate.Partition) for rollout orchestration. The infra manager must
-	// avoid mutating UpdateStrategy to prevent clobbering in-progress upgrades.
-	updated := statefulSet.DeepCopy()
-	updated.Labels = desired.Labels
-	updated.Spec.Replicas = int32Ptr(desiredReplicas)
-	updated.Spec.ServiceName = desired.Spec.ServiceName
-	updated.Spec.Selector = desired.Spec.Selector
-	updated.Spec.Template = desired.Spec.Template
-	updated.Spec.VolumeClaimTemplates = desired.Spec.VolumeClaimTemplates
+	// Set the desired replica count (SSA will handle create/update)
+	desired.Spec.Replicas = int32Ptr(desiredReplicas)
 
-	if err := m.client.Update(ctx, updated); err != nil {
-		return fmt.Errorf("failed to update StatefulSet %s/%s: %w", cluster.Namespace, name, err)
+	// Set TypeMeta for SSA
+	desired.TypeMeta = metav1.TypeMeta{
+		Kind:       "StatefulSet",
+		APIVersion: "apps/v1",
+	}
+
+	// Note: We intentionally do NOT set UpdateStrategy here. The UpgradeManager manages
+	// UpdateStrategy (including RollingUpdate.Partition) for rollout orchestration.
+	// SSA will preserve the existing UpdateStrategy if it's not specified in our desired object.
+
+	if err := m.applyResource(ctx, desired, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure StatefulSet %s/%s: %w", cluster.Namespace, name, err)
 	}
 
 	return nil

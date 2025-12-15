@@ -48,6 +48,123 @@ import (
 	upgrademanager "github.com/openbao/operator/internal/upgrade"
 )
 
+// SubReconciler is a standardized interface for sub-reconcilers that handle
+// specific aspects of OpenBaoCluster reconciliation.
+// Implementations should return (shouldRequeue, error) where shouldRequeue
+// indicates whether the reconciliation should be requeued immediately.
+type SubReconciler interface {
+	// Reconcile performs reconciliation for the given cluster.
+	// Returns (shouldRequeue, error) where shouldRequeue indicates if
+	// reconciliation should be requeued immediately.
+	Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error)
+}
+
+// infraReconciler wraps InfraManager to implement SubReconciler interface.
+// It handles image verification and injects the verified digest into InfraManager.
+type infraReconciler struct {
+	client            client.Client
+	scheme            *runtime.Scheme
+	operatorNamespace string
+	oidcIssuer        string
+	oidcJWTKeys       []string
+	verifyImageFunc   func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error)
+}
+
+// Reconcile implements SubReconciler for infrastructure reconciliation.
+func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+	logger.Info("Reconciling infrastructure for OpenBaoCluster")
+
+	// Perform image verification if enabled and get verified digest
+	var verifiedImageDigest string
+	if cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
+		digest, err := r.verifyImageFunc(ctx, logger, cluster)
+		if err != nil {
+			now := metav1.Now()
+			failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+			if failurePolicy == "" {
+				failurePolicy = "Block" // Default to Block
+			}
+
+			if failurePolicy == "Block" {
+				// Block reconciliation and set Degraded condition
+				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+					Type:               string(openbaov1alpha1.ConditionDegraded),
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: cluster.Generation,
+					LastTransitionTime: now,
+					Reason:             "ImageVerificationFailed",
+					Message:            fmt.Sprintf("Image verification failed: %v", err),
+				})
+
+				// Note: Status update will be handled by the controller
+				return false, fmt.Errorf("image verification failed (policy=Block): %w", err)
+			}
+
+			// Warn policy: log error and emit event, but proceed
+			logger.Error(err, "Image verification failed but proceeding due to Warn policy", "image", cluster.Spec.Image)
+			// TODO: Emit Kubernetes Event here
+		} else {
+			verifiedImageDigest = digest
+			logger.Info("Image verified successfully, using digest", "digest", digest)
+		}
+	}
+
+	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys)
+	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest); err != nil {
+		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
+			now := metav1.Now()
+			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+				Type:               string(openbaov1alpha1.ConditionDegraded),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: cluster.Generation,
+				LastTransitionTime: now,
+				Reason:             "GatewayAPIMissing",
+				Message:            "Gateway API CRDs are not installed but spec.gateway.enabled is true; install Gateway API CRDs or disable spec.gateway to clear this condition.",
+			})
+
+			// Note: Status update will be handled by the controller
+			return false, nil
+		}
+		if errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing) {
+			// Prerequisites are missing (ConfigMap or TLS Secret). Set a condition and requeue
+			// so reconciliation can retry once prerequisites are ready.
+			now := metav1.Now()
+			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+				Type:               string(openbaov1alpha1.ConditionDegraded),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: cluster.Generation,
+				LastTransitionTime: now,
+				Reason:             "PrerequisitesMissing",
+				Message:            fmt.Sprintf("StatefulSet prerequisites missing: %v. Waiting for ConfigMap or TLS Secret to be created.", err),
+			})
+
+			// Note: Status update will be handled by the controller
+			// Requeue with a short delay to retry once prerequisites are ready
+			logger.Info("StatefulSet prerequisites missing; requeuing reconciliation", "error", err)
+			return true, nil // Request immediate requeue
+		}
+		return false, err
+	}
+
+	// Prerequisites are ready and infrastructure reconciliation succeeded.
+	// Clear any PrerequisitesMissing condition that might have been set earlier.
+	degradedCond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
+	if degradedCond != nil && degradedCond.Reason == "PrerequisitesMissing" {
+		now := metav1.Now()
+		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type:               string(openbaov1alpha1.ConditionDegraded),
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: cluster.Generation,
+			LastTransitionTime: now,
+			Reason:             "PrerequisitesReady",
+			Message:            "StatefulSet prerequisites are now available",
+		})
+		logger.Info("StatefulSet prerequisites are ready; cleared PrerequisitesMissing condition")
+	}
+
+	return false, nil
+}
+
 // OpenBaoClusterReconciler reconciles a OpenBaoCluster object.
 type OpenBaoClusterReconciler struct {
 	client.Client
@@ -147,26 +264,73 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.reconcileCerts(ctx, logger, cluster); err != nil {
-		now := metav1.Now()
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             "Error",
-			Message:            fmt.Sprintf("failed to reconcile TLS assets: %v", err),
-		})
+	// Build sub-reconcilers in order of execution
+	reconcilers := []SubReconciler{
+		certmanager.NewManagerWithReloader(r.Client, r.Scheme, r.TLSReload),
+		&infraReconciler{
+			client:            r.Client,
+			scheme:            r.Scheme,
+			operatorNamespace: r.OperatorNamespace,
+			oidcIssuer:        r.OIDCIssuer,
+			oidcJWTKeys:       r.OIDCJWTKeys,
+			verifyImageFunc:   r.verifyImage,
+		},
+	}
 
-		if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
-			reconcileErr = fmt.Errorf("failed to update TLSReady condition for OpenBaoCluster %s/%s after TLS error: %w", cluster.Namespace, cluster.Name, statusErr)
+	// Add InitManager if configured
+	if r.InitManager != nil {
+		reconcilers = append(reconcilers, r.InitManager)
+	}
+
+	// Add UpgradeManager and BackupManager
+	reconcilers = append(reconcilers,
+		upgrademanager.NewManager(r.Client, r.Scheme),
+		backupmanager.NewManager(r.Client, r.Scheme),
+	)
+
+	// Execute sub-reconcilers in order
+	for _, rec := range reconcilers {
+		shouldRequeue, err := rec.Reconcile(ctx, logger, cluster)
+		if err != nil {
+			// Special handling for CertManager errors - set TLSReady condition
+			if _, isCertManager := rec.(*certmanager.Manager); isCertManager {
+				now := metav1.Now()
+				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+					Type:               string(openbaov1alpha1.ConditionTLSReady),
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: cluster.Generation,
+					LastTransitionTime: now,
+					Reason:             "Error",
+					Message:            fmt.Sprintf("failed to reconcile TLS assets: %v", err),
+				})
+
+				if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
+					reconcileErr = fmt.Errorf("failed to update TLSReady condition for OpenBaoCluster %s/%s after TLS error: %w", cluster.Namespace, cluster.Name, statusErr)
+					return ctrl.Result{}, reconcileErr
+				}
+			}
+
+			reconcileErr = err
 			return ctrl.Result{}, reconcileErr
 		}
 
-		reconcileErr = err
-		return ctrl.Result{}, reconcileErr
+		// If a reconciler requests requeue, stop the chain and return
+		if shouldRequeue {
+			// For infra reconciler, handle special requeue cases
+			if _, isInfraReconciler := rec.(*infraReconciler); isInfraReconciler {
+				// Update status before requeuing
+				if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
+					reconcileErr = fmt.Errorf("failed to update status before requeue: %w", statusErr)
+					return ctrl.Result{}, reconcileErr
+				}
+				return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+			}
+			return ctrl.Result{Requeue: true}, nil
+		}
 	}
 
+	// Set TLSReady condition to true after successful cert reconciliation
+	// (CertManager is the first reconciler)
 	now := metav1.Now()
 	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:               string(openbaov1alpha1.ConditionTLSReady),
@@ -176,34 +340,6 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Reason:             "Ready",
 		Message:            "TLS assets are provisioned",
 	})
-
-	infraResult, err := r.reconcileInfra(ctx, logger, cluster)
-	if err != nil {
-		reconcileErr = err
-		return ctrl.Result{}, reconcileErr
-	}
-	if infraResult.RequeueAfter > 0 {
-		return infraResult, nil
-	}
-
-	initResult, err := r.reconcileInit(ctx, logger, cluster)
-	if err != nil {
-		reconcileErr = err
-		return ctrl.Result{}, reconcileErr
-	}
-	if initResult.RequeueAfter > 0 {
-		return initResult, nil
-	}
-
-	if err := r.reconcileUpgrade(ctx, logger, cluster); err != nil {
-		reconcileErr = err
-		return ctrl.Result{}, reconcileErr
-	}
-
-	if err := r.reconcileBackup(ctx, logger, cluster); err != nil {
-		reconcileErr = err
-		return ctrl.Result{}, reconcileErr
-	}
 
 	statusUpdateResult, err := r.updateStatus(ctx, logger, cluster)
 	if err != nil {
@@ -219,8 +355,11 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// If initialization is still in progress, requeue so that the init manager
 	// can retry once the first pod is running and the API is reachable.
-	if initResult.RequeueAfter > 0 {
-		return initResult, nil
+	if r.InitManager != nil && !cluster.Status.Initialized {
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: constants.RequeueShort,
+		}, nil
 	}
 
 	// Safety net: periodically requeue to detect and correct drift that may
@@ -233,115 +372,6 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	logger.V(1).Info("Reconciliation complete; scheduling safety net requeue", "requeueAfter", requeueAfter)
 
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
-}
-
-func (r *OpenBaoClusterReconciler) reconcileCerts(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	logger.Info("Reconciling TLS assets for OpenBaoCluster")
-	manager := certmanager.NewManagerWithReloader(r.Client, r.Scheme, r.TLSReload)
-	return manager.Reconcile(ctx, logger, cluster)
-}
-
-func (r *OpenBaoClusterReconciler) reconcileInfra(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
-	logger.Info("Reconciling infrastructure for OpenBaoCluster")
-
-	// Perform image verification if enabled and get verified digest
-	var verifiedImageDigest string
-	if cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
-		digest, err := r.verifyImage(ctx, logger, cluster)
-		if err != nil {
-			now := metav1.Now()
-			failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
-			if failurePolicy == "" {
-				failurePolicy = "Block" // Default to Block
-			}
-
-			if failurePolicy == "Block" {
-				// Block reconciliation and set Degraded condition
-				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-					Type:               string(openbaov1alpha1.ConditionDegraded),
-					Status:             metav1.ConditionTrue,
-					ObservedGeneration: cluster.Generation,
-					LastTransitionTime: now,
-					Reason:             "ImageVerificationFailed",
-					Message:            fmt.Sprintf("Image verification failed: %v", err),
-				})
-
-				if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
-					return ctrl.Result{}, fmt.Errorf("failed to update Degraded condition for OpenBaoCluster %s/%s after image verification error: %w", cluster.Namespace, cluster.Name, statusErr)
-				}
-
-				return ctrl.Result{}, fmt.Errorf("image verification failed (policy=Block): %w", err)
-			}
-
-			// Warn policy: log error and emit event, but proceed
-			logger.Error(err, "Image verification failed but proceeding due to Warn policy", "image", cluster.Spec.Image)
-			// TODO: Emit Kubernetes Event here
-		} else {
-			verifiedImageDigest = digest
-			logger.Info("Image verified successfully, using digest", "digest", digest)
-		}
-	}
-
-	manager := inframanager.NewManager(r.Client, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys)
-	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest); err != nil {
-		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
-			now := metav1.Now()
-			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-				Type:               string(openbaov1alpha1.ConditionDegraded),
-				Status:             metav1.ConditionTrue,
-				ObservedGeneration: cluster.Generation,
-				LastTransitionTime: now,
-				Reason:             "GatewayAPIMissing",
-				Message:            "Gateway API CRDs are not installed but spec.gateway.enabled is true; install Gateway API CRDs or disable spec.gateway to clear this condition.",
-			})
-
-			if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to update Degraded condition for OpenBaoCluster %s/%s after Gateway API error: %w", cluster.Namespace, cluster.Name, statusErr)
-			}
-
-			return ctrl.Result{}, nil
-		}
-		if errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing) {
-			// Prerequisites are missing (ConfigMap or TLS Secret). Set a condition and requeue
-			// so reconciliation can retry once prerequisites are ready.
-			now := metav1.Now()
-			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-				Type:               string(openbaov1alpha1.ConditionDegraded),
-				Status:             metav1.ConditionTrue,
-				ObservedGeneration: cluster.Generation,
-				LastTransitionTime: now,
-				Reason:             "PrerequisitesMissing",
-				Message:            fmt.Sprintf("StatefulSet prerequisites missing: %v. Waiting for ConfigMap or TLS Secret to be created.", err),
-			})
-
-			if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to update Degraded condition for OpenBaoCluster %s/%s after prerequisites error: %w", cluster.Namespace, cluster.Name, statusErr)
-			}
-
-			// Requeue with a short delay to retry once prerequisites are ready
-			logger.Info("StatefulSet prerequisites missing; requeuing reconciliation", "error", err)
-			return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
-		}
-		return ctrl.Result{}, err
-	}
-
-	// Prerequisites are ready and infrastructure reconciliation succeeded.
-	// Clear any PrerequisitesMissing condition that might have been set earlier.
-	degradedCond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
-	if degradedCond != nil && degradedCond.Reason == "PrerequisitesMissing" {
-		now := metav1.Now()
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionDegraded),
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             "PrerequisitesReady",
-			Message:            "StatefulSet prerequisites are now available",
-		})
-		logger.Info("StatefulSet prerequisites are ready; cleared PrerequisitesMissing condition")
-	}
-
-	return ctrl.Result{}, nil
 }
 
 // verifyImage verifies the container image signature using the ImageVerifier.
@@ -377,46 +407,6 @@ func (r *OpenBaoClusterReconciler) verifyImage(ctx context.Context, logger logr.
 	}
 
 	return digest, nil
-}
-
-func (r *OpenBaoClusterReconciler) reconcileInit(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
-	if r.InitManager == nil {
-		// InitManager is optional - if not set, skip initialization check
-		return ctrl.Result{}, nil
-	}
-
-	// Skip initialization if cluster is already initialized
-	if cluster.Status.Initialized {
-		return ctrl.Result{}, nil
-	}
-
-	logger.Info("Reconciling initialization for OpenBaoCluster")
-	if err := r.InitManager.Reconcile(ctx, logger, cluster); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// If initialization is still in progress, requeue so that the init manager
-	// can retry once the first pod is running and the API is reachable.
-	if !cluster.Status.Initialized {
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: constants.RequeueShort,
-		}, nil
-	}
-
-	return ctrl.Result{}, nil
-}
-
-func (r *OpenBaoClusterReconciler) reconcileUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	logger.Info("Reconciling upgrades for OpenBaoCluster")
-	manager := upgrademanager.NewManager(r.Client, r.Scheme)
-	return manager.Reconcile(ctx, logger, cluster)
-}
-
-func (r *OpenBaoClusterReconciler) reconcileBackup(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	logger.Info("Reconciling backups for OpenBaoCluster")
-	manager := backupmanager.NewManager(r.Client, r.Scheme)
-	return manager.Reconcile(ctx, logger, cluster)
 }
 
 func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {

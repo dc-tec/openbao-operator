@@ -259,7 +259,7 @@ func TestEnsureConfigMap_UpdatesConfigMap(t *testing.T) {
 	}
 }
 
-func TestEnsureConfigMap_SkipsUpdateWhenUnchanged(t *testing.T) {
+func TestEnsureConfigMap_IsIdempotent(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
 	cmName := configMapName(cluster)
 	configContent := "test config content"
@@ -279,10 +279,30 @@ func TestEnsureConfigMap_SkipsUpdateWhenUnchanged(t *testing.T) {
 	k8sClient := newTestClientWithObjects(t, existingConfigMap)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
-	// Should not error and should skip update when content is the same
+	// With SSA, applying the same state multiple times is idempotent
+	// First apply should succeed
 	err := manager.ensureConfigMap(ctx, logger, cluster, configContent)
 	if err != nil {
-		t.Fatalf("ensureConfigMap() error = %v", err)
+		t.Fatalf("ensureConfigMap() first apply error = %v", err)
+	}
+
+	// Second apply with same content should also succeed (idempotent)
+	err = manager.ensureConfigMap(ctx, logger, cluster, configContent)
+	if err != nil {
+		t.Fatalf("ensureConfigMap() second apply error = %v", err)
+	}
+
+	// Verify ConfigMap still exists and has correct content
+	configMap := &corev1.ConfigMap{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cmName,
+	}, configMap)
+	if err != nil {
+		t.Fatalf("expected ConfigMap to exist after idempotent applies: %v", err)
+	}
+	if configMap.Data[configFileName] != configContent {
+		t.Errorf("expected ConfigMap content to remain %q, got %q", configContent, configMap.Data[configFileName])
 	}
 }
 

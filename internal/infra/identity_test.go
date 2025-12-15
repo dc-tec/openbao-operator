@@ -46,11 +46,11 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 	}
 }
 
-func TestEnsureServiceAccountUpdatesLabels(t *testing.T) {
+func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
-	cluster := newMinimalCluster("infra-sa-update", "default")
+	cluster := newMinimalCluster("infra-sa-idempotent", "default")
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -62,27 +62,37 @@ func TestEnsureServiceAccountUpdatesLabels(t *testing.T) {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
-	// Update cluster name (simulating label change)
-	cluster.Name = "infra-sa-updated"
-
-	// Ensure TLS prerequisites exist for the new cluster name before reconciling.
-	createTLSSecretForTest(t, k8sClient, cluster)
-
-	// Second reconcile should update labels
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
-		t.Fatalf("Reconcile() error = %v", err)
-	}
-
-	// Note: ServiceAccount name is based on cluster name, so this test
-	// verifies that the old ServiceAccount still exists with old labels
-	// and a new one is created. This is expected behavior.
-	sa := &corev1.ServiceAccount{}
+	// Get the ServiceAccount after first reconcile
+	sa1 := &corev1.ServiceAccount{}
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      serviceAccountName(cluster),
-	}, sa)
+	}, sa1)
 	if err != nil {
-		t.Fatalf("expected ServiceAccount to exist: %v", err)
+		t.Fatalf("expected ServiceAccount to exist after first reconcile: %v", err)
+	}
+
+	// Second reconcile with same cluster should be idempotent (SSA)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+		t.Fatalf("Reconcile() second call error = %v", err)
+	}
+
+	// Get the ServiceAccount after second reconcile
+	sa2 := &corev1.ServiceAccount{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      serviceAccountName(cluster),
+	}, sa2)
+	if err != nil {
+		t.Fatalf("expected ServiceAccount to exist after second reconcile: %v", err)
+	}
+
+	// Verify labels are still correct (SSA maintains desired state)
+	expectedLabels := infraLabels(cluster)
+	for key, expectedVal := range expectedLabels {
+		if sa2.Labels[key] != expectedVal {
+			t.Errorf("expected ServiceAccount label %s=%s after idempotent apply, got %s", key, expectedVal, sa2.Labels[key])
+		}
 	}
 }
 
@@ -175,11 +185,11 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 	}
 }
 
-func TestEnsureRBACUpdatesWhenServiceAccountChanges(t *testing.T) {
+func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
-	cluster := newMinimalCluster("infra-rbac-update", "default")
+	cluster := newMinimalCluster("infra-rbac-idempotent", "default")
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -191,9 +201,9 @@ func TestEnsureRBACUpdatesWhenServiceAccountChanges(t *testing.T) {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
-	// Second reconcile should update labels
+	// Second reconcile should be idempotent (SSA)
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
-		t.Fatalf("Reconcile() error = %v", err)
+		t.Fatalf("Reconcile() second call error = %v", err)
 	}
 
 	// Verify RoleBinding still references correct ServiceAccount
@@ -204,12 +214,26 @@ func TestEnsureRBACUpdatesWhenServiceAccountChanges(t *testing.T) {
 		Name:      roleBindingName,
 	}, roleBinding)
 	if err != nil {
-		t.Fatalf("expected RoleBinding to exist: %v", err)
+		t.Fatalf("expected RoleBinding to exist after idempotent applies: %v", err)
 	}
 
 	saName := serviceAccountName(cluster)
 	if len(roleBinding.Subjects) == 0 || roleBinding.Subjects[0].Name != saName {
-		t.Fatalf("expected RoleBinding to reference ServiceAccount %q", saName)
+		t.Fatalf("expected RoleBinding to reference ServiceAccount %q after idempotent applies", saName)
+	}
+
+	// Verify Role still exists and has correct rules
+	role := &rbacv1.Role{}
+	roleName := serviceAccountName(cluster) + "-role"
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      roleName,
+	}, role)
+	if err != nil {
+		t.Fatalf("expected Role to exist after idempotent applies: %v", err)
+	}
+	if len(role.Rules) == 0 {
+		t.Fatalf("expected Role to have rules after idempotent applies")
 	}
 }
 

@@ -38,7 +38,7 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent:  "provisioner",
+				constants.LabelAppComponent: "provisioner",
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
@@ -130,7 +130,7 @@ func GenerateTenantRoleBinding(namespace string, operatorSA OperatorServiceAccou
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent:  "provisioner",
+				constants.LabelAppComponent: "provisioner",
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},

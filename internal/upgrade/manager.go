@@ -78,9 +78,8 @@ func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factor
 //  4. Pod-by-Pod Update: Step down leader if needed, update each pod in reverse ordinal order
 //  5. Finalization: Clear upgrade state, update current version
 //
-// The reconciler returns nil on success or when no action is needed.
-// It returns an error to trigger requeue on transient failures.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+// Returns (shouldRequeue, error) where shouldRequeue indicates if reconciliation should be requeued immediately.
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
 	logger = logger.WithValues(
 		"specVersion", cluster.Spec.Version,
 		"statusVersion", cluster.Status.CurrentVersion,
@@ -91,7 +90,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Check if cluster is initialized; upgrades can only proceed after initialization
 	if !cluster.Status.Initialized {
 		logger.V(1).Info("Cluster not initialized; skipping upgrade reconciliation")
-		return nil
+		return false, nil
 	}
 
 	// Phase 1: Detection - determine if upgrade is needed
@@ -101,7 +100,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		// No upgrade needed, ensure metrics reflect idle state
 		metrics.SetInProgress(false)
 		metrics.SetStatus(UpgradeStatusNone)
-		return nil
+		return false, nil
 	}
 
 	// Handle resume scenario where spec.version changed mid-upgrade
@@ -120,12 +119,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	// Ensure upgrade ServiceAccount exists (for JWT Auth)
 	if err := m.ensureUpgradeServiceAccount(ctx, logger, cluster); err != nil {
-		return fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
+		return false, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
 	}
 
 	// Phase 2: Pre-upgrade Validation
 	if err := m.validateUpgrade(ctx, logger, cluster); err != nil {
-		return err
+		return false, err
 	}
 
 	// Phase 3: Pre-upgrade Snapshot (if enabled)
@@ -137,13 +136,13 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		// Check if pre-upgrade snapshot is required and complete
 		snapshotComplete, err := m.handlePreUpgradeSnapshot(ctx, logger, cluster)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if !snapshotComplete {
 			logger.Info("Pre-upgrade snapshot in progress, waiting...")
 			// If upgrade was already initialized, we should not proceed with pod updates
 			// Return early to wait for snapshot completion
-			return nil
+			return false, nil
 		}
 	}
 
@@ -151,7 +150,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Only reached if pre-upgrade snapshot is complete or not enabled
 	if cluster.Status.Upgrade == nil {
 		if err := m.initializeUpgrade(ctx, logger, cluster); err != nil {
-			return err
+			return false, err
 		}
 	}
 
@@ -171,23 +170,23 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		if statusErr := m.client.Status().Update(ctx, cluster); statusErr != nil {
 			logger.Error(statusErr, "Failed to update status after upgrade failure")
 		}
-		return err
+		return false, err
 	}
 
 	if !completed {
 		// Upgrade is still in progress; save state and requeue
 		if err := m.client.Status().Update(ctx, cluster); err != nil {
-			return fmt.Errorf("failed to update upgrade progress: %w", err)
+			return false, fmt.Errorf("failed to update upgrade progress: %w", err)
 		}
-		return nil
+		return false, nil
 	}
 
 	// Phase 6: Finalization
 	if err := m.finalizeUpgrade(ctx, logger, cluster, metrics); err != nil {
-		return err
+		return false, err
 	}
 
-	return nil
+	return false, nil
 }
 
 // detectUpgradeState determines whether an upgrade is needed or if we're resuming one.
@@ -1309,72 +1308,57 @@ func (m *Manager) authenticateWithJWTAuth(ctx context.Context, cluster *openbaov
 	return "", fmt.Errorf("no running pods available for authentication")
 }
 
-// ensureUpgradeServiceAccount creates or updates the ServiceAccount for upgrade operations.
+// applyResource uses Server-Side Apply to create or update a Kubernetes resource.
+// This eliminates the need for Get-then-Create-or-Update logic and manual diffing.
+//
+// The resource must have TypeMeta, ObjectMeta (with Name and Namespace), and the desired Spec set.
+// Owner references are set automatically if the resource supports them.
+//
+// fieldOwner identifies the operator as the manager of this resource (used for conflict resolution).
+func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster, fieldOwner string) error {
+	// Set owner reference for garbage collection
+	if err := controllerutil.SetControllerReference(cluster, obj, m.scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference: %w", err)
+	}
+
+	// Use Server-Side Apply with ForceOwnership to ensure the operator manages this resource
+	patchOpts := []client.PatchOption{
+		client.ForceOwnership,
+		client.FieldOwner(fieldOwner),
+	}
+
+	if err := m.client.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
+		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
+	}
+
+	return nil
+}
+
+// ensureUpgradeServiceAccount creates or updates the ServiceAccount for upgrade operations using Server-Side Apply.
 // This ServiceAccount is used for JWT Auth authentication to OpenBao.
-func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	saName := upgradeServiceAccountName(cluster)
 
-	sa := &corev1.ServiceAccount{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      saName,
-	}, sa)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-		}
-
-		logger.Info("Upgrade ServiceAccount not found; creating", "serviceaccount", saName)
-
-		sa = &corev1.ServiceAccount{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      saName,
-				Namespace: cluster.Namespace,
-				Labels: map[string]string{
-					constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-					constants.LabelAppInstance:      cluster.Name,
-					constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-					constants.LabelOpenBaoCluster:   cluster.Name,
-					constants.LabelOpenBaoComponent: "upgrade",
-				},
+	sa := &corev1.ServiceAccount{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ServiceAccount",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      saName,
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:      cluster.Name,
+				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:   cluster.Name,
+				constants.LabelOpenBaoComponent: "upgrade",
 			},
-		}
-
-		// Set OwnerReference for garbage collection
-		if err := controllerutil.SetControllerReference(cluster, sa, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-		}
-
-		if err := m.client.Create(ctx, sa); err != nil {
-			return fmt.Errorf("failed to create upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-		}
-
-		return nil
+		},
 	}
 
-	// Update labels if needed
-	if sa.Labels == nil {
-		sa.Labels = make(map[string]string)
-	}
-	needsUpdate := false
-	expectedLabels := map[string]string{
-		constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-		constants.LabelAppInstance:      cluster.Name,
-		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: "upgrade",
-	}
-	for k, v := range expectedLabels {
-		if sa.Labels[k] != v {
-			sa.Labels[k] = v
-			needsUpdate = true
-		}
-	}
-
-	if needsUpdate {
-		if err := m.client.Update(ctx, sa); err != nil {
-			return fmt.Errorf("failed to update upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-		}
+	if err := m.applyResource(ctx, sa, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
 	}
 
 	return nil

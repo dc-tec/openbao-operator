@@ -56,7 +56,7 @@ func TestGenerateTenantRole(t *testing.T) {
 			// Verify labels
 			expectedLabels := map[string]string{
 				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent:  "provisioner",
+				constants.LabelAppComponent: "provisioner",
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			}
 			for k, v := range expectedLabels {
@@ -195,7 +195,7 @@ func TestGenerateTenantRoleBinding(t *testing.T) {
 			// Verify labels
 			expectedLabels := map[string]string{
 				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent:  "provisioner",
+				constants.LabelAppComponent: "provisioner",
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			}
 			for k, v := range expectedLabels {

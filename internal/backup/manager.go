@@ -49,10 +49,11 @@ func NewManager(c client.Client, scheme *runtime.Scheme) *Manager {
 
 // Reconcile ensures backup configuration and status are aligned with the desired state for the given OpenBaoCluster.
 // It checks if a backup is due, executes it if needed, and applies retention policies.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+// Returns (shouldRequeue, error) where shouldRequeue indicates if reconciliation should be requeued immediately.
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
 	// Skip if backup is not configured
 	if cluster.Spec.Backup == nil {
-		return nil
+		return false, nil
 	}
 
 	logger = logger.WithValues("component", "backup")
@@ -61,7 +62,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	// Ensure backup ServiceAccount exists (for JWT Auth)
 	if err := m.ensureBackupServiceAccount(ctx, logger, cluster); err != nil {
-		return fmt.Errorf("failed to ensure backup ServiceAccount: %w", err)
+		return false, fmt.Errorf("failed to ensure backup ServiceAccount: %w", err)
 	}
 
 	// Initialize backup status if needed
@@ -76,24 +77,24 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		}
 
 		logger.V(1).Info("Backup preconditions not met", "reason", err.Error())
-		return nil // Don't return error - preconditions not met is not a reconcile failure
+		return false, nil // Don't return error - preconditions not met is not a reconcile failure
 	}
 
 	schedule, err := ParseSchedule(cluster.Spec.Backup.Schedule)
 	if err != nil {
-		return fmt.Errorf("failed to parse backup schedule: %w", err)
+		return false, fmt.Errorf("failed to parse backup schedule: %w", err)
 	}
 
 	if cluster.Status.Backup.NextScheduledBackup == nil {
 		next := schedule.Next(now)
 		nextMeta := metav1.NewTime(next)
 		cluster.Status.Backup.NextScheduledBackup = &nextMeta
-		return nil
+		return false, nil
 	}
 
 	scheduledTime := cluster.Status.Backup.NextScheduledBackup.Time
 	if now.Before(scheduledTime) {
-		return nil
+		return false, nil
 	}
 
 	nextScheduled := schedule.Next(scheduledTime)
@@ -108,7 +109,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Create or check backup Job
 	jobInProgress, err := m.ensureBackupJob(ctx, logger, cluster, jobName)
 	if err != nil {
-		return fmt.Errorf("failed to ensure backup Job: %w", err)
+		return false, fmt.Errorf("failed to ensure backup Job: %w", err)
 	}
 
 	m.recordBackupAttempt(cluster, now, scheduledTime, nextScheduled)
@@ -116,15 +117,15 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if jobInProgress {
 		// Job is running - process its status
 		if err := m.processBackupJobResult(ctx, logger, cluster, jobName); err != nil {
-			return fmt.Errorf("failed to process backup Job result: %w", err)
+			return false, fmt.Errorf("failed to process backup Job result: %w", err)
 		}
 		// Requeue to check Job status again
-		return nil
+		return false, nil
 	}
 
 	// Check if there's a completed Job to process
 	if err := m.processBackupJobResult(ctx, logger, cluster, jobName); err != nil {
-		return fmt.Errorf("failed to process backup Job result: %w", err)
+		return false, fmt.Errorf("failed to process backup Job result: %w", err)
 	}
 
 	// If backup completed successfully, apply retention and update schedule
@@ -142,7 +143,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		cluster.Status.Backup.NextScheduledBackup = &nextScheduledMeta
 	}
 
-	return nil
+	return false, nil
 }
 
 func (m *Manager) recordBackupAttempt(cluster *openbaov1alpha1.OpenBaoCluster, now time.Time, scheduledTime time.Time, nextScheduled time.Time) {
@@ -349,72 +350,57 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 	return nil
 }
 
-// ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs.
+// applyResource uses Server-Side Apply to create or update a Kubernetes resource.
+// This eliminates the need for Get-then-Create-or-Update logic and manual diffing.
+//
+// The resource must have TypeMeta, ObjectMeta (with Name and Namespace), and the desired Spec set.
+// Owner references are set automatically if the resource supports them.
+//
+// fieldOwner identifies the operator as the manager of this resource (used for conflict resolution).
+func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster, fieldOwner string) error {
+	// Set owner reference for garbage collection
+	if err := controllerutil.SetControllerReference(cluster, obj, m.scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference: %w", err)
+	}
+
+	// Use Server-Side Apply with ForceOwnership to ensure the operator manages this resource
+	patchOpts := []client.PatchOption{
+		client.ForceOwnership,
+		client.FieldOwner(fieldOwner),
+	}
+
+	if err := m.client.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
+		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
+	}
+
+	return nil
+}
+
+// ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs using Server-Side Apply.
 // This ServiceAccount is used for JWT Auth authentication to OpenBao.
-func (m *Manager) ensureBackupServiceAccount(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) ensureBackupServiceAccount(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	saName := backupServiceAccountName(cluster)
 
-	sa := &corev1.ServiceAccount{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      saName,
-	}, sa)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get backup ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-		}
-
-		logger.Info("Backup ServiceAccount not found; creating", "serviceaccount", saName)
-
-		sa = &corev1.ServiceAccount{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      saName,
-				Namespace: cluster.Namespace,
-				Labels: map[string]string{
-					constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-					constants.LabelAppInstance:      cluster.Name,
-					constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-					constants.LabelOpenBaoCluster:   cluster.Name,
-					constants.LabelOpenBaoComponent: "backup",
-				},
+	sa := &corev1.ServiceAccount{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ServiceAccount",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      saName,
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:      cluster.Name,
+				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:   cluster.Name,
+				constants.LabelOpenBaoComponent: "backup",
 			},
-		}
-
-		// Set OwnerReference for garbage collection
-		if err := controllerutil.SetControllerReference(cluster, sa, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on backup ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-		}
-
-		if err := m.client.Create(ctx, sa); err != nil {
-			return fmt.Errorf("failed to create backup ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-		}
-
-		return nil
+		},
 	}
 
-	// Update labels if needed
-	if sa.Labels == nil {
-		sa.Labels = make(map[string]string)
-	}
-	needsUpdate := false
-	expectedLabels := map[string]string{
-		constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-		constants.LabelAppInstance:      cluster.Name,
-		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: "backup",
-	}
-	for k, v := range expectedLabels {
-		if sa.Labels[k] != v {
-			sa.Labels[k] = v
-			needsUpdate = true
-		}
-	}
-
-	if needsUpdate {
-		if err := m.client.Update(ctx, sa); err != nil {
-			return fmt.Errorf("failed to update backup ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-		}
+	if err := m.applyResource(ctx, sa, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure backup ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
 	}
 
 	return nil

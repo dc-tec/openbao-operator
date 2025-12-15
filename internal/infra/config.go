@@ -90,67 +90,27 @@ func generateUnsealKey() ([]byte, error) {
 	return raw, nil
 }
 
-// ensureConfigMap manages the config.hcl ConfigMap for the OpenBaoCluster.
-func (m *Manager) ensureConfigMap(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string) error {
+// ensureConfigMap manages the config.hcl ConfigMap for the OpenBaoCluster using Server-Side Apply.
+func (m *Manager) ensureConfigMap(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string) error {
 	cmName := configMapName(cluster)
 
-	configMap := &corev1.ConfigMap{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      cmName,
-	}, configMap)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get config ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
-		}
-
-		logger.Info("ConfigMap not found; creating new config.hcl ConfigMap", "configmap", cmName)
-
-		configMap = &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      cmName,
-				Namespace: cluster.Namespace,
-				Labels:    infraLabels(cluster),
-			},
-			Data: map[string]string{
-				configFileName: configContent,
-			},
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, configMap, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on config ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
-		}
-
-		if err := m.client.Create(ctx, configMap); err != nil {
-			return fmt.Errorf("failed to create config ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
-		}
-
-		return nil
+	configMap := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cmName,
+			Namespace: cluster.Namespace,
+			Labels:    infraLabels(cluster),
+		},
+		Data: map[string]string{
+			configFileName: configContent,
+		},
 	}
 
-	if configMap.Data == nil {
-		configMap.Data = make(map[string]string)
-	}
-
-	existing := configMap.Data[configFileName]
-	if existing == configContent {
-		return nil
-	}
-
-	logger.Info("Updating existing config ConfigMap", "configmap", cmName)
-	configMap.Data[configFileName] = configContent
-
-	if configMap.Labels == nil {
-		configMap.Labels = infraLabels(cluster)
-	} else {
-		for k, v := range infraLabels(cluster) {
-			configMap.Labels[k] = v
-		}
-	}
-
-	if err := m.client.Update(ctx, configMap); err != nil {
-		return fmt.Errorf("failed to update config ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
+	if err := m.applyResource(ctx, configMap, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure config ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
 	}
 
 	return nil
@@ -238,63 +198,24 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		return nil
 	}
 
-	configMap := &corev1.ConfigMap{}
-	err = m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      cmName,
-	}, configMap)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get self-init ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
-		}
-
-		logger.Info("Self-init ConfigMap not found; creating", "configmap", cmName)
-
-		configMap = &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      cmName,
-				Namespace: cluster.Namespace,
-				Labels:    infraLabels(cluster),
-			},
-			Data: map[string]string{
-				configFileName: initConfigContent,
-			},
-		}
-
-		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-		if err := controllerutil.SetControllerReference(cluster, configMap, m.scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference on self-init ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
-		}
-
-		if err := m.client.Create(ctx, configMap); err != nil {
-			return fmt.Errorf("failed to create self-init ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
-		}
-
-		return nil
+	// Use SSA to create or update the ConfigMap
+	configMap := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cmName,
+			Namespace: cluster.Namespace,
+			Labels:    infraLabels(cluster),
+		},
+		Data: map[string]string{
+			configFileName: initConfigContent,
+		},
 	}
 
-	if configMap.Data == nil {
-		configMap.Data = make(map[string]string)
-	}
-
-	existing := configMap.Data[configFileName]
-	if existing == initConfigContent {
-		return nil
-	}
-
-	logger.Info("Updating self-init ConfigMap", "configmap", cmName)
-	configMap.Data[configFileName] = initConfigContent
-
-	if configMap.Labels == nil {
-		configMap.Labels = infraLabels(cluster)
-	} else {
-		for k, v := range infraLabels(cluster) {
-			configMap.Labels[k] = v
-		}
-	}
-
-	if err := m.client.Update(ctx, configMap); err != nil {
-		return fmt.Errorf("failed to update self-init ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
+	if err := m.applyResource(ctx, configMap, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure self-init ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
 	}
 
 	return nil

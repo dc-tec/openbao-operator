@@ -61,7 +61,7 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 					Namespace: "default",
 					Labels: map[string]string{
 						constants.LabelAppInstance:  "cluster",
-						constants.LabelAppName:     constants.LabelValueAppNameOpenBao,
+						constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
 						constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 					},
 				},
@@ -93,7 +93,7 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 				clientset: clientset,
 			}
 
-			if err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
+			if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 				t.Fatalf("Reconcile() error = %v, want no error", err)
 			}
 
@@ -127,10 +127,10 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 			Namespace: "default",
 			Labels: map[string]string{
 				constants.LabelAppInstance:  "cluster",
-				constants.LabelAppName:     constants.LabelValueAppNameOpenBao,
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-				"openbao-initialized":          "true",
-				"openbao-sealed":               "false",
+				"openbao-initialized":       "true",
+				"openbao-sealed":            "false",
 			},
 		},
 		Status: corev1.PodStatus{
@@ -155,7 +155,7 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 		clientset: clientset,
 	}
 
-	if err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
+	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v, want no error", err)
 	}
 

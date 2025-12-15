@@ -172,9 +172,9 @@ func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
 			Labels: map[string]string{
 				constants.LabelAppInstance:  "test-cluster",
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-				"openbao.org/cluster":          "test-cluster",
-				"openbao.org/component":        "backup",
-				"openbao.org/backup-type":      "pre-upgrade",
+				"openbao.org/cluster":       "test-cluster",
+				"openbao.org/component":     "backup",
+				"openbao.org/backup-type":   "pre-upgrade",
 			},
 		},
 		Status: batchv1.JobStatus{
@@ -232,9 +232,9 @@ func TestHandlePreUpgradeSnapshot_JobCompleted(t *testing.T) {
 			Labels: map[string]string{
 				constants.LabelAppInstance:  "test-cluster",
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-				"openbao.org/cluster":          "test-cluster",
-				"openbao.org/component":        "backup",
-				"openbao.org/backup-type":      "pre-upgrade",
+				"openbao.org/cluster":       "test-cluster",
+				"openbao.org/component":     "backup",
+				"openbao.org/backup-type":   "pre-upgrade",
 			},
 		},
 		Status: batchv1.JobStatus{
@@ -292,9 +292,9 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 			Labels: map[string]string{
 				constants.LabelAppInstance:  "test-cluster",
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-				"openbao.org/cluster":          "test-cluster",
-				"openbao.org/component":        "backup",
-				"openbao.org/backup-type":      "pre-upgrade",
+				"openbao.org/cluster":       "test-cluster",
+				"openbao.org/component":     "backup",
+				"openbao.org/backup-type":   "pre-upgrade",
 			},
 		},
 		Status: batchv1.JobStatus{
@@ -355,9 +355,9 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 			Labels: map[string]string{
 				constants.LabelAppInstance:  "test-cluster",
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-				"openbao.org/cluster":          "test-cluster",
-				"openbao.org/component":        "backup",
-				"openbao.org/backup-type":      "pre-upgrade",
+				"openbao.org/cluster":       "test-cluster",
+				"openbao.org/component":     "backup",
+				"openbao.org/backup-type":   "pre-upgrade",
 			},
 		},
 		Status: batchv1.JobStatus{
@@ -478,7 +478,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 	manager := NewManagerWithClientFactory(k8sClient, scheme, mockFactory)
 
 	// Call Reconcile - it should handle pre-upgrade snapshot and requeue
-	err := manager.Reconcile(context.Background(), testLogger(), cluster)
+	_, err := manager.Reconcile(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "should not error when backup is running")
 
 	// Verify upgrade was NOT initialized (Status.Upgrade should still be nil)
