@@ -315,6 +315,130 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 	}
 }
 
+func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+
+	cluster := newMinimalCluster("acme-probe", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://example.com/acme",
+		Domain:       "acme-probe.default.svc",
+		Email:        "e2e@example.invalid",
+	}
+	// Configure tls_acme_ca_root to use the ACME CA for certificate verification
+	cluster.Spec.Config = map[string]string{
+		"tls_acme_ca_root": "/etc/bao/seal-creds/ca.crt",
+	}
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "transit",
+		CredentialsSecretRef: &corev1.SecretReference{
+			Name: "infra-bao-token",
+		},
+	}
+
+	// Provide the seal-creds secret so the CA file path exists.
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "infra-bao-token",
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{
+			"token":  []byte("root"),
+			"ca.crt": []byte("dummy"),
+		},
+	}
+	if err := k8sClient.Create(context.Background(), secret); err != nil {
+		t.Fatalf("failed to create credentials secret: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	statefulSet := &appsv1.StatefulSet{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      statefulSetName(cluster),
+	}, statefulSet); err != nil {
+		t.Fatalf("expected StatefulSet to exist: %v", err)
+	}
+
+	var probesFound bool
+	for _, c := range statefulSet.Spec.Template.Spec.Containers {
+		if c.Name != openBaoContainerName {
+			continue
+		}
+		probesFound = true
+		cmd := strings.Join(c.ReadinessProbe.Exec.Command, " ")
+		// In ACME mode, probes should still use loopback address but set SNI to the ACME domain
+		if !strings.Contains(cmd, "-addr="+openBaoProbeAddr) {
+			t.Fatalf("expected readiness probe to use loopback address %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
+		}
+		if !strings.Contains(cmd, "-servername=acme-probe.default.svc") {
+			t.Fatalf("expected readiness probe to set SNI to ACME domain, got %v", c.ReadinessProbe.Exec.Command)
+		}
+		// In ACME mode with tls_acme_ca_root configured, probes should use the ACME CA file
+		if !strings.Contains(cmd, "-ca-file=/etc/bao/seal-creds/ca.crt") {
+			t.Fatalf("expected readiness probe to use ACME CA file from tls_acme_ca_root, got %v", c.ReadinessProbe.Exec.Command)
+		}
+	}
+	if !probesFound {
+		t.Fatalf("expected to find openbao container probes")
+	}
+}
+
+func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+
+	cluster := newMinimalCluster("acme-public", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
+		Domain:       "example.com",
+		Email:        "admin@example.com",
+	}
+	// No Unseal config, so no seal-creds volume - this simulates public ACME
+
+	ctx := context.Background()
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	statefulSet := &appsv1.StatefulSet{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      statefulSetName(cluster),
+	}, statefulSet); err != nil {
+		t.Fatalf("expected StatefulSet to exist: %v", err)
+	}
+
+	var probesFound bool
+	for _, c := range statefulSet.Spec.Template.Spec.Containers {
+		if c.Name != openBaoContainerName {
+			continue
+		}
+		probesFound = true
+		cmd := strings.Join(c.ReadinessProbe.Exec.Command, " ")
+		// In ACME mode, probes should still use loopback address but set SNI to the ACME domain
+		if !strings.Contains(cmd, "-addr="+openBaoProbeAddr) {
+			t.Fatalf("expected readiness probe to use loopback address %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
+		}
+		if !strings.Contains(cmd, "-servername=example.com") {
+			t.Fatalf("expected readiness probe to set SNI to ACME domain, got %v", c.ReadinessProbe.Exec.Command)
+		}
+		// For public ACME, no CA file should be specified (uses system roots)
+		if strings.Contains(cmd, "-ca-file=") {
+			t.Fatalf("expected readiness probe to NOT specify CA file for public ACME, got %v", c.ReadinessProbe.Exec.Command)
+		}
+	}
+	if !probesFound {
+		t.Fatalf("expected to find openbao container probes")
+	}
+}
+
 func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)

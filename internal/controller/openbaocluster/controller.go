@@ -176,15 +176,22 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Message:            "TLS assets are provisioned",
 	})
 
-	if err := r.reconcileInfra(ctx, logger, cluster); err != nil {
+	infraResult, err := r.reconcileInfra(ctx, logger, cluster)
+	if err != nil {
 		reconcileErr = err
 		return ctrl.Result{}, reconcileErr
+	}
+	if infraResult.RequeueAfter > 0 {
+		return infraResult, nil
 	}
 
 	initResult, err := r.reconcileInit(ctx, logger, cluster)
 	if err != nil {
 		reconcileErr = err
 		return ctrl.Result{}, reconcileErr
+	}
+	if initResult.RequeueAfter > 0 {
+		return initResult, nil
 	}
 
 	if err := r.reconcileUpgrade(ctx, logger, cluster); err != nil {
@@ -197,9 +204,16 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, reconcileErr
 	}
 
-	if err := r.updateStatus(ctx, logger, cluster); err != nil {
+	statusUpdateResult, err := r.updateStatus(ctx, logger, cluster)
+	if err != nil {
 		reconcileErr = err
 		return ctrl.Result{}, reconcileErr
+	}
+
+	// If status update indicates we should requeue (e.g., waiting for replicas to become ready),
+	// return that result to trigger a timely reconciliation.
+	if statusUpdateResult.RequeueAfter > 0 {
+		return statusUpdateResult, nil
 	}
 
 	// If initialization is still in progress, requeue so that the init manager
@@ -229,7 +243,7 @@ func (r *OpenBaoClusterReconciler) reconcileCerts(ctx context.Context, logger lo
 	return manager.Reconcile(ctx, logger, cluster)
 }
 
-func (r *OpenBaoClusterReconciler) reconcileInfra(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (r *OpenBaoClusterReconciler) reconcileInfra(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
 	logger.Info("Reconciling infrastructure for OpenBaoCluster")
 
 	// Perform image verification if enabled and get verified digest
@@ -255,10 +269,10 @@ func (r *OpenBaoClusterReconciler) reconcileInfra(ctx context.Context, logger lo
 				})
 
 				if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
-					return fmt.Errorf("failed to update Degraded condition for OpenBaoCluster %s/%s after image verification error: %w", cluster.Namespace, cluster.Name, statusErr)
+					return ctrl.Result{}, fmt.Errorf("failed to update Degraded condition for OpenBaoCluster %s/%s after image verification error: %w", cluster.Namespace, cluster.Name, statusErr)
 				}
 
-				return fmt.Errorf("image verification failed (policy=Block): %w", err)
+				return ctrl.Result{}, fmt.Errorf("image verification failed (policy=Block): %w", err)
 			}
 
 			// Warn policy: log error and emit event, but proceed
@@ -284,15 +298,52 @@ func (r *OpenBaoClusterReconciler) reconcileInfra(ctx context.Context, logger lo
 			})
 
 			if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
-				return fmt.Errorf("failed to update Degraded condition for OpenBaoCluster %s/%s after Gateway API error: %w", cluster.Namespace, cluster.Name, statusErr)
+				return ctrl.Result{}, fmt.Errorf("failed to update Degraded condition for OpenBaoCluster %s/%s after Gateway API error: %w", cluster.Namespace, cluster.Name, statusErr)
 			}
 
-			return nil
+			return ctrl.Result{}, nil
 		}
-		return err
+		if errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing) {
+			// Prerequisites are missing (ConfigMap or TLS Secret). Set a condition and requeue
+			// so reconciliation can retry once prerequisites are ready.
+			now := metav1.Now()
+			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+				Type:               string(openbaov1alpha1.ConditionDegraded),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: cluster.Generation,
+				LastTransitionTime: now,
+				Reason:             "PrerequisitesMissing",
+				Message:            fmt.Sprintf("StatefulSet prerequisites missing: %v. Waiting for ConfigMap or TLS Secret to be created.", err),
+			})
+
+			if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to update Degraded condition for OpenBaoCluster %s/%s after prerequisites error: %w", cluster.Namespace, cluster.Name, statusErr)
+			}
+
+			// Requeue with a short delay to retry once prerequisites are ready
+			logger.Info("StatefulSet prerequisites missing; requeuing reconciliation", "error", err)
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+		return ctrl.Result{}, err
 	}
 
-	return nil
+	// Prerequisites are ready and infrastructure reconciliation succeeded.
+	// Clear any PrerequisitesMissing condition that might have been set earlier.
+	degradedCond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
+	if degradedCond != nil && degradedCond.Reason == "PrerequisitesMissing" {
+		now := metav1.Now()
+		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type:               string(openbaov1alpha1.ConditionDegraded),
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: cluster.Generation,
+			LastTransitionTime: now,
+			Reason:             "PrerequisitesReady",
+			Message:            "StatefulSet prerequisites are now available",
+		})
+		logger.Info("StatefulSet prerequisites are ready; cleared PrerequisitesMissing condition")
+	}
+
+	return ctrl.Result{}, nil
 }
 
 // verifyImage verifies the container image signature using the ImageVerifier.
@@ -436,7 +487,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 	return nil
 }
 
-func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
 	// Fetch the StatefulSet to observe actual ready replicas
 	statefulSet := &appsv1.StatefulSet{}
 	statefulSetName := types.NamespacedName{
@@ -449,7 +500,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	err := r.Get(ctx, statefulSetName, statefulSet)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get StatefulSet %s/%s for status update: %w", cluster.Namespace, cluster.Name, err)
+			return ctrl.Result{}, fmt.Errorf("failed to get StatefulSet %s/%s for status update: %w", cluster.Namespace, cluster.Name, err)
 		}
 		// StatefulSet not found - cluster is initializing
 		readyReplicas = 0
@@ -506,7 +557,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabels(podSelector),
 	); err != nil {
-		return fmt.Errorf("failed to list pods for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		return ctrl.Result{}, fmt.Errorf("failed to list pods for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
 	var leaderCount int
@@ -536,7 +587,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	if pod0 != nil {
 		initialized, present, err := openbaolabels.ParseBoolLabel(pod0.Labels, openbaolabels.LabelInitialized)
 		if err != nil {
-			return fmt.Errorf("invalid %q label on pod %s: %w", openbaolabels.LabelInitialized, pod0.Name, err)
+			return ctrl.Result{}, fmt.Errorf("invalid %q label on pod %s: %w", openbaolabels.LabelInitialized, pod0.Name, err)
 		}
 		if present {
 			status := metav1.ConditionFalse
@@ -568,7 +619,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 
 		sealed, present, err := openbaolabels.ParseBoolLabel(pod0.Labels, openbaolabels.LabelSealed)
 		if err != nil {
-			return fmt.Errorf("invalid %q label on pod %s: %w", openbaolabels.LabelSealed, pod0.Name, err)
+			return ctrl.Result{}, fmt.Errorf("invalid %q label on pod %s: %w", openbaolabels.LabelSealed, pod0.Name, err)
 		}
 		if present {
 			status := metav1.ConditionFalse
@@ -734,12 +785,23 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	}
 
 	if err := r.Status().Update(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to update status for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		return ctrl.Result{}, fmt.Errorf("failed to update status for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
 	logger.Info("Updated status for OpenBaoCluster", "readyReplicas", readyReplicas, "phase", cluster.Status.Phase, "currentVersion", cluster.Status.CurrentVersion)
 
-	return nil
+	// If not all replicas are ready, requeue with a short delay to check again once StatefulSet status updates.
+	// This ensures the Available condition is updated promptly when pods become ready, even though we don't
+	// watch StatefulSets directly (for security reasons).
+	if !available && readyReplicas > 0 {
+		// Requeue after a short delay to allow StatefulSet status to update
+		// The delay is short enough to be responsive but long enough to avoid excessive API calls
+		const replicaCheckInterval = 5 * time.Second
+		logger.V(1).Info("Not all replicas are ready; requeuing to check status", "readyReplicas", readyReplicas, "desiredReplicas", cluster.Spec.Replicas)
+		return ctrl.Result{RequeueAfter: replicaCheckInterval}, nil
+	}
+
+	return ctrl.Result{}, nil
 }
 
 func containsFinalizer(finalizers []string, value string) bool {

@@ -106,6 +106,62 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 	}
 }
 
+func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster",
+			Namespace: "default",
+		},
+	}
+
+	started := true
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-0",
+			Namespace: "default",
+			Labels: map[string]string{
+				"app.kubernetes.io/instance":   "cluster",
+				"app.kubernetes.io/name":       "openbao",
+				"app.kubernetes.io/managed-by": "openbao-operator",
+				"openbao-initialized":          "true",
+				"openbao-sealed":               "false",
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "openbao",
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{
+							StartedAt: metav1.Now(),
+						},
+					},
+					Started: &started,
+				},
+			},
+		},
+	}
+
+	clientset := kubernetesfake.NewSimpleClientset(pod)
+	manager := &Manager{
+		config:    &rest.Config{},
+		clientset: clientset,
+	}
+
+	if err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("Reconcile() error = %v, want no error", err)
+	}
+
+	if cluster.Status.Initialized {
+		t.Fatalf("Status.Initialized = %t, want false because operator must still capture root token", cluster.Status.Initialized)
+	}
+
+	if cluster.Status.SelfInitialized {
+		t.Fatalf("Status.SelfInitialized = %t, want false when self-init disabled", cluster.Status.SelfInitialized)
+	}
+}
+
 func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 	tests := []struct {
 		name           string

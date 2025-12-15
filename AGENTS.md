@@ -228,7 +228,7 @@ These conventions ensure the codebase stays aligned with the design documents an
 * Any non-trivial change (new controllers, new CRD fields, or major behavior changes) must be reflected in:
  * `./docs/architecture.md`
  * `./docs/security.md`
- * `./docs/user-guide.md`
+ * `./docs/user-guide/README.md`
  * `./docs/contributing.md`
 * Docs and code must remain in sync; do not introduce behavior that contradicts the current design without updating the design first.
 

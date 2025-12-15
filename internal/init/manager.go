@@ -26,11 +26,17 @@ const (
 	openBaoAPIPort = 8200
 	// tlsCASecretSuffix matches the CA Secret name suffix used by the TLS manager.
 	tlsCASecretSuffix = "-tls-ca"
+	// tlsServerSecretSuffix matches the server Secret name suffix used by the TLS manager.
+	tlsServerSecretSuffix = "-tls-server"
 	// rootTokenSecretSuffix is appended to the cluster name to form the root token Secret name.
 	rootTokenSecretSuffix = "-root-token"
 	// rootTokenSecretKey is the key used to store the root token in the Secret data.
 	rootTokenSecretKey = "token"
 )
+
+// errRetryLater is a sentinel error indicating that initialization should be retried
+// on the next reconcile, rather than being treated as a failure or success.
+var errRetryLater = fmt.Errorf("initialization retry required")
 
 // Manager handles OpenBao cluster initialization.
 type Manager struct {
@@ -86,10 +92,21 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	logger.Info("Found pod for initialization", "pod", pod.Name, "phase", pod.Status.Phase)
 
-	// Wait for container to be running (not necessarily ready, since readiness probe
-	// may fail until OpenBao is initialized)
+	// Wait for container to be running and startup probe to pass (not necessarily ready, since readiness probe
+	// may fail until OpenBao is initialized). The startup probe verifies the TCP port is listening,
+	// which is required before we can attempt initialization via HTTP API.
 	if !isContainerRunning(pod) {
-		logger.Info("Container not running yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase)
+		// Log startup probe status for debugging
+		for _, status := range pod.Status.ContainerStatuses {
+			if status.Name == "openbao" {
+				if status.Started != nil {
+					logger.V(1).Info("Container running but startup probe not passed yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase, "started", *status.Started)
+				} else {
+					logger.V(1).Info("Container running but startup probe status not available yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase)
+				}
+			}
+		}
+		logger.Info("Container not ready for initialization yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase)
 		return nil
 	}
 
@@ -103,16 +120,14 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		logger.V(1).Info("Invalid OpenBao sealed label value", "pod", pod.Name, "error", err)
 	}
 
-	// Prefer Kubernetes service registration labels when available. This avoids
-	// direct OpenBao API calls from the operator and matches the cluster's
-	// observed state from OpenBao itself.
-	if hasInitializedLabel && hasSealedLabel {
+	// Prefer Kubernetes service registration labels only when self-init is enabled.
+	// When self-init is disabled, the operator must perform initialization itself
+	// to capture the root token; relying on labels would skip token collection.
+	if selfInitEnabled && hasInitializedLabel && hasSealedLabel {
 		if initializedLabel && !sealedLabel {
 			logger.Info("OpenBao service registration labels indicate initialized and unsealed; marking cluster as initialized", "pod", pod.Name)
 			cluster.Status.Initialized = true
-			if selfInitEnabled {
-				cluster.Status.SelfInitialized = true
-			}
+			cluster.Status.SelfInitialized = true
 			return nil
 		}
 	}
@@ -134,25 +149,24 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return nil
 	}
 
-	// Check if cluster is already initialized using the HTTP health endpoint.
-	initialized, err := m.checkInitialized(ctx, logger, cluster)
+	// Before attempting to connect, verify that TLS server secret exists.
+	// OpenBao needs the TLS certificate to be mounted before it can accept HTTPS connections.
+	tlsServerSecretName := cluster.Name + tlsServerSecretSuffix
+	_, err = m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, tlsServerSecretName, metav1.GetOptions{})
 	if err != nil {
-		logger.V(1).Info("Failed to check initialization status (OpenBao may still be starting)", "pod", pod.Name, "error", err)
+		if apierrors.IsNotFound(err) {
+			logger.Info("TLS server Secret not found yet; waiting for TLS reconciliation", "pod", pod.Name, "secret", tlsServerSecretName)
+			return nil // Don't fail, will retry on next reconcile once TLS secret is ready
+		}
+		logger.Info("Failed to check TLS server Secret (will retry)", "pod", pod.Name, "secret", tlsServerSecretName, "error", err)
 		return nil // Don't fail, will retry on next reconcile
 	}
 
-	if initialized {
-		logger.Info("OpenBao cluster is already initialized", "pod", pod.Name, "selfInitEnabled", selfInitEnabled)
-		// Update status to mark as initialized (this will trigger scaling in infra manager)
-		cluster.Status.Initialized = true
-		if selfInitEnabled {
-			cluster.Status.SelfInitialized = true
-		}
-		return nil
-	}
-
-	// Cluster is not initialized - initialize it using the OpenBao HTTP API.
-	logger.Info("Initializing OpenBao cluster using HTTP API")
+	// Always attempt to initialize via the operator to ensure we capture the root token.
+	// The initializeCluster function will handle the "already initialized" case gracefully,
+	// but if the cluster was manually initialized, we cannot retrieve the root token
+	// (it's only returned during the init API call).
+	logger.Info("Attempting to initialize OpenBao cluster using HTTP API")
 
 	// Audit log: Cluster initialization operation
 	logging.LogAuditEvent(logger, "Init", map[string]string{
@@ -162,6 +176,13 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	})
 
 	if err := m.initializeCluster(ctx, logger, cluster); err != nil {
+		// If initialization should be retried later (e.g., pod not ready), return nil
+		// to allow the reconciliation loop to requeue without marking as failed.
+		if err == errRetryLater {
+			logger.Info("Initialization will be retried on next reconcile", "cluster", cluster.Name)
+			return nil
+		}
+
 		logger.Error(err, "Failed to initialize OpenBao cluster")
 		logging.LogAuditEvent(logger, "InitFailed", map[string]string{
 			"cluster_namespace": cluster.Namespace,
@@ -171,7 +192,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return fmt.Errorf("failed to initialize OpenBao cluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
-	// Mark cluster as initialized
+	// Mark cluster as initialized only if initialization actually succeeded
 	// Note: This modifies the cluster object in memory, and the controller will update the status
 	cluster.Status.Initialized = true
 	logger.Info("OpenBao cluster initialized successfully via HTTP API")
@@ -228,29 +249,6 @@ func (m *Manager) findFirstPod(ctx context.Context, cluster *openbaov1alpha1.Ope
 	return nil, nil
 }
 
-// checkInitialized checks if OpenBao is initialized by querying the HTTP health endpoint.
-// It connects to the pod-0 DNS name using the per-cluster TLS CA and inspects the
-// initialized flag from /v1/sys/health.
-func (m *Manager) checkInitialized(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	client, err := m.newOpenBaoClient(ctx, cluster)
-	if err != nil {
-		logger.V(1).Info("Failed to create OpenBao client for initialization check", "error", err)
-		return false, nil
-	}
-
-	healthCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	health, err := client.Health(healthCtx)
-	if err != nil {
-		// OpenBao may still be starting; treat this as "not initialized" and retry on the next reconcile.
-		logger.V(1).Info("Failed to query OpenBao health during initialization check", "error", err)
-		return false, nil
-	}
-
-	return health.Initialized, nil
-}
-
 // initializeCluster explicitly initializes OpenBao using the HTTP API (PUT /v1/sys/init).
 // With static auto-unseal, this should rarely be needed, but we provide it as a fallback.
 func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -259,22 +257,69 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 		return fmt.Errorf("failed to create OpenBao client for initialization: %w", err)
 	}
 
+	// Before attempting initialization, verify the HTTPS endpoint is accepting connections.
+	// We use the OpenBao client's Health() call which handles connection errors appropriately
+	// and provides accurate feedback about the cluster state. This is more reliable than
+	// a separate TCP dial check, which can fail due to network policies, DNS delays, or
+	// other infrastructure issues even when the service is actually available.
+	healthCheckTimeout := 10 * time.Second
+	healthCtx, healthCancel := context.WithTimeout(ctx, healthCheckTimeout)
+	defer healthCancel()
+
+	healthResp, healthErr := client.Health(healthCtx)
+	if healthErr != nil {
+		// If health check fails with any error (timeout, connection, etc.), the endpoint isn't ready yet.
+		// Return errRetryLater to allow retry on the next reconcile.
+		// We require a successful health check before attempting initialization to ensure the HTTPS
+		// endpoint is ready to accept connections.
+		healthErrStr := healthErr.Error()
+		if contains(healthErrStr, "context deadline exceeded") || contains(healthErrStr, "timeout") ||
+			contains(healthErrStr, "connection") || contains(healthErrStr, "connection refused") ||
+			contains(healthErrStr, "no such host") || contains(healthErrStr, "i/o timeout") {
+			logger.Info("OpenBao HTTPS endpoint not ready yet; will retry on next reconcile", "cluster", cluster.Name, "error", healthErr)
+			return errRetryLater
+		}
+		// For other errors (like TLS errors), we should also retry as they indicate the endpoint
+		// isn't ready or properly configured yet.
+		logger.Info("Health check failed; will retry on next reconcile", "cluster", cluster.Name, "error", healthErr)
+		return errRetryLater
+	}
+
+	// Health check succeeded - verify OpenBao is in the expected state (not initialized)
+	if healthResp != nil {
+		logger.V(1).Info("Health check succeeded", "cluster", cluster.Name, "initialized", healthResp.Initialized, "sealed", healthResp.Sealed)
+		// If already initialized, we shouldn't be here (should have been caught earlier), but handle it gracefully
+		if healthResp.Initialized {
+			logger.Info("OpenBao cluster is already initialized (detected via health check)", "cluster", cluster.Name)
+			return nil
+		}
+	}
+
 	initCtx, cancel := context.WithTimeout(ctx, openBaoInitTimeout)
 	defer cancel()
 
 	// The operator always uses static auto-unseal, so we must not include
 	// secret_shares and secret_threshold in the init request.
 	// OpenBao will initialize using the static seal key configured in config.hcl.
+	logger.Info("Calling OpenBao Init API", "cluster", cluster.Name, "timeout", openBaoInitTimeout)
 	initResp, err := client.Init(initCtx, openbao.InitRequest{
 		SecretShares:    nil,
 		SecretThreshold: nil,
 	})
 	if err != nil {
+		logger.Info("Init API call returned error", "cluster", cluster.Name, "error", err)
 		// If the cluster is already initialized, the API returns an error. Detect this
 		// case via the error message and treat it as a no-op.
 		if contains(err.Error(), "already initialized") {
 			logger.Info("OpenBao cluster is already initialized (detected during HTTP init attempt)")
 			return nil
+		}
+
+		// Timeout errors indicate the pod isn't ready to accept connections yet.
+		// Return errRetryLater to allow retry on the next reconcile rather than failing.
+		if contains(err.Error(), "context deadline exceeded") || contains(err.Error(), "timeout") {
+			logger.Info("OpenBao pod not ready to accept connections yet; will retry on next reconcile", "cluster", cluster.Name, "error", err)
+			return errRetryLater
 		}
 
 		return fmt.Errorf("failed to initialize OpenBao via HTTP API: %w", err)
@@ -314,9 +359,15 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1
 		return nil, fmt.Errorf("TLS CA Secret %s/%s missing 'ca.crt' key", cluster.Namespace, caSecretName)
 	}
 
+	// Create OpenBao client with default timeouts. The client will be used for health checks
+	// and initialization. Default timeouts are sufficient now that NetworkPolicy is correctly
+	// configured to allow operator access.
 	client, err := openbao.NewClient(openbao.ClientConfig{
 		BaseURL: baseURL,
 		CACert:  caCert,
+		// Use default timeouts (5s connection, 10s request) which are sufficient for
+		// normal operation. The health check context timeout (10s) matches the default
+		// RequestTimeout, ensuring the client won't timeout before the context.
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OpenBao client for %s: %w", baseURL, err)
@@ -417,6 +468,8 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 // isContainerRunning checks if the OpenBao container is running.
 // This is used instead of isPodReady because the readiness probe may fail
 // until OpenBao is initialized, creating a chicken-and-egg problem.
+// If the container has a startup probe, we wait for it to pass (status.Started == true)
+// to ensure the service is actually listening before attempting initialization.
 func isContainerRunning(pod *corev1.Pod) bool {
 	// Check if pod is in Running phase
 	if pod.Status.Phase != corev1.PodRunning {
@@ -426,7 +479,21 @@ func isContainerRunning(pod *corev1.Pod) bool {
 	// Check if the openbao container is running
 	for _, status := range pod.Status.ContainerStatuses {
 		if status.Name == "openbao" {
-			return status.State.Running != nil
+			if status.State.Running == nil {
+				return false
+			}
+			// If the container has a startup probe, we must wait for it to pass.
+			// status.Started is set to true once the startup probe succeeds.
+			// The startup probe checks if the TCP port is listening, which is required
+			// before we can attempt initialization via HTTP API.
+			// If status.Started is nil, the startup probe hasn't been evaluated yet,
+			// so we should wait rather than proceeding.
+			if status.Started != nil {
+				return *status.Started
+			}
+			// If startup probe status is not available yet, wait for it to be evaluated.
+			// This ensures we don't attempt initialization before the port is listening.
+			return false
 		}
 	}
 

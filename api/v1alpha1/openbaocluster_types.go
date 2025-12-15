@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -139,7 +140,8 @@ type TLSConfig struct {
 	// RotationPeriod is a duration string (for example, "720h") controlling certificate rotation.
 	// Only used when Mode is OperatorManaged.
 	// +kubebuilder:validation:MinLength=1
-	RotationPeriod string `json:"rotationPeriod"`
+	// +optional
+	RotationPeriod string `json:"rotationPeriod,omitempty"`
 	// ExtraSANs lists additional subject alternative names to include in server certificates.
 	// Only used when Mode is OperatorManaged.
 	// +optional
@@ -302,6 +304,45 @@ type NetworkConfig struct {
 	// Example (k3d): ["192.168.166.2"]
 	// +optional
 	APIServerEndpointIPs []string `json:"apiServerEndpointIPs,omitempty"`
+
+	// EgressRules allows users to specify additional egress rules that will be merged into
+	// the operator-managed NetworkPolicy. This is useful for allowing access to external
+	// services such as transit seal backends, object storage endpoints, or other dependencies.
+	//
+	// The operator's default egress rules (DNS, API server, cluster pods) are always included
+	// and cannot be overridden. User-provided rules are appended to the operator-managed rules.
+	//
+	// Example: Allow egress to a transit seal backend in another namespace:
+	//   egressRules:
+	//   - to:
+	//     - namespaceSelector:
+	//         matchLabels:
+	//           kubernetes.io/metadata.name: transit-namespace
+	//     ports:
+	//     - protocol: TCP
+	//       port: 8200
+	// +optional
+	EgressRules []networkingv1.NetworkPolicyEgressRule `json:"egressRules,omitempty"`
+
+	// IngressRules allows users to specify additional ingress rules that will be merged into
+	// the operator-managed NetworkPolicy. This is useful for allowing access from external
+	// services, monitoring tools, or other components that need to reach OpenBao pods.
+	//
+	// The operator's default ingress rules (cluster pods, kube-system, operator, gateway)
+	// are always included and cannot be overridden. User-provided rules are appended to
+	// the operator-managed rules.
+	//
+	// Example: Allow ingress from a monitoring namespace:
+	//   ingressRules:
+	//   - from:
+	//     - namespaceSelector:
+	//         matchLabels:
+	//           kubernetes.io/metadata.name: monitoring
+	//     ports:
+	//     - protocol: TCP
+	//       port: 8200
+	// +optional
+	IngressRules []networkingv1.NetworkPolicyIngressRule `json:"ingressRules,omitempty"`
 }
 
 // BackupTarget describes a generic, cloud-agnostic object storage destination.
@@ -580,6 +621,7 @@ type WorkloadHardeningConfig struct {
 // listener "tcp", storage "raft", and seal "static" when using default unseal).
 // Users must not override these via spec.config.
 // +kubebuilder:validation:XValidation:rule="!has(self.config) || self.config.all(k, v, !(k == 'listener' || k == 'storage' || k == 'seal'))",message="spec.config may not contain protected stanzas: listener, storage, seal"
+// +kubebuilder:validation:XValidation:rule="self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod) > 0",message="spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged"
 type OpenBaoClusterSpec struct {
 	// Version is the semantic OpenBao version, used for upgrade orchestration.
 	// The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.

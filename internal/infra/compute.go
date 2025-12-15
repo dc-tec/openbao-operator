@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path"
 
@@ -23,7 +24,9 @@ import (
 
 const (
 	openBaoProbeBinary = "/utils/bao-probe"
-	openBaoProbeAddr   = "https://localhost:8200"
+	// Use 127.0.0.1 instead of localhost to force IPv4, avoiding IPv6 resolution issues
+	// where localhost might resolve to ::1 but OpenBao only listens on IPv4
+	openBaoProbeAddr   = "https://127.0.0.1:8200"
 	openBaoProbeCAFile = "/etc/bao/tls/ca.crt"
 
 	openBaoLivenessProbeTimeout  = "4s"
@@ -31,8 +34,15 @@ const (
 	openBaoStartupProbeTimeout   = "5s"
 )
 
+// ErrStatefulSetPrerequisitesMissing indicates that required prerequisites (ConfigMap or TLS Secret)
+// are missing and the StatefulSet cannot be created. Callers can use this error to set a condition
+// and requeue instead of failing reconciliation.
+var ErrStatefulSetPrerequisitesMissing = errors.New("StatefulSet prerequisites missing")
+
 // checkStatefulSetPrerequisites verifies that all required resources exist before creating or updating the StatefulSet.
 // This prevents pods from failing to start due to missing ConfigMaps or Secrets.
+// Returns ErrStatefulSetPrerequisitesMissing if prerequisites are not found (callers should handle this
+// by setting a condition and requeuing). Returns other errors for unexpected failures.
 func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	// Always check for the config ConfigMap
 	configMapName := configMapName(cluster)
@@ -42,7 +52,7 @@ func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *op
 		Name:      configMapName,
 	}, configMap); err != nil {
 		if apierrors.IsNotFound(err) {
-			return fmt.Errorf("config ConfigMap %s/%s not found; cannot create StatefulSet", cluster.Namespace, configMapName)
+			return fmt.Errorf("%w: config ConfigMap %s/%s not found; cannot create StatefulSet", ErrStatefulSetPrerequisitesMissing, cluster.Namespace, configMapName)
 		}
 		return fmt.Errorf("failed to get config ConfigMap %s/%s: %w", cluster.Namespace, configMapName, err)
 	}
@@ -57,7 +67,7 @@ func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *op
 			Name:      tlsSecretName,
 		}, tlsSecret); err != nil {
 			if apierrors.IsNotFound(err) {
-				return fmt.Errorf("TLS server Secret %s/%s not found; cannot create StatefulSet (waiting for TLS reconciliation or external provider)", cluster.Namespace, tlsSecretName)
+				return fmt.Errorf("%w: TLS server Secret %s/%s not found; cannot create StatefulSet (waiting for TLS reconciliation or external provider)", ErrStatefulSetPrerequisitesMissing, cluster.Namespace, tlsSecretName)
 			}
 			return fmt.Errorf("failed to get TLS server Secret %s/%s: %w", cluster.Namespace, tlsSecretName, err)
 		}
@@ -335,6 +345,34 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 		}
 	}
 
+	// Add VAULT_TOKEN environment variable when using transit seal with credentials
+	// This allows the seal to use the "token" parameter instead of "token_file",
+	// avoiding issues with trailing newlines in mounted Secret files.
+	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type == "transit" {
+		if cluster.Spec.Unseal.CredentialsSecretRef != nil {
+			// Read token from the mounted secret file and set as VAULT_TOKEN
+			// The token will be read from /etc/bao/seal-creds/token
+			env = append(env, corev1.EnvVar{
+				Name: "VAULT_TOKEN",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						Key: "token",
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: cluster.Spec.Unseal.CredentialsSecretRef.Name,
+						},
+					},
+				},
+			})
+
+			// If the credentials Secret provides a CA bundle, surface it via VAULT_CACERT
+			// so transit seal HTTP calls verify infra-bao TLS.
+			env = append(env, corev1.EnvVar{
+				Name:  "VAULT_CACERT",
+				Value: "/etc/bao/seal-creds/ca.crt",
+			})
+		}
+	}
+
 	return env
 }
 
@@ -551,33 +589,70 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 		configHashAnnotation: configHash,
 	}
 
+	// Probe target/CA: by default use loopback and the per-cluster TLS CA.
+	probeAddr := openBaoProbeAddr
+	probeCAFile := openBaoProbeCAFile
+	var probeServerName string
+	if usesACMEMode(cluster) && cluster.Spec.TLS.ACME != nil && cluster.Spec.TLS.ACME.Domain != "" {
+		// In ACME mode, keep probes on loopback but set SNI to the ACME domain.
+		// This prevents OpenBao from attempting ACME for "localhost" while avoiding
+		// DNS/service dependencies for probes.
+		probeServerName = cluster.Spec.TLS.ACME.Domain
+		// In ACME mode, probes need to verify the ACME-obtained certificate, which is signed
+		// by the ACME CA (PKI CA), not the ACME directory server's TLS CA.
+		// If tls_acme_ca_root is configured, derive the PKI CA path from it (same directory,
+		// filename pki-ca.crt). This allows users to provide the PKI CA in the same volume.
+		// If not available, use system roots (for public ACME CAs like Let's Encrypt).
+		if acmeCARoot, ok := cluster.Spec.Config["tls_acme_ca_root"]; ok && acmeCARoot != "" {
+			// Derive PKI CA path from tls_acme_ca_root: same directory, filename pki-ca.crt
+			// e.g., /etc/bao/seal-creds/ca.crt -> /etc/bao/seal-creds/pki-ca.crt
+			acmeCARootDir := path.Dir(acmeCARoot)
+			probeCAFile = path.Join(acmeCARootDir, "pki-ca.crt")
+		} else {
+			// No tls_acme_ca_root configured - use system roots for public ACME CAs
+			probeCAFile = ""
+		}
+	}
+
 	startupProbeExec := &corev1.ExecAction{
 		Command: []string{
 			openBaoProbeBinary,
 			"-mode=startup",
-			"-addr=" + openBaoProbeAddr,
+			"-addr=" + probeAddr,
 			"-timeout=" + openBaoStartupProbeTimeout,
 		},
 	}
 
+	livenessProbeCmd := []string{
+		openBaoProbeBinary,
+		"-mode=liveness",
+		"-addr=" + probeAddr,
+		"-timeout=" + openBaoLivenessProbeTimeout,
+	}
+	if probeServerName != "" {
+		livenessProbeCmd = append(livenessProbeCmd, "-servername="+probeServerName)
+	}
+	if probeCAFile != "" {
+		livenessProbeCmd = append(livenessProbeCmd, "-ca-file="+probeCAFile)
+	}
 	livenessProbeExec := &corev1.ExecAction{
-		Command: []string{
-			openBaoProbeBinary,
-			"-mode=liveness",
-			"-addr=" + openBaoProbeAddr,
-			"-ca-file=" + openBaoProbeCAFile,
-			"-timeout=" + openBaoLivenessProbeTimeout,
-		},
+		Command: livenessProbeCmd,
 	}
 
+	readinessProbeCmd := []string{
+		openBaoProbeBinary,
+		"-mode=readiness",
+		"-addr=" + probeAddr,
+		"-timeout=" + openBaoReadinessProbeTimeout,
+	}
+	if probeServerName != "" {
+		readinessProbeCmd = append(readinessProbeCmd, "-servername="+probeServerName)
+	}
+	if probeCAFile != "" {
+		readinessProbeCmd = append(readinessProbeCmd, "-ca-file="+probeCAFile)
+	}
 	readinessProbeExec := &corev1.ExecAction{
-		Command: []string{
-			openBaoProbeBinary,
-			"-mode=readiness",
-			"-addr=" + openBaoProbeAddr,
-			"-ca-file=" + openBaoProbeCAFile,
-			"-timeout=" + openBaoReadinessProbeTimeout,
-		},
+		Command: readinessProbeCmd,
 	}
 
 	renderedConfigDir := path.Dir(openBaoRenderedConfig)

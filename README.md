@@ -5,73 +5,65 @@ The OpenBao Supervisor Operator manages the full lifecycle of OpenBao clusters o
 ## Architecture Overview
 ```mermaid
 flowchart LR
-  subgraph Tenants["User / Tenant Namespaces"]
-    U["Users / Platform Teams"]
-    CR["OpenBaoCluster CR<br/>openbao.org/v1alpha1"]
-  end
+  %% High-level view: keep the "what talks to what" clear.
+  user["Platform team / tenant admin"]
 
-  subgraph K8sAPI["Kubernetes API Server"]
-    API["apiserver"]
-  end
+  api["Kubernetes API server"]
+  operator["OpenBao Operator<br/>(controller manager)"]
 
-  subgraph OperatorNS["Operator Namespace"]
-    CM["Controller Manager<br/>(controller-runtime)"]
+  tenantNS["Tenant namespace<br/>- OpenBaoCluster (CR)<br/>- Tenant RBAC"]
+  clusterNS["OpenBao cluster namespace<br/>(managed resources)"]
 
-    subgraph Reconcilers["Reconcilers / Managers"]
-      OC["OpenBaoCluster Reconciler"]
-      Cert["Cert Manager<br/>internal/certs"]
-      Infra["Infra / Config Manager<br/>internal/infra + internal/config"]
-      Upg["Upgrade Manager<br/>internal/upgrade"]
-      Bkp["Backup Manager<br/>internal/backup"]
-    end
-  end
+  access["OpenBao endpoint<br/>(Service + optional Ingress/HTTPRoute)"]
+  gw["Gateway (optional,<br/>user-managed)"]
+  obj["Object storage<br/>(S3 / GCS / Azure Blob)"]
 
-  subgraph ClusterNS["OpenBao Cluster Namespace"]
-    STS["OpenBao StatefulSet"]
-    Pods["OpenBao Pods"]
-    PVC["PersistentVolumes / PVCs"]
-    TLS["TLS Secrets<br/>(CA + server certs)"]
-    Unseal["Unseal Key Secret"]
-    CFG["ConfigMap: config.hcl"]
-    Svc["Services (headless + client)"]
-    Ing["Ingress (optional)"]
-    HTTPRoute["HTTPRoute (optional, Gateway API)"]
-    GW["Gateway (user-managed, optional)"]
-  end
+  user -->|apply CRs| api
+  operator <-->|watch/reconcile| api
 
-  Obj["Object Storage<br/>(S3 / GCS / Azure Blob)"]
+  operator -->|provision RBAC| tenantNS
+  operator -->|create/update resources| clusterNS
 
-  %% Relationships
-  U -->|create / update| CR
-  U -->|provision| GW
-  CR -->|stored in| API
+  clusterNS --> access
+  user -->|OpenBao API| access
+  user -->|OpenBao API via Gateway| gw --> access
 
-  CM -->|watches| API
-  CM --> OC
+  operator -->|stream snapshots| obj
 
-  OC --> Cert
-  OC --> Infra
-  OC --> Upg
-  OC --> Bkp
+  classDef core fill:#EBFBEE,stroke:#2F9E44,color:#1B5E20;
+  classDef api fill:#F1F3F5,stroke:#495057,color:#212529;
+  classDef ns fill:#FFF4E6,stroke:#F08C00,color:#7A3E00;
 
-  Cert -->|generate & rotate| TLS
-  Infra -->|manage| Unseal
-  Infra --> CFG
-  Infra --> Svc
-  Infra --> Ing
-   Infra --> HTTPRoute
-  Infra --> STS
+  class operator core;
+  class api api;
+  class tenantNS,clusterNS ns;
 
-  STS --> Pods
-  Pods --> PVC
+```
 
-  GW --> HTTPRoute
-  HTTPRoute --> Svc
+```mermaid
+flowchart TB
+  %% Per OpenBaoCluster: what the operator manages in the cluster namespace.
+  clusterCtl["OpenBaoClusterController"]
+  secrets["Secrets<br/>(TLS + unseal)"]
+  config["ConfigMap<br/>config.hcl"]
+  sts["StatefulSet"]
+  pods["Pods"]
+  pvc["PVCs / PVs"]
+  svc["Services"]
+  edge["Ingress / HTTPRoute<br/>(optional)"]
 
-  Bkp -->|stream snapshots| Obj
+  clusterCtl -->|reconcile| secrets
+  clusterCtl -->|reconcile| config
+  clusterCtl -->|reconcile| svc
+  clusterCtl -->|reconcile| edge
+  clusterCtl -->|reconcile| sts
 
-  Pods -->|serve OpenBao API<br/>mTLS, Raft| U
+  sts --> pods --> pvc
 
+  classDef controller fill:#EBFBEE,stroke:#2F9E44,color:#1B5E20;
+  classDef workload fill:#FFF4E6,stroke:#F08C00,color:#7A3E00;
+  class clusterCtl controller;
+  class secrets,config,sts,pods,pvc,svc,edge workload;
 ```
 
 ## Key Features
@@ -84,7 +76,7 @@ flowchart LR
 
 ## Quick Start
 
-**Prerequisites**: Kubernetes v1.25+, kubectl, helm (optional).
+**Prerequisites**: Kubernetes v1.33+ (see `docs/compatibility.md`), `kubectl`, `helm` (optional).
 
 ### 1. Install the Operator
 
@@ -95,7 +87,22 @@ make deploy IMG=ghcr.io/openbao/openbao-operator:latest
 
 ### 2. Deploy a Cluster
 
-Create `config/samples/dev-cluster.yaml`:
+If you are running in multi-tenant mode, provision your target namespace first (recommended):
+
+```sh
+kubectl create namespace default || true
+kubectl apply -f - <<'YAML'
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoTenant
+metadata:
+  name: default-tenant
+  namespace: openbao-operator-system
+spec:
+  targetNamespace: default
+YAML
+```
+
+Create a minimal `OpenBaoCluster`:
 
 ```yaml
 apiVersion: openbao.org/v1alpha1
@@ -105,10 +112,12 @@ metadata:
   namespace: default
 spec:
   version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
   replicas: 3
   tls:
     enabled: true
     mode: OperatorManaged
+    rotationPeriod: "720h"
   storage:
     size: "10Gi"
 ```
@@ -120,7 +129,8 @@ kubectl get pods -l openbao.org/cluster=dev-cluster -w
 
 ## Documentation
 
-  * [User Guide](docs/user-guide.md): Configuration, Backups, Upgrades, and Day 2 Ops.
+  * [Docs Index](docs/README.md)
+  * [User Guide](docs/user-guide/README.md): Configuration, Backups, Upgrades, and Day 2 Ops.
   * [Security & RBAC](docs/security.md): Threat model, RBAC design, and hardening guide.
   * [Architecture](docs/architecture.md): Internal controller design and state machines.
   * [Contributing](docs/contributing.md): Build instructions and testing strategy.

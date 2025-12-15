@@ -53,32 +53,7 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	# Generate CRDs and webhooks (shared across both controllers)
 	"$(CONTROLLER_GEN)" crd webhook paths="./api/..." output:crd:artifacts:config=config/crd/bases
-	# SECURITY: Controller RBAC is manually maintained via namespace-scoped Roles created by the Provisioner.
-	# We do NOT generate Controller RBAC because:
-	# 1. The controller has NO cluster-wide permissions - it only uses namespace-scoped Roles
-	# 2. Permissions are granted dynamically per-namespace by the Provisioner in tenant namespaces
-	# 3. The controller receives permissions via RoleBindings created by the Provisioner in each tenant namespace
-	# 4. This ensures the controller cannot access resources outside of provisioned tenant namespaces
-	# The tenant Role (openbao-operator-tenant-role) is defined in internal/provisioner/rbac.go
-	# and is created by the Provisioner in each tenant namespace labeled with openbao.org/tenant=true
-	# SECURITY: Provisioner RBAC is manually maintained in config/rbac/provisioner_minimal_role.yaml.
-	# We do NOT generate Provisioner RBAC because:
-	# 1. The Provisioner uses impersonation (impersonate serviceaccounts verb), which kubebuilder cannot generate
-	# 2. The RBAC is security-critical and must be explicitly controlled
-	# 3. The Provisioner only needs: namespace watching, RBAC read access, and impersonation permission
-	# All create/update/delete operations on Roles/RoleBindings are performed via impersonation
-	# of the delegate ServiceAccount (openbao-operator-provisioner-delegate), which enforces
-	# least privilege at the API server level.
-	# Note: RoleBindings and impersonation resources are manually maintained in config/rbac/:
-	# - provisioner_minimal_role.yaml: Actual Provisioner ClusterRole (with impersonation)
-	# - provisioner_role_binding.yaml: Binds provisioner SA to provisioner ClusterRole
-	# - provisioner_delegate_clusterrole.yaml: Template role defining tenant permissions
-	# - provisioner_delegate_serviceaccount.yaml: Delegate SA for impersonation
-	# - provisioner_delegate_clusterrolebinding.yaml: Binds delegate SA to template role
-	# - provisioner_leader_election_role_binding.yaml: Binds provisioner SA to leader-election Role
-	# - leader_election_role_binding.yaml: Binds controller SA to leader-election Role
-	# - provisioner_metrics_auth_role_binding.yaml: Binds provisioner SA to metrics-auth ClusterRole
-	# - metrics_auth_role_binding.yaml: Binds controller SA to metrics-auth ClusterRole
+
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -235,6 +210,10 @@ ifndef ignore-not-found
   ignore-not-found = false
 endif
 
+ifndef wait
+  wait = true
+endif
+
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
 	@out="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
@@ -251,8 +230,8 @@ deploy: manifests kustomize ## Deploy both provisioner and controller to the K8s
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
-undeploy: kustomize ## Undeploy both provisioner and controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -
+undeploy: kustomize ## Undeploy both provisioner and controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion. Call with wait=false to avoid waiting for finalizers.
+	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) --wait=$(wait) -f -
 
 ##@ Dependencies
 

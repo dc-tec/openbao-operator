@@ -26,16 +26,18 @@ const (
 
 func main() {
 	var (
-		mode    string
-		addr    string
-		caFile  string
-		timeout time.Duration
+		mode       string
+		addr       string
+		caFile     string
+		serverName string
+		timeout    time.Duration
 	)
 
 	flag.StringVar(&mode, "mode", "", "Probe mode: liveness or readiness")
 	flag.StringVar(&addr, "addr", "https://localhost:8200",
 		"Base address for OpenBao (must be reachable from inside the pod)")
-	flag.StringVar(&caFile, "ca-file", "/etc/bao/tls/ca.crt", "Path to the CA certificate used to verify OpenBao TLS")
+	flag.StringVar(&caFile, "ca-file", "/etc/bao/tls/ca.crt", "Path to the CA certificate used to verify OpenBao TLS (empty to use system roots)")
+	flag.StringVar(&serverName, "servername", "", "TLS SNI server name (overrides hostname from addr)")
 	flag.DurationVar(&timeout, "timeout", 4*time.Second,
 		"Timeout for the HTTP request (should be less than the Kubernetes probe timeoutSeconds)")
 	flag.Parse()
@@ -48,7 +50,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	serverName, hostPort, err := parseAddr(addr)
+	parsedServerName, hostPort, isLoopback, err := parseAddr(addr)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "invalid -addr %q: %v\n", addr, err)
 		os.Exit(1)
@@ -74,8 +76,13 @@ func main() {
 	base := strings.TrimRight(addr, "/")
 	probeURL := base + path
 
-	allowInsecureLocalFallback := serverName == "localhost"
-	client, err := newHTTPClient(caFile, serverName, timeout, allowInsecureLocalFallback)
+	// Use explicit servername if provided (e.g., for ACME mode), otherwise use parsed serverName from addr
+	tlsServerName := serverName
+	if tlsServerName == "" {
+		tlsServerName = parsedServerName
+	}
+
+	client, err := newHTTPClient(caFile, tlsServerName, timeout, isLoopback)
 	if err != nil {
 		if mode == modeLiveness {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -148,47 +155,70 @@ func main() {
 	}
 }
 
-func newHTTPClient(caFile string, serverName string, timeout time.Duration, allowInsecureLocalFallback bool) (*http.Client, error) {
-	caPEM, err := os.ReadFile(caFile)
-	if err != nil {
-		// In ACME TLS mode, the operator does not mount TLS Secrets and OpenBao
-		// manages certificates internally. For localhost probes, allow a fallback
-		// to insecure TLS when the CA file is missing so readiness can still
-		// accurately reflect OpenBao health (initialized/unsealed).
-		if allowInsecureLocalFallback && os.IsNotExist(err) {
-			tlsConfig := &tls.Config{
-				MinVersion:         tls.VersionTLS12,
-				InsecureSkipVerify: true,
-			}
-			if serverName != "" {
-				tlsConfig.ServerName = serverName
-			}
+func newHTTPClient(caFile string, serverName string, timeout time.Duration, allowInsecureLoopbackFallback bool) (*http.Client, error) {
+	var roots *x509.CertPool
 
-			transport := &http.Transport{
-				TLSClientConfig:       tlsConfig,
-				TLSHandshakeTimeout:   timeout,
-				ResponseHeaderTimeout: timeout,
-				DisableKeepAlives:     true,
-			}
+	if caFile == "" {
+		// Empty CA file means use system roots (e.g., for public ACME CAs like Let's Encrypt)
+		roots = nil
+	} else {
+		caPEM, err := os.ReadFile(caFile)
+		if err != nil {
+			// If the CA file doesn't exist and we have a serverName (ACME mode), use system roots.
+			// This handles public ACME CAs where no CA file is provided.
+			if os.IsNotExist(err) && serverName != "" {
+				// Use system roots for public ACME CAs
+				roots = nil
+			} else if allowInsecureLoopbackFallback && os.IsNotExist(err) {
+				// Fallback for non-ACME loopback probes when CA file is missing
+				tlsConfig := &tls.Config{
+					MinVersion:         tls.VersionTLS12,
+					InsecureSkipVerify: true,
+					VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+						return verifyLoopbackCertificate(rawCerts)
+					},
+				}
+				// Use the provided serverName for SNI (e.g., ACME domain), or fall back to "localhost"
+				// for backward compatibility with non-ACME loopback probes.
+				if serverName != "" {
+					tlsConfig.ServerName = serverName
+				} else {
+					tlsConfig.ServerName = "localhost"
+				}
 
-			return &http.Client{Transport: transport}, nil
+				transport := &http.Transport{
+					TLSClientConfig:       tlsConfig,
+					TLSHandshakeTimeout:   timeout,
+					ResponseHeaderTimeout: timeout,
+					DisableKeepAlives:     true,
+				}
+
+				return &http.Client{Transport: transport}, nil
+			} else {
+				return nil, fmt.Errorf("failed to read CA file %q: %w", caFile, err)
+			}
+		} else {
+			// CA file exists, parse it
+			roots = x509.NewCertPool()
+			if !roots.AppendCertsFromPEM(caPEM) {
+				return nil, fmt.Errorf("failed to parse CA PEM from %q", caFile)
+			}
 		}
-
-		return nil, fmt.Errorf("failed to read CA file %q: %w", caFile, err)
-	}
-
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(caPEM) {
-		return nil, fmt.Errorf("failed to parse CA PEM from %q", caFile)
 	}
 
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
-		RootCAs:    roots,
+		RootCAs:    roots, // nil means use system roots
 	}
+	// Use the provided serverName for SNI (e.g., ACME domain). This is critical for ACME mode
+	// to prevent OpenBao from attempting ACME for "localhost" when probes connect via loopback.
 	if serverName != "" {
 		tlsConfig.ServerName = serverName
+	} else if allowInsecureLoopbackFallback {
+		// Fallback for backward compatibility: use "localhost" for loopback when no explicit serverName
+		tlsConfig.ServerName = "localhost"
 	}
+	// If neither condition is met, let Go handle SNI automatically
 
 	transport := &http.Transport{
 		TLSClientConfig:       tlsConfig,
@@ -212,26 +242,53 @@ func tcpDial(ctx context.Context, address string) error {
 	return nil
 }
 
-func parseAddr(rawAddr string) (serverName string, hostPort string, err error) {
+func parseAddr(rawAddr string) (serverName string, hostPort string, isLoopback bool, err error) {
 	parsed, err := url.Parse(rawAddr)
 	if err != nil {
-		return "", "", fmt.Errorf("parse url: %w", err)
+		return "", "", false, fmt.Errorf("parse url: %w", err)
 	}
 
 	if parsed.Scheme == "" {
-		return "", "", fmt.Errorf("missing scheme (expected https)")
+		return "", "", false, fmt.Errorf("missing scheme (expected https)")
 	}
 
 	host := parsed.Hostname()
 	port := parsed.Port()
 	if host == "" || port == "" {
-		return "", "", fmt.Errorf("expected host:port in url")
+		return "", "", false, fmt.Errorf("expected host:port in url")
 	}
 
 	hostPort = net.JoinHostPort(host, port)
 	if net.ParseIP(host) != nil {
-		return "", hostPort, nil
+		ip := net.ParseIP(host)
+		return "", hostPort, ip != nil && ip.IsLoopback(), nil
 	}
 
-	return host, hostPort, nil
+	return host, hostPort, host == "localhost", nil
+}
+
+func verifyLoopbackCertificate(rawCerts [][]byte) error {
+	if len(rawCerts) == 0 {
+		return fmt.Errorf("no peer certificates presented")
+	}
+
+	cert, err := x509.ParseCertificate(rawCerts[0])
+	if err != nil {
+		return fmt.Errorf("failed to parse peer certificate: %w", err)
+	}
+
+	now := time.Now()
+	if now.Before(cert.NotBefore) {
+		return fmt.Errorf("certificate not valid yet (notBefore=%s)", cert.NotBefore.Format(time.RFC3339))
+	}
+	if now.After(cert.NotAfter) {
+		return fmt.Errorf("certificate expired (notAfter=%s)", cert.NotAfter.Format(time.RFC3339))
+	}
+
+	// For ACME mode we expect a CA-issued cert, not a self-signed placeholder.
+	if err := cert.CheckSignatureFrom(cert); err == nil {
+		return fmt.Errorf("certificate is self-signed")
+	}
+
+	return nil
 }

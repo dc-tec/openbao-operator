@@ -103,8 +103,10 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 		// ACME parameters are set directly on the listener, not in a nested block
 		// See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
 		listenerBody.SetAttributeValue("tls_acme_ca_directory", cty.StringVal(acmeConfig.DirectoryURL))
-		// tls_acme_domains is a list of domains
-		listenerBody.SetAttributeValue("tls_acme_domains", cty.ListVal([]cty.Value{cty.StringVal(acmeConfig.Domain)}))
+		// tls_acme_domains is a list of domains. Use exactly what is provided; do not inject localhost,
+		// to avoid ACME challenges against loopback.
+		acmeDomains := []cty.Value{cty.StringVal(acmeConfig.Domain)}
+		listenerBody.SetAttributeValue("tls_acme_domains", cty.ListVal(acmeDomains))
 		if acmeConfig.Email != "" {
 			listenerBody.SetAttributeValue("tls_acme_email", cty.StringVal(acmeConfig.Email))
 		}
@@ -180,6 +182,12 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 		for _, key := range keys {
 			value := strings.TrimSpace(cluster.Spec.Config[key])
 			if value == "" {
+				continue
+			}
+
+			// ACME listener-specific keys must live on the listener block.
+			if strings.HasPrefix(key, "tls_acme_") {
+				listenerBody.SetAttributeValue(key, cty.StringVal(value))
 				continue
 			}
 

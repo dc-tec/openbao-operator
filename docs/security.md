@@ -324,6 +324,17 @@ Egress is restricted to essential services:
 
 **Note:** Backup job pods run in separate pods that are excluded from this strict policy to allow them to reach external object storage endpoints (S3, GCS, etc.).
 
+### 4.3 Custom Network Rules
+
+While the operator enforces a default deny posture, users can extend the NetworkPolicy with custom ingress and egress rules via `spec.network.ingressRules` and `spec.network.egressRules`. These custom rules are merged with the operator-managed rules, ensuring that essential operator rules (DNS, API server, cluster peers) are always present and cannot be overridden.
+
+**Security Considerations:**
+- Custom rules should follow the principle of least privilege
+- Only allow access to specific namespaces, IPs, or ports as needed
+- Review custom rules regularly to ensure they remain necessary
+- For transit seal backends, prefer namespace selectors over broad IP ranges
+- Consider using backup jobs (excluded from NetworkPolicy) rather than adding broad egress rules for object storage access
+
 ## 5. Workload Security
 
 The operator ensures that OpenBao pods run with restricted privileges.

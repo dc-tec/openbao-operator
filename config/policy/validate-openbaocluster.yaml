@@ -57,6 +57,7 @@ spec:
               "raw_storage_endpoint",
               "introspection_endpoint",
               "ui",
+              "tls_acme_ca_root",
               "disable_standby_reads",
               "imprecise_lease_role_tracking",
               "unsafe_allow_api_audit_creation",

@@ -42,9 +42,11 @@ For a cluster named `dev-cluster` in namespace `security`, the Operator reconcil
     - Allow ingress from pods within the same cluster (same pod selector labels).
     - Allow ingress from kube-system namespace (for DNS and system components).
     - Allow ingress from OpenBao operator pods on port 8200 (for upgrade operations such as leader step-down; initialization prefers Kubernetes service-registration signals but the operator may still need API access for non-self-init initialization and as a fallback).
+    - Allow ingress from Gateway namespace (if Gateway API is enabled).
     - Allow egress to DNS (port 53 UDP/TCP) for service discovery.
     - Allow egress to Kubernetes API server (port 443) for pod discovery (discover-k8s provider). The operator auto-detects the API server CIDR by querying the `kubernetes` Service in the `default` namespace. If auto-detection fails (e.g., due to restricted permissions in multi-tenant environments), users can manually configure `spec.network.apiServerCIDR` as a fallback.
     - Allow egress to cluster pods on ports 8200 and 8201 for Raft communication.
+    - **Custom Rules:** Users can specify additional ingress and egress rules via `spec.network.ingressRules` and `spec.network.egressRules`. These are merged with the operator-managed rules (operator rules cannot be overridden). See [Network Configuration](network.md) for details.
     - **Note:** Backup job pods (labeled with `openbao.org/component=backup`) are excluded from this NetworkPolicy to allow access to object storage. Users can create custom NetworkPolicies for backup jobs if additional restrictions are needed.
 - Services:
   - Headless Service `dev-cluster` (ClusterIP `None`) backing the StatefulSet.

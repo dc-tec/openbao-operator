@@ -1282,6 +1282,8 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	// The operator pods are in a different namespace, so we use both NamespaceSelector
 	// and PodSelector to match pods in the operator namespace with the operator labels.
 	// The namespace selector uses the standard Kubernetes namespace name label.
+	// The operator pods are labeled with app.kubernetes.io/name=openbao-operator and
+	// app.kubernetes.io/component=controller (not control-plane=controller-manager).
 	operatorPeer := networkingv1.NetworkPolicyPeer{
 		NamespaceSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -1290,8 +1292,14 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 		},
 		PodSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
-				"control-plane":          "controller-manager",
 				"app.kubernetes.io/name": "openbao-operator",
+			},
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      "app.kubernetes.io/component",
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   []string{"controller", "provisioner"},
+				},
 			},
 		},
 	}
@@ -1407,6 +1415,19 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 		},
 	})
 
+	// Merge user-provided egress rules (append after operator-managed rules)
+	if cluster.Spec.Network != nil && len(cluster.Spec.Network.EgressRules) > 0 {
+		egressRules = append(egressRules, cluster.Spec.Network.EgressRules...)
+	}
+
+	// Build operator-managed ingress rules
+	ingressRules := buildNetworkPolicyIngressRules(cluster, clusterPeer, kubeSystemPeer, operatorPeer, apiPort, clusterPort)
+
+	// Merge user-provided ingress rules (append after operator-managed rules)
+	if cluster.Spec.Network != nil && len(cluster.Spec.Network.IngressRules) > 0 {
+		ingressRules = append(ingressRules, cluster.Spec.Network.IngressRules...)
+	}
+
 	networkPolicy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      networkPolicyName(cluster),
@@ -1431,7 +1452,7 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 				networkingv1.PolicyTypeIngress,
 				networkingv1.PolicyTypeEgress,
 			},
-			Ingress: buildNetworkPolicyIngressRules(cluster, clusterPeer, kubeSystemPeer, operatorPeer, apiPort, clusterPort),
+			Ingress: ingressRules,
 			Egress:  egressRules,
 		},
 	}

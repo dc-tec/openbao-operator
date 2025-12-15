@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -125,9 +126,21 @@ func NewClient(config ClientConfig) (*Client, error) {
 		requestTimeout = DefaultRequestTimeout
 	}
 
+	// Parse the base URL to extract the hostname for server name verification
+	parsedURL, err := url.Parse(config.BaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid baseURL %q: %w", config.BaseURL, err)
+	}
+
 	// Configure TLS with the provided CA certificate
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
+	}
+
+	// Set ServerName to the hostname from the URL to ensure proper certificate verification.
+	// This is important when connecting to pod DNS names where the certificate SANs must match.
+	if parsedURL.Hostname() != "" {
+		tlsConfig.ServerName = parsedURL.Hostname()
 	}
 
 	// Start from the system cert pool when available so that custom CAs are
