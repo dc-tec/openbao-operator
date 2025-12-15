@@ -33,6 +33,7 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	controllerpredicates "github.com/openbao/operator/internal/controller"
 	"github.com/openbao/operator/internal/provisioner"
 )
 
@@ -181,6 +182,7 @@ func removeFinalizer(finalizers []string, value string) []string {
 func (r *NamespaceProvisionerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoTenant{}).
+		WithEventFilter(controllerpredicates.OpenBaoTenantPredicate()).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 3,
 			RateLimiter:             workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),

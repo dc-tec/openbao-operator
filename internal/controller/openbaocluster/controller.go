@@ -41,6 +41,7 @@ import (
 	certmanager "github.com/openbao/operator/internal/certs"
 	"github.com/openbao/operator/internal/constants"
 	controllermetrics "github.com/openbao/operator/internal/controller"
+	controllerpredicates "github.com/openbao/operator/internal/controller"
 	inframanager "github.com/openbao/operator/internal/infra"
 	initmanager "github.com/openbao/operator/internal/init"
 	openbaolabels "github.com/openbao/operator/internal/openbao"
@@ -835,7 +836,8 @@ func (r *OpenBaoClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// reconciles child resources when the OpenBaoCluster itself changes or via
 	// explicit requeues in the reconciliation logic.
 	builder := ctrl.NewControllerManagedBy(mgr).
-		For(&openbaov1alpha1.OpenBaoCluster{})
+		For(&openbaov1alpha1.OpenBaoCluster{}).
+		WithEventFilter(controllerpredicates.OpenBaoClusterPredicate())
 
 	return builder.
 		WithOptions(controller.Options{
