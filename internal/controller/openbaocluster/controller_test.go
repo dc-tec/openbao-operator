@@ -468,8 +468,10 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 				}, latest)
 				g.Expect(err).NotTo(HaveOccurred())
 
+				// Capture original state for status patching to avoid optimistic locking conflicts
+				original := latest.DeepCopy()
 				latest.Status.Initialized = true
-				err = k8sClient.Status().Update(ctx, latest)
+				err = k8sClient.Status().Patch(ctx, latest, client.MergeFrom(original))
 				g.Expect(err).NotTo(HaveOccurred())
 			}).Should(Succeed())
 
@@ -488,8 +490,10 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 
 		It("skips initialization when cluster is already initialized", func() {
 			cluster := createMinimalCluster("test-init-skip", false)
+			// Capture original state for status patching to avoid optimistic locking conflicts
+			original := cluster.DeepCopy()
 			cluster.Status.Initialized = true
-			Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
+			Expect(k8sClient.Status().Patch(ctx, cluster, client.MergeFrom(original))).To(Succeed())
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{

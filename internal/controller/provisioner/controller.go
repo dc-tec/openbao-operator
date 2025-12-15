@@ -117,10 +117,12 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	ns := &corev1.Namespace{}
 	if err := r.Get(ctx, types.NamespacedName{Name: targetNS}, ns); err != nil {
 		if apierrors.IsNotFound(err) {
+			// Capture original state for status patching to avoid optimistic locking conflicts
+			original := tenant.DeepCopy()
 			// Namespace not found - update status and requeue
 			tenant.Status.Provisioned = false
 			tenant.Status.LastError = fmt.Sprintf("target namespace %s not found", targetNS)
-			if err := r.Status().Update(ctx, tenant); err != nil {
+			if err := r.Status().Patch(ctx, tenant, client.MergeFrom(original)); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
 			}
 			logger.Info("Target namespace not found; will retry", "target_namespace", targetNS)
@@ -129,12 +131,15 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, fmt.Errorf("failed to get namespace %s: %w", targetNS, err)
 	}
 
+	// Capture original state for status patching to avoid optimistic locking conflicts
+	original := tenant.DeepCopy()
+
 	// Provision RBAC
 	logger.Info("Provisioning tenant RBAC", "target_namespace", targetNS)
 	if err := r.Provisioner.EnsureTenantRBAC(ctx, targetNS); err != nil {
 		tenant.Status.Provisioned = false
 		tenant.Status.LastError = err.Error()
-		if statusErr := r.Status().Update(ctx, tenant); statusErr != nil {
+		if statusErr := r.Status().Patch(ctx, tenant, client.MergeFrom(original)); statusErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w (original error: %w)", statusErr, err)
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to ensure tenant RBAC for namespace %s: %w", targetNS, err)
@@ -143,7 +148,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	// Update status to success
 	tenant.Status.Provisioned = true
 	tenant.Status.LastError = ""
-	if err := r.Status().Update(ctx, tenant); err != nil {
+	if err := r.Status().Patch(ctx, tenant, client.MergeFrom(original)); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
 	}
 

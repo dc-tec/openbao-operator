@@ -226,6 +226,9 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, reconcileErr
 	}
 
+	// Capture original state for status patching to avoid optimistic locking conflicts
+	original := cluster.DeepCopy()
+
 	if !cluster.DeletionTimestamp.IsZero() {
 		logger.Info("OpenBaoCluster is marked for deletion")
 		if containsFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer) {
@@ -304,7 +307,7 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					Message:            fmt.Sprintf("failed to reconcile TLS assets: %v", err),
 				})
 
-				if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
+				if statusErr := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
 					reconcileErr = fmt.Errorf("failed to update TLSReady condition for OpenBaoCluster %s/%s after TLS error: %w", cluster.Namespace, cluster.Name, statusErr)
 					return ctrl.Result{}, reconcileErr
 				}
@@ -319,7 +322,7 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			// For infra reconciler, handle special requeue cases
 			if _, isInfraReconciler := rec.(*infraReconciler); isInfraReconciler {
 				// Update status before requeuing
-				if statusErr := r.Status().Update(ctx, cluster); statusErr != nil {
+				if statusErr := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
 					reconcileErr = fmt.Errorf("failed to update status before requeue: %w", statusErr)
 					return ctrl.Result{}, reconcileErr
 				}
@@ -433,6 +436,9 @@ func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger lo
 }
 
 func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	// Capture original state for status patching to avoid optimistic locking conflicts
+	original := cluster.DeepCopy()
+
 	if cluster.Status.Phase == "" {
 		cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
 	}
@@ -466,7 +472,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 		Message:            "TLS readiness is not being evaluated while reconciliation is paused",
 	})
 
-	if err := r.Status().Update(ctx, cluster); err != nil {
+	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
 		return fmt.Errorf("failed to update status for paused OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
@@ -477,6 +483,9 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 
 //nolint:gocyclo // Status computation is intentionally explicit to keep reconciliation readable and auditable.
 func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
+	// Capture original state for status patching to avoid optimistic locking conflicts
+	original := cluster.DeepCopy()
+
 	// Fetch the StatefulSet to observe actual ready replicas
 	statefulSet := &appsv1.StatefulSet{}
 	statefulSetName := types.NamespacedName{
@@ -773,7 +782,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			"secret_name", cluster.Name+"-root-token")
 	}
 
-	if err := r.Status().Update(ctx, cluster); err != nil {
+	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update status for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
