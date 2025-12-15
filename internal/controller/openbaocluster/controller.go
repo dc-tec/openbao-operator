@@ -350,6 +350,16 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				}
 				return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 			}
+			// For InitManager, update status before requeuing so Initialized status is persisted
+			// This ensures InfraReconciler sees the updated status on the next reconcile
+			if _, isInitManager := rec.(*initmanager.Manager); isInitManager {
+				// Update status before requeuing so Initialized=true is persisted
+				if statusErr := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
+					reconcileErr = fmt.Errorf("failed to update status before requeue: %w", statusErr)
+					return ctrl.Result{}, reconcileErr
+				}
+				return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+			}
 			return ctrl.Result{Requeue: true}, nil
 		}
 	}
