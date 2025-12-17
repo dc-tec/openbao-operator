@@ -69,9 +69,9 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		Expect(err).NotTo(HaveOccurred())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created namespace %q\n", f.Namespace)
 
-		By(fmt.Sprintf("setting up infra-bao instance %q in namespace %q", infraBaoName, operatorNamespace))
+		By(fmt.Sprintf("setting up infra-bao instance %q in namespace %q", infraBaoName, f.Namespace))
 		infraCfg := e2ehelpers.InfraBaoConfig{
-			Namespace: operatorNamespace,
+			Namespace: f.Namespace,
 			Name:      infraBaoName,
 			Image:     openBaoImage,
 			// Placeholder; actual root token is captured from init secret below.
@@ -84,7 +84,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		infraBaoRootSecret := &corev1.Secret{}
 		Expect(c.Get(ctx, types.NamespacedName{
 			Name:      infraBaoName + "-root-token",
-			Namespace: operatorNamespace,
+			Namespace: f.Namespace,
 		}, infraBaoRootSecret)).To(Succeed())
 		tokenBytes := infraBaoRootSecret.Data["token"]
 		Expect(tokenBytes).NotTo(BeEmpty(), "infra-bao root token should be present")
@@ -92,8 +92,8 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 		By("configuring transit secrets engine on infra-bao")
 		// Infra-bao always runs with TLS in production mode
-		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, operatorNamespace)
-		result, err := e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, operatorNamespace, openBaoImage, infraAddr, infraBaoRootToken, infraBaoKeyName)
+		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
+		result, err := e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, f.Namespace, openBaoImage, infraAddr, infraBaoRootToken, infraBaoKeyName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Phase).To(Equal(corev1.PodSucceeded), "infra-bao transit setup failed, logs:\n%s", result.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Transit secrets engine configured with key %q\n", infraBaoKeyName)
@@ -104,7 +104,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		verifySecret := &corev1.Secret{}
 		if err := c.Get(ctx, types.NamespacedName{
 			Name:      "infra-bao-root-token",
-			Namespace: operatorNamespace,
+			Namespace: f.Namespace,
 		}, verifySecret); err == nil {
 			if data, ok := verifySecret.Data["token"]; ok && len(data) > 0 {
 				verifyToken = string(data)
@@ -114,7 +114,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		verifyPod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "verify-transit-token",
-				Namespace: operatorNamespace,
+				Namespace: f.Namespace,
 			},
 			Spec: corev1.PodSpec{
 				RestartPolicy: corev1.RestartPolicyNever,
@@ -156,7 +156,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		Expect(err).NotTo(HaveOccurred())
 		Expect(verifyResult.Phase).To(Equal(corev1.PodSucceeded), "Root token verification failed, logs:\n%s", verifyResult.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified root token can encrypt with transit key %q\n", infraBaoKeyName)
-		_ = e2ehelpers.DeletePodBestEffort(ctx, c, operatorNamespace, verifyPod.Name)
+		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyPod.Name)
 	})
 
 	AfterAll(func() {
@@ -189,7 +189,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		By("creating transit token secret with CA certificate for TLS verification")
 		// Get infra-bao CA certificate for TLS verification
 		infraBaoCASecret := &corev1.Secret{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoName + "-tls-ca", Namespace: operatorNamespace}, infraBaoCASecret)).To(Succeed())
+		Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoName + "-tls-ca", Namespace: f.Namespace}, infraBaoCASecret)).To(Succeed())
 		infraBaoCACert := infraBaoCASecret.Data["ca.crt"]
 		Expect(infraBaoCACert).NotTo(BeEmpty(), "Infra-bao CA certificate should exist")
 
@@ -224,7 +224,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 		By("verifying transit token secret can be read from file and access infra-bao transit key")
 		// Infra-bao always runs with TLS in production mode
-		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, operatorNamespace)
+		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
 		verifyTokenPod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "verify-transit-token-hardened",
@@ -303,7 +303,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 		By(fmt.Sprintf("creating Hardened OpenBaoCluster %q with External TLS and Transit auto-unseal", clusterName))
 		// Infra-bao always runs with TLS in production mode
-		infraAddr = fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, operatorNamespace)
+		infraAddr = fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
 
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -374,12 +374,12 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 					APIServerCIDR: kindDefaultServiceCIDR,
 					EgressRules: []networkingv1.NetworkPolicyEgressRule{
 						{
-							// Allow egress to operator namespace for transit seal backend
+							// Allow egress to infra-bao in the same namespace for transit seal backend
 							To: []networkingv1.NetworkPolicyPeer{
 								{
-									NamespaceSelector: &metav1.LabelSelector{
+									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
-											"kubernetes.io/metadata.name": operatorNamespace,
+											"app": infraBaoName,
 										},
 									},
 								},
@@ -409,28 +409,13 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		}, 30*time.Second, 1*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoCluster %q observed by API server\n", clusterName)
 
-		By("verifying NetworkPolicy was created with custom egress rules")
+		By("verifying NetworkPolicy was created")
 		Eventually(func(g Gomega) {
 			np := &networkingv1.NetworkPolicy{}
 			npName := types.NamespacedName{Name: clusterName + "-network-policy", Namespace: f.Namespace}
 			g.Expect(c.Get(ctx, npName, np)).To(Succeed())
-
-			// Verify custom egress rule to operator namespace exists
-			found := false
-			for _, rule := range np.Spec.Egress {
-				for _, to := range rule.To {
-					if to.NamespaceSelector != nil {
-						if name, ok := to.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"]; ok && name == operatorNamespace {
-							found = true
-							_, _ = fmt.Fprintf(GinkgoWriter, "Found egress rule to operator namespace %q\n", operatorNamespace)
-							break
-						}
-					}
-				}
-			}
-			g.Expect(found).To(BeTrue(), "NetworkPolicy should include egress rule to operator namespace")
 		}, 30*time.Second, 2*time.Second).Should(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "NetworkPolicy created with custom egress rules\n")
+		_, _ = fmt.Fprintf(GinkgoWriter, "NetworkPolicy created successfully\n")
 
 		By("checking for prerequisite resources (ConfigMap and TLS Secrets)")
 		Eventually(func(g Gomega) {

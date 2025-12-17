@@ -92,6 +92,25 @@ verify-trusted-root: ## Verify that trusted_root.json exists and is valid JSON.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
 KIND_CLUSTER ?= openbao-operator-test-e2e
+# E2E_PARALLEL_NODES controls the number of parallel nodes for e2e tests.
+# Set to 1 for sequential execution (default), or a higher number for parallel execution.
+# Example: make test-e2e E2E_PARALLEL_NODES=4
+E2E_PARALLEL_NODES ?= 1
+# E2E_TIMEOUT sets the timeout for the entire test suite (default: 1h).
+# Example: make test-e2e E2E_TIMEOUT=2h
+E2E_TIMEOUT ?= 1h
+# E2E_JUNIT_REPORT generates a JUnit XML report (useful for CI).
+# Example: make test-e2e E2E_JUNIT_REPORT=test-results.xml
+E2E_JUNIT_REPORT ?=
+# E2E_KEEP_GOING continues running all tests even if some fail (useful for parallel runs).
+# Set to true to enable. Example: make test-e2e E2E_KEEP_GOING=true
+E2E_KEEP_GOING ?= false
+# E2E_TRACE shows full stack traces on failures.
+# Set to true to enable. Example: make test-e2e E2E_TRACE=true
+E2E_TRACE ?= false
+# E2E_NO_COLOR disables color output (useful for CI).
+# Set to true to enable. Example: make test-e2e E2E_NO_COLOR=true
+E2E_NO_COLOR ?= false
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
@@ -108,8 +127,32 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 	esac
 
 .PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests. Expected an isolated environment using Kind. Use E2E_PARALLEL_NODES=N to run tests in parallel (default: 1). See Makefile for additional E2E_* variables.
+	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
+	if [ "$(E2E_TRACE)" = "true" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --trace"; \
+	fi; \
+	if [ "$(E2E_NO_COLOR)" = "true" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --no-color"; \
+	fi; \
+	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --junit-report=$(E2E_JUNIT_REPORT)"; \
+	fi; \
+	if [ "$(E2E_KEEP_GOING)" = "true" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --keep-going"; \
+	fi; \
+	if [ "$(E2E_PARALLEL_NODES)" -eq 1 ]; then \
+		GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
+		if [ "$(E2E_TRACE)" = "true" ]; then \
+			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.trace"; \
+		fi; \
+		if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
+			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
+		fi; \
+		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test $$GO_TEST_FLAGS ./test/e2e/; \
+	else \
+		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/; \
+	fi
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: cleanup-test-e2e
@@ -255,10 +298,12 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+GINKGO ?= $(LOCALBIN)/ginkgo
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.7.1
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
+GINKGO_VERSION ?= v2.22.0
 
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell v='$(call gomodver,sigs.k8s.io/controller-runtime)'; \
@@ -298,6 +343,11 @@ $(ENVTEST): $(LOCALBIN)
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+
+.PHONY: ginkgo
+ginkgo: $(GINKGO) ## Download ginkgo CLI locally if necessary.
+$(GINKGO): $(LOCALBIN)
+	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,$(GINKGO_VERSION))
 
 .PHONY: security-scan
 security-scan: ## Run Trivy security scans (filesystem and container image)

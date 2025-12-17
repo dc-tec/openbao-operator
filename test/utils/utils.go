@@ -62,8 +62,11 @@ func Run(cmd *exec.Cmd) (string, error) {
 // UninstallCertManager uninstalls the cert manager
 func UninstallCertManager() {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-	cmd := exec.Command("kubectl", "delete", "-f", url) // #nosec G204 -- Test utility, command and arguments are controlled
-	if _, err := Run(cmd); err != nil {
+	cmd := exec.Command("kubectl", "delete", "-f", url, "--ignore-not-found") // #nosec G204 -- Test utility, command and arguments are controlled
+	output, err := Run(cmd)
+	// kubectl delete with --ignore-not-found can still return errors, but if resources were deleted
+	// (indicated by "deleted" in output), we consider it successful
+	if err != nil && !strings.Contains(output, "deleted") {
 		warnError(err)
 	}
 

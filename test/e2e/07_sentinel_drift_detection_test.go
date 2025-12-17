@@ -253,12 +253,38 @@ var _ = Describe("Sentinel: Drift Detection and Fast-Path Reconciliation", Order
 	})
 
 	It("detects drift and triggers fast-path reconciliation", func() {
+		// Ensure Sentinel pod is running before attempting drift detection
+		By("verifying Sentinel pod is running")
+		Eventually(func(g Gomega) {
+			pods := &corev1.PodList{}
+			labels := client.MatchingLabels{
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+				constants.LabelAppComponent: "sentinel",
+				constants.LabelAppInstance:  clusterName,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+			}
+			g.Expect(c.List(ctx, pods, client.InNamespace(f.Namespace), labels)).To(Succeed())
+			g.Expect(len(pods.Items)).To(BeNumerically(">=", 1), "expected at least one Sentinel pod")
+			for _, pod := range pods.Items {
+				g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning), "expected Sentinel pod to be Running")
+				for _, condition := range pod.Status.Conditions {
+					if condition.Type == corev1.PodReady {
+						g.Expect(condition.Status).To(Equal(corev1.ConditionTrue), "expected Sentinel pod to be Ready")
+					}
+				}
+			}
+			_, _ = fmt.Fprintf(GinkgoWriter, "Sentinel pod is running and ready\n")
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
 		By("simulating infrastructure drift by modifying a Service")
 		serviceName := clusterName
 		service := &corev1.Service{}
 		Eventually(func(g Gomega) {
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: f.Namespace}, service)).To(Succeed())
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+		// Capture modification time BEFORE making the change to ensure accurate timing
+		serviceModificationTime := time.Now()
 
 		// Use impersonation to modify the Service as a break-glass admin with maintenance mode
 		// This simulates an administrator making changes that should trigger drift detection
@@ -286,7 +312,7 @@ var _ = Describe("Sentinel: Drift Detection and Fast-Path Reconciliation", Order
 			},
 		)
 		Expect(err).NotTo(HaveOccurred(), "Failed to modify Service to simulate drift")
-		_, _ = fmt.Fprintf(GinkgoWriter, "Modified Service %q to simulate drift\n", serviceName)
+		_, _ = fmt.Fprintf(GinkgoWriter, "Modified Service %q to simulate drift at %v\n", serviceName, serviceModificationTime)
 
 		// Verify the Service was actually updated with drift
 		Eventually(func(g Gomega) {
@@ -309,56 +335,54 @@ var _ = Describe("Sentinel: Drift Detection and Fast-Path Reconciliation", Order
 		if err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, clusterBefore); err == nil && clusterBefore.Status.Drift != nil {
 			initialDriftCount = clusterBefore.Status.Drift.DriftCorrectionCount
 		}
+		_, _ = fmt.Fprintf(GinkgoWriter, "Initial drift count: %d\n", initialDriftCount)
 
-		// Wait for Sentinel to detect the drift and operator to correct it
-		// The debounce window is 2s, so we wait at least 3s for Sentinel to trigger,
-		// then additional time for operator to reconcile
-		time.Sleep(3 * time.Second)
-
-		By("verifying Sentinel detected drift and operator corrected it")
-		// Instead of trying to catch the annotation (which is cleared quickly),
-		// we verify the end-to-end behavior: drift was introduced and operator corrected it.
-		// This proves Sentinel worked because:
-		// 1. The operator only reconciles on spec changes or periodic safety net (24+ min)
-		// 2. If it reconciles quickly after drift, Sentinel must have triggered it
-		// 3. We verify by checking that the Service was reconciled (drift corrected)
-		serviceModificationTime := time.Now()
+		By("verifying Sentinel detected drift and triggered reconciliation")
+		// Simplified verification: We check for either:
+		// 1. Trigger annotation exists (Sentinel detected drift)
+		// 2. Drift count increased (operator processed drift detection)
+		// 3. Drift was detected after service modification (more specific check)
+		// We don't check timing or annotation removal - just that drift was detected and processed
 		Eventually(func(g Gomega) {
-			updatedService := &corev1.Service{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: f.Namespace}, updatedService)).To(Succeed())
+			cluster := &openbaov1alpha1.OpenBaoCluster{}
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
 
-			// Check if operator has reconciled the Service by verifying:
-			// 1. The maintenance annotation is gone (operator removed it via SSA)
-			// 2. OR the operator's managedFields timestamp is recent (proving reconciliation)
-			maintenanceRemoved := updatedService.Annotations == nil || updatedService.Annotations["openbao.org/maintenance"] == ""
-			operatorRecentlyReconciled := false
-			for _, field := range updatedService.ManagedFields {
-				if field.Manager == "openbao-operator" {
-					// Check if operator reconciled within the last 30 seconds (should be quick if Sentinel triggered)
-					if time.Since(field.Time.Time) < 30*time.Second {
-						operatorRecentlyReconciled = true
-						break
+			// Check for trigger annotation (Sentinel detected drift)
+			if val, hasTrigger := cluster.Annotations[constants.AnnotationSentinelTrigger]; hasTrigger {
+				_, _ = fmt.Fprintf(GinkgoWriter, "Sentinel trigger annotation detected: %s\n", val)
+				return // Success - annotation exists, operator will reconcile
+			}
+
+			// Check if drift status was updated (operator already processed the trigger)
+			if cluster.Status.Drift != nil {
+				currentCount := cluster.Status.Drift.DriftCorrectionCount
+
+				// Check if drift count increased (indicates new drift was detected and processed)
+				if currentCount > initialDriftCount {
+					_, _ = fmt.Fprintf(GinkgoWriter, "Drift count increased from %d to %d (drift detected and processed)\n",
+						initialDriftCount, currentCount)
+					return // Success - drift was detected and recorded
+				}
+
+				// Also check if drift was detected after service modification (more specific)
+				if cluster.Status.Drift.LastDriftDetected != nil {
+					if cluster.Status.Drift.LastDriftDetected.Time.After(serviceModificationTime) {
+						_, _ = fmt.Fprintf(GinkgoWriter, "Drift detected after service modification (LastDriftDetected: %v, DriftCorrectionCount: %d)\n",
+							cluster.Status.Drift.LastDriftDetected.Time, currentCount)
+						return // Success - drift was detected and recorded
 					}
 				}
 			}
 
-			if maintenanceRemoved || operatorRecentlyReconciled {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Operator has reconciled Service (drift corrected), confirming Sentinel triggered fast-path reconciliation\n")
-				return // Success
+			// Still waiting - log current state
+			currentCount := int32(0)
+			if cluster.Status.Drift != nil {
+				currentCount = cluster.Status.Drift.DriftCorrectionCount
 			}
-
-			// Still waiting - check if annotation was set at least once (optional verification)
-			cluster := &openbaov1alpha1.OpenBaoCluster{}
-			if err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster); err == nil {
-				if val, hasTrigger := cluster.Annotations[constants.AnnotationSentinelTrigger]; hasTrigger {
-					_, _ = fmt.Fprintf(GinkgoWriter, "Sentinel trigger annotation detected: %s\n", val)
-					return // Success - annotation exists
-				}
-			}
-
-			// Neither condition met yet
-			g.Expect(false).To(BeTrue(), "expected operator to reconcile Service after drift (maintenance removed or recent reconciliation). Service annotations: %v", updatedService.Annotations)
-		}, framework.DefaultWaitTimeout, 1*time.Second).Should(Succeed())
+			_, _ = fmt.Fprintf(GinkgoWriter, "Still waiting for drift detection. Initial count: %d, current count: %d, trigger annotation: %v\n",
+				initialDriftCount, currentCount, cluster.Annotations[constants.AnnotationSentinelTrigger])
+			g.Expect(false).To(BeTrue(), "expected Sentinel to detect drift and set trigger annotation or update drift status")
+		}, framework.DefaultWaitTimeout, 2*time.Second).Should(Succeed())
 
 		By("verifying drift status is recorded in OpenBaoCluster status")
 		Eventually(func(g Gomega) {

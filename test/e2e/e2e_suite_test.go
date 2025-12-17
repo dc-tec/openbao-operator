@@ -83,7 +83,8 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "e2e suite")
 }
 
-var _ = BeforeSuite(func() {
+var _ = SynchronizedBeforeSuite(func() []byte {
+	// THIS BLOCK RUNS ONCE (on node 1)
 	By("building the manager(Operator) image")
 	cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
 	_, err := utils.Run(cmd)
@@ -157,9 +158,21 @@ var _ = BeforeSuite(func() {
 	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the operator")
+
+	return []byte("done") // Return data to other nodes if needed (not needed here)
+}, func(data []byte) {
+	// THIS BLOCK RUNS ON ALL NODES (after node 1 finishes)
+	// No additional setup needed here - the client/scheme setup is done in individual test BeforeAll blocks
 })
 
-var _ = AfterSuite(func() {
+var _ = SynchronizedAfterSuite(func() {
+	// THIS BLOCK RUNS ON ALL NODES (after all specs complete)
+	// Per-node cleanup can go here if needed.
+	// Currently, all cleanup is shared and goes in the node 1 block below.
+}, func() {
+	// THIS BLOCK RUNS ONCE (on node 1, after all nodes complete the first block)
+	// This ensures cleanup only happens once after all tests finish.
+
 	By("cleaning up the curl pod for metrics")
 	cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", operatorNamespace, "--ignore-not-found")
 	_, _ = utils.Run(cmd)
@@ -177,15 +190,9 @@ var _ = AfterSuite(func() {
 	cmd = exec.CommandContext(ctx, "make", "undeploy", "ignore-not-found=true", "wait=false")
 	_, _ = utils.Run(cmd)
 
-	// Clean up infra-bao (shared across tests) from operator namespace
-	By("cleaning up infra-bao resources")
-	_ = exec.Command("kubectl", "delete", "pod", "infra-bao", "-n", operatorNamespace, "--ignore-not-found").Run()
-	_ = exec.Command("kubectl", "delete", "svc", "infra-bao", "-n", operatorNamespace, "--ignore-not-found").Run()
-	_ = exec.Command("kubectl", "delete", "secret", "infra-bao-tls-server", "-n", operatorNamespace, "--ignore-not-found").Run()
-	_ = exec.Command("kubectl", "delete", "secret", "infra-bao-tls-ca", "-n", operatorNamespace, "--ignore-not-found").Run()
-	_ = exec.Command("kubectl", "delete", "secret", "infra-bao-unseal-key", "-n", operatorNamespace, "--ignore-not-found").Run()
-	_ = exec.Command("kubectl", "delete", "secret", "infra-bao-root-token", "-n", operatorNamespace, "--ignore-not-found").Run()
-	_ = exec.Command("kubectl", "delete", "configmap", "infra-bao-config", "-n", operatorNamespace, "--ignore-not-found").Run()
+	// Note: infra-bao resources are now deployed per-test in test namespaces
+	// and will be cleaned up automatically when test namespaces are deleted.
+	// No explicit cleanup needed here.
 
 	By("uninstalling CRDs")
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)

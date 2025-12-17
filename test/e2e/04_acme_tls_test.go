@@ -73,9 +73,9 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created namespace %q\n", f.Namespace)
 
-		By(fmt.Sprintf("setting up infra-bao instance %q in namespace %q (production mode with TLS)", infraBaoName, operatorNamespace))
+		By(fmt.Sprintf("setting up infra-bao instance %q in namespace %q (production mode with TLS)", infraBaoName, f.Namespace))
 		infraCfg := e2ehelpers.InfraBaoConfig{
-			Namespace: operatorNamespace,
+			Namespace: f.Namespace,
 			Name:      infraBaoName,
 			Image:     openBaoImage,
 			// Placeholder; actual root token is captured from init secret below.
@@ -88,7 +88,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		rootTokenSecret := &corev1.Secret{}
 		Expect(c.Get(ctx, types.NamespacedName{
 			Name:      infraBaoName + "-root-token",
-			Namespace: operatorNamespace,
+			Namespace: f.Namespace,
 		}, rootTokenSecret)).To(Succeed())
 		tokenBytes := rootTokenSecret.Data["token"]
 		Expect(tokenBytes).NotTo(BeEmpty(), "infra-bao root token should be present")
@@ -98,29 +98,29 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		infraBaoCASecret = &corev1.Secret{}
 		Expect(c.Get(ctx, types.NamespacedName{
 			Name:      infraBaoName + "-tls-ca",
-			Namespace: operatorNamespace,
+			Namespace: f.Namespace,
 		}, infraBaoCASecret)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Fetched infra-bao CA secret %q\n", infraBaoName+"-tls-ca")
 		Expect(infraBaoCASecret.Data["ca.crt"]).NotTo(BeEmpty(), "infra-bao CA certificate should exist")
 
 		By("configuring PKI secrets engine with ACME support on infra-bao")
 		// Use HTTPS since infra-bao is configured with TLS for ACME tests
-		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, operatorNamespace)
+		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
 		clusterPath := infraAddr + "/v1/pki"
 
-		result, err := e2ehelpers.ConfigureInfraBaoPKIACME(ctx, cfg, c, operatorNamespace, openBaoImage, infraAddr, infraBaoRootToken, clusterPath)
+		result, err := e2ehelpers.ConfigureInfraBaoPKIACME(ctx, cfg, c, f.Namespace, openBaoImage, infraAddr, infraBaoRootToken, clusterPath)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Phase).To(Equal(corev1.PodSucceeded), "infra-bao pki/acme setup failed, logs:\n%s", result.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "PKI secrets engine configured with ACME support at path %q\n", clusterPath)
 
 		By("configuring transit secrets engine on infra-bao")
-		result, err = e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, operatorNamespace, openBaoImage, infraAddr, infraBaoRootToken, infraBaoKeyName)
+		result, err = e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, f.Namespace, openBaoImage, infraAddr, infraBaoRootToken, infraBaoKeyName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Phase).To(Equal(corev1.PodSucceeded), "infra-bao transit setup failed, logs:\n%s", result.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Transit secrets engine configured with key %q\n", infraBaoKeyName)
 
 		By("fetching PKI CA certificate from infra-bao for ACME certificate verification")
-		infraBaoPKICA, err = e2ehelpers.FetchInfraBaoPKICA(ctx, cfg, c, operatorNamespace, openBaoImage, infraAddr)
+		infraBaoPKICA, err = e2ehelpers.FetchInfraBaoPKICA(ctx, cfg, c, f.Namespace, openBaoImage, infraAddr)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(infraBaoPKICA).NotTo(BeEmpty(), "PKI CA certificate should not be empty")
 		_, _ = fmt.Fprintf(GinkgoWriter, "Fetched PKI CA certificate from infra-bao (length: %d bytes)\n", len(infraBaoPKICA))
@@ -153,7 +153,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		// Note: infra-bao is running in dev mode (HTTP), but for ACME tests we need HTTPS.
 		// The directory URL must use HTTPS even if infra-bao itself uses HTTP internally.
 		// In a real scenario, the ACME CA would be external (e.g., Let's Encrypt) and use HTTPS.
-		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, operatorNamespace)
+		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
 		acmeDirectoryURL := infraAddr + "/v1/pki/acme/directory"
 
 		// Create a dedicated service at port 443 to support standard ACME TLS-ALPN-01 validation.
@@ -229,7 +229,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 		// Verify the token in the secret works with infra-bao before the cluster tries to use it
 		By("verifying transit token secret can access infra-bao transit key")
 		// Use HTTPS and skip TLS verification for test environment
-		infraAddr = fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, operatorNamespace)
+		infraAddr = fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
 		verifyTokenPod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "verify-transit-token-acme",
@@ -355,16 +355,17 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 					APIServerCIDR: kindDefaultServiceCIDR,
 					IngressRules: []networkingv1.NetworkPolicyIngressRule{
 						{
-							// Allow ingress from operator namespace for ACME validation.
+							// Allow ingress from same namespace for ACME validation.
 							// The ACME server (infra-bao) needs to connect for both:
 							// - HTTP-01 challenge: service port 80 -> pod port 8200
 							// - TLS-ALPN-01 challenge: service port 443 -> pod port 8200
 							// NetworkPolicy is evaluated at the pod level, so we need to allow port 8200.
+							// Since infra-bao is in the same namespace, we can use a pod selector or allow all in namespace.
 							From: []networkingv1.NetworkPolicyPeer{
 								{
-									NamespaceSelector: &metav1.LabelSelector{
+									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
-											"kubernetes.io/metadata.name": operatorNamespace,
+											"app": infraBaoName,
 										},
 									},
 								},
@@ -379,12 +380,12 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 					},
 					EgressRules: []networkingv1.NetworkPolicyEgressRule{
 						{
-							// Allow egress to operator namespace for transit seal backend
+							// Allow egress to infra-bao in the same namespace for ACME directory access
 							To: []networkingv1.NetworkPolicyPeer{
 								{
-									NamespaceSelector: &metav1.LabelSelector{
+									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
-											"kubernetes.io/metadata.name": operatorNamespace,
+											"app": infraBaoName,
 										},
 									},
 								},
