@@ -287,6 +287,13 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 		// If already initialized, we shouldn't be here (should have been caught earlier), but handle it gracefully
 		if healthResp.Initialized {
 			logger.Info("OpenBao cluster is already initialized (detected via health check)", "cluster", cluster.Name)
+			// Verify root token secret exists - if not, we cannot retrieve it after initialization
+			secretName := cluster.Name + constants.SuffixRootToken
+			_, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				logger.Error(nil, "OpenBao is already initialized but root token Secret does not exist. The root token cannot be retrieved after initialization. This may indicate the cluster was initialized externally or the Secret was deleted.", "cluster", cluster.Name, "secret", secretName)
+				// Still return nil to avoid blocking - the cluster is initialized, we just can't provide the root token
+			}
 			return nil
 		}
 	}
@@ -307,7 +314,14 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 		// If the cluster is already initialized, the API returns an error. Detect this
 		// case via the error message and treat it as a no-op.
 		if contains(err.Error(), "already initialized") {
-			logger.Info("OpenBao cluster is already initialized (detected during HTTP init attempt)")
+			logger.Info("OpenBao cluster is already initialized (detected during HTTP init attempt)", "cluster", cluster.Name)
+			// Verify root token secret exists - if not, we cannot retrieve it after initialization
+			secretName := cluster.Name + constants.SuffixRootToken
+			_, secretErr := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+			if apierrors.IsNotFound(secretErr) {
+				logger.Error(nil, "OpenBao is already initialized but root token Secret does not exist. The root token cannot be retrieved after initialization. This may indicate the cluster was initialized externally or the Secret was deleted.", "cluster", cluster.Name, "secret", secretName)
+				// Still return nil to avoid blocking - the cluster is initialized, we just can't provide the root token
+			}
 			return nil
 		}
 
