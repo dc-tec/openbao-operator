@@ -73,6 +73,9 @@ func IsTransientConnection(err error) bool {
 		if netErr.Timeout() {
 			return true
 		}
+		if netErr.Temporary() {
+			return true
+		}
 	}
 
 	// Check for DNS errors
