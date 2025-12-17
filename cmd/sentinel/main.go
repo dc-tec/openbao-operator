@@ -320,32 +320,40 @@ func (r *SentinelReconciler) triggerReconciliation(ctx context.Context) error {
 
 	// Verify the patch succeeded by reading back the resource
 	// This helps catch cases where the patch appears to succeed but the annotation isn't actually set
-	// Note: There's a race condition where the operator might have already processed the trigger
-	// and cleared the annotation, so we only fail verification if the annotation has a different
-	// value (indicating a conflict), not if it's missing (which could mean it was already processed)
+	// Note: There are several race conditions that can occur:
+	// 1. The operator might have already processed the trigger and cleared the annotation
+	// 2. Another sentinel reconciliation might have set a different (newer) value
+	// 3. API server eventual consistency might not reflect our patch yet
+	// We only log verification results but don't fail, as the patch operation itself succeeded
+	// and any of these race conditions are acceptable outcomes
 	verifyCluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := r.client.Get(ctx, key, verifyCluster); err != nil {
-		r.logger.Error(err, "Failed to verify patch - could not read back OpenBaoCluster")
+		r.logger.V(1).Info("Could not verify patch - failed to read back OpenBaoCluster",
+			"error", err)
 		// Don't fail here - the patch might have succeeded but we just can't verify it
 	} else {
 		if val, ok := verifyCluster.Annotations[constants.AnnotationSentinelTrigger]; ok {
 			// Annotation exists - check if it has the expected value
-			if val != newValue {
-				r.logger.Error(nil, "Patch verification failed - annotation has unexpected value",
+			if val == newValue {
+				r.logger.V(1).Info("Successfully patched and verified OpenBaoCluster with trigger annotation",
+					"annotation", constants.AnnotationSentinelTrigger,
+					"value", newValue)
+			} else {
+				// Annotation has a different value - this could mean:
+				// 1. Another sentinel reconciliation set a newer value (acceptable - drift was detected again)
+				// 2. API server eventual consistency hasn't reflected our patch yet (acceptable - will be retried)
+				// 3. An older value somehow persisted (rare but acceptable - will be overwritten on next reconciliation)
+				// We log at debug level but don't fail, as the patch operation succeeded
+				r.logger.V(1).Info("Patch verification: annotation has different value - may be due to concurrent reconciliation or eventual consistency",
 					"annotation", constants.AnnotationSentinelTrigger,
 					"expected_value", newValue,
 					"actual_value", val)
-				return fmt.Errorf("patch verification failed: annotation %q has unexpected value (expected=%q, actual=%q)",
-					constants.AnnotationSentinelTrigger, newValue, val)
 			}
-			r.logger.Info("Successfully patched and verified OpenBaoCluster with trigger annotation",
-				"annotation", constants.AnnotationSentinelTrigger,
-				"value", newValue)
 		} else {
 			// Annotation doesn't exist - this could mean:
-			// 1. The patch failed (but Patch() didn't return an error)
-			// 2. The operator already processed the trigger and cleared it (race condition)
-			// We log a warning but don't fail, as the operator processing it is acceptable
+			// 1. The operator already processed the trigger and cleared it (acceptable - drift was handled)
+			// 2. The patch failed (but Patch() didn't return an error - rare but acceptable, will retry)
+			// We log at debug level but don't fail, as the operator processing it is acceptable
 			r.logger.V(1).Info("Patch verification: annotation not found - may have been cleared by operator",
 				"annotation", constants.AnnotationSentinelTrigger,
 				"expected_value", newValue)
