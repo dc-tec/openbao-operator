@@ -171,29 +171,45 @@ func TestEnsureSentinelRBAC(t *testing.T) {
 	}
 
 	// Verify Role has read-only access to infrastructure
-	hasInfraRule := false
+	// The role has 3 separate rules: StatefulSets (apps), Services/ConfigMaps (core), and OpenBaoClusters
+	hasStatefulSetRule := false
+	hasServiceConfigMapRule := false
 	hasOpenBaoClusterRule := false
 	for _, rule := range role.Rules {
-		// Check for infrastructure read rule
-		if contains(rule.APIGroups, "") && contains(rule.APIGroups, "apps") &&
+		// Check for StatefulSet read rule (apps API group)
+		if contains(rule.APIGroups, "apps") &&
 			contains(rule.Resources, "statefulsets") &&
-			contains(rule.Resources, "services") &&
+			!contains(rule.Resources, "deployments") &&
 			contains(rule.Verbs, "get") &&
 			contains(rule.Verbs, "list") &&
 			contains(rule.Verbs, "watch") {
-			hasInfraRule = true
+			hasStatefulSetRule = true
+		}
+		// Check for Service/ConfigMap read rule (core API group)
+		if contains(rule.APIGroups, "") &&
+			contains(rule.Resources, "services") &&
+			contains(rule.Resources, "configmaps") &&
+			contains(rule.Verbs, "get") &&
+			contains(rule.Verbs, "list") &&
+			contains(rule.Verbs, "watch") {
+			hasServiceConfigMapRule = true
 		}
 		// Check for OpenBaoCluster patch rule
 		if contains(rule.APIGroups, "openbao.org") &&
 			contains(rule.Resources, "openbaoclusters") &&
 			contains(rule.Verbs, "get") &&
-			contains(rule.Verbs, "patch") {
+			contains(rule.Verbs, "list") &&
+			contains(rule.Verbs, "patch") &&
+			contains(rule.Verbs, "watch") {
 			hasOpenBaoClusterRule = true
 		}
 	}
 
-	if !hasInfraRule {
-		t.Error("expected Sentinel Role to have infrastructure read rule")
+	if !hasStatefulSetRule {
+		t.Error("expected Sentinel Role to have StatefulSet read rule")
+	}
+	if !hasServiceConfigMapRule {
+		t.Error("expected Sentinel Role to have Service/ConfigMap read rule")
 	}
 	if !hasOpenBaoClusterRule {
 		t.Error("expected Sentinel Role to have OpenBaoCluster patch rule")
