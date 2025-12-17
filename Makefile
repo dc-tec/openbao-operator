@@ -111,6 +111,9 @@ E2E_TRACE ?= false
 # E2E_NO_COLOR disables color output (useful for CI).
 # Set to true to enable. Example: make test-e2e E2E_NO_COLOR=true
 E2E_NO_COLOR ?= false
+# E2E_FOCUS runs only tests matching the focus pattern (useful for running specific test suites).
+# Example: make test-e2e E2E_FOCUS=Backup
+E2E_FOCUS ?=
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
@@ -127,8 +130,11 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 	esac
 
 .PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests. Expected an isolated environment using Kind. Use E2E_PARALLEL_NODES=N to run tests in parallel (default: 1). See Makefile for additional E2E_* variables.
+test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests. Expected an isolated environment using Kind. Use E2E_PARALLEL_NODES=N to run tests in parallel (default: 1). Use E2E_FOCUS="Backup" to run only specific tests. See Makefile for additional E2E_* variables.
 	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
+	if [ -n "$(E2E_FOCUS)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=$(E2E_FOCUS)"; \
+	fi; \
 	if [ "$(E2E_TRACE)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --trace"; \
 	fi; \
@@ -143,6 +149,9 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 	fi; \
 	if [ "$(E2E_PARALLEL_NODES)" -eq 1 ]; then \
 		GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
+		if [ -n "$(E2E_FOCUS)" ]; then \
+			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=$(E2E_FOCUS)"; \
+		fi; \
 		if [ "$(E2E_TRACE)" = "true" ]; then \
 			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.trace"; \
 		fi; \
