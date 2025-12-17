@@ -42,6 +42,8 @@ spec:
                   fieldPath: metadata.namespace
             - name: OPERATOR_SERVICE_ACCOUNT_NAME
               value: openbao-operator-controller
+            - name: OPERATOR_VERSION
+              value: "v0.0.0" # [FIX] Set to actual version during release/build
           ports: []
           securityContext:
             readOnlyRootFilesystem: true

@@ -62,6 +62,7 @@ rules:
       - apps
     resources:
       - statefulsets
+      - deployments
     verbs:
       - create
       - delete
@@ -94,6 +95,7 @@ rules:
       - get
       - patch
       - update
+      - watch
   - apiGroups:
       - ""
     resources:

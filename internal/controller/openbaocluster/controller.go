@@ -110,8 +110,57 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		}
 	}
 
+	var verifiedSentinelDigest string
+	if cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled {
+		sentinelImage := cluster.Spec.Sentinel.Image
+		if sentinelImage == "" {
+			// Derive from operator version (handled in getSentinelImage)
+			sentinelImage = "openbao/operator-sentinel:latest" // Will be resolved in infra manager
+		}
+
+		// Reuse the image verification logic if enabled
+		if cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
+			var trustedRootConfig *security.TrustedRootConfig = nil
+			verifier := security.NewImageVerifier(logger, r.client, trustedRootConfig)
+			config := security.VerifyConfig{
+				PublicKey:        cluster.Spec.ImageVerification.PublicKey,
+				Issuer:           cluster.Spec.ImageVerification.Issuer,
+				Subject:          cluster.Spec.ImageVerification.Subject,
+				IgnoreTlog:       cluster.Spec.ImageVerification.IgnoreTlog,
+				ImagePullSecrets: cluster.Spec.ImageVerification.ImagePullSecrets,
+				Namespace:        cluster.Namespace,
+			}
+			digest, err := verifier.Verify(ctx, sentinelImage, config)
+			if err != nil {
+				// Handle error based on failure policy
+				failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+				if failurePolicy == "" {
+					failurePolicy = "Block" // Default to Block
+				}
+				if failurePolicy == "Block" {
+					now := metav1.Now()
+					meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+						Type:               string(openbaov1alpha1.ConditionDegraded),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: cluster.Generation,
+						LastTransitionTime: now,
+						Reason:             "SentinelImageVerificationFailed",
+						Message:            fmt.Sprintf("Sentinel image verification failed: %v", err),
+					})
+					return false, fmt.Errorf("sentinel image verification failed (policy=Block): %w", err)
+				}
+				// Warn policy: log error but proceed
+				logger.Error(err, "Sentinel image verification failed but proceeding due to Warn policy", "image", sentinelImage)
+			} else {
+				verifiedSentinelDigest = digest
+				logger.Info("Sentinel image verified successfully", "digest", digest)
+			}
+		}
+	}
+	// --------------------------------
+
 	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys)
-	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest); err != nil {
+	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest, verifiedSentinelDigest); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			now := metav1.Now()
 			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
@@ -268,6 +317,18 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	// Detect if this is a "Sentinel Trigger" event
+	// The Sentinel updates the annotation: openbao.org/sentinel-trigger: <timestamp>
+	// If the annotation exists, it means the Sentinel detected drift and triggered reconciliation
+	isSentinelTrigger := false
+	triggerAnnotation := constants.AnnotationSentinelTrigger
+
+	if val, ok := cluster.Annotations[triggerAnnotation]; ok && val != "" {
+		isSentinelTrigger = true
+		logger.Info("Sentinel trigger detected; entering Fast Path (Drift Correction)",
+			"trigger_timestamp", val)
+	}
+
 	// Build sub-reconcilers in order of execution
 	reconcilers := []SubReconciler{
 		certmanager.NewManagerWithReloader(r.Client, r.Scheme, r.TLSReload),
@@ -286,11 +347,15 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		reconcilers = append(reconcilers, r.InitManager)
 	}
 
-	// Add UpgradeManager and BackupManager
-	reconcilers = append(reconcilers,
-		upgrademanager.NewManager(r.Client, r.Scheme),
-		backupmanager.NewManager(r.Client, r.Scheme),
-	)
+	// Conditional Execution: Only run expensive managers if we are NOT in Fast Path mode
+	if !isSentinelTrigger {
+		reconcilers = append(reconcilers,
+			upgrademanager.NewManager(r.Client, r.Scheme),
+			backupmanager.NewManager(r.Client, r.Scheme),
+		)
+	} else {
+		logger.Info("Skipping Upgrade and Backup managers due to Sentinel Trigger priority")
+	}
 
 	// Execute sub-reconcilers in order
 	for _, rec := range reconcilers {
@@ -394,6 +459,26 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			Requeue:      true,
 			RequeueAfter: constants.RequeueShort,
 		}, nil
+	}
+
+	// After successful reconciliation, clear the Sentinel trigger annotation
+	// to prevent re-triggering on the next reconcile loop
+	// NOTE: This will cause a second reconciliation (Normal Path) which is DESIRABLE:
+	// 1. Fast Path fixes the immediate drift
+	// 2. Normal Path (triggered by annotation deletion) acts as a safety check
+	//    to ensure full consistency including backups/upgrades now that emergency is over
+	// Do NOT optimize this away - it adds safety.
+	if isSentinelTrigger {
+		original := cluster.DeepCopy()
+		if cluster.Annotations != nil {
+			delete(cluster.Annotations, triggerAnnotation)
+			if err := r.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+				logger.Error(err, "Failed to clear Sentinel trigger annotation")
+				// Non-fatal: annotation will be cleared on next successful reconcile
+			} else {
+				logger.Info("Cleared Sentinel trigger annotation after successful reconciliation")
+			}
+		}
 	}
 
 	// Safety net: periodically requeue to detect and correct drift that may
@@ -517,7 +602,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	// Capture original state for status patching to avoid optimistic locking conflicts
 	original := cluster.DeepCopy()
 
-	// Fetch the StatefulSet to observe actual ready replicas
+	// Fetch the StatefulSet to get ready replicas count
 	statefulSet := &appsv1.StatefulSet{}
 	statefulSetName := types.NamespacedName{
 		Namespace: cluster.Namespace,
@@ -538,6 +623,45 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		readyReplicas = statefulSet.Status.ReadyReplicas
 		desiredReplicas := cluster.Spec.Replicas
 		available = readyReplicas == desiredReplicas && readyReplicas > 0
+
+		// Check if StatefulSet controller is still processing (hasn't caught up with spec changes)
+		// or if status fields are potentially stale (pods may be ready but status not updated yet)
+		statefulSetStillScaling := statefulSet.Status.ObservedGeneration < statefulSet.Generation ||
+			statefulSet.Status.Replicas < desiredReplicas
+
+		// Even when StatefulSet controller has caught up, ReadyReplicas might be stale
+		// if pods are ready but the status update hasn't propagated yet.
+		// If we have the desired number of replicas but ReadyReplicas is less,
+		// we should requeue to catch the status update.
+		statusPotentiallyStale := statefulSet.Status.Replicas == desiredReplicas &&
+			statefulSet.Status.ReadyReplicas < statefulSet.Status.Replicas &&
+			statefulSet.Status.ReadyReplicas < desiredReplicas
+
+		logger.Info("StatefulSet status read for ReadyReplicas calculation",
+			"statefulSetReadyReplicas", statefulSet.Status.ReadyReplicas,
+			"statefulSetReplicas", statefulSet.Status.Replicas,
+			"statefulSetCurrentReplicas", statefulSet.Status.CurrentReplicas,
+			"statefulSetUpdatedReplicas", statefulSet.Status.UpdatedReplicas,
+			"statefulSetObservedGeneration", statefulSet.Status.ObservedGeneration,
+			"statefulSetGeneration", statefulSet.Generation,
+			"desiredReplicas", desiredReplicas,
+			"calculatedReadyReplicas", readyReplicas,
+			"available", available,
+			"statefulSetStillScaling", statefulSetStillScaling,
+			"statusPotentiallyStale", statusPotentiallyStale)
+
+		// If StatefulSet is still scaling or status is potentially stale, requeue to catch up
+		if statefulSetStillScaling || statusPotentiallyStale {
+			logger.V(1).Info("StatefulSet status may be stale; requeuing to check status",
+				"observedGeneration", statefulSet.Status.ObservedGeneration,
+				"generation", statefulSet.Generation,
+				"currentReplicas", statefulSet.Status.Replicas,
+				"readyReplicas", statefulSet.Status.ReadyReplicas,
+				"desiredReplicas", desiredReplicas,
+				"stillScaling", statefulSetStillScaling,
+				"statusStale", statusPotentiallyStale)
+			return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+		}
 	}
 
 	cluster.Status.ReadyReplicas = readyReplicas
@@ -819,13 +943,21 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 
 	logger.Info("Updated status for OpenBaoCluster", "readyReplicas", readyReplicas, "phase", cluster.Status.Phase, "currentVersion", cluster.Status.CurrentVersion)
 
-	// If not all replicas are ready, requeue with a short delay to check again once StatefulSet status updates.
-	// This ensures the Available condition is updated promptly when pods become ready, even though we don't
-	// watch StatefulSets directly (for security reasons).
+	// Requeue logic to ensure status updates promptly when replicas become ready.
+	// Since we don't watch StatefulSets directly (for security reasons), we need to requeue
+	// to catch when pods transition to ready state.
+	previousReadyReplicas := original.Status.ReadyReplicas
+	readyReplicasChanged := readyReplicas != previousReadyReplicas
+
 	if !available && readyReplicas > 0 {
-		// Requeue after a short delay to allow StatefulSet status to update
-		// The delay is short enough to be responsive but long enough to avoid excessive API calls
+		// Not all replicas are ready yet - requeue to check again
 		logger.V(1).Info("Not all replicas are ready; requeuing to check status", "readyReplicas", readyReplicas, "desiredReplicas", cluster.Spec.Replicas)
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+	}
+
+	if available && readyReplicasChanged {
+		// All replicas just became ready - requeue once to ensure status is persisted and visible
+		logger.V(1).Info("All replicas became ready; requeuing once to ensure status is persisted", "readyReplicas", readyReplicas, "previousReadyReplicas", previousReadyReplicas)
 		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 

@@ -29,7 +29,7 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -135,7 +135,7 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 
 			ctx := context.Background()
 
-			if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+			if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 				t.Fatalf("Reconcile() error = %v", err)
 			}
 
@@ -175,7 +175,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -243,14 +243,14 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 				t.Fatalf("expected container to have readiness probe")
 			}
 
-			if len(c.StartupProbe.Exec.Command) == 0 || c.StartupProbe.Exec.Command[0] != openBaoProbeBinary {
-				t.Fatalf("expected startup probe to exec %s, got %v", openBaoProbeBinary, c.StartupProbe.Exec.Command)
+			if len(c.StartupProbe.Exec.Command) == 0 || c.StartupProbe.Exec.Command[0] != constants.PathProbeBinary {
+				t.Fatalf("expected startup probe to exec %s, got %v", constants.PathProbeBinary, c.StartupProbe.Exec.Command)
 			}
-			if len(c.LivenessProbe.Exec.Command) == 0 || c.LivenessProbe.Exec.Command[0] != openBaoProbeBinary {
-				t.Fatalf("expected liveness probe to exec %s, got %v", openBaoProbeBinary, c.LivenessProbe.Exec.Command)
+			if len(c.LivenessProbe.Exec.Command) == 0 || c.LivenessProbe.Exec.Command[0] != constants.PathProbeBinary {
+				t.Fatalf("expected liveness probe to exec %s, got %v", constants.PathProbeBinary, c.LivenessProbe.Exec.Command)
 			}
-			if len(c.ReadinessProbe.Exec.Command) == 0 || c.ReadinessProbe.Exec.Command[0] != openBaoProbeBinary {
-				t.Fatalf("expected readiness probe to exec %s, got %v", openBaoProbeBinary, c.ReadinessProbe.Exec.Command)
+			if len(c.ReadinessProbe.Exec.Command) == 0 || c.ReadinessProbe.Exec.Command[0] != constants.PathProbeBinary {
+				t.Fatalf("expected readiness probe to exec %s, got %v", constants.PathProbeBinary, c.ReadinessProbe.Exec.Command)
 			}
 
 			if c.StartupProbe.TimeoutSeconds != 10 {
@@ -356,7 +356,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -406,7 +406,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 	// No Unseal config, so no seal-creds volume - this simulates public ACME
 
 	ctx := context.Background()
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -457,7 +457,7 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -502,7 +502,7 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -531,7 +531,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 

@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -845,6 +846,366 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 			Expect(cm1Name).NotTo(Equal(cm2Name))
 			Expect(cm1Name).To(ContainSubstring(cluster1.Name))
 			Expect(cm2Name).To(ContainSubstring(cluster2.Name))
+		})
+	})
+
+	var _ = Describe("OpenBaoCluster Sentinel", func() {
+		Context("When Sentinel is enabled", func() {
+			ctx := context.Background()
+
+			newReconciler := func() *OpenBaoClusterReconciler {
+				controllerReconciler := &OpenBaoClusterReconciler{
+					Client:            k8sClient,
+					Scheme:            k8sClient.Scheme(),
+					OperatorNamespace: "openbao-operator-system",
+				}
+				return controllerReconciler
+			}
+
+			createClusterWithSentinel := func(name string, sentinelEnabled bool) *openbaov1alpha1.OpenBaoCluster {
+				cluster := &openbaov1alpha1.OpenBaoCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      name,
+						Namespace: "default",
+					},
+					Spec: openbaov1alpha1.OpenBaoClusterSpec{
+						Version:  "2.4.4",
+						Image:    "openbao/openbao:2.4.4",
+						Replicas: 3,
+						TLS: openbaov1alpha1.TLSConfig{
+							Enabled:        true,
+							RotationPeriod: "720h",
+						},
+						Storage: openbaov1alpha1.StorageConfig{
+							Size: "10Gi",
+						},
+						InitContainer: &openbaov1alpha1.InitContainerConfig{
+							Image: "openbao/openbao-config-init:latest",
+						},
+					},
+				}
+				if sentinelEnabled {
+					cluster.Spec.Sentinel = &openbaov1alpha1.SentinelConfig{
+						Enabled: true,
+					}
+				}
+				Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+				return cluster
+			}
+
+			AfterEach(func() {
+				var clusterList openbaov1alpha1.OpenBaoClusterList
+				err := k8sClient.List(ctx, &clusterList)
+				Expect(err).NotTo(HaveOccurred())
+				for i := range clusterList.Items {
+					_ = k8sClient.Delete(ctx, &clusterList.Items[i])
+				}
+			})
+
+			It("creates Sentinel Deployment when Sentinel is enabled", func() {
+				cluster := createClusterWithSentinel("test-sentinel-enabled", true)
+
+				req := reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      cluster.Name,
+						Namespace: cluster.Namespace,
+					},
+				}
+
+				// Create ConfigMap (required for StatefulSet)
+				configMap := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster.Name,
+						Namespace: cluster.Namespace,
+					},
+					Data: map[string]string{
+						"config.hcl": "ui = true",
+					},
+				}
+				Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+				// Create TLS secret (required for StatefulSet)
+				tlsSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster.Name + "-tls-server",
+						Namespace: cluster.Namespace,
+					},
+					Data: map[string][]byte{
+						"tls.crt": []byte("test-cert"),
+						"tls.key": []byte("test-key"),
+						"ca.crt":  []byte("test-ca"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, tlsSecret)).To(Succeed())
+
+				// Update cluster status to Initialized to skip init manager
+				original := cluster.DeepCopy()
+				cluster.Status.Initialized = true
+				Expect(k8sClient.Status().Patch(ctx, cluster, client.MergeFrom(original))).To(Succeed())
+
+				// First reconcile adds finalizer
+				_, err := newReconciler().Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Second reconcile creates resources
+				_, err = newReconciler().Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify Sentinel Deployment is created
+				deployment := &appsv1.Deployment{}
+				deploymentName := cluster.Name + constants.SentinelDeploymentNameSuffix
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      deploymentName,
+					Namespace: cluster.Namespace,
+				}, deployment)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(deployment.Spec.Replicas).NotTo(BeNil())
+				Expect(*deployment.Spec.Replicas).To(Equal(int32(1)))
+
+				// Verify Sentinel ServiceAccount is created
+				sa := &corev1.ServiceAccount{}
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      constants.SentinelServiceAccountName,
+					Namespace: cluster.Namespace,
+				}, sa)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify Sentinel Role is created
+				role := &rbacv1.Role{}
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      constants.SentinelRoleName,
+					Namespace: cluster.Namespace,
+				}, role)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify Sentinel RoleBinding is created
+				roleBinding := &rbacv1.RoleBinding{}
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      constants.SentinelRoleBindingName,
+					Namespace: cluster.Namespace,
+				}, roleBinding)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("does not create Sentinel Deployment when Sentinel is disabled", func() {
+				cluster := createClusterWithSentinel("test-sentinel-disabled", false)
+
+				req := reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      cluster.Name,
+						Namespace: cluster.Namespace,
+					},
+				}
+
+				// Create ConfigMap (required for StatefulSet)
+				configMap := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster.Name,
+						Namespace: cluster.Namespace,
+					},
+					Data: map[string]string{
+						"config.hcl": "ui = true",
+					},
+				}
+				Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+				// Create TLS secret (required for StatefulSet)
+				tlsSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster.Name + "-tls-server",
+						Namespace: cluster.Namespace,
+					},
+					Data: map[string][]byte{
+						"tls.crt": []byte("test-cert"),
+						"tls.key": []byte("test-key"),
+						"ca.crt":  []byte("test-ca"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, tlsSecret)).To(Succeed())
+
+				// Update cluster status to Initialized
+				original := cluster.DeepCopy()
+				cluster.Status.Initialized = true
+				Expect(k8sClient.Status().Patch(ctx, cluster, client.MergeFrom(original))).To(Succeed())
+
+				// First reconcile adds finalizer
+				_, err := newReconciler().Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Second reconcile creates resources
+				_, err = newReconciler().Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify Sentinel Deployment is NOT created
+				deployment := &appsv1.Deployment{}
+				deploymentName := cluster.Name + constants.SentinelDeploymentNameSuffix
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      deploymentName,
+					Namespace: cluster.Namespace,
+				}, deployment)
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			})
+
+			It("deletes Sentinel resources when Sentinel is disabled after being enabled", func() {
+				cluster := createClusterWithSentinel("test-sentinel-cleanup", true)
+
+				req := reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      cluster.Name,
+						Namespace: cluster.Namespace,
+					},
+				}
+
+				// Create ConfigMap (required for StatefulSet)
+				configMap := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster.Name,
+						Namespace: cluster.Namespace,
+					},
+					Data: map[string]string{
+						"config.hcl": "ui = true",
+					},
+				}
+				Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+				// Create TLS secret (required for StatefulSet)
+				tlsSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster.Name + "-tls-server",
+						Namespace: cluster.Namespace,
+					},
+					Data: map[string][]byte{
+						"tls.crt": []byte("test-cert"),
+						"tls.key": []byte("test-key"),
+						"ca.crt":  []byte("test-ca"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, tlsSecret)).To(Succeed())
+
+				// Update cluster status to Initialized
+				original := cluster.DeepCopy()
+				cluster.Status.Initialized = true
+				Expect(k8sClient.Status().Patch(ctx, cluster, client.MergeFrom(original))).To(Succeed())
+
+				// First reconcile adds finalizer
+				_, err := newReconciler().Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Second reconcile creates resources including Sentinel
+				_, err = newReconciler().Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify Sentinel Deployment exists
+				deployment := &appsv1.Deployment{}
+				deploymentName := cluster.Name + constants.SentinelDeploymentNameSuffix
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      deploymentName,
+					Namespace: cluster.Namespace,
+				}, deployment)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Disable Sentinel
+				updatedCluster := &openbaov1alpha1.OpenBaoCluster{}
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      cluster.Name,
+					Namespace: cluster.Namespace,
+				}, updatedCluster)
+				Expect(err).NotTo(HaveOccurred())
+				originalSpec := updatedCluster.DeepCopy()
+				updatedCluster.Spec.Sentinel = &openbaov1alpha1.SentinelConfig{
+					Enabled: false,
+				}
+				Expect(k8sClient.Patch(ctx, updatedCluster, client.MergeFrom(originalSpec))).To(Succeed())
+
+				// Reconcile again to trigger cleanup
+				_, err = newReconciler().Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify Sentinel Deployment is deleted
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      deploymentName,
+					Namespace: cluster.Namespace,
+				}, deployment)
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			})
+
+			It("detects Sentinel trigger annotation and enters fast path", func() {
+				cluster := createClusterWithSentinel("test-sentinel-fastpath", true)
+
+				req := reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      cluster.Name,
+						Namespace: cluster.Namespace,
+					},
+				}
+
+				// Create ConfigMap (required for StatefulSet)
+				configMap := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster.Name,
+						Namespace: cluster.Namespace,
+					},
+					Data: map[string]string{
+						"config.hcl": "ui = true",
+					},
+				}
+				Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+				// Create TLS secret (required for StatefulSet)
+				tlsSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster.Name + "-tls-server",
+						Namespace: cluster.Namespace,
+					},
+					Data: map[string][]byte{
+						"tls.crt": []byte("test-cert"),
+						"tls.key": []byte("test-key"),
+						"ca.crt":  []byte("test-ca"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, tlsSecret)).To(Succeed())
+
+				// Update cluster status to Initialized
+				original := cluster.DeepCopy()
+				cluster.Status.Initialized = true
+				Expect(k8sClient.Status().Patch(ctx, cluster, client.MergeFrom(original))).To(Succeed())
+
+				// First reconcile adds finalizer
+				_, err := newReconciler().Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Second reconcile creates resources
+				_, err = newReconciler().Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add trigger annotation to simulate Sentinel drift detection
+				updatedCluster := &openbaov1alpha1.OpenBaoCluster{}
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      cluster.Name,
+					Namespace: cluster.Namespace,
+				}, updatedCluster)
+				Expect(err).NotTo(HaveOccurred())
+				originalAnno := updatedCluster.DeepCopy()
+				if updatedCluster.Annotations == nil {
+					updatedCluster.Annotations = make(map[string]string)
+				}
+				updatedCluster.Annotations[constants.AnnotationSentinelTrigger] = "2025-01-15T10:30:45.123456789Z"
+				Expect(k8sClient.Patch(ctx, updatedCluster, client.MergeFrom(originalAnno))).To(Succeed())
+
+				// Reconcile - should detect trigger and clear annotation
+				_, err = newReconciler().Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify trigger annotation is cleared
+				finalCluster := &openbaov1alpha1.OpenBaoCluster{}
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      cluster.Name,
+					Namespace: cluster.Namespace,
+				}, finalCluster)
+				Expect(err).NotTo(HaveOccurred())
+				_, hasTrigger := finalCluster.Annotations[constants.AnnotationSentinelTrigger]
+				Expect(hasTrigger).To(BeFalse())
+			})
 		})
 	})
 })

@@ -90,11 +90,13 @@ func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace strin
 //   - Managing a per-cluster static auto-unseal Secret (only when using static seal).
 //   - Rendering a config.hcl ConfigMap that injects TLS paths, storage configuration, retry_join, and seal configuration.
 //   - Reconciling a headless StatefulSet-backed Service, an optional external Service/Ingress, and the StatefulSet itself.
+//   - Managing the Sentinel sidecar controller for drift detection (if enabled).
 //
 // verifiedImageDigest is the verified image digest (e.g., "openbao/openbao@sha256:abc...") from image verification.
 // If provided, it will be used instead of cluster.Spec.Image to prevent TOCTOU attacks.
 // If empty, cluster.Spec.Image will be used.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) error {
+// verifiedSentinelDigest is the verified Sentinel image digest (if provided).
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string, verifiedSentinelDigest string) error {
 	// Only create unseal secret if using static seal (default or explicit)
 	if usesStaticSeal(cluster) {
 		if err := m.ensureUnsealSecret(ctx, logger, cluster); err != nil {
@@ -170,6 +172,24 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	if err := m.ensureStatefulSet(ctx, logger, cluster, configContent, verifiedImageDigest); err != nil {
 		return err
+	}
+
+	// Manage Sentinel deployment
+	if cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled {
+		if err := m.ensureSentinelServiceAccount(ctx, logger, cluster); err != nil {
+			return err
+		}
+		if err := m.ensureSentinelRBAC(ctx, logger, cluster); err != nil {
+			return err
+		}
+		if err := m.ensureSentinelDeployment(ctx, logger, cluster, verifiedSentinelDigest); err != nil {
+			return err
+		}
+	} else {
+		// Sentinel is disabled, clean up resources
+		if err := m.ensureSentinelCleanup(ctx, logger, cluster); err != nil {
+			return err
+		}
 	}
 
 	return nil

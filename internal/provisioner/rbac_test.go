@@ -17,19 +17,19 @@ func TestGenerateTenantRole(t *testing.T) {
 			name:      "default namespace",
 			namespace: "default",
 			wantName:  TenantRoleName,
-			wantRules: 12, // Expected number of PolicyRules
+			wantRules: 13, // Expected number of PolicyRules (includes Deployments for Sentinel)
 		},
 		{
 			name:      "custom namespace",
 			namespace: "tenant-1",
 			wantName:  TenantRoleName,
-			wantRules: 12,
+			wantRules: 13,
 		},
 		{
 			name:      "namespace with special characters",
 			namespace: "my-namespace-123",
 			wantName:  TenantRoleName,
-			wantRules: 12,
+			wantRules: 13,
 		},
 	}
 
@@ -68,6 +68,7 @@ func TestGenerateTenantRole(t *testing.T) {
 			// Verify key rules exist
 			hasOpenBaoClusterRule := false
 			hasStatefulSetRule := false
+			hasDeploymentRule := false
 			hasSecretRule := false
 			hasPodRule := false
 
@@ -86,6 +87,15 @@ func TestGenerateTenantRole(t *testing.T) {
 					contains(rule.Verbs, "get") &&
 					contains(rule.Verbs, "create") {
 					hasStatefulSetRule = true
+				}
+
+				// Check for Deployment rule (for Sentinel)
+				if contains(rule.APIGroups, "apps") &&
+					contains(rule.Resources, "deployments") &&
+					contains(rule.Verbs, "get") &&
+					contains(rule.Verbs, "create") &&
+					contains(rule.Verbs, "delete") {
+					hasDeploymentRule = true
 				}
 
 				// Check for Secret rule
@@ -111,6 +121,9 @@ func TestGenerateTenantRole(t *testing.T) {
 			}
 			if !hasStatefulSetRule {
 				t.Error("GenerateTenantRole() missing StatefulSet rule")
+			}
+			if !hasDeploymentRule {
+				t.Error("GenerateTenantRole() missing Deployment rule")
 			}
 			if !hasSecretRule {
 				t.Error("GenerateTenantRole() missing Secret rule")

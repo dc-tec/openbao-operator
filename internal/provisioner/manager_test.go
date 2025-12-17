@@ -173,9 +173,9 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 		t.Fatalf("expected Role to exist: %v", err)
 	}
 
-	// Verify rules were updated (should have 12 rules now)
-	if len(role.Rules) != 12 {
-		t.Errorf("Role rules count = %v, want 12", len(role.Rules))
+	// Verify rules were updated (should have 13 rules now, including Deployments for Sentinel)
+	if len(role.Rules) != 13 {
+		t.Errorf("Role rules count = %v, want 13", len(role.Rules))
 	}
 
 	// Verify at least one rule has the expected OpenBaoCluster permissions

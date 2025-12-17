@@ -78,11 +78,10 @@ spec:
       - name: enable-file-audit
         operation: update
         path: sys/audit/file
-        data:
+        auditDevice:
           type: file
-          options:
-            file_path: /var/log/openbao/audit.log
-            format: json
+          fileOptions:
+            filePath: /var/log/openbao/audit.log
       # JWT authentication is automatically bootstrapped by the Hardened profile
       # Backup and upgrade policies/roles are also automatically created when
       # spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are configured
@@ -91,7 +90,7 @@ spec:
       - name: create-admin-policy
         operation: update
         path: sys/policies/acl/admin
-        data:
+        policy:
           policy: |
             path "*" {
               capabilities = ["create", "read", "update", "delete", "list", "sudo"]

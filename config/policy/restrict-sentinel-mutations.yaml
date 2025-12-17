@@ -1,0 +1,60 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-restrict-sentinel-mutations
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["openbaoclusters"]
+  variables:
+    - name: is_sentinel
+      # Matches the ServiceAccount created in the tenant namespace
+      # Kubernetes ServiceAccount usernames follow format: system:serviceaccount:<namespace>:<name>
+      expression: >-
+        request.userInfo.username.startsWith("system:serviceaccount:") &&
+        request.userInfo.username.endsWith(":openbao-sentinel")
+  validations:
+    # 1. Block Spec Changes: Sentinel cannot change the desired state.
+    - expression: >-
+        !variables.is_sentinel || object.spec == oldObject.spec
+      message: "The Sentinel is not authorized to modify the OpenBaoCluster Spec."
+
+    # 2. Block Status Changes: Sentinel cannot confuse the operator's status logic.
+    # Uses has() to safely check for optional status field before accessing it.
+    - expression: >-
+        !variables.is_sentinel ||
+        (has(object.status) == has(oldObject.status) &&
+         (!has(object.status) || object.status == oldObject.status))
+      message: "The Sentinel is not authorized to modify the OpenBaoCluster Status."
+
+    # 3. Allow Annotation: Only specific annotations are allowed (the trigger).
+    # Supports both ADD (first trigger) and UPDATE (subsequent triggers if annotation not cleared).
+    # Logic: If is_sentinel, then (metadata == oldMetadata OR only trigger annotation added/updated)
+    # Note: Uses has() to safely check for optional fields before accessing them
+    - expression: >-
+        !variables.is_sentinel ||
+        (
+          ((!has(object.metadata.labels) && !has(oldObject.metadata.labels)) ||
+           (has(object.metadata.labels) && has(oldObject.metadata.labels) && object.metadata.labels == oldObject.metadata.labels)) &&
+          ((!has(object.metadata.finalizers) && !has(oldObject.metadata.finalizers)) ||
+           (has(object.metadata.finalizers) && has(oldObject.metadata.finalizers) && object.metadata.finalizers == oldObject.metadata.finalizers)) &&
+          (
+            ((!has(object.metadata.annotations) && !has(oldObject.metadata.annotations)) ||
+             (has(object.metadata.annotations) && has(oldObject.metadata.annotations) && object.metadata.annotations == oldObject.metadata.annotations)) ||
+            (!has(oldObject.metadata.annotations) && has(object.metadata.annotations) &&
+             size(object.metadata.annotations) == 1 && "openbao.org/sentinel-trigger" in object.metadata.annotations) ||
+            (has(oldObject.metadata.annotations) && has(object.metadata.annotations) &&
+             size(object.metadata.annotations) == size(oldObject.metadata.annotations) + 1 &&
+             !("openbao.org/sentinel-trigger" in oldObject.metadata.annotations) &&
+             "openbao.org/sentinel-trigger" in object.metadata.annotations) ||
+            (has(oldObject.metadata.annotations) && has(object.metadata.annotations) &&
+             size(object.metadata.annotations) == size(oldObject.metadata.annotations) &&
+             "openbao.org/sentinel-trigger" in oldObject.metadata.annotations &&
+             "openbao.org/sentinel-trigger" in object.metadata.annotations)
+          )
+        )
+      message: "The Sentinel can only add or update the openbao.org/sentinel-trigger annotation. All other metadata changes are forbidden."

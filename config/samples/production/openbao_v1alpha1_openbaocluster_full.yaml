@@ -187,17 +187,16 @@ spec:
       # - name: enable-stdout-audit
       #   operation: update
       #   path: sys/audit/stdout
-      #   data:
+      #   auditDevice:
       #     type: file
-      #     options:
-      #       file_path: /dev/stdout
-      #       log_raw: "true"
+      #     fileOptions:
+      #       filePath: stdout
       # Create an "admin" policy with broad permissions (similar to root).
       # This policy can be attached to tokens or identities created out-of-band.
       - name: create-admin-policy
         operation: update
         path: sys/policies/acl/admin
-        data:
+        policy:
           policy: |
             path "*" {
               capabilities = ["create", "read", "update", "delete", "list", "sudo"]

@@ -40,14 +40,15 @@ spec:
       - name: enable-stdout-audit
         operation: update
         path: sys/audit/stdout
-        data:
+        auditDevice:
           type: file
-          file_path: /dev/stdout
+          fileOptions:
+            filePath: stdout
       # Enable Kubernetes authentication
       - name: enable-kubernetes-auth
         operation: update
         path: sys/auth/kubernetes
-        data:
+        authMethod:
           type: kubernetes
       # Configure Kubernetes auth to use in-cluster service account
       - name: configure-kubernetes-auth

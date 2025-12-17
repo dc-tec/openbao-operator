@@ -102,7 +102,7 @@ func TestReconcileCreatesAllResources(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -196,7 +196,7 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 
 			ctx := context.Background()
 
-			if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+			if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 				t.Fatalf("Reconcile() error = %v", err)
 			}
 
@@ -249,7 +249,7 @@ func TestCleanupDeletesAllResources(t *testing.T) {
 	ctx := context.Background()
 
 	// Create all resources
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -334,10 +334,10 @@ func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 	createTLSSecretForTest(t, k8sClient, cluster2)
 
 	// Reconcile both clusters
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster1, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster1, "", ""); err != nil {
 		t.Fatalf("Reconcile() cluster1 error = %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster2, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster2, "", ""); err != nil {
 		t.Fatalf("Reconcile() cluster2 error = %v", err)
 	}
 
@@ -412,10 +412,10 @@ func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 	createTLSSecretForTest(t, k8sClient, cluster2)
 
 	// Reconcile both clusters
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster1, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster1, "", ""); err != nil {
 		t.Fatalf("Reconcile() cluster1 error = %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster2, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster2, "", ""); err != nil {
 		t.Fatalf("Reconcile() cluster2 error = %v", err)
 	}
 
@@ -470,7 +470,7 @@ func TestMultiTenancyResourceLabeling(t *testing.T) {
 	cluster.Status.Initialized = true
 	createTLSSecretForTest(t, k8sClient, cluster)
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -540,7 +540,7 @@ func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 
 	createTLSSecretForTest(t, k8sClient, cluster)
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 

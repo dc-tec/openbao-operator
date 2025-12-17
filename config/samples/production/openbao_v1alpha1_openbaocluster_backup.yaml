@@ -49,7 +49,7 @@ spec:
       - name: enable-jwt-auth
         operation: update
         path: sys/auth/jwt
-        data:
+        authMethod:
           type: jwt
       # Configure JWT auth with OIDC
       - name: configure-jwt-auth
@@ -63,7 +63,7 @@ spec:
       - name: create-backup-policy
         operation: update
         path: sys/policies/acl/backup
-        data:
+        policy:
           policy: |
             path "sys/storage/raft/snapshot" {
               capabilities = ["read"]

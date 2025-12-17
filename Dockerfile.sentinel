@@ -1,0 +1,27 @@
+# Build the Sentinel binary
+FROM golang:1.25.5 AS builder
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /workspace
+
+COPY go.mod go.mod
+COPY go.sum go.sum
+RUN go mod download
+
+COPY . .
+
+# Build the Sentinel binary
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o sentinel cmd/sentinel/main.go
+
+# Use distroless as minimal base image to package the Sentinel binary
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
+COPY --from=builder /workspace/sentinel /sentinel
+USER 65532:65532
+
+# Disable Docker-native healthchecks as we rely on Kubernetes Probes
+HEALTHCHECK NONE
+
+ENTRYPOINT ["/sentinel"]

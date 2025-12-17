@@ -5,3 +5,5 @@ resources:
   - lock-managed-resource-mutations-binding.yaml
   - validate-openbaocluster.yaml
   - validate-openbaocluster-binding.yaml
+  - restrict-sentinel-mutations.yaml
+  - restrict-sentinel-mutations-binding.yaml

@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	openBaoProbeBinary           = "/utils/bao-probe"
 	openBaoLivenessProbeTimeout  = "4s"
 	openBaoReadinessProbeTimeout = "10s"
 	openBaoStartupProbeTimeout   = "5s"
@@ -431,7 +430,7 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 
 	// Construct the wrapper command
 	// We pass the actual OpenBao command as arguments to the wrapper
-	cmd := []string{"/utils/bao-wrapper"}
+	cmd := []string{constants.PathWrapperBinary}
 
 	// Configure wrapper args
 	args := []string{}
@@ -454,7 +453,6 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 			SecurityContext: &corev1.SecurityContext{
 				// Prevent privilege escalation (sudo, setuid binaries)
 				AllowPrivilegeEscalation: ptr.To(false),
-				// Drop ALL capabilities. OpenBao does not need them if mlock is disabled.
 				Capabilities: &corev1.Capabilities{
 					Drop: []corev1.Capability{"ALL"},
 				},
@@ -498,9 +496,10 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 				ProbeHandler: corev1.ProbeHandler{
 					Exec: readinessProbeExec,
 				},
-				TimeoutSeconds:   10,
-				PeriodSeconds:    10,
-				FailureThreshold: 6,
+				InitialDelaySeconds: 5,
+				TimeoutSeconds:      10,
+				PeriodSeconds:       10,
+				FailureThreshold:    6,
 			},
 		},
 	}
@@ -583,17 +582,25 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 		}
 	}
 
+	// Startup probe only does TCP dial, so it doesn't need a CA file.
+	// In ACME mode, the default CA file (/etc/bao/tls/ca.crt) doesn't exist, so
+	// explicitly set -ca-file="" to avoid trying to read it.
+	startupProbeCmd := []string{
+		constants.PathProbeBinary,
+		"-mode=startup",
+		"-addr=" + probeAddr,
+		"-timeout=" + openBaoStartupProbeTimeout,
+	}
+	// Only set empty CA file for ACME mode where the default CA file won't exist
+	if usesACMEMode(cluster) {
+		startupProbeCmd = append(startupProbeCmd, "-ca-file=")
+	}
 	startupProbeExec := &corev1.ExecAction{
-		Command: []string{
-			openBaoProbeBinary,
-			"-mode=startup",
-			"-addr=" + probeAddr,
-			"-timeout=" + openBaoStartupProbeTimeout,
-		},
+		Command: startupProbeCmd,
 	}
 
 	livenessProbeCmd := []string{
-		openBaoProbeBinary,
+		constants.PathProbeBinary,
 		"-mode=liveness",
 		"-addr=" + probeAddr,
 		"-timeout=" + openBaoLivenessProbeTimeout,
@@ -609,7 +616,7 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 	}
 
 	readinessProbeCmd := []string{
-		openBaoProbeBinary,
+		constants.PathProbeBinary,
 		"-mode=readiness",
 		"-addr=" + probeAddr,
 		"-timeout=" + openBaoReadinessProbeTimeout,

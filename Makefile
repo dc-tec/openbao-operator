@@ -178,6 +178,10 @@ docker-push-init: ## Push docker image with the bao-config-init helper.
 docker-build-backup: ## Build docker image with the backup-executor helper.
 	$(CONTAINER_TOOL) build -f Dockerfile.backup -t ${IMG} .
 
+.PHONY: docker-build-sentinel
+docker-build-sentinel: ## Build docker image with the Sentinel binary.
+	$(CONTAINER_TOOL) build -f Dockerfile.sentinel -t ${IMG} .
+
 .PHONY: docker-push-backup
 docker-push-backup: ## Push docker image with the backup-executor helper.
 	$(CONTAINER_TOOL) push ${IMG}
