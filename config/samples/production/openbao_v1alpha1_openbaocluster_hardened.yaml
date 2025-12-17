@@ -5,7 +5,7 @@
 # - External TLS management (cert-manager or CSI)
 # - External KMS for auto-unseal (no static keys in Kubernetes Secrets)
 # - Self-initialization enabled (no root token stored)
-# - JWT authentication automatically bootstrapped
+# - JWT authentication (opt-in via spec.selfInit.bootstrapJWTAuth)
 #
 # IMPORTANT: The Hardened profile is REQUIRED for production deployments.
 # The Development profile stores root tokens in Kubernetes Secrets, which

@@ -1233,6 +1233,22 @@ spec:
                   requests, and the root token is automatically revoked.
                   See: https://openbao.org/docs/configuration/self-init/
                 properties:
+                  bootstrapJWTAuth:
+                    default: false
+                    description: |-
+                      BootstrapJWTAuth, when true, enables automatic JWT authentication bootstrap
+                      for the operator. This configures JWT auth in OpenBao, sets up OIDC discovery,
+                      creates the operator policy and role, and optionally creates backup/upgrade
+                      policies and roles if those features are configured with JWTAuthRole.
+
+                      When false (default), JWT auth must be manually configured via SelfInit requests.
+                      This is the recommended approach for users who want full control over JWT auth setup.
+
+                      Bootstrap requires:
+                      - OIDC issuer URL to be discoverable at operator startup
+                      - OIDC JWKS public keys to be available at operator startup
+                      - Operator namespace and service account to be known
+                    type: boolean
                   enabled:
                     default: false
                     description: |-

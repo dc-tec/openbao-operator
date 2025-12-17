@@ -85,7 +85,7 @@ spec:
           type: file
           fileOptions:
             filePath: /var/log/openbao/audit.log
-      # JWT authentication is automatically bootstrapped by the Hardened profile
+      # JWT authentication bootstrap (opt-in via bootstrapJWTAuth: true)
       # Backup and upgrade policies/roles are also automatically created when
       # spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are configured
       # Create an admin policy

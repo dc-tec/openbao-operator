@@ -67,7 +67,7 @@ data:
 # - External TLS management (cert-manager)
 # - External KMS auto-unseal (AWS KMS)
 # - Self-initialization enabled (no root token)
-# - JWT authentication (automatically bootstrapped)
+# - JWT authentication (opt-in via spec.selfInit.bootstrapJWTAuth)
 # - Gateway API for external access
 # - Scheduled backups to RustFS (S3-compatible storage)
 # - Backup and upgrade policies/roles automatically created
@@ -177,11 +177,17 @@ spec:
   #   #   namespace: openbaocluster-full
 
   # Self-initialization configuration (required for Hardened profile)
-  # JWT authentication is automatically bootstrapped by the Hardened profile
+  # JWT authentication bootstrap (opt-in)
+  # Set bootstrapJWTAuth: true to have the operator automatically configure
+  # JWT auth, OIDC discovery, operator policy/role, and backup/upgrade policies/roles.
   # Backup and upgrade policies/roles are also automatically created when
   # spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are configured
   selfInit:
     enabled: true # Required for Hardened profile
+    # Opt-in to JWT bootstrap to automatically configure JWT auth, OIDC, and policies/roles
+    # This enables the operator to authenticate via JWT and automatically creates
+    # backup/upgrade policies and roles when spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are set
+    bootstrapJWTAuth: true
     requests:
       # Enable stdout audit logging (useful for debugging)
       # - name: enable-stdout-audit

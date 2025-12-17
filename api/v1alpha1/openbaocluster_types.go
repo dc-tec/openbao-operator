@@ -423,6 +423,22 @@ type SelfInitConfig struct {
 	// and does NOT create a root token Secret (root token is auto-revoked).
 	// +kubebuilder:default=false
 	Enabled bool `json:"enabled"`
+	// BootstrapJWTAuth, when true, enables automatic JWT authentication bootstrap
+	// for the operator. This configures JWT auth in OpenBao, sets up OIDC discovery,
+	// creates the operator policy and role, and optionally creates backup/upgrade
+	// policies and roles if those features are configured with JWTAuthRole.
+	//
+	// When false (default), JWT auth must be manually configured via SelfInit requests.
+	// This is the recommended approach for users who want full control over JWT auth setup.
+	//
+	// Bootstrap requires:
+	// - OIDC issuer URL to be discoverable at operator startup
+	// - OIDC JWKS public keys to be available at operator startup
+	// - Operator namespace and service account to be known
+	//
+	// +kubebuilder:default=false
+	// +optional
+	BootstrapJWTAuth bool `json:"bootstrapJWTAuth,omitempty"`
 	// Requests defines the API operations to execute during self-initialization.
 	// Each request becomes a named request block inside an initialize stanza.
 	// +optional
