@@ -110,6 +110,17 @@ var (
 		},
 		[]string{"namespace", "name"},
 	)
+
+	// upgradePartitionGauge tracks the current partition value during upgrades.
+	upgradePartitionGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "openbao",
+			Subsystem: "upgrade",
+			Name:      "partition",
+			Help:      "Current partition value during upgrade (0 means all pods updated)",
+		},
+		[]string{"namespace", "name"},
+	)
 )
 
 func init() {
@@ -123,6 +134,7 @@ func init() {
 		upgradeInProgressGauge,
 		upgradePodsCompletedGauge,
 		upgradeTotalPodsGauge,
+		upgradePartitionGauge,
 	)
 }
 
@@ -184,12 +196,18 @@ func (m *Metrics) SetTotalPods(count int) {
 	upgradeTotalPodsGauge.WithLabelValues(m.namespace, m.name).Set(float64(count))
 }
 
+// SetPartition sets the current partition value during upgrade.
+func (m *Metrics) SetPartition(partition int32) {
+	upgradePartitionGauge.WithLabelValues(m.namespace, m.name).Set(float64(partition))
+}
+
 // Clear resets all metrics for this cluster (used on deletion).
 func (m *Metrics) Clear() {
 	upgradeStatusGauge.DeleteLabelValues(m.namespace, m.name)
 	upgradeInProgressGauge.DeleteLabelValues(m.namespace, m.name)
 	upgradePodsCompletedGauge.DeleteLabelValues(m.namespace, m.name)
 	upgradeTotalPodsGauge.DeleteLabelValues(m.namespace, m.name)
+	upgradePartitionGauge.DeleteLabelValues(m.namespace, m.name)
 	upgradeStepDownCounter.DeleteLabelValues(m.namespace, m.name)
 	upgradeStepDownFailuresCounter.DeleteLabelValues(m.namespace, m.name)
 }
