@@ -43,6 +43,9 @@ initialize "enable-stdout-audit" {
     operation = "update"
     path      = "sys/audit/stdout"
     data = {
+      options = {
+        file_path = "stdout"
+      }
       type = "file"
     }
   }

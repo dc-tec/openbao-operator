@@ -136,7 +136,6 @@ func EnsureInfraBao(ctx context.Context, c client.Client, cfg InfraBaoConfig) er
 		// Always use production mode (never dev mode) with static seal for auto-initialization
 		// Static seal allows OpenBao to auto-initialize and auto-unseal without manual intervention
 		configContent := `ui = true
-disable_mlock = true
 
 storage "file" {
   path = "/bao/data"

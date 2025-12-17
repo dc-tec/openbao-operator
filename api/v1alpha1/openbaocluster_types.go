@@ -405,6 +405,8 @@ const (
 	SelfInitOperationRead SelfInitOperation = "read"
 	// SelfInitOperationUpdate updates an existing resource.
 	SelfInitOperationUpdate SelfInitOperation = "update"
+	// SelfInitOperationPatch performs a partial update to an existing resource.
+	SelfInitOperationPatch SelfInitOperation = "patch"
 	// SelfInitOperationDelete deletes an existing resource.
 	SelfInitOperationDelete SelfInitOperation = "delete"
 	// SelfInitOperationList lists resources.
@@ -436,25 +438,121 @@ type SelfInitRequest struct {
 	// +kubebuilder:validation:Pattern=`^[A-Za-z_][A-Za-z0-9_-]*$`
 	Name string `json:"name"`
 	// Operation is the API operation type: create, read, update, delete, or list.
+	// +kubebuilder:validation:Enum=create;read;update;delete;list;patch
 	Operation SelfInitOperation `json:"operation"`
 	// Path is the API path to call (e.g., "sys/audit/stdout", "auth/kubernetes/config").
 	// +kubebuilder:validation:MinLength=1
 	Path string `json:"path"`
-	// Data contains the request payload as a structured map.
-	// This must be a JSON/YAML object whose shape matches the target API
-	// endpoint. Nested maps and lists are supported and are rendered into
-	// the initialize stanza as HCL objects (for example, the "options" map
-	// used by audit devices).
+	// AuditDevice configures an audit device when Path starts with "sys/audit/".
+	// This provides structured configuration for audit devices instead of raw JSON.
+	// Only used when Path matches the pattern "sys/audit/*".
+	// +optional
+	AuditDevice *SelfInitAuditDevice `json:"auditDevice,omitempty"`
+	// AuthMethod configures an auth method when Path starts with "sys/auth/".
+	// This provides structured configuration for enabling auth methods.
+	// Only used when Path matches the pattern "sys/auth/*".
+	// +optional
+	AuthMethod *SelfInitAuthMethod `json:"authMethod,omitempty"`
+	// SecretEngine configures a secret engine when Path starts with "sys/mounts/".
+	// This provides structured configuration for enabling secret engines.
+	// Only used when Path matches the pattern "sys/mounts/*".
+	// +optional
+	SecretEngine *SelfInitSecretEngine `json:"secretEngine,omitempty"`
+	// Policy configures a policy when Path starts with "sys/policies/".
+	// This provides structured configuration for creating/updating policies.
+	// Only used when Path matches the pattern "sys/policies/*".
+	// +optional
+	Policy *SelfInitPolicy `json:"policy,omitempty"`
+	// Data contains the request payload for paths that don't have structured types.
+	// This must be a JSON/YAML object whose shape matches the target API endpoint.
+	// Nested maps and lists are supported and are rendered into the initialize stanza as HCL objects.
 	//
-	// This payload is stored in the OpenBaoCluster resource and persisted
-	// in etcd; it must not contain sensitive values such as tokens,
-	// passwords, or unseal keys.
+	// **Note:** For common paths, use structured types instead:
+	// - `sys/audit/*` → use `auditDevice`
+	// - `sys/auth/*` → use `authMethod`
+	// - `sys/mounts/*` → use `secretEngine`
+	// - `sys/policies/*` → use `policy`
+	//
+	// This payload is stored in the OpenBaoCluster resource and persisted in etcd;
+	// it must not contain sensitive values such as tokens, passwords, or unseal keys.
 	// +optional
 	Data *apiextensionsv1.JSON `json:"data,omitempty"`
 	// AllowFailure allows this request to fail without blocking initialization.
 	// Defaults to false.
 	// +optional
 	AllowFailure bool `json:"allowFailure,omitempty"`
+}
+
+// SelfInitAuditDevice provides structured configuration for enabling audit devices
+// via self-init requests. This replaces the need for raw JSON in the Data field.
+// See: https://openbao.org/api-docs/system/audit/
+type SelfInitAuditDevice struct {
+	// Type is the type of audit device (e.g., "file", "syslog", "socket", "http").
+	// +kubebuilder:validation:Enum=file;syslog;socket;http
+	// +kubebuilder:validation:MinLength=1
+	Type string `json:"type"`
+	// Description is an optional description for the audit device.
+	// +optional
+	Description string `json:"description,omitempty"`
+	// FileOptions configures options for file audit devices.
+	// Only used when Type is "file".
+	// +optional
+	FileOptions *FileAuditOptions `json:"fileOptions,omitempty"`
+	// HTTPOptions configures options for HTTP audit devices.
+	// Only used when Type is "http".
+	// +optional
+	HTTPOptions *HTTPAuditOptions `json:"httpOptions,omitempty"`
+	// SyslogOptions configures options for syslog audit devices.
+	// Only used when Type is "syslog".
+	// +optional
+	SyslogOptions *SyslogAuditOptions `json:"syslogOptions,omitempty"`
+	// SocketOptions configures options for socket audit devices.
+	// Only used when Type is "socket".
+	// +optional
+	SocketOptions *SocketAuditOptions `json:"socketOptions,omitempty"`
+}
+
+// SelfInitAuthMethod provides structured configuration for enabling auth methods
+// via self-init requests. This replaces the need for raw JSON in the Data field.
+// See: https://openbao.org/api-docs/system/auth/
+type SelfInitAuthMethod struct {
+	// Type is the type of auth method (e.g., "jwt", "kubernetes", "userpass", "ldap").
+	// +kubebuilder:validation:MinLength=1
+	Type string `json:"type"`
+	// Description is an optional description for the auth method.
+	// +optional
+	Description string `json:"description,omitempty"`
+	// Config contains optional configuration for the auth method mount.
+	// Common fields include: default_lease_ttl, max_lease_ttl, listing_visibility, etc.
+	// +optional
+	Config map[string]string `json:"config,omitempty"`
+}
+
+// SelfInitSecretEngine provides structured configuration for enabling secret engines
+// via self-init requests. This replaces the need for raw JSON in the Data field.
+// See: https://openbao.org/api-docs/system/mounts/
+type SelfInitSecretEngine struct {
+	// Type is the type of secret engine (e.g., "kv", "pki", "transit", "database").
+	// +kubebuilder:validation:MinLength=1
+	Type string `json:"type"`
+	// Description is an optional description for the secret engine.
+	// +optional
+	Description string `json:"description,omitempty"`
+	// Options contains optional configuration specific to the secret engine type.
+	// For KV engines, common options include: version ("1" or "2").
+	// For other engines, options vary by type.
+	// +optional
+	Options map[string]string `json:"options,omitempty"`
+}
+
+// SelfInitPolicy provides structured configuration for creating/updating policies
+// via self-init requests. This replaces the need for raw JSON in the Data field.
+// See: https://openbao.org/api-docs/system/policies-acl/
+type SelfInitPolicy struct {
+	// Policy is the HCL or JSON policy content.
+	// This is the actual policy rules that will be applied.
+	// +kubebuilder:validation:MinLength=1
+	Policy string `json:"policy"`
 }
 
 // GatewayConfig configures Kubernetes Gateway API access for the OpenBao cluster.
@@ -899,6 +997,31 @@ type WorkloadHardeningConfig struct {
 	AppArmorEnabled bool `json:"appArmorEnabled,omitempty"`
 }
 
+// SentinelConfig configures the Sentinel sidecar controller that watches for infrastructure drift.
+type SentinelConfig struct {
+	// Enabled controls whether the Sentinel sidecar controller is deployed.
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled"`
+
+	// Image allows overriding the Sentinel container image.
+	// If not specified, defaults to "openbao/operator-sentinel:vX.Y.Z" (matching operator version).
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// Resources allows configuring resource limits for the Sentinel.
+	// If not specified, defaults to requests/limits: 64Mi memory, 100m CPU.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// DebounceWindowSeconds controls the debounce window for drift detection.
+	// Multiple drift events within this window will be coalesced into a single trigger.
+	// +kubebuilder:default=2
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=60
+	// +optional
+	DebounceWindowSeconds *int32 `json:"debounceWindowSeconds,omitempty"`
+}
+
 // OpenBaoConfiguration defines the server configuration for OpenBao.
 type OpenBaoConfiguration struct {
 	// UI enables the built-in web interface.
@@ -1180,6 +1303,9 @@ type OpenBaoClusterSpec struct {
 	// +kubebuilder:default=Development
 	// +optional
 	Profile Profile `json:"profile,omitempty"`
+	// Sentinel configures the high-availability watcher/healer.
+	// +optional
+	Sentinel *SentinelConfig `json:"sentinel,omitempty"`
 }
 
 // UpgradeProgress tracks the state of an in-progress upgrade.
@@ -1307,7 +1433,8 @@ type OpenBaoClusterList struct {
 // AuditDevice defines a declarative audit device configuration.
 // See: https://openbao.org/docs/configuration/audit/
 type AuditDevice struct {
-	// Type is the type of audit device (e.g., "file", "syslog", "socket").
+	// Type is the type of audit device (e.g., "file", "syslog", "socket", "http").
+	// +kubebuilder:validation:Enum=file;syslog;socket;http
 	// +kubebuilder:validation:MinLength=1
 	Type string `json:"type"`
 	// Path is the path of the audit device in the root namespace.
@@ -1316,10 +1443,85 @@ type AuditDevice struct {
 	// Description is an optional description for the audit device.
 	// +optional
 	Description string `json:"description,omitempty"`
+	// FileOptions configures options for file audit devices.
+	// Only used when Type is "file".
+	// +optional
+	FileOptions *FileAuditOptions `json:"fileOptions,omitempty"`
+	// HTTPOptions configures options for HTTP audit devices.
+	// Only used when Type is "http".
+	// +optional
+	HTTPOptions *HTTPAuditOptions `json:"httpOptions,omitempty"`
+	// SyslogOptions configures options for syslog audit devices.
+	// Only used when Type is "syslog".
+	// +optional
+	SyslogOptions *SyslogAuditOptions `json:"syslogOptions,omitempty"`
+	// SocketOptions configures options for socket audit devices.
+	// Only used when Type is "socket".
+	// +optional
+	SocketOptions *SocketAuditOptions `json:"socketOptions,omitempty"`
 	// Options contains device-specific configuration options as a map.
+	// This is a fallback for backward compatibility and advanced use cases.
+	// If structured options (FileOptions, HTTPOptions, etc.) are provided, they take precedence.
 	// The structure depends on the audit device type.
 	// +optional
 	Options *apiextensionsv1.JSON `json:"options,omitempty"`
+}
+
+// FileAuditOptions configures options for file audit devices.
+// See: https://openbao.org/docs/audit/file/
+type FileAuditOptions struct {
+	// FilePath is the path to where the audit log will be written.
+	// Special keywords: "stdout" writes to standard output, "discard" discards output.
+	// +kubebuilder:validation:MinLength=1
+	FilePath string `json:"filePath"`
+	// Mode is a string containing an octal number representing the bit pattern for the file mode.
+	// Defaults to "0600" if not specified. Set to "0000" to prevent OpenBao from modifying the file mode.
+	// +optional
+	Mode string `json:"mode,omitempty"`
+}
+
+// HTTPAuditOptions configures options for HTTP audit devices.
+// See: https://openbao.org/docs/audit/http/
+type HTTPAuditOptions struct {
+	// URI is the URI of the remote server where the audit logs will be written.
+	// +kubebuilder:validation:MinLength=1
+	URI string `json:"uri"`
+	// Headers is a JSON object describing headers. Must take the shape map[string][]string,
+	// i.e., an object of headers, with each having one or more values.
+	// Headers without values will be ignored.
+	// +optional
+	Headers *apiextensionsv1.JSON `json:"headers,omitempty"`
+}
+
+// SyslogAuditOptions configures options for syslog audit devices.
+// See: https://openbao.org/docs/audit/syslog/
+type SyslogAuditOptions struct {
+	// Facility is the syslog facility to use.
+	// Defaults to "AUTH" if not specified.
+	// +optional
+	Facility string `json:"facility,omitempty"`
+	// Tag is the syslog tag to use.
+	// Defaults to "openbao" if not specified.
+	// +optional
+	Tag string `json:"tag,omitempty"`
+}
+
+// SocketAuditOptions configures options for socket audit devices.
+// See: https://openbao.org/docs/audit/socket/
+type SocketAuditOptions struct {
+	// Address is the socket server address to use.
+	// Example: "127.0.0.1:9090" or "/tmp/audit.sock".
+	// +optional
+	Address string `json:"address,omitempty"`
+	// SocketType is the socket type to use, any type compatible with net.Dial is acceptable.
+	// Defaults to "tcp" if not specified.
+	// +optional
+	SocketType string `json:"socketType,omitempty"`
+	// WriteTimeout is the (deadline) time in seconds to allow writes to be completed over the socket.
+	// A zero value means that write attempts will not time out.
+	// Defaults to "2s" if not specified.
+	// +optional
+	WriteTimeout string `json:"writeTimeout,omitempty"`
 }
 
 // Plugin defines a declarative plugin configuration.

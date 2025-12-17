@@ -294,6 +294,31 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
 				},
 				SelfInit: &openbaov1alpha1.SelfInitConfig{
 					Enabled: true,
+					Requests: []openbaov1alpha1.SelfInitRequest{
+						{
+							Name:      "enable-userpass-auth",
+							Operation: openbaov1alpha1.SelfInitOperationUpdate,
+							Path:      "sys/auth/userpass",
+							AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
+								Type: "userpass",
+								Config: map[string]string{
+									"default_lease_ttl":  "0",
+									"max_lease_ttl":      "0",
+									"listing_visibility": "unauthenticated",
+								},
+							},
+						},
+						{
+							Name:      "create-admin-policy",
+							Operation: openbaov1alpha1.SelfInitOperationUpdate,
+							Path:      "sys/policies/acl/admin",
+							Policy: &openbaov1alpha1.SelfInitPolicy{
+								Policy: `path "*" {
+  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+}`,
+							},
+						},
+					},
 				},
 				TLS: openbaov1alpha1.TLSConfig{
 					Enabled: true,

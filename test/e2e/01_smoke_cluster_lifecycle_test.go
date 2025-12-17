@@ -23,7 +23,6 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/test/e2e/framework"
-	e2ehelpers "github.com/openbao/operator/test/e2e/helpers"
 )
 
 var _ = Describe("Smoke: Tenant + Cluster lifecycle", Ordered, func() {
@@ -80,27 +79,6 @@ var _ = Describe("Smoke: Tenant + Cluster lifecycle", Ordered, func() {
 	})
 
 	It("creates an OpenBaoCluster and converges to Available", func() {
-		type auditStdoutRequest struct {
-			Type    string `json:"type"`
-			Options struct {
-				FilePath string `json:"file_path"`
-				LogRaw   bool   `json:"log_raw"`
-			} `json:"options"`
-		}
-
-		auditRequest := auditStdoutRequest{
-			Type: "file",
-			Options: struct {
-				FilePath string `json:"file_path"`
-				LogRaw   bool   `json:"log_raw"`
-			}{
-				FilePath: "/dev/stdout",
-				LogRaw:   true,
-			},
-		}
-		auditData, err := e2ehelpers.JSONFrom(auditRequest)
-		Expect(err).NotTo(HaveOccurred())
-
 		By(fmt.Sprintf("creating OpenBaoCluster %q in namespace %q", clusterName, f.Namespace))
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -120,10 +98,22 @@ var _ = Describe("Smoke: Tenant + Cluster lifecycle", Ordered, func() {
 					Enabled: true,
 					Requests: []openbaov1alpha1.SelfInitRequest{
 						{
-							Name:      "enable-stdout-audit",
+							Name:      "enable-jwt-auth",
 							Operation: openbaov1alpha1.SelfInitOperationUpdate,
-							Path:      "sys/audit/stdout",
-							Data:      auditData,
+							Path:      "sys/auth/jwt",
+							AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
+								Type: "jwt",
+							},
+						},
+						{
+							Name:      "create-admin-policy",
+							Operation: openbaov1alpha1.SelfInitOperationUpdate,
+							Path:      "sys/policies/acl/admin",
+							Policy: &openbaov1alpha1.SelfInitPolicy{
+								Policy: `path "*" {
+  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+}`,
+							},
 						},
 					},
 				},
@@ -142,7 +132,7 @@ var _ = Describe("Smoke: Tenant + Cluster lifecycle", Ordered, func() {
 			},
 		}
 
-		err = c.Create(ctx, cluster)
+		err := c.Create(ctx, cluster)
 		Expect(err).NotTo(HaveOccurred())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created OpenBaoCluster %q\n", clusterName)
 

@@ -180,13 +180,12 @@ func TestRenderHCLWithSelfInitRequests(t *testing.T) {
 				Name:      "enable-stdout-audit",
 				Operation: openbaov1alpha1.SelfInitOperationUpdate,
 				Path:      "sys/audit/stdout",
-				Data: mustJSON(t, map[string]interface{}{
-					"type": "file",
-					"options": map[string]interface{}{
-						"file_path": "/dev/stdout",
-						"log_raw":   true,
+				AuditDevice: &openbaov1alpha1.SelfInitAuditDevice{
+					Type: "file",
+					FileOptions: &openbaov1alpha1.FileAuditOptions{
+						FilePath: "stdout",
 					},
-				}),
+				},
 			},
 		},
 	}
@@ -310,9 +309,12 @@ func TestRenderSelfInitHCL_WithBootstrapConfig(t *testing.T) {
 				Name:      "enable-stdout-audit",
 				Operation: openbaov1alpha1.SelfInitOperationUpdate,
 				Path:      "sys/audit/stdout",
-				Data: mustJSON(t, map[string]interface{}{
-					"type": "file",
-				}),
+				AuditDevice: &openbaov1alpha1.SelfInitAuditDevice{
+					Type: "file",
+					FileOptions: &openbaov1alpha1.FileAuditOptions{
+						FilePath: "stdout",
+					},
+				},
 			},
 		},
 	}

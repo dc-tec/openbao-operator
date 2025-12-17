@@ -304,6 +304,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		By(fmt.Sprintf("creating Hardened OpenBaoCluster %q with External TLS and Transit auto-unseal", clusterName))
 		// Infra-bao always runs with TLS in production mode
 		infraAddr = fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, operatorNamespace)
+
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterName,
@@ -320,6 +321,31 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 				},
 				SelfInit: &openbaov1alpha1.SelfInitConfig{
 					Enabled: true,
+					Requests: []openbaov1alpha1.SelfInitRequest{
+						{
+							Name:      "enable-userpass-auth",
+							Operation: openbaov1alpha1.SelfInitOperationUpdate,
+							Path:      "sys/auth/userpass",
+							AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
+								Type: "userpass",
+								Config: map[string]string{
+									"default_lease_ttl":  "0",
+									"max_lease_ttl":      "0",
+									"listing_visibility": "unauthenticated",
+								},
+							},
+						},
+						{
+							Name:      "create-admin-policy",
+							Operation: openbaov1alpha1.SelfInitOperationUpdate,
+							Path:      "sys/policies/acl/admin",
+							Policy: &openbaov1alpha1.SelfInitPolicy{
+								Policy: `path "*" {
+  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+}`,
+							},
+						},
+					},
 				},
 				TLS: openbaov1alpha1.TLSConfig{
 					Enabled: true,

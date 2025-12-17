@@ -66,6 +66,11 @@ var (
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
 	// and load it into kind.
 	configInitImage = "openbao-config-init:dev"
+
+	// sentinelImage is the image used by Sentinel Deployment.
+	// It must be resolvable inside the kind cluster; in E2E we build it locally
+	// and load it into kind. The version matches OPERATOR_VERSION in the operator deployment.
+	sentinelImage = "openbao/operator-sentinel:v0.0.0"
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -98,6 +103,15 @@ var _ = BeforeSuite(func() {
 	By("loading the config-init image on Kind")
 	err = utils.LoadImageToKindClusterWithName(configInitImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the config-init image into Kind")
+
+	By("building the Sentinel image")
+	cmd = exec.Command("make", "docker-build-sentinel", fmt.Sprintf("IMG=%s", sentinelImage))
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the Sentinel image")
+
+	By("loading the Sentinel image on Kind")
+	err = utils.LoadImageToKindClusterWithName(sentinelImage)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the Sentinel image into Kind")
 
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,

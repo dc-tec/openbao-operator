@@ -4,8 +4,7 @@ initialize "enable-stdout-audit" {
     path      = "sys/audit/stdout"
     data = {
       options = {
-        file_path = "/dev/stdout"
-        log_raw   = true
+        file_path = "stdout"
       }
       type = "file"
     }

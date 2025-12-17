@@ -165,15 +165,15 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// 6. Apply additional user configuration from structured fields.
 	renderUserConfiguration(body, cluster.Spec.Configuration)
 
-	// 7. Render audit devices if configured
+	// 8. Render audit devices if configured
 	if err := renderAuditDevices(body, cluster.Spec.Audit); err != nil {
 		return nil, fmt.Errorf("failed to render audit devices: %w", err)
 	}
 
-	// 8. Render plugins if configured
+	// 9. Render plugins if configured
 	renderPlugins(body, cluster.Spec.Plugins)
 
-	// 9. Render telemetry if configured
+	// 10. Render telemetry if configured
 	renderTelemetry(body, cluster.Spec.Telemetry)
 
 	// Note: Self-initialization stanzas are rendered separately via RenderSelfInitHCL
@@ -460,7 +460,56 @@ func renderSelfInitStanzas(body *hclwrite.Body, requests []openbaov1alpha1.SelfI
 		}
 
 		// Set data if provided
-		if req.Data != nil && len(req.Data.Raw) > 0 {
+		// Use structured types for supported paths; Data only for unsupported paths
+		var dataVal cty.Value
+		skipDataAttribute := false
+
+		if strings.HasPrefix(req.Path, "sys/audit/") {
+			// Audit devices must use structured AuditDevice type
+			if req.AuditDevice == nil {
+				return fmt.Errorf("audit device request %q at path %q must use structured auditDevice field, not raw data", req.Name, req.Path)
+			}
+			// Build audit device data from structured config using HCLWrite
+			// This function sets the data attribute directly on requestBody
+			if err := buildAuditDeviceDataHCL(requestBody, req.AuditDevice); err != nil {
+				return fmt.Errorf("failed to build audit device data for request %q: %w", req.Name, err)
+			}
+			skipDataAttribute = true // Already set by buildAuditDeviceDataHCL
+		} else if strings.HasPrefix(req.Path, "sys/auth/") {
+			// Auth methods must use structured AuthMethod type
+			if req.AuthMethod == nil {
+				return fmt.Errorf("auth method request %q at path %q must use structured authMethod field, not raw data", req.Name, req.Path)
+			}
+			// Build auth method data from structured config
+			var err error
+			dataVal, err = buildAuthMethodData(req.AuthMethod)
+			if err != nil {
+				return fmt.Errorf("failed to build auth method data for request %q: %w", req.Name, err)
+			}
+		} else if strings.HasPrefix(req.Path, "sys/mounts/") {
+			// Secret engines must use structured SecretEngine type
+			if req.SecretEngine == nil {
+				return fmt.Errorf("secret engine request %q at path %q must use structured secretEngine field, not raw data", req.Name, req.Path)
+			}
+			// Build secret engine data from structured config
+			var err error
+			dataVal, err = buildSecretEngineData(req.SecretEngine)
+			if err != nil {
+				return fmt.Errorf("failed to build secret engine data for request %q: %w", req.Name, err)
+			}
+		} else if strings.HasPrefix(req.Path, "sys/policies/") {
+			// Policies must use structured Policy type
+			if req.Policy == nil {
+				return fmt.Errorf("policy request %q at path %q must use structured policy field, not raw data", req.Name, req.Path)
+			}
+			// Build policy data from structured config
+			var err error
+			dataVal, err = buildPolicyData(req.Policy)
+			if err != nil {
+				return fmt.Errorf("failed to build policy data for request %q: %w", req.Name, err)
+			}
+		} else if req.Data != nil && len(req.Data.Raw) > 0 {
+			// For paths without structured types, use raw Data JSON
 			var decoded interface{}
 			if err := json.Unmarshal(req.Data.Raw, &decoded); err != nil {
 				return fmt.Errorf("failed to decode self-init data for request %q: %w", req.Name, err)
@@ -471,11 +520,160 @@ func renderSelfInitStanzas(body *hclwrite.Body, requests []openbaov1alpha1.SelfI
 				return fmt.Errorf("failed to convert self-init data for request %q to HCL: %w", req.Name, err)
 			}
 
-			requestBody.SetAttributeValue("data", ctyVal)
+			dataVal = ctyVal
+		}
+
+		if !skipDataAttribute && dataVal != cty.NilVal {
+			requestBody.SetAttributeValue("data", dataVal)
 		}
 	}
 
 	return nil
+}
+
+// buildAuditDeviceDataHCL builds the API request data for an audit device from structured config
+// using HCLWrite-style patterns and sets it as the "data" attribute on the request body.
+func buildAuditDeviceDataHCL(requestBody *hclwrite.Body, device *openbaov1alpha1.SelfInitAuditDevice) error {
+	if device == nil {
+		return fmt.Errorf("audit device config is nil")
+	}
+
+	// Build the data object using HCLWrite-style patterns
+	// Build options based on device type
+	var optionsMap map[string]cty.Value
+
+	switch device.Type {
+	case "file":
+		if device.FileOptions == nil {
+			return fmt.Errorf("fileOptions is required for file audit device")
+		}
+		optionsMap = make(map[string]cty.Value)
+		optionsMap["file_path"] = cty.StringVal(device.FileOptions.FilePath)
+		if device.FileOptions.Mode != "" {
+			optionsMap["mode"] = cty.StringVal(device.FileOptions.Mode)
+		}
+	case "http":
+		if device.HTTPOptions == nil {
+			return fmt.Errorf("httpOptions is required for http audit device")
+		}
+		optionsMap = make(map[string]cty.Value)
+		optionsMap["uri"] = cty.StringVal(device.HTTPOptions.URI)
+		if device.HTTPOptions.Headers != nil && len(device.HTTPOptions.Headers.Raw) > 0 {
+			var decoded interface{}
+			if err := json.Unmarshal(device.HTTPOptions.Headers.Raw, &decoded); err != nil {
+				return fmt.Errorf("failed to unmarshal headers: %w", err)
+			}
+			headersVal, err := jsonToCty(decoded)
+			if err != nil {
+				return fmt.Errorf("failed to convert headers to HCL: %w", err)
+			}
+			optionsMap["headers"] = headersVal
+		}
+	case "syslog":
+		if device.SyslogOptions != nil {
+			optionsMap = make(map[string]cty.Value)
+			if device.SyslogOptions.Facility != "" {
+				optionsMap["facility"] = cty.StringVal(device.SyslogOptions.Facility)
+			}
+			if device.SyslogOptions.Tag != "" {
+				optionsMap["tag"] = cty.StringVal(device.SyslogOptions.Tag)
+			}
+		}
+	case "socket":
+		if device.SocketOptions != nil {
+			optionsMap = make(map[string]cty.Value)
+			if device.SocketOptions.Address != "" {
+				optionsMap["address"] = cty.StringVal(device.SocketOptions.Address)
+			}
+			if device.SocketOptions.SocketType != "" {
+				optionsMap["socket_type"] = cty.StringVal(device.SocketOptions.SocketType)
+			}
+			if device.SocketOptions.WriteTimeout != "" {
+				optionsMap["write_timeout"] = cty.StringVal(device.SocketOptions.WriteTimeout)
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported audit device type: %s", device.Type)
+	}
+
+	// Build the final data object
+	dataMap := make(map[string]cty.Value)
+	dataMap["type"] = cty.StringVal(device.Type)
+	if device.Description != "" {
+		dataMap["description"] = cty.StringVal(device.Description)
+	}
+	if len(optionsMap) > 0 {
+		dataMap["options"] = cty.ObjectVal(optionsMap)
+	}
+
+	// Set the data attribute on the request body
+	requestBody.SetAttributeValue("data", cty.ObjectVal(dataMap))
+
+	return nil
+}
+
+// buildAuthMethodData builds the API request data for an auth method from structured config.
+func buildAuthMethodData(authMethod *openbaov1alpha1.SelfInitAuthMethod) (cty.Value, error) {
+	if authMethod == nil {
+		return cty.NilVal, fmt.Errorf("auth method config is nil")
+	}
+
+	dataMap := make(map[string]cty.Value)
+	dataMap["type"] = cty.StringVal(authMethod.Type)
+
+	if authMethod.Description != "" {
+		dataMap["description"] = cty.StringVal(authMethod.Description)
+	}
+
+	if len(authMethod.Config) > 0 {
+		configMap := make(map[string]cty.Value)
+		for k, v := range authMethod.Config {
+			configMap[k] = cty.StringVal(v)
+		}
+		dataMap["config"] = cty.ObjectVal(configMap)
+	}
+
+	return cty.ObjectVal(dataMap), nil
+}
+
+// buildSecretEngineData builds the API request data for a secret engine from structured config.
+func buildSecretEngineData(secretEngine *openbaov1alpha1.SelfInitSecretEngine) (cty.Value, error) {
+	if secretEngine == nil {
+		return cty.NilVal, fmt.Errorf("secret engine config is nil")
+	}
+
+	dataMap := make(map[string]cty.Value)
+	dataMap["type"] = cty.StringVal(secretEngine.Type)
+
+	if secretEngine.Description != "" {
+		dataMap["description"] = cty.StringVal(secretEngine.Description)
+	}
+
+	if len(secretEngine.Options) > 0 {
+		optionsMap := make(map[string]cty.Value)
+		for k, v := range secretEngine.Options {
+			optionsMap[k] = cty.StringVal(v)
+		}
+		dataMap["options"] = cty.ObjectVal(optionsMap)
+	}
+
+	return cty.ObjectVal(dataMap), nil
+}
+
+// buildPolicyData builds the API request data for a policy from structured config.
+func buildPolicyData(policy *openbaov1alpha1.SelfInitPolicy) (cty.Value, error) {
+	if policy == nil {
+		return cty.NilVal, fmt.Errorf("policy config is nil")
+	}
+
+	if policy.Policy == "" {
+		return cty.NilVal, fmt.Errorf("policy content is required")
+	}
+
+	dataMap := make(map[string]cty.Value)
+	dataMap["policy"] = cty.StringVal(policy.Policy)
+
+	return cty.ObjectVal(dataMap), nil
 }
 
 // jsonToCty converts a decoded JSON value (maps, slices, strings, numbers,
@@ -561,9 +759,66 @@ func renderAuditDevices(body *hclwrite.Body, devices []openbaov1alpha1.AuditDevi
 			auditBody.SetAttributeValue("description", cty.StringVal(device.Description))
 		}
 
-		// Set options if provided
-		if device.Options != nil && len(device.Options.Raw) > 0 {
-			var decoded interface{}
+		// Build options from structured fields or fall back to raw Options JSON
+		var options map[string]cty.Value
+
+		// Use structured options if provided, otherwise fall back to raw Options JSON
+		switch device.Type {
+		case "file":
+			if device.FileOptions != nil {
+				options = make(map[string]cty.Value)
+				options["file_path"] = cty.StringVal(device.FileOptions.FilePath)
+				if device.FileOptions.Mode != "" {
+					options["mode"] = cty.StringVal(device.FileOptions.Mode)
+				}
+			}
+		case "http":
+			if device.HTTPOptions != nil {
+				options = make(map[string]cty.Value)
+				options["uri"] = cty.StringVal(device.HTTPOptions.URI)
+				if device.HTTPOptions.Headers != nil && len(device.HTTPOptions.Headers.Raw) > 0 {
+					var decoded interface{}
+					if err := json.Unmarshal(device.HTTPOptions.Headers.Raw, &decoded); err != nil {
+						return fmt.Errorf("failed to decode HTTP audit device headers: %w", err)
+					}
+					headersVal, err := jsonToCty(decoded)
+					if err != nil {
+						return fmt.Errorf("failed to convert HTTP audit device headers to HCL: %w", err)
+					}
+					options["headers"] = headersVal
+				}
+			}
+		case "syslog":
+			if device.SyslogOptions != nil {
+				options = make(map[string]cty.Value)
+				if device.SyslogOptions.Facility != "" {
+					options["facility"] = cty.StringVal(device.SyslogOptions.Facility)
+				}
+				if device.SyslogOptions.Tag != "" {
+					options["tag"] = cty.StringVal(device.SyslogOptions.Tag)
+				}
+			}
+		case "socket":
+			if device.SocketOptions != nil {
+				options = make(map[string]cty.Value)
+				if device.SocketOptions.Address != "" {
+					options["address"] = cty.StringVal(device.SocketOptions.Address)
+				}
+				if device.SocketOptions.SocketType != "" {
+					options["socket_type"] = cty.StringVal(device.SocketOptions.SocketType)
+				}
+				if device.SocketOptions.WriteTimeout != "" {
+					options["write_timeout"] = cty.StringVal(device.SocketOptions.WriteTimeout)
+				}
+			}
+		}
+
+		// If structured options were used, render them
+		if options != nil && len(options) > 0 {
+			auditBody.SetAttributeValue("options", cty.ObjectVal(options))
+		} else if device.Options != nil && len(device.Options.Raw) > 0 {
+			// Fall back to raw Options JSON for backward compatibility
+			var decoded any
 			if err := json.Unmarshal(device.Options.Raw, &decoded); err != nil {
 				return fmt.Errorf("failed to decode audit device options: %w", err)
 			}
@@ -795,6 +1050,11 @@ func renderTLSConfiguration(listenerBody *hclwrite.Body, tlsSpec openbaov1alpha1
 		if acmeConfig.Email != "" {
 			listenerBody.SetAttributeValue("tls_acme_email", cty.StringVal(acmeConfig.Email))
 		}
+		// Disable HTTP-01 challenge when TLS is enabled to avoid failures
+		// HTTP-01 requires HTTP access, but OpenBao is listening with TLS enabled.
+		// TLS-ALPN-01 works over HTTPS and is more appropriate for this setup.
+		// This prevents OpenBao from wasting time trying HTTP-01 first and failing.
+		listenerBody.SetAttributeValue("tls_acme_disable_http_challenge", cty.BoolVal(true))
 		// ACME CA root (if specified in configuration)
 		if config != nil && config.ACMECARoot != "" {
 			listenerBody.SetAttributeValue("tls_acme_ca_root", cty.StringVal(config.ACMECARoot))
