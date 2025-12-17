@@ -79,7 +79,11 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	// Perform image verification if enabled and get verified digest
 	var verifiedImageDigest string
 	if cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
-		digest, err := r.verifyImageFunc(ctx, logger, cluster)
+		// Use a strict timeout for image verification to prevent blocking the reconcile loop.
+		// Network I/O to OCI registries/Rekor can hang, which would stall the worker.
+		verifyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		digest, err := r.verifyImageFunc(verifyCtx, logger, cluster)
 		if err != nil {
 			now := metav1.Now()
 			failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
@@ -131,7 +135,10 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 				ImagePullSecrets: cluster.Spec.ImageVerification.ImagePullSecrets,
 				Namespace:        cluster.Namespace,
 			}
-			digest, err := verifier.Verify(ctx, sentinelImage, config)
+			// Use a strict timeout for image verification to prevent blocking the reconcile loop.
+			verifyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			digest, err := verifier.Verify(verifyCtx, sentinelImage, config)
 			if err != nil {
 				// Handle error based on failure policy
 				failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
@@ -512,21 +519,6 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, reconcileErr
 	}
 
-	// If status update indicates we should requeue (e.g., waiting for replicas to become ready),
-	// return that result to trigger a timely reconciliation.
-	if statusUpdateResult.RequeueAfter > 0 {
-		return statusUpdateResult, nil
-	}
-
-	// If initialization is still in progress, requeue so that the init manager
-	// can retry once the first pod is running and the API is reachable.
-	if r.InitManager != nil && !cluster.Status.Initialized {
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: constants.RequeueShort,
-		}, nil
-	}
-
 	// After successful reconciliation, clear the Sentinel trigger annotation
 	// to prevent re-triggering on the next reconcile loop
 	// NOTE: This will cause a second reconciliation (Normal Path) which is DESIRABLE:
@@ -534,6 +526,7 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// 2. Normal Path (triggered by annotation deletion) acts as a safety check
 	//    to ensure full consistency including backups/upgrades now that emergency is over
 	// Do NOT optimize this away - it adds safety.
+	// Clear the annotation even if we're requeuing, as the fast path reconciliation has completed.
 	if isSentinelTrigger {
 		// Record drift correction in status and metrics
 		now := metav1.Now()
@@ -565,6 +558,21 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					"drift_correction_count", cluster.Status.Drift.DriftCorrectionCount)
 			}
 		}
+	}
+
+	// If status update indicates we should requeue (e.g., waiting for replicas to become ready),
+	// return that result to trigger a timely reconciliation.
+	if statusUpdateResult.RequeueAfter > 0 {
+		return statusUpdateResult, nil
+	}
+
+	// If initialization is still in progress, requeue so that the init manager
+	// can retry once the first pod is running and the API is reachable.
+	if r.InitManager != nil && !cluster.Status.Initialized {
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: constants.RequeueShort,
+		}, nil
 	}
 
 	// Safety net: periodically requeue to detect and correct drift that may
@@ -735,9 +743,9 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			"statefulSetStillScaling", statefulSetStillScaling,
 			"statusPotentiallyStale", statusPotentiallyStale)
 
-		// If StatefulSet is still scaling or status is potentially stale, requeue to catch up
+		// If StatefulSet is still scaling or status is potentially stale, set phase and persist status before requeue
 		if statefulSetStillScaling || statusPotentiallyStale {
-			logger.V(1).Info("StatefulSet status may be stale; requeuing to check status",
+			logger.V(1).Info("StatefulSet status may be stale; setting phase and requeuing to check status",
 				"observedGeneration", statefulSet.Status.ObservedGeneration,
 				"generation", statefulSet.Generation,
 				"currentReplicas", statefulSet.Status.Replicas,
@@ -745,6 +753,92 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 				"desiredReplicas", desiredReplicas,
 				"stillScaling", statefulSetStillScaling,
 				"statusStale", statusPotentiallyStale)
+
+			// Set phase and ready replicas before requeuing to ensure status is persisted
+			cluster.Status.ReadyReplicas = readyReplicas
+
+			// Update per-cluster metrics for ready replicas
+			clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
+			clusterMetrics.SetReadyReplicas(readyReplicas)
+
+			// Only update phase if no upgrade is in progress
+			if cluster.Status.Upgrade == nil {
+				if cluster.Status.Phase == "" {
+					cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
+				} else if readyReplicas == 0 {
+					cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
+				} else if !available {
+					// Some replicas are ready but not all
+					cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
+				}
+			}
+
+			clusterMetrics.SetPhase(cluster.Status.Phase)
+
+			// Set basic conditions before requeuing to ensure they're persisted
+			now := metav1.Now()
+			availableStatus := metav1.ConditionFalse
+			availableReason := "NotReady"
+			availableMessage := fmt.Sprintf("Only %d/%d replicas are ready", readyReplicas, cluster.Spec.Replicas)
+			if available {
+				availableStatus = metav1.ConditionTrue
+				availableReason = "AllReplicasReady"
+				availableMessage = fmt.Sprintf("All %d replicas are ready", readyReplicas)
+			} else if readyReplicas == 0 {
+				availableStatus = metav1.ConditionFalse
+				availableReason = "NoReplicasReady"
+				availableMessage = "No replicas are ready yet"
+			}
+
+			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+				Type:               string(openbaov1alpha1.ConditionAvailable),
+				Status:             availableStatus,
+				ObservedGeneration: cluster.Generation,
+				LastTransitionTime: now,
+				Reason:             availableReason,
+				Message:            availableMessage,
+			})
+
+			// Only set Degraded=False if not already set by another component
+			degradedCond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
+			if degradedCond == nil || (degradedCond.Status != metav1.ConditionTrue) {
+				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+					Type:               string(openbaov1alpha1.ConditionDegraded),
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: cluster.Generation,
+					LastTransitionTime: now,
+					Reason:             "Reconciling",
+					Message:            "No degradation has been recorded by the controller",
+				})
+			}
+
+			// Only set Upgrading=False if no upgrade is in progress
+			// The upgrade manager manages this condition during upgrades
+			if cluster.Status.Upgrade == nil {
+				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+					Type:               string(openbaov1alpha1.ConditionUpgrading),
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: cluster.Generation,
+					LastTransitionTime: now,
+					Reason:             "Idle",
+					Message:            "No upgrade is currently in progress",
+				})
+			}
+
+			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+				Type:               string(openbaov1alpha1.ConditionBackingUp),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: cluster.Generation,
+				LastTransitionTime: now,
+				Reason:             "Idle",
+				Message:            "No backup is currently in progress",
+			})
+
+			// Persist status before requeuing
+			if err := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to update status before requeue: %w", err)
+			}
+
 			return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 	}
