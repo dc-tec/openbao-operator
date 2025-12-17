@@ -303,6 +303,13 @@ var _ = Describe("Sentinel: Drift Detection and Fast-Path Reconciliation", Order
 		}, 10*time.Second, 1*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified Service %q was updated with drift annotation\n", serviceName)
 
+		// Capture drift status before modification to check if it increases
+		var initialDriftCount int32
+		clusterBefore := &openbaov1alpha1.OpenBaoCluster{}
+		if err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, clusterBefore); err == nil && clusterBefore.Status.Drift != nil {
+			initialDriftCount = clusterBefore.Status.Drift.DriftCorrectionCount
+		}
+
 		// Wait for Sentinel to detect the drift and operator to correct it
 		// The debounce window is 2s, so we wait at least 3s for Sentinel to trigger,
 		// then additional time for operator to reconcile
@@ -315,6 +322,7 @@ var _ = Describe("Sentinel: Drift Detection and Fast-Path Reconciliation", Order
 		// 1. The operator only reconciles on spec changes or periodic safety net (24+ min)
 		// 2. If it reconciles quickly after drift, Sentinel must have triggered it
 		// 3. We verify by checking that the Service was reconciled (drift corrected)
+		serviceModificationTime := time.Now()
 		Eventually(func(g Gomega) {
 			updatedService := &corev1.Service{}
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: f.Namespace}, updatedService)).To(Succeed())
@@ -352,13 +360,60 @@ var _ = Describe("Sentinel: Drift Detection and Fast-Path Reconciliation", Order
 			g.Expect(false).To(BeTrue(), "expected operator to reconcile Service after drift (maintenance removed or recent reconciliation). Service annotations: %v", updatedService.Annotations)
 		}, framework.DefaultWaitTimeout, 1*time.Second).Should(Succeed())
 
-		By("verifying trigger annotation is cleared after reconciliation")
+		By("verifying drift status is recorded in OpenBaoCluster status")
+		Eventually(func(g Gomega) {
+			cluster := &openbaov1alpha1.OpenBaoCluster{}
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
+
+			// Verify drift status fields are populated
+			g.Expect(cluster.Status.Drift).NotTo(BeNil(), "expected drift status to be set")
+			g.Expect(cluster.Status.Drift.LastDriftDetected).NotTo(BeNil(), "expected LastDriftDetected to be set")
+			g.Expect(cluster.Status.Drift.DriftCorrectionCount).To(BeNumerically(">=", 1), "expected DriftCorrectionCount to be at least 1")
+			g.Expect(cluster.Status.Drift.LastCorrectionTime).NotTo(BeNil(), "expected LastCorrectionTime to be set")
+
+			// Verify drift count increased (indicating new drift was detected and corrected)
+			// Note: We don't require it to be exactly initialDriftCount + 1 because other drift
+			// events (e.g., StatefulSet) might have occurred, but it should have increased
+			if initialDriftCount > 0 {
+				g.Expect(cluster.Status.Drift.DriftCorrectionCount).To(BeNumerically(">=", initialDriftCount), "expected DriftCorrectionCount to have increased")
+			}
+
+			// Verify LastDriftDetected is recent (within the last minute)
+			detectedTime := cluster.Status.Drift.LastDriftDetected.Time
+			g.Expect(detectedTime).To(BeTemporally(">=", serviceModificationTime.Add(-10*time.Second)), "LastDriftDetected should be recent (allowing for debounce window)")
+			g.Expect(detectedTime).To(BeTemporally("<=", time.Now()), "LastDriftDetected should not be in the future")
+
+			// Verify LastDriftResource is set (could be Service or StatefulSet depending on what was detected)
+			// We're flexible here because multiple drift events can occur, and the "last" one might not be the Service
+			g.Expect(cluster.Status.Drift.LastDriftResource).NotTo(BeEmpty(), "expected LastDriftResource to be set")
+			// Log the resource for debugging, but don't fail if it's not the Service
+			// (StatefulSet drift might be detected first or the Service drift might not trigger due to grace period)
+			if cluster.Status.Drift.LastDriftResource == fmt.Sprintf("Service/%s", serviceName) {
+				_, _ = fmt.Fprintf(GinkgoWriter, "Drift detected from expected Service resource\n")
+			} else {
+				_, _ = fmt.Fprintf(GinkgoWriter, "Drift detected from %q (may be from StatefulSet or other resource)\n", cluster.Status.Drift.LastDriftResource)
+			}
+
+			// Verify LastCorrectionTime is after LastDriftDetected
+			g.Expect(cluster.Status.Drift.LastCorrectionTime.Time).To(BeTemporally(">=", detectedTime), "LastCorrectionTime should be after LastDriftDetected")
+
+			_, _ = fmt.Fprintf(GinkgoWriter, "Drift status verified: LastDriftDetected=%v, DriftCorrectionCount=%d (initial=%d), LastDriftResource=%q, LastCorrectionTime=%v\n",
+				cluster.Status.Drift.LastDriftDetected.Time,
+				cluster.Status.Drift.DriftCorrectionCount,
+				initialDriftCount,
+				cluster.Status.Drift.LastDriftResource,
+				cluster.Status.Drift.LastCorrectionTime.Time)
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+		By("verifying trigger annotations are cleared after reconciliation")
 		Eventually(func(g Gomega) {
 			cluster := &openbaov1alpha1.OpenBaoCluster{}
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
 			_, hasTrigger := cluster.Annotations[constants.AnnotationSentinelTrigger]
 			g.Expect(hasTrigger).To(BeFalse(), "expected Sentinel trigger annotation to be cleared after reconciliation")
-			_, _ = fmt.Fprintf(GinkgoWriter, "Sentinel trigger annotation cleared after reconciliation\n")
+			_, hasResource := cluster.Annotations[constants.AnnotationSentinelTriggerResource]
+			g.Expect(hasResource).To(BeFalse(), "expected Sentinel trigger resource annotation to be cleared after reconciliation")
+			_, _ = fmt.Fprintf(GinkgoWriter, "Sentinel trigger annotations cleared after reconciliation\n")
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 	})
 

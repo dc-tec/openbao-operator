@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -325,8 +326,39 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if val, ok := cluster.Annotations[triggerAnnotation]; ok && val != "" {
 		isSentinelTrigger = true
+
+		// Extract resource info from annotation if available
+		resourceInfo := "unknown"
+		if resourceVal, hasResource := cluster.Annotations[constants.AnnotationSentinelTriggerResource]; hasResource {
+			resourceInfo = resourceVal
+		}
+
 		logger.Info("Sentinel trigger detected; entering Fast Path (Drift Correction)",
-			"trigger_timestamp", val)
+			"trigger_timestamp", val,
+			"resource", resourceInfo)
+
+		// Record drift detection in status and metrics
+		now := metav1.Now()
+		if cluster.Status.Drift == nil {
+			cluster.Status.Drift = &openbaov1alpha1.DriftStatus{}
+		}
+		cluster.Status.Drift.LastDriftDetected = &now
+		cluster.Status.Drift.DriftCorrectionCount++
+		cluster.Status.Drift.LastDriftResource = resourceInfo
+
+		// Extract resource kind from resource info (format: "Kind/name" or "Kind/namespace/name")
+		resourceKind := "unknown"
+		if resourceInfo != "" && resourceInfo != "unknown" {
+			parts := strings.Split(resourceInfo, "/")
+			if len(parts) > 0 {
+				resourceKind = parts[0]
+			}
+		}
+
+		// Record metrics for drift detection
+		clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
+		clusterMetrics.RecordDriftDetected(resourceKind)
+		clusterMetrics.SetDriftLastDetectedTimestamp(float64(now.Unix()))
 	}
 
 	// Build sub-reconcilers in order of execution
@@ -469,14 +501,34 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	//    to ensure full consistency including backups/upgrades now that emergency is over
 	// Do NOT optimize this away - it adds safety.
 	if isSentinelTrigger {
+		// Record drift correction in status and metrics
+		now := metav1.Now()
+		if cluster.Status.Drift == nil {
+			cluster.Status.Drift = &openbaov1alpha1.DriftStatus{}
+		}
+		cluster.Status.Drift.LastCorrectionTime = &now
+
+		// Record metrics for drift correction
+		clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
+		clusterMetrics.RecordDriftCorrected()
+
+		// Update status to persist drift tracking
+		if err := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+			logger.Error(err, "Failed to update drift status after correction")
+			// Non-fatal: status will be updated on next reconcile
+		}
+
 		original := cluster.DeepCopy()
 		if cluster.Annotations != nil {
 			delete(cluster.Annotations, triggerAnnotation)
+			// Also clear the resource annotation
+			delete(cluster.Annotations, constants.AnnotationSentinelTriggerResource)
 			if err := r.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
 				logger.Error(err, "Failed to clear Sentinel trigger annotation")
 				// Non-fatal: annotation will be cleared on next successful reconcile
 			} else {
-				logger.Info("Cleared Sentinel trigger annotation after successful reconciliation")
+				logger.Info("Cleared Sentinel trigger annotation after successful reconciliation",
+					"drift_correction_count", cluster.Status.Drift.DriftCorrectionCount)
 			}
 		}
 	}

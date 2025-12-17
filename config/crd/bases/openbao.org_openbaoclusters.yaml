@@ -2302,6 +2302,31 @@ spec:
                 description: CurrentVersion is the OpenBao version currently running
                   on the cluster.
                 type: string
+              drift:
+                description: Drift tracks drift detection and correction events for
+                  this cluster.
+                properties:
+                  driftCorrectionCount:
+                    description: DriftCorrectionCount is the total number of times
+                      drift has been detected and corrected.
+                    format: int32
+                    type: integer
+                  lastCorrectionTime:
+                    description: LastCorrectionTime is the timestamp when drift was
+                      last corrected by the operator.
+                    format: date-time
+                    type: string
+                  lastDriftDetected:
+                    description: LastDriftDetected is the timestamp when drift was
+                      last detected by Sentinel.
+                    format: date-time
+                    type: string
+                  lastDriftResource:
+                    description: |-
+                      LastDriftResource is the resource that triggered the last drift detection
+                      (e.g., "Service/sentinel-cluster" or "StatefulSet/sentinel-cluster").
+                    type: string
+                type: object
               initialized:
                 description: |-
                   Initialized indicates whether the OpenBao cluster has been initialized.

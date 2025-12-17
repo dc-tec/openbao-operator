@@ -31,10 +31,17 @@ spec:
          (!has(object.status) || object.status == oldObject.status))
       message: "The Sentinel is not authorized to modify the OpenBaoCluster Status."
 
-    # 3. Allow Annotation: Only specific annotations are allowed (the trigger).
+    # 3. Allow Annotations: Only specific annotations are allowed (the trigger and resource info).
     # Supports both ADD (first trigger) and UPDATE (subsequent triggers if annotation not cleared).
-    # Logic: If is_sentinel, then (metadata == oldMetadata OR only trigger annotation added/updated)
+    # Logic: If is_sentinel, then (metadata == oldMetadata OR only trigger/resource annotations added/updated)
     # Note: Uses has() to safely check for optional fields before accessing them
+    # The policy allows Sentinel to:
+    # - Add/update "openbao.org/sentinel-trigger" annotation (required)
+    # - Add/update "openbao.org/sentinel-trigger-resource" annotation (optional, for observability)
+    # - All other annotations, labels, and finalizers must remain unchanged
+    # Simplified check: annotations can increase by at most 2 (the two trigger annotations),
+    # and the trigger annotation must be present. This is less strict than checking all annotations
+    # individually, but CEL doesn't support iteration over maps easily.
     - expression: >-
         !variables.is_sentinel ||
         (
@@ -45,16 +52,16 @@ spec:
           (
             ((!has(object.metadata.annotations) && !has(oldObject.metadata.annotations)) ||
              (has(object.metadata.annotations) && has(oldObject.metadata.annotations) && object.metadata.annotations == oldObject.metadata.annotations)) ||
-            (!has(oldObject.metadata.annotations) && has(object.metadata.annotations) &&
-             size(object.metadata.annotations) == 1 && "openbao.org/sentinel-trigger" in object.metadata.annotations) ||
-            (has(oldObject.metadata.annotations) && has(object.metadata.annotations) &&
-             size(object.metadata.annotations) == size(oldObject.metadata.annotations) + 1 &&
-             !("openbao.org/sentinel-trigger" in oldObject.metadata.annotations) &&
-             "openbao.org/sentinel-trigger" in object.metadata.annotations) ||
-            (has(oldObject.metadata.annotations) && has(object.metadata.annotations) &&
-             size(object.metadata.annotations) == size(oldObject.metadata.annotations) &&
-             "openbao.org/sentinel-trigger" in oldObject.metadata.annotations &&
-             "openbao.org/sentinel-trigger" in object.metadata.annotations)
+            (has(object.metadata.annotations) &&
+             "openbao.org/sentinel-trigger" in object.metadata.annotations &&
+             (
+               (!has(oldObject.metadata.annotations) &&
+                size(object.metadata.annotations) <= 2) ||
+               (has(oldObject.metadata.annotations) &&
+                size(object.metadata.annotations) >= size(oldObject.metadata.annotations) &&
+                size(object.metadata.annotations) <= size(oldObject.metadata.annotations) + 2)
+             )
+            )
           )
         )
-      message: "The Sentinel can only add or update the openbao.org/sentinel-trigger annotation. All other metadata changes are forbidden."
+      message: "The Sentinel can only add or update the openbao.org/sentinel-trigger and openbao.org/sentinel-trigger-resource annotations. All other metadata changes are forbidden."

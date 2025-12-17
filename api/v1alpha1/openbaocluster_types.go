@@ -1361,6 +1361,23 @@ type BackupStatus struct {
 	LastFailureReason string `json:"lastFailureReason,omitempty"`
 }
 
+// DriftStatus tracks drift detection and correction events for a cluster.
+type DriftStatus struct {
+	// LastDriftDetected is the timestamp when drift was last detected by Sentinel.
+	// +optional
+	LastDriftDetected *metav1.Time `json:"lastDriftDetected,omitempty"`
+	// DriftCorrectionCount is the total number of times drift has been detected and corrected.
+	// +optional
+	DriftCorrectionCount int32 `json:"driftCorrectionCount,omitempty"`
+	// LastCorrectionTime is the timestamp when drift was last corrected by the operator.
+	// +optional
+	LastCorrectionTime *metav1.Time `json:"lastCorrectionTime,omitempty"`
+	// LastDriftResource is the resource that triggered the last drift detection
+	// (e.g., "Service/sentinel-cluster" or "StatefulSet/sentinel-cluster").
+	// +optional
+	LastDriftResource string `json:"lastDriftResource,omitempty"`
+}
+
 // OpenBaoClusterStatus defines the observed state of an OpenBaoCluster.
 type OpenBaoClusterStatus struct {
 	// Phase is a high-level summary of the cluster state.
@@ -1397,6 +1414,9 @@ type OpenBaoClusterStatus struct {
 	// Backup tracks the state of backups for this cluster.
 	// +optional
 	Backup *BackupStatus `json:"backup,omitempty"`
+	// Drift tracks drift detection and correction events for this cluster.
+	// +optional
+	Drift *DriftStatus `json:"drift,omitempty"`
 	// Conditions represent the current state of the OpenBaoCluster resource.
 	// +listType=map
 	// +listMapKey=type
