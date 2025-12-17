@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -372,8 +371,11 @@ func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
 				Name:      "enable-stdout-audit",
 				Operation: openbaov1alpha1.SelfInitOperationUpdate,
 				Path:      "sys/audit/stdout",
-				Data: &apiextensionsv1.JSON{
-					Raw: []byte(`{"type":"file"}`),
+				AuditDevice: &openbaov1alpha1.SelfInitAuditDevice{
+					Type: "file",
+					FileOptions: &openbaov1alpha1.FileAuditOptions{
+						FilePath: "stdout",
+					},
 				},
 			},
 		},
@@ -455,8 +457,8 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 				Name:      "create-admin-policy",
 				Operation: openbaov1alpha1.SelfInitOperationUpdate,
 				Path:      "sys/policies/acl/admin",
-				Data: &apiextensionsv1.JSON{
-					Raw: []byte(`{"policy":"path \\\"*\\\" { capabilities = [\\\"create\\\"] }"}`),
+				Policy: &openbaov1alpha1.SelfInitPolicy{
+					Policy: `path "*" { capabilities = ["create"] }`,
 				},
 			},
 		},
