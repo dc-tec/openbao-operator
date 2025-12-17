@@ -166,6 +166,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if cluster.Status.Upgrade != nil {
 		metrics.SetPodsCompleted(len(cluster.Status.Upgrade.CompletedPods))
 		metrics.SetTotalPods(int(cluster.Spec.Replicas))
+		metrics.SetPartition(cluster.Status.Upgrade.CurrentPartition)
 	}
 
 	// Phase 5: Pod-by-Pod Update
@@ -872,6 +873,7 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 	podDuration := time.Since(podStartTime).Seconds()
 	metrics.RecordPodDuration(podDuration, podName)
 	metrics.SetPodsCompleted(len(cluster.Status.Upgrade.CompletedPods))
+	metrics.SetPartition(newPartition)
 
 	logger.Info("Pod upgrade completed",
 		"pod", podName,
@@ -1029,7 +1031,10 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	}
 }
 
-// setStatefulSetPartition updates the StatefulSet's partition value.
+// setStatefulSetPartition updates the StatefulSet's partition value using Server-Side Apply
+// with a distinct field manager to avoid conflicts with InfraManager's SSA operations.
+// This ensures the partition field is owned by the upgrade manager and won't be overridden
+// by InfraManager's reconciliation loop.
 func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, partition int32) error {
 	sts := &appsv1.StatefulSet{}
 	stsName := types.NamespacedName{
@@ -1041,16 +1046,35 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 		return fmt.Errorf("failed to get StatefulSet: %w", err)
 	}
 
-	// Ensure RollingUpdate strategy exists
-	if sts.Spec.UpdateStrategy.RollingUpdate == nil {
-		sts.Spec.UpdateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
-		sts.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{}
+	// Create a minimal StatefulSet with only the UpdateStrategy field set.
+	// Using SSA with a distinct field manager ensures this field is owned by the upgrade manager
+	// and won't be overridden by InfraManager's SSA operations.
+	patchSts := &appsv1.StatefulSet{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "StatefulSet",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sts.Name,
+			Namespace: sts.Namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
+				Type: appsv1.RollingUpdateStatefulSetStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
+					Partition: &partition,
+				},
+			},
+		},
 	}
 
-	sts.Spec.UpdateStrategy.RollingUpdate.Partition = &partition
+	// Use Server-Side Apply with a distinct field manager to claim ownership of the partition field
+	patchOpts := []client.PatchOption{
+		client.FieldOwner("openbao-operator-upgrade"),
+	}
 
-	if err := m.client.Update(ctx, sts); err != nil {
-		return fmt.Errorf("failed to update StatefulSet partition: %w", err)
+	if err := m.client.Patch(ctx, patchSts, client.Apply, patchOpts...); err != nil {
+		return fmt.Errorf("failed to update StatefulSet partition via SSA: %w", err)
 	}
 
 	return nil
@@ -1171,6 +1195,7 @@ func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, clust
 	metrics.SetStatus(UpgradeStatusSuccess)
 	metrics.SetPodsCompleted(0)
 	metrics.SetTotalPods(0)
+	metrics.SetPartition(0)
 
 	logger.Info("Upgrade completed successfully",
 		"version", cluster.Spec.Version,
