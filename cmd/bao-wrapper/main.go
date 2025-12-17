@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"flag"
 	"fmt"
@@ -17,7 +18,7 @@ import (
 	"time"
 )
 
-func main() {
+func run(ctx context.Context) error {
 	applyUmaskFromEnv()
 
 	var (
@@ -32,17 +33,17 @@ func main() {
 	// remaining args are the command to run
 	cmdArgs := flag.Args()
 	if len(cmdArgs) == 0 {
-		log.Fatal("No command specified to run")
+		return fmt.Errorf("no command specified to run")
 	}
 
 	// 1. Start the child process
-	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...) // #nosec G204 -- This wrapper intentionally executes user-provided commands
+	cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...) // #nosec G204 -- This wrapper intentionally executes user-provided commands
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ() // Pass through environment variables
 
 	if err := cmd.Start(); err != nil {
-		log.Fatalf("Failed to start child process: %v", err)
+		return fmt.Errorf("failed to start child process: %w", err)
 	}
 
 	// 2. Setup Signal Forwarding (OS -> Wrapper -> Child)
@@ -50,48 +51,39 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		for sig := range sigChan {
-			if err := cmd.Process.Signal(sig); err != nil {
-				log.Printf("Failed to forward signal %v: %v", sig, err)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case sig := <-sigChan:
+				if err := cmd.Process.Signal(sig); err != nil {
+					log.Printf("Failed to forward signal %v: %v", sig, err)
+				}
 			}
 		}
 	}()
 
 	// 3. Start File Watcher (File Change -> Wrapper -> SIGHUP to Child)
 	if watchFile != "" {
-		go func() {
-			lastHash, _ := getFileHash(watchFile)
-			ticker := time.NewTicker(interval)
-			defer ticker.Stop()
-
-			for range ticker.C {
-				currentHash, err := getFileHash(watchFile)
-				if err != nil {
-					log.Printf("Error reading watch file: %v", err)
-					continue
-				}
-
-				if len(lastHash) > 0 && !bytes.Equal(lastHash, currentHash) {
-					log.Printf("File %s changed. Sending SIGHUP to child process...", watchFile)
-					if err := cmd.Process.Signal(syscall.SIGHUP); err != nil {
-						log.Printf("Failed to signal child process: %v", err)
-					} else {
-						lastHash = currentHash
-					}
-				} else if len(lastHash) == 0 {
-					lastHash = currentHash
-				}
+		watchCtx, watchCancel := context.WithCancel(ctx)
+		defer watchCancel()
+		go watchFileForChanges(watchCtx, watchFile, interval, func() {
+			log.Printf("File %s changed. Sending SIGHUP to child process...", watchFile)
+			if err := cmd.Process.Signal(syscall.SIGHUP); err != nil {
+				log.Printf("Failed to signal child process: %v", err)
 			}
-		}()
+		})
 	}
 
 	// 4. Wait for child to exit
 	if err := cmd.Wait(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
+			return fmt.Errorf("child process exited with code %d: %w", exitErr.ExitCode(), err)
 		}
-		log.Fatalf("Child process exited with error: %v", err)
+		return fmt.Errorf("child process exited with error: %w", err)
 	}
+
+	return nil
 }
 
 func applyUmaskFromEnv() {
@@ -107,6 +99,34 @@ func applyUmaskFromEnv() {
 	}
 
 	syscall.Umask(int(mask))
+}
+
+// watchFileForChanges watches a file for changes and calls onChange when a change is detected.
+// It respects context cancellation for clean shutdown.
+func watchFileForChanges(ctx context.Context, path string, interval time.Duration, onChange func()) {
+	lastHash, _ := getFileHash(path)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			currentHash, err := getFileHash(path)
+			if err != nil {
+				log.Printf("Error reading watch file: %v", err)
+				continue
+			}
+
+			if len(lastHash) > 0 && !bytes.Equal(lastHash, currentHash) {
+				onChange()
+				lastHash = currentHash
+			} else if len(lastHash) == 0 {
+				lastHash = currentHash
+			}
+		}
+	}
 }
 
 func getFileHash(path string) ([]byte, error) {
@@ -127,4 +147,14 @@ func getFileHash(path string) ([]byte, error) {
 	}
 
 	return h.Sum(nil), nil
+}
+
+func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	if err := run(ctx); err != nil {
+		log.Printf("Error: %v", err)
+		os.Exit(1)
+	}
 }

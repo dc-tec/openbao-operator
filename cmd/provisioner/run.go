@@ -57,7 +57,12 @@ func init() {
 // Run starts the Provisioner controller manager.
 // The Provisioner is responsible for onboarding new tenant namespaces
 // by creating the necessary RoleBindings that grant the Controller access.
-func Run() {
+// args are the command-line arguments (typically os.Args[2:] after the command name).
+func Run(args []string) {
+	// Set os.Args for flag parsing
+	oldArgs := os.Args
+	os.Args = append([]string{oldArgs[0]}, args...)
+	defer func() { os.Args = oldArgs }()
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string

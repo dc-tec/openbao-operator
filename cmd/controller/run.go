@@ -18,21 +18,9 @@ package controller
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rsa"
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/base64"
-	"encoding/json"
-	"encoding/pem"
-	"errors"
 	"flag"
-	"fmt"
-	"math/big"
-	"net/http"
 	"os"
-	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -48,7 +36,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -57,6 +44,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/auth"
 	certmanager "github.com/openbao/operator/internal/certs"
 	openbaoclustercontroller "github.com/openbao/operator/internal/controller/openbaocluster"
 	initmanager "github.com/openbao/operator/internal/init"
@@ -76,258 +64,15 @@ func init() {
 	utilruntime.Must(gatewayv1alpha2.Install(scheme))
 }
 
-// discoverOIDC fetches the Kubernetes OIDC issuer configuration at operator startup.
-// TIGHTENED: Fail fast if unreachable. Do not fallback to guessing.
-// baseURL allows tests (or specialized environments) to override the default
-// Kubernetes API DNS name. When empty, it defaults to:
-//
-//	https://kubernetes.default.svc
-//
-// Returns empty strings if discovery fails (operator can still run for Development profile clusters).
-func discoverOIDC(
-	ctx context.Context,
-	cfg *rest.Config,
-	baseURL string,
-) (issuerURL string, caBundle string, err error) {
-	// 1. Try well-known endpoint using K8s client transport
-	if baseURL == "" {
-		baseURL = "https://kubernetes.default.svc"
-	}
-	wellKnownURL := baseURL + "/.well-known/openid-configuration"
-
-	transport, err := rest.TransportFor(cfg)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to create transport: %w", err)
-	}
-
-	httpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, wellKnownURL, nil)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to create OIDC discovery request: %w", err)
-	}
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		// TIGHTENED: Return error instead of fallback
-		return "", "", fmt.Errorf("failed to fetch OIDC well-known endpoint: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("OIDC well-known endpoint returned status %d", resp.StatusCode)
-	}
-
-	var oidcConfig struct {
-		Issuer string `json:"issuer"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&oidcConfig); err != nil {
-		return "", "", fmt.Errorf("failed to parse OIDC config: %w", err)
-	}
-
-	if oidcConfig.Issuer == "" {
-		return "", "", fmt.Errorf("OIDC config missing issuer")
-	}
-
-	issuerURL = oidcConfig.Issuer
-
-	// 2. Get CA bundle from REST config
-	if len(cfg.CAData) > 0 {
-		caBundle = string(cfg.CAData)
-	} else if cfg.CAFile != "" {
-		data, err := os.ReadFile(cfg.CAFile)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to read CA file: %w", err)
-		}
-		caBundle = string(data)
-	} else {
-		// No CA configured - use system cert pool (may be empty)
-		caBundle = ""
-	}
-
-	return issuerURL, caBundle, nil
-}
-
-type oidcDiscoveryDocument struct {
-	Issuer  string `json:"issuer"`
-	JWKSURI string `json:"jwks_uri"`
-}
-
-type jwksDocument struct {
-	Keys []jwkKey `json:"keys"`
-}
-
-type jwkKey struct {
-	Kty string `json:"kty"`
-
-	Crv string `json:"crv,omitempty"`
-	X   string `json:"x,omitempty"`
-	Y   string `json:"y,omitempty"`
-
-	N string `json:"n,omitempty"`
-	E string `json:"e,omitempty"`
-
-	X5c []string `json:"x5c,omitempty"`
-}
-
-func pemPublicKeysFromJWKS(jwks jwksDocument) ([]string, error) {
-	var pemKeys []string
-	seen := make(map[string]struct{}, len(jwks.Keys))
-
-	for _, key := range jwks.Keys {
-		if len(key.X5c) > 0 {
-			certDER, err := base64.StdEncoding.DecodeString(key.X5c[0])
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode jwk x5c certificate: %w", err)
-			}
-
-			cert, err := x509.ParseCertificate(certDER)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse jwk x5c certificate: %w", err)
-			}
-
-			pubDER, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal jwk x5c public key: %w", err)
-			}
-
-			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
-			if _, ok := seen[pemKey]; ok {
-				continue
-			}
-			seen[pemKey] = struct{}{}
-			pemKeys = append(pemKeys, pemKey)
-			continue
-		}
-
-		switch key.Kty {
-		case "RSA":
-			nBytes, err := base64.RawURLEncoding.DecodeString(key.N)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode rsa modulus: %w", err)
-			}
-			eBytes, err := base64.RawURLEncoding.DecodeString(key.E)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode rsa exponent: %w", err)
-			}
-			if len(eBytes) == 0 {
-				return nil, fmt.Errorf("rsa exponent is empty")
-			}
-
-			exponent := 0
-			for _, b := range eBytes {
-				exponent = exponent<<8 | int(b)
-			}
-
-			pubKey := &rsa.PublicKey{
-				N: new(big.Int).SetBytes(nBytes),
-				E: exponent,
-			}
-
-			pubDER, err := x509.MarshalPKIXPublicKey(pubKey)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal rsa public key: %w", err)
-			}
-
-			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
-			if _, ok := seen[pemKey]; ok {
-				continue
-			}
-			seen[pemKey] = struct{}{}
-			pemKeys = append(pemKeys, pemKey)
-		case "EC":
-			var curve elliptic.Curve
-			switch key.Crv {
-			case "P-256":
-				curve = elliptic.P256()
-			case "P-384":
-				curve = elliptic.P384()
-			case "P-521":
-				curve = elliptic.P521()
-			default:
-				return nil, fmt.Errorf("unsupported ec curve %q", key.Crv)
-			}
-
-			xBytes, err := base64.RawURLEncoding.DecodeString(key.X)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode ec x coordinate: %w", err)
-			}
-			yBytes, err := base64.RawURLEncoding.DecodeString(key.Y)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode ec y coordinate: %w", err)
-			}
-
-			pubKey := &ecdsa.PublicKey{
-				Curve: curve,
-				X:     new(big.Int).SetBytes(xBytes),
-				Y:     new(big.Int).SetBytes(yBytes),
-			}
-
-			pubDER, err := x509.MarshalPKIXPublicKey(pubKey)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal ec public key: %w", err)
-			}
-
-			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
-			if _, ok := seen[pemKey]; ok {
-				continue
-			}
-			seen[pemKey] = struct{}{}
-			pemKeys = append(pemKeys, pemKey)
-		default:
-			return nil, fmt.Errorf("unsupported jwk key type %q", key.Kty)
-		}
-	}
-
-	if len(pemKeys) == 0 {
-		return nil, fmt.Errorf("no public keys found in jwks")
-	}
-
-	return pemKeys, nil
-}
-
-func fetchOIDCJWKSKeys(ctx context.Context, cfg *rest.Config, jwksURL string) ([]string, error) {
-	if jwksURL == "" {
-		return nil, fmt.Errorf("jwks URL is required")
-	}
-
-	transport, err := rest.TransportFor(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transport: %w", err)
-	}
-
-	httpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create jwks request: %w", err)
-	}
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch jwks endpoint: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("jwks endpoint returned status %d", resp.StatusCode)
-	}
-
-	var jwks jwksDocument
-	if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
-		return nil, fmt.Errorf("failed to parse jwks document: %w", err)
-	}
-
-	keys, err := pemPublicKeysFromJWKS(jwks)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract public keys from jwks: %w", err)
-	}
-
-	return keys, nil
-}
-
 // Run starts the OpenBaoCluster controller manager.
 // The Controller is responsible for reconciling OpenBaoCluster resources,
 // managing StatefulSets, and executing upgrades.
-func Run() {
+// args are the command-line arguments (typically os.Args[2:] after the command name).
+func Run(args []string) {
+	// Set os.Args for flag parsing
+	oldArgs := os.Args
+	os.Args = append([]string{oldArgs[0]}, args...)
+	defer func() { os.Args = oldArgs }()
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var enableLeaderElection bool
@@ -497,64 +242,17 @@ func Run() {
 
 	// Discover OIDC configuration immediately at startup
 	config = mgr.GetConfig()
-	issuer, _, err := discoverOIDC(context.Background(), config, "")
+	oidcConfig, err := auth.DiscoverConfig(context.Background(), config, "")
 	if err != nil {
 		setupLog.Error(err, "Failed to discover Kubernetes OIDC configuration. Hardened profile requires OIDC.")
 		// TIGHTENED: Do not exit; just log. If a user tries to use Hardened mode later,
 		// the Reconciler will fail then. This allows the operator to run on clusters
 		// without OIDC if they only use Development mode.
-		issuer = ""
+		oidcConfig = &auth.OIDCConfig{}
 	} else {
-		setupLog.Info("Discovered Kubernetes OIDC configuration", "issuer", issuer)
-	}
-
-	// Fetch JWKS keys for configuring OpenBao JWT auth without relying on unauthenticated
-	// OIDC discovery from inside the OpenBao Pods.
-	var oidcJWKSKeys []string
-	if issuer != "" {
-		oidcWellKnownURL := "https://kubernetes.default.svc/.well-known/openid-configuration"
-		transport, err := rest.TransportFor(config)
-		if err != nil {
-			setupLog.Error(err, "Failed to create transport for OIDC discovery")
-		} else {
-			httpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second}
-			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, oidcWellKnownURL, nil)
-			if err != nil {
-				setupLog.Error(err, "Failed to create OIDC discovery request")
-			} else {
-				resp, err := httpClient.Do(req)
-				if err != nil {
-					setupLog.Error(err, "Failed to fetch OIDC discovery document for jwks_uri")
-				} else {
-					func() {
-						defer func() { _ = resp.Body.Close() }()
-						if resp.StatusCode != http.StatusOK {
-							statusErr := fmt.Errorf("OIDC well-known endpoint returned status %d", resp.StatusCode)
-							setupLog.Error(statusErr, "Failed to fetch OIDC discovery document for jwks_uri")
-							return
-						}
-
-						var doc oidcDiscoveryDocument
-						if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
-							setupLog.Error(err, "Failed to parse OIDC discovery document for jwks_uri")
-							return
-						}
-						if doc.JWKSURI == "" {
-							missingJWKSURI := errors.New("OIDC config missing jwks_uri")
-							setupLog.Error(missingJWKSURI, "Failed to fetch OIDC discovery document for jwks_uri")
-							return
-						}
-
-						keys, err := fetchOIDCJWKSKeys(context.Background(), config, doc.JWKSURI)
-						if err != nil {
-							setupLog.Error(err, "Failed to fetch JWKS keys; Hardened clusters require JWKS to configure operator auth")
-							return
-						}
-						oidcJWKSKeys = keys
-						setupLog.Info("Fetched OIDC JWKS public keys", "count", len(keys))
-					}()
-				}
-			}
+		setupLog.Info("Discovered Kubernetes OIDC configuration", "issuer", oidcConfig.IssuerURL)
+		if len(oidcConfig.JWKSKeys) > 0 {
+			setupLog.Info("Fetched OIDC JWKS public keys", "count", len(oidcConfig.JWKSKeys))
 		}
 	}
 
@@ -565,8 +263,8 @@ func Run() {
 		TLSReload:         reloadSignaler,
 		InitManager:       initMgr,
 		OperatorNamespace: operatorNamespace,
-		OIDCIssuer:        issuer,
-		OIDCJWTKeys:       oidcJWKSKeys,
+		OIDCIssuer:        oidcConfig.IssuerURL,
+		OIDCJWTKeys:       oidcConfig.JWKSKeys,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
 		os.Exit(1)

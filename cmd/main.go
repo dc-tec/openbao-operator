@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -33,23 +34,29 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-func main() {
+func run() error {
 	if len(os.Args) < 2 {
-		setupLog.Error(nil, "missing command", "valid commands", []string{"provisioner", "controller"})
-		os.Exit(1)
+		return fmt.Errorf("missing command (valid commands: provisioner, controller)")
 	}
 
 	// Shift args so flag parsing works inside sub-functions (e.g., --leader-elect)
 	command := os.Args[1]
-	os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
+	args := os.Args[2:]
 
 	switch command {
 	case "provisioner":
-		provisioner.Run()
+		provisioner.Run(args)
 	case "controller":
-		controller.Run()
+		controller.Run(args)
 	default:
-		setupLog.Error(nil, "unknown command", "command", command, "valid commands", []string{"provisioner", "controller"})
+		return fmt.Errorf("unknown command %q (valid commands: provisioner, controller)", command)
+	}
+	return nil
+}
+
+func main() {
+	if err := run(); err != nil {
+		setupLog.Error(err, "command failed")
 		os.Exit(1)
 	}
 }

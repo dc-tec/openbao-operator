@@ -176,7 +176,7 @@ func main() {
 // in the init container, allowing it to use a distroless/static image (no shell).
 func copyWrapper(sourcePath string) error {
 	const (
-		wrapperDestPath = "/utils/bao-wrapper"
+		wrapperDestPath = constants.PathWrapperBinary
 	)
 
 	return copyBinary(sourcePath, wrapperDestPath)
@@ -184,7 +184,7 @@ func copyWrapper(sourcePath string) error {
 
 func copyProbe(sourcePath string) error {
 	const (
-		probeDestPath = "/utils/bao-probe"
+		probeDestPath = constants.PathProbeBinary
 	)
 
 	return copyBinary(sourcePath, probeDestPath)
