@@ -37,12 +37,17 @@ const (
 	EnvTLSCAPath             = "TLS_CA_PATH"
 
 	EnvBackupCredentialsSecretName      = "BACKUP_CREDENTIALS_SECRET_NAME"      // #nosec G101 -- This is an environment variable name constant, not a credential
-	EnvBackupCredentialsSecretNamespace  = "BACKUP_CREDENTIALS_SECRET_NAMESPACE"  // #nosec G101 -- This is an environment variable name constant, not a credential
+	EnvBackupCredentialsSecretNamespace = "BACKUP_CREDENTIALS_SECRET_NAMESPACE" // #nosec G101 -- This is an environment variable name constant, not a credential
 	EnvBackupTokenSecretName            = "BACKUP_TOKEN_SECRET_NAME"
 	EnvBackupTokenSecretNamespace       = "BACKUP_TOKEN_SECRET_NAMESPACE"
 
 	EnvAWSRoleARN              = "AWS_ROLE_ARN"
 	EnvAWSWebIdentityTokenFile = "AWS_WEB_IDENTITY_TOKEN_FILE" // #nosec G101 -- This is an environment variable name constant, not a credential
+
+	// Sentinel
+	EnvPodNamespace                  = "POD_NAMESPACE"
+	EnvSentinelDebounceWindowSeconds = "SENTINEL_DEBOUNCE_WINDOW_SECONDS"
+	EnvOperatorVersion               = "OPERATOR_VERSION"
 )
 
 // Backup authentication method values.
