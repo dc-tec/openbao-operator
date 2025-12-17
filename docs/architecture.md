@@ -17,6 +17,7 @@ At a high level, the architecture consists of:
 
 - **Operator Controller Manager:** Runs multiple reconcilers (Cert, Config, StatefulSet, Upgrade, Backup) in a single process.
 - **OpenBao StatefulSets:** One StatefulSet per `OpenBaoCluster` providing Raft storage and HA.
+- **Sentinel Sidecar Controller:** An optional per-cluster Deployment that watches for infrastructure drift and triggers fast-path reconciliation. When enabled, the Sentinel detects unauthorized changes to managed resources (StatefulSets, Services, ConfigMaps, Secrets) and immediately triggers the operator to correct them, bypassing expensive operations like upgrades and backups.
 - **Persistent Volumes:** Provided by the cluster's StorageClass for durable Raft data.
 - **Object Storage:** Generic HTTP/S-compatible object storage for snapshots (S3/GCS/Azure Blob or compatible endpoints).
 - **Users / Tenants:** Developers and platform teams who create and manage `OpenBaoCluster` resources in their own namespaces.
@@ -35,7 +36,8 @@ The Operator treats `OpenBaoCluster.Spec` as the declarative source of truth and
 3. **ConfigController:** Generates the `config.hcl` (ConfigMap) injecting TLS paths and `retry_join` stanzas.
 4. **StatefulSetController:** Ensures the StatefulSet exists, matches the desired version, and mounts the Secrets/ConfigMaps.
 5. **UpgradeController:** Intercepts version changes to perform Raft-aware rolling updates.
-6. **OpenBao Pods:** Boot up, mount certs, read config, and auto-join the cluster using the K8s API peer discovery.
+6. **Sentinel (if enabled):** Watches for infrastructure drift and triggers fast-path reconciliation when unauthorized changes are detected.
+7. **OpenBao Pods:** Boot up, mount certs, read config, and auto-join the cluster using the K8s API peer discovery.
 
 ### 1.3 Assumptions and Non-Goals
 
@@ -233,6 +235,36 @@ sequenceDiagram
    - `MaxAge`: Delete backups older than a specified duration
 
 **Note:** Backups are skipped during upgrades to avoid inconsistent snapshots. Backups are optional for all clusters. If backups are enabled, either `jwtAuthRole` or `tokenSecretRef` must be configured. Root tokens are not used for backup operations.
+
+### 2.6 Sentinel Drift Detection (Day N)
+
+The Sentinel is an optional per-cluster sidecar controller that provides high-availability drift detection and fast-path reconciliation. When enabled via `spec.sentinel.enabled`, the operator deploys a lightweight Deployment that watches for unauthorized changes to managed infrastructure resources.
+
+**How It Works:**
+
+1. **Deployment:** The operator creates a Sentinel Deployment in the cluster namespace with a single replica (stateless).
+2. **Watching:** The Sentinel watches StatefulSets, Services, ConfigMaps, and Secrets that are labeled with `app.kubernetes.io/managed-by=openbao-operator` and `app.kubernetes.io/instance=<cluster-name>`.
+3. **Actor Filtering:** The Sentinel ignores changes made by the operator itself by inspecting `managedFields` to prevent infinite loops.
+4. **Debouncing:** Multiple drift events within a configurable window (default: 2 seconds) are coalesced into a single trigger to prevent "thundering herd" scenarios.
+5. **Secret Safety:** For unseal keys and root tokens, the Sentinel uses SHA256 hash comparison to avoid false positives from metadata-only updates.
+6. **Trigger:** When drift is detected, the Sentinel patches the `OpenBaoCluster` with the annotation `openbao.org/sentinel-trigger: <timestamp>`.
+7. **Fast Path:** The operator detects this annotation and enters "fast path" mode, skipping expensive operations (Upgrade and Backup managers) to quickly correct the drift.
+8. **Cleanup:** After successful reconciliation, the operator clears the trigger annotation, which causes a second reconciliation (normal path) to ensure full consistency including backups/upgrades.
+
+**Security Model:**
+
+- The Sentinel has read-only access to infrastructure resources and limited patch access to `OpenBaoCluster` resources.
+- A ValidatingAdmissionPolicy (VAP) enforces that the Sentinel can only modify the trigger annotation; all other mutations (Spec, Status, other annotations, labels, finalizers) are blocked at the API server level.
+- This mathematically prevents privilege escalation even if the Sentinel binary is compromised.
+
+**Configuration:**
+
+- `spec.sentinel.enabled`: Enable/disable Sentinel (default: `true` when `spec.sentinel` is set).
+- `spec.sentinel.image`: Override the Sentinel container image (defaults to `openbao/operator-sentinel:<operator-version>`).
+- `spec.sentinel.resources`: Configure resource limits (defaults: 64Mi memory, 100m CPU requests; 128Mi memory, 200m CPU limits).
+- `spec.sentinel.debounceWindowSeconds`: Configure debounce window (default: 2 seconds, range: 1-60).
+
+**Note:** The Sentinel is designed to be a lightweight, stateless component. It does not store state and can be safely restarted or recreated without affecting cluster operation.
 
 #### 2.5.1 Day N Sequence (Backup Flow)
 
@@ -512,6 +544,49 @@ Backups are named predictably: `<pathPrefix>/<namespace>/<cluster>/<timestamp>-<
 - `Status.Backup.NextScheduledBackup` stores the next scheduled time.
 - On Operator restart, the next schedule is recalculated from the cron expression.
 
+### 3.6 The Sentinel (Drift Detection & Fast-Path Reconciliation)
+
+**Responsibility:** Detect infrastructure drift and trigger fast-path reconciliation to correct unauthorized changes.
+
+The Sentinel is an optional per-cluster sidecar controller deployed as a Deployment. It provides high-availability drift detection by watching managed infrastructure resources and triggering immediate reconciliation when unauthorized changes are detected.
+
+**Architecture:**
+
+1. **Deployment:** The InfrastructureManager creates a Sentinel Deployment when `spec.sentinel.enabled` is true (default when `spec.sentinel` is set).
+2. **Watching:** The Sentinel watches StatefulSets, Services, ConfigMaps, and Secrets in the cluster namespace that are labeled with `app.kubernetes.io/managed-by=openbao-operator` and `app.kubernetes.io/instance=<cluster-name>`.
+3. **Actor Filtering:** To prevent infinite loops, the Sentinel inspects `object.metadata.managedFields` and ignores changes where the most recent manager matches known operator names (`openbao-operator`, `openbao-operator-controller`, `manager`, `openbao-controller`).
+4. **Debouncing:** Multiple drift events within a configurable window (default: 2 seconds) are coalesced into a single trigger to prevent "thundering herd" scenarios when multiple resources change simultaneously (e.g., node failure causing multiple pod state changes).
+5. **Secret Safety:** For Secrets containing unseal keys or root tokens, the Sentinel computes SHA256 hashes of the Secret data and caches them. Only actual data changes trigger drift detection, not metadata-only updates.
+6. **Trigger Mechanism:** When drift is detected, the Sentinel patches the `OpenBaoCluster` resource with the annotation `openbao.org/sentinel-trigger: <RFC3339Nano-timestamp>`. This annotation is the only mutation the Sentinel is authorized to make (enforced by ValidatingAdmissionPolicy).
+7. **Fast Path:** The operator's main reconciliation loop detects the trigger annotation and enters "fast path" mode:
+   - CertManager and InfrastructureManager run normally (to fix the drift)
+   - InitManager runs if needed
+   - **UpgradeManager and BackupManager are skipped** to minimize latency and avoid interfering with emergency drift correction
+8. **Cleanup:** After successful reconciliation, the operator clears the trigger annotation, which causes a second reconciliation (normal path) to ensure full consistency including backups/upgrades.
+
+**Security Model:**
+
+- **RBAC:** The Sentinel has read-only access to infrastructure resources (`get`, `list`, `watch`) and limited patch access to `OpenBaoCluster` resources (`get`, `patch`).
+- **ValidatingAdmissionPolicy:** A cluster-scoped VAP (`openbao-restrict-sentinel-mutations`) enforces that the Sentinel can only modify the trigger annotation. All other mutations are blocked:
+  - Spec changes are blocked
+  - Status changes are blocked
+  - Other annotations are blocked
+  - Labels and finalizers are blocked
+- **Mathematical Security:** Even if the Sentinel binary is compromised, the VAP prevents privilege escalation at the API server level.
+
+**Configuration:**
+
+- `spec.sentinel.enabled`: Enable/disable Sentinel (default: `true` when `spec.sentinel` is set).
+- `spec.sentinel.image`: Override the Sentinel container image (defaults to `openbao/operator-sentinel:<operator-version>` from `OPERATOR_VERSION` env var).
+- `spec.sentinel.resources`: Configure resource limits (defaults: 64Mi memory, 100m CPU requests; 128Mi memory, 200m CPU limits).
+- `spec.sentinel.debounceWindowSeconds`: Configure debounce window in seconds (default: 2, range: 1-60).
+
+**Reconciliation Semantics:**
+
+- The Sentinel is stateless and can be safely restarted or recreated.
+- The Sentinel watches resources continuously and triggers reconciliation asynchronously via annotation patches.
+- The operator's fast-path logic ensures drift is corrected quickly without blocking on expensive operations.
+
 ## 4. Configuration Generation
 
 ### 4.1 The `config.hcl` Template
@@ -520,7 +595,6 @@ The Operator generates the OpenBao configuration file dynamically:
 
 ```hcl
 ui = true
-disable_mlock = true
 
 listener "tcp" {
   address = "0.0.0.0:8200"

@@ -264,6 +264,14 @@ At minimum, envtest suites should cover:
   - Valid user config fragments are merged.
   - Attempts to override protected stanzas are rejected at admission via CRD-level CEL validation and ValidatingAdmissionPolicy, or surfaced via Status Conditions when detected during reconciliation.
 
+- **Sentinel Drift Detection:**
+  - Sentinel Deployment is created when `spec.sentinel.enabled` is true.
+  - Sentinel ServiceAccount, Role, and RoleBinding are created with correct permissions.
+  - Sentinel Deployment is deleted when `spec.sentinel.enabled` is false.
+  - Sentinel trigger annotation (`openbao.org/sentinel-trigger`) triggers fast-path reconciliation.
+  - Fast-path mode skips UpgradeManager and BackupManager when trigger annotation is present.
+  - Trigger annotation is cleared after successful reconciliation.
+
 Where individual envtest assertions involve small decision functions, we still prefer table-driven subtests to cover multiple variations per scenario.
 
 #### Implementation Notes
@@ -334,6 +342,34 @@ E2E tests validate real-system behavior using kind:
   - Backup metrics:
     - `openbao_backup_success_total` increments on success.
     - `openbao_backup_failure_total` increments on failure.
+
+- **Sentinel Drift Detection:**
+  - Enable Sentinel (`spec.sentinel.enabled: true`) and verify:
+    - Sentinel Deployment is created with correct image, resources, and environment variables.
+    - Sentinel ServiceAccount, Role, and RoleBinding are created.
+    - Sentinel health endpoint (`/healthz`) returns 200 OK.
+  - Drift detection:
+    - Manually modify a managed ConfigMap (e.g., change `config.hcl` content).
+    - Verify Sentinel detects the change and patches `OpenBaoCluster` with `openbao.org/sentinel-trigger` annotation.
+    - Verify operator enters fast-path mode (skips Upgrade and Backup managers).
+    - Verify operator corrects the drift and clears the trigger annotation.
+  - Debouncing:
+    - Rapidly modify multiple resources (StatefulSet, Service, ConfigMap) within the debounce window.
+    - Verify only one trigger annotation is set (not multiple).
+  - Actor filtering:
+    - Operator updates a StatefulSet (e.g., during normal reconciliation).
+    - Verify Sentinel does NOT trigger (ignores operator updates).
+  - Secret safety:
+    - Update unseal key Secret metadata (e.g., add annotation) without changing data.
+    - Verify Sentinel does NOT trigger (hash comparison prevents false positives).
+  - VAP enforcement:
+    - Attempt to use Sentinel ServiceAccount to modify `OpenBaoCluster.Spec` (should be blocked by VAP).
+    - Attempt to modify `OpenBaoCluster.Status` (should be blocked by VAP).
+    - Attempt to add other annotations (should be blocked by VAP).
+    - Verify only `openbao.org/sentinel-trigger` annotation can be added/updated.
+  - Cleanup:
+    - Disable Sentinel (`spec.sentinel.enabled: false`).
+    - Verify Sentinel Deployment, ServiceAccount, Role, and RoleBinding are deleted.
     - `openbao_backup_last_success_timestamp` is updated.
   - Backup during upgrade:
     - Verify scheduled backups are skipped when `Status.Upgrade != nil`.

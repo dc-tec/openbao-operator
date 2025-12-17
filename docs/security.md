@@ -225,6 +225,47 @@ sequenceDiagram
 
 ### 2.4.2 Controller Pivot Guard (ValidatingAdmissionPolicy)
 
+### 2.4.3 Sentinel Mutation Restrictions (ValidatingAdmissionPolicy)
+
+The Sentinel is a per-cluster sidecar controller that watches for infrastructure drift and triggers fast-path reconciliation. To prevent privilege escalation, a ValidatingAdmissionPolicy (`openbao-restrict-sentinel-mutations`) enforces strict restrictions on what the Sentinel can modify.
+
+**Policy Scope:**
+
+The VAP matches UPDATE and PATCH operations on `OpenBaoCluster` resources where the requesting user is the Sentinel ServiceAccount (`system:serviceaccount:<namespace>:openbao-sentinel`).
+
+**Enforced Restrictions:**
+
+1. **Spec Immutability:** The Sentinel cannot modify `OpenBaoCluster.Spec`. This ensures the Sentinel cannot change the desired state (e.g., version, replicas, configuration).
+
+2. **Status Immutability:** The Sentinel cannot modify `OpenBaoCluster.Status`. This prevents the Sentinel from confusing the operator's status logic or masking conditions.
+
+3. **Annotation Restrictions:** The Sentinel can only add or update the `openbao.org/sentinel-trigger` annotation. All other annotations, labels, and finalizers are blocked.
+
+**Security Guarantees:**
+
+- **Mathematical Security:** Even if the Sentinel binary is compromised, the VAP prevents privilege escalation at the API server level. The Sentinel cannot:
+  - Modify cluster configuration
+  - Change status conditions
+  - Add or modify labels
+  - Modify finalizers
+  - Access or modify other resources
+
+- **Least Privilege:** The Sentinel has minimal RBAC permissions (read-only access to infrastructure, limited patch access to `OpenBaoCluster`), and the VAP further restricts what mutations are allowed.
+
+**Policy Expression:**
+
+The VAP uses CEL (Common Expression Language) to:
+- Identify Sentinel requests via ServiceAccount username pattern matching
+- Compare `object.spec` with `oldObject.spec` to block Spec changes
+- Compare `object.status` with `oldObject.status` to block Status changes
+- Validate that only the trigger annotation is added/updated in metadata
+
+**Deployment:**
+
+The VAP and VAPBinding are included in the operator's installation manifests (`config/policy/restrict-sentinel-mutations.yaml` and `config/policy/restrict-sentinel-mutations-binding.yaml`). They are automatically applied when the operator is deployed.
+
+**Note:** This VAP requires Kubernetes 1.33+ (ValidatingAdmissionPolicy is a stable feature in 1.33+).
+
 In addition to the resource lock policy (which blocks *external* actors from mutating managed resources),
 the operator deploys a Kubernetes-native `ValidatingAdmissionPolicy` to constrain what the **controller
 ServiceAccount itself** is allowed to change on long-lived workloads.
