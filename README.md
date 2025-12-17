@@ -3,71 +3,92 @@
 The OpenBao Supervisor Operator manages the full lifecycle of OpenBao clusters on Kubernetes. It adopts a **Supervisor Pattern**, delegating data consistency to OpenBao (Raft) while managing the external ecosystem (PKI, Upgrades, Backups).
 
 ## Architecture Overview
+
+The Operator is split into two distinct components to enforce strict security boundaries:
+
+1.  **Provisioner:** A privileged component that creates namespaces and grants specific, limited RBAC permissions.
+2.  **Controller:** A low-privilege workload that manages OpenBao clusters. It cannot access resources outside of its provisioned namespaces.
+
 ```mermaid
 flowchart LR
-  %% High-level view: keep the "what talks to what" clear.
+  %% High-level view showing the separation of Provisioner and Controller
   user["Platform team / tenant admin"]
 
   api["Kubernetes API server"]
-  operator["OpenBao Operator<br/>(controller manager)"]
+  
+  subgraph "Operator System"
+    provisioner["Provisioner<br/>(Cluster Privileges)"]
+    controller["Controller<br/>(Namespace Privileges)"]
+  end
 
   tenantNS["Tenant namespace<br/>- OpenBaoCluster (CR)<br/>- Tenant RBAC"]
   clusterNS["OpenBao cluster namespace<br/>(managed resources)"]
 
-  access["OpenBao endpoint<br/>(Service + optional Ingress/HTTPRoute)"]
-  gw["Gateway (optional,<br/>user-managed)"]
-  obj["Object storage<br/>(S3 / GCS / Azure Blob)"]
+  access["OpenBao endpoint<br/>(Service)"]
+  obj["Object storage<br/>(S3 / GCS / Azure)"]
 
   user -->|apply CRs| api
-  operator <-->|watch/reconcile| api
-
-  operator -->|provision RBAC| tenantNS
-  operator -->|create/update resources| clusterNS
+  
+  provisioner <-->|watch Tenants| api
+  provisioner -->|1. create NS & RBAC| tenantNS
+  
+  controller <-->|watch Clusters| api
+  controller -->|2. reconcile resources| clusterNS
 
   clusterNS --> access
   user -->|OpenBao API| access
-  user -->|OpenBao API via Gateway| gw --> access
 
-  operator -->|stream snapshots| obj
+  controller -->|stream snapshots| obj
 
   classDef core fill:#EBFBEE,stroke:#2F9E44,color:#1B5E20;
   classDef api fill:#F1F3F5,stroke:#495057,color:#212529;
   classDef ns fill:#FFF4E6,stroke:#F08C00,color:#7A3E00;
 
-  class operator core;
+  class provisioner,controller core;
   class api api;
   class tenantNS,clusterNS ns;
-
 ```
 
 ```mermaid
 flowchart TB
-  %% Per OpenBaoCluster: what the operator manages in the cluster namespace.
-  clusterCtl["OpenBaoClusterController"]
-  secrets["Secrets<br/>(TLS + unseal)"]
-  config["ConfigMap<br/>config.hcl"]
-  sts["StatefulSet"]
-  pods["Pods"]
-  pvc["PVCs / PVs"]
-  svc["Services"]
-  edge["Ingress / HTTPRoute<br/>(optional)"]
+  %% Per OpenBaoCluster: showing the Sentinel interaction
+  clusterCtl["Reconciler"]
+  
+  subgraph "Data Plane"
+    secrets["Secrets"]
+    config["ConfigMap"]
+    
+    subgraph "StatefulSet Pod"
+      bao["OpenBao Container"]
+      sentinel["Sentinel Sidecar"]
+    end
+    
+    svc["Service"]
+  end
 
   clusterCtl -->|reconcile| secrets
   clusterCtl -->|reconcile| config
   clusterCtl -->|reconcile| svc
-  clusterCtl -->|reconcile| edge
-  clusterCtl -->|reconcile| sts
-
-  sts --> pods --> pvc
+  
+  config -.->|mount| bao
+  secrets -.->|mount| bao
+  
+  sentinel -.->|watch for drift| config
+  sentinel -.->|watch for drift| secrets
+  sentinel -->|trigger fast-path| clusterCtl
 
   classDef controller fill:#EBFBEE,stroke:#2F9E44,color:#1B5E20;
   classDef workload fill:#FFF4E6,stroke:#F08C00,color:#7A3E00;
+  classDef sidecar fill:#E7F5FF,stroke:#1C7ED6,color:#1864AB;
+  
   class clusterCtl controller;
-  class secrets,config,sts,pods,pvc,svc,edge workload;
+  class secrets,config,bao,svc workload;
+  class sentinel sidecar;
 ```
 
 ## Key Features
 
+  * **Zero Trust Architecture:** The Controller runs with minimal permissions. Access is granted dynamically per-tenant by the Provisioner.
   * **Automated PKI:** Manages internal Root CA, rotates certificates, and triggers hot-reloads.
   * **Raft-Aware Upgrades:** Orchestrates safe, step-down based rolling upgrades.
   * **Disaster Recovery:** Streams snapshots directly to S3/GCS/Azure without disk buffering.
