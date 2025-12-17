@@ -21,3 +21,14 @@ func JSONFrom(v interface{}) (*apiextensionsv1.JSON, error) {
 	}
 	return &apiextensionsv1.JSON{Raw: raw}, nil
 }
+
+// MustJSON marshals an arbitrary Go value into apiextensionsv1.JSON and panics on error.
+// This is a convenience function for test code where marshaling failures should cause
+// the test to fail immediately.
+func MustJSON(v interface{}) *apiextensionsv1.JSON {
+	result, err := JSONFrom(v)
+	if err != nil {
+		panic(fmt.Sprintf("MustJSON failed: %v", err))
+	}
+	return result
+}

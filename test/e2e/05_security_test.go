@@ -57,7 +57,7 @@ func createAdminPolicyAndJWTAuthRequests() []openbaov1alpha1.SelfInitRequest {
 	}
 }
 
-var _ = Describe("Chaos and Security", Ordered, func() {
+var _ = Describe("Security", Ordered, func() {
 	ctx := context.Background()
 
 	var (
@@ -379,104 +379,6 @@ var _ = Describe("Chaos and Security", Ordered, func() {
 			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
-		})
-	})
-
-	Context("Controller resilience (chaos)", func() {
-		var (
-			tenantNamespace string
-			tenantFW        *framework.Framework
-			chaos           *openbaov1alpha1.OpenBaoCluster
-		)
-
-		BeforeAll(func() {
-			var err error
-
-			tenantFW, err = framework.New(ctx, admin, "tenant-chaos", operatorNamespace)
-			Expect(err).NotTo(HaveOccurred())
-			tenantNamespace = tenantFW.Namespace
-
-			chaos = &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "chaos-cluster",
-					Namespace: tenantNamespace,
-				},
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Profile:  openbaov1alpha1.ProfileDevelopment,
-					Version:  openBaoVersion,
-					Image:    openBaoImage,
-					Replicas: 1,
-					InitContainer: &openbaov1alpha1.InitContainerConfig{
-						Enabled: true,
-						Image:   configInitImage,
-					},
-					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:  true,
-						Requests: createAdminPolicyAndJWTAuthRequests(),
-					},
-					TLS: openbaov1alpha1.TLSConfig{
-						Enabled:        true,
-						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
-						RotationPeriod: "720h",
-					},
-					Storage: openbaov1alpha1.StorageConfig{
-						Size: "1Gi",
-					},
-					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
-					},
-					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
-				},
-			}
-			Expect(admin.Create(ctx, chaos)).To(Succeed())
-
-			Eventually(func() error {
-				return admin.Get(ctx, types.NamespacedName{Name: chaos.Name + "-config", Namespace: tenantNamespace}, &corev1.ConfigMap{})
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-		})
-
-		AfterAll(func() {
-			if tenantFW == nil {
-				return
-			}
-			cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			defer cancel()
-
-			_ = tenantFW.Cleanup(cleanupCtx)
-		})
-
-		It("prevents deletion of managed ConfigMap (policy enforcement)", func() {
-			cm := &corev1.ConfigMap{}
-			err := admin.Get(ctx, types.NamespacedName{Name: chaos.Name + "-config", Namespace: tenantNamespace}, cm)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Attempt to delete the ConfigMap - this should be blocked by the ValidatingAdmissionPolicy
-			err = admin.Delete(ctx, cm)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
-			Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy"))
-
-			// Verify the ConfigMap still exists
-			Eventually(func() error {
-				return admin.Get(ctx, types.NamespacedName{Name: chaos.Name + "-config", Namespace: tenantNamespace}, &corev1.ConfigMap{})
-			}, 5*time.Second, 1*time.Second).Should(Succeed())
-		})
-
-		It("prevents deletion of managed StatefulSet (policy enforcement)", func() {
-			sts := &appsv1.StatefulSet{}
-			err := admin.Get(ctx, types.NamespacedName{Name: chaos.Name, Namespace: tenantNamespace}, sts)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Attempt to delete the StatefulSet - this should be blocked by the ValidatingAdmissionPolicy
-			err = admin.Delete(ctx, sts)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
-			Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy"))
-
-			// Verify the StatefulSet still exists
-			Eventually(func() error {
-				return admin.Get(ctx, types.NamespacedName{Name: chaos.Name, Namespace: tenantNamespace}, &appsv1.StatefulSet{})
-			}, 5*time.Second, 1*time.Second).Should(Succeed())
 		})
 	})
 

@@ -71,6 +71,11 @@ var (
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
 	// and load it into kind. The version matches OPERATOR_VERSION in the operator deployment.
 	sentinelImage = "openbao/operator-sentinel:v0.0.0"
+
+	// backupExecutorImage is the image used by backup Jobs.
+	// It must be resolvable inside the kind cluster; in E2E we build it locally
+	// and load it into kind.
+	backupExecutorImage = "openbao/backup-executor:dev"
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -113,6 +118,15 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	By("loading the Sentinel image on Kind")
 	err = utils.LoadImageToKindClusterWithName(sentinelImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the Sentinel image into Kind")
+
+	By("building the backup executor image")
+	cmd = exec.Command("make", "docker-build-backup", fmt.Sprintf("IMG=%s", backupExecutorImage))
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the backup executor image")
+
+	By("loading the backup executor image on Kind")
+	err = utils.LoadImageToKindClusterWithName(backupExecutorImage)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the backup executor image into Kind")
 
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,
@@ -163,6 +177,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 }, func(data []byte) {
 	// THIS BLOCK RUNS ON ALL NODES (after node 1 finishes)
 	// No additional setup needed here - the client/scheme setup is done in individual test BeforeAll blocks
+	// This block must exist for SynchronizedBeforeSuite coordination, but it's intentionally empty
+	// to allow nodes to proceed immediately after node 1 completes setup
 })
 
 var _ = SynchronizedAfterSuite(func() {
@@ -178,10 +194,12 @@ var _ = SynchronizedAfterSuite(func() {
 	_, _ = utils.Run(cmd)
 
 	By("cleaning up OpenBao custom resources before undeploying")
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	// Use a shorter timeout for cleanup - if resources are stuck, we'll remove finalizers quickly
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := cleanupOpenBaoCustomResources(ctx); err != nil {
-		_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: cleanupOpenBaoCustomResources failed: %v\n", err)
+		_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: cleanupOpenBaoCustomResources failed (will continue with undeploy): %v\n", err)
+		// Continue with cleanup even if resource deletion failed - undeploy will handle it
 	}
 
 	By("undeploying the operator")
@@ -231,11 +249,13 @@ func cleanupOpenBaoCustomResources(ctx context.Context) error {
 		return err
 	}
 
-	if err := waitForOpenBaoCustomResourcesDeleted(ctx, c, 45*time.Second, 2*time.Second); err == nil {
+	// Wait briefly for resources to be deleted (most should delete quickly)
+	if err := waitForOpenBaoCustomResourcesDeleted(ctx, c, 10*time.Second, 1*time.Second); err == nil {
 		return nil
 	}
 
 	// If resources are stuck (usually finalizers), remove finalizers and try again.
+	// This is faster than waiting for the full timeout
 	if err := removeFinalizersFromOpenBaoCustomResources(ctx, c); err != nil {
 		return err
 	}
@@ -243,8 +263,19 @@ func cleanupOpenBaoCustomResources(ctx context.Context) error {
 		return err
 	}
 
-	if err := waitForOpenBaoCustomResourcesDeleted(ctx, c, 45*time.Second, 2*time.Second); err != nil {
-		return err
+	// Wait again with remaining context time (but cap at 10 seconds)
+	deadline, hasDeadline := ctx.Deadline()
+	if hasDeadline {
+		remainingTimeout := time.Until(deadline)
+		if remainingTimeout > 10*time.Second {
+			remainingTimeout = 10 * time.Second
+		}
+		if remainingTimeout > 0 {
+			if err := waitForOpenBaoCustomResourcesDeleted(ctx, c, remainingTimeout, 1*time.Second); err != nil {
+				// Log but don't fail - undeploy will clean up remaining resources
+				_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: Some resources may still exist after cleanup: %v\n", err)
+			}
+		}
 	}
 
 	return nil
