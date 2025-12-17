@@ -93,14 +93,20 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// which is required before we can attempt initialization via HTTP API.
 	if !isContainerRunning(pod) {
 		// Log startup probe status for debugging
-		for _, status := range pod.Status.ContainerStatuses {
-			if status.Name == constants.ContainerNameOpenBao {
-				if status.Started != nil {
-					logger.V(1).Info("Container running but startup probe not passed yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase, "started", *status.Started)
-				} else {
-					logger.V(1).Info("Container running but startup probe status not available yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase)
+		// ContainerStatuses may be empty if the pod was just created and status hasn't been populated yet.
+		// This is normal and we should wait for Kubernetes to populate the status.
+		if len(pod.Status.ContainerStatuses) > 0 {
+			for _, status := range pod.Status.ContainerStatuses {
+				if status.Name == constants.ContainerNameOpenBao {
+					if status.Started != nil {
+						logger.V(1).Info("Container running but startup probe not passed yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase, "started", *status.Started)
+					} else {
+						logger.V(1).Info("Container running but startup probe status not available yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase)
+					}
 				}
 			}
+		} else {
+			logger.V(1).Info("Container status not yet populated; waiting for Kubernetes to update pod status", "pod", pod.Name, "phase", pod.Status.Phase)
 		}
 		logger.Info("Container not ready for initialization yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase)
 		return false, nil
@@ -480,9 +486,16 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 // until OpenBao is initialized, creating a chicken-and-egg problem.
 // If the container has a startup probe, we wait for it to pass (status.Started == true)
 // to ensure the service is actually listening before attempting initialization.
+// Returns false if ContainerStatuses is nil or empty (pod status not yet populated by Kubernetes).
 func isContainerRunning(pod *corev1.Pod) bool {
 	// Check if pod is in Running phase
 	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+
+	// ContainerStatuses may be empty if the pod was just created and status hasn't been populated yet.
+	// This is normal - Kubernetes status updates are asynchronous. We should wait for status to be populated.
+	if len(pod.Status.ContainerStatuses) == 0 {
 		return false
 	}
 
