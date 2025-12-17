@@ -97,7 +97,10 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 }
 
 // processBackupJobResult processes the result of a completed backup Job and updates cluster status.
-func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) error {
+// Returns (statusUpdated, error) where statusUpdated indicates if the status was modified
+// (job completed successfully or failed). This is used to determine if a requeue is needed
+// to persist the status update.
+func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (bool, error) {
 	job := &batchv1.Job{}
 
 	err := m.client.Get(ctx, types.NamespacedName{
@@ -108,9 +111,9 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// Job was cleaned up or doesn't exist
-			return nil
+			return false, nil
 		}
-		return fmt.Errorf("failed to get backup Job %s/%s: %w", cluster.Namespace, jobName, err)
+		return false, fmt.Errorf("failed to get backup Job %s/%s: %w", cluster.Namespace, jobName, err)
 	}
 
 	// Check Job status
@@ -126,8 +129,8 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		m.setBackingUpCondition(cluster, false, "BackupSucceeded",
 			fmt.Sprintf("Backup Job %s completed successfully", jobName))
 
-		logger.Info("Backup Job completed successfully", "job", jobName)
-		return nil
+		logger.Info("Backup Job completed successfully, status updated", "job", jobName, "lastBackupTime", now)
+		return true, nil // Status was updated - request requeue to persist
 	}
 
 	if job.Status.Failed > 0 {
@@ -138,16 +141,16 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		m.setBackingUpCondition(cluster, false, "BackupFailed",
 			fmt.Sprintf("Backup Job %s failed", jobName))
 
-		logger.Error(fmt.Errorf("backup job failed"), "Backup Job failed",
+		logger.Error(fmt.Errorf("backup job failed"), "Backup Job failed, status updated",
 			"job", jobName,
 			"consecutiveFailures", cluster.Status.Backup.ConsecutiveFailures)
-		return nil
+		return true, nil // Status was updated - request requeue to persist
 	}
 
 	// Job is still running
 	m.setBackingUpCondition(cluster, true, "BackupInProgress",
 		fmt.Sprintf("Backup Job %s is in progress", jobName))
-	return nil
+	return false, nil // Status updated but job still running - no requeue needed yet
 }
 
 func backupJobName(cluster *openbaov1alpha1.OpenBaoCluster, scheduledTime time.Time) string {

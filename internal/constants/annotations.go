@@ -9,6 +9,11 @@ const (
 	// which resource triggered the drift detection (e.g., "Service/sentinel-cluster").
 	// This is set alongside AnnotationSentinelTrigger for observability.
 	AnnotationSentinelTriggerResource = "openbao.org/sentinel-trigger-resource"
+	// AnnotationTriggerBackup is the annotation key used to trigger an immediate manual backup.
+	// When set to a non-empty value (typically a timestamp), the backup manager will create
+	// a backup job immediately, bypassing the schedule. The annotation is cleared after the
+	// backup is triggered.
+	AnnotationTriggerBackup = "openbao.org/trigger-backup"
 )
 
 // Sentinel resource names.

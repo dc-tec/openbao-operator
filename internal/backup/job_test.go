@@ -650,12 +650,16 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 	k8sClient := newTestClient(t, succeededJob)
 	manager := NewManager(k8sClient, testScheme)
 
-	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
 
 	// Verify status was updated
+	if !statusUpdated {
+		t.Error("processBackupJobResult() should return true when job succeeded")
+	}
+
 	if cluster.Status.Backup.LastBackupTime == nil {
 		t.Error("processBackupJobResult() should set LastBackupTime")
 	}
@@ -690,12 +694,16 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	k8sClient := newTestClient(t, failedJob)
 	manager := NewManager(k8sClient, testScheme)
 
-	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
 
 	// Verify status was updated
+	if !statusUpdated {
+		t.Error("processBackupJobResult() should return true when job failed")
+	}
+
 	if cluster.Status.Backup.ConsecutiveFailures != 1 {
 		t.Errorf("processBackupJobResult() ConsecutiveFailures = %v, want 1", cluster.Status.Backup.ConsecutiveFailures)
 	}
@@ -716,9 +724,13 @@ func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
 	manager := NewManager(k8sClient, testScheme)
 
 	// Should not error when job doesn't exist
-	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() with missing job should not error, got: %v", err)
+	}
+
+	if statusUpdated {
+		t.Error("processBackupJobResult() should return false when job doesn't exist")
 	}
 }
 
@@ -742,11 +754,15 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 	k8sClient := newTestClient(t, runningJob)
 	manager := NewManager(k8sClient, testScheme)
 
-	err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
 
 	// Status should indicate backup is in progress
 	// (We can't easily test the condition without exposing setBackingUpCondition)
+	// Status was updated (condition set) but job is still running, so no requeue needed
+	if statusUpdated {
+		t.Error("processBackupJobResult() should return false when job is still running")
+	}
 }

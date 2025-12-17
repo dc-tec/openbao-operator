@@ -391,6 +391,9 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Execute sub-reconcilers in order
 	for _, rec := range reconcilers {
+		// Capture state before reconciler runs to detect status changes
+		statusBeforeReconcile := cluster.Status.DeepCopy()
+
 		shouldRequeue, err := rec.Reconcile(ctx, logger, cluster)
 		if err != nil {
 			// Special handling for CertManager errors - set TLSReady condition
@@ -435,6 +438,27 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, reconcileErr
 		}
 
+		// For BackupManager, persist status if it was initialized (even if preconditions fail)
+		// The backup manager initializes Status.Backup before checking preconditions, so we need
+		// to persist it even if the manager returns early due to failed preconditions.
+		if _, isBackupManager := rec.(*backupmanager.Manager); isBackupManager {
+			// Check if Status.Backup was initialized (was nil, now not nil)
+			wasNil := statusBeforeReconcile.Backup == nil
+			isInitialized := cluster.Status.Backup != nil
+			if wasNil && isInitialized {
+				// Status.Backup was just initialized - persist it immediately
+				// This ensures the status is available even if preconditions fail
+				if statusErr := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
+					logger.Error(statusErr, "Failed to persist backup status initialization")
+					// Don't fail the reconcile - status will be persisted on next reconcile
+				} else {
+					logger.V(1).Info("Persisted backup status initialization")
+					// Update original for subsequent status patches
+					original = cluster.DeepCopy()
+				}
+			}
+		}
+
 		// If a reconciler requests requeue, stop the chain and return
 		if shouldRequeue {
 			// For infra reconciler, handle special requeue cases
@@ -450,6 +474,16 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			// This ensures InfraReconciler sees the updated status on the next reconcile
 			if _, isInitManager := rec.(*initmanager.Manager); isInitManager {
 				// Update status before requeuing so Initialized=true is persisted
+				if statusErr := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
+					reconcileErr = fmt.Errorf("failed to update status before requeue: %w", statusErr)
+					return ctrl.Result{}, reconcileErr
+				}
+				return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+			}
+			// For BackupManager, requeue with a short delay to check if backup is due
+			// This ensures timely backup execution even with frequent schedules
+			if _, isBackupManager := rec.(*backupmanager.Manager); isBackupManager {
+				// Update status before requeuing to persist any status changes
 				if statusErr := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
 					reconcileErr = fmt.Errorf("failed to update status before requeue: %w", statusErr)
 					return ctrl.Result{}, reconcileErr
@@ -534,8 +568,7 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Safety net: periodically requeue to detect and correct drift that may
-	// have bypassed admission controls (for example, if the resource locking
-	// webhook is temporarily disabled). The interval is long to minimize API
+	// have bypassed admission control. The interval is long to minimize API
 	// load and does not change the core reconciliation semantics.
 	jitterNanos := time.Now().UnixNano() % int64(constants.RequeueSafetyNetJitter)
 	requeueAfter := constants.RequeueSafetyNetBase + time.Duration(jitterNanos)

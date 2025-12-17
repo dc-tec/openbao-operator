@@ -365,7 +365,8 @@ func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
 	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
-		Enabled: true,
+		Enabled:          true,
+		BootstrapJWTAuth: true, // Opt-in to JWT bootstrap
 		Requests: []openbaov1alpha1.SelfInitRequest{
 			{
 				Name:      "enable-stdout-audit",
@@ -447,7 +448,8 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 		},
 	}
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
-		Enabled: true,
+		Enabled:          true,
+		BootstrapJWTAuth: true, // Opt-in to JWT bootstrap (required for backup JWT role creation)
 		Requests: []openbaov1alpha1.SelfInitRequest{
 			{
 				Name:      "create-admin-policy",
