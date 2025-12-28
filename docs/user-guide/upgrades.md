@@ -2,15 +2,39 @@
 
 [Back to User Guide index](README.md)
 
-### 12.1 Upgrade Authentication
+## 12.1 Upgrade Strategies
+
+The OpenBao Operator supports two upgrade strategies:
+
+| Strategy | Description | Use Case |
+|----------|-------------|----------|
+| **RollingUpdate** (default) | Updates pods one-by-one with leader step-down | Standard upgrades, minimal resource usage |
+| **BlueGreen** | Creates a parallel "Green" cluster before switching traffic | Zero-downtime upgrades, safer rollback path |
+
+Configure the strategy in your `OpenBaoCluster` spec:
+
+```yaml
+spec:
+  updateStrategy:
+    type: BlueGreen  # or RollingUpdate (default)
+    blueGreen:
+      autoPromote: true  # Automatically promote after sync (default: true)
+      verification:
+        minSyncDuration: "30s"  # Wait before promotion (optional)
+```
+
+---
+
+## 12.2 Upgrade Authentication
 
 Upgrade operations that require OpenBao permissions run in Kubernetes Jobs (upgrade executor). These Jobs authenticate to OpenBao via JWT using a projected ServiceAccount token.
 
 The upgrade executor requires:
+
 - `spec.upgrade.executorImage`
 - `spec.upgrade.jwtAuthRole`
 
-#### 12.1.1 JWT Auth (Preferred)
+### 12.2.1 JWT Auth (Preferred)
 
 Configure JWT Auth for upgrade operations:
 
@@ -41,7 +65,6 @@ spec:
               capabilities = ["read"]
             }
       # Create JWT Auth role for upgrades
-      # The ServiceAccount name is automatically <cluster-name>-upgrade-serviceaccount
       - name: create-upgrade-jwt-role
         operation: update
         path: auth/jwt/role/upgrade
@@ -55,11 +78,11 @@ spec:
           ttl: 1h
   upgrade:
     executorImage: openbao/upgrade-executor:v0.1.0
-    jwtAuthRole: upgrade  # Reference to the role created above
+    jwtAuthRole: upgrade
     preUpgradeSnapshot: true
 ```
 
-2. **Configure the upgrade manager to use the role:**
+1. **Configure the upgrade manager to use the role:**
 
 ```yaml
 spec:
@@ -68,16 +91,19 @@ spec:
     jwtAuthRole: upgrade
 ```
 
-**Note:** For `Hardened` profile clusters, JWT authentication is automatically bootstrapped during self-init, so you only need to create the upgrade policy and role.
+---
 
-### 12.2 Upgrade ServiceAccount
+## 12.3 Upgrade ServiceAccount
 
 The operator automatically creates `<cluster-name>-upgrade-serviceaccount` when upgrade authentication is configured. This ServiceAccount:
+
 - Is used by upgrade executor Jobs for JWT Auth (via projected ServiceAccount token)
 - Is mounted into the Job Pod via a projected token volume with audience `openbao-internal`
 - Is owned by the OpenBaoCluster for automatic cleanup
 
-### 12.3 Performing Upgrades
+---
+
+## 12.4 Performing Upgrades
 
 To upgrade an OpenBao cluster, update the `spec.version` field:
 
@@ -86,12 +112,43 @@ kubectl -n security patch openbaocluster dev-cluster \
   --type merge -p '{"spec":{"version":"2.5.0"}}'
 ```
 
+### 12.4.1 Rolling Update Strategy
+
 The upgrade manager will:
+
 1. Validate the target version
 2. Perform pre-upgrade validation (cluster health, quorum, leader detection)
 3. Create a pre-upgrade snapshot (if `spec.upgrade.preUpgradeSnapshot` is enabled)
 4. Perform a rolling upgrade, pod-by-pod, with leader step-down handling
 5. Update `Status.CurrentVersion` when complete
+
+### 12.4.2 Blue/Green Upgrade Strategy
+
+The Blue/Green upgrade follows a 7-phase process:
+
+```
+Idle → DeployingGreen → JoiningMesh → Syncing → Promoting → DemotingBlue → Cleanup → Idle
+```
+
+| Phase | Description |
+|-------|-------------|
+| **Idle** | No upgrade in progress |
+| **DeployingGreen** | Creating Green StatefulSet with new version, waiting for pods to be ready and unsealed |
+| **JoiningMesh** | Green pods join the Raft cluster as non-voters |
+| **Syncing** | Green pods replicate data from Blue leader |
+| **Promoting** | Green pods promoted to voters |
+| **DemotingBlue** | Blue pods demoted to non-voters, Green leader election verified |
+| **Cleanup** | Blue pods removed from Raft, Blue StatefulSet deleted |
+
+**Key benefits:**
+
+- Zero-downtime: traffic only switches after Green is fully synced
+- Safe rollback: Blue cluster remains available until cleanup phase
+- Verification: automatic sync verification before promotion
+
+---
+
+## 12.5 Monitoring Upgrades
 
 Monitor upgrade progress:
 
@@ -99,4 +156,19 @@ Monitor upgrade progress:
 kubectl -n security get openbaocluster dev-cluster -o yaml
 ```
 
-Check `Status.Upgrade` for current progress and `Status.Conditions` for upgrade state.
+Check `Status.BlueGreen` for Blue/Green upgrade progress:
+
+```yaml
+status:
+  blueGreen:
+    phase: Syncing
+    blueRevision: "e8983038c519c718"
+    greenRevision: "269c4f7ba494030d"
+    startTime: "2024-01-15T10:30:00Z"
+```
+
+Check `Status.Conditions` for upgrade state:
+
+```sh
+kubectl -n security get openbaocluster dev-cluster -o jsonpath='{.status.conditions}' | jq
+```

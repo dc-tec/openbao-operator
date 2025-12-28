@@ -495,6 +495,74 @@ Upgrades are designed to survive Operator restarts:
   3. Otherwise, resume from `Status.Upgrade.CurrentPartition`.
   4. Re-verify health of already-upgraded pods before continuing.
 
+#### 3.4.1 Blue/Green Upgrade Strategy
+
+When `spec.updateStrategy.type` is `BlueGreen`, the operator uses a parallel cluster upgrade approach instead of rolling updates.
+
+**Architecture:**
+
+The Blue/Green strategy is implemented in the `internal/upgrade/bluegreen/` subpackage:
+
+- `manager.go` - Main upgrade orchestrator (`bluegreen.Manager`)
+- `actions.go` - Executor action constants
+- `job.go` - Upgrade executor Job creation
+- `constants.go` - Condition reason strings
+
+**7-Phase State Machine:**
+
+```
+Idle → DeployingGreen → JoiningMesh → Syncing → Promoting → DemotingBlue → Cleanup → Idle
+```
+
+| Phase | Description |
+|-------|-------------|
+| **Idle** | No upgrade in progress, `CurrentVersion == Spec.Version` |
+| **DeployingGreen** | Creates Green StatefulSet with new version, waits for all pods to be running, ready, and unsealed |
+| **JoiningMesh** | Runs executor Job to join Green pods to Raft as non-voters |
+| **Syncing** | Runs executor Job to verify Green pods have replicated data, respects `minSyncDuration` if configured |
+| **Promoting** | Runs executor Job to promote Green pods to voters |
+| **DemotingBlue** | Runs executor Job to demote Blue pods to non-voters, verifies Green leader election |
+| **Cleanup** | Runs executor Job to remove Blue peers from Raft, deletes Blue StatefulSet |
+
+**Blue/Green State Machine Flow:**
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> DeployingGreen: Spec.Version != CurrentVersion
+    DeployingGreen --> JoiningMesh: All Green pods ready + unsealed
+    JoiningMesh --> Syncing: Join job succeeded
+    Syncing --> Promoting: Sync job succeeded + MinSyncDuration elapsed
+    Promoting --> DemotingBlue: Promote job succeeded
+    DemotingBlue --> Cleanup: Demote job succeeded + Green leader verified
+    Cleanup --> Idle: Blue removed + CurrentVersion updated
+    Idle --> [*]
+```
+
+**Key Design Decisions:**
+
+1. **Revision-based naming**: StatefulSets are named `<cluster>-<revision>` where revision is a hash of version+image+replicas.
+2. **Shared headless service**: Blue and Green StatefulSets share the same headless service for Raft discovery.
+3. **Executor Jobs**: Long-running Raft operations run in isolated Jobs to avoid blocking the controller.
+4. **Automatic abort**: If Green pods fail health checks, the upgrade can be aborted and Blue cluster remains active.
+
+**Upgrade Executor Jobs:**
+
+Each phase transition that requires Raft operations creates an upgrade executor Job:
+
+- `ActionJoinGreenNonVoters` - Adds Green pods as Raft non-voters
+- `ActionWaitGreenSynced` - Verifies replication is complete
+- `ActionPromoteGreenVoters` - Promotes Green pods to Raft voters
+- `ActionDemoteBlueNonVotersStepDown` - Demotes Blue pods, triggers leader step-down
+- `ActionRemoveBluePeers` - Removes Blue pods from Raft peer list
+
+**Reconciliation Semantics:**
+
+- All state is stored in `Status.BlueGreen` for resumability.
+- Phase transitions are idempotent; re-running returns the same result.
+- The manager requeues (returns `true`) when waiting for external state changes.
+- Executor Jobs are owned by the OpenBaoCluster for automatic cleanup.
+
 ### 3.5 The BackupManager (Snapshots to Object Storage)
 
 **Responsibility:** Schedule and execute Raft snapshots, stream them to object storage, and manage retention.
