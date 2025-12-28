@@ -1,10 +1,15 @@
-# 16. Multi-Tenancy Security
+# Multi-Tenancy Security
 
-[Back to User Guide index](README.md)
+## Prerequisites
+
+- **RBAC**: Administrator permissions to create Roles/RoleBindings.
+- **NetworkPolicies**: CNI that supports NetworkPolicies.
+
+## Overview
 
 When running multiple `OpenBaoCluster` resources in a shared Kubernetes cluster (multi-tenant), additional security considerations apply.
 
-### 16.1 RBAC for Tenant Isolation
+## RBAC for Tenant Isolation
 
 The operator provides ClusterRoles that can be bound at the namespace level to isolate tenant access:
 
@@ -19,9 +24,10 @@ kubectl apply -f config/samples/namespace_scoped_openbaocluster-rbac.yaml
 - The `openbaocluster-editor-role` allows creating/managing clusters but NOT reading Secrets
 - Platform teams should have `openbaocluster-admin-role` cluster-wide
 
-### 16.2 Secret Access Isolation
+## Secret Access Isolation
 
 The operator creates sensitive Secrets for each cluster:
+
 - `<cluster>-root-token` - Full admin access to OpenBao
 - `<cluster>-unseal-key` - Can decrypt all OpenBao data
 - `<cluster>-tls-ca` / `<cluster>-tls-server` - TLS credentials
@@ -286,6 +292,7 @@ spec:
 ### 16.6 Pod Security Standards
 
 OpenBao pods created by the operator run with these security settings:
+
 - Non-root user (UID 100, GID 1000)
 - Read-only root filesystem (secrets/config mounted read-only)
 - No privilege escalation

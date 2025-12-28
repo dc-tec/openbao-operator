@@ -1,16 +1,16 @@
-# 8. Gateway API Support
+# Gateway API Support
 
-[Back to User Guide index](README.md)
+## Prerequisites
+
+- **Gateway API Implementation**: Installed (e.g., Envoy Gateway, Istio, Cilium, Traefik)
+- **CRDs**: Gateway API CRDs installed
+- **Gateway**: An existing `Gateway` resource configured
+
+## Overview
 
 The Operator supports [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) as a modern alternative to Ingress for external access. Gateway API provides more expressive routing, better multi-tenancy support, and is more portable across implementations.
 
-### 8.1 Prerequisites
-
-- A Gateway API implementation installed in your cluster (e.g., Envoy Gateway, Istio, Cilium, Traefik)
-- Gateway API CRDs installed
-- An existing `Gateway` resource configured
-
-### 8.2 Basic Gateway API Example
+## Basic Gateway API Example
 
 First, ensure you have a Gateway resource (typically managed by your platform team):
 

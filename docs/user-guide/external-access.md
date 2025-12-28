@@ -1,6 +1,11 @@
-# 6. External Access (Service and Ingress)
+# External Access
 
-[Back to User Guide index](README.md)
+## Prerequisites
+
+- **Ingress Controller**: Installed (e.g., NGINX, Traefik, AWS Load Balancer Controller)
+- **DNS**: Domain name configured (e.g., `bao.example.com`)
+
+## Configuration
 
 To expose OpenBao externally, configure `spec.service` and/or `spec.ingress`:
 
@@ -26,14 +31,14 @@ With this configuration:
 - The `bao.example.com` host is automatically added to the server certificate SANs.
 - The external service DNS name (`{cluster-name}-public.{namespace}.svc`) is automatically added to the server certificate SANs when service or ingress is configured.
 
-Always validate connectivity through your ingress or load balancer after the cluster reports
-`Available=True`.
+Always validate connectivity through your ingress or load balancer after the cluster reports `Available=True`.
 
 ### 6.1 Traefik v3 Configuration
 
 When using Traefik v3 with TLS termination at the ingress and HTTPS backend communication, you need to configure Traefik to trust the OpenBaoCluster CA certificate:
 
 1. **Create a ServersTransport** resource that references the existing CA secret (see `config/samples/traefik-servers-transport.yaml`):
+
    ```yaml
    apiVersion: traefik.io/v1alpha1
    kind: ServersTransport
@@ -44,15 +49,18 @@ When using Traefik v3 with TLS termination at the ingress and HTTPS backend comm
      rootCAsSecrets:
        - <cluster-name>-tls-ca  # e.g., openbaocluster-external-tls-ca
    ```
+
    The operator automatically creates the CA secret named `<cluster-name>-tls-ca`. Traefik will read the `ca.crt` key from this secret directly - no mounting required!
 
 2. **Reference the transport** in your OpenBaoCluster service annotations (already included in the sample):
+
    ```yaml
    service:
      annotations:
        traefik.ingress.kubernetes.io/service.serversscheme: https
        traefik.ingress.kubernetes.io/service.serverstransport: openbao-tls-transport
    ```
+
    Note: If the ServersTransport is in the same namespace as the Service, use just the name. For cross-namespace references, use `<namespace>-<name>@kubernetescrd` and ensure `allowCrossNamespace` is enabled in Traefik.
 
 This ensures Traefik validates the OpenBao backend certificate using the cluster's CA, maintaining secure end-to-end TLS.
@@ -156,6 +164,7 @@ spec:
 ```
 
 The operator will:
+
 - Wait for the Secrets to be created (no error if missing)
 - Monitor certificate changes and trigger hot-reloads when cert-manager rotates certificates
 - Not attempt to generate or rotate certificates itself

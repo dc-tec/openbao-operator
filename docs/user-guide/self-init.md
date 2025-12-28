@@ -1,6 +1,4 @@
-# 7. Self-Initialization
-
-[Back to User Guide index](README.md)
+# Self-Initialization
 
 OpenBao supports [self-initialization](https://openbao.org/docs/configuration/self-init/), which allows you to declaratively configure your cluster during first startup. When enabled, OpenBao automatically:
 
@@ -131,6 +129,7 @@ Each request in `spec.selfInit.requests[]` maps to an OpenBao API call:
 For audit device requests (`sys/audit/*`), use the structured `auditDevice` field instead of raw `data`:
 
 **File Audit Device:**
+
 ```yaml
 - name: enable-file-audit
   operation: update
@@ -144,6 +143,7 @@ For audit device requests (`sys/audit/*`), use the structured `auditDevice` fiel
 ```
 
 **HTTP Audit Device:**
+
 ```yaml
 - name: enable-http-audit
   operation: update
@@ -157,6 +157,7 @@ For audit device requests (`sys/audit/*`), use the structured `auditDevice` fiel
 ```
 
 **Syslog Audit Device:**
+
 ```yaml
 - name: enable-syslog-audit
   operation: update
@@ -169,6 +170,7 @@ For audit device requests (`sys/audit/*`), use the structured `auditDevice` fiel
 ```
 
 **Socket Audit Device:**
+
 ```yaml
 - name: enable-socket-audit
   operation: update

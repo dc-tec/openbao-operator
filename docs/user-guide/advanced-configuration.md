@@ -1,8 +1,10 @@
-# 9. Advanced Configuration
+# Advanced Configuration
 
-[Back to User Guide index](README.md)
+## Prerequisites
 
-### 9.1 Structured Configuration
+- **OpenBao Operator**: v2.4.0+ (some features require specific versions)
+
+## Structured Configuration
 
 Configure OpenBao server settings using the structured `spec.configuration` API. This provides type safety, `kubectl explain` support, and better IDE autocomplete compared to the legacy `spec.config` map.
 

@@ -1,8 +1,13 @@
-# 11. Network Configuration
+# Network Configuration
 
-[Back to User Guide index](README.md)
+## Prerequisites
 
-### 11.1 API Server CIDR Fallback
+- **CNI Plugin**: A CNI that supports NetworkPolicies (e.g., Cilium, Calico) is recommended but not required.
+- **Permissions**: Access to read Services in `default` namespace (optional, for auto-detection).
+
+## API Server CIDR Fallback
+
+### Overview
 
 In restricted multi-tenant environments, the operator may not have permissions to read Services/Endpoints in the `default` namespace, which prevents auto-detection of the Kubernetes API server CIDR for NetworkPolicy egress rules.
 
@@ -23,11 +28,13 @@ spec:
 ```
 
 **When to Use:**
+
 - The operator lacks permissions to read the `kubernetes` Service in the `default` namespace
 - Auto-detection fails due to network restrictions
 - You want to explicitly control the NetworkPolicy egress rules
 
 **How to Determine the CIDR:**
+
 - **Managed clusters (EKS, GKE, AKS)**: Use the service network CIDR (e.g., `10.43.0.0/16`). You can find this by checking the ClusterIP of the `kubernetes` Service: `kubectl get svc kubernetes -n default -o jsonpath='{.spec.clusterIP}'`
 - **Self-managed clusters (k3d, kubeadm)**: Use the control plane node CIDR or the specific API server endpoint IP with `/32` (e.g., `192.168.1.100/32`)
 
@@ -48,6 +55,7 @@ spec:
 ```
 
 **When to Use:**
+
 - Using CNI implementations where egress enforcement happens on post-NAT destinations
 - Auto-detection of API server endpoints fails
 - You want explicit control over which API server endpoints are allowed
@@ -102,6 +110,7 @@ spec:
 ```
 
 **Important Notes:**
+
 - Operator-managed rules (DNS, API server, cluster pods, etc.) are **always included** and cannot be overridden
 - User-provided rules are **appended** to the operator-managed rules
 - Rules follow standard Kubernetes NetworkPolicy semantics

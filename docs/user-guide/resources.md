@@ -1,6 +1,10 @@
-# 5. What the Operator Creates
+# Managed Resources
 
-[Back to User Guide index](README.md)
+## Prerequisites
+
+- **OpenBaoCluster**: An active `OpenBaoCluster` CR.
+
+## Resources List
 
 For a cluster named `dev-cluster` in namespace `security`, the Operator reconciles:
 

@@ -1,6 +1,11 @@
-# 4. Create a Basic OpenBaoCluster
+# Basic Cluster Creation
 
-[Back to User Guide index](README.md)
+## Prerequisites
+
+- **OpenBao Operator**: Installed and running (see [Installation](installation.md))
+- **Storage Class**: Default storage class configured in the cluster
+
+## Configuration
 
 The minimal spec focuses on version, image, replicas, TLS, and storage:
 
@@ -21,6 +26,8 @@ spec:
     size: "10Gi"
   deletionPolicy: Retain
 ```
+
+## Operation
 
 Apply the resource:
 

@@ -1,6 +1,4 @@
-# 17. Next Steps
-
-[Back to User Guide index](README.md)
+# Next Steps
 
 Once you have basic cluster creation working:
 
@@ -12,4 +10,4 @@ Once you have basic cluster creation working:
 - Integrate Operator metrics with your monitoring stack using the manifests under `config/prometheus`.
 
 For deeper architectural details and the full roadmap (upgrades, backups, multi-tenancy),
-refer to [Architecture](../architecture.md) and [Security](../security.md).
+refer to [Architecture](../architecture/index.md) and [Security](../security/index.md).

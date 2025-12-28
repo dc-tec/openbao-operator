@@ -1,8 +1,10 @@
-# 14. Deletion and DeletionPolicy
+# Deletion Policy
 
-[Back to User Guide index](README.md)
+## Prerequisites
 
-### 14.1 Resource Ownership
+- **Permissions**: `delete` permissions on `OpenBaoCluster` resources.
+
+## Resource Ownership
 
 All resources created by the operator (StatefulSet, Services, ConfigMaps, Secrets, ServiceAccounts, Ingresses, HTTPRoutes) have Kubernetes `OwnerReferences` pointing to the parent `OpenBaoCluster`. This ensures:
 

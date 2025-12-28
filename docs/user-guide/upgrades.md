@@ -1,8 +1,11 @@
-# 12. Upgrades
+# Cluster Upgrades
 
-[Back to User Guide index](README.md)
+## Prerequisites
 
-## 12.1 Upgrade Strategies
+- **Running Cluster**: An initialized `OpenBaoCluster`
+- **Permissions**: RBAC to patch the CR and creating Jobs (for Blue/Green)
+
+## Upgrade Strategies
 
 The OpenBao Operator supports two upgrade strategies:
 
@@ -18,9 +21,15 @@ spec:
   updateStrategy:
     type: BlueGreen  # or RollingUpdate (default)
     blueGreen:
-      autoPromote: true  # Automatically promote after sync (default: true)
+      autoPromote: true          # Automatically promote after sync (default: true)
+      preUpgradeSnapshot: true   # Create backup before upgrade starts
+      preCleanupSnapshot: true   # Create backup before removing Blue
       verification:
-        minSyncDuration: "30s"  # Wait before promotion (optional)
+        minSyncDuration: "30s"   # Wait before promotion (optional)
+      autoRollback:
+        enabled: true
+        onJobFailure: true
+        stabilizationSeconds: 60
 ```
 
 ---
@@ -124,31 +133,129 @@ The upgrade manager will:
 
 ### 12.4.2 Blue/Green Upgrade Strategy
 
-The Blue/Green upgrade follows a 7-phase process:
+The Blue/Green upgrade follows a multi-phase process with safety checkpoints.
 
+#### Phase Flow
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Idle
+    Idle --> DeployingGreen: Version change detected
+    DeployingGreen --> JoiningMesh: Pods ready
+    JoiningMesh --> Syncing: Non-voters joined
+    Syncing --> Promoting: Data synced
+    Promoting --> TrafficSwitching: Voters promoted
+    TrafficSwitching --> DemotingBlue: Stabilization passed
+    DemotingBlue --> Cleanup: Blue demoted
+    Cleanup --> Idle: Complete
+    
+    state "Pre-Upgrade Snapshot" as PreSnap
+    Idle --> PreSnap: preUpgradeSnapshot=true
+    PreSnap --> DeployingGreen
+    
+    state "Pre-Cleanup Snapshot" as PreCleanup
+    DemotingBlue --> PreCleanup: preCleanupSnapshot=true
+    PreCleanup --> Cleanup
 ```
-Idle → DeployingGreen → JoiningMesh → Syncing → Promoting → DemotingBlue → Cleanup → Idle
+
+#### Rollback Flow
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> RollingBack: Failure detected
+    RollingBack --> RollbackCleanup: Blue re-promoted
+    RollbackCleanup --> Idle: Green removed
+    
+    note right of RollingBack
+        Triggered by:
+        - Job failure threshold
+        - Validation hook failure
+        - Traffic failure during stabilization
+    end note
 ```
+
+#### Phase Details
 
 | Phase | Description |
 |-------|-------------|
-| **Idle** | No upgrade in progress |
+| **Idle** | No upgrade in progress. Pre-upgrade snapshot taken if configured. |
 | **DeployingGreen** | Creating Green StatefulSet with new version, waiting for pods to be ready and unsealed |
 | **JoiningMesh** | Green pods join the Raft cluster as non-voters |
-| **Syncing** | Green pods replicate data from Blue leader |
+| **Syncing** | Green pods replicate data from Blue leader. Pre-promotion hook runs (if configured). |
 | **Promoting** | Green pods promoted to voters |
-| **DemotingBlue** | Blue pods demoted to non-voters, Green leader election verified |
-| **Cleanup** | Blue pods removed from Raft, Blue StatefulSet deleted |
-
-**Key benefits:**
-
-- Zero-downtime: traffic only switches after Green is fully synced
-- Safe rollback: Blue cluster remains available until cleanup phase
-- Verification: automatic sync verification before promotion
+| **TrafficSwitching** | Service selectors point to Green. Stabilization period monitors health. |
+| **DemotingBlue** | Blue pods demoted to non-voters |
+| **Cleanup** | Pre-cleanup snapshot taken (if configured). Blue pods removed from Raft, Blue StatefulSet deleted. |
 
 ---
 
-## 12.5 Monitoring Upgrades
+## 12.5 Advanced Blue/Green Configuration
+
+### 12.5.1 Snapshots
+
+Create automatic backups during upgrades:
+
+```yaml
+spec:
+  updateStrategy:
+    blueGreen:
+      preUpgradeSnapshot: true   # Backup before any changes
+      preCleanupSnapshot: true   # Backup before removing Blue (point of no return)
+  backup:                         # Required for snapshots
+    executorImage: openbao/backup-executor:v0.1.0
+    jwtAuthRole: backup
+    target:
+      endpoint: http://rustfs-svc.rustfs.svc:9000
+      bucket: openbao-backups
+```
+
+### 12.5.2 Pre-Promotion Validation Hook
+
+Run custom validation before promoting Green:
+
+```yaml
+spec:
+  updateStrategy:
+    blueGreen:
+      verification:
+        prePromotionHook:
+          image: busybox:latest
+          command: ["sh", "-c"]
+          args: ["curl -fs https://green-cluster:8200/v1/sys/health"]
+          timeoutSeconds: 300
+```
+
+### 12.5.3 Auto-Rollback Configuration
+
+Configure automatic rollback on failure:
+
+```yaml
+spec:
+  updateStrategy:
+    blueGreen:
+      maxJobFailures: 3           # Max failures before rollback (default: 5)
+      autoRollback:
+        enabled: true
+        onJobFailure: true       # Rollback on job failures
+        onValidationFailure: true # Rollback if hook fails
+        onTrafficFailure: true   # Rollback if Green fails during stabilization
+        stabilizationSeconds: 60 # Observation period during TrafficSwitching
+```
+
+### 12.5.4 Traffic Switching
+
+The `TrafficSwitching` phase provides a safety window:
+
+1. Service selectors are updated to point to Green pods
+2. Green is monitored for `stabilizationSeconds` (default: 60s)
+3. If Green remains healthy, upgrade proceeds to DemotingBlue
+4. If Green fails and `onTrafficFailure` is true, automatic rollback is triggered
+
+---
+
+## 12.6 Monitoring Upgrades
 
 Monitor upgrade progress:
 
@@ -161,14 +268,29 @@ Check `Status.BlueGreen` for Blue/Green upgrade progress:
 ```yaml
 status:
   blueGreen:
-    phase: Syncing
+    phase: TrafficSwitching
     blueRevision: "e8983038c519c718"
     greenRevision: "269c4f7ba494030d"
     startTime: "2024-01-15T10:30:00Z"
+    trafficSwitchedTime: "2024-01-15T10:35:00Z"
+    preUpgradeSnapshotJobName: "dev-cluster-preupgrade-snapshot-1705315800"
+    jobFailureCount: 0
 ```
 
 Check `Status.Conditions` for upgrade state:
 
 ```sh
 kubectl -n security get openbaocluster dev-cluster -o jsonpath='{.status.conditions}' | jq
+```
+
+### 12.6.1 Rollback Status
+
+If a rollback is triggered:
+
+```yaml
+status:
+  blueGreen:
+    phase: RollingBack
+    rollbackReason: "job failure threshold exceeded"
+    rollbackStartTime: "2024-01-15T10:36:00Z"
 ```

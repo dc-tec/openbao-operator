@@ -1,6 +1,4 @@
-# 13. Pausing Reconciliation
-
-[Back to User Guide index](README.md)
+# Pausing Reconciliation
 
 Set `spec.paused` to temporarily stop reconciliation for a cluster:
 

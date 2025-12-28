@@ -1,6 +1,4 @@
-# 3. Provision Tenant Namespaces
-
-[Back to User Guide index](README.md)
+# Provision Tenant Namespaces
 
 Before creating an `OpenBaoCluster`, you must provision the target namespace with tenant RBAC. The operator uses a governance model based on the `OpenBaoTenant` Custom Resource Definition (CRD) to explicitly declare which namespaces should be provisioned.
 
@@ -34,6 +32,7 @@ kubectl -n openbao-operator-system get openbaotenant security-tenant -o yaml
 ```
 
 Look for:
+
 - `status.provisioned: true` - Indicates RBAC has been successfully applied
 - `status.lastError` - Any errors encountered during provisioning (e.g., namespace not found)
 
@@ -44,6 +43,7 @@ kubectl -n security get role,rolebinding -l app.kubernetes.io/component=provisio
 ```
 
 You should see:
+
 - `openbao-operator-tenant-role` - Namespace-scoped Role granting OpenBaoCluster management permissions
 - `openbao-operator-tenant-rolebinding` - RoleBinding binding the controller ServiceAccount to the Role
 

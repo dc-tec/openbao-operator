@@ -1,6 +1,4 @@
-# 15. Security Considerations
-
-[Back to User Guide index](README.md)
+# Security Considerations
 
 ### 15.1 Root Token Secret
 
@@ -21,6 +19,7 @@ kubectl -n security get secret dev-cluster-root-token -o jsonpath='{.data.token}
 - **Audit Access:** Enable Kubernetes audit logging to monitor access to this Secret.
 - **Consider Self-Init:** For production workloads with GitOps workflows, consider using self-initialization to avoid having a root token Secret at all.
 - **Not Auto-Deleted:** The root token Secret is NOT automatically deleted when the cluster is deleted (to support recovery scenarios). Clean it up manually if needed:
+
   ```sh
   kubectl -n security delete secret dev-cluster-root-token
   ```
@@ -32,6 +31,7 @@ kubectl -n security get secret dev-cluster-root-token -o jsonpath='{.data.token}
 The Operator manages a static auto-unseal key stored in `<cluster>-unseal-key`. This key is used by OpenBao to automatically unseal on startup.
 
 **Important:** If this Secret is compromised, an attacker with access to the Raft data can decrypt it. Ensure:
+
 - etcd encryption at rest is enabled in your Kubernetes cluster.
 - RBAC strictly limits access to Secrets in the OpenBao namespace.
 
@@ -163,6 +163,7 @@ spec:
 ```
 
 **Configuration Options:**
+
 - `enabled`: Enable or disable image verification (required).
 - `publicKey`: PEM-encoded Cosign public key used to verify signatures (required when enabled).
 - `failurePolicy`: Behavior on verification failure:
@@ -172,6 +173,7 @@ spec:
 - `imagePullSecrets`: List of ImagePullSecrets (type `kubernetes.io/dockerconfigjson` or `kubernetes.io/dockercfg`) for private registry authentication during verification.
 
 **Security Features:**
+
 - **TOCTOU Mitigation**: The operator resolves image tags to digests during verification and uses the verified digest in StatefulSets, preventing Time-of-Check to Time-of-Use attacks where a tag could be updated between verification and deployment.
 - **Rekor Verification**: By default, signatures are verified against the Rekor transparency log, providing strong non-repudiation guarantees as recommended by OpenBao.
 - **Private Registry Support**: ImagePullSecrets can be provided for authentication when verifying images from private registries.

@@ -1,6 +1,13 @@
-# 1. Deploy the Operator
+# Operator Deployment
+<!-- id: installation-guide -->
 
-[Back to User Guide index](README.md)
+## Prerequisites
+
+- **Kubernetes Cluster**: v1.23+
+- **kubectl**: Installed and configured
+- **Permissions**: Cluster-admin permissions to install CRDs and RBAC
+
+## Deploy the Operator
 
 Build and push an image:
 

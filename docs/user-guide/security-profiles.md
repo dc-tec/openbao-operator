@@ -1,6 +1,4 @@
-# 2. Security Profiles
-
-[Back to User Guide index](README.md)
+# Security Profiles
 
 **IMPORTANT FOR PRODUCTION:** Always use the `Hardened` profile for production deployments. The `Development` profile stores root tokens in Kubernetes Secrets, which poses a significant security risk. See the [Hardened Profile](#22-hardened-profile) section for details.
 
@@ -32,6 +30,7 @@ spec:
 ```
 
 **Characteristics:**
+
 - Allows operator-managed TLS (`spec.tls.mode: OperatorManaged`)
 - Allows static unseal (default)
 - Allows self-init to be disabled (root token created)
@@ -77,16 +76,19 @@ spec:
 ```
 
 **Requirements:**
+
 - `spec.tls.mode` MUST be `External` (cert-manager or CSI managed) OR `ACME` (OpenBao native ACME client)
 - `spec.unseal.type` MUST be external KMS (`awskms`, `gcpckms`, `azurekeyvault`, or `transit`)
 - `spec.selfInit.enabled` MUST be `true` (no root token)
 - `tlsSkipVerify=true` in seal configuration (e.g., `spec.unseal.transit.tlsSkipVerify` or `spec.unseal.kmip.tlsSkipVerify`) is rejected
 
 **Automatic Features:**
+
 - JWT authentication is automatically bootstrapped during self-init
 - No manual JWT configuration required
 
 **Security Benefits:**
+
 - **No Root Tokens:** Root tokens are never created or stored, eliminating the risk of token compromise
 - **External KMS:** Stronger root of trust than Kubernetes Secrets for unseal keys
 - **External TLS:** Integrates with organizational PKI and certificate management

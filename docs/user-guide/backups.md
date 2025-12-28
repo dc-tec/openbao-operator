@@ -1,10 +1,15 @@
-# 10. Backup Configuration
+# Backup & Restore
 
-[Back to User Guide index](README.md)
+## Prerequisites
+
+- **Object Storage**: S3-compatible endpoint (AWS S3, MinIO, GCS, Azure)
+- **Permissions**: Credentials to write to the bucket
+
+## Basic Backup Configuration
 
 The operator supports scheduled backups of OpenBao Raft snapshots to S3-compatible object storage. Backups are executed using Kubernetes Jobs with a dedicated backup executor container.
 
-### 10.1 Basic Backup Configuration
+### Configuration Example
 
 ```yaml
 apiVersion: openbao.org/v1alpha1
@@ -45,6 +50,7 @@ The operator supports two authentication methods for backup operations:
 JWT Auth uses projected ServiceAccount tokens that are automatically rotated by Kubernetes, providing better security than static tokens.
 
 **Prerequisites:**
+
 1. Enable JWT authentication in OpenBao (via `spec.selfInit.requests` or automatically for Hardened profile)
 2. Create a JWT Auth role that binds to the backup ServiceAccount
 3. Configure `spec.backup.jwtAuthRole`
@@ -146,6 +152,7 @@ spec:
 ### 10.3 Backup ServiceAccount
 
 The operator automatically creates `<cluster-name>-backup-serviceaccount` when backups are enabled. This ServiceAccount:
+
 - Is used by backup Jobs for JWT Auth (via projected ServiceAccount token)
 - Has its token mounted at `/var/run/secrets/tokens/openbao-token` (projected volume with audience `openbao-internal`)
 - Is owned by the OpenBaoCluster for automatic cleanup
@@ -153,6 +160,7 @@ The operator automatically creates `<cluster-name>-backup-serviceaccount` when b
 ### 10.4 Backup Execution
 
 When a backup is scheduled:
+
 1. The operator creates a Kubernetes Job with the backup executor container
 2. The Job runs as the backup ServiceAccount
 3. The executor:
@@ -171,6 +179,7 @@ kubectl get openbaocluster backup-cluster -o yaml
 ```
 
 Status fields:
+
 - `Status.Backup.LastBackupTime`: Timestamp of last successful backup
 - `Status.Backup.NextScheduledBackup`: Next scheduled backup time
 - `Status.Backup.ConsecutiveFailures`: Number of consecutive failures
@@ -225,10 +234,12 @@ backup:
 ```
 
 **Configuration Options:**
+
 - `partSize` (int64, optional): Size of each part in multipart uploads in bytes. Defaults to 10MB (10485760). Minimum: 5MB (5242880). Larger values may improve performance for large snapshots on fast networks, while smaller values may be better for slow or unreliable networks.
 - `concurrency` (int32, optional): Number of concurrent parts to upload during multipart uploads. Defaults to 3. Range: 1-10. Higher values may improve throughput on fast networks but increase memory usage and may overwhelm slower storage backends.
 
 **When to Tune:**
+
 - **Slow networks**: Reduce `partSize` and `concurrency` to avoid timeouts
 - **Fast networks with large snapshots**: Increase `partSize` and `concurrency` for better throughput
 - **Memory-constrained environments**: Reduce `concurrency` to lower memory usage

@@ -182,6 +182,7 @@ The Sentinel has minimal permissions:
 - **Limited patch access** to `OpenBaoCluster` resources (`get`, `patch`)
 
 The Sentinel cannot:
+
 - Create or delete resources
 - Modify Spec or Status
 - Access resources outside the cluster namespace
@@ -201,18 +202,22 @@ The Sentinel exposes a health endpoint at `/healthz` for Kubernetes liveness and
 If the Sentinel is not detecting drift:
 
 1. **Check Deployment Status:**
+
    ```bash
    kubectl get deployment <cluster-name>-sentinel -n <namespace>
    kubectl logs deployment/<cluster-name>-sentinel -n <namespace>
    ```
 
 2. **Verify Labels:** Ensure managed resources have the correct labels:
+
    ```bash
    kubectl get statefulset <cluster-name> -n <namespace> --show-labels
    ```
+
    Should show: `app.kubernetes.io/managed-by=openbao-operator` and `app.kubernetes.io/instance=<cluster-name>`
 
 3. **Check Actor Filtering:** The Sentinel ignores operator updates. Verify the change was made by a different actor:
+
    ```bash
    kubectl get statefulset <cluster-name> -n <namespace> -o jsonpath='{.metadata.managedFields[*].manager}'
    ```
@@ -222,6 +227,7 @@ If the Sentinel is not detecting drift:
 If the Sentinel is triggering too frequently:
 
 1. **Increase Debounce Window:**
+
    ```yaml
    spec:
      sentinel:
@@ -235,11 +241,13 @@ If the Sentinel is triggering too frequently:
 If the Sentinel Deployment is not created:
 
 1. **Check Spec:**
+
    ```bash
    kubectl get openbaocluster <cluster-name> -n <namespace> -o yaml | grep -A 10 sentinel
    ```
 
 2. **Check Operator Logs:**
+
    ```bash
    kubectl logs deployment/openbao-operator-controller -n openbao-operator-system | grep -i sentinel
    ```
@@ -279,6 +287,6 @@ The operator will clean up the Sentinel Deployment, ServiceAccount, Role, and Ro
 
 ## See Also
 
-- [Architecture: Sentinel](../architecture.md#36-the-sentinel-drift-detection--fast-path-reconciliation)
-- [Security: ValidatingAdmissionPolicy](../security.md#validatingadmissionpolicy-for-sentinel)
+- [Architecture: Sentinel](../architecture/index.md#36-the-sentinel-drift-detection--fast-path-reconciliation)
+- [Security: ValidatingAdmissionPolicy](../security/index.md#validatingadmissionpolicy-for-sentinel)
 - [Advanced Configuration](advanced-configuration.md)
