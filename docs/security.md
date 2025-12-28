@@ -549,8 +549,8 @@ The Operator uses JWT authentication (OIDC-based) for all operator-to-OpenBao co
 
 ### 10.2 Projected ServiceAccount Tokens
 
-- **Operator Token Source:** The operator requests short-lived ServiceAccount tokens via the Kubernetes TokenRequest API (audience `openbao-internal`) for operator-to-OpenBao JWT authentication.
-- **Job Token Source:** Backup jobs mount a projected ServiceAccount token at `/var/run/secrets/tokens/openbao-token` (audience `openbao-internal`).
+- **Controller Token Source:** The controller does not create ServiceAccount TokenRequests. Upgrade and backup operations that require OpenBao permissions run in dedicated Jobs.
+- **Job Token Source:** Upgrade and backup Jobs mount a projected ServiceAccount token at `/var/run/secrets/tokens/openbao-token` (audience `openbao-internal`).
 - **Automatic Rotation:** Kubernetes automatically rotates these tokens, providing better security than static tokens.
 - **Short Lifetime:** Tokens have a limited lifetime (default 1 hour), reducing the impact of token compromise.
 
@@ -562,7 +562,7 @@ For `Hardened` profile clusters, JWT authentication is automatically bootstrappe
 - **OIDC Configuration:** Configures OIDC discovery URL and CA bundle pointing to the Kubernetes API server.
 - **Operator Policy:** Creates a least-privilege policy (`openbao-operator`) granting only necessary permissions:
   - `sys/health` (read)
-  - `sys/step-down` (update)
+  - `sys/step-down` (sudo)
   - `sys/storage/raft/snapshot` (read)
 - **Operator Role:** Creates a JWT role (`openbao-operator`) that binds to the operator's ServiceAccount with appropriate token policies.
 
@@ -577,8 +577,8 @@ For `Hardened` profile clusters, JWT authentication is automatically bootstrappe
 Backup and upgrade executors use JWT authentication when `jwtAuthRole` is configured:
 
 - **Backup Executor:** Uses projected ServiceAccount token from `<cluster-name>-backup-serviceaccount` to authenticate via JWT.
-- **Upgrade Manager:** Uses projected ServiceAccount token from `<cluster-name>-upgrade-serviceaccount` to authenticate via JWT.
-- **Fallback:** Static tokens can be used as a fallback when JWT is not available (via `tokenSecretRef`).
+- **Upgrade Executor:** Uses projected ServiceAccount token from `<cluster-name>-upgrade-serviceaccount` to authenticate via JWT.
+- **Backup Fallback:** Backup can fall back to a static token via `spec.backup.tokenSecretRef` when JWT is not available.
 
 ## 11. Threat Model
 

@@ -4,7 +4,11 @@
 
 ### 12.1 Upgrade Authentication
 
-The upgrade manager requires explicit authentication configuration via `spec.upgrade.jwtAuthRole` or `spec.upgrade.tokenSecretRef`. There is no fallback to backup authentication.
+Upgrade operations that require OpenBao permissions run in Kubernetes Jobs (upgrade executor). These Jobs authenticate to OpenBao via JWT using a projected ServiceAccount token.
+
+The upgrade executor requires:
+- `spec.upgrade.executorImage`
+- `spec.upgrade.jwtAuthRole`
 
 #### 12.1.1 JWT Auth (Preferred)
 
@@ -50,6 +54,7 @@ spec:
           token_policies: upgrade
           ttl: 1h
   upgrade:
+    executorImage: openbao/upgrade-executor:v0.1.0
     jwtAuthRole: upgrade  # Reference to the role created above
     preUpgradeSnapshot: true
 ```
@@ -59,38 +64,17 @@ spec:
 ```yaml
 spec:
   upgrade:
+    executorImage: openbao/upgrade-executor:v0.1.0
     jwtAuthRole: upgrade
 ```
 
 **Note:** For `Hardened` profile clusters, JWT authentication is automatically bootstrapped during self-init, so you only need to create the upgrade policy and role.
 
-#### 12.1.2 Static Token (Alternative)
-
-For clusters that cannot use JWT Auth, you must create a token Secret with appropriate permissions and reference it via `spec.upgrade.tokenSecretRef`:
-
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
-metadata:
-  name: upgrade-cluster
-spec:
-  upgrade:
-    tokenSecretRef:
-      name: upgrade-token-secret
-      namespace: openbao-operator-system
-    preUpgradeSnapshot: true
-```
-
-The token must have permission to:
-- Read `sys/health`
-- Update `sys/step-down`
-- Read `sys/storage/raft/snapshot` (if `preUpgradeSnapshot` is enabled)
-
 ### 12.2 Upgrade ServiceAccount
 
 The operator automatically creates `<cluster-name>-upgrade-serviceaccount` when upgrade authentication is configured. This ServiceAccount:
-- Is used by the upgrade manager for JWT Auth (via projected ServiceAccount token)
-- Has its token automatically obtained via projected volume with audience `openbao-internal`
+- Is used by upgrade executor Jobs for JWT Auth (via projected ServiceAccount token)
+- Is mounted into the Job Pod via a projected token volume with audience `openbao-internal`
 - Is owned by the OpenBaoCluster for automatic cleanup
 
 ### 12.3 Performing Upgrades

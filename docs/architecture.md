@@ -158,10 +158,9 @@ sequenceDiagram
 
 ### 2.3 Cluster Operations / Upgrades (Day 2)
 
-1. User configures upgrade authentication:
-   - **JWT Auth (Preferred):** Set `spec.upgrade.jwtAuthRole` and configure the role in OpenBao (binds to `<cluster-name>-upgrade-serviceaccount`, automatically created by operator)
-   - **Static Token (Alternative):** Set `spec.upgrade.tokenSecretRef` pointing to a token Secret
-   - **Important:** Upgrade authentication must be explicitly configured; there is no fallback to backup authentication
+1. User configures upgrade executor:
+   - Set `spec.upgrade.executorImage` (container image used by upgrade Jobs)
+   - Set `spec.upgrade.jwtAuthRole` and configure the role in OpenBao (binds to `<cluster-name>-upgrade-serviceaccount`, automatically created by operator)
 2. User updates `OpenBaoCluster.Spec.Version` and/or `Spec.Image`.
 3. UpgradeController detects version drift and performs pre-upgrade validation:
    - Validates semantic versioning (blocks downgrades by default).
@@ -170,7 +169,7 @@ sequenceDiagram
 4. UpgradeController orchestrates Raft-aware rolling updates:
    - Locks StatefulSet updates using partitioning.
    - Iterates pods in reverse ordinal order.
-   - Forces leader step-down before updating leader pod.
+   - Runs an upgrade Job to perform leader step-down before updating the leader pod.
    - Waits for pod Ready, OpenBao health, and Raft sync after each update.
 5. Upgrade progress is persisted in `Status.Upgrade`, allowing resumption after Operator restart.
 6. On completion, `Status.CurrentVersion` is updated and `Status.Upgrade` is cleared.
