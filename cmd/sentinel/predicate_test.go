@@ -1,20 +1,21 @@
 package main
 
 import (
-	"strings"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/openbao/operator/internal/constants"
 )
 
+// testClusterName is the cluster name used in drift predicate tests.
+const testClusterName = "test-cluster"
+
 func TestDriftPredicate_UpdateFunc(t *testing.T) {
-	clusterName := "test-cluster"
+	clusterName := testClusterName
 	now := time.Now()
 	recentTime := now.Add(-2 * time.Second) // Within grace period (5s)
 	oldTime := now.Add(-7 * time.Second)    // Outside grace period but recent enough for annotation check (10s)
@@ -74,7 +75,8 @@ func TestDriftPredicate_UpdateFunc(t *testing.T) {
 				ObjectNew: newService(clusterName, map[string]string{
 					"openbao.org/maintenance": "true",
 				}, []managedField{
-					{Manager: "openbao-operator", Time: oldTime}, // Old enough to pass grace period, recent enough for annotation check
+					// Old enough to pass grace period, recent enough for annotation check
+					{Manager: "openbao-operator", Time: oldTime},
 				}),
 			},
 			wantPass: true,
@@ -90,7 +92,8 @@ func TestDriftPredicate_UpdateFunc(t *testing.T) {
 				ObjectNew: newService(clusterName, map[string]string{
 					"openbao.org/maintenance": "true",
 				}, []managedField{
-					{Manager: "openbao-operator", Time: oldTime}, // Old enough to pass grace period, recent enough for annotation check
+					// Old enough to pass grace period, recent enough for annotation check
+					{Manager: "openbao-operator", Time: oldTime},
 				}),
 			},
 			wantPass: true,
@@ -120,7 +123,8 @@ func TestDriftPredicate_UpdateFunc(t *testing.T) {
 				ObjectNew: newService(clusterName, map[string]string{
 					"custom-annotation": "value",
 				}, []managedField{
-					{Manager: "openbao-operator", Time: oldTime}, // Old enough to pass grace period, recent enough for annotation check
+					// Old enough to pass grace period, recent enough for annotation check
+					{Manager: "openbao-operator", Time: oldTime},
 				}),
 			},
 			wantPass: true,
@@ -160,8 +164,10 @@ func TestDriftPredicate_UpdateFunc(t *testing.T) {
 					{Manager: "openbao-operator", Time: oldTime},
 				}),
 				ObjectNew: newService(clusterName, map[string]string{}, []managedField{
-					{Manager: "kubectl", Time: now.Add(-10 * time.Second)}, // Recent non-operator update (< 15s)
-					{Manager: "openbao-operator", Time: oldTime},           // Most recent is operator, but old enough to pass grace period
+					// Recent non-operator update (< 15s)
+					{Manager: "kubectl", Time: now.Add(-10 * time.Second)},
+					// Most recent is operator, but old enough to pass grace period
+					{Manager: "openbao-operator", Time: oldTime},
 				}),
 			},
 			wantPass: true,
@@ -220,7 +226,7 @@ func TestDriftPredicate_UpdateFunc(t *testing.T) {
 }
 
 func TestDriftPredicate_CreateFunc(t *testing.T) {
-	clusterName := "test-cluster"
+	clusterName := testClusterName
 	pred := buildDriftPredicate(clusterName)
 
 	tests := []struct {
@@ -255,14 +261,14 @@ func TestDriftPredicate_CreateFunc(t *testing.T) {
 }
 
 func TestDriftPredicate_DeleteFunc(t *testing.T) {
-	clusterName := "test-cluster"
+	clusterName := testClusterName
 	pred := buildDriftPredicate(clusterName)
 
-	event := event.DeleteEvent{
+	deleteEvt := event.DeleteEvent{
 		Object: newService(clusterName, map[string]string{}, nil),
 	}
 
-	got := pred.DeleteFunc(event)
+	got := pred.DeleteFunc(deleteEvt)
 	if got != false {
 		t.Errorf("DeleteFunc() = %v, want false", got)
 	}
@@ -307,120 +313,5 @@ func newService(clusterName string, annotations map[string]string, managedFields
 	return svc
 }
 
-// buildDriftPredicate extracts the predicate logic for testing
-// This is a simplified version that doesn't require a full controller setup
-func buildDriftPredicate(clusterName string) predicate.Funcs {
-	// We need to access the actual predicate logic, but it's embedded in setupController
-	// For testing, we'll recreate the logic here
-	return predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool {
-			return isSentinelManagedResource(e.Object, clusterName)
-		},
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			isManaged := isSentinelManagedResource(e.ObjectNew, clusterName)
-			if !isManaged {
-				return false
-			}
-
-			mostRecentIsOperator := isOperatorUpdate(e.ObjectNew, operatorManagerNames)
-
-			if mostRecentIsOperator {
-				managedFields := e.ObjectNew.GetManagedFields()
-				mostRecentTime := time.Time{}
-				if len(managedFields) > 0 {
-					mostRecentTime = managedFields[len(managedFields)-1].Time.Time
-				}
-
-				gracePeriod := 5 * time.Second
-				if time.Since(mostRecentTime) < gracePeriod {
-					return false
-				}
-
-				// Check for recent non-operator updates in managedFields
-				for _, field := range managedFields {
-					isFieldOperator := false
-					for _, name := range operatorManagerNames {
-						if field.Manager == name {
-							isFieldOperator = true
-							break
-						}
-					}
-
-					if !isFieldOperator && time.Since(field.Time.Time) < 15*time.Second {
-						return true
-					}
-				}
-
-				// Check annotations
-				oldAnnotations := e.ObjectOld.GetAnnotations()
-				newAnnotations := e.ObjectNew.GetAnnotations()
-
-				if oldAnnotations == nil {
-					oldAnnotations = make(map[string]string)
-				}
-				if newAnnotations == nil {
-					newAnnotations = make(map[string]string)
-				}
-
-				if len(newAnnotations) > 0 && len(managedFields) > 0 {
-					mostRecentTime := managedFields[len(managedFields)-1].Time.Time
-					recentlyUpdated := time.Since(mostRecentTime) < 10*time.Second
-
-					if recentlyUpdated {
-						for key := range newAnnotations {
-							if strings.HasPrefix(key, "e2e.") {
-								continue
-							}
-							if key == "openbao.org/maintenance-allowed" {
-								continue
-							}
-							if key == "openbao.org/maintenance" {
-								oldValue, existed := oldAnnotations[key]
-								wasAddedOrChanged := !existed || oldValue != newAnnotations[key]
-								if wasAddedOrChanged {
-									return true
-								}
-								continue
-							}
-							ignoredPrefixes := []string{
-								"openbao.org/",
-								"kubectl.kubernetes.io/",
-								"deployment.kubernetes.io/",
-								"service.beta.kubernetes.io/",
-								"service.kubernetes.io/",
-								"cloud.google.com/",
-								"eks.amazonaws.com/",
-								"azure.workload.identity/",
-							}
-							isIgnored := false
-							for _, prefix := range ignoredPrefixes {
-								if strings.HasPrefix(key, prefix) {
-									isIgnored = true
-									break
-								}
-							}
-							if isIgnored {
-								continue
-							}
-							oldValue, existed := oldAnnotations[key]
-							wasAddedOrChanged := !existed || oldValue != newAnnotations[key]
-							if wasAddedOrChanged {
-								return true
-							}
-						}
-					}
-				}
-
-				return false
-			}
-
-			return true
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			return false
-		},
-		GenericFunc: func(e event.GenericEvent) bool {
-			return false
-		},
-	}
-}
+// The buildDriftPredicate function is defined in main.go and reused by tests.
+// This comment keeps the test file at this location after removal of the duplicate.

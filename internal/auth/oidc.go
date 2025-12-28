@@ -111,11 +111,6 @@ func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*OID
 	}, nil
 }
 
-type oidcDiscoveryDocument struct {
-	Issuer  string `json:"issuer"`
-	JWKSURI string `json:"jwks_uri"`
-}
-
 type jwksDocument struct {
 	Keys []jwkKey `json:"keys"`
 }

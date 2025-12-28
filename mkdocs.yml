@@ -1,0 +1,83 @@
+site_name: OpenBao Operator
+site_url: https://openbao.github.io/openbao-operator/
+repo_url: https://github.com/openbao/openbao-operator
+repo_name: openbao/openbao-operator
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.expand
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: DM Sans
+    code: DM Mono
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - User Guide:
+    - Introduction: user-guide/index.md
+    - Installation: user-guide/installation.md
+    - Basic Cluster: user-guide/cluster-basic.md
+    - Upgrades: user-guide/upgrades.md
+    - Backups: user-guide/backups.md
+    - External Access: user-guide/external-access.md
+    - Network Configuration: user-guide/network.md
+    - Resources & Storage: user-guide/resources.md
+    - Advanced Configuration: user-guide/advanced-configuration.md
+    - Security Profiles: user-guide/security-profiles.md
+    - Self-Initialization: user-guide/self-init.md
+    - Sentinel: user-guide/sentinel.md
+    - Multi-Tenancy: user-guide/multi-tenancy.md
+    - Tenant Namespaces: user-guide/tenant-namespaces.md
+    - Gateway API: user-guide/gateway-api.md
+    - Pausing Reconciliation: user-guide/pausing.md
+    - Deletion: user-guide/deletion.md
+    - Security Considerations: user-guide/security-considerations.md
+    - Next Steps: user-guide/next-steps.md
+  - Architecture:
+    - Overview: architecture/index.md
+    - Component Design: architecture/components.md
+    - Lifecycle Management: architecture/lifecycle.md
+    - Sentinel Sidecar: architecture/sentinel.md
+  - Security:
+    - Overview: security/index.md
+    - RBAC: security/rbac.md
+    - Tenant Isolation: security/tenant-isolation.md
+    - Threat Model: security/threat-model.md
+  - Contributing:
+    - Basics: contributing/index.md
+    - Development: contributing/development.md
+    - Testing Strategy: contributing/testing.md
+  - Compatibility: compatibility.md

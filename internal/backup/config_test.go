@@ -208,9 +208,9 @@ func TestLoadStorageCredentials(t *testing.T) {
 			name: "valid credentials",
 			setup: func() string {
 				credsDir := filepath.Join(tmpDir, "creds")
-				os.MkdirAll(credsDir, 0755)
-				os.WriteFile(filepath.Join(credsDir, "accessKeyId"), []byte("test-access-key"), 0600)
-				os.WriteFile(filepath.Join(credsDir, "secretAccessKey"), []byte("test-secret-key"), 0600)
+				_ = os.MkdirAll(credsDir, 0755)
+				_ = os.WriteFile(filepath.Join(credsDir, "accessKeyId"), []byte("test-access-key"), 0600)
+				_ = os.WriteFile(filepath.Join(credsDir, "secretAccessKey"), []byte("test-secret-key"), 0600)
 				return credsDir
 			},
 			wantErr: false,
@@ -219,8 +219,8 @@ func TestLoadStorageCredentials(t *testing.T) {
 			name: "missing secret access key",
 			setup: func() string {
 				credsDir := filepath.Join(tmpDir, "creds-incomplete")
-				os.MkdirAll(credsDir, 0755)
-				os.WriteFile(filepath.Join(credsDir, "accessKeyId"), []byte("test-access-key"), 0600)
+				_ = os.MkdirAll(credsDir, 0755)
+				_ = os.WriteFile(filepath.Join(credsDir, "accessKeyId"), []byte("test-access-key"), 0600)
 				return credsDir
 			},
 			wantErr: true,

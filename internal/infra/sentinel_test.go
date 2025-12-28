@@ -81,16 +81,16 @@ func TestGetSentinelImage(t *testing.T) {
 			originalEnv := os.Getenv(constants.EnvOperatorVersion)
 			defer func() {
 				if originalEnv != "" {
-					os.Setenv(constants.EnvOperatorVersion, originalEnv)
+					_ = os.Setenv(constants.EnvOperatorVersion, originalEnv)
 				} else {
-					os.Unsetenv(constants.EnvOperatorVersion)
+					_ = os.Unsetenv(constants.EnvOperatorVersion)
 				}
 			}()
 
 			if tt.envVersion != "" {
-				os.Setenv(constants.EnvOperatorVersion, tt.envVersion)
+				_ = os.Setenv(constants.EnvOperatorVersion, tt.envVersion)
 			} else {
-				os.Unsetenv(constants.EnvOperatorVersion)
+				_ = os.Unsetenv(constants.EnvOperatorVersion)
 			}
 
 			got := getSentinelImage(tt.cluster, logr.Discard())
@@ -140,6 +140,7 @@ func TestEnsureSentinelServiceAccount(t *testing.T) {
 	}
 }
 
+//nolint:gocyclo // Table-driven test with multiple assertions
 func TestEnsureSentinelRBAC(t *testing.T) {
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)

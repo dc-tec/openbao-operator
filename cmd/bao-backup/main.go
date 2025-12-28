@@ -241,7 +241,8 @@ func main() {
 			os.Exit(exitLeaderDiscovery)
 		case strings.Contains(errStr, "failed to get snapshot"):
 			os.Exit(exitSnapshotError)
-		case strings.Contains(errStr, "failed to upload backup") || strings.Contains(errStr, "failed to create storage client"):
+		case strings.Contains(errStr, "failed to upload backup") ||
+			strings.Contains(errStr, "failed to create storage client"):
 			os.Exit(exitStorageError)
 		case strings.Contains(errStr, "failed to verify backup"):
 			os.Exit(exitVerificationError)

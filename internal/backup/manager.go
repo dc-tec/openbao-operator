@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -70,32 +71,24 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		cluster.Status.Backup = &openbaov1alpha1.BackupStatus{}
 	}
 
-	// Parse schedule early so we can set NextScheduledBackup even if preconditions fail
-	// The controller will persist Status.Backup if it was initialized (see controller.go),
-	// so we ensure it's complete with NextScheduledBackup set to provide useful information
-	// even when preconditions aren't met yet.
+	// Parse schedule and set NextScheduledBackup
 	schedule, err := ParseSchedule(cluster.Spec.Backup.Schedule)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse backup schedule: %w", err)
 	}
-
-	// Set NextScheduledBackup if not already set, even before checking preconditions
-	// This makes the status "complete" and provides useful information to users
-	// The controller will persist this status even if preconditions fail
 	if cluster.Status.Backup.NextScheduledBackup == nil {
 		next := schedule.Next(now)
 		nextMeta := metav1.NewTime(next)
 		cluster.Status.Backup.NextScheduledBackup = &nextMeta
-		// Don't return here - continue to check preconditions so we can set conditions
 	}
 
-	// Check for manual backup trigger annotation
-	// If present, trigger backup immediately regardless of schedule
-	triggerAnnotation := constants.AnnotationTriggerBackup
-	manualTrigger := false
-	if val, ok := cluster.Annotations[triggerAnnotation]; ok && val != "" {
-		manualTrigger = true
-		logger.Info("Manual backup trigger detected", "annotation", val)
+	// Check for manual backup trigger
+	manualTrigger, scheduledTime, shouldReturn, result, err := m.handleManualTrigger(ctx, logger, cluster, now)
+	if shouldReturn {
+		return result, err
+	}
+	if !manualTrigger {
+		scheduledTime = cluster.Status.Backup.NextScheduledBackup.Time
 	}
 
 	// Pre-flight checks
@@ -103,86 +96,121 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		if errors.Is(err, ErrNoBackupToken) {
 			m.setBackingUpCondition(cluster, false, "NoBackupToken", err.Error())
 		}
-
-		logger.Info("Backup preconditions not met", "reason", err.Error(), "nextScheduledBackup", cluster.Status.Backup.NextScheduledBackup)
-		// Status.Backup is now initialized with NextScheduledBackup, so it will be persisted
-		return false, nil // Don't return error - preconditions not met is not a reconcile failure
-	}
-
-	// Determine scheduled time: use now for manual triggers, otherwise use NextScheduledBackup
-	var scheduledTime time.Time
-	if manualTrigger {
-		// For manual triggers, check if there's already a backup job in progress
-		// to prevent duplicate jobs from multiple reconciles
-		hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
-		if err != nil {
-			return false, fmt.Errorf("failed to check for active backup job: %w", err)
-		}
-		if hasActiveJob {
-			logger.Info("Manual backup triggered but job already in progress, skipping duplicate")
-			// Clear the annotation even though we're not creating a new job
-			// This prevents the annotation from triggering more reconciles
-			original := cluster.DeepCopy()
-			if cluster.Annotations == nil {
-				cluster.Annotations = make(map[string]string)
-			}
-			delete(cluster.Annotations, triggerAnnotation)
-			if err := m.client.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
-				logger.Error(err, "Failed to clear manual backup trigger annotation")
-			}
-			return false, nil
-		}
-		// For manual triggers, use current time as the scheduled time
-		// Use full timestamp (not truncated) to ensure unique job names for multiple triggers
-		// This allows users to trigger multiple backups even if they happen close together
-		scheduledTime = now
-		logger.Info("Manual backup triggered, using current time as scheduled time")
-	} else {
-		scheduledTime = cluster.Status.Backup.NextScheduledBackup.Time
-	}
-
-	if !manualTrigger && now.Before(scheduledTime) {
-		timeUntilDue := scheduledTime.Sub(now)
-		logger.V(1).Info("Backup not due yet", "scheduledTime", scheduledTime, "now", now, "timeUntilDue", timeUntilDue)
-
-		// Check for any completed backup jobs that need processing, even when backup is not due yet
-		// This ensures we process completed jobs promptly regardless of schedule
-		statusUpdated, err := m.checkForCompletedJobs(ctx, logger, cluster)
-		if err != nil {
-			return false, fmt.Errorf("failed to check for completed backup jobs: %w", err)
-		}
-		if statusUpdated {
-			// Found a completed job and updated status - request requeue to persist
-			logger.Info("Found completed backup job, requesting requeue to persist status")
-			return true, nil
-		}
-
-		// Request requeue when backup is due soon to ensure timely execution
-		// The controller will requeue with a short delay (5 seconds), so we check frequently
-		// when backup is approaching to avoid missing the scheduled time.
-		// We calculate a reasonable window based on the schedule interval to avoid missing backups
-		// while not causing excessive reconciles. For a 5-minute schedule, we check when due within 5 minutes.
-		scheduleInterval, err := GetScheduleInterval(cluster.Spec.Backup.Schedule)
-		if err == nil {
-			// Request requeue when backup is due within the schedule interval
-			// This ensures we check frequently enough to catch the scheduled time
-			// For a 5-minute schedule, we'll check every 5 seconds when backup is due within 5 minutes
-			if timeUntilDue <= scheduleInterval {
-				logger.V(1).Info("Backup due soon, requesting requeue", "timeUntilDue", timeUntilDue, "scheduleInterval", scheduleInterval)
-				return true, nil // Request requeue to check again soon
-			}
-		} else {
-			// Fallback: if we can't parse the schedule interval, use a conservative 5-minute window
-			if timeUntilDue <= 5*time.Minute {
-				logger.V(1).Info("Backup due soon, requesting requeue (fallback)", "timeUntilDue", timeUntilDue)
-				return true, nil
-			}
-		}
-		// For longer waits, don't requeue - rely on the controller's safety net requeue
-		// This avoids excessive reconciles when backup is far in the future
+		logger.Info("Backup preconditions not met", "reason", err.Error())
 		return false, nil
 	}
 
+	// Check if backup is due
+	shouldReturn, result, err = m.checkBackupDue(ctx, logger, cluster, schedule, now, scheduledTime, manualTrigger)
+	if shouldReturn {
+		return result, err
+	}
+
+	// Execute backup and process results
+	return m.executeAndProcessBackup(ctx, logger, cluster, schedule, metrics, now, scheduledTime, manualTrigger)
+}
+
+// handleManualTrigger checks for and handles manual backup trigger annotation.
+// Returns (manualTrigger, scheduledTime, shouldReturn, result, error).
+//
+//nolint:unparam // result (4th return) is always false but matches interface pattern
+func (m *Manager) handleManualTrigger(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	now time.Time,
+) (bool, time.Time, bool, bool, error) {
+	triggerAnnotation := constants.AnnotationTriggerBackup
+	val, ok := cluster.Annotations[triggerAnnotation]
+	if !ok || val == "" {
+		return false, time.Time{}, false, false, nil
+	}
+
+	logger.Info("Manual backup trigger detected", "annotation", val)
+
+	// Check if there's already a backup job in progress
+	hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
+	if err != nil {
+		return false, time.Time{}, true, false, fmt.Errorf("failed to check for active backup job: %w", err)
+	}
+	if hasActiveJob {
+		logger.Info("Manual backup triggered but job already in progress, skipping duplicate")
+		m.clearTriggerAnnotation(ctx, logger, cluster, triggerAnnotation)
+		return false, time.Time{}, true, false, nil
+	}
+
+	return true, now, false, false, nil
+}
+
+// clearTriggerAnnotation removes the manual trigger annotation from the cluster.
+func (m *Manager) clearTriggerAnnotation(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, annotation string) {
+	original := cluster.DeepCopy()
+	if cluster.Annotations == nil {
+		cluster.Annotations = make(map[string]string)
+	}
+	delete(cluster.Annotations, annotation)
+	if err := m.client.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+		logger.Error(err, "Failed to clear manual backup trigger annotation")
+	} else {
+		logger.Info("Cleared manual backup trigger annotation")
+	}
+}
+
+// checkBackupDue determines if a backup should be executed now.
+// Returns (shouldReturn, result, error) where shouldReturn indicates early return.
+//
+//nolint:unparam // schedule parameter kept for API consistency with executeAndProcessBackup
+func (m *Manager) checkBackupDue(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	_ cron.Schedule, // schedule parameter unused but kept for API consistency
+	now time.Time,
+	scheduledTime time.Time,
+	manualTrigger bool,
+) (bool, bool, error) {
+	if manualTrigger || !now.Before(scheduledTime) {
+		return false, false, nil // Backup is due
+	}
+
+	timeUntilDue := scheduledTime.Sub(now)
+	logger.V(1).Info("Backup not due yet", "scheduledTime", scheduledTime, "now", now, "timeUntilDue", timeUntilDue)
+
+	// Check for completed jobs
+	statusUpdated, err := m.checkForCompletedJobs(ctx, logger, cluster)
+	if err != nil {
+		return true, false, fmt.Errorf("failed to check for completed backup jobs: %w", err)
+	}
+	if statusUpdated {
+		logger.Info("Found completed backup job, requesting requeue to persist status")
+		return true, true, nil
+	}
+
+	// Determine if requeue is needed based on schedule
+	scheduleInterval, err := GetScheduleInterval(cluster.Spec.Backup.Schedule)
+	if err == nil && timeUntilDue <= scheduleInterval {
+		logger.V(1).Info("Backup due soon, requesting requeue", "timeUntilDue", timeUntilDue)
+		return true, true, nil
+	}
+	if err != nil && timeUntilDue <= 5*time.Minute {
+		logger.V(1).Info("Backup due soon, requesting requeue (fallback)", "timeUntilDue", timeUntilDue)
+		return true, true, nil
+	}
+
+	return true, false, nil
+}
+
+// executeAndProcessBackup creates/checks the backup job and processes results.
+func (m *Manager) executeAndProcessBackup(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	schedule cron.Schedule,
+	metrics *Metrics,
+	now time.Time,
+	scheduledTime time.Time,
+	manualTrigger bool,
+) (bool, error) {
 	nextScheduled := schedule.Next(scheduledTime)
 	if !nextScheduled.After(now) {
 		nextScheduled = schedule.Next(now)
@@ -192,7 +220,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if manualTrigger {
 		logger.Info("Manual backup triggered, ensuring backup Job", "job", jobName)
 	} else {
-		logger.Info("Backup is due, ensuring backup Job", "job", jobName, "scheduledTime", scheduledTime, "nextScheduled", nextScheduled)
+		logger.Info("Backup is due, ensuring backup Job", "job", jobName)
 	}
 	metrics.SetInProgress(true)
 
@@ -202,61 +230,38 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return false, fmt.Errorf("failed to ensure backup Job: %w", err)
 	}
 
-	// If this was a manual trigger, clear the annotation after ensuring the job exists
-	// We clear it regardless of whether the job was just created or already existed,
-	// as long as we've processed the trigger. For completed jobs, we'll process them
-	// below and update status accordingly.
+	// Clear manual trigger annotation after job creation
 	if manualTrigger {
-		original := cluster.DeepCopy()
-		if cluster.Annotations == nil {
-			cluster.Annotations = make(map[string]string)
-		}
-		delete(cluster.Annotations, triggerAnnotation)
-		if err := m.client.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
-			logger.Error(err, "Failed to clear manual backup trigger annotation")
-			// Don't fail the backup - annotation will be cleared on next reconcile
-		} else {
-			logger.Info("Cleared manual backup trigger annotation")
-		}
+		m.clearTriggerAnnotation(ctx, logger, cluster, constants.AnnotationTriggerBackup)
 	}
 
 	m.recordBackupAttempt(cluster, now, scheduledTime, nextScheduled)
 
 	if jobInProgress {
-		// Job is running - process its status
 		statusUpdated, err := m.processBackupJobResult(ctx, logger, cluster, jobName)
 		if err != nil {
 			return false, fmt.Errorf("failed to process backup Job result: %w", err)
 		}
-		// Requeue to check Job status again (job is still running)
-		// If status was updated (job just completed), request requeue to persist status
 		return statusUpdated, nil
 	}
 
-	// Check if there's a completed Job to process
+	// Process completed job
 	statusUpdated, err := m.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		return false, fmt.Errorf("failed to process backup Job result: %w", err)
 	}
 
-	// If backup completed successfully, apply retention and update schedule
+	// Apply retention if backup completed
 	if cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupTime != nil {
-		// Apply retention policy
 		if cluster.Spec.Backup.Retention != nil {
 			if err := m.applyRetention(ctx, logger, cluster, metrics); err != nil {
-				// Log but don't fail - retention errors shouldn't fail the backup
 				logger.Error(err, "Failed to apply retention policy")
 			}
 		}
-
-		// Next scheduled backup is set when a run becomes due; keep it up-to-date for status reporting.
 		nextScheduledMeta := metav1.NewTime(nextScheduled)
 		cluster.Status.Backup.NextScheduledBackup = &nextScheduledMeta
 	}
 
-	// Request requeue if status was updated (job completed) to ensure status is persisted immediately.
-	// The controller will persist the status before requeuing, ensuring users see the updated
-	// LastBackupTime or failure information promptly.
 	return statusUpdated, nil
 }
 

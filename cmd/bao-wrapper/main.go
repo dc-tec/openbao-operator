@@ -37,7 +37,8 @@ func run(ctx context.Context) error {
 	}
 
 	// 1. Start the child process
-	cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...) // #nosec G204 -- This wrapper intentionally executes user-provided commands
+	// #nosec G204 -- This wrapper intentionally executes user-provided commands
+	cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ() // Pass through environment variables

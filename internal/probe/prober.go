@@ -144,14 +144,16 @@ func (p *HTTPProber) CheckReadiness(ctx context.Context) error {
 
 	// Retry readiness probes up to 3 times with exponential backoff
 	// to handle connection resets during startup
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		if attempt > 0 {
+	// Pre-computed backoff durations to avoid integer overflow issues with bit shifting
+	backoffs := []time.Duration{0, 100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond}
+
+	for attempt := range maxRetries {
+		if attempt > 0 && attempt < len(backoffs) {
 			// Exponential backoff: 100ms, 200ms, 400ms
-			backoff := time.Duration(100*(1<<uint(attempt-1))) * time.Millisecond
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(backoff):
+			case <-time.After(backoffs[attempt]):
 			}
 		}
 

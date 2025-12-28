@@ -6,6 +6,7 @@ import (
 	"github.com/openbao/operator/internal/constants"
 )
 
+//nolint:gocyclo // Table-driven test with multiple assertions
 func TestGenerateTenantRole(t *testing.T) {
 	tests := []struct {
 		name      string

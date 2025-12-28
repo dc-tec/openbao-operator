@@ -52,6 +52,12 @@ import (
 	"github.com/openbao/operator/internal/upgrade/bluegreen"
 )
 
+// failurePolicyBlock is the default failure policy for image verification.
+const failurePolicyBlock = "Block"
+
+// unknownResource is used when the resource kind or info is not available.
+const unknownResource = "unknown"
+
 // SubReconciler is a standardized interface for sub-reconcilers that handle
 // specific aspects of OpenBaoCluster reconciliation.
 // Implementations should return (shouldRequeue, error) where shouldRequeue
@@ -90,10 +96,10 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 			now := metav1.Now()
 			failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
 			if failurePolicy == "" {
-				failurePolicy = "Block" // Default to Block
+				failurePolicy = failurePolicyBlock // Default to Block
 			}
 
-			if failurePolicy == "Block" {
+			if failurePolicy == failurePolicyBlock {
 				// Block reconciliation and set Degraded condition
 				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 					Type:               string(openbaov1alpha1.ConditionDegraded),
@@ -145,9 +151,9 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 				// Handle error based on failure policy
 				failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
 				if failurePolicy == "" {
-					failurePolicy = "Block" // Default to Block
+					failurePolicy = failurePolicyBlock // Default to Block
 				}
-				if failurePolicy == "Block" {
+				if failurePolicy == failurePolicyBlock {
 					now := metav1.Now()
 					meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 						Type:               string(openbaov1alpha1.ConditionDegraded),
@@ -251,6 +257,11 @@ type OpenBaoClusterReconciler struct {
 // move the current state of the cluster closer to the desired state.
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.4/pkg/reconcile
+//
+// complex status persistence, error classification, and sentinel trigger handling.
+// Refactoring would fragment the control flow without reducing actual complexity.
+//
+//nolint:gocyclo // Orchestrator function coordinating multiple sub-reconcilers with
 func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reconcileMetrics := controllerutil.NewReconcileMetrics(req.Namespace, req.Name, "openbaocluster")
 	startTime := time.Now()
@@ -337,7 +348,7 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		isSentinelTrigger = true
 
 		// Extract resource info from annotation if available
-		resourceInfo := "unknown"
+		resourceInfo := unknownResource
 		if resourceVal, hasResource := cluster.Annotations[constants.AnnotationSentinelTriggerResource]; hasResource {
 			resourceInfo = resourceVal
 		}
@@ -356,8 +367,8 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		cluster.Status.Drift.LastDriftResource = resourceInfo
 
 		// Extract resource kind from resource info (format: "Kind/name" or "Kind/namespace/name")
-		resourceKind := "unknown"
-		if resourceInfo != "" && resourceInfo != "unknown" {
+		resourceKind := unknownResource
+		if resourceInfo != "" && resourceInfo != unknownResource {
 			parts := strings.Split(resourceInfo, "/")
 			if len(parts) > 0 {
 				resourceKind = parts[0]

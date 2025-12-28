@@ -619,9 +619,5 @@ func isBenignJoinError(err error) bool {
 	if err == nil {
 		return false
 	}
-	msg := err.Error()
-	if strings.Contains(msg, "already joined") {
-		return true
-	}
-	return false
+	return strings.Contains(err.Error(), "already joined")
 }

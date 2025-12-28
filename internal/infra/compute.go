@@ -80,12 +80,6 @@ func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *op
 	return nil
 }
 
-// ensureStatefulSet manages the StatefulSet for the OpenBaoCluster using Server-Side Apply.
-// This is a convenience wrapper that calls EnsureStatefulSetWithRevision with an empty revision.
-func (m *Manager) ensureStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string, verifiedImageDigest string) error {
-	return m.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, verifiedImageDigest, "", false)
-}
-
 // EnsureStatefulSetWithRevision manages the StatefulSet for the OpenBaoCluster using Server-Side Apply.
 // This is exported for use by BlueGreenManager.
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
@@ -524,6 +518,8 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 
 // buildStatefulSet constructs a StatefulSet for the given OpenBaoCluster.
 // This is a convenience wrapper that calls buildStatefulSetWithRevision with an empty revision.
+//
+//nolint:unparam // configContent varies in production with actual config values
 func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string) (*appsv1.StatefulSet, error) {
 	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, "", false)
 }

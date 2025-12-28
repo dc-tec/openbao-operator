@@ -54,6 +54,7 @@ func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {
 	}
 }
 
+//nolint:gocyclo // Multi-phase test requires sequential reconcile calls
 func TestManager_Reconcile_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	scheme := runtime.NewScheme()
 	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {

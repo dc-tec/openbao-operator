@@ -73,9 +73,7 @@ func IsTransientConnection(err error) bool {
 		if netErr.Timeout() {
 			return true
 		}
-		if netErr.Temporary() {
-			return true
-		}
+		// Note: netErr.Temporary() is deprecated since Go 1.18 and not recommended
 	}
 
 	// Check for DNS errors

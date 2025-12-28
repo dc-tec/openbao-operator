@@ -214,7 +214,8 @@ func copyBinary(sourcePath string, destPath string) error {
 	}
 	defer func() { _ = sourceFile.Close() }()
 
-	destFile, err := os.OpenFile(cleanDestPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fileMode) // #nosec G304 -- Path is validated and cleaned to prevent traversal
+	// #nosec G304 -- Path is validated and cleaned to prevent traversal
+	destFile, err := os.OpenFile(cleanDestPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fileMode)
 	if err != nil {
 		return fmt.Errorf("failed to create destination file %q: %w", cleanDestPath, err)
 	}

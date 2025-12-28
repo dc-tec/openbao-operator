@@ -5,9 +5,10 @@ This guide covers deploying the operator, provisioning tenant namespaces, and op
 If you are using the Provisioner, you must create an `OpenBaoTenant` in the operator namespace (typically `openbao-operator-system`) for each target namespace. See [3. Provision Tenant Namespaces](tenant-namespaces.md).
 
 See also:
-- [Architecture](../architecture.md)
-- [Security](../security.md)
-- [Contributing](../contributing.md)
+
+- [Architecture](../architecture/index.md)
+- [Security](../security/index.md)
+- [Contributing](../contributing/index.md)
 
 ## Topics
 

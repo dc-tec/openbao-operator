@@ -198,7 +198,7 @@ func (m *Manager) executeStateMachine(ctx context.Context, logger logr.Logger, c
 }
 
 // handlePhaseIdle transitions from Idle to DeployingGreen when an upgrade is detected.
-func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (bool, error) {
+func (m *Manager) handlePhaseIdle(_ context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, _ string) (bool, error) {
 	logger.Info("Starting blue/green upgrade",
 		"fromVersion", cluster.Status.CurrentVersion,
 		"targetVersion", cluster.Spec.Version)
@@ -225,7 +225,7 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 
 // handlePhaseDeployingGreen creates the Green StatefulSet.
 // IMPORTANT: Green pods must join the existing Blue cluster as non-voters, not initialize a new cluster.
-func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (bool, error) {
+func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, _ string) (bool, error) {
 	greenRevision := cluster.Status.BlueGreen.GreenRevision
 	blueRevision := cluster.Status.BlueGreen.BlueRevision
 	logger = logger.WithValues("greenRevision", greenRevision, "blueRevision", blueRevision)
@@ -246,13 +246,13 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 	// If Blue pods don't have the revision label, the InfraManager needs to update them first
 	bluePodsHaveRevisionLabel := true
 	for _, pod := range bluePods {
-		revision, present := pod.Labels[constants.LabelOpenBaoRevision]
-		if !present || revision != blueRevision {
+		rev, present := pod.Labels[constants.LabelOpenBaoRevision]
+		if !present || rev != blueRevision {
 			bluePodsHaveRevisionLabel = false
 			logger.Info("Blue pod missing revision label, InfraManager will update it",
 				"pod", pod.Name,
 				"expectedRevision", blueRevision,
-				"actualRevision", revision)
+				"actualRevision", rev)
 			break
 		}
 	}
@@ -699,19 +699,19 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 
 // getPodsByRevision returns all pods belonging to the specified revision.
 // This is a unified helper used for both Blue and Green pod lookup.
-func (m *Manager) getPodsByRevision(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, revision string) ([]corev1.Pod, error) {
+func (m *Manager) getPodsByRevision(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, rev string) ([]corev1.Pod, error) {
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
 		constants.LabelAppInstance:     cluster.Name,
 		constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
-		constants.LabelOpenBaoRevision: revision,
+		constants.LabelOpenBaoRevision: rev,
 	})
 
 	if err := m.client.List(ctx, podList,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabelsSelector{Selector: labelSelector},
 	); err != nil {
-		return nil, fmt.Errorf("failed to list pods for revision %s: %w", revision, err)
+		return nil, fmt.Errorf("failed to list pods for revision %s: %w", rev, err)
 	}
 
 	return podList.Items, nil

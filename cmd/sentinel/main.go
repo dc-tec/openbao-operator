@@ -103,12 +103,6 @@ func isSentinelManagedResource(obj metav1.Object, clusterName string) bool {
 	return managedBy == constants.LabelValueAppManagedByOpenBaoOperator && instance == clusterName
 }
 
-// isUnsealOrRootTokenSecret checks if a Secret is an unseal key or root token.
-func isUnsealOrRootTokenSecret(secret *corev1.Secret) bool {
-	name := secret.Name
-	return strings.Contains(name, "-unseal-key") || strings.Contains(name, "-root-token")
-}
-
 // pendingTrigger tracks whether a trigger is pending and when it was last set.
 type pendingTrigger struct {
 	mu           sync.RWMutex
@@ -125,14 +119,6 @@ func (p *pendingTrigger) set(resourceKind, resourceName string) {
 	p.isPending = true
 	p.resourceKind = resourceKind
 	p.resourceName = resourceName
-}
-
-func (p *pendingTrigger) clear() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.isPending = false
-	p.resourceKind = ""
-	p.resourceName = ""
 }
 
 func (p *pendingTrigger) getResourceInfo() (kind, name string) {
@@ -281,10 +267,12 @@ found:
 	// Drift detected! Mark as pending and requeue after debounce window
 	// This allows multiple rapid drift detections to be batched into a single trigger
 	resourceKind := obj.GetObjectKind().GroupVersionKind().Kind
+	nsName := req.NamespacedName
+	resourceName := nsName.String()
 	logger.Info("Drift detected, marking trigger as pending",
 		"resource", req.NamespacedName,
 		"resource_kind", resourceKind)
-	r.pendingTrigger.set(resourceKind, req.NamespacedName.String())
+	r.pendingTrigger.set(resourceKind, resourceName)
 
 	// Requeue after debounce window to allow batching of multiple drift events
 	// The workqueue will handle the timing and ensure we only trigger once
@@ -363,12 +351,11 @@ func (r *SentinelReconciler) triggerReconciliation(ctx context.Context, resource
 					"annotation", constants.AnnotationSentinelTrigger,
 					"value", newValue)
 			} else {
-				// Annotation has a different value - this could mean:
-				// 1. Another sentinel reconciliation set a newer value (acceptable - drift was detected again)
-				// 2. API server eventual consistency hasn't reflected our patch yet (acceptable - will be retried)
-				// 3. An older value somehow persisted (rare but acceptable - will be overwritten on next reconciliation)
+				// Annotation has a different value - could be due to:
+				// concurrent reconciliation, eventual consistency, or persisted old value.
 				// We log at debug level but don't fail, as the patch operation succeeded
-				r.logger.V(1).Info("Patch verification: annotation has different value - may be due to concurrent reconciliation or eventual consistency",
+				r.logger.V(1).Info(
+					"Patch verification: annotation has different value",
 					"annotation", constants.AnnotationSentinelTrigger,
 					"expected_value", newValue,
 					"actual_value", val)
@@ -401,8 +388,9 @@ func (r *SentinelReconciler) setupHealthEndpoint(ctx context.Context) {
 	})
 
 	server := &http.Server{
-		Addr:    ":8082",
-		Handler: mux,
+		Addr:              ":8082",
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second, // Prevent Slowloris attack
 	}
 
 	go func() {
@@ -415,6 +403,232 @@ func (r *SentinelReconciler) setupHealthEndpoint(ctx context.Context) {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = server.Shutdown(shutdownCtx)
+}
+
+// unknownManager is used when the manager name cannot be determined from managedFields.
+const unknownManager = "unknown"
+
+// sentinelConfig holds the configuration loaded from environment variables.
+type sentinelConfig struct {
+	clusterNamespace string
+	clusterName      string
+	debounceWindow   time.Duration
+}
+
+// loadSentinelConfig loads configuration from environment variables.
+// Returns an error if required environment variables are missing or invalid.
+func loadSentinelConfig() (*sentinelConfig, error) {
+	clusterNamespace := strings.TrimSpace(os.Getenv(constants.EnvPodNamespace))
+	if clusterNamespace == "" {
+		return nil, fmt.Errorf("POD_NAMESPACE environment variable is required")
+	}
+
+	clusterName := strings.TrimSpace(os.Getenv(constants.EnvClusterName))
+	if clusterName == "" {
+		return nil, fmt.Errorf("CLUSTER_NAME environment variable is required")
+	}
+
+	debounceWindowStr := strings.TrimSpace(os.Getenv(constants.EnvSentinelDebounceWindowSeconds))
+	if debounceWindowStr == "" {
+		debounceWindowStr = "2" // Default
+	}
+	debounceWindowSeconds, err := strconv.ParseInt(debounceWindowStr, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SENTINEL_DEBOUNCE_WINDOW_SECONDS %q: %w", debounceWindowStr, err)
+	}
+
+	return &sentinelConfig{
+		clusterNamespace: clusterNamespace,
+		clusterName:      clusterName,
+		debounceWindow:   time.Duration(debounceWindowSeconds) * time.Second,
+	}, nil
+}
+
+// hasRecentNonOperatorUpdate checks if any managed field was updated by a non-operator
+// within the specified time window, indicating potential drift.
+func hasRecentNonOperatorUpdate(managedFields []metav1.ManagedFieldsEntry, window time.Duration) bool {
+	for _, field := range managedFields {
+		isOperator := false
+		for _, name := range operatorManagerNames {
+			if field.Manager == name {
+				isOperator = true
+				break
+			}
+		}
+		if !isOperator && time.Since(field.Time.Time) < window {
+			return true
+		}
+	}
+	return false
+}
+
+// ignoredAnnotationPrefixes lists annotation prefixes that should not trigger drift detection.
+var ignoredAnnotationPrefixes = []string{
+	"openbao.org/",           // Operator-managed annotations (except maintenance, handled separately)
+	"kubectl.kubernetes.io/", // kubectl annotations
+	"deployment.kubernetes.io/",
+	"service.beta.kubernetes.io/",
+	"service.kubernetes.io/",
+	"cloud.google.com/",
+	"eks.amazonaws.com/",
+	"azure.workload.identity/",
+}
+
+// hasNonOperatorAnnotationChange checks if any non-operator annotation was added or changed.
+// Returns true if a drift-indicating annotation change was detected.
+func hasNonOperatorAnnotationChange(
+	oldAnnotations, newAnnotations map[string]string,
+	managedFields []metav1.ManagedFieldsEntry,
+) bool {
+	if len(newAnnotations) == 0 || len(managedFields) == 0 {
+		return false
+	}
+
+	// Check if the most recent update was recent (within last 10 seconds)
+	mostRecentTime := managedFields[len(managedFields)-1].Time.Time
+	if time.Since(mostRecentTime) >= 10*time.Second {
+		return false
+	}
+
+	for key, newVal := range newAnnotations {
+		// Ignore test annotations (e2e.*)
+		if strings.HasPrefix(key, "e2e.") {
+			continue
+		}
+		// Ignore maintenance-allowed annotation
+		if key == "openbao.org/maintenance-allowed" {
+			continue
+		}
+
+		// Check if annotation was added or changed
+		oldVal, existed := oldAnnotations[key]
+		wasAddedOrChanged := !existed || oldVal != newVal
+		if !wasAddedOrChanged {
+			continue
+		}
+
+		// Maintenance annotation should trigger drift detection
+		if key == "openbao.org/maintenance" {
+			return true
+		}
+
+		// Check if annotation matches any ignored prefix
+		isIgnored := false
+		for _, prefix := range ignoredAnnotationPrefixes {
+			if strings.HasPrefix(key, prefix) {
+				isIgnored = true
+				break
+			}
+		}
+		if isIgnored {
+			continue
+		}
+
+		// Found a non-operator annotation that was added or changed
+		return true
+	}
+
+	return false
+}
+
+// getMostRecentManager returns the manager name from the most recent managed field entry.
+func getMostRecentManager(managedFields []metav1.ManagedFieldsEntry) string {
+	if len(managedFields) > 0 {
+		return managedFields[len(managedFields)-1].Manager
+	}
+	return unknownManager
+}
+
+// buildDriftPredicate creates the predicate for drift detection on managed resources.
+func buildDriftPredicate(clusterName string) predicate.Funcs {
+	return predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			return isSentinelManagedResource(e.Object, clusterName)
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return evaluateUpdateForDrift(e, clusterName)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return false // Ignore deletions
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			return false
+		},
+	}
+}
+
+// evaluateUpdateForDrift determines if an update event indicates drift that needs correction.
+func evaluateUpdateForDrift(e event.UpdateEvent, clusterName string) bool {
+	if !isSentinelManagedResource(e.ObjectNew, clusterName) {
+		return false
+	}
+
+	mostRecentIsOperator := isOperatorUpdate(e.ObjectNew, operatorManagerNames)
+
+	// If the most recent update is from the operator, apply additional checks
+	if mostRecentIsOperator {
+		return checkOperatorUpdateForDrift(e)
+	}
+
+	// Most recent update is from non-operator, this is drift
+	setupLog.V(1).Info("Update event passed predicate filter: non-operator update",
+		"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
+		"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind)
+	return true
+}
+
+// checkOperatorUpdateForDrift performs additional drift detection when the most recent
+// update was from the operator. This catches cases where drift was quickly reconciled.
+func checkOperatorUpdateForDrift(e event.UpdateEvent) bool {
+	managedFields := e.ObjectNew.GetManagedFields()
+	if len(managedFields) == 0 {
+		return false
+	}
+
+	mostRecentTime := managedFields[len(managedFields)-1].Time.Time
+
+	// Grace period: Ignore updates within 5 seconds of operator reconciliation
+	gracePeriod := 5 * time.Second
+	if time.Since(mostRecentTime) < gracePeriod {
+		setupLog.V(1).Info("Update event filtered: within grace period after operator reconciliation",
+			"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
+			"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind,
+			"time_since_operator_update", time.Since(mostRecentTime))
+		return false
+	}
+
+	// Check for recent non-operator updates (within 15 seconds)
+	if hasRecentNonOperatorUpdate(managedFields, 15*time.Second) {
+		setupLog.V(1).Info("Update event passed predicate: recent non-operator update detected",
+			"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
+			"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind,
+			"most_recent_manager", getMostRecentManager(managedFields))
+		return true
+	}
+
+	// Check for annotation changes
+	oldAnnotations := e.ObjectOld.GetAnnotations()
+	newAnnotations := e.ObjectNew.GetAnnotations()
+	if oldAnnotations == nil {
+		oldAnnotations = make(map[string]string)
+	}
+	if newAnnotations == nil {
+		newAnnotations = make(map[string]string)
+	}
+
+	if hasNonOperatorAnnotationChange(oldAnnotations, newAnnotations, managedFields) {
+		setupLog.V(1).Info("Update event passed predicate: non-operator annotation detected",
+			"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
+			"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind,
+			"most_recent_manager", getMostRecentManager(managedFields))
+		return true
+	}
+
+	setupLog.V(1).Info("Update event filtered: operator update",
+		"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
+		"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind,
+		"manager", getMostRecentManager(managedFields))
+	return false
 }
 
 func main() {
@@ -435,34 +649,17 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	// Load configuration from environment
-	clusterNamespace := strings.TrimSpace(os.Getenv(constants.EnvPodNamespace))
-	if clusterNamespace == "" {
-		setupLog.Error(nil, "POD_NAMESPACE environment variable is required")
-		os.Exit(1)
-	}
-
-	clusterName := strings.TrimSpace(os.Getenv(constants.EnvClusterName))
-	if clusterName == "" {
-		setupLog.Error(nil, "CLUSTER_NAME environment variable is required")
-		os.Exit(1)
-	}
-
-	debounceWindowStr := strings.TrimSpace(os.Getenv(constants.EnvSentinelDebounceWindowSeconds))
-	if debounceWindowStr == "" {
-		debounceWindowStr = "2" // Default
-	}
-	debounceWindowSeconds, err := strconv.ParseInt(debounceWindowStr, 10, 32)
+	// Load configuration from environment using the extracted helper
+	cfg, err := loadSentinelConfig()
 	if err != nil {
-		setupLog.Error(err, "Invalid SENTINEL_DEBOUNCE_WINDOW_SECONDS", "value", debounceWindowStr)
+		setupLog.Error(err, "Failed to load configuration")
 		os.Exit(1)
 	}
-	debounceWindow := time.Duration(debounceWindowSeconds) * time.Second
 
 	setupLog.Info("Starting Sentinel",
-		"cluster_namespace", clusterNamespace,
-		"cluster_name", clusterName,
-		"debounce_window", debounceWindow)
+		"cluster_namespace", cfg.clusterNamespace,
+		"cluster_name", cfg.clusterName,
+		"debounce_window", cfg.debounceWindow)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
@@ -471,12 +668,12 @@ func main() {
 		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       fmt.Sprintf("openbao-sentinel-%s-%s", clusterNamespace, clusterName),
+		LeaderElectionID:       fmt.Sprintf("openbao-sentinel-%s-%s", cfg.clusterNamespace, cfg.clusterName),
 		// Restrict cache to the cluster namespace to align with namespace-scoped RBAC permissions.
 		// This prevents the cache from requiring cluster-wide list/watch permissions.
 		Cache: cache.Options{
 			DefaultNamespaces: map[string]cache.Config{
-				clusterNamespace: {},
+				cfg.clusterNamespace: {},
 			},
 		},
 	})
@@ -486,204 +683,23 @@ func main() {
 	}
 
 	reconciler := &SentinelReconciler{
-		client:           mgr.GetClient(),
-		logger:           ctrl.Log.WithName("sentinel").WithValues("cluster_namespace", clusterNamespace, "cluster_name", clusterName, "component", "sentinel"),
-		clusterName:      clusterName,
-		clusterNamespace: clusterNamespace,
-		debounceWindow:   debounceWindow,
+		client: mgr.GetClient(),
+		logger: ctrl.Log.WithName("sentinel").WithValues(
+			"cluster_namespace", cfg.clusterNamespace,
+			"cluster_name", cfg.clusterName,
+			"component", "sentinel",
+		),
+		clusterName:      cfg.clusterName,
+		clusterNamespace: cfg.clusterNamespace,
+		debounceWindow:   cfg.debounceWindow,
 		pendingTrigger:   &pendingTrigger{},
 		healthStatus:     &healthStatus{},
 	}
 
 	// Create a single controller that watches multiple resource types
 	// Use StatefulSet as the primary resource and add watches for others
-	driftPredicate := predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool {
-			return isSentinelManagedResource(e.Object, clusterName)
-		},
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			isManaged := isSentinelManagedResource(e.ObjectNew, clusterName)
-			if !isManaged {
-				return false
-			}
-
-			// Check if the most recent update was from the operator
-			// However, if the resource was recently updated by a non-operator (within last 10 seconds),
-			// we should still detect it as drift, even if the operator then reconciled it.
-			// This handles the race condition where the operator fixes drift before Sentinel detects it.
-			mostRecentIsOperator := isOperatorUpdate(e.ObjectNew, operatorManagerNames)
-
-			// If the most recent update is from the operator, check for drift indicators:
-			// 1. Check all managedFields entries for recent non-operator updates
-			// 2. Compare old vs new annotations to detect if new annotations were added
-			//    (SSA with ForceOwnership can take ownership of fields without removing values)
-			// 3. Apply grace period to avoid false positives from operator's own reconciliation
-			if mostRecentIsOperator {
-				managedFields := e.ObjectNew.GetManagedFields()
-				mostRecentTime := time.Time{}
-				if len(managedFields) > 0 {
-					mostRecentTime = managedFields[len(managedFields)-1].Time.Time
-				}
-
-				// Grace period: Ignore updates within 5 seconds of operator reconciliation
-				// This prevents false positives where the operator's reconciliation triggers
-				// another update event that we might misinterpret as drift
-				gracePeriod := 5 * time.Second
-				if time.Since(mostRecentTime) < gracePeriod {
-					setupLog.V(1).Info("Update event filtered: within grace period after operator reconciliation",
-						"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
-						"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind,
-						"time_since_operator_update", time.Since(mostRecentTime))
-					return false
-				}
-
-				// Check all managedFields entries for recent non-operator updates
-				// (not just the second one, as SSA can create multiple entries)
-				for _, field := range managedFields {
-					isFieldOperator := false
-					for _, name := range operatorManagerNames {
-						if field.Manager == name {
-							isFieldOperator = true
-							break
-						}
-					}
-
-					// If this field was managed by a non-operator and updated recently, it's likely drift
-					// Use a longer window (15 seconds) to catch drift that happened just before operator reconciliation
-					if !isFieldOperator && time.Since(field.Time.Time) < 15*time.Second {
-						setupLog.V(1).Info("Update event passed predicate: recent non-operator update detected",
-							"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
-							"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind,
-							"most_recent_manager", func() string {
-								if len(managedFields) > 0 {
-									return managedFields[len(managedFields)-1].Manager
-								}
-								return "unknown"
-							}(),
-							"non_operator_manager", field.Manager,
-							"non_operator_time", field.Time.Time)
-						return true
-					}
-				}
-
-				// Check if annotations exist that operator wouldn't set
-				// This handles the case where SSA takes ownership but preserves annotation values.
-				// We check if non-operator annotations exist AND the resource was recently updated
-				// (within last 10 seconds), indicating recent drift that the operator just reconciled.
-				oldAnnotations := e.ObjectOld.GetAnnotations()
-				newAnnotations := e.ObjectNew.GetAnnotations()
-
-				// Handle nil annotations by treating them as empty maps
-				// This is critical because Services created by the operator often have nil annotations
-				if oldAnnotations == nil {
-					oldAnnotations = make(map[string]string)
-				}
-				if newAnnotations == nil {
-					newAnnotations = make(map[string]string)
-				}
-
-				if len(newAnnotations) > 0 && len(managedFields) > 0 {
-					// Check if the most recent update was recent (within last 10 seconds)
-					// The most recent entry is the last one in the managedFields slice
-					mostRecentTime := managedFields[len(managedFields)-1].Time.Time
-					recentlyUpdated := time.Since(mostRecentTime) < 10*time.Second
-
-					if recentlyUpdated {
-						// Check if any annotations exist that don't match operator patterns
-						for key := range newAnnotations {
-							// Ignore test annotations (e2e.*) - these are added by tests
-							// and may persist after operator reconciliation due to SSA behavior
-							if strings.HasPrefix(key, "e2e.") {
-								continue
-							}
-							// Ignore maintenance annotations that are explicitly allowed
-							// Users can set "openbao.org/maintenance-allowed" to indicate legitimate maintenance
-							if key == "openbao.org/maintenance-allowed" {
-								continue
-							}
-							// openbao.org/maintenance is a user-set annotation for break-glass scenarios
-							// The operator should detect and correct it, so it should trigger drift detection
-							if key == "openbao.org/maintenance" {
-								// Check if it was added/changed by comparing with old object
-								oldValue, existed := oldAnnotations[key]
-								wasAddedOrChanged := !existed || oldValue != newAnnotations[key]
-								if wasAddedOrChanged {
-									setupLog.V(1).Info("Update event passed predicate: maintenance annotation detected (drift indicator)",
-										"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
-										"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind,
-										"annotation", key,
-										"most_recent_manager", managedFields[len(managedFields)-1].Manager,
-										"most_recent_time", mostRecentTime)
-									return true
-								}
-								continue // If maintenance annotation wasn't changed, ignore it
-							}
-							// Ignore common Kubernetes system annotations that are set by other controllers
-							// These are legitimate and shouldn't trigger drift detection
-							ignoredPrefixes := []string{
-								"openbao.org/",           // Operator-managed annotations (except maintenance, handled above)
-								"kubectl.kubernetes.io/", // kubectl annotations
-								"deployment.kubernetes.io/",
-								"service.beta.kubernetes.io/",
-								"service.kubernetes.io/",
-								"cloud.google.com/",
-								"eks.amazonaws.com/",
-								"azure.workload.identity/",
-							}
-							isIgnored := false
-							for _, prefix := range ignoredPrefixes {
-								if strings.HasPrefix(key, prefix) {
-									isIgnored = true
-									break
-								}
-							}
-							if isIgnored {
-								continue
-							}
-							// This looks like a non-operator annotation that exists after operator reconciliation
-							// Check if it was added/changed by comparing with old object
-							oldValue, existed := oldAnnotations[key]
-							wasAddedOrChanged := !existed || oldValue != newAnnotations[key]
-
-							if wasAddedOrChanged {
-								setupLog.V(1).Info("Update event passed predicate: non-operator annotation detected",
-									"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
-									"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind,
-									"annotation", key,
-									"most_recent_manager", managedFields[len(managedFields)-1].Manager,
-									"most_recent_time", mostRecentTime)
-								return true
-							}
-						}
-					}
-				}
-
-				setupLog.V(1).Info("Update event filtered: operator update",
-					"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
-					"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind,
-					"manager", func() string {
-						fields := e.ObjectNew.GetManagedFields()
-						if len(fields) > 0 {
-							return fields[len(fields)-1].Manager
-						}
-						return "unknown"
-					}())
-				return false
-			}
-
-			// Most recent update is from non-operator, this is drift
-			setupLog.V(1).Info("Update event passed predicate filter: non-operator update",
-				"resource", fmt.Sprintf("%s/%s", e.ObjectNew.GetNamespace(), e.ObjectNew.GetName()),
-				"kind", e.ObjectNew.GetObjectKind().GroupVersionKind().Kind)
-			return true
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			return false // Ignore deletions
-		},
-		GenericFunc: func(e event.GenericEvent) bool {
-			return false
-		},
-	}
+	// Use the extracted drift predicate builder
+	driftPredicate := buildDriftPredicate(cfg.clusterName)
 
 	// Create a single controller that watches StatefulSet as primary
 	// and uses Watches for other resource types with predicates

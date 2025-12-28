@@ -588,6 +588,7 @@ func renderSelfInitStanzas(body *hclwrite.Body, requests []openbaov1alpha1.SelfI
 	return nil
 }
 
+//nolint:unparam // Error return maintained for API consistency and future extensibility
 func setSelfInitRequestData(requestBody *hclwrite.Body, dataVal cty.Value) error {
 	if dataVal == cty.NilVal {
 		return nil
@@ -894,7 +895,7 @@ func renderAuditDevices(body *hclwrite.Body, devices []openbaov1alpha1.AuditDevi
 		}
 
 		// If structured options were used, render them
-		if options != nil && len(options) > 0 {
+		if len(options) > 0 {
 			auditBody.SetAttributeValue("options", cty.ObjectVal(options))
 		} else if device.Options != nil && len(device.Options.Raw) > 0 {
 			// Fall back to raw Options JSON for backward compatibility

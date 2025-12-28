@@ -81,9 +81,9 @@ func TestIsTransientConnection(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "temporary net.Error",
+			name: "temporary net.Error (deprecated, only timeout is checked)",
 			err:  &temporaryError{},
-			want: true,
+			want: false, // Temporary() is deprecated; only Timeout() is checked
 		},
 		{
 			name: "non-transient error",

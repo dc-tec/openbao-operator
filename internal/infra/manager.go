@@ -340,15 +340,15 @@ func podSelectorLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]strin
 }
 
 // podSelectorLabelsWithRevision returns pod selector labels including the revision label.
-// If revision is empty, returns base labels (for backward compatibility).
+// If rev is empty, returns base labels (for backward compatibility).
 // Otherwise, includes the revision label for blue/green deployments.
-func podSelectorLabelsWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, revision string) map[string]string {
+func podSelectorLabelsWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, rev string) map[string]string {
 	labels := infraLabels(cluster)
-	if revision != "" {
+	if rev != "" {
 		if labels == nil {
 			labels = make(map[string]string)
 		}
-		labels[constants.LabelOpenBaoRevision] = revision
+		labels[constants.LabelOpenBaoRevision] = rev
 	}
 	return labels
 }
@@ -362,13 +362,13 @@ func configMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 }
 
 // configMapNameWithRevision returns the ConfigMap name for a given revision.
-// If revision is empty, returns the cluster's base ConfigMap name.
+// If rev is empty, returns the cluster's base ConfigMap name.
 // Otherwise, returns "<cluster-name>-config-<revision>".
-func configMapNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, revision string) string {
-	if revision == "" {
+func configMapNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, rev string) string {
+	if rev == "" {
 		return configMapName(cluster)
 	}
-	return fmt.Sprintf("%s%s-%s", cluster.Name, constants.SuffixConfigMap, revision)
+	return fmt.Sprintf("%s%s-%s", cluster.Name, constants.SuffixConfigMap, rev)
 }
 
 func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -396,13 +396,13 @@ func statefulSetName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 }
 
 // statefulSetNameWithRevision returns the StatefulSet name for a given revision.
-// If revision is empty, returns the cluster name (for backward compatibility).
+// If rev is empty, returns the cluster name (for backward compatibility).
 // Otherwise, returns "<cluster-name>-<revision>".
-func statefulSetNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, revision string) string {
-	if revision == "" {
+func statefulSetNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, rev string) string {
+	if rev == "" {
 		return cluster.Name
 	}
-	return fmt.Sprintf("%s-%s", cluster.Name, revision)
+	return fmt.Sprintf("%s-%s", cluster.Name, rev)
 }
 
 func int32Ptr(v int32) *int32 {

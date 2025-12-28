@@ -396,7 +396,13 @@ func checkRustFSReadiness(ctx context.Context, c client.Client, namespace, name 
 }
 
 // createRustFSBuckets creates the specified buckets in RustFS using AWS CLI.
-func createRustFSBuckets(ctx context.Context, restCfg *rest.Config, c client.Client, cfg RustFSConfig, endpoint string) error {
+func createRustFSBuckets(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	cfg RustFSConfig,
+	endpoint string,
+) error {
 	if len(cfg.Buckets) == 0 {
 		return nil
 	}
@@ -406,7 +412,7 @@ func createRustFSBuckets(ctx context.Context, restCfg *rest.Config, c client.Cli
 	awsCliImage := "amazon/aws-cli:latest"
 
 	// Build the command to create all buckets
-	var bucketCommands []string
+	bucketCommands := make([]string, 0, len(cfg.Buckets))
 	for _, bucket := range cfg.Buckets {
 		if bucket == "" {
 			continue

@@ -6,8 +6,8 @@ The OpenBao Supervisor Operator manages the full lifecycle of OpenBao clusters o
 
 The Operator is split into two distinct components to enforce strict security boundaries:
 
-1.  **Provisioner:** A privileged component that creates namespaces and grants specific, limited RBAC permissions.
-2.  **Controller:** A low-privilege workload that manages OpenBao clusters. It cannot access resources outside of its provisioned namespaces.
+1. **Provisioner:** A privileged component that creates namespaces and grants specific, limited RBAC permissions.
+2. **Controller:** A low-privilege workload that manages OpenBao clusters. It cannot access resources outside of its provisioned namespaces.
 
 ```mermaid
 flowchart LR
@@ -88,12 +88,12 @@ flowchart TB
 
 ## Key Features
 
-  * **Zero Trust Architecture:** The Controller runs with minimal permissions. Access is granted dynamically per-tenant by the Provisioner.
-  * **Automated PKI:** Manages internal Root CA, rotates certificates, and triggers hot-reloads.
-  * **Raft-Aware Upgrades:** Orchestrates safe, step-down based rolling upgrades.
-  * **Disaster Recovery:** Streams snapshots directly to S3/GCS/Azure without disk buffering.
-  * **Secure by Default:** Rootless, read-only filesystem, strict NetworkPolicies, and auto-unseal.
-  * **Multi-Tenant:** Namespace-scoped isolation with strict RBAC boundaries.
+* **Zero Trust Architecture:** The Controller runs with minimal permissions. Access is granted dynamically per-tenant by the Provisioner.
+* **Automated PKI:** Manages internal Root CA, rotates certificates, and triggers hot-reloads.
+* **Raft-Aware Upgrades:** Orchestrates safe, step-down based rolling upgrades.
+* **Disaster Recovery:** Streams snapshots directly to S3/GCS/Azure without disk buffering.
+* **Secure by Default:** Rootless, read-only filesystem, strict NetworkPolicies, and auto-unseal.
+* **Multi-Tenant:** Namespace-scoped isolation with strict RBAC boundaries.
 
 ## Quick Start
 
@@ -150,19 +150,18 @@ kubectl get pods -l openbao.org/cluster=dev-cluster -w
 
 ## Documentation
 
-  * [Docs Index](docs/README.md)
-  * [User Guide](docs/user-guide/README.md): Configuration, Backups, Upgrades, and Day 2 Ops.
-  * [Security & RBAC](docs/security.md): Threat model, RBAC design, and hardening guide.
-  * [Architecture](docs/architecture.md): Internal controller design and state machines.
-  * [Contributing](docs/contributing.md): Build instructions and testing strategy.
+* [User Guide](docs/user-guide/README.md): Configuration, Backups, Upgrades, and Day 2 Ops.
+* [Architecture](docs/architecture/index.md): Internal controller design and state machines.
+* [Security & RBAC](docs/security/index.md): Threat model, RBAC design, and hardening guide.
+* [Contributing](docs/contributing/index.md): Build instructions and testing strategy.
 
 ## Contributing
 
 We welcome issues and pull requests. When contributing:
 
-- Follow the coding guidelines in `AGENTS.md`.
-- Ensure `go test ./...` and `golangci-lint` pass locally.
-- Keep documentation in sync with any non-trivial behavior changes.
+* Follow the coding guidelines in `AGENTS.md`.
+* Ensure `go test ./...` and `golangci-lint` pass locally.
+* Keep documentation in sync with any non-trivial behavior changes.
 
 **NOTE:** Run `make help` for more information on all potential `make` targets
 

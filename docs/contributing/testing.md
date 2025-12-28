@@ -1,38 +1,14 @@
-# Testing Strategy: OpenBao Supervisor Operator
+# Testing Strategy
 
-This document expands on the high-level "Testing Strategy" section in `architecture.md` and defines how we structure tests for the OpenBao Supervisor Operator.
+To ensure correctness and avoid regressions, we adopt a layered testing strategy:
 
-**Note:** This content has been merged into `docs/contributing.md`. See that document for the latest testing strategy and build instructions.
-
-The goals of this strategy are:
-
-- To provide repeatable, layered test coverage from pure Go logic to full end-to-end behavior.
-- To make tests easy to understand and extend by using table-driven tests wherever practical.
-- To ensure tests enforce the non-functional requirements (reconcile latency, concurrency, and resource limits) as the project evolves.
-
------
-
-## 1. Testing Layers
-
-We use three primary layers of tests:
-
-- **Unit Tests (Pure Go / Small-scope):**
-  - Focus on functions in `internal/` and other packages that do not require a running Kubernetes API server.
-  - Use table-driven tests by default to cover multiple inputs and edge cases.
-
-- **Controller / Integration Tests (envtest):**
-  - Use `controller-runtime`'s `envtest` to run reconciliation logic against a real API server with in-memory etcd.
-  - Validate interactions between controllers, CRDs, and Kubernetes resources without a full cluster.
-
-- **End-to-End Tests (kind + KUTTL or Ginkgo):**
-  - Run the Operator and a real OpenBao image in a kind cluster.
-  - Validate real-world scenarios: cluster creation, upgrades, backup scheduling, multi-tenancy behavior.
+- **Unit Tests (Pure Go / Small-scope):** Validate functions in `internal/` and other packages that do not require a running Kubernetes API server.
+- **Controller / Integration Tests (envtest):** Use `controller-runtime`'s `envtest` to run reconciliation logic against a real API server with in-memory etcd.
+- **End-to-End Tests (kind + KUTTL or Ginkgo):** Run the Operator and a real OpenBao image in a kind cluster.
 
 Each layer has its own focus and trade-offs; higher layers cover fewer scenarios but with higher fidelity.
 
------
-
-## 2. Unit Tests and Table-Driven Patterns
+## 1. Unit Tests
 
 Unit tests focus on deterministic, in-process logic with no external I/O. Typical targets include:
 
@@ -43,9 +19,9 @@ Unit tests focus on deterministic, in-process logic with no external I/O. Typica
 - Upgrade state-machine helper functions that compute next actions from a given status.
 - Backup naming and path construction functions.
 
-### 2.1 Table-Driven Test Pattern
+### 1.1 Table-Driven Test Pattern
 
-We standardize on table-driven tests for unit-level logic, following the pattern:
+We standardize on table-driven tests for unit-level logic:
 
 ```go
 func TestRenderConfig(t *testing.T) {
@@ -88,14 +64,48 @@ Guidelines:
 - Use descriptive `name` values to make it clear what each case is asserting.
 - Construct inputs via small helpers (e.g., `minimalSpec()`) to keep test cases readable.
 
-### 2.2 What to Avoid in Unit Tests
+**What to Avoid in Unit Tests:**
 
 - Avoid network calls, real Kubernetes clients, and real OpenBao APIs in unit tests.
 - Avoid global shared state between tests; prefer fresh instances per test case.
 
------
+**Run unit tests:**
 
-## 3. Controller / Integration Tests (envtest)
+```sh
+go test ./...
+```
+
+Or for a specific package:
+
+```sh
+go test ./internal/certs/...
+```
+
+### 1.2 Golden File Testing for HCL Generation
+
+The HCL configuration generation tests (`internal/config/builder_test.go`) use golden files to ensure exact output matching. Golden files are stored in `internal/config/testdata/` and contain the expected HCL output for each test scenario.
+
+**When to update golden files:**
+
+- After modifying `internal/config/builder.go` or related HCL generation logic
+- When the expected HCL output changes due to feature additions or bug fixes
+- When refactoring config generation that affects output formatting
+
+**To update golden files:**
+
+```sh
+make test-update-golden
+```
+
+Or manually:
+
+```sh
+UPDATE_GOLDEN=true go test ./internal/config/... -v
+```
+
+This will regenerate all golden files based on the current implementation. Review the changes in the golden files carefully before committing, as they represent the actual HCL configuration that will be generated for OpenBao clusters.
+
+## 2. Controller / Integration Tests (envtest)
 
 Controller-level tests validate reconciliation behavior using `envtest`:
 
@@ -103,7 +113,7 @@ Controller-level tests validate reconciliation behavior using `envtest`:
 - CRDs for `OpenBaoCluster` and related resources are installed.
 - Controllers run with `client.Client` against this API server.
 
-### 3.1 Scenarios to Cover
+### 2.1 Scenarios to Cover
 
 At minimum, envtest suites should cover:
 
@@ -133,17 +143,35 @@ At minimum, envtest suites should cover:
   - Valid user config fragments are merged.
   - Attempts to override protected stanzas are rejected at admission via CRD-level CEL validation and ValidatingAdmissionPolicy, or surfaced via Status Conditions when detected during reconciliation.
 
+- **Sentinel Drift Detection:**
+  - Sentinel Deployment is created when `spec.sentinel.enabled` is true.
+  - Sentinel ServiceAccount, Role, and RoleBinding are created with correct permissions.
+  - Sentinel Deployment is deleted when `spec.sentinel.enabled` is false.
+  - Sentinel trigger annotation (`openbao.org/sentinel-trigger`) triggers fast-path reconciliation.
+  - Fast-path mode skips UpgradeManager and BackupManager when trigger annotation is present.
+  - Trigger annotation is cleared after successful reconciliation.
+
 Where individual envtest assertions involve small decision functions, we still prefer table-driven subtests to cover multiple variations per scenario.
 
-### 3.2 Implementation Notes
+### 2.2 Implementation Notes
 
 - Use `testing.T` and Go subtests (`t.Run`) to group related scenarios.
 - Use `Eventually`/`Consistently` patterns (from Gomega or similar) only where needed; prefer direct `client.Client` reads and explicit `timeouts`.
 - Keep envtest suites focused; do not attempt to fully replicate E2E behavior.
 
------
+**Run integration tests:**
 
-## 4. End-to-End Tests (kind + KUTTL or Ginkgo)
+```sh
+make test-integration
+```
+
+Or for a specific test:
+
+```sh
+go test ./internal/controller/openbaocluster/... -v
+```
+
+## 3. End-to-End Tests (kind + KUTTL or Ginkgo)
 
 E2E tests validate real-system behavior using kind:
 
@@ -152,7 +180,7 @@ E2E tests validate real-system behavior using kind:
 - Real OpenBao image.
 - Optional MinIO deployment for backup tests.
 
-### 4.1 Core E2E Scenarios
+### 3.1 Core E2E Scenarios
 
 - **Cluster Creation and Initialization:**
   - Apply `OpenBaoCluster` manifests and verify:
@@ -193,15 +221,37 @@ E2E tests validate real-system behavior using kind:
   - Backup metrics:
     - `openbao_backup_success_total` increments on success.
     - `openbao_backup_failure_total` increments on failure.
+
+- **Sentinel Drift Detection:**
+  - Enable Sentinel (`spec.sentinel.enabled: true`) and verify:
+    - Sentinel Deployment is created with correct image, resources, and environment variables.
+    - Sentinel ServiceAccount, Role, and RoleBinding are created.
+    - Sentinel health endpoint (`/healthz`) returns 200 OK.
+  - Drift detection:
+    - Manually modify a managed ConfigMap (e.g., change `config.hcl` content).
+    - Verify Sentinel detects the change and patches `OpenBaoCluster` with `openbao.org/sentinel-trigger` annotation.
+    - Verify operator enters fast-path mode (skips Upgrade and Backup managers).
+    - Verify operator corrects the drift and clears the trigger annotation.
+  - Debouncing:
+    - Rapidly modify multiple resources (StatefulSet, Service, ConfigMap) within the debounce window.
+    - Verify only one trigger annotation is set (not multiple).
+  - Actor filtering:
+    - Operator updates a StatefulSet (e.g., during normal reconciliation).
+    - Verify Sentinel does NOT trigger (ignores operator updates).
+  - Secret safety:
+    - Update unseal key Secret metadata (e.g., add annotation) without changing data.
+    - Verify Sentinel does NOT trigger (hash comparison prevents false positives).
+  - VAP enforcement:
+    - Attempt to use Sentinel ServiceAccount to modify `OpenBaoCluster.Spec` (should be blocked by VAP).
+    - Attempt to modify `OpenBaoCluster.Status` (should be blocked by VAP).
+    - Attempt to add other annotations (should be blocked by VAP).
+    - Verify only `openbao.org/sentinel-trigger` annotation can be added/updated.
+  - Cleanup:
+    - Disable Sentinel (`spec.sentinel.enabled: false`).
+    - Verify Sentinel Deployment, ServiceAccount, Role, and RoleBinding are deleted.
     - `openbao_backup_last_success_timestamp` is updated.
   - Backup during upgrade:
     - Verify scheduled backups are skipped when `Status.Upgrade != nil`.
-
-- **Self-Init Backup Authentication:**
-  - Deploy self-init cluster without backup token.
-  - Verify backups are skipped with `Reason=NoBackupToken`.
-  - Add backup token via self-init requests.
-  - Verify backups succeed with configured token.
 
 - **Multi-Tenancy:**
   - Deploy multiple `OpenBaoCluster` resources across namespaces.
@@ -216,17 +266,15 @@ E2E tests validate real-system behavior using kind:
     - Operator CPU/memory.
   - Assert that reconciliation completes in approximately 30 seconds under normal load and that rate limiting prevents hot loops.
 
-### 4.2 Tooling Choices
+### 3.2 Tooling Choices
 
-- KUTTL or Ginkgo may be used depending on the team’s preference:
+- KUTTL or Ginkgo may be used depending on the team's preference:
   - KUTTL for declarative, YAML-based scenario descriptions.
   - Ginkgo for more programmatic flows requiring conditional logic.
 
------
+### 3.3 Backup Integration Testing with MinIO
 
-## 5. Backup Integration Testing with MinIO
-
-As described in the TDD, we use MinIO to validate backup integration:
+As described in the architecture documentation, we use MinIO to validate backup integration:
 
 - Deploy MinIO as an S3-compatible endpoint within the test environment.
 - Configure `BackupTarget` in `OpenBaoCluster` to point at MinIO.
@@ -235,10 +283,10 @@ As described in the TDD, we use MinIO to validate backup integration:
   - Object names follow the expected naming convention: `<prefix>/<namespace>/<cluster>/<timestamp>-<uuid>.snap`.
   - Failures are reflected in `Status.Backup.LastFailureReason` and `openbao_backup_failure_total`.
 
-### 5.1 Backup Test Scenarios
+#### 3.3.1 Backup Test Scenarios
 
 | Scenario | Expected Behavior |
-|----------|-------------------|
+| :--- | :--- |
 | Scheduled backup | Backup appears in MinIO at scheduled time |
 | Manual trigger (future) | Backup created immediately when annotation is set |
 | Large backup (>100MB) | Multipart upload completes successfully |
@@ -248,21 +296,19 @@ As described in the TDD, we use MinIO to validate backup integration:
 | MinIO unavailable | Backup fails, ConsecutiveFailures increments |
 | Backup during upgrade | Backup skipped, no error |
 
-### 5.2 Credentials Testing
+#### 3.3.2 Credentials Testing
 
-- **Static credentials**: Test with `accessKeyId` and `secretAccessKey` in Secret.
-- **Session tokens**: Test with temporary credentials including `sessionToken`.
-- **Missing credentials**: Verify appropriate error when credentials Secret is missing.
-- **Invalid credentials**: Verify error is surfaced in `Status.Backup.LastFailureReason`.
+- **Static credentials:** Test with `accessKeyId` and `secretAccessKey` in Secret.
+- **Session tokens:** Test with temporary credentials including `sessionToken`.
+- **Missing credentials:** Verify appropriate error when credentials Secret is missing.
+- **Invalid credentials:** Verify error is surfaced in `Status.Backup.LastFailureReason`.
 
 These tests run in CI alongside other E2E scenarios.
 
------
-
-## 5.3 Upgrade Testing Scenarios
+### 3.4 Upgrade Testing Scenarios
 
 | Scenario | Expected Behavior |
-|----------|-------------------|
+| :--- | :--- |
 | Patch upgrade (2.4.0 -> 2.4.1) | Smooth rolling update, no warnings |
 | Minor upgrade (2.4.0 -> 2.5.0) | Smooth rolling update |
 | Major upgrade (2.x -> 3.x) | Upgrade proceeds with warning in Status |
@@ -274,18 +320,64 @@ These tests run in CI alongside other E2E scenarios.
 | Pre-upgrade backup failure | Upgrade blocked with `Degraded=True` |
 | Step-down timeout | Upgrade halts, `Degraded=True` with timeout reason |
 
-### 5.4 Upgrade Unit Test Coverage
+### 3.5 Upgrade Unit Test Coverage
 
 Unit tests for the UpgradeManager (`internal/upgrade/*_test.go`):
 
-- **Version validation**: Table-driven tests for semver parsing and comparison.
-- **State machine transitions**: Test each phase transition with mocked Kubernetes client.
-- **Timeout handling**: Verify context deadline enforcement.
-- **Resume logic**: Test that upgrade resumes correctly from various `Status.Upgrade` states.
+- **Version validation:** Table-driven tests for semver parsing and comparison.
+- **State machine transitions:** Test each phase transition with mocked Kubernetes client.
+- **Timeout handling:** Verify context deadline enforcement.
+- **Resume logic:** Test that upgrade resumes correctly from various `Status.Upgrade` states.
 
------
+## 4. Code Quality
 
-## 6. CI Integration and Test Execution
+### 4.1 Linting
+
+Run the linter:
+
+```sh
+make lint
+```
+
+Or using golangci-lint directly:
+
+```sh
+golangci-lint run
+```
+
+The project uses `golangci-lint` with the configuration in `.golangci.yml`.
+
+### 4.2 Code Formatting
+
+All code must be formatted with `gofmt` (or `goimports`):
+
+```sh
+go fmt ./...
+```
+
+Or:
+
+```sh
+goimports -w .
+```
+
+### 4.3 Code Generation
+
+Generate code (deepcopy, clientset, etc.):
+
+```sh
+make generate
+```
+
+Generate manifests (CRDs, RBAC, etc.):
+
+```sh
+make manifests
+```
+
+**Important:** After modifying API types (`api/v1alpha1/*.go`), you must run `make generate` and `make manifests` to regenerate the code and manifests.
+
+## 5. CI Integration and Test Execution
 
 CI should:
 
@@ -294,7 +386,6 @@ CI should:
 - Run E2E suites (including MinIO backup tests and multi-tenant scenarios):
   - On main branch and/or nightly.
   - Across the supported Kubernetes versions listed in the compatibility matrix (`docs/compatibility.md`).
-
 
 New functionality MUST include:
 

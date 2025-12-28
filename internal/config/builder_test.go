@@ -1,14 +1,12 @@
 package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
@@ -196,17 +194,6 @@ func TestRenderHCLWithSelfInitRequests(t *testing.T) {
 	}
 
 	compareGolden(t, "render_self_init_requests", got)
-}
-
-func mustJSON(t *testing.T, v interface{}) *apiextensionsv1.JSON {
-	t.Helper()
-
-	raw, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("failed to marshal JSON: %v", err)
-	}
-
-	return &apiextensionsv1.JSON{Raw: raw}
 }
 
 // goldenFile reads the golden file for the given test name.

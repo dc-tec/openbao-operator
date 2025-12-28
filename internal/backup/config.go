@@ -63,18 +63,19 @@ func (c *ExecutorConfig) Validate() error {
 	if len(c.TLSCACert) == 0 {
 		return fmt.Errorf("TLS CA certificate is required")
 	}
-	if c.AuthMethod == constants.BackupAuthMethodJWT {
+	switch c.AuthMethod {
+	case constants.BackupAuthMethodJWT:
 		if c.JWTAuthRole == "" {
 			return fmt.Errorf("JWT auth role is required when using JWT authentication")
 		}
 		if c.JWTToken == "" {
 			return fmt.Errorf("JWT token is required when using JWT authentication")
 		}
-	} else if c.AuthMethod == constants.BackupAuthMethodToken {
+	case constants.BackupAuthMethodToken:
 		if c.OpenBaoToken == "" {
 			return fmt.Errorf("OpenBao token is required when using token authentication")
 		}
-	} else {
+	default:
 		return fmt.Errorf("invalid auth method: %q", c.AuthMethod)
 	}
 	return nil
@@ -84,36 +85,64 @@ func (c *ExecutorConfig) Validate() error {
 func LoadExecutorConfig() (*ExecutorConfig, error) {
 	cfg := &ExecutorConfig{}
 
-	// Load cluster information
+	if err := loadClusterConfig(cfg); err != nil {
+		return nil, err
+	}
+	if err := loadStorageConfig(cfg); err != nil {
+		return nil, err
+	}
+	if err := loadTLSConfig(cfg); err != nil {
+		return nil, err
+	}
+	if err := loadAuthConfig(cfg); err != nil {
+		return nil, err
+	}
+	if err := loadUploadConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	// Validate the configuration
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	return cfg, nil
+}
+
+// loadClusterConfig loads cluster namespace, name, and replicas from environment variables.
+func loadClusterConfig(cfg *ExecutorConfig) error {
 	cfg.ClusterNamespace = strings.TrimSpace(os.Getenv(constants.EnvClusterNamespace))
 	if cfg.ClusterNamespace == "" {
-		return nil, fmt.Errorf("%s environment variable is required", constants.EnvClusterNamespace)
+		return fmt.Errorf("%s environment variable is required", constants.EnvClusterNamespace)
 	}
 
 	cfg.ClusterName = strings.TrimSpace(os.Getenv(constants.EnvClusterName))
 	if cfg.ClusterName == "" {
-		return nil, fmt.Errorf("%s environment variable is required", constants.EnvClusterName)
+		return fmt.Errorf("%s environment variable is required", constants.EnvClusterName)
 	}
 
 	replicasStr := strings.TrimSpace(os.Getenv(constants.EnvClusterReplicas))
 	if replicasStr == "" {
-		return nil, fmt.Errorf("%s environment variable is required", constants.EnvClusterReplicas)
+		return fmt.Errorf("%s environment variable is required", constants.EnvClusterReplicas)
 	}
 	replicas, err := strconv.ParseInt(replicasStr, 10, 32)
 	if err != nil {
-		return nil, fmt.Errorf("invalid CLUSTER_REPLICAS value %q: %w", replicasStr, err)
+		return fmt.Errorf("invalid CLUSTER_REPLICAS value %q: %w", replicasStr, err)
 	}
 	cfg.ClusterReplicas = int32(replicas)
+	return nil
+}
 
-	// Load storage configuration
+// loadStorageConfig loads backup storage endpoint, bucket, and path configuration.
+func loadStorageConfig(cfg *ExecutorConfig) error {
 	cfg.BackupEndpoint = strings.TrimSpace(os.Getenv(constants.EnvBackupEndpoint))
 	if cfg.BackupEndpoint == "" {
-		return nil, fmt.Errorf("%s environment variable is required", constants.EnvBackupEndpoint)
+		return fmt.Errorf("%s environment variable is required", constants.EnvBackupEndpoint)
 	}
 
 	cfg.BackupBucket = strings.TrimSpace(os.Getenv(constants.EnvBackupBucket))
 	if cfg.BackupBucket == "" {
-		return nil, fmt.Errorf("%s environment variable is required", constants.EnvBackupBucket)
+		return fmt.Errorf("%s environment variable is required", constants.EnvBackupBucket)
 	}
 
 	cfg.BackupPathPrefix = strings.TrimSpace(os.Getenv(constants.EnvBackupPathPrefix))
@@ -126,25 +155,43 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 
 	usePathStyleStr := strings.TrimSpace(os.Getenv(constants.EnvBackupUsePathStyle))
 	if usePathStyleStr != "" {
-		var err error
-		cfg.BackupUsePathStyle, err = strconv.ParseBool(usePathStyleStr)
+		usePathStyle, err := strconv.ParseBool(usePathStyleStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid BACKUP_USE_PATH_STYLE value %q: %w", usePathStyleStr, err)
+			return fmt.Errorf("invalid BACKUP_USE_PATH_STYLE value %q: %w", usePathStyleStr, err)
 		}
+		cfg.BackupUsePathStyle = usePathStyle
 	}
 
-	// Load TLS CA certificate
+	// Load storage credentials
+	credsPath := constants.PathBackupCredentials
+	if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupCredentialsPath)); envPath != "" {
+		credsPath = envPath
+	}
+
+	creds, err := loadStorageCredentials(credsPath)
+	if err != nil {
+		return fmt.Errorf("failed to load storage credentials: %w", err)
+	}
+	cfg.StorageCredentials = creds
+	return nil
+}
+
+// loadTLSConfig loads the TLS CA certificate from a file.
+func loadTLSConfig(cfg *ExecutorConfig) error {
 	caCertPath := constants.PathTLSCACert
 	if envPath := strings.TrimSpace(os.Getenv(constants.EnvTLSCAPath)); envPath != "" {
 		caCertPath = envPath
 	}
-	caCert, err := os.ReadFile(caCertPath)
+	caCert, err := os.ReadFile(caCertPath) //#nosec G304 -- Path from constant or environment variable
 	if err != nil {
-		return nil, fmt.Errorf("failed to read TLS CA certificate from %q: %w", caCertPath, err)
+		return fmt.Errorf("failed to read TLS CA certificate from %q: %w", caCertPath, err)
 	}
 	cfg.TLSCACert = caCert
+	return nil
+}
 
-	// Determine authentication method
+// loadAuthConfig loads authentication configuration (JWT or static token).
+func loadAuthConfig(cfg *ExecutorConfig) error {
 	cfg.AuthMethod = strings.TrimSpace(os.Getenv(constants.EnvBackupAuthMethod))
 
 	// Try to load JWT token from projected volume
@@ -152,7 +199,7 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 	if envPath := strings.TrimSpace(os.Getenv(constants.EnvJWTTokenPath)); envPath != "" {
 		jwtTokenPath = envPath
 	}
-	jwtToken, err := os.ReadFile(jwtTokenPath)
+	jwtToken, err := os.ReadFile(jwtTokenPath) //#nosec G304 -- Path from constant or environment variable
 	if err == nil && len(jwtToken) > 0 {
 		cfg.JWTToken = strings.TrimSpace(string(jwtToken))
 		// If auth method not explicitly set, prefer JWT Auth
@@ -165,47 +212,39 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 	if cfg.AuthMethod == constants.BackupAuthMethodJWT || (cfg.AuthMethod == "" && cfg.JWTToken != "") {
 		cfg.JWTAuthRole = strings.TrimSpace(os.Getenv(constants.EnvBackupJWTAuthRole))
 		if cfg.JWTAuthRole == "" {
-			return nil, fmt.Errorf("BACKUP_JWT_AUTH_ROLE is required when using JWT authentication")
+			return fmt.Errorf("BACKUP_JWT_AUTH_ROLE is required when using JWT authentication")
 		}
 		if cfg.JWTToken == "" {
-			return nil, fmt.Errorf("JWT token not found at %q", jwtTokenPath)
+			return fmt.Errorf("JWT token not found at %q", jwtTokenPath)
 		}
 		cfg.AuthMethod = constants.BackupAuthMethodJWT
-	} else {
-		// Fall back to static token
-		tokenPath := constants.PathBackupToken
-		if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupTokenPath)); envPath != "" {
-			tokenPath = envPath
-		}
-		token, err := os.ReadFile(tokenPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read OpenBao token from %q: %w", tokenPath, err)
-		}
-		cfg.OpenBaoToken = strings.TrimSpace(string(token))
-		if cfg.OpenBaoToken == "" {
-			return nil, fmt.Errorf("OpenBao token is empty")
-		}
-		cfg.AuthMethod = constants.BackupAuthMethodToken
+		return nil
 	}
 
-	// Load storage credentials if provided
-	credsPath := constants.PathBackupCredentials
-	if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupCredentialsPath)); envPath != "" {
-		credsPath = envPath
+	// Fall back to static token
+	tokenPath := constants.PathBackupToken
+	if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupTokenPath)); envPath != "" {
+		tokenPath = envPath
 	}
-
-	creds, err := loadStorageCredentials(credsPath)
+	token, err := os.ReadFile(tokenPath) //#nosec G304 -- Path from constant or environment variable
 	if err != nil {
-		return nil, fmt.Errorf("failed to load storage credentials: %w", err)
+		return fmt.Errorf("failed to read OpenBao token from %q: %w", tokenPath, err)
 	}
-	cfg.StorageCredentials = creds
+	cfg.OpenBaoToken = strings.TrimSpace(string(token))
+	if cfg.OpenBaoToken == "" {
+		return fmt.Errorf("OpenBao token is empty")
+	}
+	cfg.AuthMethod = constants.BackupAuthMethodToken
+	return nil
+}
 
-	// Load S3 upload configuration (optional, with defaults)
+// loadUploadConfig loads S3 upload configuration (part size and concurrency).
+func loadUploadConfig(cfg *ExecutorConfig) error {
 	partSizeStr := strings.TrimSpace(os.Getenv(constants.EnvBackupPartSize))
 	if partSizeStr != "" {
 		partSize, err := strconv.ParseInt(partSizeStr, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("invalid BACKUP_PART_SIZE value %q: %w", partSizeStr, err)
+			return fmt.Errorf("invalid BACKUP_PART_SIZE value %q: %w", partSizeStr, err)
 		}
 		cfg.PartSize = partSize
 	}
@@ -214,17 +253,11 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 	if concurrencyStr != "" {
 		concurrency, err := strconv.ParseInt(concurrencyStr, 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("invalid BACKUP_CONCURRENCY value %q: %w", concurrencyStr, err)
+			return fmt.Errorf("invalid BACKUP_CONCURRENCY value %q: %w", concurrencyStr, err)
 		}
 		cfg.Concurrency = int32(concurrency)
 	}
-
-	// Validate the configuration
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
-	}
-
-	return cfg, nil
+	return nil
 }
 
 // validatePath ensures a file path is within the base directory and doesn't contain path traversal.
