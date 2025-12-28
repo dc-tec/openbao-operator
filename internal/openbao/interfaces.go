@@ -38,3 +38,17 @@ type ClusterActions interface {
 	// Returns the OpenBao client token on success, or an error if authentication fails.
 	LoginJWT(ctx context.Context, role, jwtToken string) (string, error)
 }
+
+// RaftActions defines the interface for performing Raft-specific operations on OpenBao.
+// This interface extends ClusterActions with Raft management capabilities.
+type RaftActions interface {
+	ClusterActions
+	// JoinRaftCluster joins a node to the Raft cluster.
+	JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retry bool, nonVoter bool) error
+	// ReadRaftConfiguration reads the current Raft cluster configuration.
+	ReadRaftConfiguration(ctx context.Context) (*RaftConfigurationResponse, error)
+	// RemoveRaftPeer removes a peer from the Raft cluster.
+	RemoveRaftPeer(ctx context.Context, serverID string) error
+	// UpdateRaftConfiguration updates the Raft cluster configuration.
+	UpdateRaftConfiguration(ctx context.Context, servers []RaftServer) error
+}

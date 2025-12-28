@@ -16,6 +16,14 @@ const (
 	EnvClusterName      = "CLUSTER_NAME"
 	EnvClusterReplicas  = "CLUSTER_REPLICAS"
 
+	// Upgrade executor
+	EnvUpgradeAction        = "UPGRADE_ACTION"
+	EnvUpgradeJWTAuthRole   = "UPGRADE_JWT_AUTH_ROLE"
+	EnvUpgradeBlueRevision  = "UPGRADE_BLUE_REVISION"
+	EnvUpgradeGreenRevision = "UPGRADE_GREEN_REVISION"
+	EnvUpgradeSyncThreshold = "UPGRADE_SYNC_THRESHOLD"
+	EnvUpgradeTimeout       = "UPGRADE_TIMEOUT"
+
 	// Backup executor (S3/object storage target)
 	EnvBackupEndpoint       = "BACKUP_ENDPOINT"
 	EnvBackupBucket         = "BACKUP_BUCKET"

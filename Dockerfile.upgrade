@@ -1,0 +1,34 @@
+# Upgrade executor image
+#
+# This Dockerfile builds a minimal container image for the upgrade executor
+# process used by upgrade Jobs. The executor binary is built from source in
+# a multi-stage build. The image is configured to run as a non-root user.
+#
+# Example build (from repo root):
+#   docker build -f Dockerfile.upgrade-executor -t openbao/upgrade-executor:dev .
+
+FROM golang:1.25.5 AS builder
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /workspace
+
+COPY go.mod go.mod
+COPY go.sum go.sum
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o bao-upgrade-executor ./cmd/bao-upgrade
+
+FROM gcr.io/distroless/static:nonroot
+
+USER 1000:1000
+WORKDIR /
+
+COPY --from=builder /workspace/bao-upgrade-executor /upgrade-executor
+
+HEALTHCHECK NONE
+
+ENTRYPOINT ["/upgrade-executor"]
+

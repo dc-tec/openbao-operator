@@ -19,7 +19,7 @@ initialize "operator-bootstrap" {
     operation = "update"
     path      = "sys/policies/acl/openbao-operator"
     data {
-      policy = "path \"sys/health\" { capabilities = [\"read\"] }\npath \"sys/step-down\" { capabilities = [\"update\"] }\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }"
+      policy = "path \"sys/health\" { capabilities = [\"read\"] }\npath \"sys/step-down\" { capabilities = [\"sudo\", \"update\"] }\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }"
     }
   }
   request "create-operator-role" {
@@ -34,6 +34,7 @@ initialize "operator-bootstrap" {
         "kubernetes.io/serviceaccount/name" = "openbao-operator-controller"
       }
       token_policies = ["openbao-operator"]
+      policies       = ["openbao-operator"]
       ttl            = "1h"
     }
   }
@@ -56,6 +57,7 @@ initialize "operator-bootstrap" {
         "kubernetes.io/serviceaccount/name" = "hardened-cluster-backup-serviceaccount"
       }
       token_policies = ["backup"]
+      policies       = ["backup"]
       ttl            = "1h"
     }
   }
@@ -63,7 +65,7 @@ initialize "operator-bootstrap" {
     operation = "update"
     path      = "sys/policies/acl/upgrade"
     data {
-      policy = "path \"sys/health\" { capabilities = [\"read\"] }\npath \"sys/step-down\" { capabilities = [\"update\"] }\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }"
+      policy = "path \"sys/health\" { capabilities = [\"read\"] }\npath \"sys/step-down\" { capabilities = [\"sudo\", \"update\"] }\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }\npath \"sys/storage/raft/autopilot/state\" { capabilities = [\"read\"] }"
     }
   }
   request "create-upgrade-jwt-role" {
@@ -78,6 +80,7 @@ initialize "operator-bootstrap" {
         "kubernetes.io/serviceaccount/name" = "hardened-cluster-upgrade-serviceaccount"
       }
       token_policies = ["upgrade"]
+      policies       = ["upgrade"]
       ttl            = "1h"
     }
   }

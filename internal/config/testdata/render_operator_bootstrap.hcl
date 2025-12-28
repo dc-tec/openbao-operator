@@ -19,7 +19,7 @@ initialize "operator-bootstrap" {
     operation = "update"
     path      = "sys/policies/acl/openbao-operator"
     data {
-      policy = "path \"sys/health\" { capabilities = [\"read\"] }\npath \"sys/step-down\" { capabilities = [\"update\"] }\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }"
+      policy = "path \"sys/health\" { capabilities = [\"read\"] }\npath \"sys/step-down\" { capabilities = [\"sudo\", \"update\"] }\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }"
     }
   }
   request "create-operator-role" {

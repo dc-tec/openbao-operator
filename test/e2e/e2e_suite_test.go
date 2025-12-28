@@ -76,6 +76,11 @@ var (
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
 	// and load it into kind.
 	backupExecutorImage = "openbao/backup-executor:dev"
+
+	// upgradeExecutorImage is the image used by upgrade Jobs.
+	// It must be resolvable inside the kind cluster; in E2E we build it locally
+	// and load it into kind.
+	upgradeExecutorImage = "openbao/upgrade-executor:dev"
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -127,6 +132,15 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	By("loading the backup executor image on Kind")
 	err = utils.LoadImageToKindClusterWithName(backupExecutorImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the backup executor image into Kind")
+
+	By("building the upgrade executor image")
+	cmd = exec.Command("make", "docker-build-upgrade", fmt.Sprintf("IMG=%s", upgradeExecutorImage))
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the upgrade executor image")
+
+	By("loading the upgrade executor image on Kind")
+	err = utils.LoadImageToKindClusterWithName(upgradeExecutorImage)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the upgrade executor image into Kind")
 
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,

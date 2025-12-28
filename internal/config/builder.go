@@ -22,8 +22,23 @@ const (
 	configNodeIDTemplate      = "${HOSTNAME}"
 
 	jwtPolicyHealthStepDownSnapshot = `path "sys/health" { capabilities = ["read"] }
-path "sys/step-down" { capabilities = ["update"] }
+path "sys/step-down" { capabilities = ["sudo", "update"] }
 path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
+
+	jwtPolicyUpgradeRolling = `path "sys/health" { capabilities = ["read"] }
+path "sys/step-down" { capabilities = ["sudo", "update"] }
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }
+path "sys/storage/raft/autopilot/state" { capabilities = ["read"] }`
+
+	jwtPolicyUpgradeBlueGreen = `path "sys/health" { capabilities = ["read"] }
+path "sys/step-down" { capabilities = ["sudo", "update"] }
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }
+path "sys/storage/raft/autopilot/state" { capabilities = ["read"] }
+path "sys/storage/raft/join" { capabilities = ["update"] }
+path "sys/storage/raft/configuration" { capabilities = ["read", "update"] }
+path "sys/storage/raft/remove-peer" { capabilities = ["update"] }
+path "sys/storage/raft/promote" { capabilities = ["update"] }
+path "sys/storage/raft/demote" { capabilities = ["update"] }`
 )
 
 // OperatorBootstrapConfig holds configuration for operator bootstrap.
@@ -41,6 +56,10 @@ type InfrastructureDetails struct {
 	Namespace           string
 	APIPort             int
 	ClusterPort         int
+	// TargetRevisionForJoin is an optional revision identifier for blue/green deployments.
+	// When set, the retry_join label selector will include this revision to ensure
+	// Green pods only discover Blue pods (not each other).
+	TargetRevisionForJoin string
 }
 
 // RenderHCL renders a complete OpenBao configuration using the provided cluster
@@ -124,12 +143,38 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// Use Kubernetes go-discover for dynamic cluster membership. This allows pods
 	// to discover and join the Raft cluster based on labels, without requiring
 	// a static list of peer addresses.
-	autoJoinExpr := fmt.Sprintf(
-		`provider=k8s namespace=%s label_selector="%s=%s"`,
-		namespace,
-		constants.LabelOpenBaoCluster,
-		cluster.Name,
-	)
+	// For blue/green upgrades, if TargetRevisionForJoin is set, include it in the
+	// label selector to ensure Green pods only discover Blue pods (not each other).
+	var autoJoinExpr string
+	if infra.TargetRevisionForJoin != "" {
+		// Include revision in label selector to target specific revision (Blue pods)
+		autoJoinExpr = fmt.Sprintf(
+			`provider=k8s namespace=%s label_selector="%s=%s,%s=%s"`,
+			namespace,
+			constants.LabelOpenBaoCluster,
+			cluster.Name,
+			constants.LabelOpenBaoRevision,
+			infra.TargetRevisionForJoin,
+		)
+		// For Blue/Green upgrades, Green pods should join as non-voters to prevent
+		// the race condition where a Green pod self-initializes as its own cluster
+		// leader before successfully joining the Blue cluster. Non-voters are automatically
+		// promoted to voters by Raft autopilot once they've synced.
+		storageBody.SetAttributeValue("retry_join_as_non_voter", cty.BoolVal(true))
+
+		// Increase election timeout for Green pods to prevent self-initialization.
+		// By default, Raft starts an election after ~5s effectively self-initializing
+		// if retry_join hasn't succeeded yet. 30s gives retry_join ample time to work.
+		storageBody.SetAttributeValue("election_timeout", cty.StringVal("30s"))
+	} else {
+		// Standard case: discover all pods with the cluster label
+		autoJoinExpr = fmt.Sprintf(
+			`provider=k8s namespace=%s label_selector="%s=%s"`,
+			namespace,
+			constants.LabelOpenBaoCluster,
+			cluster.Name,
+		)
+	}
 
 	retryJoinBlock := storageBody.AppendNewBlock("retry_join", nil)
 	retryJoinBody := retryJoinBlock.Body()
@@ -180,6 +225,13 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// and stored in a separate ConfigMap that is only mounted for pod-0.
 
 	return file.Bytes(), nil
+}
+
+func upgradePolicyForCluster(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+		return jwtPolicyUpgradeBlueGreen
+	}
+	return jwtPolicyUpgradeRolling
 }
 
 // RenderOperatorBootstrapHCL renders the operator bootstrap initialize block.
@@ -331,6 +383,7 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 		}
 		roleReqData.Body().SetAttributeValue("bound_claims", cty.ObjectVal(boundClaims))
 		roleReqData.Body().SetAttributeValue("token_policies", cty.ListVal([]cty.Value{cty.StringVal("openbao-operator")}))
+		roleReqData.Body().SetAttributeValue("policies", cty.ListVal([]cty.Value{cty.StringVal("openbao-operator")}))
 		roleReqData.Body().SetAttributeValue("ttl", cty.StringVal("1h"))
 
 		// 5. Auto-create backup policy and role if backup is configured with JWT Auth (opt-in)
@@ -362,6 +415,7 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 			}
 			backupRoleReqData.Body().SetAttributeValue("bound_claims", cty.ObjectVal(backupBoundClaims))
 			backupRoleReqData.Body().SetAttributeValue("token_policies", cty.ListVal([]cty.Value{cty.StringVal("backup")}))
+			backupRoleReqData.Body().SetAttributeValue("policies", cty.ListVal([]cty.Value{cty.StringVal("backup")}))
 			backupRoleReqData.Body().SetAttributeValue("ttl", cty.StringVal("1h"))
 		}
 
@@ -375,7 +429,7 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 			upgradePolicyReqBody.SetAttributeValue("operation", cty.StringVal("update"))
 			upgradePolicyReqBody.SetAttributeValue("path", cty.StringVal("sys/policies/acl/upgrade"))
 			upgradePolicyReqData := upgradePolicyReqBody.AppendNewBlock("data", nil)
-			upgradePolicyReqData.Body().SetAttributeValue("policy", cty.StringVal(jwtPolicyHealthStepDownSnapshot))
+			upgradePolicyReqData.Body().SetAttributeValue("policy", cty.StringVal(upgradePolicyForCluster(cluster)))
 
 			// Create upgrade JWT role
 			upgradeRoleReq := initBody.AppendNewBlock("request", []string{"create-upgrade-jwt-role"})
@@ -393,6 +447,7 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 			}
 			upgradeRoleReqData.Body().SetAttributeValue("bound_claims", cty.ObjectVal(upgradeBoundClaims))
 			upgradeRoleReqData.Body().SetAttributeValue("token_policies", cty.ListVal([]cty.Value{cty.StringVal("upgrade")}))
+			upgradeRoleReqData.Body().SetAttributeValue("policies", cty.ListVal([]cty.Value{cty.StringVal("upgrade")}))
 			upgradeRoleReqData.Body().SetAttributeValue("ttl", cty.StringVal("1h"))
 		}
 	}
@@ -469,12 +524,12 @@ func renderSelfInitStanzas(body *hclwrite.Body, requests []openbaov1alpha1.SelfI
 			if req.AuditDevice == nil {
 				return fmt.Errorf("audit device request %q at path %q must use structured auditDevice field, not raw data", req.Name, req.Path)
 			}
-			// Build audit device data from structured config using HCLWrite
-			// This function sets the data attribute directly on requestBody
-			if err := buildAuditDeviceDataHCL(requestBody, req.AuditDevice); err != nil {
+			// Build audit device data from structured config and render it as a data block.
+			var err error
+			dataVal, err = buildAuditDeviceData(req.AuditDevice)
+			if err != nil {
 				return fmt.Errorf("failed to build audit device data for request %q: %w", req.Name, err)
 			}
-			skipDataAttribute = true // Already set by buildAuditDeviceDataHCL
 		} else if strings.HasPrefix(req.Path, "sys/auth/") {
 			// Auth methods must use structured AuthMethod type
 			if req.AuthMethod == nil {
@@ -524,18 +579,46 @@ func renderSelfInitStanzas(body *hclwrite.Body, requests []openbaov1alpha1.SelfI
 		}
 
 		if !skipDataAttribute && dataVal != cty.NilVal {
-			requestBody.SetAttributeValue("data", dataVal)
+			if err := setSelfInitRequestData(requestBody, dataVal); err != nil {
+				return fmt.Errorf("failed to render self-init request data for request %q: %w", req.Name, err)
+			}
 		}
 	}
 
 	return nil
 }
 
-// buildAuditDeviceDataHCL builds the API request data for an audit device from structured config
-// using HCLWrite-style patterns and sets it as the "data" attribute on the request body.
-func buildAuditDeviceDataHCL(requestBody *hclwrite.Body, device *openbaov1alpha1.SelfInitAuditDevice) error {
+func setSelfInitRequestData(requestBody *hclwrite.Body, dataVal cty.Value) error {
+	if dataVal == cty.NilVal {
+		return nil
+	}
+
+	// Prefer "data { ... }" blocks which match OpenBao self-init docs and the
+	// operator-bootstrap output. Some endpoints appear to ignore "data = { ... }".
+	if dataVal.Type().IsObjectType() || dataVal.Type().IsMapType() {
+		dataBlock := requestBody.AppendNewBlock("data", nil)
+		dataBody := dataBlock.Body()
+
+		dataMap := dataVal.AsValueMap()
+		keys := make([]string, 0, len(dataMap))
+		for k := range dataMap {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			dataBody.SetAttributeValue(k, dataMap[k])
+		}
+		return nil
+	}
+
+	requestBody.SetAttributeValue("data", dataVal)
+	return nil
+}
+
+// buildAuditDeviceData builds the API request data for an audit device from structured config.
+func buildAuditDeviceData(device *openbaov1alpha1.SelfInitAuditDevice) (cty.Value, error) {
 	if device == nil {
-		return fmt.Errorf("audit device config is nil")
+		return cty.NilVal, fmt.Errorf("audit device config is nil")
 	}
 
 	// Build the data object using HCLWrite-style patterns
@@ -545,7 +628,7 @@ func buildAuditDeviceDataHCL(requestBody *hclwrite.Body, device *openbaov1alpha1
 	switch device.Type {
 	case "file":
 		if device.FileOptions == nil {
-			return fmt.Errorf("fileOptions is required for file audit device")
+			return cty.NilVal, fmt.Errorf("fileOptions is required for file audit device")
 		}
 		optionsMap = make(map[string]cty.Value)
 		optionsMap["file_path"] = cty.StringVal(device.FileOptions.FilePath)
@@ -554,18 +637,18 @@ func buildAuditDeviceDataHCL(requestBody *hclwrite.Body, device *openbaov1alpha1
 		}
 	case "http":
 		if device.HTTPOptions == nil {
-			return fmt.Errorf("httpOptions is required for http audit device")
+			return cty.NilVal, fmt.Errorf("httpOptions is required for http audit device")
 		}
 		optionsMap = make(map[string]cty.Value)
 		optionsMap["uri"] = cty.StringVal(device.HTTPOptions.URI)
 		if device.HTTPOptions.Headers != nil && len(device.HTTPOptions.Headers.Raw) > 0 {
 			var decoded interface{}
 			if err := json.Unmarshal(device.HTTPOptions.Headers.Raw, &decoded); err != nil {
-				return fmt.Errorf("failed to unmarshal headers: %w", err)
+				return cty.NilVal, fmt.Errorf("failed to unmarshal headers: %w", err)
 			}
 			headersVal, err := jsonToCty(decoded)
 			if err != nil {
-				return fmt.Errorf("failed to convert headers to HCL: %w", err)
+				return cty.NilVal, fmt.Errorf("failed to convert headers to HCL: %w", err)
 			}
 			optionsMap["headers"] = headersVal
 		}
@@ -593,7 +676,7 @@ func buildAuditDeviceDataHCL(requestBody *hclwrite.Body, device *openbaov1alpha1
 			}
 		}
 	default:
-		return fmt.Errorf("unsupported audit device type: %s", device.Type)
+		return cty.NilVal, fmt.Errorf("unsupported audit device type: %s", device.Type)
 	}
 
 	// Build the final data object
@@ -606,10 +689,7 @@ func buildAuditDeviceDataHCL(requestBody *hclwrite.Body, device *openbaov1alpha1
 		dataMap["options"] = cty.ObjectVal(optionsMap)
 	}
 
-	// Set the data attribute on the request body
-	requestBody.SetAttributeValue("data", cty.ObjectVal(dataMap))
-
-	return nil
+	return cty.ObjectVal(dataMap), nil
 }
 
 // buildAuthMethodData builds the API request data for an auth method from structured config.

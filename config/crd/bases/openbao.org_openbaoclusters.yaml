@@ -2107,6 +2107,41 @@ spec:
                     - pkcs11
                     type: string
                 type: object
+              updateStrategy:
+                description: UpdateStrategy controls how the operator handles version
+                  changes.
+                properties:
+                  blueGreen:
+                    description: BlueGreen configures the behavior when Type is BlueGreen.
+                    properties:
+                      autoPromote:
+                        default: true
+                        description: |-
+                          AutoPromote controls whether the operator automatically switches traffic
+                          and deletes the old cluster after sync. If false, it pauses at PhaseSynced
+                          waiting for manual approval (annotation or field update).
+                        type: boolean
+                      verification:
+                        description: VerificationConfig allows defining custom health
+                          checks before promotion.
+                        properties:
+                          minSyncDuration:
+                            description: |-
+                              MinSyncDuration ensures the Green cluster stays healthy as a non-voter
+                              for at least this duration before promotion (e.g., "5m").
+                            type: string
+                        type: object
+                    required:
+                    - autoPromote
+                    type: object
+                  type:
+                    default: RollingUpdate
+                    description: Type controls how the operator handles version changes.
+                    enum:
+                    - RollingUpdate
+                    - BlueGreen
+                    type: string
+                type: object
               upgrade:
                 description: |-
                   Upgrade configures upgrade operations.
@@ -2116,6 +2151,14 @@ spec:
                   or spec.upgrade.tokenSecretRef. The operator automatically creates an upgrade ServiceAccount
                   (<cluster-name>-upgrade-serviceaccount) for JWT Auth authentication.
                 properties:
+                  executorImage:
+                    description: |-
+                      ExecutorImage is the container image to use for upgrade operations.
+
+                      This image is used by Kubernetes Jobs created during upgrades (for example, blue/green
+                      cluster orchestration actions). The executor runs inside the tenant namespace and
+                      authenticates to OpenBao using a projected ServiceAccount token (JWT auth).
+                    type: string
                   jwtAuthRole:
                     description: |-
                       JWTAuthRole is the name of the JWT Auth role configured in OpenBao
@@ -2250,6 +2293,34 @@ spec:
                     type: string
                   nextScheduledBackup:
                     description: NextScheduledBackup is when the next backup is scheduled.
+                    format: date-time
+                    type: string
+                type: object
+              blueGreen:
+                description: BlueGreen tracks the state of blue/green upgrades (if
+                  enabled).
+                properties:
+                  blueRevision:
+                    description: BlueRevision is the hash/name of the currently active
+                      cluster.
+                    type: string
+                  greenRevision:
+                    description: GreenRevision is the hash/name of the next cluster
+                      (if upgrade in progress).
+                    type: string
+                  phase:
+                    description: Phase is the current phase of the blue/green upgrade.
+                    enum:
+                    - Idle
+                    - DeployingGreen
+                    - JoiningMesh
+                    - Syncing
+                    - Promoting
+                    - DemotingBlue
+                    - Cleanup
+                    type: string
+                  startTime:
+                    description: StartTime is when the current phase began.
                     format: date-time
                     type: string
                 type: object

@@ -518,3 +518,500 @@ func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, e
 
 	return authResp.Auth.ClientToken, nil
 }
+
+// JoinRaftClusterRequest represents the payload sent to PUT /v1/sys/storage/raft/join.
+type JoinRaftClusterRequest struct {
+	// LeaderAPIAddr is the address of the leader node to join.
+	LeaderAPIAddr string `json:"leader_api_addr"`
+	// Retry indicates whether to retry joining if the initial attempt fails.
+	Retry bool `json:"retry,omitempty"`
+	// NonVoter indicates whether this node should join as a non-voter.
+	// Non-voters receive snapshots and logs but do not participate in quorum.
+	NonVoter bool `json:"non_voter,omitempty"`
+}
+
+// JoinRaftClusterResponse represents the response from PUT /v1/sys/storage/raft/join.
+type JoinRaftClusterResponse struct {
+	Joined bool `json:"joined"`
+}
+
+// JoinRaftCluster joins a node to the Raft cluster.
+// This endpoint requires authentication with a token that has
+// update capability on sys/storage/raft/join.
+//
+// The leaderAPIAddr should be the full API address of the leader node
+// (e.g., "https://pod-0.cluster.ns.svc:8200").
+//
+// When nonVoter is true, the node joins as a non-voter, which means it
+// receives snapshots and logs but does not participate in quorum decisions.
+// This is used during blue/green upgrades to safely synchronize data
+// before promoting the node to a voter.
+func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retry bool, nonVoter bool) error {
+	if c.token == "" {
+		return fmt.Errorf("authentication token required for raft join operation")
+	}
+
+	if leaderAPIAddr == "" {
+		return fmt.Errorf("leaderAPIAddr is required")
+	}
+
+	reqBody := JoinRaftClusterRequest{
+		LeaderAPIAddr: leaderAPIAddr,
+		Retry:         retry,
+		NonVoter:      nonVoter,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal raft join request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+constants.APIPathRaftJoin, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create raft join request: %w", err)
+	}
+
+	httpReq.Header.Set("X-Vault-Token", c.token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft join request: %w", err))
+		}
+		return fmt.Errorf("failed to execute raft join request: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read raft join response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("raft join request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response to check if join actually succeeded.
+	// OpenBao returns HTTP 200 with {"joined": false} when node is already initialized
+	// as a standalone cluster - this happens if the node self-elected before the join job ran.
+	var joinResp JoinRaftClusterResponse
+	if err := json.Unmarshal(body, &joinResp); err != nil {
+		// If we can't parse the response, log warning but don't fail
+		// as older versions may not return this field
+		return nil
+	}
+
+	if !joinResp.Joined {
+		return fmt.Errorf("node was not joined to cluster (already initialized as standalone)")
+	}
+
+	return nil
+}
+
+// RaftServer represents a server in the Raft configuration.
+type RaftServer struct {
+	// NodeID is the unique identifier for this node.
+	NodeID string `json:"node_id"`
+	// Address is the API address of this node.
+	Address string `json:"address"`
+	// Leader indicates whether this node is the current leader.
+	Leader bool `json:"leader,omitempty"`
+	// ProtocolVersion is the Raft protocol version.
+	ProtocolVersion string `json:"protocol_version,omitempty"`
+	// Voter indicates whether this node is a voter (participates in quorum).
+	Voter bool `json:"voter,omitempty"`
+	// LastIndex is the last log index on this node.
+	LastIndex uint64 `json:"last_index,omitempty"`
+	// LastTerm is the last log term on this node.
+	LastTerm uint64 `json:"last_term,omitempty"`
+}
+
+// RaftConfiguration represents the current Raft cluster configuration.
+type RaftConfiguration struct {
+	// Servers is the list of servers in the cluster.
+	Servers []RaftServer `json:"servers"`
+	// Index is the configuration index.
+	Index uint64 `json:"index"`
+}
+
+// RaftConfigurationResponse represents the response from GET /v1/sys/storage/raft/configuration.
+type RaftConfigurationResponse struct {
+	// Config is the Raft configuration.
+	Config RaftConfiguration `json:"config"`
+}
+
+// ReadRaftConfiguration reads the current Raft cluster configuration.
+// This endpoint requires authentication with a token that has
+// read capability on sys/storage/raft/configuration.
+//
+// This is used to check synchronization status by comparing
+// last_log_index values between Blue and Green nodes.
+func (c *Client) ReadRaftConfiguration(ctx context.Context) (*RaftConfigurationResponse, error) {
+	if c.token == "" {
+		return nil, fmt.Errorf("authentication token required for raft configuration read")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+constants.APIPathRaftConfiguration, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create raft configuration request: %w", err)
+	}
+
+	req.Header.Set("X-Vault-Token", c.token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		if operatorerrors.IsTransientConnection(err) {
+			return nil, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft configuration request: %w", err))
+		}
+		return nil, fmt.Errorf("failed to execute raft configuration request: %w", err)
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("raft configuration request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read raft configuration response: %w", err)
+	}
+
+	type raftConfigEnvelope struct {
+		Data *RaftConfigurationResponse `json:"data,omitempty"`
+		RaftConfigurationResponse
+	}
+
+	var envelope raftConfigEnvelope
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse raft configuration response: %w", err)
+	}
+
+	if envelope.Data != nil {
+		return envelope.Data, nil
+	}
+
+	return &envelope.RaftConfigurationResponse, nil
+}
+
+// RaftAutopilotServerState represents the server state returned by Raft Autopilot.
+type RaftAutopilotServerState struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Address     string `json:"address"`
+	NodeStatus  string `json:"node_status"`
+	LastContact string `json:"last_contact"`
+	LastTerm    uint64 `json:"last_term"`
+	LastIndex   uint64 `json:"last_index"`
+	Healthy     bool   `json:"healthy"`
+	StableSince string `json:"stable_since"`
+	Status      string `json:"status"`
+	// Meta may contain arbitrary server metadata. We keep it as raw JSON because
+	// the schema is not stable across OpenBao versions.
+	Meta json.RawMessage `json:"meta,omitempty"`
+}
+
+// RaftAutopilotStateResponse represents the response from GET /v1/sys/storage/raft/autopilot/state.
+type RaftAutopilotStateResponse struct {
+	Healthy          bool                                `json:"healthy"`
+	FailureTolerance int                                 `json:"failure_tolerance"`
+	Servers          map[string]RaftAutopilotServerState `json:"servers"`
+	Leader           string                              `json:"leader"`
+	Voters           []string                            `json:"voters"`
+	NonVoters        []string                            `json:"non_voters"`
+}
+
+// ReadRaftAutopilotState reads the Raft Autopilot cluster state.
+// This endpoint requires authentication with a token that has
+// read capability on sys/storage/raft/autopilot/state.
+func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*RaftAutopilotStateResponse, error) {
+	if c.token == "" {
+		return nil, fmt.Errorf("authentication token required for raft autopilot state read")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+constants.APIPathRaftAutopilotState, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create raft autopilot state request: %w", err)
+	}
+
+	req.Header.Set("X-Vault-Token", c.token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		if operatorerrors.IsTransientConnection(err) {
+			return nil, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft autopilot state request: %w", err))
+		}
+		return nil, fmt.Errorf("failed to execute raft autopilot state request: %w", err)
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrAutopilotNotAvailable
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("raft autopilot state request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read raft autopilot state response: %w", err)
+	}
+
+	type raftAutopilotEnvelope struct {
+		Data *RaftAutopilotStateResponse `json:"data,omitempty"`
+		RaftAutopilotStateResponse
+	}
+
+	var envelope raftAutopilotEnvelope
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse raft autopilot state response: %w", err)
+	}
+
+	if envelope.Data != nil {
+		return envelope.Data, nil
+	}
+
+	return &envelope.RaftAutopilotStateResponse, nil
+}
+
+// RemoveRaftPeerRequest represents the payload sent to POST /v1/sys/storage/raft/remove-peer.
+type RemoveRaftPeerRequest struct {
+	// ServerID is the node ID of the peer to remove.
+	ServerID string `json:"server_id"`
+}
+
+// RemoveRaftPeer removes a peer from the Raft cluster.
+// This endpoint requires authentication with a token that has
+// update capability on sys/storage/raft/remove-peer.
+//
+// This is used during blue/green upgrades to eject Blue nodes
+// after the cutover to Green is complete.
+func (c *Client) RemoveRaftPeer(ctx context.Context, serverID string) error {
+	if c.token == "" {
+		return fmt.Errorf("authentication token required for raft remove-peer operation")
+	}
+
+	if serverID == "" {
+		return fmt.Errorf("serverID is required")
+	}
+
+	reqBody := RemoveRaftPeerRequest{
+		ServerID: serverID,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal raft remove-peer request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+constants.APIPathRaftRemovePeer, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create raft remove-peer request: %w", err)
+	}
+
+	httpReq.Header.Set("X-Vault-Token", c.token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft remove-peer request: %w", err))
+		}
+		return fmt.Errorf("failed to execute raft remove-peer request: %w", err)
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("raft remove-peer request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// PromoteRaftPeerRequest represents the payload sent to POST /v1/sys/storage/raft/promote.
+type PromoteRaftPeerRequest struct {
+	// ServerID is the node ID of the peer to promote to voter.
+	ServerID string `json:"server_id"`
+}
+
+// PromoteRaftPeer promotes a non-voter peer to a voter in the Raft cluster.
+// This endpoint requires authentication with a token that has
+// update capability on sys/storage/raft/configuration.
+//
+// This is used during blue/green upgrades to promote Green nodes from
+// non-voters to voters after they have synchronized with the leader.
+func (c *Client) PromoteRaftPeer(ctx context.Context, serverID string) error {
+	if c.token == "" {
+		return fmt.Errorf("authentication token required for raft promote operation")
+	}
+
+	if serverID == "" {
+		return fmt.Errorf("serverID is required")
+	}
+
+	reqBody := PromoteRaftPeerRequest{
+		ServerID: serverID,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal raft promote request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+constants.APIPathRaftPromotePeer, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create raft promote request: %w", err)
+	}
+
+	httpReq.Header.Set("X-Vault-Token", c.token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft promote request: %w", err))
+		}
+		return fmt.Errorf("failed to execute raft promote request: %w", err)
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("raft promote request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// DemoteRaftPeerRequest represents the payload sent to POST /v1/sys/storage/raft/demote.
+type DemoteRaftPeerRequest struct {
+	// ServerID is the node ID of the peer to demote to non-voter.
+	ServerID string `json:"server_id"`
+}
+
+// DemoteRaftPeer demotes a voter peer to a non-voter in the Raft cluster.
+// This endpoint requires authentication with a token that has
+// update capability on sys/storage/raft/configuration.
+//
+// This is used during blue/green upgrades to demote Blue nodes from
+// voters to non-voters before removal, preventing them from becoming leader.
+func (c *Client) DemoteRaftPeer(ctx context.Context, serverID string) error {
+	if c.token == "" {
+		return fmt.Errorf("authentication token required for raft demote operation")
+	}
+
+	if serverID == "" {
+		return fmt.Errorf("serverID is required")
+	}
+
+	reqBody := DemoteRaftPeerRequest{
+		ServerID: serverID,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal raft demote request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+constants.APIPathRaftDemotePeer, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create raft demote request: %w", err)
+	}
+
+	httpReq.Header.Set("X-Vault-Token", c.token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft demote request: %w", err))
+		}
+		return fmt.Errorf("failed to execute raft demote request: %w", err)
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("raft demote request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// UpdateRaftConfigurationRequest represents the payload sent to PUT /v1/sys/storage/raft/configuration.
+type UpdateRaftConfigurationRequest struct {
+	// Servers is the list of servers in the cluster with updated configuration.
+	Servers []RaftServer `json:"servers"`
+}
+
+// UpdateRaftConfiguration updates the Raft cluster configuration.
+// This endpoint requires authentication with a token that has
+// update capability on sys/storage/raft/configuration.
+//
+// This is used during blue/green upgrades to promote Green nodes to voters
+// or demote Blue nodes to non-voters.
+func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []RaftServer) error {
+	if c.token == "" {
+		return fmt.Errorf("authentication token required for raft configuration update")
+	}
+
+	if len(servers) == 0 {
+		return fmt.Errorf("servers list cannot be empty")
+	}
+
+	reqBody := UpdateRaftConfigurationRequest{
+		Servers: servers,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal raft configuration update request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+constants.APIPathRaftUpdateConfig, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create raft configuration update request: %w", err)
+	}
+
+	httpReq.Header.Set("X-Vault-Token", c.token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft configuration update request: %w", err))
+		}
+		return fmt.Errorf("failed to execute raft configuration update request: %w", err)
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("raft configuration update request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}

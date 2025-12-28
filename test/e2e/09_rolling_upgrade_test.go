@@ -47,9 +47,12 @@ func createUpgradeSelfInitRequests(clusterNamespace, clusterName string) []openb
   capabilities = ["read"]
 }
 path "sys/step-down" {
-  capabilities = ["update"]
+  capabilities = ["sudo", "update"]
 }
 path "sys/storage/raft/snapshot" {
+  capabilities = ["read"]
+}
+path "sys/storage/raft/autopilot/state" {
   capabilities = ["read"]
 }`,
 			},
@@ -66,6 +69,7 @@ path "sys/storage/raft/snapshot" {
 					"kubernetes.io/serviceaccount/name": fmt.Sprintf("%s-upgrade-serviceaccount", clusterName),
 				},
 				"token_policies": []string{"upgrade"},
+				"policies":       []string{"upgrade"},
 				"ttl":            "1h",
 			}),
 		},
@@ -152,7 +156,8 @@ var _ = Describe("Upgrade", Ordered, func() {
 						APIServerCIDR: kindDefaultServiceCIDR,
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						JWTAuthRole: "upgrade",
+						ExecutorImage: upgradeExecutorImage,
+						JWTAuthRole:   "upgrade",
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},

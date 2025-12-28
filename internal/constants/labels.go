@@ -11,6 +11,7 @@ const (
 	LabelOpenBaoComponent  = "openbao.org/component"
 	LabelOpenBaoBackupType = "openbao.org/backup-type"
 	LabelOpenBaoTenant     = "openbao.org/tenant"
+	LabelOpenBaoRevision   = "openbao.org/revision"
 )
 
 // Common label values used by the operator.

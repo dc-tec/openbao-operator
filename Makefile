@@ -114,6 +114,9 @@ E2E_NO_COLOR ?= false
 # E2E_FOCUS runs only tests matching the focus pattern (useful for running specific test suites).
 # Example: make test-e2e E2E_FOCUS=Backup
 E2E_FOCUS ?=
+# E2E_SKIP_CLEANUP skips the Kind cluster cleanup after tests (useful for debugging).
+# Set to true to keep the cluster running. Example: make test-e2e E2E_SKIP_CLEANUP=true
+E2E_SKIP_CLEANUP ?= false
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
@@ -162,7 +165,11 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 	else \
 		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/; \
 	fi
-	$(MAKE) cleanup-test-e2e
+	@if [ "$(E2E_SKIP_CLEANUP)" != "true" ]; then \
+		$(MAKE) cleanup-test-e2e; \
+	else \
+		echo "E2E_SKIP_CLEANUP=true: Keeping Kind cluster $(KIND_CLUSTER) for debugging"; \
+	fi
 
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
@@ -229,6 +236,10 @@ docker-push-init: ## Push docker image with the bao-config-init helper.
 .PHONY: docker-build-backup
 docker-build-backup: ## Build docker image with the backup-executor helper.
 	$(CONTAINER_TOOL) build -f Dockerfile.backup -t ${IMG} .
+
+.PHONY: docker-build-upgrade
+docker-build-upgrade: ## Build docker image with the upgrade executor helper.
+	$(CONTAINER_TOOL) build -f Dockerfile.upgrade -t ${IMG} .
 
 .PHONY: docker-build-sentinel
 docker-build-sentinel: ## Build docker image with the Sentinel binary.

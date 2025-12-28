@@ -46,8 +46,10 @@ import (
 	inframanager "github.com/openbao/operator/internal/infra"
 	initmanager "github.com/openbao/operator/internal/init"
 	openbaolabels "github.com/openbao/operator/internal/openbao"
+	"github.com/openbao/operator/internal/revision"
 	security "github.com/openbao/operator/internal/security"
 	upgrademanager "github.com/openbao/operator/internal/upgrade"
+	"github.com/openbao/operator/internal/upgrade/bluegreen"
 )
 
 // SubReconciler is a standardized interface for sub-reconcilers that handle
@@ -388,10 +390,21 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Conditional Execution: Only run expensive managers if we are NOT in Fast Path mode
 	if !isSentinelTrigger {
-		reconcilers = append(reconcilers,
-			upgrademanager.NewManager(r.Client, r.Scheme),
-			backupmanager.NewManager(r.Client, r.Scheme),
-		)
+		// Choose upgrade strategy: BlueGreen or RollingUpdate
+		if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+			// Use bluegreen.Manager for blue/green upgrades
+			infraMgr := inframanager.NewManager(r.Client, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys)
+			reconcilers = append(reconcilers,
+				bluegreen.NewManager(r.Client, r.Scheme, infraMgr),
+				backupmanager.NewManager(r.Client, r.Scheme),
+			)
+		} else {
+			// Use UpgradeManager for rolling updates (default)
+			reconcilers = append(reconcilers,
+				upgrademanager.NewManager(r.Client, r.Scheme),
+				backupmanager.NewManager(r.Client, r.Scheme),
+			)
+		}
 	} else {
 		logger.Info("Skipping Upgrade and Backup managers due to Sentinel Trigger priority")
 	}
@@ -466,6 +479,37 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			}
 		}
 
+		// For bluegreen.Manager, persist status if it was initialized (even if no upgrade is needed),
+		// OR if the phase changed (to ensure finalization changes like Phase=Idle are persisted).
+		// bluegreen.Manager initializes Status.BlueGreen on the "no-op" path (PhaseIdle) which would
+		// otherwise be lost because updateStatus() snapshots "original" after sub-reconcilers have run.
+		if _, isBlueGreenManager := rec.(*bluegreen.Manager); isBlueGreenManager {
+			wasNil := statusBeforeReconcile.BlueGreen == nil
+			isInitialized := cluster.Status.BlueGreen != nil
+			phaseChanged := false
+			if statusBeforeReconcile.BlueGreen != nil && cluster.Status.BlueGreen != nil {
+				phaseChanged = statusBeforeReconcile.BlueGreen.Phase != cluster.Status.BlueGreen.Phase
+			}
+			versionChanged := statusBeforeReconcile.CurrentVersion != cluster.Status.CurrentVersion
+
+			if (wasNil && isInitialized) || phaseChanged || versionChanged {
+				if statusErr := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
+					logger.Error(statusErr, "Failed to persist blue/green status changes")
+				} else {
+					if phaseChanged || versionChanged {
+						logger.Info("Persisted blue/green status changes",
+							"phaseChanged", phaseChanged,
+							"versionChanged", versionChanged,
+							"newPhase", cluster.Status.BlueGreen.Phase,
+							"newVersion", cluster.Status.CurrentVersion)
+					} else {
+						logger.V(1).Info("Persisted blue/green status initialization")
+					}
+					original = cluster.DeepCopy()
+				}
+			}
+		}
+
 		// If a reconciler requests requeue, stop the chain and return
 		if shouldRequeue {
 			// For infra reconciler, handle special requeue cases
@@ -491,6 +535,14 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			// This ensures timely backup execution even with frequent schedules
 			if _, isBackupManager := rec.(*backupmanager.Manager); isBackupManager {
 				// Update status before requeuing to persist any status changes
+				if statusErr := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
+					reconcileErr = fmt.Errorf("failed to update status before requeue: %w", statusErr)
+					return ctrl.Result{}, reconcileErr
+				}
+				return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+			}
+			// For bluegreen.Manager, update status before requeuing
+			if _, isBlueGreenManager := rec.(*bluegreen.Manager); isBlueGreenManager {
 				if statusErr := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
 					reconcileErr = fmt.Errorf("failed to update status before requeue: %w", statusErr)
 					return ctrl.Result{}, reconcileErr
@@ -701,6 +753,20 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		Namespace: cluster.Namespace,
 		Name:      cluster.Name,
 	}
+	activeRevision := ""
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+		activeRevision = revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+			activeRevision = cluster.Status.BlueGreen.BlueRevision
+			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
+				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
+				if cluster.Status.BlueGreen.GreenRevision != "" {
+					activeRevision = cluster.Status.BlueGreen.GreenRevision
+				}
+			}
+		}
+		statefulSetName.Name = fmt.Sprintf("%s-%s", cluster.Name, activeRevision)
+	}
 
 	var readyReplicas int32
 	var available bool
@@ -883,6 +949,9 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
 		constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 	}
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen && activeRevision != "" {
+		podSelector[constants.LabelOpenBaoRevision] = activeRevision
+	}
 
 	var pods corev1.PodList
 	if err := r.List(ctx, &pods,
@@ -896,6 +965,9 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	var leaderName string
 	var pod0 *corev1.Pod
 	pod0Name := fmt.Sprintf("%s-0", cluster.Name)
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen && activeRevision != "" {
+		pod0Name = fmt.Sprintf("%s-%s-0", cluster.Name, activeRevision)
+	}
 
 	for i := range pods.Items {
 		pod := &pods.Items[i]

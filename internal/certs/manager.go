@@ -629,19 +629,46 @@ func buildServerSANs(cluster *openbaov1alpha1.OpenBaoCluster) ([]string, []net.I
 	}
 
 	if clusterName != "" {
-		// Add wildcard for all pods in the cluster
+		// Add wildcards for all pods in the cluster
+		// Include both .svc and .svc.cluster.local for comprehensive coverage
 		addDNS(fmt.Sprintf("*.%s.%s.svc", clusterName, namespace))
+		addDNS(fmt.Sprintf("*.%s.%s.svc.cluster.local", clusterName, namespace))
 		// Add the headless service name
 		addDNS(fmt.Sprintf("%s.%s.svc", clusterName, namespace))
+		addDNS(fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace))
 		// Add individual pod DNS names for explicit coverage
 		// This ensures certificates work for retry_join even if wildcard matching has issues
 		replicas := cluster.Spec.Replicas
 		for i := int32(0); i < replicas; i++ {
 			addDNS(fmt.Sprintf("%s-%d.%s.%s.svc", clusterName, i, clusterName, namespace))
+			addDNS(fmt.Sprintf("%s-%d.%s.%s.svc.cluster.local", clusterName, i, clusterName, namespace))
+		}
+
+		// For Blue/Green upgrades, explicitly add SANs for the revision-specific pod names.
+		// Wildcards like *.bluegreen-cluster.svc work for standard pods, but for Green pods
+		// like bluegreen-cluster-hash-0, we want to be explicit to ensure TLS validation works.
+		if cluster.Status.BlueGreen != nil {
+			revisions := []string{}
+			if cluster.Status.BlueGreen.BlueRevision != "" {
+				revisions = append(revisions, cluster.Status.BlueGreen.BlueRevision)
+			}
+			if cluster.Status.BlueGreen.GreenRevision != "" {
+				revisions = append(revisions, cluster.Status.BlueGreen.GreenRevision)
+			}
+
+			for _, rev := range revisions {
+				for i := int32(0); i < replicas; i++ {
+					podName := fmt.Sprintf("%s-%s-%d", clusterName, rev, i)
+					addDNS(fmt.Sprintf("%s.%s.%s.svc", podName, clusterName, namespace))
+					addDNS(fmt.Sprintf("%s.%s.%s.svc.cluster.local", podName, clusterName, namespace))
+				}
+			}
 		}
 	}
 
+	// Add namespace-wide wildcards for both DNS suffixes
 	addDNS(fmt.Sprintf("*.%s.svc", namespace))
+	addDNS(fmt.Sprintf("*.%s.svc.cluster.local", namespace))
 
 	// Add external service DNS name if service, ingress, or gateway is configured
 	// This is needed when ingress controllers or gateways connect to the backend service

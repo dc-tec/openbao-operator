@@ -28,6 +28,11 @@ const (
 	PathBackupJWTToken    = "/var/run/secrets/tokens/openbao-token" // #nosec G101 -- This is a file path constant, not a credential
 )
 
+// Upgrade executor mounted file paths.
+const (
+	PathUpgradeJWTToken = "/var/run/secrets/tokens/openbao-token" // #nosec G101 -- This is a file path constant, not a credential
+)
+
 // Helper binary paths mounted into OpenBao pods.
 const (
 	PathWrapperBinary = "/utils/bao-wrapper"

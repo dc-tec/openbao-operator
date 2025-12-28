@@ -17,7 +17,7 @@ func TestGenerateTenantRole(t *testing.T) {
 			name:      "default namespace",
 			namespace: "default",
 			wantName:  TenantRoleName,
-			wantRules: 13, // Expected number of PolicyRules (includes Deployments for Sentinel)
+			wantRules: 13, // Expected number of PolicyRules
 		},
 		{
 			name:      "custom namespace",
@@ -114,6 +114,7 @@ func TestGenerateTenantRole(t *testing.T) {
 					contains(rule.Verbs, "delete") {
 					hasPodRule = true
 				}
+
 			}
 
 			if !hasOpenBaoClusterRule {

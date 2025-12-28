@@ -115,6 +115,7 @@ func createBackupSelfInitRequests(ctx context.Context, clusterNamespace, cluster
 				// and is always present in ServiceAccount tokens
 				"bound_subject":  fmt.Sprintf("system:serviceaccount:%s:%s-backup-serviceaccount", clusterNamespace, clusterName),
 				"token_policies": []string{"backup"},
+				"policies":       []string{"backup"},
 				"ttl":            "1h",
 			}),
 		},

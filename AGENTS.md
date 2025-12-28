@@ -240,7 +240,7 @@ While we aim to reduce redundancy, we adhere to the Go proverb: **"A little copy
 
 ### 13.4 CRD Evolution & Compatibility
 
-* Breaking changes to the `OpenBaoCluster` API require:
+* Breaking changes to the `OpenBaoCluster` API (removal/rename of fields, changed semantics) require:
   * Updating CRD versions (e.g., introducing `v1beta1`).
   * A documented migration path.
 * Avoid changing existing field behavior silently; prefer additive, backwards-compatible changes.

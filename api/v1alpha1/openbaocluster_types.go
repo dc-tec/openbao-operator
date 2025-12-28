@@ -229,8 +229,59 @@ type BackupSchedule struct {
 	ExecutorImage string `json:"executorImage,omitempty"`
 }
 
+// UpdateStrategyType defines the type of update strategy to use.
+// +kubebuilder:validation:Enum=RollingUpdate;BlueGreen
+type UpdateStrategyType string
+
+const (
+	// UpdateStrategyRollingUpdate uses a rolling update strategy (default).
+	UpdateStrategyRollingUpdate UpdateStrategyType = "RollingUpdate"
+	// UpdateStrategyBlueGreen uses a blue/green deployment strategy.
+	UpdateStrategyBlueGreen UpdateStrategyType = "BlueGreen"
+)
+
+// VerificationConfig allows defining custom health checks before promotion.
+type VerificationConfig struct {
+	// MinSyncDuration ensures the Green cluster stays healthy as a non-voter
+	// for at least this duration before promotion (e.g., "5m").
+	// +optional
+	MinSyncDuration string `json:"minSyncDuration,omitempty"`
+}
+
+// BlueGreenConfig configures the behavior when Type is BlueGreen.
+type BlueGreenConfig struct {
+	// AutoPromote controls whether the operator automatically switches traffic
+	// and deletes the old cluster after sync. If false, it pauses at PhaseSynced
+	// waiting for manual approval (annotation or field update).
+	// +kubebuilder:default=true
+	AutoPromote bool `json:"autoPromote"`
+
+	// VerificationConfig allows defining custom health checks before promotion.
+	// +optional
+	Verification *VerificationConfig `json:"verification,omitempty"`
+}
+
+// UpdateStrategy controls how the operator handles version changes.
+type UpdateStrategy struct {
+	// Type controls how the operator handles version changes.
+	// +kubebuilder:default="RollingUpdate"
+	Type UpdateStrategyType `json:"type,omitempty"`
+
+	// BlueGreen configures the behavior when Type is BlueGreen.
+	// +optional
+	BlueGreen *BlueGreenConfig `json:"blueGreen,omitempty"`
+}
+
 // UpgradeConfig defines configuration for upgrade operations.
 type UpgradeConfig struct {
+	// ExecutorImage is the container image to use for upgrade operations.
+	//
+	// This image is used by Kubernetes Jobs created during upgrades (for example, blue/green
+	// cluster orchestration actions). The executor runs inside the tenant namespace and
+	// authenticates to OpenBao using a projected ServiceAccount token (JWT auth).
+	// +optional
+	ExecutorImage string `json:"executorImage,omitempty"`
+
 	// PreUpgradeSnapshot, when true, triggers a backup before any upgrade.
 	// When enabled, the upgrade manager will create a backup using the backup
 	// configuration (spec.backup.target, spec.backup.executorImage, etc.) and
@@ -1322,6 +1373,9 @@ type OpenBaoClusterSpec struct {
 	// Sentinel configures the high-availability watcher/healer.
 	// +optional
 	Sentinel *SentinelConfig `json:"sentinel,omitempty"`
+	// UpdateStrategy controls how the operator handles version changes.
+	// +optional
+	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty"`
 }
 
 // UpgradeProgress tracks the state of an in-progress upgrade.
@@ -1341,6 +1395,40 @@ type UpgradeProgress struct {
 	// LastStepDownTime records when the last leader step-down was performed.
 	// +optional
 	LastStepDownTime *metav1.Time `json:"lastStepDownTime,omitempty"`
+}
+
+// BlueGreenPhase is a high-level summary of blue/green upgrade state.
+// +kubebuilder:validation:Enum=Idle;DeployingGreen;JoiningMesh;Syncing;Promoting;DemotingBlue;Cleanup
+type BlueGreenPhase string
+
+const (
+	// PhaseIdle indicates no blue/green upgrade is in progress.
+	PhaseIdle BlueGreenPhase = "Idle"
+	// PhaseDeployingGreen indicates the Green StatefulSet is being created and pods are becoming ready.
+	// This phase includes waiting for pods to be unsealed.
+	PhaseDeployingGreen BlueGreenPhase = "DeployingGreen"
+	// PhaseJoiningMesh indicates Green pods are joining the Raft cluster as non-voters.
+	PhaseJoiningMesh BlueGreenPhase = "JoiningMesh"
+	// PhaseSyncing indicates waiting for Green nodes to catch up with Blue nodes.
+	PhaseSyncing BlueGreenPhase = "Syncing"
+	// PhasePromoting indicates Green nodes are being promoted to voters.
+	PhasePromoting BlueGreenPhase = "Promoting"
+	// PhaseDemotingBlue indicates Blue nodes are being demoted to non-voters and Service is switching to Green.
+	PhaseDemotingBlue BlueGreenPhase = "DemotingBlue"
+	// PhaseCleanup indicates Blue StatefulSet is being deleted.
+	PhaseCleanup BlueGreenPhase = "Cleanup"
+)
+
+// BlueGreenStatus tracks the lifecycle of the "Green" revision during blue/green upgrades.
+type BlueGreenStatus struct {
+	// Phase is the current phase of the blue/green upgrade.
+	Phase BlueGreenPhase `json:"phase,omitempty"`
+	// BlueRevision is the hash/name of the currently active cluster.
+	BlueRevision string `json:"blueRevision,omitempty"`
+	// GreenRevision is the hash/name of the next cluster (if upgrade in progress).
+	GreenRevision string `json:"greenRevision,omitempty"`
+	// StartTime is when the current phase began.
+	StartTime *metav1.Time `json:"startTime,omitempty"`
 }
 
 // BackupStatus tracks the state of backups for a cluster.
@@ -1433,6 +1521,9 @@ type OpenBaoClusterStatus struct {
 	// Drift tracks drift detection and correction events for this cluster.
 	// +optional
 	Drift *DriftStatus `json:"drift,omitempty"`
+	// BlueGreen tracks the state of blue/green upgrades (if enabled).
+	// +optional
+	BlueGreen *BlueGreenStatus `json:"blueGreen,omitempty"`
 	// Conditions represent the current state of the OpenBaoCluster resource.
 	// +listType=map
 	// +listMapKey=type

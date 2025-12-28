@@ -14,6 +14,7 @@ import (
 	configbuilder "github.com/openbao/operator/internal/config"
 	"github.com/openbao/operator/internal/constants"
 	operatorerrors "github.com/openbao/operator/internal/errors"
+	"github.com/openbao/operator/internal/revision"
 )
 
 const (
@@ -170,7 +171,31 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return err
 	}
 
-	if err := m.ensureStatefulSet(ctx, logger, cluster, configContent, verifiedImageDigest); err != nil {
+	// Determine if we're in blue/green mode and need revision-based naming
+	revisionName := ""
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+		// During blue/green deployments, the active ("Blue") StatefulSet is revisioned.
+		// Use the stored BlueRevision when available so infra continues to reconcile Blue
+		// after the user updates spec.version/spec.image to start an upgrade.
+		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+			// Skip StatefulSet creation during DemotingBlue/Cleanup phases.
+			// The BlueGreenManager handles StatefulSet lifecycle during these phases.
+			// If we don't skip, we'll keep recreating the old Blue StatefulSet that's being deleted.
+			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
+				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
+				logger.Info("Skipping Blue StatefulSet reconciliation during cleanup phase",
+					"phase", cluster.Status.BlueGreen.Phase,
+					"blueRevision", cluster.Status.BlueGreen.BlueRevision)
+				return nil
+			}
+			revisionName = cluster.Status.BlueGreen.BlueRevision
+		} else {
+			// Bootstrap revision for initial reconciliation before BlueGreen status is initialized.
+			revisionName = revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+		}
+	}
+
+	if err := m.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, verifiedImageDigest, revisionName, false); err != nil {
 		return err
 	}
 
@@ -311,7 +336,21 @@ func infraLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
 }
 
 func podSelectorLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
-	return infraLabels(cluster)
+	return podSelectorLabelsWithRevision(cluster, "")
+}
+
+// podSelectorLabelsWithRevision returns pod selector labels including the revision label.
+// If revision is empty, returns base labels (for backward compatibility).
+// Otherwise, includes the revision label for blue/green deployments.
+func podSelectorLabelsWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, revision string) map[string]string {
+	labels := infraLabels(cluster)
+	if revision != "" {
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[constants.LabelOpenBaoRevision] = revision
+	}
+	return labels
 }
 
 func unsealSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -320,6 +359,16 @@ func unsealSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 
 func configMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + constants.SuffixConfigMap
+}
+
+// configMapNameWithRevision returns the ConfigMap name for a given revision.
+// If revision is empty, returns the cluster's base ConfigMap name.
+// Otherwise, returns "<cluster-name>-config-<revision>".
+func configMapNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, revision string) string {
+	if revision == "" {
+		return configMapName(cluster)
+	}
+	return fmt.Sprintf("%s%s-%s", cluster.Name, constants.SuffixConfigMap, revision)
 }
 
 func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -343,7 +392,17 @@ func externalServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 }
 
 func statefulSetName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name
+	return statefulSetNameWithRevision(cluster, "")
+}
+
+// statefulSetNameWithRevision returns the StatefulSet name for a given revision.
+// If revision is empty, returns the cluster name (for backward compatibility).
+// Otherwise, returns "<cluster-name>-<revision>".
+func statefulSetNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, revision string) string {
+	if revision == "" {
+		return cluster.Name
+	}
+	return fmt.Sprintf("%s-%s", cluster.Name, revision)
 }
 
 func int32Ptr(v int32) *int32 {

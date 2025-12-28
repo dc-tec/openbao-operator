@@ -11,7 +11,6 @@ import (
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
-	authv1 "k8s.io/api/authentication/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -837,14 +836,13 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 
 	podStartTime := time.Now()
 
-	// Check if this pod is the leader
-	isLeader, err := m.isPodLeader(ctx, cluster, podName)
+	leaderPodName, err := m.currentLeaderPodByLabel(ctx, cluster)
 	if err != nil {
-		return false, fmt.Errorf("failed to check if pod %s is leader: %w", podName, err)
+		logger.Info("Unable to determine current leader from pod labels; attempting safe step-down", "error", err)
 	}
 
-	if isLeader {
-		logger.Info("Pod is the leader; initiating step-down", "pod", podName)
+	if leaderPodName == "" || leaderPodName == podName {
+		logger.Info("Initiating leader step-down before updating pod", "pod", podName, "currentLeader", leaderPodName)
 		if err := m.stepDownLeader(ctx, logger, cluster, podName, metrics); err != nil {
 			return false, err
 		}
@@ -888,71 +886,44 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 	return true, nil
 }
 
-// isPodLeader checks if a specific pod is the Raft leader.
-func (m *Manager) isPodLeader(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
-	pod := &corev1.Pod{}
-	if err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      podName,
-	}, pod); err != nil {
-		return false, fmt.Errorf("failed to get pod %s/%s: %w", cluster.Namespace, podName, err)
+// currentLeaderPodByLabel returns the pod name labeled as the current leader, if available.
+// Returns an empty string if no leader label is observed.
+func (m *Manager) currentLeaderPodByLabel(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	podList := &corev1.PodList{}
+	if err := m.client.List(ctx, podList,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabels(map[string]string{
+			constants.LabelAppInstance: cluster.Name,
+			constants.LabelAppName:     constants.LabelValueAppNameOpenBao,
+		}),
+	); err != nil {
+		return "", fmt.Errorf("failed to list pods: %w", err)
 	}
 
-	isLeader, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
-	if err != nil {
-		return false, fmt.Errorf("invalid %q label on pod %s/%s: %w", openbaoapi.LabelActive, cluster.Namespace, podName, err)
-	}
-	if present {
-		return isLeader, nil
-	}
-
-	caCert, err := m.getClusterCACert(ctx, cluster)
-	if err != nil {
-		return false, fmt.Errorf("failed to get CA certificate: %w", err)
-	}
-
-	podURL := m.getPodURL(cluster, podName)
-	apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
-		BaseURL: podURL,
-		CACert:  caCert,
-	})
-	if err != nil {
-		// Wrap connection errors as transient
-		if operatorerrors.IsTransientConnection(err) {
-			return false, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client: %w", err))
+	leaders := make([]string, 0, 1)
+	for i := range podList.Items {
+		pod := &podList.Items[i]
+		leader, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+		if err != nil || !present {
+			continue
 		}
-		return false, fmt.Errorf("failed to create OpenBao client: %w", err)
+		if leader {
+			leaders = append(leaders, pod.Name)
+		}
 	}
 
-	return apiClient.IsLeader(ctx)
+	switch len(leaders) {
+	case 0:
+		return "", nil
+	case 1:
+		return leaders[0], nil
+	default:
+		return "", fmt.Errorf("multiple leaders detected via pod labels (%d)", len(leaders))
+	}
 }
 
 // stepDownLeader performs a leader step-down and waits for leadership transfer.
 func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string, metrics *Metrics) error {
-	caCert, err := m.getClusterCACert(ctx, cluster)
-	if err != nil {
-		return fmt.Errorf("failed to get CA certificate: %w", err)
-	}
-
-	token, err := m.getOperatorToken(ctx, cluster)
-	if err != nil {
-		return fmt.Errorf("failed to get operator token: %w", err)
-	}
-
-	podURL := m.getPodURL(cluster, podName)
-	apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
-		BaseURL: podURL,
-		CACert:  caCert,
-		Token:   token,
-	})
-	if err != nil {
-		// Wrap connection errors as transient
-		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client: %w", err))
-		}
-		return fmt.Errorf("failed to create OpenBao client: %w", err)
-	}
-
 	// Record step-down attempt
 	metrics.IncrementStepDownTotal()
 
@@ -965,25 +936,47 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		"from_version":      cluster.Status.Upgrade.FromVersion,
 	})
 
-	// Execute step-down
-	if err := apiClient.StepDownLeader(ctx); err != nil {
-		metrics.IncrementStepDownFailures()
-		logging.LogAuditEvent(logger, "StepDownFailed", map[string]string{
-			"cluster_namespace": cluster.Namespace,
-			"cluster_name":      cluster.Name,
-			"pod":               podName,
-			"error":             err.Error(),
-		})
-		return fmt.Errorf("step-down failed: %w", err)
-	}
-
-	// Wait for leadership to transfer
 	stepDownCtx, cancel := context.WithTimeout(ctx, DefaultStepDownTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(DefaultLeaderCheckInterval)
 	defer ticker.Stop()
 
+	for {
+		result, err := ensureUpgradeExecutorJob(
+			stepDownCtx,
+			m.client,
+			m.scheme,
+			logger,
+			cluster,
+			ExecutorActionRollingStepDownLeader,
+			podName,
+			"",
+			"",
+		)
+		if err != nil {
+			return fmt.Errorf("failed to ensure step-down Job: %w", err)
+		}
+		if result.Failed {
+			metrics.IncrementStepDownFailures()
+			return fmt.Errorf("step-down Job %s failed", result.Name)
+		}
+		if result.Succeeded {
+			break
+		}
+
+		select {
+		case <-stepDownCtx.Done():
+			metrics.IncrementStepDownFailures()
+			SetUpgradeFailed(&cluster.Status, ReasonStepDownTimeout,
+				fmt.Sprintf(MessageStepDownTimeout, DefaultStepDownTimeout),
+				cluster.Generation)
+			return fmt.Errorf("step-down timeout: step-down Job did not complete within %v", DefaultStepDownTimeout)
+		case <-ticker.C:
+		}
+	}
+
+	// Wait for leadership to transfer
 	for {
 		select {
 		case <-stepDownCtx.Done():
@@ -1008,15 +1001,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 				continue
 			}
 
-			if !present {
-				stillLeader, err = apiClient.IsLeader(ctx)
-				if err != nil {
-					logger.V(1).Info("Error checking leader status after step-down", "error", err)
-					continue
-				}
-			}
-
-			if !stillLeader {
+			if present && !stillLeader {
 				logger.Info("Leadership transferred successfully", "previousLeader", podName)
 				SetStepDownPerformed(&cluster.Status)
 				logging.LogAuditEvent(logger, "StepDownCompleted", map[string]string{
@@ -1026,6 +1011,44 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 				})
 				return nil
 			}
+
+			// If the previous leader label is missing, treat transfer as complete if we
+			// can observe a different pod labeled as leader.
+			if !present {
+				podList := &corev1.PodList{}
+				if err := m.client.List(ctx, podList,
+					client.InNamespace(cluster.Namespace),
+					client.MatchingLabels(map[string]string{
+						constants.LabelAppInstance: cluster.Name,
+						constants.LabelAppName:     constants.LabelValueAppNameOpenBao,
+					}),
+				); err != nil {
+					logger.V(1).Info("Error listing pods while waiting for leader transfer", "error", err)
+					continue
+				}
+
+				for i := range podList.Items {
+					candidate := &podList.Items[i]
+					if candidate.Name == podName {
+						continue
+					}
+					leader, leaderPresent, err := openbaoapi.ParseBoolLabel(candidate.Labels, openbaoapi.LabelActive)
+					if err != nil || !leaderPresent {
+						continue
+					}
+					if leader {
+						logger.Info("Leadership transferred successfully", "previousLeader", podName, "newLeader", candidate.Name)
+						SetStepDownPerformed(&cluster.Status)
+						logging.LogAuditEvent(logger, "StepDownCompleted", map[string]string{
+							"cluster_namespace": cluster.Namespace,
+							"cluster_name":      cluster.Name,
+							"pod":               podName,
+						})
+						return nil
+					}
+				}
+			}
+
 			logger.V(1).Info("Waiting for leadership transfer", "pod", podName)
 		}
 	}
@@ -1274,106 +1297,6 @@ func (m *Manager) getClusterCACert(ctx context.Context, cluster *openbaov1alpha1
 	return caCert, nil
 }
 
-// getOperatorToken retrieves the authentication token for OpenBao API calls.
-// It supports JWT Auth (preferred) and static token authentication.
-// Upgrade authentication must be explicitly configured via spec.upgrade.jwtAuthRole
-// or spec.upgrade.tokenSecretRef.
-func (m *Manager) getOperatorToken(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	upgradeCfg := cluster.Spec.Upgrade
-	if upgradeCfg == nil {
-		return "", ErrNoUpgradeToken
-	}
-
-	// Check if upgrade auth is configured
-	hasUpgradeJWTAuth := strings.TrimSpace(upgradeCfg.JWTAuthRole) != ""
-	hasUpgradeTokenSecret := upgradeCfg.TokenSecretRef != nil && strings.TrimSpace(upgradeCfg.TokenSecretRef.Name) != ""
-
-	if !hasUpgradeJWTAuth && !hasUpgradeTokenSecret {
-		return "", ErrNoUpgradeToken
-	}
-
-	// If JWT Auth is configured, use it
-	if hasUpgradeJWTAuth {
-		jwtAuthRole := strings.TrimSpace(upgradeCfg.JWTAuthRole)
-		return m.authenticateWithJWTAuth(ctx, cluster, jwtAuthRole)
-	}
-
-	// Otherwise, use static token
-	return m.getTokenFromSecret(ctx, cluster, upgradeCfg.TokenSecretRef)
-}
-
-// authenticateWithJWTAuth authenticates to OpenBao using JWT authentication.
-// It uses the upgrade ServiceAccount token for authentication.
-func (m *Manager) authenticateWithJWTAuth(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, role string) (string, error) {
-	// Get token for the upgrade ServiceAccount
-	saName := upgradeServiceAccountName(cluster)
-	jwtToken, err := m.getServiceAccountToken(ctx, cluster.Namespace, saName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get upgrade ServiceAccount token: %w", err)
-	}
-
-	// Get CA certificate for TLS
-	caCert, err := m.getClusterCACert(ctx, cluster)
-	if err != nil {
-		return "", fmt.Errorf("failed to get CA certificate: %w", err)
-	}
-
-	// Find pods to authenticate against
-	podList, err := m.getClusterPods(ctx, cluster)
-	if err != nil {
-		return "", fmt.Errorf("failed to get cluster pods: %w", err)
-	}
-
-	if len(podList) == 0 {
-		return "", fmt.Errorf("no pods found in cluster")
-	}
-
-	// Try to authenticate against each pod until one succeeds
-	var lastErr error
-	for _, pod := range podList {
-		if pod.Status.Phase != corev1.PodRunning {
-			continue
-		}
-
-		podURL := m.getPodURL(cluster, pod.Name)
-
-		// Create OpenBao client without token for authentication
-		apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
-			BaseURL: podURL,
-			CACert:  caCert,
-		})
-		if err != nil {
-			// Wrap connection errors as transient
-			if operatorerrors.IsTransientConnection(err) {
-				lastErr = operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client for pod %s: %w", pod.Name, err))
-			} else {
-				lastErr = fmt.Errorf("failed to create OpenBao client for pod %s: %w", pod.Name, err)
-			}
-			continue
-		}
-
-		// Authenticate using JWT Auth
-		token, err := apiClient.LoginJWT(ctx, role, jwtToken)
-		if err != nil {
-			// Wrap connection errors as transient
-			if operatorerrors.IsTransientConnection(err) {
-				lastErr = operatorerrors.WrapTransientConnection(fmt.Errorf("failed to authenticate using JWT Auth against pod %s: %w", pod.Name, err))
-			} else {
-				lastErr = fmt.Errorf("failed to authenticate using JWT Auth against pod %s: %w", pod.Name, err)
-			}
-			continue
-		}
-
-		return token, nil
-	}
-
-	if lastErr != nil {
-		return "", fmt.Errorf("failed to authenticate against any pod: %w", lastErr)
-	}
-
-	return "", fmt.Errorf("no running pods available for authentication")
-}
-
 // applyResource uses Server-Side Apply to create or update a Kubernetes resource.
 // This eliminates the need for Get-then-Create-or-Update logic and manual diffing.
 //
@@ -1433,71 +1356,6 @@ func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, _ logr.Logger
 // upgradeServiceAccountName returns the name for the upgrade ServiceAccount.
 func upgradeServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + constants.SuffixUpgradeServiceAccount
-}
-
-// getServiceAccountToken creates a TokenRequest for the specified ServiceAccount and returns the token.
-func (m *Manager) getServiceAccountToken(ctx context.Context, namespace, saName string) (string, error) {
-	// Get the ServiceAccount first to ensure it exists
-	sa := &corev1.ServiceAccount{}
-	if err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      saName,
-	}, sa); err != nil {
-		return "", fmt.Errorf("failed to get ServiceAccount %s/%s: %w", namespace, saName, err)
-	}
-
-	// Create TokenRequest
-	tokenRequest := &authv1.TokenRequest{
-		Spec: authv1.TokenRequestSpec{
-			// Request a token with 1 hour expiration
-			ExpirationSeconds: ptr.To(int64(3600)),
-		},
-	}
-
-	// Use SubResource client to create token
-	if err := m.client.SubResource("token").Create(ctx, sa, tokenRequest); err != nil {
-		return "", fmt.Errorf("failed to create token request for ServiceAccount %s/%s: %w", namespace, saName, err)
-	}
-
-	if tokenRequest.Status.Token == "" {
-		return "", fmt.Errorf("token request succeeded but token is empty for ServiceAccount %s/%s", namespace, saName)
-	}
-
-	return tokenRequest.Status.Token, nil
-}
-
-// getTokenFromSecret retrieves a token from a Kubernetes Secret.
-func (m *Manager) getTokenFromSecret(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, secretRef *corev1.SecretReference) (string, error) {
-	secretNamespace := cluster.Namespace
-	if ns := strings.TrimSpace(secretRef.Namespace); ns != "" {
-		secretNamespace = ns
-	}
-
-	secretName := types.NamespacedName{
-		Namespace: secretNamespace,
-		Name:      secretRef.Name,
-	}
-
-	secret := &corev1.Secret{}
-	if err := m.client.Get(ctx, secretName, secret); err != nil {
-		if apierrors.IsNotFound(err) {
-			return "", fmt.Errorf("upgrade token Secret %s/%s not found: %w", secretNamespace, secretRef.Name, ErrNoUpgradeToken)
-		}
-		return "", fmt.Errorf("failed to get upgrade token Secret %s/%s: %w", secretNamespace, secretRef.Name, err)
-	}
-
-	// Extract token from secret (default key is "token")
-	tokenKey := "token"
-	if secret.Data == nil {
-		return "", fmt.Errorf("upgrade token Secret %s/%s has no data", secretNamespace, secretRef.Name)
-	}
-
-	token, ok := secret.Data[tokenKey]
-	if !ok || len(token) == 0 {
-		return "", fmt.Errorf("upgrade token Secret %s/%s missing %q key", secretNamespace, secretRef.Name, tokenKey)
-	}
-
-	return strings.TrimSpace(string(token)), nil
 }
 
 // getPodURL returns the URL for connecting to a specific pod.

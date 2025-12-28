@@ -173,7 +173,7 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 		t.Fatalf("expected Role to exist: %v", err)
 	}
 
-	// Verify rules were updated (should have 13 rules now, including Deployments for Sentinel)
+	// Verify rules were updated
 	if len(role.Rules) != 13 {
 		t.Errorf("Role rules count = %v, want 13", len(role.Rules))
 	}
