@@ -276,28 +276,19 @@ var _ = Describe("Upgrade", Ordered, func() {
 			}, 10*time.Minute, 30*time.Second).Should(Succeed())
 		})
 
-		It("maintains cluster availability during upgrade", func() {
-			// During upgrade, cluster should remain available
-			Consistently(func(g Gomega) {
+		It("completes upgrade successfully", func() {
+			// Wait for upgrade to complete and verify availability during the process
+			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				err := admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)
 				g.Expect(err).NotTo(HaveOccurred())
 
-				// At least one pod should be ready at all times
+				// Verify availability: At least one pod should be ready at all times during the wait
 				sts := &appsv1.StatefulSet{}
 				err = admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, sts)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(sts.Status.ReadyReplicas).To(BeNumerically(">=", 1),
 					"at least one pod should remain ready during upgrade")
-			}, 5*time.Minute, 10*time.Second).Should(Succeed())
-		})
-
-		It("completes upgrade successfully", func() {
-			// Wait for upgrade to complete
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
 
 				// Upgrade should be complete (Status.Upgrade should be nil)
 				if updated.Status.Upgrade == nil {
@@ -322,7 +313,7 @@ var _ = Describe("Upgrade", Ordered, func() {
 					updated.Status.Upgrade.CurrentPartition,
 					len(updated.Status.Upgrade.CompletedPods),
 					upgradeCluster.Spec.Replicas)
-			}, 20*time.Minute, 30*time.Second).Should(Succeed(), "upgrade should complete successfully")
+			}, 20*time.Minute, 10*time.Second).Should(Succeed(), "upgrade should complete successfully")
 		})
 
 		It("updates all pods to target version", func() {
