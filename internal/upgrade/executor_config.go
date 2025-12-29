@@ -121,7 +121,7 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 	if envPath := strings.TrimSpace(os.Getenv(constants.EnvJWTTokenPath)); envPath != "" {
 		jwtTokenPath = envPath
 	}
-	jwtToken, err := os.ReadFile(jwtTokenPath) //#nosec G304 -- Path from constant or environment variable
+	jwtToken, err := os.ReadFile(jwtTokenPath) // #nosec G304 -- Path from constant or environment variable
 	if err != nil {
 		return nil, fmt.Errorf("failed to read JWT token from %q: %w", jwtTokenPath, err)
 	}
@@ -131,7 +131,7 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 	if envPath := strings.TrimSpace(os.Getenv(constants.EnvTLSCAPath)); envPath != "" {
 		caCertPath = envPath
 	}
-	caCert, err := os.ReadFile(caCertPath) //#nosec G304 -- Path from constant or environment variable
+	caCert, err := os.ReadFile(caCertPath) // #nosec G304 -- Path from constant or environment variable
 	if err != nil {
 		return nil, fmt.Errorf("failed to read TLS CA certificate from %q: %w", caCertPath, err)
 	}

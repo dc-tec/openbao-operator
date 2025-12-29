@@ -1424,10 +1424,7 @@ func (m *Manager) createPreUpgradeSnapshotJob(
 	jobName := fmt.Sprintf("%s-preupgrade-snapshot-%d", cluster.Name, time.Now().Unix())
 
 	// Build the snapshot job
-	job, err := m.buildSnapshotJob(cluster, jobName, "pre-upgrade")
-	if err != nil {
-		return "", fmt.Errorf("failed to build snapshot job: %w", err)
-	}
+	job := m.buildSnapshotJob(cluster, jobName, "pre-upgrade")
 
 	// Create the job
 	if err := m.client.Create(ctx, job); err != nil {
@@ -1443,7 +1440,7 @@ func (m *Manager) createPreUpgradeSnapshotJob(
 }
 
 // buildSnapshotJob creates a backup Job spec for upgrade snapshots.
-func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, phase string) (*batchv1.Job, error) {
+func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, phase string) *batchv1.Job {
 	region := cluster.Spec.Backup.Target.Region
 	if region == "" {
 		region = "us-east-1"
@@ -1638,5 +1635,5 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 		},
 	}
 
-	return job, nil
+	return job
 }

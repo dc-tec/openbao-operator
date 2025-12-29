@@ -533,7 +533,7 @@ func (m *Manager) ensureBackupRBAC(ctx context.Context, _ logr.Logger, cluster *
 	saName := backupServiceAccountName(cluster)
 	roleName := saName + "-role"
 	roleBindingName := saName + "-rolebinding"
-	labels := backupLabels(cluster)
+	resourceLabels := backupLabels(cluster)
 
 	// Ensure Role exists using SSA
 	role := &rbacv1.Role{
@@ -544,7 +544,7 @@ func (m *Manager) ensureBackupRBAC(ctx context.Context, _ logr.Logger, cluster *
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      roleName,
 			Namespace: cluster.Namespace,
-			Labels:    labels,
+			Labels:    resourceLabels,
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
@@ -568,7 +568,7 @@ func (m *Manager) ensureBackupRBAC(ctx context.Context, _ logr.Logger, cluster *
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      roleBindingName,
 			Namespace: cluster.Namespace,
-			Labels:    labels,
+			Labels:    resourceLabels,
 		},
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: "rbac.authorization.k8s.io",

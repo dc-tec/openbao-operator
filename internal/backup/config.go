@@ -189,7 +189,7 @@ func loadTLSConfig(cfg *ExecutorConfig) error {
 	if envPath := strings.TrimSpace(os.Getenv(constants.EnvTLSCAPath)); envPath != "" {
 		caCertPath = envPath
 	}
-	caCert, err := os.ReadFile(caCertPath) //#nosec G304 -- Path from constant or environment variable
+	caCert, err := os.ReadFile(caCertPath) // #nosec G304 -- Path from constant or environment variable
 	if err != nil {
 		return fmt.Errorf("failed to read TLS CA certificate from %q: %w", caCertPath, err)
 	}
@@ -206,7 +206,7 @@ func loadAuthConfig(cfg *ExecutorConfig) error {
 	if envPath := strings.TrimSpace(os.Getenv(constants.EnvJWTTokenPath)); envPath != "" {
 		jwtTokenPath = envPath
 	}
-	jwtToken, err := os.ReadFile(jwtTokenPath) //#nosec G304 -- Path from constant or environment variable
+	jwtToken, err := os.ReadFile(jwtTokenPath) // #nosec G304 -- Path from constant or environment variable
 	if err == nil && len(jwtToken) > 0 {
 		cfg.JWTToken = strings.TrimSpace(string(jwtToken))
 		// If auth method not explicitly set, prefer JWT Auth
@@ -233,7 +233,7 @@ func loadAuthConfig(cfg *ExecutorConfig) error {
 	if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupTokenPath)); envPath != "" {
 		tokenPath = envPath
 	}
-	token, err := os.ReadFile(tokenPath) //#nosec G304 -- Path from constant or environment variable
+	token, err := os.ReadFile(tokenPath) // #nosec G304 -- Path from constant or environment variable
 	if err != nil {
 		return fmt.Errorf("failed to read OpenBao token from %q: %w", tokenPath, err)
 	}

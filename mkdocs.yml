@@ -80,4 +80,5 @@ nav:
     - Basics: contributing/index.md
     - Development: contributing/development.md
     - Testing Strategy: contributing/testing.md
-  - Compatibility: compatibility.md
+  - Reference:
+    - Compatibility Matrix: reference/compatibility.md
