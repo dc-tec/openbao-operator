@@ -33,3 +33,6 @@ go.work
 # Environment variables
 .env
 .envrc
+
+# Documentation build output
+site/*
