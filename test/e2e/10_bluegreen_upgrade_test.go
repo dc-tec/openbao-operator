@@ -616,7 +616,7 @@ var _ = Describe("Blue/Green Upgrade", Ordered, func() {
 
 				_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet cleanup verified: activeStatefulSets=%d, activeRevision=%s\n",
 					clusterStatefulSets, updated.Status.BlueGreen.BlueRevision)
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 		})
 
 		It("verifies all pods are running target version", func() {

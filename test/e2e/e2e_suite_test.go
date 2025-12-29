@@ -81,6 +81,10 @@ var (
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
 	// and load it into kind.
 	upgradeExecutorImage = "openbao/upgrade-executor:dev"
+
+	// skipCleanup controls whether to clean up resources after the suite finishes.
+	// Set E2E_SKIP_CLEANUP=true environment variable to preserve the cluster state for debugging.
+	skipCleanup = os.Getenv("E2E_SKIP_CLEANUP") == "true"
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -202,6 +206,11 @@ var _ = SynchronizedAfterSuite(func() {
 }, func() {
 	// THIS BLOCK RUNS ONCE (on node 1, after all nodes complete the first block)
 	// This ensures cleanup only happens once after all tests finish.
+
+	if skipCleanup {
+		_, _ = fmt.Fprintf(GinkgoWriter, "Skipping cleanup as E2E_SKIP_CLEANUP is set to true\n")
+		return
+	}
 
 	By("cleaning up the curl pod for metrics")
 	cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", operatorNamespace, "--ignore-not-found")
