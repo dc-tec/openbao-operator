@@ -208,6 +208,21 @@ func TestManager_Reconcile_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	if !requeue {
 		t.Fatalf("expected requeue")
 	}
+	// After promoting, we now go to TrafficSwitching (not directly to DemotingBlue)
+	if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseTrafficSwitching {
+		t.Fatalf("phase=%s want=%s", cluster.Status.BlueGreen.Phase, openbaov1alpha1.PhaseTrafficSwitching)
+	}
+
+	// Phase: TrafficSwitching -> wait for stabilization period
+	// For the test, we need to set the TrafficSwitchedTime in the past to pass stabilization
+	cluster.Status.BlueGreen.TrafficSwitchedTime = &metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
+	requeue, err = mgr.Reconcile(ctx, logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("reconcile TrafficSwitching: %v", err)
+	}
+	if !requeue {
+		t.Fatalf("expected requeue")
+	}
 	if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseDemotingBlue {
 		t.Fatalf("phase=%s want=%s", cluster.Status.BlueGreen.Phase, openbaov1alpha1.PhaseDemotingBlue)
 	}

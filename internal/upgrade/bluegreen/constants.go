@@ -11,10 +11,3 @@ const (
 	// ReasonUpgradeFailed indicates an upgrade has failed.
 	ReasonUpgradeFailed = "UpgradeFailed"
 )
-
-// isPodReady checks if a pod is ready (all containers ready).
-func isPodReady(_ interface{ GetName() string }) bool {
-	// Type assertion to check pod readiness conditions
-	// This is a simplified version - the actual implementation checks Ready condition
-	return true // Placeholder - will be replaced with actual implementation
-}

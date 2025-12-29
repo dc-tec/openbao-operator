@@ -114,10 +114,11 @@ func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger,
 	selectorLabels := podSelectorLabels(cluster)
 	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
 		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
-			// During blue/green upgrades, select the active revision (Blue by default, Green after cutover)
+			// During blue/green upgrades, select the active revision (Blue by default, Green after traffic switching)
 			activeRevision := cluster.Status.BlueGreen.BlueRevision
-			// If we're past cutover phase (now merged into DemotingBlue), use Green revision
-			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
+			// Switch to Green when in TrafficSwitching phase or later
+			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseTrafficSwitching ||
+				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
 				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
 				if cluster.Status.BlueGreen.GreenRevision != "" {
 					activeRevision = cluster.Status.BlueGreen.GreenRevision

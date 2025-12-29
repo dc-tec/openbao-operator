@@ -41,7 +41,9 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		for i := int32(0); i < cfg.ClusterReplicas; i++ {
-			podName := fmt.Sprintf("%s-%d", cfg.ClusterName, i)
+			// Use StatefulSetName for pod name (may include revision for Blue/Green)
+			// but ClusterName for service name (headless service is always cluster name)
+			podName := fmt.Sprintf("%s-%d", cfg.StatefulSetName, i)
 			host := fmt.Sprintf("%s.%s.%s.svc", podName, cfg.ClusterName, cfg.ClusterNamespace)
 			if clusterDomainSuffix != "" {
 				host = host + clusterDomainSuffix

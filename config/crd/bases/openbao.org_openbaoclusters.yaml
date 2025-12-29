@@ -2121,6 +2121,56 @@ spec:
                           and deletes the old cluster after sync. If false, it pauses at PhaseSynced
                           waiting for manual approval (annotation or field update).
                         type: boolean
+                      autoRollback:
+                        description: AutoRollback configures automatic rollback behavior.
+                        properties:
+                          enabled:
+                            default: true
+                            description: Enabled controls whether automatic rollback
+                              is active.
+                            type: boolean
+                          onJobFailure:
+                            default: true
+                            description: |-
+                              OnJobFailure triggers rollback when job failures exceed MaxJobFailures.
+                              Only applies during early phases (before TrafficSwitching).
+                            type: boolean
+                          onTrafficFailure:
+                            default: false
+                            description: |-
+                              OnTrafficFailure triggers rollback if Green fails health checks
+                              during TrafficSwitching phase (stabilization period).
+                            type: boolean
+                          onValidationFailure:
+                            default: true
+                            description: OnValidationFailure triggers rollback if
+                              pre-promotion hook fails.
+                            type: boolean
+                          stabilizationSeconds:
+                            default: 60
+                            description: |-
+                              StabilizationSeconds is the observation period during TrafficSwitching.
+                              Green must remain healthy for this duration before proceeding to DemotingBlue.
+                            format: int32
+                            minimum: 0
+                            type: integer
+                        required:
+                        - enabled
+                        type: object
+                      maxJobFailures:
+                        default: 5
+                        description: |-
+                          MaxJobFailures is the maximum consecutive job failures before aborting/rolling back.
+                          Defaults to 5 if not specified.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                      preUpgradeSnapshot:
+                        description: |-
+                          PreUpgradeSnapshot triggers a backup at the start of an upgrade.
+                          Creates a recovery point before any changes are made.
+                          Requires spec.backup to be configured.
+                        type: boolean
                       verification:
                         description: VerificationConfig allows defining custom health
                           checks before promotion.
@@ -2130,6 +2180,36 @@ spec:
                               MinSyncDuration ensures the Green cluster stays healthy as a non-voter
                               for at least this duration before promotion (e.g., "5m").
                             type: string
+                          prePromotionHook:
+                            description: |-
+                              PrePromotionHook specifies a Job template to run before promoting Green.
+                              The job must complete successfully (exit 0) for promotion to proceed.
+                              If the job fails, the upgrade enters a paused state until manually resolved.
+                            properties:
+                              args:
+                                description: Args are arguments passed to the command.
+                                items:
+                                  type: string
+                                type: array
+                              command:
+                                description: Command is the command to run.
+                                items:
+                                  type: string
+                                type: array
+                              image:
+                                description: Image is the container image for the
+                                  validation job.
+                                minLength: 1
+                                type: string
+                              timeoutSeconds:
+                                default: 300
+                                description: 'TimeoutSeconds is the job timeout (default:
+                                  300s).'
+                                format: int32
+                                type: integer
+                            required:
+                            - image
+                            type: object
                         type: object
                     required:
                     - autoPromote
@@ -2308,6 +2388,16 @@ spec:
                     description: GreenRevision is the hash/name of the next cluster
                       (if upgrade in progress).
                     type: string
+                  jobFailureCount:
+                    description: |-
+                      JobFailureCount tracks consecutive job failures in the current phase.
+                      Reset to 0 on phase transition or successful job completion.
+                    format: int32
+                    type: integer
+                  lastJobFailure:
+                    description: LastJobFailure records the name of the last failed
+                      job for debugging.
+                    type: string
                   phase:
                     description: Phase is the current phase of the blue/green upgrade.
                     enum:
@@ -2316,11 +2406,32 @@ spec:
                     - JoiningMesh
                     - Syncing
                     - Promoting
+                    - TrafficSwitching
                     - DemotingBlue
                     - Cleanup
+                    - RollingBack
+                    - RollbackCleanup
+                    type: string
+                  preUpgradeSnapshotJobName:
+                    description: PreUpgradeSnapshotJobName is the name of the backup
+                      job triggered at upgrade start.
+                    type: string
+                  rollbackReason:
+                    description: RollbackReason records why a rollback was triggered
+                      (if any).
+                    type: string
+                  rollbackStartTime:
+                    description: RollbackStartTime is when the rollback was initiated.
+                    format: date-time
                     type: string
                   startTime:
                     description: StartTime is when the current phase began.
+                    format: date-time
+                    type: string
+                  trafficSwitchedTime:
+                    description: |-
+                      TrafficSwitchedTime records when traffic was switched to Green.
+                      Used for calculating stabilization period.
                     format: date-time
                     type: string
                 type: object

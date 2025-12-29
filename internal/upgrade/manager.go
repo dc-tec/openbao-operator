@@ -1069,35 +1069,20 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 		return fmt.Errorf("failed to get StatefulSet: %w", err)
 	}
 
-	// Create a minimal StatefulSet with only the UpdateStrategy field set.
-	// Using SSA with a distinct field manager ensures this field is owned by the upgrade manager
-	// and won't be overridden by InfraManager's SSA operations.
-	patchSts := &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
-			APIVersion: "apps/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      sts.Name,
-			Namespace: sts.Namespace,
-		},
-		Spec: appsv1.StatefulSetSpec{
-			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
-				Type: appsv1.RollingUpdateStatefulSetStrategyType,
-				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
-					Partition: &partition,
-				},
-			},
-		},
+	// Create a patch that only updates the partition field.
+	// We use client.MergeFrom instead of Server-Side Apply (SSA) to avoid conflicts
+	// with the infra manager which owns the rest of the StatefulSet spec.
+	// This generates a strategic merge patch that only touches the modified fields,
+	// preventing "zero value" overwrites and "stale cache" issues.
+	newSts := sts.DeepCopy()
+	newSts.Spec.UpdateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
+	newSts.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
+		Partition: &partition,
 	}
 
-	// Use Server-Side Apply with a distinct field manager to claim ownership of the partition field
-	patchOpts := []client.PatchOption{
-		client.FieldOwner("openbao-operator-upgrade"),
-	}
-
-	if err := m.client.Patch(ctx, patchSts, client.Apply, patchOpts...); err != nil {
-		return fmt.Errorf("failed to update StatefulSet partition via SSA: %w", err)
+	// Patch using MergeFrom to send only the differences
+	if err := m.client.Patch(ctx, newSts, client.MergeFrom(sts)); err != nil {
+		return fmt.Errorf("failed to update StatefulSet partition: %w", err)
 	}
 
 	return nil

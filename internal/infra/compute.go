@@ -129,6 +129,25 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 		APIVersion: "apps/v1",
 	}
 
+	// Check if the StatefulSet already exists to preserve fields managed by other controllers (UpgradeManager)
+	existing := &appsv1.StatefulSet{}
+	err := m.client.Get(ctx, types.NamespacedName{Name: name, Namespace: cluster.Namespace}, existing)
+	if err == nil {
+		// If existing STS has a partition set, preserve it in our desired object.
+		// The UpgradeManager sets this field via Patch/SSA, but if we don't include it here,
+		// our SSA apply might interfere or try to reset it to nil (depending on ownership).
+		// By explicitly including the current value, we tell SSA we are okay with this state.
+		if existing.Spec.UpdateStrategy.RollingUpdate != nil && existing.Spec.UpdateStrategy.RollingUpdate.Partition != nil {
+			if desired.Spec.UpdateStrategy.RollingUpdate == nil {
+				desired.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{}
+			}
+			desired.Spec.UpdateStrategy.RollingUpdate.Partition = existing.Spec.UpdateStrategy.RollingUpdate.Partition
+		}
+	} else if !apierrors.IsNotFound(err) {
+		// If error is something other than NotFound, return it
+		return fmt.Errorf("failed to get existing StatefulSet %s/%s: %w", cluster.Namespace, name, err)
+	}
+
 	// Note: We intentionally do NOT set UpdateStrategy here. The UpgradeManager manages
 	// UpdateStrategy (including RollingUpdate.Partition) for rollout orchestration.
 	// SSA will preserve the existing UpdateStrategy if it's not specified in our desired object.
@@ -795,11 +814,19 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
-			// For blue/green deployments, use OnDelete update strategy to prevent
+			// For blue/green deployments, use OnDelete update strategy to preventing
 			// automatic rolling updates. The BlueGreenManager controls when pods are created/updated.
-			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
-				Type: appsv1.OnDeleteStatefulSetStrategyType,
-			},
+			// For standard rolling upgrades, use RollingUpdate (default behavior).
+			UpdateStrategy: func() appsv1.StatefulSetUpdateStrategy {
+				if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+					return appsv1.StatefulSetUpdateStrategy{
+						Type: appsv1.OnDeleteStatefulSetStrategyType,
+					}
+				}
+				return appsv1.StatefulSetUpdateStrategy{
+					Type: appsv1.RollingUpdateStatefulSetStrategyType,
+				}
+			}(),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      podLabels,

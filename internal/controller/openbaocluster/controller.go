@@ -343,42 +343,31 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// If the annotation exists, it means the Sentinel detected drift and triggered reconciliation
 	isSentinelTrigger := false
 	triggerAnnotation := constants.AnnotationSentinelTrigger
+	sentinelResourceInfo := unknownResource // Captured for drift status update after reconciliation
 
 	if val, ok := cluster.Annotations[triggerAnnotation]; ok && val != "" {
 		isSentinelTrigger = true
 
 		// Extract resource info from annotation if available
-		resourceInfo := unknownResource
 		if resourceVal, hasResource := cluster.Annotations[constants.AnnotationSentinelTriggerResource]; hasResource {
-			resourceInfo = resourceVal
+			sentinelResourceInfo = resourceVal
 		}
 
 		logger.Info("Sentinel trigger detected; entering Fast Path (Drift Correction)",
 			"trigger_timestamp", val,
-			"resource", resourceInfo)
+			"resource", sentinelResourceInfo)
 
-		// Record drift detection in status and metrics
-		now := metav1.Now()
-		if cluster.Status.Drift == nil {
-			cluster.Status.Drift = &openbaov1alpha1.DriftStatus{}
-		}
-		cluster.Status.Drift.LastDriftDetected = &now
-		cluster.Status.Drift.DriftCorrectionCount++
-		cluster.Status.Drift.LastDriftResource = resourceInfo
-
-		// Extract resource kind from resource info (format: "Kind/name" or "Kind/namespace/name")
+		// Record metrics for drift detection (status update happens after updateStatus())
 		resourceKind := unknownResource
-		if resourceInfo != "" && resourceInfo != unknownResource {
-			parts := strings.Split(resourceInfo, "/")
+		if sentinelResourceInfo != "" && sentinelResourceInfo != unknownResource {
+			parts := strings.Split(sentinelResourceInfo, "/")
 			if len(parts) > 0 {
 				resourceKind = parts[0]
 			}
 		}
-
-		// Record metrics for drift detection
 		clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
 		clusterMetrics.RecordDriftDetected(resourceKind)
-		clusterMetrics.SetDriftLastDetectedTimestamp(float64(now.Unix()))
+		clusterMetrics.SetDriftLastDetectedTimestamp(float64(time.Now().Unix()))
 	}
 
 	// Build sub-reconcilers in order of execution
@@ -591,11 +580,15 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// Do NOT optimize this away - it adds safety.
 	// Clear the annotation even if we're requeuing, as the fast path reconciliation has completed.
 	if isSentinelTrigger {
-		// Record drift correction in status and metrics
+		// Record ALL drift fields together (detection + correction) so they're persisted atomically
+		// This happens AFTER updateStatus() to avoid being overwritten by that status patch
 		now := metav1.Now()
 		if cluster.Status.Drift == nil {
 			cluster.Status.Drift = &openbaov1alpha1.DriftStatus{}
 		}
+		cluster.Status.Drift.LastDriftDetected = &now
+		cluster.Status.Drift.DriftCorrectionCount++
+		cluster.Status.Drift.LastDriftResource = sentinelResourceInfo
 		cluster.Status.Drift.LastCorrectionTime = &now
 
 		// Record metrics for drift correction

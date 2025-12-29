@@ -246,6 +246,53 @@ type VerificationConfig struct {
 	// for at least this duration before promotion (e.g., "5m").
 	// +optional
 	MinSyncDuration string `json:"minSyncDuration,omitempty"`
+
+	// PrePromotionHook specifies a Job template to run before promoting Green.
+	// The job must complete successfully (exit 0) for promotion to proceed.
+	// If the job fails, the upgrade enters a paused state until manually resolved.
+	// +optional
+	PrePromotionHook *ValidationHookConfig `json:"prePromotionHook,omitempty"`
+}
+
+// ValidationHookConfig defines a user-supplied validation Job.
+type ValidationHookConfig struct {
+	// Image is the container image for the validation job.
+	// +kubebuilder:validation:MinLength=1
+	Image string `json:"image"`
+	// Command is the command to run.
+	// +optional
+	Command []string `json:"command,omitempty"`
+	// Args are arguments passed to the command.
+	// +optional
+	Args []string `json:"args,omitempty"`
+	// TimeoutSeconds is the job timeout (default: 300s).
+	// +kubebuilder:default=300
+	// +optional
+	TimeoutSeconds *int32 `json:"timeoutSeconds,omitempty"`
+}
+
+// AutoRollbackConfig defines conditions that trigger automatic rollback.
+type AutoRollbackConfig struct {
+	// Enabled controls whether automatic rollback is active.
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled"`
+	// OnJobFailure triggers rollback when job failures exceed MaxJobFailures.
+	// Only applies during early phases (before TrafficSwitching).
+	// +kubebuilder:default=true
+	OnJobFailure bool `json:"onJobFailure,omitempty"`
+	// OnValidationFailure triggers rollback if pre-promotion hook fails.
+	// +kubebuilder:default=true
+	OnValidationFailure bool `json:"onValidationFailure,omitempty"`
+	// OnTrafficFailure triggers rollback if Green fails health checks
+	// during TrafficSwitching phase (stabilization period).
+	// +kubebuilder:default=false
+	OnTrafficFailure bool `json:"onTrafficFailure,omitempty"`
+	// StabilizationSeconds is the observation period during TrafficSwitching.
+	// Green must remain healthy for this duration before proceeding to DemotingBlue.
+	// +kubebuilder:default=60
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	StabilizationSeconds *int32 `json:"stabilizationSeconds,omitempty"`
 }
 
 // BlueGreenConfig configures the behavior when Type is BlueGreen.
@@ -259,6 +306,23 @@ type BlueGreenConfig struct {
 	// VerificationConfig allows defining custom health checks before promotion.
 	// +optional
 	Verification *VerificationConfig `json:"verification,omitempty"`
+
+	// MaxJobFailures is the maximum consecutive job failures before aborting/rolling back.
+	// Defaults to 5 if not specified.
+	// +kubebuilder:default=5
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxJobFailures *int32 `json:"maxJobFailures,omitempty"`
+
+	// PreUpgradeSnapshot triggers a backup at the start of an upgrade.
+	// Creates a recovery point before any changes are made.
+	// Requires spec.backup to be configured.
+	// +optional
+	PreUpgradeSnapshot bool `json:"preUpgradeSnapshot,omitempty"`
+
+	// AutoRollback configures automatic rollback behavior.
+	// +optional
+	AutoRollback *AutoRollbackConfig `json:"autoRollback,omitempty"`
 }
 
 // UpdateStrategy controls how the operator handles version changes.
@@ -1398,7 +1462,7 @@ type UpgradeProgress struct {
 }
 
 // BlueGreenPhase is a high-level summary of blue/green upgrade state.
-// +kubebuilder:validation:Enum=Idle;DeployingGreen;JoiningMesh;Syncing;Promoting;DemotingBlue;Cleanup
+// +kubebuilder:validation:Enum=Idle;DeployingGreen;JoiningMesh;Syncing;Promoting;TrafficSwitching;DemotingBlue;Cleanup;RollingBack;RollbackCleanup
 type BlueGreenPhase string
 
 const (
@@ -1413,10 +1477,18 @@ const (
 	PhaseSyncing BlueGreenPhase = "Syncing"
 	// PhasePromoting indicates Green nodes are being promoted to voters.
 	PhasePromoting BlueGreenPhase = "Promoting"
-	// PhaseDemotingBlue indicates Blue nodes are being demoted to non-voters and Service is switching to Green.
+	// PhaseTrafficSwitching indicates traffic is being switched to Green before demoting Blue.
+	// This includes an optional stabilization period to observe Green under traffic.
+	PhaseTrafficSwitching BlueGreenPhase = "TrafficSwitching"
+	// PhaseDemotingBlue indicates Blue nodes are being demoted to non-voters.
 	PhaseDemotingBlue BlueGreenPhase = "DemotingBlue"
 	// PhaseCleanup indicates Blue StatefulSet is being deleted.
 	PhaseCleanup BlueGreenPhase = "Cleanup"
+	// PhaseRollingBack indicates the upgrade is being rolled back.
+	// Blue nodes are re-promoted and Green nodes are demoted.
+	PhaseRollingBack BlueGreenPhase = "RollingBack"
+	// PhaseRollbackCleanup indicates Green StatefulSet is being deleted after rollback.
+	PhaseRollbackCleanup BlueGreenPhase = "RollbackCleanup"
 )
 
 // BlueGreenStatus tracks the lifecycle of the "Green" revision during blue/green upgrades.
@@ -1429,6 +1501,26 @@ type BlueGreenStatus struct {
 	GreenRevision string `json:"greenRevision,omitempty"`
 	// StartTime is when the current phase began.
 	StartTime *metav1.Time `json:"startTime,omitempty"`
+	// JobFailureCount tracks consecutive job failures in the current phase.
+	// Reset to 0 on phase transition or successful job completion.
+	// +optional
+	JobFailureCount int32 `json:"jobFailureCount,omitempty"`
+	// LastJobFailure records the name of the last failed job for debugging.
+	// +optional
+	LastJobFailure string `json:"lastJobFailure,omitempty"`
+	// PreUpgradeSnapshotJobName is the name of the backup job triggered at upgrade start.
+	// +optional
+	PreUpgradeSnapshotJobName string `json:"preUpgradeSnapshotJobName,omitempty"`
+	// RollbackReason records why a rollback was triggered (if any).
+	// +optional
+	RollbackReason string `json:"rollbackReason,omitempty"`
+	// RollbackStartTime is when the rollback was initiated.
+	// +optional
+	RollbackStartTime *metav1.Time `json:"rollbackStartTime,omitempty"`
+	// TrafficSwitchedTime records when traffic was switched to Green.
+	// Used for calculating stabilization period.
+	// +optional
+	TrafficSwitchedTime *metav1.Time `json:"trafficSwitchedTime,omitempty"`
 }
 
 // BackupStatus tracks the state of backups for a cluster.

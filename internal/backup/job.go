@@ -163,10 +163,18 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 		region = constants.DefaultS3Region
 	}
 
+	// Compute StatefulSet name for pod discovery
+	// For Blue/Green, use the Blue revision (active stable pods) if available
+	statefulSetName := cluster.Name
+	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+		statefulSetName = fmt.Sprintf("%s-%s", cluster.Name, cluster.Status.BlueGreen.BlueRevision)
+	}
+
 	// Build environment variables for the backup container
 	env := []corev1.EnvVar{
 		{Name: constants.EnvClusterNamespace, Value: cluster.Namespace},
 		{Name: constants.EnvClusterName, Value: cluster.Name},
+		{Name: constants.EnvStatefulSetName, Value: statefulSetName},
 		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
 		{Name: constants.EnvBackupEndpoint, Value: cluster.Spec.Backup.Target.Endpoint},
 		{Name: constants.EnvBackupBucket, Value: cluster.Spec.Backup.Target.Bucket},

@@ -14,6 +14,7 @@ import (
 	"github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,6 +65,11 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Ensure backup ServiceAccount exists (for JWT Auth)
 	if err := m.ensureBackupServiceAccount(ctx, logger, cluster); err != nil {
 		return false, fmt.Errorf("failed to ensure backup ServiceAccount: %w", err)
+	}
+
+	// Ensure backup RBAC exists (for pod listing/leader discovery)
+	if err := m.ensureBackupRBAC(ctx, logger, cluster); err != nil {
+		return false, fmt.Errorf("failed to ensure backup RBAC: %w", err)
 	}
 
 	// Initialize backup status if needed
@@ -497,6 +503,8 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 
 // ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs using Server-Side Apply.
 // This ServiceAccount is used for JWT Auth authentication to OpenBao.
+// ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs using Server-Side Apply.
+// This ServiceAccount is used for JWT Auth authentication to OpenBao.
 func (m *Manager) ensureBackupServiceAccount(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	saName := backupServiceAccountName(cluster)
 
@@ -508,13 +516,7 @@ func (m *Manager) ensureBackupServiceAccount(ctx context.Context, _ logr.Logger,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      saName,
 			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:      cluster.Name,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: "backup",
-			},
+			Labels:    backupLabels(cluster),
 		},
 	}
 
@@ -523,6 +525,81 @@ func (m *Manager) ensureBackupServiceAccount(ctx context.Context, _ logr.Logger,
 	}
 
 	return nil
+}
+
+// ensureBackupRBAC creates a Role and RoleBinding that grants the backup service account
+// permission to list pods in its namespace. This is required for finding the active OpenBao pod.
+func (m *Manager) ensureBackupRBAC(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	saName := backupServiceAccountName(cluster)
+	roleName := saName + "-role"
+	roleBindingName := saName + "-rolebinding"
+	labels := backupLabels(cluster)
+
+	// Ensure Role exists using SSA
+	role := &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Role",
+			APIVersion: "rbac.authorization.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      roleName,
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+		},
+	}
+
+	if err := m.applyResource(ctx, role, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure Role %s/%s: %w", cluster.Namespace, roleName, err)
+	}
+
+	// Ensure RoleBinding exists using SSA
+	roleBinding := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "RoleBinding",
+			APIVersion: "rbac.authorization.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      roleBindingName,
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     roleName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      saName,
+				Namespace: cluster.Namespace,
+			},
+		},
+	}
+
+	if err := m.applyResource(ctx, roleBinding, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure RoleBinding %s/%s: %w", cluster.Namespace, roleBindingName, err)
+	}
+
+	return nil
+}
+
+// backupLabels returns the labels for backup resources
+func backupLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
+	return map[string]string{
+		constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:      cluster.Name,
+		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:   cluster.Name,
+		constants.LabelOpenBaoComponent: "backup",
+	}
 }
 
 // backupServiceAccountName returns the name for the backup ServiceAccount.

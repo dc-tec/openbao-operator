@@ -15,6 +15,7 @@ const (
 	EnvClusterNamespace = "CLUSTER_NAMESPACE"
 	EnvClusterName      = "CLUSTER_NAME"
 	EnvClusterReplicas  = "CLUSTER_REPLICAS"
+	EnvStatefulSetName  = "STATEFULSET_NAME" // StatefulSet name for pod discovery (may include revision for Blue/Green)
 
 	// Upgrade executor
 	EnvUpgradeAction        = "UPGRADE_ACTION"

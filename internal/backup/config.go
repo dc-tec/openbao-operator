@@ -16,6 +16,7 @@ type ExecutorConfig struct {
 	// Cluster information
 	ClusterNamespace string
 	ClusterName      string
+	StatefulSetName  string // StatefulSet name for pod discovery (may include revision for Blue/Green)
 	ClusterReplicas  int32
 
 	// Storage configuration
@@ -130,6 +131,12 @@ func loadClusterConfig(cfg *ExecutorConfig) error {
 		return fmt.Errorf("invalid CLUSTER_REPLICAS value %q: %w", replicasStr, err)
 	}
 	cfg.ClusterReplicas = int32(replicas)
+
+	// Load StatefulSet name for pod discovery (defaults to cluster name for backwards compatibility)
+	cfg.StatefulSetName = strings.TrimSpace(os.Getenv(constants.EnvStatefulSetName))
+	if cfg.StatefulSetName == "" {
+		cfg.StatefulSetName = cfg.ClusterName
+	}
 	return nil
 }
 
