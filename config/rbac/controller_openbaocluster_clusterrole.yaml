@@ -20,4 +20,12 @@ rules:
       - get
       - list
       - watch
-
+  # Read-only access to admission policies that are required security dependencies.
+  # The controller only needs deterministic-name GETs (no list/watch).
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
+    verbs:
+      - get

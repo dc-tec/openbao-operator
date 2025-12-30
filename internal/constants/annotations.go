@@ -19,6 +19,15 @@ const (
 	AnnotationMaintenance = "openbao.org/maintenance"
 	// AnnotationMaintenanceAllowed is the annotation key used to check if maintenance is allowed.
 	AnnotationMaintenanceAllowed = "openbao.org/maintenance-allowed"
+
+	// AnnotationLastDevelopmentWarning is the last time the operator emitted a Development profile warning event.
+	AnnotationLastDevelopmentWarning = "openbao.org/last-development-warning"
+	// AnnotationLastProfileNotSetWarning is the last time the operator emitted a missing profile warning event.
+	AnnotationLastProfileNotSetWarning = "openbao.org/last-profile-not-set-warning"
+	// AnnotationLastRootTokenWarning is the last time the operator emitted a root token storage warning event.
+	AnnotationLastRootTokenWarning = "openbao.org/last-root-token-warning"
+	// AnnotationLastStaticUnsealWarning is the last time the operator emitted a static unseal warning event.
+	AnnotationLastStaticUnsealWarning = "openbao.org/last-static-unseal-warning"
 )
 
 // Sentinel resource names.

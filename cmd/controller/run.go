@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -44,8 +45,10 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/admission"
 	"github.com/openbao/operator/internal/auth"
 	certmanager "github.com/openbao/operator/internal/certs"
+	"github.com/openbao/operator/internal/constants"
 	openbaoclustercontroller "github.com/openbao/operator/internal/controller/openbaocluster"
 	openbaorestorecontroller "github.com/openbao/operator/internal/controller/openbaorestore"
 	initmanager "github.com/openbao/operator/internal/init"
@@ -257,6 +260,38 @@ func Run(args []string) {
 		}
 	}
 
+	// Admission policy dependency check (release-critical security boundary).
+	// If this check fails, the controller stays up, but Sentinel is treated as unsafe.
+	admissionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	admissionStatus, err := admission.CheckDependencies(
+		admissionCtx,
+		mgr.GetAPIReader(),
+		admission.DefaultDependencies(),
+		[]string{"openbao-operator-", ""},
+	)
+	if err != nil {
+		setupLog.Error(err, "Failed to evaluate admission policy dependencies; treating admission as not ready")
+		admissionStatus.OverallReady = false
+		admissionStatus.SentinelReady = false
+	}
+	admission.SetAdmissionDependenciesReady(admissionStatus.OverallReady)
+	if admissionStatus.OverallReady {
+		setupLog.Info("Admission policy dependencies ready", "sentinel_ready", admissionStatus.SentinelReady)
+	} else {
+		if admissionStatus.SentinelReady {
+			setupLog.Info("Admission policy dependencies not ready; Sentinel remains enabled",
+				"sentinel_ready", admissionStatus.SentinelReady,
+				"summary", admissionStatus.SummaryMessage(),
+			)
+		} else {
+			setupLog.Info("Admission policy dependencies not ready; Sentinel will be disabled",
+				"sentinel_ready", admissionStatus.SentinelReady,
+				"summary", admissionStatus.SummaryMessage(),
+			)
+		}
+	}
+
 	// Pass these values into the Reconciler struct
 	if err := (&openbaoclustercontroller.OpenBaoClusterReconciler{
 		Client:            mgr.GetClient(),
@@ -266,6 +301,8 @@ func Run(args []string) {
 		OperatorNamespace: operatorNamespace,
 		OIDCIssuer:        oidcConfig.IssuerURL,
 		OIDCJWTKeys:       oidcConfig.JWKSKeys,
+		AdmissionStatus:   &admissionStatus,
+		Recorder:          mgr.GetEventRecorderFor(constants.ControllerNameOpenBaoCluster),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
 		os.Exit(1)

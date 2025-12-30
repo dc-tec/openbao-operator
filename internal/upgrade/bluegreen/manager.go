@@ -663,21 +663,12 @@ func (m *Manager) handlePhaseDemotingBlue(ctx context.Context, logger logr.Logge
 		return false, fmt.Errorf("failed to get Green pods: %w", err)
 	}
 
-	var greenLeader *corev1.Pod
 	readyGreenPods := 0
 	for i := range greenPods {
 		pod := &greenPods[i]
 
 		if isPodReady(pod) && pod.DeletionTimestamp == nil {
 			readyGreenPods++
-		}
-
-		active, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
-		if err != nil {
-			continue
-		}
-		if present && active {
-			greenLeader = pod
 		}
 	}
 
@@ -714,7 +705,7 @@ func (m *Manager) handlePhaseDemotingBlue(ctx context.Context, logger logr.Logge
 	}
 
 	// After demotion, verify Green is now the leader (merged from former Cutover phase)
-	greenLeader = nil
+	var greenLeader *corev1.Pod
 	for i := range greenPods {
 		pod := &greenPods[i]
 		active, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)

@@ -61,6 +61,9 @@ const (
 	ConditionAvailable ConditionType = "Available"
 	// ConditionTLSReady indicates whether TLS assets have been successfully provisioned.
 	ConditionTLSReady ConditionType = "TLSReady"
+	// ConditionProductionReady indicates whether the cluster configuration is considered
+	// production-ready by the operator (security posture, unseal, bootstrap flow).
+	ConditionProductionReady ConditionType = "ProductionReady"
 	// ConditionUpgrading indicates whether an upgrade is currently in progress.
 	ConditionUpgrading ConditionType = "Upgrading"
 	// ConditionBackingUp indicates whether a backup is currently in progress.
@@ -1462,7 +1465,6 @@ type OpenBaoClusterSpec struct {
 	// When set to "Development", relaxed security is allowed but a security warning
 	// condition is set.
 	// +kubebuilder:validation:Enum=Hardened;Development
-	// +kubebuilder:default=Development
 	// +optional
 	Profile Profile `json:"profile,omitempty"`
 	// Sentinel configures the high-availability watcher/healer.

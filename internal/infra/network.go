@@ -67,7 +67,7 @@ func (m *Manager) ensureHeadlessService(ctx context.Context, _ logr.Logger, clus
 }
 
 // ensureExternalService manages the external-facing Service for the OpenBaoCluster using Server-Side Apply.
-func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	serviceCfg := cluster.Spec.Service
 	ingressCfg := cluster.Spec.Ingress
 	gatewayCfg := cluster.Spec.Gateway

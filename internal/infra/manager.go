@@ -64,11 +64,12 @@ const (
 
 // Manager reconciles infrastructure resources such as ConfigMaps, StatefulSets, and Services for an OpenBaoCluster.
 type Manager struct {
-	client            client.Client
-	scheme            *runtime.Scheme
-	operatorNamespace string
-	oidcIssuer        string
-	oidcJWTKeys       []string
+	client                 client.Client
+	scheme                 *runtime.Scheme
+	operatorNamespace      string
+	oidcIssuer             string
+	oidcJWTKeys            []string
+	sentinelAdmissionReady bool
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client.
@@ -77,11 +78,26 @@ type Manager struct {
 // oidcIssuer and oidcJWTKeys are the OIDC configuration discovered at operator startup.
 func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string) *Manager {
 	return &Manager{
-		client:            c,
-		scheme:            scheme,
-		operatorNamespace: operatorNamespace,
-		oidcIssuer:        oidcIssuer,
-		oidcJWTKeys:       oidcJWTKeys,
+		client:                 c,
+		scheme:                 scheme,
+		operatorNamespace:      operatorNamespace,
+		oidcIssuer:             oidcIssuer,
+		oidcJWTKeys:            oidcJWTKeys,
+		sentinelAdmissionReady: true,
+	}
+}
+
+// NewManagerWithSentinelAdmission constructs a Manager with an explicit admission readiness
+// signal for Sentinel. When sentinelAdmissionReady is false, the Manager will not deploy
+// Sentinel resources even if spec.sentinel.enabled is true.
+func NewManagerWithSentinelAdmission(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string, sentinelAdmissionReady bool) *Manager {
+	return &Manager{
+		client:                 c,
+		scheme:                 scheme,
+		operatorNamespace:      operatorNamespace,
+		oidcIssuer:             oidcIssuer,
+		oidcJWTKeys:            oidcJWTKeys,
+		sentinelAdmissionReady: sentinelAdmissionReady,
 	}
 }
 
@@ -119,11 +135,39 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	configContent := string(renderedConfig)
 
+	if err := m.reconcilePreStatefulSet(ctx, logger, cluster, configContent); err != nil {
+		return err
+	}
+
+	// Determine if we're in blue/green mode and need revision-based naming
+	revisionName, skipStatefulSet := statefulSetRevisionName(logger, cluster)
+	if skipStatefulSet {
+		return nil
+	}
+
+	if err := m.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, verifiedImageDigest, revisionName, false); err != nil {
+		return err
+	}
+
+	// SECURITY: Create PodDisruptionBudget to prevent simultaneous pod evictions
+	// that could cause quorum loss during node drains or cluster upgrades
+	if err := m.ensurePodDisruptionBudget(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	if err := m.reconcileSentinel(ctx, logger, cluster, verifiedSentinelDigest); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string) error {
 	if err := m.ensureConfigMap(ctx, logger, cluster, configContent); err != nil {
 		return err
 	}
 
-	// Create a separate ConfigMap for self-init blocks (only mounted for pod-0)
+	// Create a separate ConfigMap for self-init blocks (only mounted for pod-0).
 	if err := m.ensureSelfInitConfigMap(ctx, logger, cluster); err != nil {
 		return err
 	}
@@ -171,42 +215,39 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return err
 	}
 
-	// Determine if we're in blue/green mode and need revision-based naming
-	revisionName := ""
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
-		// During blue/green deployments, the active ("Blue") StatefulSet is revisioned.
-		// Use the stored BlueRevision when available so infra continues to reconcile Blue
-		// after the user updates spec.version/spec.image to start an upgrade.
-		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
-			// Skip StatefulSet creation during DemotingBlue/Cleanup phases.
-			// The BlueGreenManager handles StatefulSet lifecycle during these phases.
-			// If we don't skip, we'll keep recreating the old Blue StatefulSet that's being deleted.
-			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
-				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
-				logger.Info("Skipping Blue StatefulSet reconciliation during cleanup phase",
-					"phase", cluster.Status.BlueGreen.Phase,
-					"blueRevision", cluster.Status.BlueGreen.BlueRevision)
-				return nil
-			}
-			revisionName = cluster.Status.BlueGreen.BlueRevision
-		} else {
-			// Bootstrap revision for initial reconciliation before BlueGreen status is initialized.
-			revisionName = revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+	return nil
+}
+
+func statefulSetRevisionName(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, bool) {
+	if cluster.Spec.UpdateStrategy.Type != openbaov1alpha1.UpdateStrategyBlueGreen {
+		return "", false
+	}
+
+	// During blue/green deployments, the active ("Blue") StatefulSet is revisioned.
+	// Use the stored BlueRevision when available so infra continues to reconcile Blue
+	// after the user updates spec.version/spec.image to start an upgrade.
+	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+		// Skip StatefulSet creation during DemotingBlue/Cleanup phases.
+		// The BlueGreenManager handles StatefulSet lifecycle during these phases.
+		// If we don't skip, we'll keep recreating the old Blue StatefulSet that's being deleted.
+		if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
+			cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
+			logger.Info("Skipping Blue StatefulSet reconciliation during cleanup phase",
+				"phase", cluster.Status.BlueGreen.Phase,
+				"blueRevision", cluster.Status.BlueGreen.BlueRevision)
+			return "", true
 		}
+		return cluster.Status.BlueGreen.BlueRevision, false
 	}
 
-	if err := m.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, verifiedImageDigest, revisionName, false); err != nil {
-		return err
-	}
+	// Bootstrap revision for initial reconciliation before BlueGreen status is initialized.
+	return revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas), false
+}
 
-	// SECURITY: Create PodDisruptionBudget to prevent simultaneous pod evictions
-	// that could cause quorum loss during node drains or cluster upgrades
-	if err := m.ensurePodDisruptionBudget(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	// Manage Sentinel deployment
-	if cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled {
+func (m *Manager) reconcileSentinel(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedSentinelDigest string) error {
+	// Manage Sentinel deployment.
+	sentinelEnabled := cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled
+	if sentinelEnabled && m.sentinelAdmissionReady {
 		if err := m.ensureSentinelServiceAccount(ctx, logger, cluster); err != nil {
 			return err
 		}
@@ -216,11 +257,15 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		if err := m.ensureSentinelDeployment(ctx, logger, cluster, verifiedSentinelDigest); err != nil {
 			return err
 		}
-	} else {
-		// Sentinel is disabled, clean up resources
-		if err := m.ensureSentinelCleanup(ctx, logger, cluster); err != nil {
-			return err
-		}
+		return nil
+	}
+
+	// Sentinel is disabled or unsafe; clean up resources.
+	if sentinelEnabled && !m.sentinelAdmissionReady {
+		logger.Info("Sentinel is enabled but admission policies are not ready; skipping Sentinel deployment and cleaning up any existing Sentinel resources")
+	}
+	if err := m.ensureSentinelCleanup(ctx, logger, cluster); err != nil {
+		return err
 	}
 
 	return nil

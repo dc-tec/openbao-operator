@@ -541,8 +541,8 @@ func TestBuildHTTPRouteBackends_ServiceSelectorsDefault(t *testing.T) {
 		t.Fatalf("expected 1 backend, got %d", len(backends))
 	}
 
-	if string(backends[0].BackendRef.Name) != externalServiceName(cluster) {
-		t.Fatalf("expected backend name %q, got %q", externalServiceName(cluster), backends[0].BackendRef.Name)
+	if string(backends[0].Name) != externalServiceName(cluster) {
+		t.Fatalf("expected backend name %q, got %q", externalServiceName(cluster), backends[0].Name)
 	}
 
 	if backends[0].Weight != nil {
@@ -602,7 +602,7 @@ func TestBuildHTTPRouteBackends_GatewayWeightsSteps(t *testing.T) {
 			var blueBackend, greenBackend *gatewayv1.HTTPBackendRef
 			for i := range backends {
 				b := &backends[i]
-				switch string(b.BackendRef.Name) {
+				switch string(b.Name) {
 				case externalServiceNameBlue(c):
 					blueBackend = b
 				case externalServiceNameGreen(c):

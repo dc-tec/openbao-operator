@@ -93,6 +93,26 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 		BeforeAll(func() {
 			Expect(framework.EnsureRestrictedNamespace(ctx, admin, guardrailsNamespace)).To(Succeed())
 
+			By("onboarding the guardrails namespace as a tenant (so the controller has namespace-scoped permissions)")
+			tenant := &openbaov1alpha1.OpenBaoTenant{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      guardrailsNamespace,
+					Namespace: operatorNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoTenantSpec{
+					TargetNamespace: guardrailsNamespace,
+				},
+			}
+			err := admin.Create(ctx, tenant)
+			if err != nil && !apierrors.IsAlreadyExists(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoTenant{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailsNamespace, Namespace: operatorNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Provisioned).To(BeTrue(), "expected tenant to be provisioned before creating OpenBaoClusters")
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
 			role := &rbacv1.Role{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "e2e-openbaocluster-writer",
@@ -111,6 +131,12 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 		})
 
 		AfterAll(func() {
+			_ = admin.Delete(ctx, &openbaov1alpha1.OpenBaoTenant{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      guardrailsNamespace,
+					Namespace: operatorNamespace,
+				},
+			})
 			_ = admin.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: guardrailsNamespace}})
 		})
 

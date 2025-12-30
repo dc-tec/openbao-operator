@@ -44,7 +44,7 @@ func TestAuthenticate_JWT(t *testing.T) {
 				"client_token": "login-token",
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 

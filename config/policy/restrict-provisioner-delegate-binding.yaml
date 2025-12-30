@@ -3,7 +3,9 @@ kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: openbao-restrict-provisioner-delegate-binding
 spec:
-  policyName: openbao-restrict-provisioner-delegate
+  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
+  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
+  policyName: openbao-operator-openbao-restrict-provisioner-delegate
   validationActions: [Deny]
   matchResources:
     # This binding applies the policy to ALL Role/RoleBinding requests.

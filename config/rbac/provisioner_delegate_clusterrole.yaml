@@ -91,6 +91,7 @@ rules:
       - services
       - configmaps
       - serviceaccounts
+      - events
     verbs:
       - create
       - delete

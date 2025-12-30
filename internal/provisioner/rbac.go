@@ -70,13 +70,21 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 				Resources: []string{"services", "configmaps", "serviceaccounts"},
 				Verbs:     commonVerbs, // Changed from "*"
 			},
+			// Events for operator visibility (kubectl describe, auditing, troubleshooting).
+			// Events are namespaced and do not expand access to tenant resources.
+			{
+				APIGroups: []string{""},
+				Resources: []string{"events"},
+				Verbs:     []string{"create", "patch"},
+			},
 			// 3. Limited Secret Access (Hardened)
 			// Removed "list" to prevent secret enumeration/scraping.
-			// "watch" is included to allow Sentinel drift detection and doesn't enable enumeration.
+			// SECURITY: Do NOT grant "watch" for Secrets. An attacker can enumerate Secrets by
+			// watching from resourceVersion=0 even without "list".
 			{
 				APIGroups: []string{""},
 				Resources: []string{"secrets"},
-				Verbs:     []string{"create", "delete", "get", "patch", "update", "watch"},
+				Verbs:     []string{"create", "delete", "get", "patch", "update"},
 			},
 			// 4. Pod access for health checks, leader detection, and cleanup
 			// The operator needs delete permission to clean up pods during OpenBaoCluster deletion,

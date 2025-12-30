@@ -3,6 +3,8 @@ kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: openbao-restrict-sentinel-mutations
 spec:
-  policyName: openbao-restrict-sentinel-mutations
+  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
+  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
+  policyName: openbao-operator-openbao-restrict-sentinel-mutations
   validationActions:
     - Deny

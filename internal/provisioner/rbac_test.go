@@ -18,19 +18,19 @@ func TestGenerateTenantRole(t *testing.T) {
 			name:      "default namespace",
 			namespace: "default",
 			wantName:  TenantRoleName,
-			wantRules: 15, // Expected number of PolicyRules
+			wantRules: 16, // Expected number of PolicyRules
 		},
 		{
 			name:      "custom namespace",
 			namespace: "tenant-1",
 			wantName:  TenantRoleName,
-			wantRules: 15,
+			wantRules: 16,
 		},
 		{
 			name:      "namespace with special characters",
 			namespace: "my-namespace-123",
 			wantName:  TenantRoleName,
-			wantRules: 15,
+			wantRules: 16,
 		},
 	}
 
@@ -71,6 +71,8 @@ func TestGenerateTenantRole(t *testing.T) {
 			hasStatefulSetRule := false
 			hasDeploymentRule := false
 			hasSecretRule := false
+			secretRuleHasWatch := false
+			secretRuleHasList := false
 			hasPodRule := false
 
 			for _, rule := range role.Rules {
@@ -105,6 +107,8 @@ func TestGenerateTenantRole(t *testing.T) {
 					contains(rule.Verbs, "get") &&
 					contains(rule.Verbs, "create") {
 					hasSecretRule = true
+					secretRuleHasWatch = contains(rule.Verbs, "watch")
+					secretRuleHasList = contains(rule.Verbs, "list")
 				}
 
 				// Check for Pod rule (includes delete for cleanup)
@@ -129,6 +133,12 @@ func TestGenerateTenantRole(t *testing.T) {
 			}
 			if !hasSecretRule {
 				t.Error("GenerateTenantRole() missing Secret rule")
+			}
+			if secretRuleHasWatch {
+				t.Error("GenerateTenantRole() Secret rule must not grant watch")
+			}
+			if secretRuleHasList {
+				t.Error("GenerateTenantRole() Secret rule must not grant list")
 			}
 			if !hasPodRule {
 				t.Error("GenerateTenantRole() missing Pod rule")

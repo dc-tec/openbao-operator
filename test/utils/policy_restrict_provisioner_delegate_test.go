@@ -17,7 +17,8 @@ import (
 func TestRestrictProvisionerDelegatePolicyContainsDangerousVerbGuard(t *testing.T) {
 	const (
 		policyPath = "../../config/policy/restrict-provisioner-delegate.yaml"
-		required   = "The Provisioner Delegate cannot create Roles granting 'impersonate', 'bind', 'escalate', or wildcard permissions."
+		required   = "The Provisioner Delegate cannot create Roles granting " +
+			"'impersonate', 'bind', 'escalate', or wildcard permissions."
 	)
 
 	data, err := os.ReadFile(policyPath)
