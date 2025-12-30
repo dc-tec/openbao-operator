@@ -10,8 +10,7 @@ const (
 	ActionDemoteBlueNonVotersStepDown ExecutorAction = "bluegreen-demote-blue-nonvoters-stepdown"
 	ActionRemoveBluePeers             ExecutorAction = "bluegreen-remove-blue-peers"
 
-	// Rollback actions
-	ActionPromoteBlueVoters    ExecutorAction = "bluegreen-promote-blue-voters"
-	ActionDemoteGreenNonVoters ExecutorAction = "bluegreen-demote-green-nonvoters"
-	ActionRemoveGreenPeers     ExecutorAction = "bluegreen-remove-green-peers"
+	// ActionRepairConsensus repairs Raft consensus during rollback by ensuring
+	// Blue nodes are voters and Green nodes are non-voters in a single pass.
+	ActionRepairConsensus ExecutorAction = "bluegreen-repair-consensus"
 )

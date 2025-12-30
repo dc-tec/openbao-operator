@@ -43,6 +43,8 @@ func RunExecutor(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) e
 		return runBlueGreenDemoteBlueNonVotersStepDown(ctx, logger, cfg)
 	case ExecutorActionBlueGreenRemoveBluePeers:
 		return runBlueGreenRemoveBluePeers(ctx, logger, cfg)
+	case ExecutorActionBlueGreenRepairConsensus:
+		return runBlueGreenRepairConsensus(ctx, logger, cfg)
 	case ExecutorActionRollingStepDownLeader:
 		return runRollingStepDownLeader(ctx, logger, cfg)
 	default:
@@ -321,6 +323,110 @@ func countMissingGreenServers(cfg *ExecutorConfig, config *openbao.RaftConfigura
 	}
 
 	return missing
+}
+
+// runBlueGreenRepairConsensus repairs Raft consensus during rollback by ensuring
+// that all Blue pods are configured as voters and all Green pods are configured
+// as non-voters in a single reconciliation pass. This reduces the risk of leaving
+// the cluster in a mixed or split configuration when rollback is triggered from
+// late blue/green phases.
+func runBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) error {
+	if cfg.BlueRevision == "" {
+		return fmt.Errorf("blue revision is required for consensus repair")
+	}
+	if cfg.GreenRevision == "" {
+		return fmt.Errorf("green revision is required for consensus repair")
+	}
+
+	// Prefer a Blue leader when repairing consensus, since Blue should remain
+	// the authoritative cluster after rollback. If that fails, fall back to any
+	// leader we can reach (including Green) to read the Raft configuration.
+	leaderURL, err := findLeader(ctx, cfg, cfg.BlueRevision)
+	if err != nil {
+		logger.Info("Failed to find leader among Blue pods for consensus repair, falling back to Green", "error", err)
+		leaderURL, err = findLeader(ctx, cfg, cfg.GreenRevision)
+		if err != nil {
+			return fmt.Errorf("failed to find leader for consensus repair: %w", err)
+		}
+	}
+	logger.Info("Leader found for consensus repair", "leader_url", leaderURL)
+
+	token, err := loginJWT(ctx, cfg, leaderURL)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate for consensus repair: %w", err)
+	}
+
+	client, err := openbao.NewClient(openbao.ClientConfig{
+		BaseURL: leaderURL,
+		Token:   token,
+		CACert:  cfg.TLSCACert,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create OpenBao client for consensus repair: %w", err)
+	}
+
+	config, err := client.ReadRaftConfiguration(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to read Raft configuration for consensus repair: %w", err)
+	}
+
+	// Helper to classify a Raft server as Blue or Green based on pod naming.
+	isBlueServer := func(nodeID, address string) bool {
+		for i := int32(0); i < cfg.ClusterReplicas; i++ {
+			podName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.BlueRevision, i)
+			if nodeID == podName || strings.Contains(address, podName) {
+				return true
+			}
+		}
+		return false
+	}
+
+	isGreenServer := func(nodeID, address string) bool {
+		for i := int32(0); i < cfg.ClusterReplicas; i++ {
+			podName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.GreenRevision, i)
+			if nodeID == podName || strings.Contains(address, podName) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// First pass: ensure all Blue servers are voters.
+	for _, server := range config.Config.Servers {
+		if !isBlueServer(server.NodeID, server.Address) {
+			continue
+		}
+
+		if server.Voter {
+			logger.V(1).Info("Blue peer already voter during consensus repair", "node_id", server.NodeID, "address", server.Address)
+			continue
+		}
+
+		logger.Info("Promoting Blue peer to voter during consensus repair", "node_id", server.NodeID, "address", server.Address)
+		if err := client.PromoteRaftPeer(ctx, server.NodeID); err != nil {
+			return fmt.Errorf("failed to promote Blue peer %q to voter during consensus repair: %w", server.NodeID, err)
+		}
+	}
+
+	// Second pass: ensure all Green servers are non-voters.
+	for _, server := range config.Config.Servers {
+		if !isGreenServer(server.NodeID, server.Address) {
+			continue
+		}
+
+		if !server.Voter {
+			logger.V(1).Info("Green peer already non-voter during consensus repair", "node_id", server.NodeID, "address", server.Address)
+			continue
+		}
+
+		logger.Info("Demoting Green peer to non-voter during consensus repair", "node_id", server.NodeID, "address", server.Address)
+		if err := client.DemoteRaftPeer(ctx, server.NodeID); err != nil {
+			logger.Info("Failed to demote Green peer (may already be non-voter)", "node_id", server.NodeID, "error", err)
+		}
+	}
+
+	logger.Info("Consensus repair completed: Blue voters and Green non-voters enforced")
+	return nil
 }
 
 func runBlueGreenPromoteGreenVoters(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) error {

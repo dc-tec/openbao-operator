@@ -252,6 +252,15 @@ type VerificationConfig struct {
 	// If the job fails, the upgrade enters a paused state until manually resolved.
 	// +optional
 	PrePromotionHook *ValidationHookConfig `json:"prePromotionHook,omitempty"`
+
+	// PostSwitchHook specifies a Job template to run after switching traffic
+	// to the Green cluster. The job must complete successfully (exit 0) before
+	// the upgrade proceeds beyond the TrafficSwitching phase. If the job fails
+	// and auto-rollback on traffic failure is enabled, the operator triggers
+	// a rollback; otherwise, the upgrade remains paused in TrafficSwitching
+	// until manually resolved.
+	// +optional
+	PostSwitchHook *ValidationHookConfig `json:"postSwitchHook,omitempty"`
 }
 
 // ValidationHookConfig defines a user-supplied validation Job.
@@ -323,7 +332,29 @@ type BlueGreenConfig struct {
 	// AutoRollback configures automatic rollback behavior.
 	// +optional
 	AutoRollback *AutoRollbackConfig `json:"autoRollback,omitempty"`
+
+	// TrafficStrategy controls how traffic is routed during blue/green upgrades.
+	// When empty, the effective strategy defaults to ServiceSelectors when
+	// Gateway is disabled, and GatewayWeights when spec.gateway.enabled is true.
+	// +optional
+	TrafficStrategy BlueGreenTrafficStrategy `json:"trafficStrategy,omitempty"`
 }
+
+// BlueGreenTrafficStrategy defines how traffic is routed during blue/green upgrades.
+// +kubebuilder:validation:Enum=ServiceSelectors;GatewayWeights
+type BlueGreenTrafficStrategy string
+
+const (
+	// BlueGreenTrafficStrategyServiceSelectors routes traffic by switching the
+	// external Service selector between Blue and Green revisions. This is the
+	// default strategy when Gateway API is not enabled for the cluster.
+	BlueGreenTrafficStrategyServiceSelectors BlueGreenTrafficStrategy = "ServiceSelectors"
+	// BlueGreenTrafficStrategyGatewayWeights routes traffic using Gateway API
+	// weighted backends when spec.gateway.enabled is true. In this mode, the
+	// external Gateway HTTPRoute is responsible for gradually shifting traffic
+	// between Blue and Green.
+	BlueGreenTrafficStrategyGatewayWeights BlueGreenTrafficStrategy = "GatewayWeights"
+)
 
 // UpdateStrategy controls how the operator handles version changes.
 type UpdateStrategy struct {
@@ -1521,6 +1552,14 @@ type BlueGreenStatus struct {
 	// Used for calculating stabilization period.
 	// +optional
 	TrafficSwitchedTime *metav1.Time `json:"trafficSwitchedTime,omitempty"`
+
+	// TrafficStep indicates the current traffic shifting step when using
+	// GatewayWeights traffic strategy. It is used by the infra layer to
+	// derive Gateway backend weights. The operator treats 0 as initial
+	// state (100% Blue), 1 as canary (e.g., 90/10), 2 as mid-step (e.g., 50/50),
+	// and 3 as final (0/100).
+	// +optional
+	TrafficStep int32 `json:"trafficStep,omitempty"`
 }
 
 // BackupStatus tracks the state of backups for a cluster.

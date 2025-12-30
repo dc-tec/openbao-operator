@@ -79,21 +79,16 @@ func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger,
 
 	// If service is not needed, check if it exists and delete it
 	if !needsService {
-		service := &corev1.Service{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      svcName,
-		}, service)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil // Already deleted, nothing to do
-			}
-			return fmt.Errorf("failed to get external Service %s/%s: %w", cluster.Namespace, svcName, err)
-		}
-
-		logger.Info("External Service no longer needed; deleting", "service", svcName)
-		if err := m.client.Delete(ctx, service); err != nil && !apierrors.IsNotFound(err) {
+		// Delete main external service
+		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, svcName); err != nil {
 			return fmt.Errorf("failed to delete external Service %s/%s: %w", cluster.Namespace, svcName, err)
+		}
+		// Delete any blue/green-specific services that might exist from previous runs
+		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, externalServiceNameBlue(cluster)); err != nil {
+			return fmt.Errorf("failed to delete blue external Service %s/%s: %w", cluster.Namespace, externalServiceNameBlue(cluster), err)
+		}
+		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, externalServiceNameGreen(cluster)); err != nil {
+			return fmt.Errorf("failed to delete green external Service %s/%s: %w", cluster.Namespace, externalServiceNameGreen(cluster), err)
 		}
 		return nil
 	}
@@ -110,11 +105,20 @@ func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger,
 		}
 	}
 
-	// Determine active revision for blue/green deployments
+	// Determine active revision for blue/green deployments. When Gateway
+	// weighted traffic is enabled, the Gateway HTTPRoute is responsible for
+	// routing between Blue and Green, so the external Service keeps a stable
+	// selector (no revision label) to avoid conflicting with Gateway weights.
 	selectorLabels := podSelectorLabels(cluster)
 	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
-		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
-			// During blue/green upgrades, select the active revision (Blue by default, Green after traffic switching)
+		// Only apply revision-based selection when using the ServiceSelectors
+		// traffic strategy. When GatewayWeights is effective, the Gateway HTTPRoute
+		// handles weighting and we keep the Service selector stable.
+		strategy := effectiveBlueGreenTrafficStrategy(cluster)
+		if strategy == openbaov1alpha1.BlueGreenTrafficStrategyServiceSelectors &&
+			cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+			// During blue/green upgrades, select the active revision (Blue by default,
+			// Green after traffic switching and demotion).
 			activeRevision := cluster.Status.BlueGreen.BlueRevision
 			// Switch to Green when in TrafficSwitching phase or later
 			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseTrafficSwitching ||
@@ -154,6 +158,29 @@ func (m *Manager) ensureExternalService(ctx context.Context, logger logr.Logger,
 
 	if err := m.applyResource(ctx, service, cluster); err != nil {
 		return fmt.Errorf("failed to ensure external Service %s/%s: %w", cluster.Namespace, svcName, err)
+	}
+
+	// When Gateway weighted traffic is enabled, also ensure dedicated Blue and
+	// Green Services exist for use as HTTPRoute backends. These services have
+	// fixed selectors on the Blue/Green revisions and are not used directly by
+	// clients; they are only referenced by Gateway backends.
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen &&
+		effectiveBlueGreenTrafficStrategy(cluster) == openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights &&
+		cluster.Status.BlueGreen != nil &&
+		cluster.Status.BlueGreen.BlueRevision != "" &&
+		cluster.Status.BlueGreen.GreenRevision != "" {
+		// Blue backend service
+		blueSelector := podSelectorLabels(cluster)
+		blueSelector[constants.LabelOpenBaoRevision] = cluster.Status.BlueGreen.BlueRevision
+		if err := m.ensureExternalBackendService(ctx, cluster, externalServiceNameBlue(cluster), svcType, annotations, blueSelector); err != nil {
+			return fmt.Errorf("failed to ensure blue external Service: %w", err)
+		}
+		// Green backend service
+		greenSelector := podSelectorLabels(cluster)
+		greenSelector[constants.LabelOpenBaoRevision] = cluster.Status.BlueGreen.GreenRevision
+		if err := m.ensureExternalBackendService(ctx, cluster, externalServiceNameGreen(cluster), svcType, annotations, greenSelector); err != nil {
+			return fmt.Errorf("failed to ensure green external Service: %w", err)
+		}
 	}
 
 	return nil
@@ -408,7 +435,6 @@ func buildHTTPRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.HTTPRout
 		gatewayNamespace = cluster.Namespace
 	}
 
-	backendServiceName := externalServiceName(cluster)
 	hostname := gatewayv1.Hostname(gw.Hostname)
 	pathType := gatewayv1.PathMatchPathPrefix
 	port := gatewayv1.PortNumber(constants.PortAPI)
@@ -441,22 +467,115 @@ func buildHTTPRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.HTTPRout
 							},
 						},
 					},
-					BackendRefs: []gatewayv1.HTTPBackendRef{
-						{
-							BackendRef: gatewayv1.BackendRef{
-								BackendObjectReference: gatewayv1.BackendObjectReference{
-									Name: gatewayv1.ObjectName(backendServiceName),
-									Port: &port,
-								},
-							},
-						},
-					},
+					BackendRefs: buildHTTPRouteBackends(cluster, port),
 				},
 			},
 		},
 	}
 
 	return httpRoute
+}
+
+// buildHTTPRouteBackends constructs HTTPRoute backends based on the effective
+// blue/green traffic strategy. For ServiceSelectors, a single backend pointing
+// at the main external Service is used. For GatewayWeights, dedicated Blue and
+// Green Services are used with weights, enabling progressive traffic shifting.
+func buildHTTPRouteBackends(cluster *openbaov1alpha1.OpenBaoCluster, port gatewayv1.PortNumber) []gatewayv1.HTTPBackendRef {
+	strategy := effectiveBlueGreenTrafficStrategy(cluster)
+
+	// Default: single backend to the main external Service.
+	if strategy != openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights ||
+		cluster.Status.BlueGreen == nil ||
+		cluster.Status.BlueGreen.BlueRevision == "" ||
+		cluster.Status.BlueGreen.GreenRevision == "" {
+		name := gatewayv1.ObjectName(externalServiceName(cluster))
+		return []gatewayv1.HTTPBackendRef{
+			{
+				BackendRef: gatewayv1.BackendRef{
+					BackendObjectReference: gatewayv1.BackendObjectReference{
+						Name: name,
+						Port: &port,
+					},
+				},
+			},
+		}
+	}
+
+	// GatewayWeights strategy: use dedicated Blue and Green Services with weights
+	// derived from the current TrafficStep in status.
+	blueName := gatewayv1.ObjectName(externalServiceNameBlue(cluster))
+	greenName := gatewayv1.ObjectName(externalServiceNameGreen(cluster))
+
+	blueWeight := int32(0)
+	greenWeight := int32(0)
+
+	step := int32(0)
+	if cluster.Status.BlueGreen != nil {
+		step = cluster.Status.BlueGreen.TrafficStep
+	}
+
+	switch {
+	case step <= 0:
+		// Initial state: 100% Blue, 0% Green.
+		blueWeight = 100
+		greenWeight = 0
+	case step == 1:
+		// Canary step: 90% Blue, 10% Green.
+		blueWeight = 90
+		greenWeight = 10
+	case step == 2:
+		// Mid-step: 50% Blue, 50% Green.
+		blueWeight = 50
+		greenWeight = 50
+	default:
+		// Final step: 0% Blue, 100% Green.
+		blueWeight = 0
+		greenWeight = 100
+	}
+
+	return []gatewayv1.HTTPBackendRef{
+		{
+			BackendRef: gatewayv1.BackendRef{
+				BackendObjectReference: gatewayv1.BackendObjectReference{
+					Name: blueName,
+					Port: &port,
+				},
+				Weight: &blueWeight,
+			},
+		},
+		{
+			BackendRef: gatewayv1.BackendRef{
+				BackendObjectReference: gatewayv1.BackendObjectReference{
+					Name: greenName,
+					Port: &port,
+				},
+				Weight: &greenWeight,
+			},
+		},
+	}
+}
+
+// effectiveBlueGreenTrafficStrategy returns the effective blue/green traffic
+// strategy for the given cluster, applying defaults based on Gateway usage.
+func effectiveBlueGreenTrafficStrategy(cluster *openbaov1alpha1.OpenBaoCluster) openbaov1alpha1.BlueGreenTrafficStrategy {
+	if cluster == nil || cluster.Spec.UpdateStrategy.BlueGreen == nil {
+		return openbaov1alpha1.BlueGreenTrafficStrategyServiceSelectors
+	}
+
+	cfg := cluster.Spec.UpdateStrategy.BlueGreen
+	if cfg.TrafficStrategy != "" {
+		return cfg.TrafficStrategy
+	}
+
+	// Defaulting rule:
+	// - When Gateway is disabled or unset, use ServiceSelectors.
+	// - When Gateway is enabled, prefer GatewayWeights so that HTTPRoute
+	//   becomes the primary traffic switch mechanism.
+	if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {
+		return openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights
+	}
+
+	return openbaov1alpha1.BlueGreenTrafficStrategyServiceSelectors
 }
 
 // httpRouteName returns the name for the HTTPRoute resource.
@@ -1398,27 +1517,84 @@ func (m *Manager) ensureGatewayCAConfigMap(ctx context.Context, logger logr.Logg
 	return nil
 }
 
+// deleteServiceIfExists deletes the Service with the given namespace/name if it exists.
+func (m *Manager) deleteServiceIfExists(ctx context.Context, namespace, name string) error {
+	if strings.TrimSpace(name) == "" {
+		return nil
+	}
+
+	service := &corev1.Service{}
+	err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      name,
+	}, service)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	if err := m.client.Delete(ctx, service); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	return nil
+}
+
+// ensureExternalBackendService ensures an auxiliary external Service exists for
+// a specific revision. These Services are used only as Gateway HTTPRoute
+// backends when GatewayWeights traffic strategy is active.
+func (m *Manager) ensureExternalBackendService(
+	ctx context.Context,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	name string,
+	svcType corev1.ServiceType,
+	annotations map[string]string,
+	selector map[string]string,
+) error {
+	service := &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   cluster.Namespace,
+			Labels:      infraLabels(cluster),
+			Annotations: annotations,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     svcType,
+			Selector: selector,
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "api",
+					Port:     constants.PortAPI,
+					Protocol: corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+
+	if err := m.applyResource(ctx, service, cluster); err != nil {
+		return fmt.Errorf("failed to ensure external backend Service %s/%s: %w", cluster.Namespace, name, err)
+	}
+
+	return nil
+}
+
 // deleteServices removes all Services associated with the OpenBaoCluster.
 func (m *Manager) deleteServices(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	serviceNames := []string{
 		headlessServiceName(cluster),
 		externalServiceName(cluster),
+		externalServiceNameBlue(cluster),
+		externalServiceNameGreen(cluster),
 	}
 
 	for _, name := range serviceNames {
-		service := &corev1.Service{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		}, service)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				continue
-			}
-			return err
-		}
-
-		if err := m.client.Delete(ctx, service); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, name); err != nil {
 			return err
 		}
 	}

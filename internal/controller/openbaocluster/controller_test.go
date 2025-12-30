@@ -18,6 +18,7 @@ package openbaocluster
 
 import (
 	"context"
+	"errors"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -32,9 +33,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	"github.com/openbao/operator/internal/infra"
 )
 
 var _ = Describe("OpenBaoCluster Controller", func() {
@@ -269,6 +272,125 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			Expect(serverSecret.Data).To(HaveKey("tls.crt"))
 			Expect(serverSecret.Data).To(HaveKey("tls.key"))
 			Expect(serverSecret.Data).To(HaveKey("ca.crt"))
+		})
+
+		It("creates Gateway weighted HTTPRoute backends based on TrafficStep", func() {
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-gateway-weights",
+					Namespace: "default",
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version:  "2.4.4",
+					Image:    "openbao/openbao:2.4.4",
+					Replicas: 3,
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "10Gi",
+					},
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Image: "openbao/openbao-config-init:latest",
+					},
+					UpdateStrategy: openbaov1alpha1.UpdateStrategy{
+						Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+							TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
+						},
+					},
+					Gateway: &openbaov1alpha1.GatewayConfig{
+						Enabled: true,
+						GatewayRef: openbaov1alpha1.GatewayReference{
+							Name: "traefik-gateway",
+						},
+						Hostname: "bao.example.local",
+					},
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					Initialized: true,
+					BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+						Phase:         openbaov1alpha1.PhaseTrafficSwitching,
+						BlueRevision:  "blue123",
+						GreenRevision: "green456",
+						TrafficStep:   1,
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+
+			// Create TLS secret required by infra Manager for StatefulSet prerequisites.
+			serverSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cluster.Name + constants.SuffixTLSServer,
+					Namespace: cluster.Namespace,
+				},
+				Data: map[string][]byte{
+					"tls.crt": []byte("test-cert"),
+					"tls.key": []byte("test-key"),
+					"ca.crt":  []byte("test-ca"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, serverSecret)).To(Succeed())
+
+			infraMgr := infra.NewManager(k8sClient, k8sClient.Scheme(), "openbao-operator-system", "", nil)
+
+			// Use the infra manager directly to reconcile networking resources for this cluster.
+			err := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "")
+			if errors.Is(err, infra.ErrGatewayAPIMissing) {
+				Skip("Skipping test: Gateway API CRDs not installed in envtest environment")
+			}
+			Expect(err).NotTo(HaveOccurred())
+
+			// Helper to assert weights for a given TrafficStep.
+			assertWeights := func(step int32, wantBlue, wantGreen int32) {
+				cluster.Status.BlueGreen.TrafficStep = step
+				// Reconcile again to apply new backend weights.
+				reconcileErr := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "")
+				if errors.Is(reconcileErr, infra.ErrGatewayAPIMissing) {
+					Skip("Skipping test: Gateway API CRDs not installed in envtest environment")
+				}
+				Expect(reconcileErr).NotTo(HaveOccurred())
+
+				route := &gatewayv1.HTTPRoute{}
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Namespace: cluster.Namespace,
+					Name:      cluster.Name + "-httproute",
+				}, route)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(route.Spec.Rules).ToNot(BeEmpty())
+				backends := route.Spec.Rules[0].BackendRefs
+				Expect(len(backends)).To(Equal(2))
+
+				var blueBackend, greenBackend *gatewayv1.HTTPBackendRef
+				for i := range backends {
+					b := &backends[i]
+					switch string(b.BackendRef.Name) {
+					case cluster.Name + "-public-blue":
+						blueBackend = b
+					case cluster.Name + "-public-green":
+						greenBackend = b
+					}
+				}
+
+				Expect(blueBackend).ToNot(BeNil())
+				Expect(greenBackend).ToNot(BeNil())
+				Expect(blueBackend.Weight).ToNot(BeNil())
+				Expect(greenBackend.Weight).ToNot(BeNil())
+				Expect(*blueBackend.Weight).To(Equal(wantBlue))
+				Expect(*greenBackend.Weight).To(Equal(wantGreen))
+			}
+
+			By("verifying canary step weights (step 1: 90/10)")
+			assertWeights(1, 90, 10)
+
+			By("verifying mid-step weights (step 2: 50/50)")
+			assertWeights(2, 50, 50)
+
+			By("verifying final-step weights (step 3: 0/100)")
+			assertWeights(3, 0, 100)
 		})
 
 		It("honors DeletionPolicy Retain by preserving PVCs while deleting StatefulSet", func() {

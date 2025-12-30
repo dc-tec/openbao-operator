@@ -391,6 +391,14 @@ func externalServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + publicServiceSuffix
 }
 
+func externalServiceNameBlue(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return externalServiceName(cluster) + "-blue"
+}
+
+func externalServiceNameGreen(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return externalServiceName(cluster) + "-green"
+}
+
 func statefulSetName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return statefulSetNameWithRevision(cluster, "")
 }

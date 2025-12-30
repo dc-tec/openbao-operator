@@ -530,6 +530,173 @@ func TestEnsureGatewayCAConfigMapDeletesWhenGatewayDisabled(t *testing.T) {
 	}
 }
 
+func TestBuildHTTPRouteBackends_ServiceSelectorsDefault(t *testing.T) {
+	cluster := newMinimalCluster("infra-httproute-default", "default")
+	// No Gateway and no BlueGreen status -> single backend to external Service.
+
+	port := gatewayv1.PortNumber(constants.PortAPI)
+	backends := buildHTTPRouteBackends(cluster, port)
+
+	if len(backends) != 1 {
+		t.Fatalf("expected 1 backend, got %d", len(backends))
+	}
+
+	if string(backends[0].BackendRef.Name) != externalServiceName(cluster) {
+		t.Fatalf("expected backend name %q, got %q", externalServiceName(cluster), backends[0].BackendRef.Name)
+	}
+
+	if backends[0].Weight != nil {
+		t.Fatalf("expected nil weight for default backend, got %v", *backends[0].Weight)
+	}
+}
+
+func TestBuildHTTPRouteBackends_GatewayWeightsSteps(t *testing.T) {
+	cluster := newMinimalCluster("infra-httproute-weights", "default")
+	cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+		Enabled: true,
+		GatewayRef: openbaov1alpha1.GatewayReference{
+			Name: "traefik-gateway",
+		},
+		Hostname: "bao.example.local",
+	}
+	cluster.Spec.UpdateStrategy = openbaov1alpha1.UpdateStrategy{
+		Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+		BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+			TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
+		},
+	}
+	cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+		BlueRevision:  "blue123",
+		GreenRevision: "green456",
+	}
+
+	type weights struct {
+		blue  int32
+		green int32
+	}
+
+	tests := []struct {
+		name string
+		step int32
+		want weights
+	}{
+		{"step 0 initial", 0, weights{blue: 100, green: 0}},
+		{"step 1 canary", 1, weights{blue: 90, green: 10}},
+		{"step 2 mid", 2, weights{blue: 50, green: 50}},
+		{"step 3 final", 3, weights{blue: 0, green: 100}},
+		{"step 4 final-plus", 4, weights{blue: 0, green: 100}},
+	}
+
+	port := gatewayv1.PortNumber(constants.PortAPI)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := cluster.DeepCopy()
+			c.Status.BlueGreen.TrafficStep = tt.step
+
+			backends := buildHTTPRouteBackends(c, port)
+			if len(backends) != 2 {
+				t.Fatalf("expected 2 backends, got %d", len(backends))
+			}
+
+			var blueBackend, greenBackend *gatewayv1.HTTPBackendRef
+			for i := range backends {
+				b := &backends[i]
+				switch string(b.BackendRef.Name) {
+				case externalServiceNameBlue(c):
+					blueBackend = b
+				case externalServiceNameGreen(c):
+					greenBackend = b
+				}
+			}
+
+			if blueBackend == nil || greenBackend == nil {
+				t.Fatalf("expected both blue and green backends to be present")
+			}
+
+			if blueBackend.Weight == nil || greenBackend.Weight == nil {
+				t.Fatalf("expected both backends to have weights, got blue=%v green=%v", blueBackend.Weight, greenBackend.Weight)
+			}
+
+			if *blueBackend.Weight != tt.want.blue || *greenBackend.Weight != tt.want.green {
+				t.Fatalf("unexpected weights: blue=%d green=%d, want blue=%d green=%d",
+					*blueBackend.Weight, *greenBackend.Weight, tt.want.blue, tt.want.green)
+			}
+		})
+	}
+}
+
+func TestEnsureExternalServiceCreatesGatewayWeightedBackends(t *testing.T) {
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+
+	cluster := newMinimalCluster("infra-gateway-weights-svc", "default")
+	cluster.Status.Initialized = true
+	cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+		Enabled: true,
+		GatewayRef: openbaov1alpha1.GatewayReference{
+			Name: "traefik-gateway",
+		},
+		Hostname: "bao.example.local",
+	}
+	cluster.Spec.UpdateStrategy = openbaov1alpha1.UpdateStrategy{
+		Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+		BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+			TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
+		},
+	}
+	cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+		Phase:         openbaov1alpha1.PhaseTrafficSwitching,
+		BlueRevision:  "blue123",
+		GreenRevision: "green456",
+	}
+
+	// Create TLS secret before Reconcile, as ensureStatefulSet checks prerequisites.
+	createTLSSecretForTest(t, k8sClient, cluster)
+
+	ctx := context.Background()
+
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+		if errors.Is(err, ErrGatewayAPIMissing) {
+			t.Skip("Skipping test: Gateway API CRDs not installed in test environment")
+		}
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	// Main external Service must exist.
+	external := &corev1.Service{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      externalServiceName(cluster),
+	}, external); err != nil {
+		t.Fatalf("expected external Service %s to exist: %v", externalServiceName(cluster), err)
+	}
+
+	// Blue backend Service must exist with correct revision selector.
+	blueSvc := &corev1.Service{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      externalServiceNameBlue(cluster),
+	}, blueSvc); err != nil {
+		t.Fatalf("expected blue backend Service %s to exist: %v", externalServiceNameBlue(cluster), err)
+	}
+	if rev := blueSvc.Spec.Selector[constants.LabelOpenBaoRevision]; rev != cluster.Status.BlueGreen.BlueRevision {
+		t.Fatalf("expected blue backend Service to select revision %q, got %q", cluster.Status.BlueGreen.BlueRevision, rev)
+	}
+
+	// Green backend Service must exist with correct revision selector.
+	greenSvc := &corev1.Service{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      externalServiceNameGreen(cluster),
+	}, greenSvc); err != nil {
+		t.Fatalf("expected green backend Service %s to exist: %v", externalServiceNameGreen(cluster), err)
+	}
+	if rev := greenSvc.Spec.Selector[constants.LabelOpenBaoRevision]; rev != cluster.Status.BlueGreen.GreenRevision {
+		t.Fatalf("expected green backend Service to select revision %q, got %q", cluster.Status.BlueGreen.GreenRevision, rev)
+	}
+}
+
 func TestEnsureGatewayCAConfigMapUpdatesWhenCASecretChanges(t *testing.T) {
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
