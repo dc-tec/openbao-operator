@@ -476,7 +476,7 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 
 	containers := []corev1.Container{
 		{
-			Name:  constants.ContainerNameOpenBao,
+			Name:  constants.ContainerBao,
 			Image: getContainerImage(cluster, verifiedImageDigest),
 			SecurityContext: &corev1.SecurityContext{
 				// Prevent privilege escalation (sudo, setuid binaries)

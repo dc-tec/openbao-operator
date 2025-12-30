@@ -1110,7 +1110,7 @@ func (m *Manager) triggerRollback(logger logr.Logger, cluster *openbaov1alpha1.O
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             "UpgradeRollback",
+		Reason:             ReasonUpgradeRollback,
 		Message:            fmt.Sprintf("Blue/green upgrade rolling back: %s", reason),
 	})
 
@@ -1388,7 +1388,7 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: metav1.Now(),
-			Reason:             "RollbackFailed",
+			Reason:             ReasonRollbackFailed,
 			Message:            fmt.Sprintf("Rollback consensus repair job %s failed - manual intervention required", result.Name),
 		})
 		return false, nil
@@ -1498,7 +1498,7 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             "UpgradeRolledBack",
+		Reason:             ReasonUpgradeRollback,
 		Message:            fmt.Sprintf("Blue/green upgrade rolled back: %s", rollbackReason),
 	})
 
@@ -1507,7 +1507,7 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             "RollbackComplete",
+		Reason:             ReasonUpgradeComplete,
 		Message:            "Rollback completed, cluster restored to previous version",
 	})
 
@@ -1581,7 +1581,7 @@ func (m *Manager) ensurePrePromotionHookJob(
 				constants.LabelAppInstance:      cluster.Name,
 				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: "validation-hook",
+				constants.LabelOpenBaoComponent: ComponentValidationHook,
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -1667,7 +1667,7 @@ func (m *Manager) ensurePostSwitchHookJob(
 				constants.LabelAppInstance:      cluster.Name,
 				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: "post-switch-validation-hook",
+				constants.LabelOpenBaoComponent: ComponentPostSwitchValidationHook,
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -1871,7 +1871,7 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 				constants.LabelAppInstance:      cluster.Name,
 				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: "upgrade-snapshot",
+				constants.LabelOpenBaoComponent: ComponentUpgradeSnapshot,
 			},
 			Annotations: map[string]string{
 				"openbao.org/snapshot-phase": phase,
@@ -1890,7 +1890,7 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 						constants.LabelAppInstance:      cluster.Name,
 						constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 						constants.LabelOpenBaoCluster:   cluster.Name,
-						constants.LabelOpenBaoComponent: "upgrade-snapshot",
+						constants.LabelOpenBaoComponent: ComponentUpgradeSnapshot,
 					},
 				},
 				Spec: corev1.PodSpec{

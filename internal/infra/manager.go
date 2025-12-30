@@ -44,7 +44,7 @@ const (
 	openBaoDataPath          = constants.PathData
 	serviceAccountMountPath  = "/var/run/secrets/kubernetes.io/serviceaccount"
 	kubeRootCAConfigMapName  = "kube-root-ca.crt"
-	openBaoBinaryName        = constants.BinaryNameOpenBao
+	openBaoBinaryName        = constants.BinaryBao
 	configHashAnnotation     = "openbao.org/config-hash"
 
 	// OpenBao images are built to run as a non-root user with stable UID/GID.

@@ -69,7 +69,7 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
 						{
-							Name: constants.ContainerNameOpenBao,
+							Name: constants.ContainerBao,
 							State: corev1.ContainerState{
 								Running: &corev1.ContainerStateRunning{
 									StartedAt: metav1.Now(),
@@ -137,7 +137,7 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
 				{
-					Name: constants.ContainerNameOpenBao,
+					Name: constants.ContainerBao,
 					State: corev1.ContainerState{
 						Running: &corev1.ContainerStateRunning{
 							StartedAt: metav1.Now(),

@@ -10,10 +10,15 @@ const (
 	// This is set alongside AnnotationSentinelTrigger for observability.
 	AnnotationSentinelTriggerResource = "openbao.org/sentinel-trigger-resource"
 	// AnnotationTriggerBackup is the annotation key used to trigger an immediate manual backup.
-	// When set to a non-empty value (typically a timestamp), the backup manager will create
-	// a backup job immediately, bypassing the schedule. The annotation is cleared after the
-	// backup is triggered.
 	AnnotationTriggerBackup = "openbao.org/trigger-backup"
+	// AnnotationConfigHash is the annotation key used to track ConfigMap/Secret changes.
+	AnnotationConfigHash = "openbao.org/config-hash"
+	// AnnotationForceRollback is a manual escape hatch annotation for blue/green upgrades.
+	AnnotationForceRollback = "openbao.org/force-rollback"
+	// AnnotationMaintenance is the annotation key used to put a cluster into maintenance mode.
+	AnnotationMaintenance = "openbao.org/maintenance"
+	// AnnotationMaintenanceAllowed is the annotation key used to check if maintenance is allowed.
+	AnnotationMaintenanceAllowed = "openbao.org/maintenance-allowed"
 )
 
 // Sentinel resource names.

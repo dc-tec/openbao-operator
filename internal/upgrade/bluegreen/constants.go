@@ -2,17 +2,35 @@ package bluegreen
 
 // Condition reason strings for Blue/Green upgrades.
 const (
-	// ReasonUpgradeStarted indicates an upgrade has been initiated.
+	// ReasonUpgradeStarted indicates the blue/green upgrade process has begun.
 	ReasonUpgradeStarted = "UpgradeStarted"
 
-	// ReasonUpgradeComplete indicates an upgrade has finished successfully.
+	// ReasonUpgradeComplete indicates the blue/green upgrade finished successfully.
 	ReasonUpgradeComplete = "UpgradeComplete"
 
-	// ReasonUpgradeFailed indicates an upgrade has failed.
+	// ReasonUpgradeFailed indicates the blue/green upgrade process failed.
 	ReasonUpgradeFailed = "UpgradeFailed"
+
+	// ReasonUpgradeRollback indicates a blue/green upgrade is being rolled back.
+	ReasonUpgradeRollback = "UpgradeRollback"
+
+	// ReasonRollbackFailed indicates a blue/green rollback operation failed.
+	ReasonRollbackFailed = "RollbackFailed"
 
 	// AnnotationForceRollback is a manual escape hatch annotation that
 	// forces a rollback of the current blue/green upgrade when set to "true".
 	// This allows operators to break glass if the state machine becomes stuck.
 	AnnotationForceRollback = "openbao.org/force-rollback"
+
+	// DeploymentNameSuffix is the suffix for the Green StatefulSet name.
+	DeploymentNameSuffix = "green"
+
+	// ComponentValidationHook is the component name for validation hook.
+	ComponentValidationHook = "validation-hook"
+
+	// ComponentPostSwitchValidationHook is the component name for post-switch validation hook.
+	ComponentPostSwitchValidationHook = "post-switch-validation-hook"
+
+	// ComponentUpgradeSnapshot is the component name for upgrade snapshot.
+	ComponentUpgradeSnapshot = "upgrade-snapshot"
 )

@@ -48,6 +48,7 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	"github.com/openbao/operator/internal/controller/openbaocluster"
 )
 
 var (
@@ -496,7 +497,7 @@ func hasNonOperatorAnnotationChange(
 			continue
 		}
 		// Ignore maintenance-allowed annotation
-		if key == "openbao.org/maintenance-allowed" {
+		if key == constants.AnnotationMaintenanceAllowed {
 			continue
 		}
 
@@ -508,7 +509,7 @@ func hasNonOperatorAnnotationChange(
 		}
 
 		// Maintenance annotation should trigger drift detection
-		if key == "openbao.org/maintenance" {
+		if key == constants.AnnotationMaintenance {
 			return true
 		}
 
@@ -687,7 +688,7 @@ func main() {
 		logger: ctrl.Log.WithName("sentinel").WithValues(
 			"cluster_namespace", cfg.clusterNamespace,
 			"cluster_name", cfg.clusterName,
-			"component", "sentinel",
+			"component", openbaocluster.ComponentSentinel,
 		),
 		clusterName:      cfg.clusterName,
 		clusterNamespace: cfg.clusterNamespace,

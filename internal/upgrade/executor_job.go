@@ -154,7 +154,7 @@ func buildUpgradeExecutorJob(
 				constants.LabelAppInstance:      cluster.Name,
 				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: "upgrade",
+				constants.LabelOpenBaoComponent: ComponentUpgrade,
 			},
 			Annotations: buildUpgradeExecutorJobAnnotations(action, runID),
 		},
@@ -168,7 +168,7 @@ func buildUpgradeExecutorJob(
 						constants.LabelAppInstance:      cluster.Name,
 						constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 						constants.LabelOpenBaoCluster:   cluster.Name,
-						constants.LabelOpenBaoComponent: "upgrade",
+						constants.LabelOpenBaoComponent: ComponentUpgrade,
 					},
 				},
 				Spec: corev1.PodSpec{

@@ -106,7 +106,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: cluster.Generation,
 					LastTransitionTime: now,
-					Reason:             "ImageVerificationFailed",
+					Reason:             ReasonImageVerificationFailed,
 					Message:            fmt.Sprintf("Image verification failed: %v", err),
 				})
 
@@ -160,7 +160,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 						Status:             metav1.ConditionTrue,
 						ObservedGeneration: cluster.Generation,
 						LastTransitionTime: now,
-						Reason:             "SentinelImageVerificationFailed",
+						Reason:             ReasonSentinelImageVerificationFailed,
 						Message:            fmt.Sprintf("Sentinel image verification failed: %v", err),
 					})
 					return false, fmt.Errorf("sentinel image verification failed (policy=Block): %w", err)
@@ -184,7 +184,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: cluster.Generation,
 				LastTransitionTime: now,
-				Reason:             "GatewayAPIMissing",
+				Reason:             ReasonGatewayAPIMissing,
 				Message:            "Gateway API CRDs are not installed but spec.gateway.enabled is true; install Gateway API CRDs or disable spec.gateway to clear this condition.",
 			})
 
@@ -200,7 +200,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: cluster.Generation,
 				LastTransitionTime: now,
-				Reason:             "PrerequisitesMissing",
+				Reason:             ReasonPrerequisitesMissing,
 				Message:            fmt.Sprintf("StatefulSet prerequisites missing: %v. Waiting for ConfigMap or TLS Secret to be created.", err),
 			})
 
@@ -222,7 +222,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             "PrerequisitesReady",
+			Reason:             ReasonPrerequisitesReady,
 			Message:            "StatefulSet prerequisites are now available",
 		})
 		logger.Info("StatefulSet prerequisites are ready; cleared PrerequisitesMissing condition")
@@ -263,7 +263,7 @@ type OpenBaoClusterReconciler struct {
 //
 //nolint:gocyclo // Orchestrator function coordinating multiple sub-reconcilers with
 func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	reconcileMetrics := controllerutil.NewReconcileMetrics(req.Namespace, req.Name, "openbaocluster")
+	reconcileMetrics := controllerutil.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoCluster)
 	startTime := time.Now()
 	var reconcileErr error
 	defer func() {
@@ -280,7 +280,7 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	logger := baseLogger.WithValues(
 		"cluster_namespace", req.Namespace,
 		"cluster_name", req.Name,
-		"controller", "openbaocluster",
+		"controller", constants.ControllerNameOpenBaoCluster,
 		"reconcile_id", time.Now().UnixNano(),
 	)
 
@@ -474,7 +474,7 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: cluster.Generation,
 					LastTransitionTime: now,
-					Reason:             "Error",
+					Reason:             constants.ReasonUnknown,
 					Message:            fmt.Sprintf("failed to reconcile TLS assets: %v", err),
 				})
 
@@ -611,7 +611,7 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             "Ready",
+		Reason:             constants.ReasonReady,
 		Message:            "TLS assets are provisioned",
 	})
 
@@ -765,7 +765,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 		Status:             metav1.ConditionUnknown,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             "Paused",
+		Reason:             constants.ReasonPaused,
 		Message:            "Reconciliation is paused; availability is not being evaluated",
 	})
 
@@ -774,7 +774,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             "Paused",
+		Reason:             constants.ReasonPaused,
 		Message:            "Cluster is paused; no new degradation has been evaluated",
 	})
 
@@ -783,7 +783,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 		Status:             metav1.ConditionUnknown,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             "Paused",
+		Reason:             constants.ReasonPaused,
 		Message:            "TLS readiness is not being evaluated while reconciliation is paused",
 	})
 
@@ -927,7 +927,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: cluster.Generation,
 					LastTransitionTime: now,
-					Reason:             "Reconciling",
+					Reason:             constants.ReasonReconciling,
 					Message:            "No degradation has been recorded by the controller",
 				})
 			}
@@ -940,7 +940,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: cluster.Generation,
 					LastTransitionTime: now,
-					Reason:             "Idle",
+					Reason:             constants.ReasonIdle,
 					Message:            "No upgrade is currently in progress",
 				})
 			}
@@ -950,7 +950,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: cluster.Generation,
 				LastTransitionTime: now,
-				Reason:             "Idle",
+				Reason:             constants.ReasonIdle,
 				Message:            "No backup is currently in progress",
 			})
 
@@ -1070,7 +1070,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 				Status:             metav1.ConditionUnknown,
 				ObservedGeneration: cluster.Generation,
 				LastTransitionTime: now,
-				Reason:             "Unknown",
+				Reason:             constants.ReasonUnknown,
 				Message:            "OpenBao initialization state is not yet available via service registration",
 			})
 		}
@@ -1102,7 +1102,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 				Status:             metav1.ConditionUnknown,
 				ObservedGeneration: cluster.Generation,
 				LastTransitionTime: now,
-				Reason:             "Unknown",
+				Reason:             constants.ReasonUnknown,
 				Message:            "OpenBao seal state is not yet available via service registration",
 			})
 		}
@@ -1115,7 +1115,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			Status:             metav1.ConditionUnknown,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             "LeaderUnknown",
+			Reason:             ReasonLeaderUnknown,
 			Message:            "No active leader label observed on pods",
 		})
 	case 1:
@@ -1124,7 +1124,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             "LeaderFound",
+			Reason:             ReasonLeaderFound,
 			Message:            fmt.Sprintf("Leader is %s", leaderName),
 		})
 	default:
@@ -1133,7 +1133,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             "MultipleLeaders",
+			Reason:             ReasonMultipleLeaders,
 			Message:            fmt.Sprintf("Multiple leaders detected via pod labels (%d)", leaderCount),
 		})
 	}
@@ -1168,7 +1168,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             "Reconciling",
+			Reason:             constants.ReasonReconciling,
 			Message:            "No degradation has been recorded by the controller",
 		})
 	}
@@ -1181,7 +1181,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             "Idle",
+			Reason:             constants.ReasonIdle,
 			Message:            "No upgrade is currently in progress",
 		})
 	}
@@ -1191,7 +1191,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             "Idle",
+		Reason:             constants.ReasonIdle,
 		Message:            "No backup is currently in progress",
 	})
 
@@ -1203,7 +1203,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             "EtcdEncryptionUnknown",
+		Reason:             ReasonEtcdEncryptionUnknown,
 		Message:            "The operator cannot verify etcd encryption status. Ensure etcd encryption at rest is enabled in your Kubernetes cluster to protect Secrets (including unseal keys and root tokens) stored in etcd.",
 	})
 
@@ -1214,7 +1214,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             "DevelopmentProfile",
+			Reason:             ReasonDevelopmentProfile,
 			Message:            "Cluster is using Development profile with relaxed security. Not suitable for production.",
 		})
 	} else {
@@ -1231,7 +1231,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             "RootTokenStored",
+			Reason:             ReasonRootTokenStored,
 			Message: "SelfInit is disabled. The operator is storing the root token in a Secret, which violates Zero Trust principles. " +
 				"Anyone with Secret read access in this namespace can access the root token. " +
 				"Strongly consider enabling SelfInit (spec.selfInit.enabled=true) for production deployments.",

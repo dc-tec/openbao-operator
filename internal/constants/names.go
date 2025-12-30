@@ -12,10 +12,30 @@ const (
 
 	SuffixBackupServiceAccount  = "-backup-serviceaccount"
 	SuffixUpgradeServiceAccount = "-upgrade-serviceaccount"
+	SuffixRestoreServiceAccount = "-restore-serviceaccount"
+
+	PrefixRestoreJob = "restore-"
+)
+
+// Component names used for labeling and observability.
+const (
+	ComponentOpenBaoCluster = "openbaocluster"
+	ComponentBackup         = "backup"
+	ComponentRestore        = "restore"
+	ComponentSentinel       = "sentinel"
 )
 
 // Well-known container and binary names used across the operator and helper binaries.
 const (
-	ContainerNameOpenBao = "openbao"
-	BinaryNameOpenBao    = "bao"
+	// ContainerBao is the name of the OpenBao container.
+	ContainerBao = "openbao"
+	// BinaryBao is the name of the OpenBao binary.
+	BinaryBao = "bao"
+)
+
+// Controller names for observability.
+const (
+	ControllerNameOpenBaoCluster       = "openbaocluster"
+	ControllerNameOpenBaoRestore       = "openbaorestore"
+	ControllerNameNamespaceProvisioner = "namespace-provisioner"
 )

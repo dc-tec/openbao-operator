@@ -20,17 +20,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
 )
 
 const (
 	// RestoreJobNamePrefix is the prefix for restore job names.
-	RestoreJobNamePrefix = "restore-"
+	RestoreJobNamePrefix = constants.PrefixRestoreJob
 	// RestoreJobTTLSeconds is the TTL for completed/failed restore jobs.
 	RestoreJobTTLSeconds = 3600 // 1 hour
 	// RestoreServiceAccountSuffix is appended to cluster name for the restore SA.
-	RestoreServiceAccountSuffix = "-restore-serviceaccount"
+	RestoreServiceAccountSuffix = constants.SuffixRestoreServiceAccount
 	// RestoreConditionType is the condition type for restore operations.
-	RestoreConditionType = "RestoreComplete"
+	RestoreConditionType = constants.RestoreConditionType // This will need to be added to conditions.go if missed
 )
 
 // Manager orchestrates restore operations for OpenBao clusters.
@@ -237,9 +238,9 @@ func (m *Manager) failRestore(ctx context.Context, restore *openbaov1alpha1.Open
 	restore.Status.Message = message
 
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
-		Type:               RestoreConditionType,
+		Type:               string(RestoreConditionType),
 		Status:             metav1.ConditionFalse,
-		Reason:             "RestoreFailed",
+		Reason:             ReasonRestoreFailed,
 		Message:            message,
 		LastTransitionTime: now,
 	})
@@ -259,9 +260,9 @@ func (m *Manager) completeRestore(ctx context.Context, restore *openbaov1alpha1.
 	restore.Status.Message = message
 
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
-		Type:               RestoreConditionType,
+		Type:               string(RestoreConditionType),
 		Status:             metav1.ConditionTrue,
-		Reason:             "RestoreSucceeded",
+		Reason:             ReasonRestoreSucceeded,
 		Message:            message,
 		LastTransitionTime: now,
 	})
@@ -325,8 +326,8 @@ func (m *Manager) ensureRestoreRBAC(ctx context.Context, _ logr.Logger, _ *openb
 // restoreLabels returns standard labels for restore resources.
 func restoreLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
 	return map[string]string{
-		"app.kubernetes.io/managed-by": "openbao-operator",
-		"openbao.org/cluster":          cluster.Name,
-		"openbao.org/component":        "restore",
+		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:   cluster.Name,
+		constants.LabelOpenBaoComponent: ComponentRestore,
 	}
 }

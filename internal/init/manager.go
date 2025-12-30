@@ -97,7 +97,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		// This is normal and we should wait for Kubernetes to populate the status.
 		if len(pod.Status.ContainerStatuses) > 0 {
 			for _, status := range pod.Status.ContainerStatuses {
-				if status.Name == constants.ContainerNameOpenBao {
+				if status.Name == constants.ContainerBao {
 					if status.Started != nil {
 						logger.V(1).Info("Container running but startup probe not passed yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase, "started", *status.Started)
 					} else {
@@ -501,7 +501,7 @@ func isContainerRunning(pod *corev1.Pod) bool {
 
 	// Check if the openbao container is running
 	for _, status := range pod.Status.ContainerStatuses {
-		if status.Name == constants.ContainerNameOpenBao {
+		if status.Name == constants.ContainerBao {
 			if status.State.Running == nil {
 				return false
 			}

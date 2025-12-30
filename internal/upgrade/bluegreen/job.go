@@ -20,6 +20,7 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	"github.com/openbao/operator/internal/upgrade"
 )
 
 const (
@@ -156,7 +157,7 @@ func buildExecutorJob(
 				constants.LabelAppInstance:      cluster.Name,
 				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: "upgrade",
+				constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
 			},
 			Annotations: buildExecutorJobAnnotations(action, runID),
 		},
@@ -170,7 +171,7 @@ func buildExecutorJob(
 						constants.LabelAppInstance:      cluster.Name,
 						constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 						constants.LabelOpenBaoCluster:   cluster.Name,
-						constants.LabelOpenBaoComponent: "upgrade",
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
 					},
 				},
 				Spec: corev1.PodSpec{

@@ -58,7 +58,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return false, nil
 	}
 
-	logger = logger.WithValues("component", "backup")
+	logger = logger.WithValues("component", constants.ComponentBackup)
 	metrics := NewMetrics(cluster.Namespace, cluster.Name)
 	now := time.Now().UTC()
 
@@ -100,7 +100,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Pre-flight checks
 	if err := m.checkPreconditions(ctx, logger, cluster); err != nil {
 		if errors.Is(err, ErrNoBackupToken) {
-			m.setBackingUpCondition(cluster, false, "NoBackupToken", err.Error())
+			m.setBackingUpCondition(cluster, false, ReasonNoBackupToken, err.Error())
 		}
 		logger.Info("Backup preconditions not met", "reason", err.Error())
 		return false, nil
@@ -597,7 +597,7 @@ func backupLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
 		constants.LabelAppInstance:      cluster.Name,
 		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: "backup",
+		constants.LabelOpenBaoComponent: ComponentBackup,
 	}
 }
 
@@ -614,7 +614,7 @@ func (m *Manager) hasPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1
 		constants.LabelAppInstance:       cluster.Name,
 		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
 		constants.LabelOpenBaoCluster:    cluster.Name,
-		constants.LabelOpenBaoComponent:  "backup",
+		constants.LabelOpenBaoComponent:  ComponentBackup,
 		constants.LabelOpenBaoBackupType: "pre-upgrade",
 	})
 
@@ -646,7 +646,7 @@ func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger,
 		constants.LabelAppInstance:      cluster.Name,
 		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: "backup",
+		constants.LabelOpenBaoComponent: ComponentBackup,
 	})
 
 	if err := m.client.List(ctx, jobList,
@@ -690,7 +690,7 @@ func (m *Manager) hasActiveBackupJob(ctx context.Context, cluster *openbaov1alph
 		constants.LabelAppInstance:      cluster.Name,
 		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: "backup",
+		constants.LabelOpenBaoComponent: ComponentBackup,
 	})
 
 	if err := m.client.List(ctx, jobList,

@@ -19,5 +19,6 @@ const (
 	LabelValueAppNameOpenBao              = "openbao"
 	LabelValueAppNameOpenBaoOperator      = "openbao-operator"
 	LabelValueAppManagedByOpenBaoOperator = "openbao-operator"
-	LabelValueOpenBaoTenant               = "true"
+
+	LabelValueOpenBaoTenant = "true"
 )

@@ -73,7 +73,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	baseLogger := log.FromContext(ctx)
 	logger := baseLogger.WithValues(
 		"tenant", req.NamespacedName,
-		"controller", "namespace-provisioner",
+		"controller", constants.ControllerNameNamespaceProvisioner,
 		"reconcile_id", time.Now().UnixNano(),
 	)
 
@@ -112,9 +112,9 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		tenant.Status.LastError = err.Error()
 
 		meta.SetStatusCondition(&tenant.Status.Conditions, metav1.Condition{
-			Type:    "Provisioned",
+			Type:    constants.ConditionTypeProvisioned,
 			Status:  metav1.ConditionFalse,
-			Reason:  "SecurityViolation",
+			Reason:  ReasonSecurityViolation,
 			Message: err.Error(),
 		})
 
@@ -229,6 +229,6 @@ func (r *NamespaceProvisionerReconciler) SetupWithManager(mgr ctrl.Manager) erro
 			MaxConcurrentReconciles: 3,
 			RateLimiter:             workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
 		}).
-		Named("namespace-provisioner").
+		Named(constants.ControllerNameNamespaceProvisioner).
 		Complete(r)
 }

@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/backup"
 	"github.com/openbao/operator/internal/constants"
 	operatorerrors "github.com/openbao/operator/internal/errors"
 	"github.com/openbao/operator/internal/logging"
@@ -533,7 +534,7 @@ func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *
 		constants.LabelAppInstance:    cluster.Name,
 		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
 		constants.LabelOpenBaoCluster: cluster.Name,
-		"openbao.org/component":       "backup",
+		"openbao.org/component":       backup.ComponentBackup,
 		"openbao.org/backup-type":     "pre-upgrade",
 	})
 
@@ -722,7 +723,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 				constants.LabelAppInstance:       cluster.Name,
 				constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
 				constants.LabelOpenBaoCluster:    cluster.Name,
-				constants.LabelOpenBaoComponent:  "backup",
+				constants.LabelOpenBaoComponent:  backup.ComponentBackup,
 				constants.LabelOpenBaoBackupType: "pre-upgrade",
 			},
 		},
@@ -736,7 +737,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 						constants.LabelAppInstance:       cluster.Name,
 						constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
 						constants.LabelOpenBaoCluster:    cluster.Name,
-						constants.LabelOpenBaoComponent:  "backup",
+						constants.LabelOpenBaoComponent:  backup.ComponentBackup,
 						constants.LabelOpenBaoBackupType: "pre-upgrade",
 					},
 				},
@@ -754,7 +755,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 					RestartPolicy: corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
-							Name:         "backup",
+							Name:         backup.ComponentBackup,
 							Image:        image,
 							Env:          env,
 							VolumeMounts: volumeMounts,
@@ -1222,12 +1223,12 @@ func (m *Manager) getClusterPods(ctx context.Context, cluster *openbaov1alpha1.O
 
 	// Filter out backup job pods and other non-StatefulSet pods
 	// StatefulSet pods have a name pattern: <cluster-name>-<ordinal>
-	// Backup job pods have labels like "openbao.org/component": "backup"
+	// Backup job pods have labels like "openbao.org/component": backup.ComponentBackup
 	filteredPods := make([]corev1.Pod, 0, len(podList.Items))
 	statefulSetPrefix := cluster.Name + "-"
 	for _, pod := range podList.Items {
 		// Skip backup job pods (they have the backup component label)
-		if pod.Labels[constants.LabelOpenBaoComponent] == "backup" {
+		if pod.Labels[constants.LabelOpenBaoComponent] == backup.ComponentBackup {
 			continue
 		}
 		// Only include pods that match the StatefulSet naming pattern

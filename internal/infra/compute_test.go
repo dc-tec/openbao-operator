@@ -194,7 +194,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 
 	containerFound := false
 	for _, c := range statefulSet.Spec.Template.Spec.Containers {
-		if c.Name == constants.ContainerNameOpenBao {
+		if c.Name == constants.ContainerBao {
 			containerFound = true
 			if c.Image != cluster.Spec.Image {
 				t.Fatalf("expected container image %q, got %q", cluster.Spec.Image, c.Image)
@@ -314,7 +314,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 		}
 	}
 	if !containerFound {
-		t.Fatalf("expected StatefulSet to have container %q", constants.ContainerNameOpenBao)
+		t.Fatalf("expected StatefulSet to have container %q", constants.ContainerBao)
 	}
 }
 
@@ -370,7 +370,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 
 	var probesFound bool
 	for _, c := range statefulSet.Spec.Template.Spec.Containers {
-		if c.Name != constants.ContainerNameOpenBao {
+		if c.Name != constants.ContainerBao {
 			continue
 		}
 		probesFound = true
@@ -420,7 +420,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 
 	var probesFound bool
 	for _, c := range statefulSet.Spec.Template.Spec.Containers {
-		if c.Name != constants.ContainerNameOpenBao {
+		if c.Name != constants.ContainerBao {
 			continue
 		}
 		probesFound = true
@@ -554,7 +554,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 
 	containerFound := false
 	for _, c := range statefulSet.Spec.Template.Spec.Containers {
-		if c.Name == constants.ContainerNameOpenBao {
+		if c.Name == constants.ContainerBao {
 			containerFound = true
 			volumeMountNames := make(map[string]bool)
 			for _, vm := range c.VolumeMounts {
@@ -569,7 +569,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 		}
 	}
 	if !containerFound {
-		t.Fatalf("expected StatefulSet to have container %q", constants.ContainerNameOpenBao)
+		t.Fatalf("expected StatefulSet to have container %q", constants.ContainerBao)
 	}
 }
 
@@ -662,8 +662,8 @@ func TestStatefulSet_ACMEMode_NoSidecar(t *testing.T) {
 	if len(containers) != 1 {
 		t.Fatalf("expected StatefulSet to have 1 container in ACME mode, got %d", len(containers))
 	}
-	if containers[0].Name != constants.ContainerNameOpenBao {
-		t.Fatalf("expected container name to be %q, got %q", constants.ContainerNameOpenBao, containers[0].Name)
+	if containers[0].Name != constants.ContainerBao {
+		t.Fatalf("expected container name to be %q, got %q", constants.ContainerBao, containers[0].Name)
 	}
 }
 
