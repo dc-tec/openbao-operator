@@ -134,11 +134,18 @@ func Run(args []string) {
 		os.Exit(1)
 	}
 
+	// Get operator namespace for security validation
+	operatorNS := os.Getenv("OPERATOR_NAMESPACE")
+	if operatorNS == "" {
+		operatorNS = "openbao-operator-system"
+	}
+
 	// Register namespace provisioner controller
 	if err := (&provisionercontroller.NamespaceProvisionerReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		Provisioner: provisionerMgr,
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Provisioner:       provisionerMgr,
+		OperatorNamespace: operatorNS,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NamespaceProvisioner")
 		os.Exit(1)

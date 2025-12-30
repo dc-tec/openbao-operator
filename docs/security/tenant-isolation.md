@@ -2,21 +2,29 @@
 
 The Operator includes a **Namespace Provisioner** controller that manages RBAC for tenant namespaces using a governance model based on the `OpenBaoTenant` Custom Resource Definition (CRD).
 
-## Governance Model (OpenBaoTenant CRD)
+## Governance Model (Updated)
 
-Instead of watching all namespaces for labels, the Provisioner watches `OpenBaoTenant` CRDs that explicitly declare which namespaces should be provisioned. This eliminates the need for `list` and `watch` permissions on namespaces, significantly improving the security posture.
+The Provisioner supports two modes of operation:
 
-- **OpenBaoTenant CRD:** A namespaced resource that declares a target namespace for provisioning. Users create an `OpenBaoTenant` resource in the operator's namespace (typically `openbao-operator-system`) with `spec.targetNamespace` set to the namespace that should receive tenant RBAC.
-- **Tenant Role (`openbao-operator-tenant-role`):** A namespace-scoped Role is created in each target namespace granting the OpenBaoCluster Controller ServiceAccount permission to manage OpenBao-related resources (StatefulSets, Secrets, Services, ConfigMaps, etc.) in that specific namespace only.
-- **Tenant RoleBinding (`openbao-operator-tenant-rolebinding`):** A RoleBinding ties the OpenBaoCluster Controller ServiceAccount to the tenant Role, ensuring it only operates on tenant resources within their designated boundary.
+1. **Self-Service (Recommended):** Namespace admins create an `OpenBaoTenant` CR in their *own* namespace.
+    * **Constraint:** `spec.targetNamespace` MUST match `metadata.namespace`.
+    * **Security:** Prevents users from provisioning RBAC in namespaces they do not own.
+
+2. **Centralized Admin:** Cluster admins create an `OpenBaoTenant` CR in the *Operator's* namespace (e.g., `openbao-operator-system`).
+    * **Capability:** Can target *any* namespace.
+    * **Use Case:** Pre-provisioning environments or strict governance models where users are not allowed to create CRs.
+
+* **OpenBaoTenant CRD:** A namespaced resource that declares a target namespace for provisioning.
+* **Tenant Role (`openbao-operator-tenant-role`):** A namespace-scoped Role is created in each target namespace granting the OpenBaoCluster Controller ServiceAccount permission to manage OpenBao-related resources (StatefulSets, Secrets, Services, ConfigMaps, etc.) in that specific namespace only.
+* **Tenant RoleBinding (`openbao-operator-tenant-rolebinding`):** A RoleBinding ties the OpenBaoCluster Controller ServiceAccount to the tenant Role, ensuring it only operates on tenant resources within their designated boundary.
 
 ## Security Benefits
 
-- The OpenBaoCluster controller cannot access resources in non-tenant namespaces.
-- The OpenBaoCluster controller cannot access resources unrelated to OpenBao in tenant namespaces (e.g., other applications' Secrets, Deployments, etc.).
-- The Provisioner cannot access workload resources directly, only create Roles/RoleBindings.
-- **Information Disclosure Mitigation:** The Provisioner cannot enumerate namespaces to discover cluster topology. It can only access namespaces explicitly declared in `OpenBaoTenant` CRDs.
-- **Elevation of Privilege Mitigation:** Creating an `OpenBaoTenant` CRD requires write access to the operator's namespace, which should be highly restricted (Cluster Admin only).
+* The OpenBaoCluster controller cannot access resources in non-tenant namespaces.
+* The OpenBaoCluster controller cannot access resources unrelated to OpenBao in tenant namespaces (e.g., other applications' Secrets, Deployments, etc.).
+* The Provisioner cannot access workload resources directly, only create Roles/RoleBindings.
+* **Information Disclosure Mitigation:** The Provisioner cannot enumerate namespaces to discover cluster topology. It can only access namespaces explicitly declared in `OpenBaoTenant` CRDs.
+* **Elevation of Privilege Mitigation:** Creating an `OpenBaoTenant` CRD requires write access to the operator's namespace, which should be highly restricted (Cluster Admin only).
 
 **Recommendation:** Tenants should typically be granted `edit` or `view` roles for `OpenBaoCluster` resources but should **not** have `get` access to Secrets matching `*-root-token` or `*-unseal-key`. Additionally, only cluster administrators should have permission to create `OpenBaoTenant` resources.
 
@@ -29,9 +37,9 @@ Instead of watching all namespaces for labels, the Provisioner watches `OpenBaoT
 5. Provisioner creates the tenant Role (`openbao-operator-tenant-role`) in the target namespace
 6. Provisioner creates the tenant RoleBinding (`openbao-operator-tenant-rolebinding`) binding the `openbao-operator-controller` ServiceAccount to the tenant Role
 7. Provisioner applies Pod Security Standards labels to the namespace:
-   - `pod-security.kubernetes.io/enforce: restricted`
-   - `pod-security.kubernetes.io/audit: restricted`
-   - `pod-security.kubernetes.io/warn: restricted`
+   * `pod-security.kubernetes.io/enforce: restricted`
+   * `pod-security.kubernetes.io/audit: restricted`
+   * `pod-security.kubernetes.io/warn: restricted`
 8. Provisioner updates `OpenBaoTenant.Status.Provisioned = true`
 9. OpenBaoCluster controller can now manage OpenBaoCluster resources in that namespace
 
@@ -41,22 +49,22 @@ Instead of watching all namespaces for labels, the Provisioner watches `OpenBaoT
 
 **Provisioner Compromise:**
 
-- Cannot read or modify workload resources (StatefulSets, Secrets, Services, etc.) in tenant namespaces
-- Can only create Roles/RoleBindings, which is a limited attack surface
-- Cannot access OpenBao data or configuration
+* Cannot read or modify workload resources (StatefulSets, Secrets, Services, etc.) in tenant namespaces
+* Can only create Roles/RoleBindings, which is a limited attack surface
+* Cannot access OpenBao data or configuration
 
 **OpenBaoCluster Controller Compromise:**
 
-- Cannot access resources outside of tenant namespaces
-- Cannot access non-OpenBao resources within tenant namespaces (unless explicitly granted)
-- Cannot create or modify cluster-wide resources
-- Cannot access other tenants' namespaces
+* Cannot access resources outside of tenant namespaces
+* Cannot access non-OpenBao resources within tenant namespaces (unless explicitly granted)
+* Cannot create or modify cluster-wide resources
+* Cannot access other tenants' namespaces
 
 ## Tenant Isolation
 
-- Each tenant namespace has its own Role and RoleBinding
-- The OpenBaoCluster controller can only access resources in namespaces where it has been granted permissions
-- Cross-tenant access is impossible without explicit RoleBindings
+* Each tenant namespace has its own Role and RoleBinding
+* The OpenBaoCluster controller can only access resources in namespaces where it has been granted permissions
+* Cross-tenant access is impossible without explicit RoleBindings
 
 ## Multi-Tenancy Security Considerations
 
@@ -64,27 +72,27 @@ In multi-tenant deployments, additional threats and mitigations apply:
 
 ### Tenant Isolation Threats
 
-- **Threat:** Tenant A reads Tenant B's root token or unseal key Secret.
-- **Mitigation:**
-  - **Namespace-Scoped Permissions:** The OpenBaoCluster controller uses namespace-scoped Roles that only grant permissions within the tenant namespace, preventing cross-namespace access.
-  - Use namespace-scoped RoleBindings that do NOT grant Secret read access to tenants.
-  - Deploy policy engines (OPA Gatekeeper, Kyverno) to block access to `*-root-token` and `*-unseal-key` Secrets.
-  - **External KMS:** When using external KMS auto-unseal (`spec.unseal.type` set to `awskms`, `gcpckms`, `azurekeyvault`, or `transit`), the unseal key is not stored in Kubernetes Secrets, eliminating this threat vector for the unseal key.
-  - Consider using self-initialization to avoid root token Secrets entirely.
+* **Threat:** Tenant A reads Tenant B's root token or unseal key Secret.
+* **Mitigation:**
+  * **Namespace-Scoped Permissions:** The OpenBaoCluster controller uses namespace-scoped Roles that only grant permissions within the tenant namespace, preventing cross-namespace access.
+  * Use namespace-scoped RoleBindings that do NOT grant Secret read access to tenants.
+  * Deploy policy engines (OPA Gatekeeper, Kyverno) to block access to `*-root-token` and `*-unseal-key` Secrets.
+  * **External KMS:** When using external KMS auto-unseal (`spec.unseal.type` set to `awskms`, `gcpckms`, `azurekeyvault`, or `transit`), the unseal key is not stored in Kubernetes Secrets, eliminating this threat vector for the unseal key.
+  * Consider using self-initialization to avoid root token Secrets entirely.
 
-- **Threat:** Tenant A's OpenBao pods communicate with Tenant B's pods.
-- **Mitigation:** The Operator automatically creates NetworkPolicies for each cluster that restrict ingress/egress to pods with matching `openbao.org/cluster` labels, enforcing default-deny-all-ingress with exceptions for same-cluster pods, kube-system, and operator pods.
+* **Threat:** Tenant A's OpenBao pods communicate with Tenant B's pods.
+* **Mitigation:** The Operator automatically creates NetworkPolicies for each cluster that restrict ingress/egress to pods with matching `openbao.org/cluster` labels, enforcing default-deny-all-ingress with exceptions for same-cluster pods, kube-system, and operator pods.
 
-- **Threat:** Tenant A accesses Tenant B's backup data in object storage.
-- **Mitigation:**
-  - Each tenant MUST have separate backup credentials.
-  - IAM policies MUST restrict access to tenant-specific bucket prefixes.
-  - Backup credentials should be write-only (read access granted separately for restore operations).
+* **Threat:** Tenant A accesses Tenant B's backup data in object storage.
+* **Mitigation:**
+  * Each tenant MUST have separate backup credentials.
+  * IAM policies MUST restrict access to tenant-specific bucket prefixes.
+  * Backup credentials should be write-only (read access granted separately for restore operations).
 
 ### Resource Exhaustion Threats
 
-- **Threat:** One tenant creates excessive OpenBaoCluster resources, exhausting cluster resources.
-- **Mitigation:** Configure ResourceQuotas per namespace to limit pods, PVCs, CPU, and memory. Controller rate limiting (MaxConcurrentReconciles: 3) prevents one cluster from starving the reconciler.
+* **Threat:** One tenant creates excessive OpenBaoCluster resources, exhausting cluster resources.
+* **Mitigation:** Configure ResourceQuotas per namespace to limit pods, PVCs, CPU, and memory. Controller rate limiting (MaxConcurrentReconciles: 3) prevents one cluster from starving the reconciler.
 
 ### Recommended Multi-Tenancy Controls
 

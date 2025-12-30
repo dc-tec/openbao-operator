@@ -1,0 +1,28 @@
+# Permissions for users to manage OpenBaoTenant CRs in their namespaces
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openbaotenant-editor-role
+  labels:
+    # Aggregates this role to the default "admin" and "edit" ClusterRoles
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaotenants
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaotenants/status
+    verbs:
+      - get

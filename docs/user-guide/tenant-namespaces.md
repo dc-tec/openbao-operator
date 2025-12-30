@@ -1,66 +1,80 @@
-# Provision Tenant Namespaces
+# Tenant Onboarding & Governance
 
-Before creating an `OpenBaoCluster`, you must provision the target namespace with tenant RBAC. The operator uses a governance model based on the `OpenBaoTenant` Custom Resource Definition (CRD) to explicitly declare which namespaces should be provisioned.
+Before creating an `OpenBaoCluster`, the target namespace must be provisioned with the necessary RBAC. The operator supports two governance models: **Self-Service** (decentralized) and **Centralized Admin** (strict control).
 
-### 3.1 Create an OpenBaoTenant Resource
+## 1. Self-Service Onboarding (Recommended)
 
-Create an `OpenBaoTenant` resource in the operator's namespace (typically `openbao-operator-system`) to declare a target namespace for provisioning:
+In this model, namespace owners can onboard themselves without cluster-admin intervention. This relies on the `Confused Deputy` prevention logic: users can only provision the namespace they already have access to.
 
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoTenant
-metadata:
-  name: security-tenant
-  namespace: openbao-operator-system
-spec:
-  targetNamespace: security
-```
+### Prerequisites
 
-**Important Notes:**
+Ensure the `openbaotenant-editor-role` is bound to your user (this is aggregated to the standard `admin` and `edit` ClusterRoles by default).
 
-- The `OpenBaoTenant` resource must be created in the operator's namespace (where the Provisioner controller runs).
-- The `spec.targetNamespace` field specifies the namespace that will receive tenant RBAC.
-- The target namespace must exist before the Provisioner can successfully provision it. If the namespace doesn't exist, the Provisioner will update `Status.LastError` and retry periodically.
-- Only cluster administrators should have permission to create `OpenBaoTenant` resources, as this grants the OpenBaoCluster controller access to the target namespace.
+### Self-Service Steps
 
-### 3.2 Verify Provisioning
+1. Create an `OpenBaoTenant` resource **in your own namespace**, targeting **that same namespace**:
 
-Check the `OpenBaoTenant` status to verify provisioning:
+    ```yaml
+    apiVersion: openbao.org/v1alpha1
+    kind: OpenBaoTenant
+    metadata:
+      name: my-tenant-onboarding
+      namespace: team-a-prod  # Your namespace
+    spec:
+      targetNamespace: team-a-prod # MUST match metadata.namespace
+    ```
+
+2. Apply the resource:
+
+    ```sh
+    kubectl apply -f my-tenant.yaml
+    ```
+
+3. The Provisioner controller will detect this valid request and create the necessary `Role` and `RoleBinding` in `team-a-prod` to allow the operator to manage resources.
+
+### Security Note
+
+If you attempt to target a different namespace (e.g., `targetNamespace: kube-system`), the controller will **block** the request and update the status with a `SecurityViolation` error.
+
+## 2. Centralized Admin Onboarding
+
+In this model, cluster administrators explicitly declare which namespaces are valid tenants. This is useful for strict environments where users should not self-provision.
+
+### Centralized Admin Steps
+
+1. As a cluster administrator, create an `OpenBaoTenant` resource in the **operator's namespace** (typically `openbao-operator-system`):
+
+    ```yaml
+    apiVersion: openbao.org/v1alpha1
+    kind: OpenBaoTenant
+    metadata:
+      name: team-b-authorization
+      namespace: openbao-operator-system # Trusted namespace
+    spec:
+      targetNamespace: team-b-prod      # Can be any namespace
+    ```
+
+2. Since the request originates from the trusted operator namespace, the controller allows cross-namespace provisioning.
+
+## 3. Verifying Provisioning
+
+Check the `OpenBaoTenant` status:
 
 ```sh
-kubectl -n openbao-operator-system get openbaotenant security-tenant -o yaml
+kubectl -n team-a-prod get openbaotenant my-tenant-onboarding -o yaml
 ```
 
 Look for:
 
-- `status.provisioned: true` - Indicates RBAC has been successfully applied
-- `status.lastError` - Any errors encountered during provisioning (e.g., namespace not found)
+* `status.provisioned: true`: RBAC successfully applied.
+* `status.lastError`: detailed error message if provisioning failed.
+* **Conditions**:
+  * `Type: Provisioned`, `Status: False`, `Reason: SecurityViolation`: You attempted an unauthorized cross-namespace provisioning.
 
-Verify that the tenant Role and RoleBinding were created:
+## 4. How It Works (Security Model)
 
-```sh
-kubectl -n security get role,rolebinding -l app.kubernetes.io/component=provisioner
-```
+The operator uses a **Trust-But-Verify** approach:
 
-You should see:
-
-- `openbao-operator-tenant-role` - Namespace-scoped Role granting OpenBaoCluster management permissions
-- `openbao-operator-tenant-rolebinding` - RoleBinding binding the controller ServiceAccount to the Role
-
-### 3.3 Security Benefits
-
-The `OpenBaoTenant` governance model provides significant security improvements:
-
-- **No Namespace Enumeration:** The Provisioner cannot list or watch namespaces, preventing it from discovering cluster topology even if compromised.
-- **Explicit Declaration:** Only namespaces explicitly declared in `OpenBaoTenant` CRDs receive tenant RBAC, reducing the attack surface.
-- **Access Control:** Creating `OpenBaoTenant` resources requires write access to the operator's namespace, which should be restricted to cluster administrators.
-
-### 3.4 Cleanup
-
-When you no longer need a tenant namespace, delete the `OpenBaoTenant` resource:
-
-```sh
-kubectl -n openbao-operator-system delete openbaotenant security-tenant
-```
-
-The Provisioner will automatically clean up the tenant Role and RoleBinding from the target namespace when the `OpenBaoTenant` is deleted.
+1. **Trust**: The Operator's own namespace (`openbao-operator-system`) is trusted. Resources created there can target *any* namespace.
+2. **Verify**: Resources created in user namespaces are verified. They must target their own namespace (`metadata.namespace == spec.targetNamespace`).
+3. **Isolation**: The Provisioner uses a delegated ServiceAccount with minimal permissions. It cannot list all namespaces in the cluster; it only acts on namespaces explicitly discovered via valid `OpenBaoTenant` CRs.

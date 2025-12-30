@@ -22,6 +22,7 @@ kubectl apply -f config/samples/namespace_scoped_openbaocluster-rbac.yaml
 
 - Use `RoleBinding` (not `ClusterRoleBinding`) to restrict users to their namespace
 - The `openbaocluster-editor-role` allows creating/managing clusters but NOT reading Secrets
+- The `openbaotenant-editor-role` allows users to self-onboard their namespace (via `OpenBaoTenant`)
 - Platform teams should have `openbaocluster-admin-role` cluster-wide
 
 ## Secret Access Isolation
@@ -86,7 +87,7 @@ spec:
 
 ### 16.3 Network Policies
 
-The operator automatically creates a NetworkPolicy for each OpenBaoCluster that enforces default-deny ingress and restricts egress. The operator auto-detects the Kubernetes API server CIDR by querying the `kubernetes` Service in the `default` namespace. If auto-detection fails (e.g., due to restricted permissions in multi-tenant environments), you can manually configure `spec.network.apiServerCIDR` as a fallback (see [Network Configuration](#101-api-server-cidr-fallback)).
+The operator automatically creates a NetworkPolicy for each OpenBaoCluster that enforces default-deny ingress and restricts egress. The operator auto-detects the Kubernetes API server CIDR by querying the `kubernetes` Service in the `default` namespace. If auto-detection fails (e.g., due to restricted permissions in multi-tenant environments), you can manually configure `spec.network.apiServerCIDR` as a fallback (see [Network Configuration](network.md#api-server-cidr-fallback)).
 
 **Backup job pods are excluded from this NetworkPolicy** (they have the label `openbao.org/component=backup`) to allow access to object storage services.
 
@@ -359,7 +360,7 @@ kubectl -n security get openbaocluster dev-cluster -o jsonpath='{.status.conditi
 
 Before deploying OpenBao in a multi-tenant environment, verify:
 
-- [ ] `OpenBaoTenant` CRDs are created for each tenant namespace (only cluster administrators should have permission to create these)
+- [ ] `OpenBaoTenant` CRDs are created for each tenant namespace (either via Self-Service by users or Centralized by admins)
 - [ ] Namespace-scoped RoleBindings configured for each tenant (automatically created by Provisioner)
 - [ ] Tenants cannot read `*-root-token` and `*-unseal-key` Secrets
 - [ ] NetworkPolicies isolate OpenBao clusters from each other (operator-managed NetworkPolicy excludes backup jobs; create custom NetworkPolicy for backup jobs if restrictions are needed)

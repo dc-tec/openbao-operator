@@ -23,6 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -81,9 +82,10 @@ func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
-		Client:      k8sClient,
-		Scheme:      testScheme,
-		Provisioner: provisionerManager,
+		Client:            k8sClient,
+		Scheme:            testScheme,
+		Provisioner:       provisionerManager,
+		OperatorNamespace: "openbao-operator-system",
 	}
 
 	req := reconcile.Request{
@@ -165,9 +167,10 @@ func TestNamespaceProvisionerReconcile_TargetNamespaceNotFound(t *testing.T) {
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
-		Client:      k8sClient,
-		Scheme:      testScheme,
-		Provisioner: provisionerManager,
+		Client:            k8sClient,
+		Scheme:            testScheme,
+		Provisioner:       provisionerManager,
+		OperatorNamespace: "openbao-operator-system",
 	}
 
 	req := reconcile.Request{
@@ -220,9 +223,10 @@ func TestNamespaceProvisionerReconcile_OpenBaoTenantDeleted(t *testing.T) {
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
-		Client:      k8sClient,
-		Scheme:      testScheme,
-		Provisioner: provisionerManager,
+		Client:            k8sClient,
+		Scheme:            testScheme,
+		Provisioner:       provisionerManager,
+		OperatorNamespace: "openbao-operator-system",
 	}
 
 	req := reconcile.Request{
@@ -290,9 +294,10 @@ func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
-		Client:      k8sClient,
-		Scheme:      testScheme,
-		Provisioner: provisionerManager,
+		Client:            k8sClient,
+		Scheme:            testScheme,
+		Provisioner:       provisionerManager,
+		OperatorNamespace: "openbao-operator-system",
 	}
 
 	req := reconcile.Request{
@@ -341,5 +346,136 @@ func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
 				break
 			}
 		}
+	}
+}
+
+func TestNamespaceProvisionerReconcile_SecurityViolation(t *testing.T) {
+	// Create OpenBaoTenant in user namespace targeting a different namespace
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "malicious-tenant",
+			Namespace: "user-ns",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: "victim-ns",
+		},
+	}
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	k8sClient := newTestClient(t, tenant)
+	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("failed to create provisioner manager: %v", err)
+	}
+
+	reconciler := &NamespaceProvisionerReconciler{
+		Client:            k8sClient,
+		Scheme:            testScheme,
+		Provisioner:       provisionerManager,
+		OperatorNamespace: "openbao-operator-system", // Trusted NS is different from user-ns
+	}
+
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "malicious-tenant",
+			Namespace: "user-ns",
+		},
+	}
+
+	result, err := reconciler.Reconcile(ctx, req)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	// Should not requeue on security violation
+	if result.RequeueAfter != 0 {
+		t.Error("Reconcile() should not requeue on security violation")
+	}
+
+	// Verify status
+	updatedTenant := &openbaov1alpha1.OpenBaoTenant{}
+	if err := k8sClient.Get(ctx, req.NamespacedName, updatedTenant); err != nil {
+		t.Fatalf("failed to get updated tenant: %v", err)
+	}
+
+	if updatedTenant.Status.Provisioned {
+		t.Error("expected Status.Provisioned to be false")
+	}
+
+	condition := meta.FindStatusCondition(updatedTenant.Status.Conditions, "Provisioned")
+	if condition == nil {
+		t.Error("expected Provisioned condition to be set")
+	} else {
+		if condition.Status != metav1.ConditionFalse {
+			t.Errorf("expected Condition Status to be False, got %s", condition.Status)
+		}
+		if condition.Reason != "SecurityViolation" {
+			t.Errorf("expected Condition Reason to be SecurityViolation, got %s", condition.Reason)
+		}
+	}
+}
+
+func TestNamespaceProvisionerReconcile_SelfService_Success(t *testing.T) {
+	// Create OpenBaoTenant in user namespace targeting SAME namespace
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-tenant",
+			Namespace: "user-ns",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: "user-ns",
+		},
+	}
+
+	// Create the namespace (target must exist)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "user-ns",
+		},
+	}
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	k8sClient := newTestClient(t, tenant, namespace)
+	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("failed to create provisioner manager: %v", err)
+	}
+
+	reconciler := &NamespaceProvisionerReconciler{
+		Client:            k8sClient,
+		Scheme:            testScheme,
+		Provisioner:       provisionerManager,
+		OperatorNamespace: "openbao-operator-system",
+	}
+
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "my-tenant",
+			Namespace: "user-ns",
+		},
+	}
+
+	// First reconcile: add finalizer
+	_, err = reconciler.Reconcile(ctx, req)
+	if err != nil {
+		t.Fatalf("Reconcile() 1 error = %v", err)
+	}
+
+	// Second reconcile: provision
+	_, err = reconciler.Reconcile(ctx, req)
+	if err != nil {
+		t.Fatalf("Reconcile() 2 error = %v", err)
+	}
+
+	// Verify status
+	updatedTenant := &openbaov1alpha1.OpenBaoTenant{}
+	if err := k8sClient.Get(ctx, req.NamespacedName, updatedTenant); err != nil {
+		t.Fatalf("failed to get updated tenant: %v", err)
+	}
+
+	if !updatedTenant.Status.Provisioned {
+		t.Error("expected Status.Provisioned to be true for valid self-service")
 	}
 }

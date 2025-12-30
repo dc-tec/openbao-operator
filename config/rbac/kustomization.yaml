@@ -23,6 +23,7 @@ resources:
   - controller_openbaorestore_clusterrole.yaml
   - controller_openbaorestore_clusterrolebinding.yaml
   - leader_election_role_binding.yaml
+  - openbaotenant_editor_role.yaml
   # The following RBAC configurations are used to protect
   # the metrics endpoint with authn/authz. These configurations
   # ensure that only authorized users and service accounts

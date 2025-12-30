@@ -23,6 +23,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
@@ -51,8 +53,9 @@ import (
 // posture by preventing the Provisioner from surveying the cluster topology.
 type NamespaceProvisionerReconciler struct {
 	client.Client
-	Scheme      *runtime.Scheme
-	Provisioner *provisioner.Manager
+	Scheme            *runtime.Scheme
+	Provisioner       *provisioner.Manager
+	OperatorNamespace string
 }
 
 // SECURITY: RBAC is manually maintained in config/rbac/provisioner_minimal_role.yaml.
@@ -82,6 +85,45 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoTenant %s: %w", req.NamespacedName, err)
+	}
+
+	// SECURITY: Self-Service Validation
+	// To prevent cross-tenant attacks ("Confused Deputy"), we enforce that
+	// OpenBaoTenant resources created in user namespaces can ONLY target
+	// their own namespace. Only the Operator namespace is trusted to
+	// delegate to arbitrary namespaces.
+	//
+	// Note: We check r.OperatorNamespace != "" to allow local testing/development
+	// where the env var might not be set, though properly it should always be set.
+	isTrustedNamespace := tenant.Namespace == r.OperatorNamespace
+	isSelfTargeting := tenant.Namespace == tenant.Spec.TargetNamespace
+
+	if !isTrustedNamespace && !isSelfTargeting {
+		err := fmt.Errorf("security violation: OpenBaoTenant in namespace %q cannot target namespace %q",
+			tenant.Namespace, tenant.Spec.TargetNamespace)
+
+		logger.Error(err, "Blocking provisioning attempt")
+
+		// Capture original for patching
+		original := tenant.DeepCopy()
+
+		// Update status to reflect failure
+		tenant.Status.Provisioned = false
+		tenant.Status.LastError = err.Error()
+
+		meta.SetStatusCondition(&tenant.Status.Conditions, metav1.Condition{
+			Type:    "Provisioned",
+			Status:  metav1.ConditionFalse,
+			Reason:  "SecurityViolation",
+			Message: err.Error(),
+		})
+
+		if patchErr := r.Status().Patch(ctx, tenant, client.MergeFrom(original)); patchErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch status for security violation: %w", patchErr)
+		}
+
+		// Do not requeue. User must fix the CR.
+		return ctrl.Result{}, nil
 	}
 
 	targetNS := tenant.Spec.TargetNamespace
