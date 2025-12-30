@@ -5,6 +5,37 @@
 - **CNI Plugin**: A CNI that supports NetworkPolicies (e.g., Cilium, Calico) is recommended but not required.
 - **Permissions**: Access to read Services in `default` namespace (optional, for auto-detection).
 
+## Default NetworkPolicy Topology
+
+```mermaid
+flowchart LR
+    subgraph TenantNS["Tenant Namespace"]
+        Bao["OpenBao Pods\n(StatefulSet)"]
+    end
+
+    subgraph OperatorNS["Operator Namespace\n(openbao-operator-system)"]
+        OpCtrl["Operator Pods\n(controller, provisioner)"]
+    end
+
+    subgraph KubeSystem["kube-system"]
+        DNS["CoreDNS / kube-dns"]
+    end
+
+    API["Kubernetes API Server"]
+    GW["Gateway / Ingress Controller"]
+
+    %% Ingress
+    Bao ---|"ingress allowed from\nsame labels (Raft peers)"| Bao
+    KubeSystem -->|"ingress allowed for DNS\n(e.g., readiness probes)"| Bao
+    OperatorNS -->|"ingress allowed on 8200\n(init, health, upgrades)"| Bao
+    GW -->|"ingress allowed on 8200\nwhen Ingress/Gateway enabled"| Bao
+
+    %% Egress
+    Bao -->|"UDP/TCP 53\n(DNS egress)"| DNS
+    Bao -->|"443 (service CIDR)\n6443 (endpoint IPs)"| API
+    Bao -->|"Raft ports\n(api & cluster)"| Bao
+```
+
 ## API Server CIDR Fallback
 
 ### Overview

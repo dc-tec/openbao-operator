@@ -17,13 +17,13 @@ At a high level, the architecture consists of:
 
 - **Operator Controller Manager:** Runs multiple reconcilers (Cert, Config, StatefulSet, Upgrade, Backup) in a single process.
 - **OpenBao StatefulSets:** One StatefulSet per `OpenBaoCluster` providing Raft storage and HA.
-- **Sentinel Sidecar Controller:** An optional per-cluster Deployment that watches for infrastructure drift and triggers fast-path reconciliation. When enabled, the Sentinel detects unauthorized changes to managed resources (StatefulSets, Services, ConfigMaps, Secrets) and immediately triggers the operator to correct them, bypassing expensive operations like upgrades and backups.
+- **Sentinel Sidecar Controller:** An optional per-cluster Deployment that watches for infrastructure drift and triggers fast-path reconciliation. When enabled, the Sentinel detects unauthorized changes to managed infrastructure resources (StatefulSets, Services, ConfigMaps) and immediately triggers the operator to correct them, bypassing expensive operations like upgrades and backups.
 - **Persistent Volumes:** Provided by the cluster's StorageClass for durable Raft data.
 - **Object Storage:** Generic HTTP/S-compatible object storage for snapshots (S3/GCS/Azure Blob or compatible endpoints).
 - **Users / Tenants:** Developers and platform teams who create and manage `OpenBaoCluster` resources in their own namespaces.
 - **Static Auto-Unseal Key:** A per-cluster unseal key managed by the Operator and stored in a Kubernetes Secret, used by OpenBao's static auto-unseal mechanism.
 - **RBAC Architecture (Least-Privilege Model):**
-  - **Provisioner ServiceAccount (`openbao-operator-provisioner`):** Has minimal cluster-wide permissions to manage `OpenBaoTenant` CRDs and create Roles/RoleBindings in tenant namespaces. Cannot access workload resources directly. Does not have `list` or `watch` permissions on namespaces, preventing cluster topology enumeration.
+  - **Provisioner ServiceAccount (`openbao-operator-provisioner`):** Has minimal cluster-wide permissions to manage `OpenBaoTenant` CRDs and create Roles/RoleBindings in tenant namespaces using impersonation of a dedicated delegate ServiceAccount bound to the `openbao-operator-tenant-template` ClusterRole. Cannot access workload resources directly. Does not have `list` or `watch` permissions on namespaces, preventing cluster topology enumeration.
   - **OpenBaoCluster Controller ServiceAccount (`openbao-operator-controller`):** Has cluster-wide read access to `openbaoclusters` (`get;list;watch`) and cluster-wide `create` on `tokenreviews`/`subjectaccessreviews` (for the protected metrics endpoint). All OpenBaoCluster writes and all child resources are tenant-scoped via namespace Roles created by the Provisioner.
   - **Namespace Provisioner Controller:** Watches `OpenBaoTenant` CRDs that explicitly declare target namespaces for provisioning. Creates namespace-scoped Roles and RoleBindings that grant the OpenBaoCluster Controller ServiceAccount the permissions needed to manage OpenBaoCluster resources in those namespaces.
 
@@ -99,6 +99,12 @@ The Operator exposes metrics suitable for Prometheus-style scraping and emits st
 - `openbao_tls_cert_expiry_timestamp` - Unix timestamp when the current server certificate expires (per `namespace`, `name`, `type`)
 - `openbao_tls_rotation_total` - Total number of server certificate rotations per cluster
 
+**Drift Metrics:**
+
+- `openbao_drift_detected_total` - Total number of drift events detected by Sentinel
+- `openbao_drift_corrected_total` - Total number of drift events corrected by the operator
+- `openbao_drift_last_detected_timestamp` - Unix timestamp when drift was last detected
+
 **Logging:**
 
 - Structured logs include: `namespace`, `name`, `controller`, `reconcile_id`
@@ -121,12 +127,22 @@ Key fields include:
 - `image`: Container image to run
 - `replicas`: Number of replicas (default: 3)
 - `paused`: If true, reconciliation is paused
-- `tls`: TLS configuration (enabled, mode, rotationPeriod)
+- `tls`: TLS configuration (enabled, mode, rotationPeriod, ACME support)
+- `unseal`: Auto-unseal configuration (static or external KMS providers)
 - `storage`: Storage configuration (size, storageClassName)
+- `configuration`: Server configuration (listener, storage, audit, telemetry, etc.)
 - `backup`: Backup schedule and target configuration
+- `upgrade`: Upgrade configuration (including optional pre-upgrade snapshots)
 - `selfInit`: Self-initialization configuration
 - `gateway`: Gateway API configuration
-- `deletionPolicy`: Behavior when CR is deleted (Retain, DeletePVCs, DeleteAll)
+- `service` / `ingress`: Service exposure and optional Ingress configuration
+- `network`: Network-related settings for the cluster
+- `audit` / `plugins` / `telemetry`: Declarative OpenBao audit devices, plugins, and telemetry sinks
+- `imageVerification`: Supply chain security configuration for container images
+- `workloadHardening`: Opt-in workload hardening (Pod security settings, automount, etc.)
+- `profile`: Security posture (`Hardened` or `Development`)
+- `sentinel`: Drift detection and fast-path reconciliation configuration
+- `updateStrategy`: Version update strategy (rolling vs blue/green)
 
 ### Status (Observability)
 
@@ -140,4 +156,6 @@ Key fields include:
 - `selfInitialized`: Whether cluster was initialized using self-init
 - `upgrade`: Upgrade progress state
 - `backup`: Backup status
+- `drift`: Drift detection and correction history reported by Sentinel
+- `blueGreen`: Blue/green upgrade status when blue/green strategy is enabled
 - `conditions`: Kubernetes-style conditions (Available, TLSReady, Upgrading, Degraded, etc.)

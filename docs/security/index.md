@@ -18,18 +18,35 @@ The Operator enforces a "Secure by Default" posture:
 - **Least-Privilege RBAC:** Split-controller design with minimal permissions
 - **Supply Chain Security:** Optional Cosign image verification
 
+See also:
+
+- User guide: [Security Profiles](../user-guide/security-profiles.md)
+
 ## 2. Admission Validation & Configuration Security
 
 The Operator enforces a strict "Secure by Default" posture for OpenBao configuration using CRD structural validation and `ValidatingAdmissionPolicy`.
 
-### 2.1 Configuration Allowlist
+### 2.1 ValidatingAdmissionPolicy for Sentinel
+
+A dedicated `ValidatingAdmissionPolicy` (`openbao-restrict-sentinel-mutations`) hardens the Sentinel drift detector:
+
+- **Subject Scoping:** The policy only applies when the caller is the Sentinel ServiceAccount (`system:serviceaccount:<tenant-namespace>:openbao-sentinel`).
+- **Spec & Status Protection:** For Sentinel requests, `object.spec` and `object.status` must match `oldObject.spec` and `oldObject.status`. The Sentinel cannot change desired state or status.
+- **Metadata Restrictions:** The only metadata changes allowed are:
+  - Adding or updating `openbao.org/sentinel-trigger`
+  - Adding or updating `openbao.org/sentinel-trigger-resource`
+- **All Other Changes Blocked:** Any attempt by Sentinel to modify labels, finalizers, or other annotations is rejected.
+
+**Result:** Even if the Sentinel binary is compromised, it can only signal drift via the trigger annotations and cannot escalate privileges or mutate configuration.
+
+### 2.2 Configuration Allowlist
 
 The operator rejects `OpenBaoCluster` resources that attempt to override protected configuration stanzas. This prevents tenants from weakening security controls managed by the operator.
 
-- **Protected Stanzas:** Users cannot override `listener`, `storage`, `seal`, `api_addr`, or `cluster_addr` via `spec.config`. These are strictly owned by the operator to ensure mTLS and Raft integrity.
-- **Parameter Allowlist:** Only known-safe OpenBao configuration parameters are accepted in `spec.config`. Unknown or arbitrary keys are rejected.
+- **Protected Stanzas:** Users cannot override `listener`, `storage`, `seal`, `api_addr`, or `cluster_addr` via `spec.configuration` or legacy `spec.config`. These are strictly owned by the operator to ensure mTLS and Raft integrity.
+- **Parameter Allowlist:** Only known-safe OpenBao configuration parameters are accepted. Unknown or arbitrary keys are rejected by admission.
 
-### 2.2 Immutability
+### 2.3 Immutability
 
 Certain security-critical fields, such as the enabling/disabling of the Init Container, are validated to ensure the cluster cannot be put into an unsupported or insecure state.
 
@@ -70,6 +87,10 @@ While the operator enforces a default deny posture, users can extend the Network
 - Review custom rules regularly to ensure they remain necessary
 - For transit seal backends, prefer namespace selectors over broad IP ranges
 - Consider using backup jobs (excluded from NetworkPolicy) rather than adding broad egress rules for object storage access
+
+See also:
+
+- User guide: [Network Configuration](../user-guide/network.md)
 
 ## 4. Workload Security
 
@@ -133,6 +154,10 @@ The Operator manages several high-value secrets.
 - **Root of Trust:** Shifts from Kubernetes Secrets to the cloud provider's KMS service, improving security posture.
 - **Credentials:** If `spec.unseal.credentialsSecretRef` is provided, credentials are mounted at `/etc/bao/seal-creds`. For GCP Cloud KMS, the `GOOGLE_APPLICATION_CREDENTIALS` environment variable is set to point to the mounted credentials file.
 - **Workload Identity:** When using workload identity mechanisms (IRSA for AWS, GKE Workload Identity for GCP), credentials may be omitted as the pod identity is used for authentication.
+
+See also:
+
+- User guide: [Security Considerations](../user-guide/security-considerations.md)
 
 ### 5.2 Root Token
 
@@ -217,6 +242,10 @@ The `Hardened` profile enforces strict security requirements suitable for produc
 - **External TLS:** Integrates with organizational PKI and certificate management systems (cert-manager, CSI drivers).
 - **Automatic JWT Bootstrap:** Reduces configuration errors and ensures proper authentication setup without manual intervention.
 
+See also:
+
+- User guide: [Advanced Configuration](../user-guide/advanced-configuration.md)
+
 **Production Requirement:** All production OpenBaoCluster resources MUST use `spec.profile: Hardened`. Admission policies prevent accidental use of Development profile configurations that would violate Hardened profile requirements.
 
 ### 8.2 Development Profile
@@ -231,6 +260,10 @@ The `Development` profile allows relaxed security for development and testing:
 **CRITICAL WARNING:** Development profile clusters **MUST NOT** be used in production. The Development profile stores root tokens in Kubernetes Secrets, which can be compromised through Secret enumeration, etcd access, or RBAC misconfiguration. The SecurityRisk condition serves as a reminder to upgrade to Hardened profile before production deployment.
 
 **Recommendation:** Always use the Hardened profile for production deployments. Admission policies prevent accidental use of Development profile configurations that would violate Hardened profile requirements.
+
+See also:
+
+- User guide: [Security Profiles](../user-guide/security-profiles.md)
 
 ## 9. JWT Authentication & OIDC Integration
 
@@ -274,3 +307,30 @@ Backup and upgrade executors use JWT authentication when `jwtAuthRole` is config
 - **Backup Executor:** Uses projected ServiceAccount token from `<cluster-name>-backup-serviceaccount` to authenticate via JWT.
 - **Upgrade Executor:** Uses projected ServiceAccount token from `<cluster-name>-upgrade-serviceaccount` to authenticate via JWT.
 - **Backup Fallback:** Backup can fall back to a static token via `spec.backup.tokenSecretRef` when JWT is not available.
+
+See also:
+
+- User guide: [Backups](../user-guide/backups.md)
+
+### 9.5 JWT Flow Overview
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Op as Operator Controller
+    participant K as Kubernetes API
+    participant Bao as OpenBao
+    participant Job as Backup/Upgrade Job
+
+    Op->>K: Discover OIDC issuer & JWKS
+    K-->>Op: OIDC config (issuer, keys)
+    Op->>Bao: Self-init bootstrap requests<br/>(enable JWT, create policy/role)
+    Bao-->>Op: JWT auth ready for operator roles
+
+    Op->>K: Create Job (backup/upgrade)<br/>(ServiceAccount with projected token)
+    K-->>Job: Start pod with projected token<br/>(audience=openbao-internal)
+    Job->>Bao: Authenticate via JWT
+    Bao-->>Job: Token/lease for operator policy
+    Job->>Bao: Call sys/health / sys/storage/raft/snapshot / upgrade APIs
+    Job-->>Op: Report status<br/>(success/failure)
+```

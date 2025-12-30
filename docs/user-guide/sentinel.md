@@ -4,7 +4,7 @@ The Sentinel is an optional per-cluster sidecar controller that provides high-av
 
 ## Overview
 
-The Sentinel addresses a critical gap in Kubernetes operators: **detecting and correcting infrastructure drift in real-time**. While the operator reconciles based on `OpenBaoCluster.Spec`, there's a window where manual changes or external actors could modify managed resources (StatefulSets, Services, ConfigMaps, Secrets) before the next reconciliation cycle.
+The Sentinel addresses a critical gap in Kubernetes operators: **detecting and correcting infrastructure drift in real-time**. While the operator reconciles based on `OpenBaoCluster.Spec`, there's a window where manual changes or external actors could modify managed resources (StatefulSets, Services, ConfigMaps) before the next reconciliation cycle.
 
 **Key Benefits:**
 
@@ -122,7 +122,6 @@ The Sentinel watches for changes to:
 - **StatefulSets** labeled with `app.kubernetes.io/managed-by=openbao-operator` and `app.kubernetes.io/instance=<cluster-name>`
 - **Services** with the same labels
 - **ConfigMaps** with the same labels
-- **Secrets** with the same labels (with special handling for unseal keys and root tokens)
 
 ### 3. Actor Filtering
 
@@ -132,13 +131,9 @@ To prevent infinite loops, the Sentinel inspects `object.metadata.managedFields`
 
 Multiple drift events within the debounce window are coalesced into a single trigger. For example, if a node fails and 50 pods change state simultaneously, the Sentinel will fire only one trigger after the debounce window expires.
 
-### 5. Secret Safety
+### 5. Scope and Secret Safety
 
-For Secrets containing unseal keys or root tokens, the Sentinel:
-
-- Computes SHA256 hashes of the Secret data
-- Caches hashes in-memory (with TTL to prevent memory leaks)
-- Only triggers on actual data changes, not metadata-only updates
+The Sentinel does **not** have access to Secrets. RBAC for the Sentinel is strictly limited to read-only access for StatefulSets, Services, and ConfigMaps, plus patch access on `OpenBaoCluster` resources for drift triggers. Drift that involves unseal keys or root tokens is detected indirectly via OpenBao health and status, not by inspecting Secret data.
 
 ### 6. Trigger
 
@@ -147,9 +142,10 @@ When drift is detected, the Sentinel patches the `OpenBaoCluster` with:
 ```yaml
 annotations:
   openbao.org/sentinel-trigger: "2025-01-15T10:30:45.123456789Z"
+  openbao.org/sentinel-trigger-resource: "StatefulSet/my-cluster"
 ```
 
-This annotation is the **only** mutation the Sentinel is authorized to make (enforced by ValidatingAdmissionPolicy).
+These annotations are the **only** metadata mutations the Sentinel is authorized to make (enforced by ValidatingAdmissionPolicy).
 
 ### 7. Fast Path
 
@@ -165,11 +161,11 @@ After successful reconciliation, the operator clears the trigger annotation, whi
 
 ### ValidatingAdmissionPolicy
 
-A cluster-scoped ValidatingAdmissionPolicy (`openbao-restrict-sentinel-mutations`) enforces that the Sentinel can only modify the trigger annotation. All other mutations are blocked at the API server level:
+A cluster-scoped ValidatingAdmissionPolicy (`openbao-restrict-sentinel-mutations`) enforces that the Sentinel can only modify the drift trigger annotations. All other mutations are blocked at the API server level:
 
 - **Spec changes:** Blocked
 - **Status changes:** Blocked
-- **Other annotations:** Blocked
+- **Other annotations (besides `openbao.org/sentinel-trigger` and `openbao.org/sentinel-trigger-resource`):** Blocked
 - **Labels and finalizers:** Blocked
 
 This provides **mathematical security**: even if the Sentinel binary is compromised, it cannot escalate privileges or modify cluster configuration.
@@ -290,3 +286,4 @@ The operator will clean up the Sentinel Deployment, ServiceAccount, Role, and Ro
 - [Architecture: Sentinel](../architecture/index.md#36-the-sentinel-drift-detection--fast-path-reconciliation)
 - [Security: ValidatingAdmissionPolicy](../security/index.md#validatingadmissionpolicy-for-sentinel)
 - [Advanced Configuration](advanced-configuration.md)
+

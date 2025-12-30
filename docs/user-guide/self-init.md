@@ -117,6 +117,31 @@ Each request in `spec.selfInit.requests[]` maps to an OpenBao API call:
 
 ### 7.4 Standard vs Self-Initialization
 
+```mermaid
+flowchart LR
+    Start["OpenBaoCluster created"]
+    Profile["spec.profile"]
+
+    subgraph StandardInit["Standard Initialization"]
+        Std["Init Manager calls /v1/sys/init\non pod-0"]
+        StdRoot["<cluster>-root-token Secret created\nRoot token stored in namespace"]
+        StdStatus["status.initialized=true\nstatus.selfInitialized=false"]
+    end
+
+    subgraph SelfInit["Self-Initialization"]
+        SI["OpenBao executes initialize stanzas\non first start"]
+        SIRoot["Root token auto-revoked\nNo root token Secret"]
+        SIStatus["status.initialized=true\nstatus.selfInitialized=true"]
+    end
+
+    Start --> Profile
+    Profile -->|selfInit.enabled=false| StandardInit
+    Profile -->|selfInit.enabled=true| SelfInit
+
+    Std --> StdRoot --> StdStatus
+    SI --> SIRoot --> SIStatus
+```
+
 | Aspect | Standard Init | Self-Init |
 |--------|---------------|-----------|
 | Root Token | Stored in `<cluster>-root-token` Secret | Auto-revoked, not available |

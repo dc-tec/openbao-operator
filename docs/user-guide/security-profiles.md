@@ -4,6 +4,16 @@
 
 The Operator supports two security profiles via `spec.profile`:
 
+```mermaid
+flowchart LR
+    Cluster["OpenBaoCluster.spec.profile"]
+    Dev["Development Profile<br/>- OperatorManaged TLS allowed<br/>- Static unseal allowed<br/>- Self-init optional<br/>- Root token Secret stored<br/>- ConditionSecurityRisk=True"]
+    Hard["Hardened Profile<br/>- TLS = External or ACME only<br/>- External KMS seal only<br/>- Self-init required<br/>- No root token Secret<br/>- JWT auto-bootstrap"]
+
+    Cluster --> Dev
+    Cluster --> Hard
+```
+
 ### 2.0 Optional AppArmor
 
 AppArmor is **opt-in** because it is not available in all Kubernetes environments. When enabled, the operator sets `RuntimeDefault` AppArmor profiles on generated Pods/Jobs.

@@ -43,6 +43,17 @@ The Provisioner supports two modes of operation:
 8. Provisioner updates `OpenBaoTenant.Status.Provisioned = true`
 9. OpenBaoCluster controller can now manage OpenBaoCluster resources in that namespace
 
+```mermaid
+flowchart LR
+    Admin["Cluster or Namespace Admin"] --> Obt["OpenBaoTenant CR"]
+    Obt --> Prov["Provisioner Controller\n(openbao-operator-provisioner)"]
+    Prov --> Imp["Impersonate delegate SA\n(openbao-operator-provisioner-delegate)"]
+    Imp --> TRole["Role: openbao-operator-tenant-role\n(target namespace)"]
+    Imp --> TRB["RoleBinding: openbao-operator-tenant-rolebinding\n(target namespace)"]
+    TRB --> Ctrl["OpenBaoCluster Controller\n(openbao-operator-controller)"]
+    Ctrl --> Res["OpenBao resources in tenant namespace\n(StatefulSets, Services, ConfigMaps, Jobs, etc.)"]
+```
+
 **Note:** If the target namespace does not exist, the Provisioner updates `OpenBaoTenant.Status.LastError` and requeues the reconciliation. The Provisioner will retry once the namespace is created.
 
 ## Security Benefits of Split-Controller Design
