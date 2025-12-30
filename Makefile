@@ -114,6 +114,9 @@ E2E_NO_COLOR ?= false
 # E2E_FOCUS runs only tests matching the focus pattern (useful for running specific test suites).
 # Example: make test-e2e E2E_FOCUS=Backup
 E2E_FOCUS ?=
+# E2E_LABEL_FILTER runs only tests whose Ginkgo v2 labels match the filter expression.
+# Example: make test-e2e E2E_LABEL_FILTER='smoke && critical'
+E2E_LABEL_FILTER ?=
 # E2E_SKIP_CLEANUP skips the Kind cluster cleanup after tests (useful for debugging).
 # Set to true to keep the cluster running. Example: make test-e2e E2E_SKIP_CLEANUP=true
 E2E_SKIP_CLEANUP ?= false
@@ -138,6 +141,9 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=$(E2E_FOCUS)"; \
 	fi; \
+	if [ -n "$(E2E_LABEL_FILTER)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --label-filter=$(E2E_LABEL_FILTER)"; \
+	fi; \
 	if [ "$(E2E_TRACE)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --trace"; \
 	fi; \
@@ -154,6 +160,9 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 		GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
 		if [ -n "$(E2E_FOCUS)" ]; then \
 			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=$(E2E_FOCUS)"; \
+		fi; \
+		if [ -n "$(E2E_LABEL_FILTER)" ]; then \
+			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.label-filter=$(E2E_LABEL_FILTER)"; \
 		fi; \
 		if [ "$(E2E_TRACE)" = "true" ]; then \
 			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.trace"; \
