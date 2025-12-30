@@ -47,6 +47,7 @@ import (
 	"github.com/openbao/operator/internal/auth"
 	certmanager "github.com/openbao/operator/internal/certs"
 	openbaoclustercontroller "github.com/openbao/operator/internal/controller/openbaocluster"
+	openbaorestorecontroller "github.com/openbao/operator/internal/controller/openbaorestore"
 	initmanager "github.com/openbao/operator/internal/init"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
@@ -267,6 +268,15 @@ func Run(args []string) {
 		OIDCJWTKeys:       oidcConfig.JWKSKeys,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
+		os.Exit(1)
+	}
+
+	// Set up OpenBaoRestore controller
+	if err := (&openbaorestorecontroller.OpenBaoRestoreReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoRestore")
 		os.Exit(1)
 	}
 

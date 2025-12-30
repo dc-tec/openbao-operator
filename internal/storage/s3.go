@@ -346,3 +346,31 @@ func (c *S3Client) Head(ctx context.Context, key string) (*ObjectInfo, error) {
 func (c *S3Client) Bucket() string {
 	return c.bucket
 }
+
+// Download retrieves an object and returns a reader for its contents.
+// The caller is responsible for closing the returned ReadCloser.
+// Returns an error if the object does not exist.
+func (c *S3Client) Download(ctx context.Context, key string) (io.ReadCloser, error) {
+	if key == "" {
+		return nil, fmt.Errorf("key is required")
+	}
+
+	resp, err := c.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		// Check if the error is because the object doesn't exist
+		var nf *types.NotFound
+		if errors.As(err, &nf) {
+			return nil, fmt.Errorf("object not found: %s", key)
+		}
+		var nsk *types.NoSuchKey
+		if errors.As(err, &nsk) {
+			return nil, fmt.Errorf("object not found: %s", key)
+		}
+		return nil, fmt.Errorf("failed to download object %s: %w", key, err)
+	}
+
+	return resp.Body, nil
+}

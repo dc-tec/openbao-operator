@@ -43,11 +43,16 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			},
 		},
 		Rules: []rbacv1.PolicyRule{
-			// 1. Manage OpenBao Clusters
+			// 1. Manage OpenBao Clusters and Restores
 			{
 				APIGroups: []string{"openbao.org"},
 				Resources: []string{"openbaoclusters", "openbaoclusters/status", "openbaoclusters/finalizers"},
 				Verbs:     commonVerbs, // Changed from "*"
+			},
+			{
+				APIGroups: []string{"openbao.org"},
+				Resources: []string{"openbaorestores", "openbaorestores/status", "openbaorestores/finalizers"},
+				Verbs:     commonVerbs,
 			},
 			// 2. Manage Workload Infrastructure
 			{

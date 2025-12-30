@@ -42,7 +42,7 @@ const (
 
 // ensureBackupJob creates or updates a Kubernetes Job for executing the backup.
 // Returns true if a Job was created or is already running, false if backup should not proceed.
-func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (bool, error) {
+func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string, scheduledTime time.Time) (bool, error) {
 	job := &batchv1.Job{}
 
 	err := m.client.Get(ctx, types.NamespacedName{
@@ -57,7 +57,22 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 
 		// Job doesn't exist - create it
 		logger.Info("Creating backup Job", "job", jobName)
-		job, buildErr := buildBackupJob(cluster, jobName)
+
+		// Generate deterministic backup key
+		// Format: <pathPrefix>/<namespace>/<cluster>/[<filenamePrefix>-]<timestamp>-<uuid>.snap
+		// precise timestamp from schedule to match job name
+		backupKey, err := GenerateBackupKey(
+			cluster.Spec.Backup.Target.PathPrefix,
+			cluster.Namespace,
+			cluster.Name,
+			"", // filenamePrefix (empty default)
+			scheduledTime,
+		)
+		if err != nil {
+			return false, fmt.Errorf("failed to generate backup key: %w", err)
+		}
+
+		job, buildErr := buildBackupJob(cluster, jobName, backupKey)
 		if buildErr != nil {
 			return false, fmt.Errorf("failed to build backup Job %s/%s: %w", cluster.Namespace, jobName, buildErr)
 		}
@@ -71,7 +86,7 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 			return false, fmt.Errorf("failed to create backup Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
 
-		logger.Info("Backup Job created", "job", jobName)
+		logger.Info("Backup Job created", "job", jobName, "backupKey", backupKey)
 		return true, nil
 	}
 
@@ -118,18 +133,22 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 
 	// Check Job status
 	if job.Status.Succeeded > 0 {
-		// Job succeeded - extract result from Job annotations or logs
-		// For now, we'll update status based on Job completion
-		// In a full implementation, the Job would write results to a ConfigMap or annotation
+		// Job succeeded - extract result from Job annotations
+		// The backup key is stored in the Job annotation by the manager when creating the job
+		backupKey := job.Annotations["openbao.org/backup-key"]
+
 		now := metav1.Now()
 		cluster.Status.Backup.LastBackupTime = &now
+		if backupKey != "" {
+			cluster.Status.Backup.LastBackupName = backupKey
+		}
 		cluster.Status.Backup.ConsecutiveFailures = 0
 		cluster.Status.Backup.LastFailureReason = ""
 
 		m.setBackingUpCondition(cluster, false, "BackupSucceeded",
 			fmt.Sprintf("Backup Job %s completed successfully", jobName))
 
-		logger.Info("Backup Job completed successfully, status updated", "job", jobName, "lastBackupTime", now)
+		logger.Info("Backup Job completed successfully, status updated", "job", jobName, "lastBackupTime", now, "backupKey", backupKey)
 		return true, nil // Status was updated - request requeue to persist
 	}
 
@@ -157,7 +176,7 @@ func backupJobName(cluster *openbaov1alpha1.OpenBaoCluster, scheduledTime time.T
 	return backupJobNamePrefix + cluster.Name + "-" + scheduledTime.UTC().Format("20060102-150405")
 }
 
-func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*batchv1.Job, error) {
+func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, backupKey string) (*batchv1.Job, error) {
 	region := cluster.Spec.Backup.Target.Region
 	if region == "" {
 		region = constants.DefaultS3Region
@@ -181,6 +200,7 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 		{Name: constants.EnvBackupPathPrefix, Value: cluster.Spec.Backup.Target.PathPrefix},
 		{Name: constants.EnvBackupRegion, Value: region},
 		{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", cluster.Spec.Backup.Target.UsePathStyle)},
+		{Name: constants.EnvBackupKey, Value: backupKey}, // Explicitly set the pre-generated key
 	}
 
 	if cluster.Spec.Backup.Target.RoleARN != "" {
@@ -275,6 +295,9 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*b
 				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 				constants.LabelOpenBaoCluster:   cluster.Name,
 				constants.LabelOpenBaoComponent: "backup",
+			},
+			Annotations: map[string]string{
+				"openbao.org/backup-key": backupKey,
 			},
 		},
 		Spec: batchv1.JobSpec{

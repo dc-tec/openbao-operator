@@ -19,6 +19,9 @@ resources:
   # Controller RBAC: OpenBaoCluster watch, leader election, and metrics
   - controller_openbaocluster_clusterrole.yaml
   - controller_openbaocluster_clusterrolebinding.yaml
+  # Controller RBAC: OpenBaoRestore watch
+  - controller_openbaorestore_clusterrole.yaml
+  - controller_openbaorestore_clusterrolebinding.yaml
   - leader_election_role_binding.yaml
   # The following RBAC configurations are used to protect
   # the metrics endpoint with authn/authz. These configurations

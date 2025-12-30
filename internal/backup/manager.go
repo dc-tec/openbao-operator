@@ -231,7 +231,7 @@ func (m *Manager) executeAndProcessBackup(
 	metrics.SetInProgress(true)
 
 	// Create or check backup Job
-	jobInProgress, err := m.ensureBackupJob(ctx, logger, cluster, jobName)
+	jobInProgress, err := m.ensureBackupJob(ctx, logger, cluster, jobName, scheduledTime)
 	if err != nil {
 		return false, fmt.Errorf("failed to ensure backup Job: %w", err)
 	}

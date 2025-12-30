@@ -21,6 +21,8 @@ type MockClusterActions struct {
 	SnapshotFunc func(ctx context.Context, writer io.Writer) error
 	// LoginJWTFunc controls the behavior of LoginJWT
 	LoginJWTFunc func(ctx context.Context, role, jwtToken string) (string, error)
+	// RestoreFunc controls the behavior of Restore
+	RestoreFunc func(ctx context.Context, reader io.Reader) error
 }
 
 // IsSealed implements ClusterActions.
@@ -69,4 +71,12 @@ func (m *MockClusterActions) LoginJWT(ctx context.Context, role, jwtToken string
 		return m.LoginJWTFunc(ctx, role, jwtToken)
 	}
 	return "mock-token", nil
+}
+
+// Restore implements ClusterActions.
+func (m *MockClusterActions) Restore(ctx context.Context, reader io.Reader) error {
+	if m.RestoreFunc != nil {
+		return m.RestoreFunc(ctx, reader)
+	}
+	return nil
 }

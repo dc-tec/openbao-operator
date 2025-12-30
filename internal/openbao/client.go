@@ -379,6 +379,57 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 	return nil
 }
 
+// Restore restores a snapshot to the cluster using the force restore API.
+// This method calls POST /sys/storage/raft/snapshot-force which replaces ALL Raft data.
+// WARNING: This operation is destructive and irreversible.
+//
+// The restore endpoint requires authentication with a token that has
+// update capability on sys/storage/raft/snapshot-force.
+//
+// The reader should provide the raw snapshot data (binary gzip format).
+// For large snapshots, streaming is used to avoid loading the entire file into memory.
+func (c *Client) Restore(ctx context.Context, reader io.Reader) error {
+	if c.token == "" {
+		return fmt.Errorf("authentication token required for restore operation")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+constants.APIPathRaftSnapshotForceRestore, reader)
+	if err != nil {
+		return fmt.Errorf("failed to create restore request: %w", err)
+	}
+
+	req.Header.Set("X-Vault-Token", c.token)
+	req.Header.Set("Content-Type", "application/octet-stream")
+
+	// Use a new HTTP client with extended timeout for restores
+	// The restore could take a while for large snapshots
+	restoreClient := &http.Client{
+		Transport: c.httpClient.Transport,
+		Timeout:   DefaultSnapshotTimeout,
+	}
+
+	resp, err := restoreClient.Do(req)
+	if err != nil {
+		// Wrap connection errors as transient to allow retry
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute restore request: %w", err))
+		}
+		return fmt.Errorf("failed to execute restore request: %w", err)
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	// Check for success status codes (200 OK or 204 No Content)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("restore request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 // Init initializes an OpenBao cluster by calling PUT /v1/sys/init.
 // This endpoint must only be called on an uninitialized cluster. The caller is
 // responsible for handling the returned root token securely.

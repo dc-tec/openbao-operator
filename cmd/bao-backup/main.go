@@ -39,7 +39,11 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 	// use the short ".svc" form.
 	clusterDomainSuffix := strings.TrimSpace(os.Getenv("CLUSTER_DOMAIN_SUFFIX"))
 
+	fmt.Printf("findLeader: Starting leader discovery for %d replicas (statefulset=%s)\n",
+		cfg.ClusterReplicas, cfg.StatefulSetName)
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
+		fmt.Printf("findLeader: Attempt %d/%d\n", attempt+1, maxRetries)
 		for i := int32(0); i < cfg.ClusterReplicas; i++ {
 			// Use StatefulSetName for pod name (may include revision for Blue/Green)
 			// but ClusterName for service name (headless service is always cluster name)
@@ -50,22 +54,25 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 			}
 			podURL := fmt.Sprintf("https://%s:%d", host, constants.PortAPI)
 
+			fmt.Printf("findLeader: Checking pod %s at %s\n", podName, podURL)
+
 			// Create a client without token for health checks
 			client, err := openbao.NewClient(openbao.ClientConfig{
 				BaseURL: podURL,
 				CACert:  cfg.TLSCACert,
 			})
 			if err != nil {
-				// Log but continue to next pod
+				fmt.Printf("findLeader: Failed to create client for %s: %v\n", podName, err)
 				continue
 			}
 
 			isLeader, err := client.IsLeader(ctx)
 			if err != nil {
-				// Log but continue to next pod
+				fmt.Printf("findLeader: IsLeader check failed for %s: %v\n", podName, err)
 				continue
 			}
 
+			fmt.Printf("findLeader: Pod %s isLeader=%t\n", podName, isLeader)
 			if isLeader {
 				return podURL, nil
 			}
@@ -78,6 +85,7 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 
 		// Wait before retrying with exponential backoff
 		delay := baseDelay * time.Duration(1<<uint(attempt))
+		fmt.Printf("findLeader: No leader found, waiting %v before retry...\n", delay)
 		select {
 		case <-ctx.Done():
 			return "", fmt.Errorf("context cancelled while finding leader: %w", ctx.Err())
@@ -147,16 +155,21 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
 
-	// Generate backup key
-	backupKey, err := backupconfig.GenerateBackupKey(
-		cfg.BackupPathPrefix,
-		cfg.ClusterNamespace,
-		cfg.ClusterName,
-		cfg.BackupFilenamePrefix,
-		time.Now().UTC(),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to generate backup key: %w", err)
+	// Use explicitly provided backup key if available, otherwise generate one
+	backupKey := cfg.BackupKey
+	if backupKey == "" {
+		// Generate backup key (legacy behavior)
+		var err error
+		backupKey, err = backupconfig.GenerateBackupKey(
+			cfg.BackupPathPrefix,
+			cfg.ClusterNamespace,
+			cfg.ClusterName,
+			cfg.BackupFilenamePrefix,
+			time.Now().UTC(),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to generate backup key: %w", err)
+		}
 	}
 
 	// Ensure region is set (required by S3 client)
@@ -225,13 +238,158 @@ func run(ctx context.Context) error {
 
 	// Success
 	_, _ = fmt.Fprintf(os.Stdout, "Backup completed successfully: %s (size: %d bytes)\n", backupKey, objInfo.Size)
+
+	return nil
+}
+
+// runRestore executes the restore operation.
+func runRestore(ctx context.Context) error {
+	flag.Parse()
+
+	fmt.Println("Starting restore operation...")
+
+	// Load configuration (reuse backup config for common settings)
+	cfg, err := backupconfig.LoadExecutorConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+	fmt.Printf("Configuration loaded - cluster=%s, namespace=%s, replicas=%d\n",
+		cfg.ClusterName, cfg.ClusterNamespace, cfg.ClusterReplicas)
+
+	// Get restore-specific configuration from environment
+	restoreKey := os.Getenv("RESTORE_KEY")
+	if restoreKey == "" {
+		return fmt.Errorf("RESTORE_KEY environment variable is required")
+	}
+	fmt.Printf("Restore key: %s\n", restoreKey)
+
+	restoreBucket := os.Getenv("RESTORE_BUCKET")
+	if restoreBucket == "" {
+		restoreBucket = cfg.BackupBucket // Fall back to backup bucket if not specified
+	}
+
+	restoreEndpoint := os.Getenv("RESTORE_ENDPOINT")
+	if restoreEndpoint == "" {
+		restoreEndpoint = cfg.BackupEndpoint // Fall back to backup endpoint
+	}
+
+	restoreRegion := os.Getenv("RESTORE_REGION")
+	if restoreRegion == "" {
+		restoreRegion = cfg.BackupRegion
+	}
+
+	usePathStyle := os.Getenv("RESTORE_USE_PATH_STYLE") == "true"
+
+	// Find leader with timeout (60s to allow for retries in findLeader)
+	fmt.Println("Finding cluster leader...")
+	leaderCtx, leaderCancel := context.WithTimeout(ctx, 60*time.Second)
+	defer leaderCancel()
+
+	leaderURL, err := findLeader(leaderCtx, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to find leader: %w", err)
+	}
+	fmt.Printf("Found leader at: %s\n", leaderURL)
+
+	// Authenticate
+	fmt.Printf("Authenticating to leader (method=%s)...\n", cfg.AuthMethod)
+	token, err := authenticate(ctx, cfg, leaderURL)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate: %w", err)
+	}
+	fmt.Println("Authentication successful")
+
+	// Create OpenBao client for leader
+	baoClient, err := openbao.NewClient(openbao.ClientConfig{
+		BaseURL: leaderURL,
+		Token:   token,
+		CACert:  cfg.TLSCACert,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create OpenBao client: %w", err)
+	}
+
+	// Ensure region is set
+	if cfg.StorageCredentials == nil {
+		cfg.StorageCredentials = &storage.Credentials{
+			Region: restoreRegion,
+		}
+	} else if cfg.StorageCredentials.Region == "" {
+		cfg.StorageCredentials.Region = restoreRegion
+	}
+
+	// Create storage client for downloading
+	fmt.Println("Creating storage client...")
+	storageClient, err := storage.NewS3ClientFromCredentials(
+		ctx,
+		restoreEndpoint,
+		restoreBucket,
+		cfg.StorageCredentials,
+		usePathStyle,
+		cfg.PartSize,
+		cfg.Concurrency,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create storage client: %w", err)
+	}
+	fmt.Println("Storage client created")
+
+	// Verify snapshot exists before downloading
+	fmt.Printf("Verifying snapshot exists: %s\n", restoreKey)
+	objInfo, err := storageClient.Head(ctx, restoreKey)
+	if err != nil {
+		return fmt.Errorf("failed to verify snapshot exists: %w", err)
+	}
+	if objInfo == nil {
+		return fmt.Errorf("snapshot not found: %s", restoreKey)
+	}
+
+	_, _ = fmt.Fprintf(os.Stdout, "Found snapshot: %s (size: %d bytes)\n", restoreKey, objInfo.Size)
+
+	// Download snapshot from storage
+	fmt.Println("Downloading snapshot from storage...")
+	reader, err := storageClient.Download(ctx, restoreKey)
+	if err != nil {
+		return fmt.Errorf("failed to download snapshot: %w", err)
+	}
+	defer reader.Close()
+	fmt.Println("Snapshot downloaded successfully")
+
+	// Perform restore
+	fmt.Println("Restoring snapshot to cluster...")
+	if err := baoClient.Restore(ctx, reader); err != nil {
+		return fmt.Errorf("failed to restore snapshot: %w", err)
+	}
+
+	// Success
+	_, _ = fmt.Fprintf(os.Stdout, "Restore completed successfully from: %s\n", restoreKey)
 	return nil
 }
 
 func main() {
 	ctx := context.Background()
-	if err := run(ctx); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "bao-backup error: %v\n", err)
+
+	// Check executor mode
+	mode := os.Getenv("EXECUTOR_MODE")
+	var err error
+
+	switch mode {
+	case "restore":
+		err = runRestore(ctx)
+	case "backup", "":
+		// Default to backup mode for backward compatibility
+		err = run(ctx)
+	default:
+		_, _ = fmt.Fprintf(os.Stderr, "unknown EXECUTOR_MODE: %s (expected 'backup' or 'restore')\n", mode)
+		os.Exit(exitConfigError)
+	}
+
+	if err != nil {
+		prefix := "bao-backup"
+		if mode == "restore" {
+			prefix = "bao-restore"
+		}
+		_, _ = fmt.Fprintf(os.Stderr, "%s error: %v\n", prefix, err)
 		// Determine exit code based on error type
 		errStr := err.Error()
 		switch {
@@ -241,12 +399,14 @@ func main() {
 			os.Exit(exitAuthError)
 		case strings.Contains(errStr, "failed to find leader"):
 			os.Exit(exitLeaderDiscovery)
-		case strings.Contains(errStr, "failed to get snapshot"):
+		case strings.Contains(errStr, "failed to get snapshot") ||
+			strings.Contains(errStr, "failed to restore snapshot"):
 			os.Exit(exitSnapshotError)
 		case strings.Contains(errStr, "failed to upload backup") ||
+			strings.Contains(errStr, "failed to download snapshot") ||
 			strings.Contains(errStr, "failed to create storage client"):
 			os.Exit(exitStorageError)
-		case strings.Contains(errStr, "failed to verify backup"):
+		case strings.Contains(errStr, "failed to verify"):
 			os.Exit(exitVerificationError)
 		default:
 			os.Exit(exitConfigError)

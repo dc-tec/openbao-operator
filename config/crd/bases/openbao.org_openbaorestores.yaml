@@ -1,0 +1,300 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaorestores.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoRestore
+    listKind: OpenBaoRestoreList
+    plural: openbaorestores
+    shortNames:
+    - obrestore
+    singular: openbaorestore
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.cluster
+      name: Cluster
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .status.message
+      name: Message
+      priority: 1
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoRestore represents a request to restore an OpenBao cluster from a snapshot.
+          This resource is immutable after creation - it acts as a "job request".
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              OpenBaoRestoreSpec defines the desired state for a restore operation.
+              An OpenBaoRestore acts as a "job request" - it is immutable after creation.
+            properties:
+              cluster:
+                description: |-
+                  Cluster is the name of the OpenBaoCluster to restore INTO.
+                  Must exist in the same namespace as the OpenBaoRestore.
+                minLength: 1
+                type: string
+              executorImage:
+                description: |-
+                  ExecutorImage is the container image to use for restore operations.
+                  Defaults to the same image used for backup operations if not specified.
+                minLength: 1
+                type: string
+              force:
+                default: false
+                description: |-
+                  Force allows restore even if the cluster appears unhealthy.
+                  This is required for disaster recovery scenarios where the cluster
+                  may be in a degraded state.
+                type: boolean
+              jwtAuthRole:
+                description: |-
+                  JWTAuthRole is the name of the JWT Auth role configured in OpenBao
+                  for restore operations. When set, the restore executor will use JWT Auth
+                  (projected ServiceAccount token) instead of a static token.
+
+                  The role must be configured in OpenBao and must grant the "update" capability on
+                  sys/storage/raft/snapshot-force. The role must bind to the restore ServiceAccount
+                  (<cluster-name>-restore-serviceaccount) in the cluster namespace.
+                type: string
+              source:
+                description: Source defines where the snapshot comes from.
+                properties:
+                  key:
+                    description: |-
+                      Key is the full path to the snapshot object in the bucket.
+                      For example, "clusters/prod/2025-10-14-120000.snap".
+                    minLength: 1
+                    type: string
+                  target:
+                    description: |-
+                      Target reuses BackupTarget for storage connection details.
+                      This includes endpoint, bucket, region, credentials, etc.
+                    properties:
+                      bucket:
+                        description: Bucket is the bucket or container name.
+                        minLength: 1
+                        type: string
+                      concurrency:
+                        default: 3
+                        description: |-
+                          Concurrency is the number of concurrent parts to upload during multipart uploads.
+                          Defaults to 3. Higher values may improve throughput on fast networks but increase
+                          memory usage and may overwhelm slower storage backends.
+                        format: int32
+                        maximum: 10
+                        minimum: 1
+                        type: integer
+                      credentialsSecretRef:
+                        description: CredentialsSecretRef optionally references a
+                          Secret containing credentials for the object store.
+                        properties:
+                          name:
+                            description: name is unique within a namespace to reference
+                              a secret resource.
+                            type: string
+                          namespace:
+                            description: namespace defines the space within which
+                              the secret name must be unique.
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      endpoint:
+                        description: Endpoint is the HTTP(S) endpoint for the object
+                          storage service.
+                        minLength: 1
+                        type: string
+                      partSize:
+                        default: 10485760
+                        description: |-
+                          PartSize is the size of each part in multipart uploads (in bytes).
+                          Defaults to 10MB (10485760 bytes). Larger values may improve performance for large snapshots
+                          on fast networks, while smaller values may be better for slow or unreliable networks.
+                        format: int64
+                        minimum: 5242880
+                        type: integer
+                      pathPrefix:
+                        description: PathPrefix is an optional prefix within the bucket
+                          for this cluster's snapshots.
+                        type: string
+                      region:
+                        default: us-east-1
+                        description: |-
+                          Region is the AWS region to use for S3-compatible clients.
+                          For AWS, this should match the bucket region (for example, "eu-west-1").
+                          For many S3-compatible stores (MinIO/Ceph), this can be any non-empty value.
+                        type: string
+                      roleArn:
+                        description: |-
+                          RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
+                          When set, the backup Job mounts a projected ServiceAccount token and relies on the
+                          cloud provider SDK default credential chain (for example, AWS IRSA).
+                        type: string
+                      usePathStyle:
+                        default: false
+                        description: |-
+                          UsePathStyle controls whether to use path-style addressing (bucket.s3.amazonaws.com/object)
+                          or virtual-hosted-style addressing (bucket.s3.amazonaws.com/object).
+                          Set to true for MinIO and S3-compatible stores that require path-style.
+                          Set to false for AWS S3 (default, as AWS is deprecating path-style).
+                        type: boolean
+                    required:
+                    - bucket
+                    - endpoint
+                    type: object
+                required:
+                - key
+                - target
+                type: object
+              tokenSecretRef:
+                description: |-
+                  TokenSecretRef optionally references a Secret containing an OpenBao API
+                  token to use for restore operations (fallback method).
+
+                  The token must have permission to update sys/storage/raft/snapshot-force.
+
+                  If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
+                properties:
+                  name:
+                    description: name is unique within a namespace to reference a
+                      secret resource.
+                    type: string
+                  namespace:
+                    description: namespace defines the space within which the secret
+                      name must be unique.
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+            required:
+            - cluster
+            - source
+            type: object
+          status:
+            description: OpenBaoRestoreStatus defines the observed state of OpenBaoRestore.
+            properties:
+              completionTime:
+                description: CompletionTime is when the restore operation completed
+                  (success or failure).
+                format: date-time
+                type: string
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the restore's state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              message:
+                description: Message provides additional details about the current
+                  phase.
+                type: string
+              phase:
+                default: Pending
+                description: Phase represents the current phase of the restore operation.
+                enum:
+                - Pending
+                - Validating
+                - Running
+                - Completed
+                - Failed
+                type: string
+              snapshotKey:
+                description: SnapshotKey is the key of the snapshot that was restored.
+                type: string
+              snapshotSize:
+                description: SnapshotSize is the size of the restored snapshot in
+                  bytes.
+                format: int64
+                type: integer
+              startTime:
+                description: StartTime is when the restore operation started.
+                format: date-time
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

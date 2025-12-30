@@ -166,7 +166,7 @@ func TestBuildBackupJob(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	jobName := testBackupJobName
 
-	job, err := buildBackupJob(cluster, jobName)
+	job, err := buildBackupJob(cluster, jobName, "test-key-12345")
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -195,6 +195,11 @@ func TestBuildBackupJob(t *testing.T) {
 		if job.Labels[k] != v {
 			t.Errorf("buildBackupJob() label[%s] = %v, want %v", k, job.Labels[k], v)
 		}
+	}
+
+	// Verify annotations
+	if job.Annotations["openbao.org/backup-key"] != "test-key-12345" {
+		t.Errorf("buildBackupJob() annotation[openbao.org/backup-key] = %v, want test-key-12345", job.Annotations["openbao.org/backup-key"])
 	}
 
 	// Verify Job spec
@@ -235,6 +240,7 @@ func TestBuildBackupJob(t *testing.T) {
 		constants.EnvBackupPathPrefix:   cluster.Spec.Backup.Target.PathPrefix,
 		constants.EnvBackupRegion:       "us-east-1",
 		constants.EnvBackupUsePathStyle: "false",
+		constants.EnvBackupKey:          "test-key-12345",
 	}
 
 	for k, v := range expectedEnv {
@@ -270,7 +276,7 @@ func TestBuildBackupJob_WithCredentialsSecret(t *testing.T) {
 	}
 
 	jobName := testBackupJobName
-	job, err := buildBackupJob(cluster, jobName)
+	job, err := buildBackupJob(cluster, jobName, "test-key")
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -330,7 +336,7 @@ func TestBuildBackupJob_WithJWTAuth(t *testing.T) {
 	cluster.Spec.Backup.JWTAuthRole = "backup-role"
 
 	jobName := testBackupJobName
-	job, err := buildBackupJob(cluster, jobName)
+	job, err := buildBackupJob(cluster, jobName, "test")
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -392,7 +398,7 @@ func TestBuildBackupJob_WithRoleARN(t *testing.T) {
 	cluster.Spec.Backup.Target.RoleARN = "arn:aws:iam::123456789012:role/backup-role"
 
 	jobName := testBackupJobName
-	job, err := buildBackupJob(cluster, jobName)
+	job, err := buildBackupJob(cluster, jobName, "test")
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -458,7 +464,7 @@ func TestBuildBackupJob_WithTokenSecret(t *testing.T) {
 	}
 
 	jobName := testBackupJobName
-	job, err := buildBackupJob(cluster, jobName)
+	job, err := buildBackupJob(cluster, jobName, "test")
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -494,7 +500,7 @@ func TestBuildBackupJob_MissingExecutorImage(t *testing.T) {
 	cluster.Spec.Backup.ExecutorImage = ""
 
 	jobName := testBackupJobName
-	job, err := buildBackupJob(cluster, jobName)
+	job, err := buildBackupJob(cluster, jobName, "test")
 
 	if err == nil {
 		t.Error("buildBackupJob() with missing executor image should return error")
@@ -519,7 +525,7 @@ func TestEnsureBackupJob_CreatesJob(t *testing.T) {
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
 	jobName := backupJobName(cluster, scheduled)
 
-	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
+	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
 		t.Fatalf("ensureBackupJob() error = %v", err)
 	}
@@ -560,7 +566,7 @@ func TestEnsureBackupJob_JobAlreadyRunning(t *testing.T) {
 	k8sClient := newTestClient(t, runningJob)
 	manager := NewManager(k8sClient, testScheme)
 
-	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
+	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
 		t.Fatalf("ensureBackupJob() error = %v", err)
 	}
@@ -590,7 +596,7 @@ func TestEnsureBackupJob_JobCompleted(t *testing.T) {
 	k8sClient := newTestClient(t, completedJob)
 	manager := NewManager(k8sClient, testScheme)
 
-	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
+	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
 		t.Fatalf("ensureBackupJob() error = %v", err)
 	}
@@ -620,7 +626,7 @@ func TestEnsureBackupJob_JobFailed(t *testing.T) {
 	k8sClient := newTestClient(t, failedJob)
 	manager := NewManager(k8sClient, testScheme)
 
-	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName)
+	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
 		t.Fatalf("ensureBackupJob() error = %v", err)
 	}
@@ -639,6 +645,9 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
+			Annotations: map[string]string{
+				"openbao.org/backup-key": "test-key-abc",
+			},
 		},
 		Status: batchv1.JobStatus{
 			Succeeded: 1,
@@ -662,6 +671,10 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 
 	if cluster.Status.Backup.LastBackupTime == nil {
 		t.Error("processBackupJobResult() should set LastBackupTime")
+	}
+
+	if cluster.Status.Backup.LastBackupName != "test-key-abc" {
+		t.Errorf("processBackupJobResult() LastBackupName = %v, want test-key-abc", cluster.Status.Backup.LastBackupName)
 	}
 
 	if cluster.Status.Backup.ConsecutiveFailures != 0 {

@@ -32,6 +32,7 @@ const (
 	EnvBackupFilenamePrefix = "BACKUP_FILENAME_PREFIX"
 	EnvBackupRegion         = "BACKUP_REGION"
 	EnvBackupUsePathStyle   = "BACKUP_USE_PATH_STYLE"
+	EnvBackupKey            = "BACKUP_KEY"
 
 	EnvBackupPartSize    = "BACKUP_PART_SIZE"
 	EnvBackupConcurrency = "BACKUP_CONCURRENCY"

@@ -37,6 +37,13 @@ type ClusterActions interface {
 	// LoginJWT authenticates to OpenBao using JWT authentication.
 	// Returns the OpenBao client token on success, or an error if authentication fails.
 	LoginJWT(ctx context.Context, role, jwtToken string) (string, error)
+
+	// Restore performs a force restore from the provided reader.
+	// This calls POST /sys/storage/raft/snapshot-force which replaces all Raft data.
+	// WARNING: This operation is destructive and irreversible. It will replace
+	// all data in the cluster with the contents of the snapshot.
+	// Returns an error if the restore operation fails.
+	Restore(ctx context.Context, reader io.Reader) error
 }
 
 // RaftActions defines the interface for performing Raft-specific operations on OpenBao.

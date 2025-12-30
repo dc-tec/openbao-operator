@@ -1045,6 +1045,34 @@ func buildNetworkPolicyIngressRules(
 		},
 	})
 
+	// Allow ingress from backup and restore pods on port 8200.
+	// These pods are labeled with openbao.org/cluster=<cluster-name> and
+	// openbao.org/component in (backup, restore). They need to access the
+	// leader to perform snapshot/restore operations.
+	backupRestorePeer := networkingv1.NetworkPolicyPeer{
+		PodSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				constants.LabelOpenBaoCluster: cluster.Name,
+			},
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      "openbao.org/component",
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   []string{"backup", "restore"},
+				},
+			},
+		},
+	}
+	rules = append(rules, networkingv1.NetworkPolicyIngressRule{
+		From: []networkingv1.NetworkPolicyPeer{backupRestorePeer},
+		Ports: []networkingv1.NetworkPolicyPort{
+			{
+				Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
+				Port:     &apiPort,
+			},
+		},
+	})
+
 	// If standard Ingress is enabled, we must allow traffic to the API port.
 	// Since Ingress Controllers can run anywhere (and often preserve client IPs),
 	// we allow traffic from anywhere on the API port.
@@ -1261,14 +1289,14 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
 				MatchLabels: podSelector,
-				// Exclude backup job pods from this NetworkPolicy.
-				// Backup jobs have different network requirements (e.g., access to object storage)
+				// Exclude backup and restore job pods from this NetworkPolicy.
+				// These jobs have different network requirements (e.g., access to object storage)
 				// and should be managed by separate NetworkPolicies if restrictions are needed.
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
 						Key:      "openbao.org/component",
 						Operator: metav1.LabelSelectorOpNotIn,
-						Values:   []string{"backup"},
+						Values:   []string{"backup", "restore"},
 					},
 				},
 			},

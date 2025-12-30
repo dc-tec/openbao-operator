@@ -24,6 +24,7 @@ type ExecutorConfig struct {
 	BackupBucket         string
 	BackupPathPrefix     string
 	BackupFilenamePrefix string // Added to support pre-upgrade prefixes
+	BackupKey            string // Deterministic key provided by controller
 	BackupUsePathStyle   bool
 	BackupRegion         string
 
@@ -154,6 +155,7 @@ func loadStorageConfig(cfg *ExecutorConfig) error {
 
 	cfg.BackupPathPrefix = strings.TrimSpace(os.Getenv(constants.EnvBackupPathPrefix))
 	cfg.BackupFilenamePrefix = strings.TrimSpace(os.Getenv(constants.EnvBackupFilenamePrefix))
+	cfg.BackupKey = strings.TrimSpace(os.Getenv(constants.EnvBackupKey))
 
 	cfg.BackupRegion = strings.TrimSpace(os.Getenv(constants.EnvBackupRegion))
 	if cfg.BackupRegion == "" {

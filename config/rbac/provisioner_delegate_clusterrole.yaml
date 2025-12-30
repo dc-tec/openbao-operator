@@ -59,6 +59,20 @@ rules:
       - update
       - watch
   - apiGroups:
+      - openbao.org
+    resources:
+      - openbaorestores
+      - openbaorestores/status
+      - openbaorestores/finalizers
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
       - apps
     resources:
       - statefulsets

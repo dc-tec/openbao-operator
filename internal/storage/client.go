@@ -39,4 +39,9 @@ type ObjectStorage interface {
 	// Head retrieves metadata for a single object without downloading its contents.
 	// Returns nil and no error if the object does not exist.
 	Head(ctx context.Context, key string) (*ObjectInfo, error)
+
+	// Download retrieves an object and returns a reader for its contents.
+	// The caller is responsible for closing the returned ReadCloser.
+	// Returns an error if the object does not exist.
+	Download(ctx context.Context, key string) (io.ReadCloser, error)
 }
