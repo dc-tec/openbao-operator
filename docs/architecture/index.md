@@ -39,7 +39,7 @@ The Operator treats `OpenBaoCluster.Spec` as the declarative source of truth and
 6. **Sentinel (if enabled):** Watches for infrastructure drift and triggers fast-path reconciliation when unauthorized changes are detected.
 7. **OpenBao Pods:** Boot up, mount certs, read config, and auto-join the cluster using the K8s API peer discovery.
 
-### 1.3 Assumptions and Non-Goals
+### 1.3 Assumptions
 
 **Assumptions:**
 
@@ -51,13 +51,6 @@ The Operator treats `OpenBaoCluster.Spec` as the declarative source of truth and
 - Platform teams are responsible for:
   - Deploying and upgrading the Operator itself (or enabling an optional self-managed mode).
   - Wiring the Operator and OpenBao telemetry into their observability stack.
-
-**Non-Goals (v0.1):**
-
-- Cross-cluster or multi-region OpenBao federation.
-- Automated disaster **restore** flows (restore may be manual for v0.1).
-- Deep integration with provider-specific IAM mechanisms (e.g., IRSA); these can be layered on by platform teams.
-- Provider-specific integrations (e.g., native AWS/GCP/Azure APIs); these can be added as optional extensions.
 
 ## Cross-Cutting Concerns
 
