@@ -7,3 +7,6 @@ resources:
   - validate-openbaocluster-binding.yaml
   - restrict-sentinel-mutations.yaml
   - restrict-sentinel-mutations-binding.yaml
+  - restrict-provisioner-delegate.yaml
+  - restrict-provisioner-delegate-binding.yaml
+

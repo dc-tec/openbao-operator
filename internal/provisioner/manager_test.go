@@ -174,8 +174,8 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 	}
 
 	// Verify rules were updated
-	if len(role.Rules) != 14 {
-		t.Errorf("Role rules count = %v, want 14", len(role.Rules))
+	if len(role.Rules) != 15 {
+		t.Errorf("Role rules count = %v, want 15", len(role.Rules))
 	}
 
 	// Verify at least one rule has the expected OpenBaoCluster permissions

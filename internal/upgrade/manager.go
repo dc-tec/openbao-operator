@@ -498,11 +498,10 @@ func (m *Manager) validateBackupConfig(ctx context.Context, cluster *openbaov1al
 	}
 
 	// If using token secret, verify it exists
+	// SECURITY: Always use cluster.Namespace for secret lookups.
+	// Do NOT trust user-provided Namespace in SecretRef to prevent Confused Deputy attacks.
 	if hasTokenSecret {
 		secretNamespace := cluster.Namespace
-		if ns := strings.TrimSpace(backupCfg.TokenSecretRef.Namespace); ns != "" {
-			secretNamespace = ns
-		}
 
 		secretName := types.NamespacedName{
 			Namespace: secretNamespace,
@@ -607,17 +606,13 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 	}
 
 	// Add credentials secret reference if provided
+	// SECURITY: Do NOT pass cross-namespace references. Secrets must be in cluster.Namespace.
 	if backupCfg.Target.CredentialsSecretRef != nil {
 		env = append(env, corev1.EnvVar{
 			Name:  constants.EnvBackupCredentialsSecretName,
 			Value: backupCfg.Target.CredentialsSecretRef.Name,
 		})
-		if backupCfg.Target.CredentialsSecretRef.Namespace != "" {
-			env = append(env, corev1.EnvVar{
-				Name:  constants.EnvBackupCredentialsSecretNamespace,
-				Value: backupCfg.Target.CredentialsSecretRef.Namespace,
-			})
-		}
+		// Namespace is always cluster.Namespace - cross-namespace references are not allowed
 	}
 
 	// Add JWT Auth configuration (preferred method)
@@ -633,17 +628,13 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 	}
 
 	// Add token secret reference if provided (fallback for token-based auth)
+	// SECURITY: Do NOT pass cross-namespace references. Secrets must be in cluster.Namespace.
 	if backupCfg.TokenSecretRef != nil {
 		env = append(env, corev1.EnvVar{
 			Name:  constants.EnvBackupTokenSecretName,
 			Value: backupCfg.TokenSecretRef.Name,
 		})
-		if backupCfg.TokenSecretRef.Namespace != "" {
-			env = append(env, corev1.EnvVar{
-				Name:  constants.EnvBackupTokenSecretNamespace,
-				Value: backupCfg.TokenSecretRef.Namespace,
-			})
-		}
+		// Namespace is always cluster.Namespace - cross-namespace references are not allowed
 		// Only set auth method to token if JWT Auth is not configured
 		if backupCfg.JWTAuthRole == "" {
 			env = append(env, corev1.EnvVar{

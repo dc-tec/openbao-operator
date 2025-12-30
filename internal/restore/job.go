@@ -5,6 +5,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -58,6 +59,17 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 			RunAsNonRoot:             ptr.To(true),
 			Capabilities: &corev1.Capabilities{
 				Drop: []corev1.Capability{"ALL"},
+			},
+		},
+		// SECURITY: Resource limits prevent restore jobs from exhausting node resources
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("128Mi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
 			},
 		},
 		VolumeMounts: volumeMounts,

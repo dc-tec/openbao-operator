@@ -15,7 +15,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -428,6 +430,18 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 			// when Gateway API CRDs are not installed but spec.gateway.enabled is true.
 			// Gateway API CRDs are NOT installed by default in the e2e suite, so this test
 			// should work without any setup.
+			//
+			// Skip if Gateway API CRDs are already installed (by another test like Blue/Green GatewayWeights)
+			// Check by trying to list HTTPRoutes - if it succeeds, CRDs are installed
+			var httpRouteList unstructured.UnstructuredList
+			httpRouteList.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "gateway.networking.k8s.io",
+				Version: "v1",
+				Kind:    "HTTPRouteList",
+			})
+			if err := admin.List(ctx, &httpRouteList); err == nil {
+				Skip("Gateway API CRDs are installed (likely by another test), skipping missing CRDs test")
+			}
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				err := admin.Get(ctx, types.NamespacedName{Name: bad.Name, Namespace: tenantNamespace}, updated)

@@ -56,3 +56,31 @@ spec:
           (object.spec.backup.target.roleArn != "" || has(object.spec.backup.target.credentialsSecretRef)) &&
           object.spec.backup.schedule.matches("^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$"))
       message: spec.backup requires schedule, executorImage, OpenBao auth (jwtAuthRole or tokenSecretRef), storage auth (target.roleArn or target.credentialsSecretRef), and a 5-field cron expression.
+    # SSRF Protection: Block localhost endpoints (all profiles - localhost is never a valid backup target)
+    - expression: >-
+        !variables.has_backup ||
+        !has(object.spec.backup.target.endpoint) ||
+        object.spec.backup.target.endpoint == "" ||
+        !(
+          object.spec.backup.target.endpoint.contains("localhost") ||
+          object.spec.backup.target.endpoint.contains("127.0.0.1") ||
+          object.spec.backup.target.endpoint.contains("::1")
+        )
+      message: "Backup endpoint cannot point to localhost (SSRF protection)."
+    # SSRF Protection: Block link-local addresses (all profiles - cloud metadata is always dangerous)
+    - expression: >-
+        !variables.has_backup ||
+        !has(object.spec.backup.target.endpoint) ||
+        object.spec.backup.target.endpoint == "" ||
+        !object.spec.backup.target.endpoint.matches("^https?://169\\.254\\..*")
+      message: "Backup endpoint cannot point to link-local addresses (SSRF protection against cloud metadata services)."
+    # SSRF Protection: Require HTTPS for Hardened profile
+    - expression: >-
+        object.spec.profile != "Hardened" ||
+        !variables.has_backup ||
+        !has(object.spec.backup.target.endpoint) ||
+        object.spec.backup.target.endpoint == "" ||
+        object.spec.backup.target.endpoint.startsWith("https://") ||
+        object.spec.backup.target.endpoint.startsWith("s3://")
+      message: "Backup endpoint must use HTTPS or S3 scheme in Hardened profile."
+

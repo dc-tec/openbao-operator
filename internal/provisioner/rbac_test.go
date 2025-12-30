@@ -18,19 +18,19 @@ func TestGenerateTenantRole(t *testing.T) {
 			name:      "default namespace",
 			namespace: "default",
 			wantName:  TenantRoleName,
-			wantRules: 14, // Expected number of PolicyRules
+			wantRules: 15, // Expected number of PolicyRules
 		},
 		{
 			name:      "custom namespace",
 			namespace: "tenant-1",
 			wantName:  TenantRoleName,
-			wantRules: 14,
+			wantRules: 15,
 		},
 		{
 			name:      "namespace with special characters",
 			namespace: "my-namespace-123",
 			wantName:  TenantRoleName,
-			wantRules: 14,
+			wantRules: 15,
 		},
 	}
 

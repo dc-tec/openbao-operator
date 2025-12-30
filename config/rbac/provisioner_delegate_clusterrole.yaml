@@ -145,6 +145,19 @@ rules:
       - patch
       - update
       - watch
+  # PodDisruptionBudgets for StatefulSet protection during disruptions
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
   - apiGroups:
       - networking.k8s.io
     resources:

@@ -50,6 +50,18 @@ The operator rejects `OpenBaoCluster` resources that attempt to override protect
 
 Certain security-critical fields, such as the enabling/disabling of the Init Container, are validated to ensure the cluster cannot be put into an unsupported or insecure state.
 
+### 2.4 RBAC Delegation Hardening
+
+The Provisioner uses a dedicated delegate ServiceAccount and impersonation to create tenant-scoped Roles and RoleBindings. This delegation is hardened at two layers:
+
+- **Kubernetes RBAC Escalation Prevention:** The delegate ClusterRole (`openbao-operator-tenant-template`) defines the maximum permissions that can ever be granted to tenants. The API server enforces that the delegate cannot create Roles with permissions it does not already possess.
+- **ValidatingAdmissionPolicy Guard:** A cluster-scoped `ValidatingAdmissionPolicy` (`openbao-restrict-provisioner-delegate`) restricts the Provisioner Delegate to:
+  - Only creating specific Roles/RoleBindings by name.
+  - Only binding those Roles to operator- and Sentinel-owned ServiceAccounts.
+  - Rejecting any delegated Role whose `rules.verbs` include `impersonate`, `bind`, `escalate`, or `*`.
+
+Together, these controls provide defense-in-depth: even if the delegate's ClusterRole is accidentally broadened, the policy still prevents impersonation or wildcard privilege grants through delegated Roles.
+
 ## 3. Network Security
 
 The Operator adopts a "Default Deny" network posture for every OpenBao cluster it creates.
@@ -92,7 +104,48 @@ See also:
 
 - User guide: [Network Configuration](../user-guide/network.md)
 
-## 4. Workload Security
+## 4. Security Hardening
+
+The Operator implements additional security hardening measures to protect against various attack vectors and ensure operational resilience.
+
+### 4.1 PodDisruptionBudget
+
+The operator automatically creates a `PodDisruptionBudget` (PDB) for every `OpenBaoCluster`:
+
+- **Configuration:** `maxUnavailable: 1` ensures at least N-1 pods remain available during voluntary disruptions.
+- **Purpose:** Prevents simultaneous pod evictions during node drains, cluster upgrades, or autoscaler actions that could cause Raft quorum loss.
+- **Automatic Creation:** PDB is created alongside the StatefulSet and owned by the `OpenBaoCluster` for garbage collection.
+- **Single-Replica Exclusion:** PDB is skipped for single-replica clusters where it provides no benefit.
+
+### 4.2 Backup Endpoint SSRF Protection
+
+To prevent Server-Side Request Forgery (SSRF) attacks, backup endpoint URLs are validated via `ValidatingAdmissionPolicy`:
+
+- **Blocked Endpoints:**
+  - `localhost`, `127.0.0.1`, `::1` (loopback)
+  - `169.254.x.x` (link-local addresses, including cloud metadata services like `169.254.169.254`)
+  - `.svc.cluster.local`, `.pod.cluster.local` (internal Kubernetes DNS)
+- **Hardened Profile:** Requires HTTPS or S3 scheme for backup endpoints.
+- **Defense-in-Depth:** Go-side validation in `BackupManager.checkPreconditions` provides runtime verification.
+
+### 4.3 Sentinel Rate Limiting
+
+To prevent Sentinel-triggered reconciliations from indefinitely blocking administrative operations (backups, upgrades), rate limiting is enforced:
+
+- **Consecutive Fast Path Limit:** After 5 consecutive Sentinel-triggered reconciliations, a full reconcile (including Upgrade and Backup managers) is forced.
+- **Time-Based Limit:** If 5 minutes have elapsed since the last full reconcile, the next reconcile runs all managers regardless of Sentinel trigger status.
+- **Tracking Fields:** `status.drift.lastFullReconcileTime` and `status.drift.consecutiveFastPaths` track reconciliation patterns.
+- **Security Purpose:** Prevents a compromised or misbehaving Sentinel from causing a denial-of-service of administrative functions.
+
+### 4.4 Job Resource Limits
+
+Backup and restore Jobs have resource limits to prevent resource exhaustion:
+
+- **Requests:** 100m CPU, 128Mi memory
+- **Limits:** 500m CPU, 512Mi memory
+- **Purpose:** Prevents runaway jobs from consuming excessive node resources and impacting other workloads.
+
+## 5. Workload Security
 
 The operator ensures that OpenBao pods run with restricted privileges.
 
@@ -135,7 +188,7 @@ The Provisioner automatically applies Pod Security Standards (PSS) labels to ten
 - Provides consistent security posture across all tenant namespaces.
 - Aligns with Kubernetes security best practices.
 
-## 5. Secret Management
+## 6. Secret Management
 
 The Operator manages several high-value secrets.
 
@@ -165,7 +218,7 @@ See also:
 - **Recommendation:** Users are strongly advised to revoke this token or delete the Secret immediately after initial setup.
 - **Self-Init:** When `spec.selfInit` is used, the root token is automatically revoked by OpenBao after initialization and is **never** stored in a Secret.
 
-## 6. TLS & Identity
+## 7. TLS & Identity
 
 The Operator supports three modes for TLS certificate management:
 
@@ -198,7 +251,7 @@ When `spec.tls.mode` is `ACME`, OpenBao uses its native ACME client to automatic
 - **Zero Trust:** The operator never possesses private keys, making this mode ideal for zero-trust architectures.
 - **Configuration:** ACME parameters (`directoryURL`, `domain`, `email`) are configured via `spec.tls.acme` and rendered directly in the OpenBao listener configuration.
 
-## 7. Supply Chain Security
+## 8. Supply Chain Security
 
 The Operator implements container image signature verification to protect against compromised registries, man-in-the-middle attacks, and TOCTOU (Time-of-Check to Time-of-Use) vulnerabilities.
 
@@ -219,7 +272,7 @@ The Operator implements container image signature verification to protect agains
   - Rekor verification provides non-repudiation, making it impossible to deny that a signature was created.
   - Digest pinning prevents TOCTOU attacks where tags could be swapped between verification and deployment.
 
-## 8. Security Profiles
+## 9. Security Profiles
 
 The Operator supports two security profiles via `spec.profile` to enforce different security postures:
 
@@ -265,7 +318,7 @@ See also:
 
 - User guide: [Security Profiles](../user-guide/security-profiles.md)
 
-## 9. JWT Authentication & OIDC Integration
+## 10. JWT Authentication & OIDC Integration
 
 The Operator uses JWT authentication (OIDC-based) for all operator-to-OpenBao communication, replacing the previous Kubernetes Auth mechanism.
 

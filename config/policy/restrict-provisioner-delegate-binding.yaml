@@ -1,0 +1,15 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-restrict-provisioner-delegate-binding
+spec:
+  policyName: openbao-restrict-provisioner-delegate
+  validationActions: [Deny]
+  matchResources:
+    # This binding applies the policy to ALL Role/RoleBinding requests.
+    # The policy itself filters for the specific user (is_delegate variable).
+    resourceRules:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["roles", "rolebindings"]

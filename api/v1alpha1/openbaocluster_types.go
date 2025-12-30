@@ -1611,6 +1611,15 @@ type DriftStatus struct {
 	// (e.g., "Service/sentinel-cluster" or "StatefulSet/sentinel-cluster").
 	// +optional
 	LastDriftResource string `json:"lastDriftResource,omitempty"`
+	// LastFullReconcileTime is the timestamp of the last full reconciliation
+	// (including UpgradeManager and BackupManager). Used to prevent Sentinel-triggered
+	// fast path from indefinitely blocking administrative operations.
+	// +optional
+	LastFullReconcileTime *metav1.Time `json:"lastFullReconcileTime,omitempty"`
+	// ConsecutiveFastPaths tracks consecutive Sentinel-triggered reconciliations
+	// without a full reconcile. Reset to 0 after each full reconcile.
+	// +optional
+	ConsecutiveFastPaths int32 `json:"consecutiveFastPaths,omitempty"`
 }
 
 // OpenBaoClusterStatus defines the observed state of an OpenBaoCluster.

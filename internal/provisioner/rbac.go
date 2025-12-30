@@ -98,31 +98,37 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 				Resources: []string{"jobs"},
 				Verbs:     commonVerbs, // Changed from "*"
 			},
-			// 7. Networking resources
+			// 7. PodDisruptionBudgets for StatefulSet protection
+			{
+				APIGroups: []string{"policy"},
+				Resources: []string{"poddisruptionbudgets"},
+				Verbs:     commonVerbs,
+			},
+			// 8. Networking resources
 			{
 				APIGroups: []string{"networking.k8s.io"},
 				Resources: []string{"ingresses", "networkpolicies"},
 				Verbs:     commonVerbs, // Changed from "*"
 			},
-			// 8. Gateway API
+			// 9. Gateway API
 			{
 				APIGroups: []string{"gateway.networking.k8s.io"},
 				Resources: []string{"httproutes", "tlsroutes", "backendtlspolicies"},
 				Verbs:     commonVerbs, // Changed from "*"
 			},
-			// 9. RBAC for OpenBao pod discovery
+			// 10. RBAC for OpenBao pod discovery
 			{
 				APIGroups: []string{"rbac.authorization.k8s.io"},
 				Resources: []string{"roles", "rolebindings"},
 				Verbs:     commonVerbs,
 			},
-			// 10. Endpoints for service discovery
+			// 11. Endpoints for service discovery
 			{
 				APIGroups: []string{""},
 				Resources: []string{"endpoints"},
 				Verbs:     []string{"get", "list", "watch"},
 			},
-			// 11. EndpointSlices for service discovery (Required for modern K8s)
+			// 12. EndpointSlices for service discovery (Required for modern K8s)
 			{
 				APIGroups: []string{"discovery.k8s.io"},
 				Resources: []string{"endpointslices"},

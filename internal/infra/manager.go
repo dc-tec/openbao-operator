@@ -199,6 +199,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return err
 	}
 
+	// SECURITY: Create PodDisruptionBudget to prevent simultaneous pod evictions
+	// that could cause quorum loss during node drains or cluster upgrades
+	if err := m.ensurePodDisruptionBudget(ctx, logger, cluster); err != nil {
+		return err
+	}
+
 	// Manage Sentinel deployment
 	if cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled {
 		if err := m.ensureSentinelServiceAccount(ctx, logger, cluster); err != nil {

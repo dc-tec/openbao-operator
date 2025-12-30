@@ -373,11 +373,10 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 	}
 
 	// If using token secret, verify it exists
+	// SECURITY: Always use cluster.Namespace for secret lookups.
+	// Do NOT trust user-provided Namespace in SecretRef to prevent Confused Deputy attacks.
 	if hasTokenSecret {
 		secretNamespace := cluster.Namespace
-		if ns := strings.TrimSpace(backupCfg.TokenSecretRef.Namespace); ns != "" {
-			secretNamespace = ns
-		}
 
 		secretName := types.NamespacedName{
 			Namespace: secretNamespace,

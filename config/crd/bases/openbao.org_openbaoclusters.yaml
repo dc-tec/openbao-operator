@@ -2555,6 +2555,12 @@ spec:
                 description: Drift tracks drift detection and correction events for
                   this cluster.
                 properties:
+                  consecutiveFastPaths:
+                    description: |-
+                      ConsecutiveFastPaths tracks consecutive Sentinel-triggered reconciliations
+                      without a full reconcile. Reset to 0 after each full reconcile.
+                    format: int32
+                    type: integer
                   driftCorrectionCount:
                     description: DriftCorrectionCount is the total number of times
                       drift has been detected and corrected.
@@ -2574,6 +2580,13 @@ spec:
                     description: |-
                       LastDriftResource is the resource that triggered the last drift detection
                       (e.g., "Service/sentinel-cluster" or "StatefulSet/sentinel-cluster").
+                    type: string
+                  lastFullReconcileTime:
+                    description: |-
+                      LastFullReconcileTime is the timestamp of the last full reconciliation
+                      (including UpgradeManager and BackupManager). Used to prevent Sentinel-triggered
+                      fast path from indefinitely blocking administrative operations.
+                    format: date-time
                     type: string
                 type: object
               initialized:

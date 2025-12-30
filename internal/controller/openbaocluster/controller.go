@@ -389,7 +389,38 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Conditional Execution: Only run expensive managers if we are NOT in Fast Path mode
-	if !isSentinelTrigger {
+	// SECURITY: Rate limit Sentinel triggers to prevent DoS of admin operations (backups/upgrades)
+	// Force full reconciliation if:
+	// 1. Too many consecutive fast paths (exceeds SentinelMaxConsecutiveFastPaths), OR
+	// 2. Too much time since last full reconcile (exceeds SentinelForceFullReconcileInterval)
+	forceFullReconcile := false
+	if isSentinelTrigger {
+		// Initialize drift status if needed
+		if cluster.Status.Drift == nil {
+			cluster.Status.Drift = &openbaov1alpha1.DriftStatus{}
+		}
+
+		// Check if we should force a full reconcile
+		consecutiveFastPaths := cluster.Status.Drift.ConsecutiveFastPaths
+		lastFullReconcile := cluster.Status.Drift.LastFullReconcileTime
+
+		if consecutiveFastPaths >= constants.SentinelMaxConsecutiveFastPaths {
+			logger.Info("Forcing full reconcile due to consecutive fast paths limit",
+				"consecutiveFastPaths", consecutiveFastPaths,
+				"maxAllowed", constants.SentinelMaxConsecutiveFastPaths)
+			forceFullReconcile = true
+		} else if lastFullReconcile != nil {
+			timeSinceFullReconcile := time.Since(lastFullReconcile.Time)
+			if timeSinceFullReconcile >= constants.SentinelForceFullReconcileInterval {
+				logger.Info("Forcing full reconcile due to time since last full reconcile",
+					"timeSinceFullReconcile", timeSinceFullReconcile,
+					"forceInterval", constants.SentinelForceFullReconcileInterval)
+				forceFullReconcile = true
+			}
+		}
+	}
+
+	if !isSentinelTrigger || forceFullReconcile {
 		// Choose upgrade strategy: BlueGreen or RollingUpdate
 		if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
 			// Use bluegreen.Manager for blue/green upgrades
@@ -405,8 +436,27 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				backupmanager.NewManager(r.Client, r.Scheme),
 			)
 		}
+
+		// Track full reconcile for rate limiting
+		if cluster.Status.Drift == nil {
+			cluster.Status.Drift = &openbaov1alpha1.DriftStatus{}
+		}
+		now := metav1.Now()
+		cluster.Status.Drift.LastFullReconcileTime = &now
+		cluster.Status.Drift.ConsecutiveFastPaths = 0
+
+		if forceFullReconcile {
+			logger.Info("Reset consecutive fast paths counter after forced full reconcile")
+		}
 	} else {
-		logger.Info("Skipping Upgrade and Backup managers due to Sentinel Trigger priority")
+		// Fast path - increment consecutive counter
+		if cluster.Status.Drift == nil {
+			cluster.Status.Drift = &openbaov1alpha1.DriftStatus{}
+		}
+		cluster.Status.Drift.ConsecutiveFastPaths++
+		logger.Info("Skipping Upgrade and Backup managers due to Sentinel Trigger priority",
+			"consecutiveFastPaths", cluster.Status.Drift.ConsecutiveFastPaths,
+			"maxBeforeForce", constants.SentinelMaxConsecutiveFastPaths)
 	}
 
 	// Execute sub-reconcilers in order

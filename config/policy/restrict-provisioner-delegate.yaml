@@ -1,0 +1,79 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-restrict-provisioner-delegate
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["roles", "rolebindings"]
+  variables:
+    - name: is_delegate
+      # Matches the exact ServiceAccount of the Provisioner Delegate
+      expression: >-
+        request.userInfo.username == "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner-delegate"
+  validations:
+    # Rule 1: Role Name Restriction
+    # The Delegate can ONLY create Roles with specific names.
+    # This prevents creation of arbitrary privileged roles.
+    - expression: >-
+        !variables.is_delegate ||
+        object.kind != 'Role' ||
+        object.metadata.name in ['openbao-operator-tenant-role', 'openbao-sentinel-role']
+      message: "The Provisioner Delegate can only create Roles named 'openbao-operator-tenant-role' or 'openbao-sentinel-role'."
+
+    # Rule 2: RoleBinding Name Restriction
+    # The Delegate can ONLY create RoleBindings with specific names.
+    - expression: >-
+        !variables.is_delegate ||
+        object.kind != 'RoleBinding' ||
+        object.metadata.name in ['openbao-operator-tenant-rolebinding', 'openbao-sentinel-rolebinding']
+      message: "The Provisioner Delegate can only create RoleBindings named 'openbao-operator-tenant-rolebinding' or 'openbao-sentinel-rolebinding'."
+
+    # Rule 3: Role Reference Restriction (Prevent Admin Grant)
+    # The Delegate can ONLY bind to the specific operator-defined roles.
+    # It cannot bind 'cluster-admin' or any other privileged role.
+    - expression: >-
+        !variables.is_delegate ||
+        object.kind != 'RoleBinding' ||
+        object.roleRef.name in ['openbao-operator-tenant-role', 'openbao-sentinel-role']
+      message: "The Provisioner Delegate is restricted to binding only 'openbao-operator-tenant-role' or 'openbao-sentinel-role'."
+
+    # Rule 4: Subject Type Restriction
+    # The Delegate can ONLY bind roles to ServiceAccounts (not users or groups).
+    - expression: >-
+        !variables.is_delegate ||
+        object.kind != 'RoleBinding' ||
+        object.subjects.all(s, s.kind == 'ServiceAccount')
+      message: "The Provisioner Delegate can only grant permissions to ServiceAccounts."
+
+    # Rule 5: Subject Name Restriction (Prevent Backdoor Creation)
+    # For tenant rolebinding: allows operator controller SA (with .startsWith for dynamic names)
+    # For sentinel rolebinding: allows openbao-sentinel SA only
+    - expression: >-
+        !variables.is_delegate ||
+        object.kind != 'RoleBinding' ||
+        object.subjects.all(s,
+          s.name.startsWith('openbao-operator') ||
+          s.name == 'openbao-sentinel')
+      message: "The Provisioner Delegate can only grant permissions to operator or sentinel ServiceAccounts."
+
+    # Rule 6: Content Restriction (Prevent Dangerous Verbs)
+    # The Delegate cannot create or update Roles that grant impersonation,
+    # bind/escalate, or wildcard permissions. This provides defense-in-depth
+    # even if the delegate ClusterRole is accidentally broadened in the future.
+    - expression: >-
+        !variables.is_delegate ||
+        object.kind != 'Role' ||
+        !object.rules.exists(rule,
+          rule.verbs.exists(v,
+            v == 'impersonate' ||
+            v == 'bind' ||
+            v == 'escalate' ||
+            v == '*'
+          )
+        )
+      message: "The Provisioner Delegate cannot create Roles granting 'impersonate', 'bind', 'escalate', or wildcard permissions."

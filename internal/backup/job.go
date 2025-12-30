@@ -10,6 +10,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -229,17 +230,13 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, backupKey 
 	}
 
 	// Add credentials secret reference if provided
+	// SECURITY: Do NOT pass cross-namespace references. Secrets must be in cluster.Namespace.
 	if cluster.Spec.Backup.Target.CredentialsSecretRef != nil {
 		env = append(env, corev1.EnvVar{
 			Name:  constants.EnvBackupCredentialsSecretName,
 			Value: cluster.Spec.Backup.Target.CredentialsSecretRef.Name,
 		})
-		if cluster.Spec.Backup.Target.CredentialsSecretRef.Namespace != "" {
-			env = append(env, corev1.EnvVar{
-				Name:  constants.EnvBackupCredentialsSecretNamespace,
-				Value: cluster.Spec.Backup.Target.CredentialsSecretRef.Namespace,
-			})
-		}
+		// Namespace is always cluster.Namespace - cross-namespace references are not allowed
 	}
 
 	// Add JWT Auth configuration (preferred method)
@@ -257,17 +254,13 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, backupKey 
 	}
 
 	// Add token secret reference if provided (fallback for token-based auth)
+	// SECURITY: Do NOT pass cross-namespace references. Secrets must be in cluster.Namespace.
 	if cluster.Spec.Backup.TokenSecretRef != nil {
 		env = append(env, corev1.EnvVar{
 			Name:  constants.EnvBackupTokenSecretName,
 			Value: cluster.Spec.Backup.TokenSecretRef.Name,
 		})
-		if cluster.Spec.Backup.TokenSecretRef.Namespace != "" {
-			env = append(env, corev1.EnvVar{
-				Name:  constants.EnvBackupTokenSecretNamespace,
-				Value: cluster.Spec.Backup.TokenSecretRef.Namespace,
-			})
-		}
+		// Namespace is always cluster.Namespace - cross-namespace references are not allowed
 		// Only set auth method to token if JWT Auth is not configured
 		if cluster.Spec.Backup.JWTAuthRole == "" {
 			env = append(env, corev1.EnvVar{
@@ -344,6 +337,17 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, backupKey 
 								ReadOnlyRootFilesystem: ptr.To(true),
 								// Run as non-root (inherited from PodSecurityContext, but explicit here is safe)
 								RunAsNonRoot: ptr.To(true),
+							},
+							// SECURITY: Resource limits prevent backup jobs from exhausting node resources
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("128Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("500m"),
+									corev1.ResourceMemory: resource.MustParse("512Mi"),
+								},
 							},
 							Env: env,
 							// Mount secrets for credentials and tokens
