@@ -95,7 +95,7 @@ KIND_CLUSTER ?= openbao-operator-test-e2e
 # E2E_PARALLEL_NODES controls the number of parallel nodes for e2e tests.
 # Set to 1 for sequential execution (default), or a higher number for parallel execution.
 # Example: make test-e2e E2E_PARALLEL_NODES=4
-E2E_PARALLEL_NODES ?= 1
+E2E_PARALLEL_NODES ?= 2
 # E2E_TIMEOUT sets the timeout for the entire test suite (default: 1h).
 # Example: make test-e2e E2E_TIMEOUT=2h
 E2E_TIMEOUT ?= 1h
