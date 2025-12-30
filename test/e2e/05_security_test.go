@@ -32,32 +32,7 @@ const (
 	impersonatedGroup = "e2e-developers"
 )
 
-// createAdminPolicyAndJWTAuthRequests creates SelfInit requests for enabling JWT auth
-// and creating an admin policy.
-func createAdminPolicyAndJWTAuthRequests() []openbaov1alpha1.SelfInitRequest {
-	return []openbaov1alpha1.SelfInitRequest{
-		{
-			Name:      "enable-jwt-auth",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "sys/auth/jwt",
-			AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
-				Type: "jwt",
-			},
-		},
-		{
-			Name:      "create-admin-policy",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "sys/policies/acl/admin",
-			Policy: &openbaov1alpha1.SelfInitPolicy{
-				Policy: `path "*" {
-  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
-}`,
-			},
-		},
-	}
-}
-
-var _ = Describe("Security", Ordered, func() {
+var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 	ctx := context.Background()
 
 	var (
@@ -196,7 +171,7 @@ var _ = Describe("Security", Ordered, func() {
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
 						Enabled:  true,
-						Requests: createAdminPolicyAndJWTAuthRequests(),
+						Requests: framework.DefaultAdminSelfInitRequests(),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -275,7 +250,7 @@ var _ = Describe("Security", Ordered, func() {
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
 						Enabled:  true,
-						Requests: createAdminPolicyAndJWTAuthRequests(),
+						Requests: framework.DefaultAdminSelfInitRequests(),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -412,7 +387,7 @@ var _ = Describe("Security", Ordered, func() {
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
 						Enabled:  true,
-						Requests: createAdminPolicyAndJWTAuthRequests(),
+						Requests: framework.DefaultAdminSelfInitRequests(),
 					},
 					Gateway: &openbaov1alpha1.GatewayConfig{
 						Enabled:  true,

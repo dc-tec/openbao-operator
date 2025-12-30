@@ -38,9 +38,19 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/test/utils"
+)
+
+const (
+	defaultProjectImage         = "example.com/openbao-operator:v0.0.1"
+	defaultConfigInitImage      = "openbao-config-init:dev"
+	defaultSentinelImage        = "openbao/operator-sentinel:v0.0.0"
+	defaultBackupExecutorImage  = "openbao/backup-executor:dev"
+	defaultUpgradeExecutorImage = "openbao/upgrade-executor:dev"
 )
 
 var (
@@ -60,27 +70,27 @@ var (
 
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
-	projectImage = "example.com/openbao-operator:v0.0.1"
+	projectImage = defaultProjectImage
 
 	// configInitImage is the image used by OpenBao pods as init container.
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
 	// and load it into kind.
-	configInitImage = "openbao-config-init:dev"
+	configInitImage = defaultConfigInitImage
 
 	// sentinelImage is the image used by Sentinel Deployment.
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
 	// and load it into kind. The version matches OPERATOR_VERSION in the operator deployment.
-	sentinelImage = "openbao/operator-sentinel:v0.0.0"
+	sentinelImage = defaultSentinelImage
 
 	// backupExecutorImage is the image used by backup Jobs.
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
 	// and load it into kind.
-	backupExecutorImage = "openbao/backup-executor:dev"
+	backupExecutorImage = defaultBackupExecutorImage
 
 	// upgradeExecutorImage is the image used by upgrade Jobs.
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
 	// and load it into kind.
-	upgradeExecutorImage = "openbao/upgrade-executor:dev"
+	upgradeExecutorImage = defaultUpgradeExecutorImage
 
 	// skipCleanup controls whether to clean up resources after the suite finishes.
 	// Set E2E_SKIP_CLEANUP=true environment variable to preserve the cluster state for debugging.
@@ -92,9 +102,23 @@ var (
 // The default setup requires Kind, builds/loads the Manager Docker image locally, and installs
 // CertManager.
 func TestE2E(t *testing.T) {
+	logf.SetLogger(zap.New(zap.UseDevMode(false)))
+	projectImage = envOrDefault("E2E_OPERATOR_IMAGE", projectImage)
+	configInitImage = envOrDefault("E2E_CONFIG_INIT_IMAGE", configInitImage)
+	sentinelImage = envOrDefault("E2E_SENTINEL_IMAGE", sentinelImage)
+	backupExecutorImage = envOrDefault("E2E_BACKUP_EXECUTOR_IMAGE", backupExecutorImage)
+	upgradeExecutorImage = envOrDefault("E2E_UPGRADE_EXECUTOR_IMAGE", upgradeExecutorImage)
 	RegisterFailHandler(Fail)
 	_, _ = fmt.Fprintf(GinkgoWriter, "Starting openbao-operator integration test suite\n")
 	RunSpecs(t, "e2e suite")
+}
+
+func envOrDefault(key, defaultValue string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }
 
 var _ = SynchronizedBeforeSuite(func() []byte {
@@ -443,20 +467,24 @@ func InstallGatewayAPI() error {
 
 // installGatewayAPI installs the Gateway API CRDs (standard and experimental).
 func installGatewayAPI() error {
-	const (
-		gatewayAPIStandardURL     = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml"
-		gatewayAPIExperimentalURL = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/experimental-install.yaml"
-	)
+	standardManifest := os.Getenv("E2E_GATEWAY_API_STANDARD_MANIFEST")
+	if strings.TrimSpace(standardManifest) == "" {
+		standardManifest = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml"
+	}
+	experimentalManifest := os.Getenv("E2E_GATEWAY_API_EXPERIMENTAL_MANIFEST")
+	if strings.TrimSpace(experimentalManifest) == "" {
+		experimentalManifest = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/experimental-install.yaml"
+	}
 
 	// Install standard CRDs first
-	cmd := exec.Command("kubectl", "apply", "-f", gatewayAPIStandardURL)
+	cmd := exec.Command("kubectl", "apply", "-f", standardManifest)
 	if _, err := utils.Run(cmd); err != nil {
 		return fmt.Errorf("failed to install Gateway API standard CRDs: %w", err)
 	}
 
 	// Install experimental CRDs using 'create' instead of 'apply' because the metadata
 	// annotations are too long for 'apply' to handle (exceeds Kubernetes annotation size limits).
-	cmd = exec.Command("kubectl", "create", "-f", gatewayAPIExperimentalURL)
+	cmd = exec.Command("kubectl", "create", "-f", experimentalManifest)
 	output, err := utils.Run(cmd)
 	if err != nil {
 		// If CRDs already exist, that's okay - we can continue
@@ -516,19 +544,23 @@ func isGatewayAPICRDsInstalled() bool {
 // This is exported so individual tests can clean up Gateway API after use.
 // Returns an error if uninstallation fails.
 func UninstallGatewayAPI() error {
-	const (
-		gatewayAPIStandardURL     = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml"
-		gatewayAPIExperimentalURL = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/experimental-install.yaml"
-	)
+	standardManifest := os.Getenv("E2E_GATEWAY_API_STANDARD_MANIFEST")
+	if strings.TrimSpace(standardManifest) == "" {
+		standardManifest = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml"
+	}
+	experimentalManifest := os.Getenv("E2E_GATEWAY_API_EXPERIMENTAL_MANIFEST")
+	if strings.TrimSpace(experimentalManifest) == "" {
+		experimentalManifest = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/experimental-install.yaml"
+	}
 
 	// Delete experimental CRDs first (they may depend on standard CRDs)
-	cmd := exec.Command("kubectl", "delete", "-f", gatewayAPIExperimentalURL, "--ignore-not-found")
+	cmd := exec.Command("kubectl", "delete", "-f", experimentalManifest, "--ignore-not-found")
 	if _, err := utils.Run(cmd); err != nil {
 		return fmt.Errorf("failed to uninstall Gateway API experimental CRDs: %w", err)
 	}
 
 	// Delete standard CRDs
-	cmd = exec.Command("kubectl", "delete", "-f", gatewayAPIStandardURL, "--ignore-not-found")
+	cmd = exec.Command("kubectl", "delete", "-f", standardManifest, "--ignore-not-found")
 	if _, err := utils.Run(cmd); err != nil {
 		return fmt.Errorf("failed to uninstall Gateway API standard CRDs: %w", err)
 	}

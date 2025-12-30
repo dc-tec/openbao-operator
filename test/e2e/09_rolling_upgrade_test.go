@@ -76,7 +76,7 @@ path "sys/storage/raft/autopilot/state" {
 	}
 }
 
-var _ = Describe("Upgrade", Ordered, func() {
+var _ = Describe("Upgrade", Label("upgrade", "cluster", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (

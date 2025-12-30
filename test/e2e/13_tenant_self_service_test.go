@@ -24,7 +24,7 @@ import (
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 )
 
-var _ = Describe("Tenant Self-Service", Ordered, Label("security", "self-service"), func() {
+var _ = Describe("Tenant Self-Service", Label("security", "tenant", "critical"), Ordered, func() {
 	ctx := context.Background()
 
 	var (
@@ -163,10 +163,6 @@ var _ = Describe("Tenant Self-Service", Ordered, Label("security", "self-service
 		})
 	})
 })
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 

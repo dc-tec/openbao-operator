@@ -25,7 +25,7 @@ import (
 	e2ehelpers "github.com/openbao/operator/test/e2e/helpers"
 )
 
-var _ = Describe("Blue/Green Upgrade Failure Scenarios", Ordered, func() {
+var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "cluster", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (

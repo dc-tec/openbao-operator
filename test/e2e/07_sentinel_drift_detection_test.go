@@ -42,7 +42,7 @@ import (
 	"github.com/openbao/operator/test/e2e/framework"
 )
 
-var _ = Describe("Sentinel: Drift Detection and Fast-Path Reconciliation", Ordered, func() {
+var _ = Describe("Sentinel: Drift Detection and Fast-Path Reconciliation", Label("sentinel", "security", "cluster", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (

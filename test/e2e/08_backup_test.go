@@ -39,6 +39,10 @@ const (
 	rustfsSecretKey = "rustfsadmin"
 )
 
+var _ = Describe("Backup", Label("backup", "requires-rustfs", "slow"), Ordered, func() {
+	// test suite body is defined below
+})
+
 // createBackupSelfInitRequests creates SelfInit requests for backup operations.
 // For Development profile, JWT auth and backup JWT role must be manually configured
 // since bootstrap is not automatically provided. This matches the pattern used in upgrade tests.
@@ -152,7 +156,7 @@ func ensureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, na
 	return nil
 }
 
-var _ = Describe("Backup", Ordered, func() {
+var _ = Describe("Backup", Label("backup", "requires-rustfs", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (

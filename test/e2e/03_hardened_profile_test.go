@@ -31,7 +31,7 @@ import (
 	e2ehelpers "github.com/openbao/operator/test/e2e/helpers"
 )
 
-var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfInit)", Ordered, func() {
+var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfInit)", Label("profile-hardened", "security", "cluster"), Ordered, func() {
 	ctx := context.Background()
 
 	var (

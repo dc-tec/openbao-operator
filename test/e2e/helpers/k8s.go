@@ -7,16 +7,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 // RunWithImpersonation runs the provided action as the specified user/group(s)
 // using Kubernetes impersonation. This is used in E2E tests to validate RBAC and
 // ValidatingAdmissionPolicy enforcement without relying on system:masters.
-//
-// This function ensures that controller-runtime logging is initialized before
-// creating the client to prevent panics when the client handles API warnings.
 func RunWithImpersonation(
 	ctx context.Context,
 	baseConfig *rest.Config,
@@ -37,11 +32,6 @@ func RunWithImpersonation(
 	if action == nil {
 		return fmt.Errorf("action is required")
 	}
-
-	// Initialize controller-runtime logger to prevent panics when the client
-	// handles API warnings. This is a no-op if logging is already initialized.
-	// We use a discard logger to avoid polluting test output with warning logs.
-	logf.SetLogger(zap.New(zap.UseDevMode(false)))
 
 	impersonatedConfig := rest.CopyConfig(baseConfig)
 	impersonatedConfig.Impersonate = rest.ImpersonationConfig{

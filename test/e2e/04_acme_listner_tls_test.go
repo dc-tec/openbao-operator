@@ -31,7 +31,7 @@ import (
 	e2ehelpers "github.com/openbao/operator/test/e2e/helpers"
 )
 
-var _ = Describe("ACME TLS (OpenBao native ACME client)", Ordered, func() {
+var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security"), Ordered, func() {
 	ctx := context.Background()
 
 	var (

@@ -25,7 +25,7 @@ import (
 	"github.com/openbao/operator/test/e2e/framework"
 )
 
-var _ = Describe("Smoke: Tenant + Cluster lifecycle", Ordered, func() {
+var _ = Describe("Smoke: Tenant + Cluster lifecycle", Label("smoke", "critical", "tenant", "cluster"), Ordered, func() {
 	ctx := context.Background()
 
 	var (
@@ -95,27 +95,8 @@ var _ = Describe("Smoke: Tenant + Cluster lifecycle", Ordered, func() {
 					Image:   configInitImage,
 				},
 				SelfInit: &openbaov1alpha1.SelfInitConfig{
-					Enabled: true,
-					Requests: []openbaov1alpha1.SelfInitRequest{
-						{
-							Name:      "enable-jwt-auth",
-							Operation: openbaov1alpha1.SelfInitOperationUpdate,
-							Path:      "sys/auth/jwt",
-							AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
-								Type: "jwt",
-							},
-						},
-						{
-							Name:      "create-admin-policy",
-							Operation: openbaov1alpha1.SelfInitOperationUpdate,
-							Path:      "sys/policies/acl/admin",
-							Policy: &openbaov1alpha1.SelfInitPolicy{
-								Policy: `path "*" {
-  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
-}`,
-							},
-						},
-					},
+					Enabled:  true,
+					Requests: framework.DefaultAdminSelfInitRequests(),
 				},
 				TLS: openbaov1alpha1.TLSConfig{
 					Enabled:        true,

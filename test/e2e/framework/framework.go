@@ -61,6 +61,35 @@ type DevelopmentClusterConfig struct {
 	APIServerCIDR string
 }
 
+// DefaultAdminSelfInitRequests returns a standard set of SelfInit requests that:
+// - enable JWT authentication
+// - create an "admin" policy with full capabilities.
+//
+// This helper is used across multiple E2E tests to avoid duplicating the same
+// SelfInit wiring in each test file.
+func DefaultAdminSelfInitRequests() []openbaov1alpha1.SelfInitRequest {
+	return []openbaov1alpha1.SelfInitRequest{
+		{
+			Name:      "enable-jwt-auth",
+			Operation: openbaov1alpha1.SelfInitOperationUpdate,
+			Path:      "sys/auth/jwt",
+			AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
+				Type: "jwt",
+			},
+		},
+		{
+			Name:      "create-admin-policy",
+			Operation: openbaov1alpha1.SelfInitOperationUpdate,
+			Path:      "sys/policies/acl/admin",
+			Policy: &openbaov1alpha1.SelfInitPolicy{
+				Policy: `path "*" {
+  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+}`,
+			},
+		},
+	}
+}
+
 // EnsureRestrictedNamespace creates a namespace with a restricted Pod Security label.
 // It ignores AlreadyExists errors.
 func EnsureRestrictedNamespace(ctx context.Context, c client.Client, name string) error {
