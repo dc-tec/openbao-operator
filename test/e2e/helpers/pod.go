@@ -3,6 +3,7 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,6 +13,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	podNotFoundGracePeriod = 10 * time.Second
+	maxPodsInSummary       = 10
 )
 
 // PodResult captures the final state and logs for a one-shot Pod.
@@ -52,6 +58,8 @@ func RunPodUntilCompletion(
 		return nil, fmt.Errorf("failed to create pod %s/%s: %w", pod.Namespace, pod.Name, err)
 	}
 
+	waitStart := time.Now()
+
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 	ticker := time.NewTicker(1 * time.Second)
@@ -62,6 +70,42 @@ func RunPodUntilCompletion(
 	for {
 		current := &corev1.Pod{}
 		if err := c.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, current); err != nil {
+			if apierrors.IsNotFound(err) && time.Since(waitStart) < podNotFoundGracePeriod {
+				// The API server may not observe the object immediately, especially under load.
+				// Treat NotFound as transient for a short grace period to reduce flakes.
+				select {
+				case <-ctx.Done():
+					return nil, fmt.Errorf(
+						"context canceled while waiting for pod %s/%s to appear: %w",
+						pod.Namespace,
+						pod.Name,
+						ctx.Err(),
+					)
+				case <-deadline.C:
+					return nil, fmt.Errorf("timed out waiting for pod %s/%s to appear", pod.Namespace, pod.Name)
+				case <-ticker.C:
+					continue
+				}
+			}
+
+			if apierrors.IsNotFound(err) {
+				podsSummary, summaryErr := summarizePods(ctx, c, pod.Namespace)
+				if summaryErr != nil {
+					return nil, fmt.Errorf(
+						"pod %s/%s disappeared while waiting (failed to list pods for diagnostics: %v)",
+						pod.Namespace,
+						pod.Name,
+						summaryErr,
+					)
+				}
+				return nil, fmt.Errorf(
+					"pod %s/%s disappeared while waiting; pods in namespace:\n%s",
+					pod.Namespace,
+					pod.Name,
+					podsSummary,
+				)
+			}
+
 			return nil, fmt.Errorf("failed to get pod %s/%s: %w", pod.Namespace, pod.Name, err)
 		}
 
@@ -99,6 +143,36 @@ func RunPodUntilCompletion(
 		case <-ticker.C:
 		}
 	}
+}
+
+func summarizePods(ctx context.Context, c client.Client, namespace string) (string, error) {
+	var pods corev1.PodList
+	if err := c.List(ctx, &pods, client.InNamespace(namespace)); err != nil {
+		return "", fmt.Errorf("failed to list pods: %w", err)
+	}
+	if len(pods.Items) == 0 {
+		return "(no pods found)", nil
+	}
+
+	lines := make([]string, 0, minInt(len(pods.Items), maxPodsInSummary))
+	for i := range pods.Items {
+		if len(lines) >= maxPodsInSummary {
+			break
+		}
+		pod := pods.Items[i]
+		lines = append(lines, fmt.Sprintf("- %s phase=%s", pod.Name, pod.Status.Phase))
+	}
+	if len(pods.Items) > maxPodsInSummary {
+		lines = append(lines, fmt.Sprintf("... and %d more", len(pods.Items)-maxPodsInSummary))
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func getPodLogs(ctx context.Context, cfg *rest.Config, namespace string, name string) (string, error) {

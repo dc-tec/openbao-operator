@@ -2,6 +2,8 @@ package helpers
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -431,10 +433,20 @@ func createRustFSBuckets(
 
 	command := strings.Join(bucketCommands, " && ")
 
+	suffix, err := randomHexSuffix(4)
+	if err != nil {
+		return fmt.Errorf("failed to generate bucket creation pod suffix: %w", err)
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-create-buckets", cfg.Name),
+			// Use a unique name to avoid cross-test/node races when e2e runs in parallel.
+			Name:      fmt.Sprintf("%s-create-buckets-%s", cfg.Name, suffix),
 			Namespace: cfg.Namespace,
+			Labels: map[string]string{
+				"openbao.org/component": "rustfs-bucket-create",
+				"openbao.org/rustfs":    cfg.Name,
+			},
 		},
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyNever,
@@ -490,6 +502,18 @@ func createRustFSBuckets(
 
 	_ = DeletePodBestEffort(ctx, c, cfg.Namespace, pod.Name)
 	return nil
+}
+
+func randomHexSuffix(bytes int) (string, error) {
+	if bytes <= 0 {
+		return "", fmt.Errorf("bytes must be positive")
+	}
+
+	raw := make([]byte, bytes)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("failed to read random bytes: %w", err)
+	}
+	return hex.EncodeToString(raw), nil
 }
 
 // CleanupRustFS best-effort deletes the RustFS resources created by EnsureRustFS.
