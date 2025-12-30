@@ -18,12 +18,13 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: openbaocluster-awskms
 spec:
+  profile: Hardened
   version: "2.4.4"
   image: "openbao/openbao:2.4.4"
   replicas: 3
   tls:
     enabled: true
-    rotationPeriod: "720h"
+    mode: External
   storage:
     size: "10Gi"
   deletionPolicy: Retain
@@ -51,6 +52,8 @@ spec:
     # credentialsSecretRef:
     #   name: aws-kms-credentials
     #   namespace: openbaocluster-awskms
+  selfInit:
+    enabled: true
 ---
 # Example: Create AWS KMS credentials Secret (only if not using IRSA)
 # apiVersion: v1

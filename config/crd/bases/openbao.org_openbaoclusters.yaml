@@ -1210,7 +1210,6 @@ spec:
                 - enum:
                   - Hardened
                   - Development
-                default: Development
                 description: |-
                   Profile defines the security posture for this cluster.
                   When set to "Hardened", the operator enforces strict security requirements:

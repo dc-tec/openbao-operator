@@ -36,6 +36,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/admission"
 	"github.com/openbao/operator/internal/constants"
 	"github.com/openbao/operator/internal/infra"
 )
@@ -63,6 +64,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 					Image:    "openbao/openbao:2.4.4",
 					Replicas: 3,
 					Paused:   paused,
+					Profile:  openbaov1alpha1.ProfileDevelopment,
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
 						RotationPeriod: "720h",
@@ -86,6 +88,59 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			for i := range clusterList.Items {
 				_ = k8sClient.Delete(ctx, &clusterList.Items[i])
 			}
+		})
+
+		It("blocks reconciliation when spec.profile is not set", func() {
+			cluster := createMinimalCluster("test-profile-not-set", false)
+			cluster.Spec.Profile = ""
+			Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      cluster.Name,
+					Namespace: cluster.Namespace,
+				},
+			}
+
+			// First reconcile adds the finalizer.
+			_, err := newReconciler().Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Second reconcile should refuse to proceed and set status conditions.
+			_, err = newReconciler().Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			updated := &openbaov1alpha1.OpenBaoCluster{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      cluster.Name,
+				Namespace: cluster.Namespace,
+			}, updated)
+			Expect(err).NotTo(HaveOccurred())
+
+			productionReady := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionProductionReady))
+			Expect(productionReady).NotTo(BeNil())
+			Expect(productionReady.Status).To(Equal(metav1.ConditionFalse))
+			Expect(productionReady.Reason).To(Equal(ReasonProfileNotSet))
+
+			degraded := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
+			Expect(degraded).NotTo(BeNil())
+			Expect(degraded.Status).To(Equal(metav1.ConditionTrue))
+			Expect(degraded.Reason).To(Equal(ReasonProfileNotSet))
+
+			// Ensure we did not create TLS assets.
+			caSecret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      cluster.Name + constants.SuffixTLSCA,
+				Namespace: cluster.Namespace,
+			}, caSecret)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			serverSecret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      cluster.Name + constants.SuffixTLSServer,
+				Namespace: cluster.Namespace,
+			}, serverSecret)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
 		It("adds a finalizer to new clusters", func() {
@@ -284,6 +339,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 					Version:  "2.4.4",
 					Image:    "openbao/openbao:2.4.4",
 					Replicas: 3,
+					Profile:  openbaov1alpha1.ProfileDevelopment,
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
 						RotationPeriod: "720h",
@@ -362,12 +418,12 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(route.Spec.Rules).ToNot(BeEmpty())
 				backends := route.Spec.Rules[0].BackendRefs
-				Expect(len(backends)).To(Equal(2))
+				Expect(backends).To(HaveLen(2))
 
 				var blueBackend, greenBackend *gatewayv1.HTTPBackendRef
 				for i := range backends {
 					b := &backends[i]
-					switch string(b.BackendRef.Name) {
+					switch string(b.Name) {
 					case cluster.Name + "-public-blue":
 						blueBackend = b
 					case cluster.Name + "-public-green":
@@ -467,6 +523,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 					Version:  "2.4.4",
 					Image:    "openbao/openbao:2.4.4",
 					Replicas: 3,
+					Profile:  openbaov1alpha1.ProfileDevelopment,
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
 						RotationPeriod: "720h",
@@ -690,6 +747,7 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 					Version:  "2.4.4",
 					Image:    "openbao/openbao:2.4.4",
 					Replicas: 3,
+					Profile:  openbaov1alpha1.ProfileDevelopment,
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
 						RotationPeriod: "720h",
@@ -984,6 +1042,19 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 				return controllerReconciler
 			}
 
+			newReconcilerWithAdmission := func(sentinelReady bool) *OpenBaoClusterReconciler {
+				controllerReconciler := &OpenBaoClusterReconciler{
+					Client:            k8sClient,
+					Scheme:            k8sClient.Scheme(),
+					OperatorNamespace: "openbao-operator-system",
+					AdmissionStatus: &admission.Status{
+						OverallReady:  sentinelReady,
+						SentinelReady: sentinelReady,
+					},
+				}
+				return controllerReconciler
+			}
+
 			createClusterWithSentinel := func(name string, sentinelEnabled bool) *openbaov1alpha1.OpenBaoCluster {
 				cluster := &openbaov1alpha1.OpenBaoCluster{
 					ObjectMeta: metav1.ObjectMeta{
@@ -994,6 +1065,7 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 						Version:  "2.4.4",
 						Image:    "openbao/openbao:2.4.4",
 						Replicas: 3,
+						Profile:  openbaov1alpha1.ProfileDevelopment,
 						TLS: openbaov1alpha1.TLSConfig{
 							Enabled:        true,
 							RotationPeriod: "720h",
@@ -1327,6 +1399,72 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 				Expect(err).NotTo(HaveOccurred())
 				_, hasTrigger := finalCluster.Annotations[constants.AnnotationSentinelTrigger]
 				Expect(hasTrigger).To(BeFalse())
+			})
+
+			It("does not deploy Sentinel when admission policies are not ready", func() {
+				cluster := createClusterWithSentinel("test-sentinel-admission-not-ready", true)
+
+				req := reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      cluster.Name,
+						Namespace: cluster.Namespace,
+					},
+				}
+
+				// Create ConfigMap and TLS Secret (required for StatefulSet)
+				configMap := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster.Name,
+						Namespace: cluster.Namespace,
+					},
+					Data: map[string]string{
+						"config.hcl": "ui = true",
+					},
+				}
+				Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+				tlsSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster.Name + "-tls-server",
+						Namespace: cluster.Namespace,
+					},
+					Data: map[string][]byte{
+						"tls.crt": []byte("test-cert"),
+						"tls.key": []byte("test-key"),
+						"ca.crt":  []byte("test-ca"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, tlsSecret)).To(Succeed())
+
+				// Update cluster status to Initialized
+				original := cluster.DeepCopy()
+				cluster.Status.Initialized = true
+				Expect(k8sClient.Status().Patch(ctx, cluster, client.MergeFrom(original))).To(Succeed())
+
+				// First reconcile adds finalizer
+				_, err := newReconcilerWithAdmission(false).Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Second reconcile creates resources, but must not deploy Sentinel
+				_, err = newReconcilerWithAdmission(false).Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify Sentinel Deployment is NOT created
+				deployment := &appsv1.Deployment{}
+				deploymentName := cluster.Name + constants.SentinelDeploymentNameSuffix
+				err = k8sClient.Get(ctx, types.NamespacedName{
+					Name:      deploymentName,
+					Namespace: cluster.Namespace,
+				}, deployment)
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+				// Verify Degraded condition is set with the expected reason
+				finalCluster := &openbaov1alpha1.OpenBaoCluster{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, finalCluster)).To(Succeed())
+				degraded := meta.FindStatusCondition(finalCluster.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
+				Expect(degraded).NotTo(BeNil())
+				Expect(degraded.Status).To(Equal(metav1.ConditionTrue))
+				Expect(degraded.Reason).To(Equal(ReasonAdmissionPoliciesNotReady))
 			})
 		})
 	})

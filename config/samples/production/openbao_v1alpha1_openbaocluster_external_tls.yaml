@@ -20,6 +20,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: openbaocluster-external-tls
 spec:
+  profile: Hardened
   version: "2.4.4"
   image: "openbao/openbao:2.4.4"
   replicas: 3
@@ -27,6 +28,21 @@ spec:
   tls:
     enabled: true
     mode: External # Use external certificate management
+  # Hardened profile requires external unseal (non-static).
+  # This example uses Transit auto-unseal as a portable default; replace with your preferred KMS.
+  unseal:
+    type: transit
+    transit:
+      address: "https://TRANSIT_BAO_ADDR"
+      keyName: "openbao-unseal-key"
+      mountPath: "transit/"
+    # Recommended: provide credentials via a Secret, workload identity, or another platform mechanism.
+    # credentialsSecretRef:
+    #   name: transit-credentials
+    #   namespace: default
+  # Hardened profile requires self-init (no root token Secret).
+  selfInit:
+    enabled: true
   storage:
     size: "10Gi"
   deletionPolicy: Retain

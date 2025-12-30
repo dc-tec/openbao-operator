@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/admission"
 	backupmanager "github.com/openbao/operator/internal/backup"
 	certmanager "github.com/openbao/operator/internal/certs"
 	"github.com/openbao/operator/internal/constants"
@@ -57,6 +59,8 @@ const failurePolicyBlock = "Block"
 
 // unknownResource is used when the resource kind or info is not available.
 const unknownResource = "unknown"
+
+const unsealTypeStatic = "static"
 
 // SubReconciler is a standardized interface for sub-reconcilers that handle
 // specific aspects of OpenBaoCluster reconciliation.
@@ -78,6 +82,8 @@ type infraReconciler struct {
 	oidcIssuer        string
 	oidcJWTKeys       []string
 	verifyImageFunc   func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error)
+	recorder          record.EventRecorder
+	admissionStatus   *admission.Status
 }
 
 // Reconcile implements SubReconciler for infrastructure reconciliation.
@@ -116,7 +122,9 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 
 			// Warn policy: log error and emit event, but proceed
 			logger.Error(err, "Image verification failed but proceeding due to Warn policy", "image", cluster.Spec.Image)
-			// TODO: Emit Kubernetes Event here
+			if r.recorder != nil {
+				r.recorder.Eventf(cluster, corev1.EventTypeWarning, ReasonImageVerificationFailed, "Image verification failed but proceeding due to Warn policy: %v", err)
+			}
 		} else {
 			verifiedImageDigest = digest
 			logger.Info("Image verified successfully, using digest", "digest", digest)
@@ -175,7 +183,39 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	}
 	// --------------------------------
 
-	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys)
+	sentinelAdmissionReady := r.admissionStatus == nil || r.admissionStatus.SentinelReady
+	sentinelEnabled := cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled
+
+	if sentinelEnabled && !sentinelAdmissionReady {
+		now := metav1.Now()
+		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type:               string(openbaov1alpha1.ConditionDegraded),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: cluster.Generation,
+			LastTransitionTime: now,
+			Reason:             ReasonAdmissionPoliciesNotReady,
+			Message:            "Sentinel is enabled but required admission policies are missing or misbound; Sentinel will not be deployed. " + r.admissionStatus.SummaryMessage(),
+		})
+		if r.recorder != nil {
+			r.recorder.Eventf(cluster, corev1.EventTypeWarning, ReasonAdmissionPoliciesNotReady,
+				"Sentinel is enabled but admission policies are not ready; Sentinel will be disabled: %s", r.admissionStatus.SummaryMessage())
+		}
+	} else if sentinelEnabled && sentinelAdmissionReady {
+		degradedCond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
+		if degradedCond != nil && degradedCond.Reason == ReasonAdmissionPoliciesNotReady {
+			now := metav1.Now()
+			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+				Type:               string(openbaov1alpha1.ConditionDegraded),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: cluster.Generation,
+				LastTransitionTime: now,
+				Reason:             ReasonAdmissionPoliciesReady,
+				Message:            "Admission policies are ready; Sentinel can be deployed safely",
+			})
+		}
+	}
+
+	manager := inframanager.NewManagerWithSentinelAdmission(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, sentinelAdmissionReady)
 	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest, verifiedSentinelDigest); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			now := metav1.Now()
@@ -240,6 +280,8 @@ type OpenBaoClusterReconciler struct {
 	OperatorNamespace string
 	OIDCIssuer        string // OIDC issuer URL discovered at startup
 	OIDCJWTKeys       []string
+	AdmissionStatus   *admission.Status
+	Recorder          record.EventRecorder
 }
 
 // SECURITY: RBAC is manually maintained via namespace-scoped Roles created by the Provisioner.
@@ -338,15 +380,42 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	// Emit periodic warning events for insecure or invalid configurations.
+	// Best-effort only: failures must not block reconciliation.
+	if err := r.emitSecurityWarningEvents(ctx, logger, cluster); err != nil {
+		logger.Error(err, "Failed to emit security warning events")
+	}
+
+	// Fail closed on implicit defaults: require an explicit Profile selection.
+	// This prevents accidental production-by-default behavior.
+	if cluster.Spec.Profile == "" {
+		if err := r.updateStatusForProfileNotSet(ctx, logger, cluster); err != nil {
+			reconcileErr = err
+			return ctrl.Result{}, reconcileErr
+		}
+
+		jitterNanos := time.Now().UnixNano() % int64(constants.RequeueSafetyNetJitter)
+		requeueAfter := constants.RequeueSafetyNetBase + time.Duration(jitterNanos)
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	}
+
 	// Detect if this is a "Sentinel Trigger" event
 	// The Sentinel updates the annotation: openbao.org/sentinel-trigger: <timestamp>
 	// If the annotation exists, it means the Sentinel detected drift and triggered reconciliation
 	isSentinelTrigger := false
+	sentinelFastPathAllowed := r.AdmissionStatus == nil || r.AdmissionStatus.SentinelReady
 	triggerAnnotation := constants.AnnotationSentinelTrigger
 	sentinelResourceInfo := unknownResource // Captured for drift status update after reconciliation
 
 	if val, ok := cluster.Annotations[triggerAnnotation]; ok && val != "" {
-		isSentinelTrigger = true
+		if sentinelFastPathAllowed {
+			isSentinelTrigger = true
+		} else {
+			logger.Info("Sentinel trigger annotation present, but Sentinel fast-path is disabled because admission policies are not ready",
+				"trigger_timestamp", val,
+				"annotation", triggerAnnotation,
+			)
+		}
 
 		// Extract resource info from annotation if available
 		if resourceVal, hasResource := cluster.Annotations[constants.AnnotationSentinelTriggerResource]; hasResource {
@@ -380,6 +449,8 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			oidcIssuer:        r.OIDCIssuer,
 			oidcJWTKeys:       r.OIDCJWTKeys,
 			verifyImageFunc:   r.verifyImage,
+			recorder:          r.Recorder,
+			admissionStatus:   r.AdmissionStatus,
 		},
 	}
 
@@ -424,7 +495,7 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		// Choose upgrade strategy: BlueGreen or RollingUpdate
 		if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
 			// Use bluegreen.Manager for blue/green upgrades
-			infraMgr := inframanager.NewManager(r.Client, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys)
+			infraMgr := inframanager.NewManagerWithSentinelAdmission(r.Client, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys, sentinelFastPathAllowed)
 			reconcilers = append(reconcilers,
 				bluegreen.NewManager(r.Client, r.Scheme, infraMgr),
 				backupmanager.NewManager(r.Client, r.Scheme),
@@ -793,6 +864,58 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 
 	logger.Info("Updated status for paused OpenBaoCluster")
 
+	return nil
+}
+
+func (r *OpenBaoClusterReconciler) updateStatusForProfileNotSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	original := cluster.DeepCopy()
+
+	now := metav1.Now()
+	if cluster.Status.Phase == "" {
+		cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
+	}
+
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:               string(openbaov1alpha1.ConditionAvailable),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: cluster.Generation,
+		LastTransitionTime: now,
+		Reason:             ReasonProfileNotSet,
+		Message:            "spec.profile must be explicitly set to Hardened or Development; reconciliation is blocked until set",
+	})
+
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:               string(openbaov1alpha1.ConditionDegraded),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: cluster.Generation,
+		LastTransitionTime: now,
+		Reason:             ReasonProfileNotSet,
+		Message:            "spec.profile is not set; defaults may be inappropriate for production and could lead to insecure deployment",
+	})
+
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:               string(openbaov1alpha1.ConditionTLSReady),
+		Status:             metav1.ConditionUnknown,
+		ObservedGeneration: cluster.Generation,
+		LastTransitionTime: now,
+		Reason:             ReasonProfileNotSet,
+		Message:            "TLS readiness is not being evaluated until spec.profile is set",
+	})
+
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:               string(openbaov1alpha1.ConditionProductionReady),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: cluster.Generation,
+		LastTransitionTime: now,
+		Reason:             ReasonProfileNotSet,
+		Message:            "Cluster cannot be considered production-ready until spec.profile is explicitly set",
+	})
+
+	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+		return fmt.Errorf("failed to update status for missing profile on OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
+
+	logger.Info("Updated status for OpenBaoCluster missing profile")
 	return nil
 }
 
@@ -1222,6 +1345,17 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionSecurityRisk))
 	}
 
+	// Set ProductionReady condition based on security posture and bootstrap configuration.
+	productionReadyStatus, productionReadyReason, productionReadyMessage := evaluateProductionReady(cluster)
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:               string(openbaov1alpha1.ConditionProductionReady),
+		Status:             productionReadyStatus,
+		ObservedGeneration: cluster.Generation,
+		LastTransitionTime: now,
+		Reason:             productionReadyReason,
+		Message:            productionReadyMessage,
+	})
+
 	// SECURITY: Warn when SelfInit is disabled - the operator will store the root token
 	// In a Zero Trust model, the operator should not possess the "Keys to the Kingdom"
 	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
@@ -1267,6 +1401,112 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster) (metav1.ConditionStatus, string, string) {
+	if cluster.Spec.Profile == "" {
+		return metav1.ConditionFalse, ReasonProfileNotSet, "spec.profile must be explicitly set to Hardened or Development"
+	}
+
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileDevelopment {
+		return metav1.ConditionFalse, ReasonDevelopmentProfile, "Development profile is not suitable for production"
+	}
+
+	if cluster.Spec.TLS.Mode == "" || cluster.Spec.TLS.Mode == openbaov1alpha1.TLSModeOperatorManaged {
+		return metav1.ConditionFalse, ReasonOperatorManagedTLS, "Hardened profile requires TLS mode External or ACME; OperatorManaged TLS is not considered production-ready"
+	}
+
+	if isStaticUnseal(cluster) {
+		return metav1.ConditionFalse, ReasonStaticUnsealInUse, "Hardened profile requires a non-static unseal configuration (external KMS/Transit); static unseal is not considered production-ready"
+	}
+
+	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
+	if !selfInitEnabled {
+		return metav1.ConditionFalse, ReasonRootTokenStored, "Hardened profile requires self-init; manual bootstrap stores a root token Secret and is not considered production-ready"
+	}
+
+	return metav1.ConditionTrue, ReasonProductionReady, "Cluster meets Hardened profile production-ready requirements"
+}
+
+func isStaticUnseal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster.Spec.Unseal == nil {
+		return true
+	}
+	if cluster.Spec.Unseal.Type == "" {
+		return true
+	}
+	return cluster.Spec.Unseal.Type == unsealTypeStatic
+}
+
+func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if r.Recorder == nil {
+		return nil
+	}
+
+	now := time.Now().UTC()
+	annotationUpdates := make(map[string]string)
+
+	maybeWarn := func(annotationKey, reason, message string) {
+		if !shouldEmitSecurityWarning(cluster.Annotations, annotationKey, now) {
+			return
+		}
+		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, reason, "%s", message)
+		annotationUpdates[annotationKey] = now.Format(time.RFC3339Nano)
+	}
+
+	if cluster.Spec.Profile == "" {
+		maybeWarn(constants.AnnotationLastProfileNotSetWarning, ReasonProfileNotSet, "spec.profile is not set; reconciliation is blocked until spec.profile is explicitly set to Hardened or Development")
+	}
+
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileDevelopment {
+		maybeWarn(constants.AnnotationLastDevelopmentWarning, ReasonDevelopmentProfile, "Cluster is using Development profile; this is not suitable for production")
+	}
+
+	if isStaticUnseal(cluster) {
+		maybeWarn(constants.AnnotationLastStaticUnsealWarning, ReasonStaticUnsealInUse, "Cluster is using static auto-unseal; the unseal key is stored in a Kubernetes Secret and is not suitable for production without etcd encryption at rest and strict RBAC")
+	}
+
+	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
+	if !selfInitEnabled {
+		maybeWarn(constants.AnnotationLastRootTokenWarning, ReasonRootTokenStored, "SelfInit is disabled; the operator will store a root token in a Kubernetes Secret during bootstrap, which is not suitable for production")
+	}
+
+	if len(annotationUpdates) == 0 {
+		return nil
+	}
+
+	original := cluster.DeepCopy()
+	if cluster.Annotations == nil {
+		cluster.Annotations = make(map[string]string)
+	}
+	for k, v := range annotationUpdates {
+		cluster.Annotations[k] = v
+	}
+
+	if err := r.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+		return fmt.Errorf("failed to persist security warning timestamps on OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
+
+	logger.V(1).Info("Emitted security warning events", "count", len(annotationUpdates))
+	return nil
+}
+
+func shouldEmitSecurityWarning(annotations map[string]string, annotationKey string, now time.Time) bool {
+	if len(annotations) == 0 {
+		return true
+	}
+
+	raw, ok := annotations[annotationKey]
+	if !ok || strings.TrimSpace(raw) == "" {
+		return true
+	}
+
+	last, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return true
+	}
+
+	return now.Sub(last) >= constants.SecurityWarningInterval
 }
 
 func containsFinalizer(finalizers []string, value string) bool {
