@@ -352,7 +352,9 @@ func runRestore(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to download snapshot: %w", err)
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 	fmt.Println("Snapshot downloaded successfully")
 
 	// Perform restore

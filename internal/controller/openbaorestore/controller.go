@@ -101,6 +101,6 @@ func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // logr returns a logger for the reconciler.
-func (r *OpenBaoRestoreReconciler) logr(logger logr.Logger) logr.Logger {
+func (r *OpenBaoRestoreReconciler) _(logger logr.Logger) logr.Logger {
 	return logger.WithName("openbaorestore-controller")
 }
