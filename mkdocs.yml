@@ -47,38 +47,39 @@ markdown_extensions:
 nav:
   - Home: index.md
   - User Guide:
-    - Introduction: user-guide/index.md
-    - Installation: user-guide/installation.md
-    - Basic Cluster: user-guide/cluster-basic.md
-    - Upgrades: user-guide/upgrades.md
-    - Backups: user-guide/backups.md
-    - External Access: user-guide/external-access.md
-    - Network Configuration: user-guide/network.md
-    - Resources & Storage: user-guide/resources.md
-    - Advanced Configuration: user-guide/advanced-configuration.md
-    - Security Profiles: user-guide/security-profiles.md
-    - Self-Initialization: user-guide/self-init.md
-    - Sentinel: user-guide/sentinel.md
-    - Multi-Tenancy: user-guide/multi-tenancy.md
-    - Tenant Namespaces: user-guide/tenant-namespaces.md
-    - Gateway API: user-guide/gateway-api.md
-    - Pausing Reconciliation: user-guide/pausing.md
-    - Deletion: user-guide/deletion.md
-    - Security Considerations: user-guide/security-considerations.md
-    - Next Steps: user-guide/next-steps.md
+      - Introduction: user-guide/index.md
+      - Installation: user-guide/installation.md
+      - Basic Cluster: user-guide/cluster-basic.md
+      - Upgrades: user-guide/upgrades.md
+      - Backups: user-guide/backups.md
+      - Restore: user-guide/restore.md
+      - External Access: user-guide/external-access.md
+      - Network Configuration: user-guide/network.md
+      - Resources & Storage: user-guide/resources.md
+      - Advanced Configuration: user-guide/advanced-configuration.md
+      - Security Profiles: user-guide/security-profiles.md
+      - Self-Initialization: user-guide/self-init.md
+      - Sentinel: user-guide/sentinel.md
+      - Multi-Tenancy: user-guide/multi-tenancy.md
+      - Tenant Namespaces: user-guide/tenant-namespaces.md
+      - Gateway API: user-guide/gateway-api.md
+      - Pausing Reconciliation: user-guide/pausing.md
+      - Deletion: user-guide/deletion.md
+      - Security Considerations: user-guide/security-considerations.md
+      - Next Steps: user-guide/next-steps.md
   - Architecture:
-    - Overview: architecture/index.md
-    - Component Design: architecture/components.md
-    - Lifecycle Management: architecture/lifecycle.md
-    - Sentinel Sidecar: architecture/sentinel.md
+      - Overview: architecture/index.md
+      - Component Design: architecture/components.md
+      - Lifecycle Management: architecture/lifecycle.md
+      - Sentinel Sidecar: architecture/sentinel.md
   - Security:
-    - Overview: security/index.md
-    - RBAC: security/rbac.md
-    - Tenant Isolation: security/tenant-isolation.md
-    - Threat Model: security/threat-model.md
+      - Overview: security/index.md
+      - RBAC: security/rbac.md
+      - Tenant Isolation: security/tenant-isolation.md
+      - Threat Model: security/threat-model.md
   - Contributing:
-    - Basics: contributing/index.md
-    - Development: contributing/development.md
-    - Testing Strategy: contributing/testing.md
+      - Basics: contributing/index.md
+      - Development: contributing/development.md
+      - Testing Strategy: contributing/testing.md
   - Reference:
-    - Compatibility Matrix: reference/compatibility.md
+      - Compatibility Matrix: reference/compatibility.md
