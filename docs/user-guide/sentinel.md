@@ -24,6 +24,7 @@ metadata:
   name: my-cluster
   namespace: default
 spec:
+  profile: Development
   # ... other spec fields ...
   sentinel:
     enabled: true  # Enable Sentinel (default: true when sentinel is set)
@@ -170,6 +171,10 @@ A cluster-scoped ValidatingAdmissionPolicy (`openbao-restrict-sentinel-mutations
 
 This provides **mathematical security**: even if the Sentinel binary is compromised, it cannot escalate privileges or modify cluster configuration.
 
+**Required dependency:** These admission policies are required. If the operator cannot verify that the Sentinel mutation policy (and its binding) is installed and correctly bound, it will treat Sentinel as unsafe and will not deploy the Sentinel Deployment, and Sentinel-triggered fast-path is disabled. The supported Kubernetes baseline for these controls is v1.33+.
+
+**Note on names:** When deploying via `config/default`, `kustomize` applies a `namePrefix` (for example, `openbao-operator-`) to cluster-scoped admission resources.
+
 ### RBAC
 
 The Sentinel has minimal permissions:
@@ -286,4 +291,3 @@ The operator will clean up the Sentinel Deployment, ServiceAccount, Role, and Ro
 - [Architecture: Sentinel](../architecture/index.md#36-the-sentinel-drift-detection--fast-path-reconciliation)
 - [Security: ValidatingAdmissionPolicy](../security/index.md#validatingadmissionpolicy-for-sentinel)
 - [Advanced Configuration](advanced-configuration.md)
-

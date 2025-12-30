@@ -17,6 +17,7 @@ kind: OpenBaoCluster
 metadata:
   name: backup-cluster
 spec:
+  profile: Development
   # ... other spec fields ...
   backup:
     schedule: "0 3 * * *"  # Daily at 3 AM
@@ -64,6 +65,7 @@ metadata:
   name: backup-cluster
   namespace: openbao
 spec:
+  profile: Development
   selfInit:
     enabled: true
     requests:
@@ -71,7 +73,7 @@ spec:
       - name: enable-jwt-auth
         operation: update
         path: sys/auth/jwt
-        data:
+        authMethod:
           type: jwt
       # Configure JWT auth using the cluster's JWKS public keys.
       - name: configure-jwt-auth
@@ -85,7 +87,7 @@ spec:
       - name: create-backup-policy
         operation: update
         path: sys/policies/acl/backup
-        data:
+        policy:
           policy: |
             path "sys/storage/raft/snapshot" {
               capabilities = ["read"]
@@ -127,6 +129,7 @@ kind: OpenBaoCluster
 metadata:
   name: backup-cluster
 spec:
+  profile: Development
   selfInit:
     enabled: true
     requests:
@@ -134,7 +137,7 @@ spec:
       - name: create-backup-policy
         operation: update
         path: sys/policies/acl/backup
-        data:
+        policy:
           policy: |
             path "sys/storage/raft/snapshot" {
               capabilities = ["read"]

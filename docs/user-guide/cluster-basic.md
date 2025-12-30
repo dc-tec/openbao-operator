@@ -19,6 +19,7 @@ spec:
   version: "2.1.0"
   image: "openbao/openbao:2.1.0"
   replicas: 3
+  profile: Development
   tls:
     enabled: true
     rotationPeriod: "720h"

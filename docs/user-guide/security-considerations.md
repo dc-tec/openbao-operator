@@ -53,6 +53,7 @@ spec:
   version: "2.1.0"
   image: "openbao/openbao:2.1.0"
   replicas: 3
+  profile: Development
   unseal:
     type: "awskms"
     awskms:
@@ -81,6 +82,7 @@ spec:
   version: "2.1.0"
   image: "openbao/openbao:2.1.0"
   replicas: 3
+  profile: Development
   unseal:
     type: "gcpckms"
     gcpCloudKMS:
@@ -125,6 +127,7 @@ spec:
     failurePolicy: Block  # or "Warn" to log but proceed
     # ignoreTlog: false  # Set to true to disable Rekor transparency log verification
   replicas: 3
+  profile: Development
   tls:
     enabled: true
     rotationPeriod: "720h"
@@ -155,6 +158,7 @@ spec:
     imagePullSecrets:
       - name: registry-credentials  # Secret of type kubernetes.io/dockerconfigjson
   replicas: 3
+  profile: Development
   tls:
     enabled: true
     rotationPeriod: "720h"

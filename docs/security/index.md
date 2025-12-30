@@ -39,6 +39,10 @@ A dedicated `ValidatingAdmissionPolicy` (`openbao-restrict-sentinel-mutations`) 
 
 **Result:** Even if the Sentinel binary is compromised, it can only signal drift via the trigger annotations and cannot escalate privileges or mutate configuration.
 
+**Required dependency:** These admission policies are not optional. If the Operator cannot verify the Sentinel mutation policy (and its binding) is installed and correctly bound, it will treat Sentinel as unsafe and will not deploy Sentinel. The supported Kubernetes baseline for these controls is v1.33+.
+
+**Note on names:** When deploying via `config/default`, `kustomize` applies a `namePrefix` (for example, `openbao-operator-`) to cluster-scoped admission resources. Ensure any referenced policy names/bindings match the rendered names.
+
 ### 2.2 Configuration Allowlist
 
 The operator rejects `OpenBaoCluster` resources that attempt to override protected configuration stanzas. This prevents tenants from weakening security controls managed by the operator.

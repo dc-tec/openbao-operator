@@ -47,6 +47,7 @@ spec:
   version: "2.4.0"
   image: "openbao/openbao:2.4.0"
   replicas: 3
+  profile: Development
   tls:
     enabled: true
     rotationPeriod: "720h"
@@ -203,6 +204,7 @@ kind: OpenBaoCluster
 metadata:
   name: my-cluster
 spec:
+  profile: Development
   gateway:
     enabled: true
     gatewayRef:
@@ -222,6 +224,7 @@ kind: OpenBaoCluster
 metadata:
   name: my-cluster
 spec:
+  profile: Development
   gateway:
     enabled: true
     gatewayRef:

@@ -14,6 +14,7 @@ kind: OpenBaoCluster
 metadata:
   name: config-cluster
 spec:
+  profile: Development
   # ... other spec fields ...
   configuration:
     # UI configuration
@@ -73,6 +74,7 @@ kind: OpenBaoCluster
 metadata:
   name: audit-cluster
 spec:
+  profile: Development
   # ... other spec fields ...
   audit:
     - type: file
@@ -101,6 +103,7 @@ kind: OpenBaoCluster
 metadata:
   name: plugin-cluster
 spec:
+  profile: Development
   # ... other spec fields ...
   plugins:
     - type: secret
@@ -129,6 +132,7 @@ kind: OpenBaoCluster
 metadata:
   name: telemetry-cluster
 spec:
+  profile: Development
   # ... other spec fields ...
   telemetry:
     prometheusRetentionTime: "24h"
@@ -157,6 +161,7 @@ kind: OpenBaoCluster
 metadata:
   name: custom-images-cluster
 spec:
+  profile: Development
   # ... other spec fields ...
   backup:
     schedule: "0 3 * * *"

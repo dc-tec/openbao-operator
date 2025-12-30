@@ -135,6 +135,7 @@ spec:
   version: "2.4.4"
   image: "openbao/openbao:2.4.4"
   replicas: 3
+  profile: Development
   tls:
     enabled: true
     mode: OperatorManaged

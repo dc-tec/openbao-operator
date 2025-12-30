@@ -50,6 +50,7 @@ kind: OpenBaoCluster
 metadata:
   name: restricted-cluster
 spec:
+  profile: Development
   # ... other spec fields ...
   network:
     # Manual API server CIDR configuration (fallback when auto-detection fails)
@@ -79,6 +80,7 @@ kind: OpenBaoCluster
 metadata:
   name: k3d-cluster
 spec:
+  profile: Development
   # ... other spec fields ...
   network:
     apiServerEndpointIPs:
@@ -108,6 +110,7 @@ kind: OpenBaoCluster
 metadata:
   name: custom-network-cluster
 spec:
+  profile: Development
   # ... other spec fields ...
   network:
     # Custom egress rules (merged with operator-managed rules)
@@ -157,6 +160,7 @@ kind: OpenBaoCluster
 metadata:
   name: transit-seal-cluster
 spec:
+  profile: Development
   unseal:
     type: transit
     transit:

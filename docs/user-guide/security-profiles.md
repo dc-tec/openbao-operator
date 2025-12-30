@@ -24,7 +24,7 @@ spec:
     appArmorEnabled: true
 ```
 
-### 2.1 Development Profile (Default)
+### 2.1 Development Profile
 
 The `Development` profile allows relaxed security for development and testing:
 
@@ -34,7 +34,7 @@ kind: OpenBaoCluster
 metadata:
   name: dev-cluster
 spec:
-  profile: Development  # Default, can be omitted
+  profile: Development  # Required: must be explicit
   version: "2.4.4"
   # ... other fields ...
 ```
@@ -79,10 +79,10 @@ spec:
       - name: enable-audit
         operation: update
         path: sys/audit/file
-        data:
+        auditDevice:
           type: file
-          options:
-            file_path: /tmp/audit.log
+          fileOptions:
+            filePath: /tmp/audit.log
 ```
 
 **Requirements:**

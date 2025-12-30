@@ -10,7 +10,7 @@
 The OpenBao Operator supports two upgrade strategies:
 
 | Strategy | Description | Use Case |
-|----------|-------------|----------|
+| :--- | :--- | :--- |
 | **RollingUpdate** (default) | Updates pods one-by-one with leader step-down | Standard upgrades, minimal resource usage |
 | **BlueGreen** | Creates a parallel "Green" cluster before switching traffic | Zero-downtime upgrades, safer rollback path |
 
@@ -55,6 +55,7 @@ kind: OpenBaoCluster
 metadata:
   name: upgrade-cluster
 spec:
+  profile: Development
   selfInit:
     enabled: true
     requests:
@@ -62,7 +63,7 @@ spec:
       - name: create-upgrade-policy
         operation: update
         path: sys/policies/acl/upgrade
-        data:
+        policy:
           policy: |
             path "sys/health" {
               capabilities = ["read"]
@@ -179,7 +180,7 @@ stateDiagram-v2
 #### Phase Details
 
 | Phase | Description |
-|-------|-------------|
+| :--- | :--- |
 | **Idle** | No upgrade in progress. Pre-upgrade snapshot taken if configured. |
 | **DeployingGreen** | Creating Green StatefulSet with new version, waiting for pods to be ready and unsealed |
 | **JoiningMesh** | Green pods join the Raft cluster as non-voters |
