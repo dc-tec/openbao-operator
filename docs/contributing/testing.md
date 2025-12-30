@@ -180,6 +180,91 @@ E2E tests validate real-system behavior using kind:
 - Real OpenBao image.
 - Optional MinIO deployment for backup tests.
 
+### 3.0 Running the E2E Suite
+
+The e2e tests live under `test/e2e` and are implemented with Ginkgo.
+
+**Environment variables**
+
+Images:
+
+- `E2E_OPERATOR_IMAGE` (default: `example.com/openbao-operator:v0.0.1`)  
+  Image used for the operator (`projectImage` in `test/e2e/e2e_suite_test.go`).
+- `E2E_CONFIG_INIT_IMAGE` (default: `openbao-config-init:dev`)  
+  Image used by the OpenBao config-init container.
+- `E2E_SENTINEL_IMAGE` (default: `openbao/operator-sentinel:v0.0.0`)  
+  Image used by the Sentinel deployment.
+- `E2E_BACKUP_EXECUTOR_IMAGE` (default: `openbao/backup-executor:dev`)  
+  Image used by backup jobs.
+- `E2E_UPGRADE_EXECUTOR_IMAGE` (default: `openbao/upgrade-executor:dev`)  
+  Image used by upgrade jobs.
+
+OpenBao versions:
+
+- `E2E_OPENBAO_VERSION` (fallback: `defaultOpenBaoVersion` from `test/e2e/e2e_versions.go`)  
+  Base OpenBao version used for most tests.
+- `E2E_OPENBAO_IMAGE` (optional)  
+  Overrides the OpenBao image; if unset, it is derived from `E2E_OPENBAO_VERSION`.
+- `E2E_UPGRADE_FROM_VERSION` / `E2E_UPGRADE_TO_VERSION`  
+  Control the starting and target versions for upgrade tests (rolling/blue-green).  
+  CI **must** set these explicitly; the defaults in `e2e_versions.go` are for local/development only.
+
+Gateway API manifests:
+
+- `E2E_GATEWAY_API_STANDARD_MANIFEST`  
+  Path or URL to the standard Gateway API install manifest. Recommended: local YAML under `test/manifests/gateway-api/` for hermetic CI.
+- `E2E_GATEWAY_API_EXPERIMENTAL_MANIFEST`  
+  Path or URL to the experimental Gateway API manifest.
+
+If these Gateway API env vars are unset, the e2e helpers fall back to the upstream GitHub release URLs.
+
+Other useful flags:
+
+- `CERT_MANAGER_INSTALL_SKIP=true`  
+  Skip automatic cert-manager installation if it is already present.
+- `E2E_SKIP_CLEANUP=true`  
+  Preserve the cluster state after the suite for debugging (namespaces and CRDs are not removed).
+
+**Running the suite**
+
+From the repository root:
+
+```sh
+go test ./test/e2e/... -tags=e2e -v
+```
+
+or use the project’s dedicated Make target if defined (for example):
+
+```sh
+make test-e2e
+```
+
+### 3.1 Label-based E2E selection
+
+E2E tests use Ginkgo v2 labels (`Label(...)`) to slice suites by domain and criticality (for example `smoke`, `critical`, `security`, `upgrade`, `backup`, `requires-rustfs`).
+
+You can run only tests matching a label expression via the Makefile:
+
+- Run smoke/critical tests only:
+
+  ```sh
+  make test-e2e E2E_LABEL_FILTER='smoke && critical'
+  ```
+
+- Run only upgrade-related tests:
+
+  ```sh
+  make test-e2e E2E_LABEL_FILTER='upgrade'
+  ```
+
+- Run slow backup/restore tests that require the RustFS S3-compatible endpoint:
+
+  ```sh
+  make test-e2e E2E_LABEL_FILTER='backup && requires-rustfs'
+  ```
+
+`E2E_LABEL_FILTER` is passed through to Ginkgo’s `--label-filter` (or `-ginkgo.label-filter` when using `go test`). You can still use `E2E_FOCUS` for name-based filtering; when both are set, Ginkgo requires tests to satisfy **both** the focus pattern and the label filter.
+
 ### 3.1 Core E2E Scenarios
 
 - **Cluster Creation and Initialization:**
