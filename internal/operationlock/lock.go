@@ -161,6 +161,6 @@ func patchStatus(ctx context.Context, c client.Client, cluster *openbaov1alpha1.
 	}
 	// Keep the caller object in sync with the apiserver's updated ResourceVersion
 	// to avoid optimistic locking conflicts in later patches during the same reconcile.
-	cluster.ObjectMeta.ResourceVersion = toPatch.ObjectMeta.ResourceVersion
+	cluster.ResourceVersion = toPatch.ResourceVersion
 	return nil
 }

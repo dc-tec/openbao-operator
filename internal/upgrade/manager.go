@@ -83,6 +83,8 @@ func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factor
 //  5. Finalization: Clear upgrade state, update current version
 //
 // Returns (shouldRequeue, error) where shouldRequeue indicates if reconciliation should be requeued immediately.
+//
+//nolint:gocyclo // Upgrade reconciliation is an orchestrator with guard clauses and phase transitions.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
 	// Capture original state for status patching to avoid optimistic locking conflicts
 	original := cluster.DeepCopy()

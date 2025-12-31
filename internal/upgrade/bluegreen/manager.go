@@ -108,10 +108,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Use spec image (infra reconciler handles verification)
 	verifiedImageDigest := cluster.Spec.Image
 
-	handled, shouldRequeue, err := m.handleBreakGlassAck(logger, cluster)
-	if err != nil {
-		return false, err
-	}
+	handled, shouldRequeue := m.handleBreakGlassAck(logger, cluster)
 	if handled {
 		return shouldRequeue, nil
 	}
@@ -875,13 +872,13 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 	return false, nil
 }
 
-func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (handled bool, shouldRequeue bool, err error) {
+func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (handled bool, shouldRequeue bool) {
 	if cluster.Status.BreakGlass == nil || !cluster.Status.BreakGlass.Active {
-		return false, false, nil
+		return false, false
 	}
 
 	if cluster.Status.BreakGlass.Nonce == "" || cluster.Spec.BreakGlassAck != cluster.Status.BreakGlass.Nonce {
-		return true, false, nil
+		return true, false
 	}
 
 	now := metav1.Now()
@@ -904,10 +901,10 @@ func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alph
 			Reason:             ReasonUpgradeRollback,
 			Message:            "Break glass acknowledged; retrying rollback consensus repair",
 		})
-		return true, true, nil
+		return true, true
 	}
 
-	return true, true, nil
+	return true, true
 }
 
 const breakGlassNonceBytes = 16

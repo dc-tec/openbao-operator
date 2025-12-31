@@ -57,6 +57,7 @@ const (
 	// Sentinel
 	EnvPodNamespace                  = "POD_NAMESPACE"
 	EnvSentinelDebounceWindowSeconds = "SENTINEL_DEBOUNCE_WINDOW_SECONDS"
+	EnvSentinelDebounceJitterSeconds = "SENTINEL_DEBOUNCE_JITTER_SECONDS"
 	EnvOperatorVersion               = "OPERATOR_VERSION"
 )
 

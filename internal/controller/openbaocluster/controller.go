@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"golang.org/x/time/rate"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -36,6 +37,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
@@ -1565,14 +1568,86 @@ func (r *OpenBaoClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// namespace-scoped permissions via tenant Roles. Instead, the controller
 	// reconciles child resources when the OpenBaoCluster itself changes or via
 	// explicit requeues in the reconciliation logic.
+	sentinelAwareHandler := handler.TypedFuncs[client.Object, ctrl.Request]{
+		CreateFunc: func(ctx context.Context, evt event.TypedCreateEvent[client.Object], q workqueue.TypedRateLimitingInterface[ctrl.Request]) {
+			if evt.Object == nil {
+				return
+			}
+			q.Add(ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: evt.Object.GetNamespace(),
+					Name:      evt.Object.GetName(),
+				},
+			})
+		},
+		DeleteFunc: func(ctx context.Context, evt event.TypedDeleteEvent[client.Object], q workqueue.TypedRateLimitingInterface[ctrl.Request]) {
+			if evt.Object == nil {
+				return
+			}
+			q.Add(ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: evt.Object.GetNamespace(),
+					Name:      evt.Object.GetName(),
+				},
+			})
+		},
+		UpdateFunc: func(ctx context.Context, evt event.TypedUpdateEvent[client.Object], q workqueue.TypedRateLimitingInterface[ctrl.Request]) {
+			if evt.ObjectOld == nil || evt.ObjectNew == nil {
+				return
+			}
+			req := ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: evt.ObjectNew.GetNamespace(),
+					Name:      evt.ObjectNew.GetName(),
+				},
+			}
+
+			oldAnnotations := evt.ObjectOld.GetAnnotations()
+			newAnnotations := evt.ObjectNew.GetAnnotations()
+			oldTrigger := ""
+			if oldAnnotations != nil {
+				oldTrigger = oldAnnotations[constants.AnnotationSentinelTrigger]
+			}
+			newTrigger := ""
+			if newAnnotations != nil {
+				newTrigger = newAnnotations[constants.AnnotationSentinelTrigger]
+			}
+
+			// Rate limit Sentinel fast-path triggers to avoid a single cluster
+			// generating a continuous high-rate reconcile loop.
+			// Deletion of the trigger annotation is not rate limited so the
+			// post-fast-path safety check reconcile happens promptly.
+			if newTrigger != "" && newTrigger != oldTrigger {
+				q.AddRateLimited(req)
+				return
+			}
+
+			q.Add(req)
+		},
+		GenericFunc: func(ctx context.Context, evt event.TypedGenericEvent[client.Object], q workqueue.TypedRateLimitingInterface[ctrl.Request]) {
+			if evt.Object == nil {
+				return
+			}
+			q.Add(ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: evt.Object.GetNamespace(),
+					Name:      evt.Object.GetName(),
+				},
+			})
+		},
+	}
+
 	builder := ctrl.NewControllerManagedBy(mgr).
-		For(&openbaov1alpha1.OpenBaoCluster{}).
-		WithEventFilter(controllerutil.OpenBaoClusterPredicate())
+		WithEventFilter(controllerutil.OpenBaoClusterPredicate()).
+		Watches(&openbaov1alpha1.OpenBaoCluster{}, sentinelAwareHandler)
 
 	return builder.
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 3,
-			RateLimiter:             workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
+			RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
+				workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
+				&workqueue.TypedBucketRateLimiter[ctrl.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+			),
 		}).
 		Named("openbaocluster").
 		Complete(r)

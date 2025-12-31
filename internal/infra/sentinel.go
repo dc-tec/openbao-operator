@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -99,6 +100,8 @@ func (m *Manager) ensureSentinelRBAC(ctx context.Context, logger logr.Logger, cl
 func (m *Manager) ensureSentinelDeployment(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) error {
 	deploymentName := cluster.Name + constants.SentinelDeploymentNameSuffix
 
+	const defaultDebounceJitterSeconds = "5"
+
 	// Get Sentinel image
 	sentinelImage := getSentinelImage(cluster, logger)
 	if verifiedImageDigest != "" {
@@ -124,6 +127,11 @@ func (m *Manager) ensureSentinelDeployment(ctx context.Context, logger logr.Logg
 	debounceWindowSeconds := int32(2) // Default
 	if cluster.Spec.Sentinel.DebounceWindowSeconds != nil {
 		debounceWindowSeconds = *cluster.Spec.Sentinel.DebounceWindowSeconds
+	}
+
+	debounceJitterSeconds := strings.TrimSpace(os.Getenv(constants.EnvSentinelDebounceJitterSeconds))
+	if debounceJitterSeconds == "" {
+		debounceJitterSeconds = defaultDebounceJitterSeconds
 	}
 
 	labels := map[string]string{
@@ -203,6 +211,10 @@ func (m *Manager) ensureSentinelDeployment(ctx context.Context, logger logr.Logg
 								{
 									Name:  constants.EnvSentinelDebounceWindowSeconds,
 									Value: fmt.Sprintf("%d", debounceWindowSeconds),
+								},
+								{
+									Name:  constants.EnvSentinelDebounceJitterSeconds,
+									Value: debounceJitterSeconds,
 								},
 							},
 							Resources: *resources,

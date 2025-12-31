@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"net/http"
 	"os"
 	"strconv"
@@ -414,6 +415,27 @@ type sentinelConfig struct {
 	clusterNamespace string
 	clusterName      string
 	debounceWindow   time.Duration
+
+	debounceWindowBase   time.Duration
+	debounceJitterRange  time.Duration
+	debounceWindowJitter time.Duration
+}
+
+const (
+	defaultSentinelDebounceWindowSeconds = 2
+	defaultSentinelDebounceJitterSeconds = 5
+)
+
+func computeDeterministicDebounceJitter(clusterName string, jitterRangeSeconds int64) time.Duration {
+	if clusterName == "" || jitterRangeSeconds <= 0 {
+		return 0
+	}
+
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(clusterName))
+
+	sum := h.Sum64()
+	return time.Duration(sum%uint64(jitterRangeSeconds)) * time.Second
 }
 
 // loadSentinelConfig loads configuration from environment variables.
@@ -431,17 +453,36 @@ func loadSentinelConfig() (*sentinelConfig, error) {
 
 	debounceWindowStr := strings.TrimSpace(os.Getenv(constants.EnvSentinelDebounceWindowSeconds))
 	if debounceWindowStr == "" {
-		debounceWindowStr = "2" // Default
+		debounceWindowStr = strconv.Itoa(defaultSentinelDebounceWindowSeconds)
 	}
 	debounceWindowSeconds, err := strconv.ParseInt(debounceWindowStr, 10, 32)
 	if err != nil {
 		return nil, fmt.Errorf("invalid SENTINEL_DEBOUNCE_WINDOW_SECONDS %q: %w", debounceWindowStr, err)
 	}
 
+	debounceJitterStr := strings.TrimSpace(os.Getenv(constants.EnvSentinelDebounceJitterSeconds))
+	if debounceJitterStr == "" {
+		debounceJitterStr = strconv.Itoa(defaultSentinelDebounceJitterSeconds)
+	}
+	debounceJitterRangeSeconds, err := strconv.ParseInt(debounceJitterStr, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SENTINEL_DEBOUNCE_JITTER_SECONDS %q: %w", debounceJitterStr, err)
+	}
+	if debounceJitterRangeSeconds < 0 {
+		return nil, fmt.Errorf("invalid SENTINEL_DEBOUNCE_JITTER_SECONDS %q: must be >= 0", debounceJitterStr)
+	}
+
+	base := time.Duration(debounceWindowSeconds) * time.Second
+	jitter := computeDeterministicDebounceJitter(clusterName, debounceJitterRangeSeconds)
+	effective := base + jitter
+
 	return &sentinelConfig{
-		clusterNamespace: clusterNamespace,
-		clusterName:      clusterName,
-		debounceWindow:   time.Duration(debounceWindowSeconds) * time.Second,
+		clusterNamespace:     clusterNamespace,
+		clusterName:          clusterName,
+		debounceWindow:       effective,
+		debounceWindowBase:   base,
+		debounceJitterRange:  time.Duration(debounceJitterRangeSeconds) * time.Second,
+		debounceWindowJitter: jitter,
 	}, nil
 }
 
@@ -660,7 +701,10 @@ func main() {
 	setupLog.Info("Starting Sentinel",
 		"cluster_namespace", cfg.clusterNamespace,
 		"cluster_name", cfg.clusterName,
-		"debounce_window", cfg.debounceWindow)
+		"debounce_window", cfg.debounceWindow,
+		"debounce_base", cfg.debounceWindowBase,
+		"debounce_jitter_range", cfg.debounceJitterRange,
+		"debounce_jitter", cfg.debounceWindowJitter)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
