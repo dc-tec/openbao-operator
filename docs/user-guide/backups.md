@@ -1,5 +1,7 @@
-# Backup & Restore
+# Backups
 
+> **See also:** [Restore from Backup](restore.md) for restore procedures.
+>
 ## Prerequisites
 
 - **Object Storage**: S3-compatible endpoint (AWS S3, MinIO, GCS, Azure)

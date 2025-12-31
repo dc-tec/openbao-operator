@@ -24,14 +24,14 @@ sequenceDiagram
     participant C as OpenBaoCluster Controller
     participant Bao as OpenBao Pods
 
-    Actor->>K: Patch StatefulSet/Service/ConfigMap
+    Ext->>K: Patch (StatefulSet/Service/ConfigMap)
     K-->>S: Watch event for managed resource
     S->>S: Apply debounce window
-    S->>K: Patch OpenBaoCluster annotations<br/>(sentinel-trigger, sentinel-trigger-resource)
+    S->>K: Patch OpenBaoCluster annotations (sentinel-trigger, sentinel-trigger-resource)
     K-->>C: Reconcile OpenBaoCluster (Sentinel trigger)
-    C->>Bao: Fast-path reconciliation<br/>(certs + infra, skip upgrade/backup)
+    C->>Bao: Fast-path reconciliation (certs + infra, skip upgrade/backup)
     C->>K: Clear Sentinel trigger annotation
-    K-->>C: Normal reconciliation<br/>(full path, including upgrade/backup)
+    K-->>C: Normal reconciliation (full path, including upgrade/backup)
 ```
 
 ## Security Model
