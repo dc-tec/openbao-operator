@@ -2,13 +2,11 @@ package openbaocluster
 
 // Reason constants for OpenBaoCluster conditions.
 const (
-	ReasonImageVerificationFailed         = "ImageVerificationFailed"
-	ReasonSentinelImageVerificationFailed = "SentinelImageVerificationFailed"
-	ReasonGatewayAPIMissing               = "GatewayAPIMissing"
-	ReasonPrerequisitesMissing            = "PrerequisitesMissing"
-	ReasonPrerequisitesReady              = "PrerequisitesReady"
-	ReasonAdmissionPoliciesNotReady       = "AdmissionPoliciesNotReady"
-	ReasonAdmissionPoliciesReady          = "AdmissionPoliciesReady"
+	ReasonGatewayAPIMissing         = "GatewayAPIMissing"
+	ReasonPrerequisitesMissing      = "PrerequisitesMissing"
+	ReasonPrerequisitesReady        = "PrerequisitesReady"
+	ReasonAdmissionPoliciesNotReady = "AdmissionPoliciesNotReady"
+	ReasonAdmissionPoliciesReady    = "AdmissionPoliciesReady"
 
 	ReasonLeaderFound           = "LeaderFound"
 	ReasonLeaderUnknown         = "LeaderUnknown"
