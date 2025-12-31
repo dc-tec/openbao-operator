@@ -27,6 +27,12 @@ To run a specific subset of E2E tests (e.g., only Backup related):
 make test-e2e E2E_FOCUS="Backup"
 ```
 
+To run a specfic subset of E2E tests using test labels (eg., only smoke, slow, backup)
+
+```bash
+make test-e2e E2E_LABEL_FILTER="smoke"
+```
+
 To run E2E tests in parallel (e.g., 4 nodes):
 
 ```bash
