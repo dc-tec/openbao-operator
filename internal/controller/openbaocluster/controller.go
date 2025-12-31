@@ -57,9 +57,6 @@ import (
 	"github.com/openbao/operator/internal/upgrade/bluegreen"
 )
 
-// failurePolicyBlock is the default failure policy for image verification.
-const failurePolicyBlock = "Block"
-
 // unknownResource is used when the resource kind or info is not available.
 const unknownResource = "unknown"
 
@@ -89,103 +86,114 @@ type infraReconciler struct {
 	admissionStatus   *admission.Status
 }
 
-// Reconcile implements SubReconciler for infrastructure reconciliation.
-func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	logger.Info("Reconciling infrastructure for OpenBaoCluster")
+func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	if cluster.Spec.ImageVerification == nil {
+		return constants.ImageVerificationFailurePolicyBlock
+	}
+	failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+	if failurePolicy == "" {
+		return constants.ImageVerificationFailurePolicyBlock
+	}
+	return failurePolicy
+}
 
-	// Perform image verification if enabled and get verified digest
-	var verifiedImageDigest string
-	if cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
-		// Use a strict timeout for image verification to prevent blocking the reconcile loop.
-		// Network I/O to OCI registries/Rekor can hang, which would stall the worker.
-		verifyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		digest, err := r.verifyImageFunc(verifyCtx, logger, cluster)
-		if err != nil {
-			now := metav1.Now()
-			failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
-			if failurePolicy == "" {
-				failurePolicy = failurePolicyBlock // Default to Block
-			}
-
-			if failurePolicy == failurePolicyBlock {
-				// Block reconciliation and set Degraded condition
-				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-					Type:               string(openbaov1alpha1.ConditionDegraded),
-					Status:             metav1.ConditionTrue,
-					ObservedGeneration: cluster.Generation,
-					LastTransitionTime: now,
-					Reason:             ReasonImageVerificationFailed,
-					Message:            fmt.Sprintf("Image verification failed: %v", err),
-				})
-
-				// Note: Status update will be handled by the controller
-				return false, fmt.Errorf("image verification failed (policy=Block): %w", err)
-			}
-
-			// Warn policy: log error and emit event, but proceed
-			logger.Error(err, "Image verification failed but proceeding due to Warn policy", "image", cluster.Spec.Image)
-			if r.recorder != nil {
-				r.recorder.Eventf(cluster, corev1.EventTypeWarning, ReasonImageVerificationFailed, "Image verification failed but proceeding due to Warn policy: %v", err)
-			}
-		} else {
-			verifiedImageDigest = digest
-			logger.Info("Image verified successfully, using digest", "digest", digest)
-		}
+func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	if cluster.Spec.ImageVerification == nil || !cluster.Spec.ImageVerification.Enabled {
+		return "", nil
 	}
 
-	var verifiedSentinelDigest string
-	if cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled {
-		sentinelImage := cluster.Spec.Sentinel.Image
-		if sentinelImage == "" {
-			// Derive from operator version (handled in getSentinelImage)
-			sentinelImage = "openbao/operator-sentinel:latest" // Will be resolved in infra manager
-		}
+	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+	defer cancel()
 
-		// Reuse the image verification logic if enabled
-		if cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
-			var trustedRootConfig *security.TrustedRootConfig = nil
-			verifier := security.NewImageVerifier(logger, r.client, trustedRootConfig)
-			config := security.VerifyConfig{
-				PublicKey:        cluster.Spec.ImageVerification.PublicKey,
-				Issuer:           cluster.Spec.ImageVerification.Issuer,
-				Subject:          cluster.Spec.ImageVerification.Subject,
-				IgnoreTlog:       cluster.Spec.ImageVerification.IgnoreTlog,
-				ImagePullSecrets: cluster.Spec.ImageVerification.ImagePullSecrets,
-				Namespace:        cluster.Namespace,
-			}
-			// Use a strict timeout for image verification to prevent blocking the reconcile loop.
-			verifyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-			digest, err := verifier.Verify(verifyCtx, sentinelImage, config)
-			if err != nil {
-				// Handle error based on failure policy
-				failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
-				if failurePolicy == "" {
-					failurePolicy = failurePolicyBlock // Default to Block
-				}
-				if failurePolicy == failurePolicyBlock {
-					now := metav1.Now()
-					meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-						Type:               string(openbaov1alpha1.ConditionDegraded),
-						Status:             metav1.ConditionTrue,
-						ObservedGeneration: cluster.Generation,
-						LastTransitionTime: now,
-						Reason:             ReasonSentinelImageVerificationFailed,
-						Message:            fmt.Sprintf("Sentinel image verification failed: %v", err),
-					})
-					return false, fmt.Errorf("sentinel image verification failed (policy=Block): %w", err)
-				}
-				// Warn policy: log error but proceed
-				logger.Error(err, "Sentinel image verification failed but proceeding due to Warn policy", "image", sentinelImage)
-			} else {
-				verifiedSentinelDigest = digest
-				logger.Info("Sentinel image verified successfully", "digest", digest)
-			}
-		}
+	digest, err := r.verifyImageFunc(verifyCtx, logger, cluster)
+	if err == nil {
+		logger.Info("Image verified successfully, using digest", "digest", digest)
+		return digest, nil
 	}
-	// --------------------------------
 
+	now := metav1.Now()
+	failurePolicy := imageVerificationFailurePolicy(cluster)
+	if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type:               string(openbaov1alpha1.ConditionDegraded),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: cluster.Generation,
+			LastTransitionTime: now,
+			Reason:             constants.ReasonImageVerificationFailed,
+			Message:            fmt.Sprintf("Image verification failed: %v", err),
+		})
+		return "", fmt.Errorf("image verification failed (policy=Block): %w", err)
+	}
+
+	logger.Error(err, "Image verification failed but proceeding due to Warn policy", "image", cluster.Spec.Image)
+	if r.recorder != nil {
+		r.recorder.Eventf(cluster, corev1.EventTypeWarning, constants.ReasonImageVerificationFailed, "Image verification failed but proceeding due to Warn policy: %v", err)
+	}
+	return "", nil
+}
+
+func (r *infraReconciler) verifyImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
+	if cluster.Spec.ImageVerification == nil || !cluster.Spec.ImageVerification.Enabled {
+		return "", nil
+	}
+	if strings.TrimSpace(imageRef) == "" {
+		return "", nil
+	}
+
+	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+	defer cancel()
+
+	digest, err := security.VerifyImageForCluster(verifyCtx, logger, r.client, cluster, imageRef)
+	if err == nil {
+		logger.Info("Image verified successfully", "digest", digest)
+		return digest, nil
+	}
+
+	failurePolicy := imageVerificationFailurePolicy(cluster)
+	if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+		now := metav1.Now()
+		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type:               string(openbaov1alpha1.ConditionDegraded),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: cluster.Generation,
+			LastTransitionTime: now,
+			Reason:             failureReason,
+			Message:            fmt.Sprintf("%s: %v", failureMessagePrefix, err),
+		})
+		return "", fmt.Errorf("%s (policy=Block): %w", failureMessagePrefix, err)
+	}
+
+	logger.Error(err, failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
+	return "", nil
+}
+
+func (r *infraReconciler) verifySentinelImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	if cluster.Spec.Sentinel == nil || !cluster.Spec.Sentinel.Enabled {
+		return "", nil
+	}
+
+	sentinelImage := cluster.Spec.Sentinel.Image
+	if sentinelImage == "" {
+		sentinelImage = inframanager.SentinelImage(cluster, logger)
+	}
+
+	return r.verifyImageDigest(ctx, logger, cluster, sentinelImage, constants.ReasonSentinelImageVerificationFailed, "Sentinel image verification failed")
+}
+
+func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	if cluster.Spec.InitContainer == nil {
+		return "", nil
+	}
+
+	initImage := strings.TrimSpace(cluster.Spec.InitContainer.Image)
+	if initImage == "" {
+		return "", nil
+	}
+
+	return r.verifyImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Init container image verification failed")
+}
+
+func (r *infraReconciler) reconcileSentinelAdmissionStatus(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 	sentinelAdmissionReady := r.admissionStatus == nil || r.admissionStatus.SentinelReady
 	sentinelEnabled := cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled
 
@@ -203,7 +211,10 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 			r.recorder.Eventf(cluster, corev1.EventTypeWarning, ReasonAdmissionPoliciesNotReady,
 				"Sentinel is enabled but admission policies are not ready; Sentinel will be disabled: %s", r.admissionStatus.SummaryMessage())
 		}
-	} else if sentinelEnabled && sentinelAdmissionReady {
+		return false
+	}
+
+	if sentinelEnabled && sentinelAdmissionReady {
 		degradedCond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
 		if degradedCond != nil && degradedCond.Reason == ReasonAdmissionPoliciesNotReady {
 			now := metav1.Now()
@@ -218,8 +229,32 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		}
 	}
 
+	return sentinelAdmissionReady
+}
+
+// Reconcile implements SubReconciler for infrastructure reconciliation.
+func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+	logger.Info("Reconciling infrastructure for OpenBaoCluster")
+
+	verifiedImageDigest, err := r.verifyMainImageDigest(ctx, logger, cluster)
+	if err != nil {
+		return false, err
+	}
+
+	verifiedSentinelDigest, err := r.verifySentinelImageDigest(ctx, logger, cluster)
+	if err != nil {
+		return false, err
+	}
+
+	verifiedInitContainerDigest, err := r.verifyInitContainerImageDigest(ctx, logger, cluster)
+	if err != nil {
+		return false, err
+	}
+
+	sentinelAdmissionReady := r.reconcileSentinelAdmissionStatus(cluster)
+
 	manager := inframanager.NewManagerWithSentinelAdmission(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, sentinelAdmissionReady)
-	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest, verifiedSentinelDigest); err != nil {
+	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest, verifiedSentinelDigest, verifiedInitContainerDigest); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			now := metav1.Now()
 			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{

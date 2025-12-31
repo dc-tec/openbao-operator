@@ -28,6 +28,7 @@ import (
 	openbaoapi "github.com/openbao/operator/internal/openbao"
 	"github.com/openbao/operator/internal/operationlock"
 	"github.com/openbao/operator/internal/revision"
+	"github.com/openbao/operator/internal/security"
 )
 
 var (
@@ -44,6 +45,59 @@ type Manager struct {
 	infraManager *infra.Manager
 }
 
+func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	if cluster.Spec.ImageVerification == nil {
+		return constants.ImageVerificationFailurePolicyBlock
+	}
+	failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+	if failurePolicy == "" {
+		return constants.ImageVerificationFailurePolicyBlock
+	}
+	return failurePolicy
+}
+
+func initContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	if cluster.Spec.InitContainer == nil {
+		return ""
+	}
+	return cluster.Spec.InitContainer.Image
+}
+
+func (m *Manager) verifyImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
+	if cluster.Spec.ImageVerification == nil || !cluster.Spec.ImageVerification.Enabled {
+		return "", nil
+	}
+	if imageRef == "" {
+		return "", nil
+	}
+
+	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+	defer cancel()
+
+	digest, err := security.VerifyImageForCluster(verifyCtx, logger, m.client, cluster, imageRef)
+	if err == nil {
+		logger.Info("Image verified successfully", "digest", digest)
+		return digest, nil
+	}
+
+	failurePolicy := imageVerificationFailurePolicy(cluster)
+	if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+		now := metav1.Now()
+		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type:               string(openbaov1alpha1.ConditionDegraded),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: cluster.Generation,
+			LastTransitionTime: now,
+			Reason:             failureReason,
+			Message:            fmt.Sprintf("%s: %v", failureMessagePrefix, err),
+		})
+		return "", fmt.Errorf("%s (policy=Block): %w", failureMessagePrefix, err)
+	}
+
+	logger.Error(err, failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
+	return "", nil
+}
+
 // NewManager constructs a Manager.
 func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager) *Manager {
 	return &Manager{
@@ -57,9 +111,9 @@ func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Man
 // This implements the SubReconciler interface.
 // Returns (shouldRequeue, error) where shouldRequeue indicates if reconciliation should be requeued immediately.
 //
-// Note: Image verification is handled by the infra reconciler which runs before this.
-// For Green StatefulSet creation, we use cluster.Spec.Image. If image verification
-// is enabled, the infra reconciler will have already verified it.
+// Note: Image verification for the Blue StatefulSet is handled by the infra reconciler which runs before this.
+// For Green resources (StatefulSet and snapshot Jobs), we verify and pin digests here to ensure the
+// target images are validated when ImageVerification is enabled.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
 	logger.Info("Manager reconciling",
 		"updateStrategy", cluster.Spec.UpdateStrategy.Type,
@@ -431,9 +485,24 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 
 		// Create Green StatefulSet with revision
 		// Note: Green StatefulSet should start with all replicas immediately (no rolling)
-		// Use cluster.Spec.Image directly to ensure we get the target version (not the captured verifiedImageDigest)
 		greenImage := cluster.Spec.Image
-		if err := m.infraManager.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, greenImage, greenRevision, true); err != nil {
+		verifiedGreenDigest, err := m.verifyImageDigest(ctx, logger, cluster, greenImage, constants.ReasonBlueGreenImageVerificationFailed, "Green image verification failed")
+		if err != nil {
+			return false, err
+		}
+
+		initImage := initContainerImage(cluster)
+		verifiedInitContainerDigest, err := m.verifyImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Green init container image verification failed")
+		if err != nil {
+			return false, err
+		}
+
+		imageForGreen := greenImage
+		if verifiedGreenDigest != "" {
+			imageForGreen = verifiedGreenDigest
+		}
+
+		if err := m.infraManager.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, imageForGreen, verifiedInitContainerDigest, greenRevision, true); err != nil {
 			return false, fmt.Errorf("failed to create Green StatefulSet: %w", err)
 		}
 
@@ -1812,7 +1881,38 @@ func (m *Manager) createPreUpgradeSnapshotJob(
 	jobName := fmt.Sprintf("%s-preupgrade-snapshot-%d", cluster.Name, time.Now().Unix())
 
 	// Build the snapshot job
-	job := m.buildSnapshotJob(cluster, jobName, "pre-upgrade")
+	verifiedExecutorDigest := ""
+	executorImage := cluster.Spec.Backup.ExecutorImage
+	if executorImage != "" && cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
+		verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+		defer cancel()
+
+		digest, err := security.VerifyImageForCluster(verifyCtx, logger, m.client, cluster, executorImage)
+		if err != nil {
+			failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+			if failurePolicy == "" {
+				failurePolicy = constants.ImageVerificationFailurePolicyBlock
+			}
+			if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+				now := metav1.Now()
+				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+					Type:               string(openbaov1alpha1.ConditionDegraded),
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: cluster.Generation,
+					LastTransitionTime: now,
+					Reason:             constants.ReasonBlueGreenSnapshotImageVerificationFailed,
+					Message:            fmt.Sprintf("Pre-upgrade snapshot executor image verification failed: %v", err),
+				})
+				return "", fmt.Errorf("pre-upgrade snapshot executor image verification failed (policy=Block): %w", err)
+			}
+			logger.Error(err, "Pre-upgrade snapshot executor image verification failed but proceeding due to Warn policy", "image", executorImage)
+		} else {
+			verifiedExecutorDigest = digest
+			logger.Info("Pre-upgrade snapshot executor image verified successfully", "digest", digest)
+		}
+	}
+
+	job := m.buildSnapshotJob(cluster, jobName, "pre-upgrade", verifiedExecutorDigest)
 
 	// Create the job
 	if err := m.client.Create(ctx, job); err != nil {
@@ -1828,7 +1928,7 @@ func (m *Manager) createPreUpgradeSnapshotJob(
 }
 
 // buildSnapshotJob creates a backup Job spec for upgrade snapshots.
-func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, phase string) *batchv1.Job {
+func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, phase string, verifiedExecutorDigest string) *batchv1.Job {
 	region := cluster.Spec.Backup.Target.Region
 	if region == "" {
 		region = "us-east-1"
@@ -1957,6 +2057,11 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 	// Service account name - use backup service account
 	serviceAccountName := cluster.Name + constants.SuffixBackupServiceAccount
 
+	image := verifiedExecutorDigest
+	if image == "" {
+		image = cluster.Spec.Backup.ExecutorImage
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -1969,7 +2074,7 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 				constants.LabelOpenBaoComponent: ComponentUpgradeSnapshot,
 			},
 			Annotations: map[string]string{
-				"openbao.org/snapshot-phase": phase,
+				"openbao.org/snapshot-phase": phase, // TODO: Add constant
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(cluster, openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster")),
@@ -2004,7 +2109,7 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 					Containers: []corev1.Container{
 						{
 							Name:  "backup",
-							Image: cluster.Spec.Backup.ExecutorImage,
+							Image: image,
 							SecurityContext: &corev1.SecurityContext{
 								AllowPrivilegeEscalation: ptr.To(false),
 								Capabilities: &corev1.Capabilities{

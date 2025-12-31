@@ -29,7 +29,7 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -135,7 +135,7 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 
 			ctx := context.Background()
 
-			if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+			if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
 				t.Fatalf("Reconcile() error = %v", err)
 			}
 
@@ -175,7 +175,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -356,7 +356,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -406,7 +406,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 	// No Unseal config, so no seal-creds volume - this simulates public ACME
 
 	ctx := context.Background()
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -457,7 +457,7 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -502,7 +502,7 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -531,7 +531,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -640,7 +640,7 @@ func TestStatefulSet_ACMEMode_NoSidecar(t *testing.T) {
 	}
 
 	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "")
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "")
 	if err != nil {
 		t.Fatalf("buildStatefulSet() error = %v", err)
 	}
@@ -676,7 +676,7 @@ func TestStatefulSet_ACMEMode_NoTLSVolume(t *testing.T) {
 	}
 
 	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "")
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "")
 	if err != nil {
 		t.Fatalf("buildStatefulSet() error = %v", err)
 	}
@@ -717,7 +717,7 @@ func TestStatefulSet_ACMEMode_NoShareProcessNamespace(t *testing.T) {
 	}
 
 	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "")
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "")
 	if err != nil {
 		t.Fatalf("buildStatefulSet() error = %v", err)
 	}
@@ -734,7 +734,7 @@ func TestStatefulSet_NonACMEMode_UsesWrapper(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
 
 	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "")
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "")
 	if err != nil {
 		t.Fatalf("buildStatefulSet() error = %v", err)
 	}

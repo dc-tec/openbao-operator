@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/openbao/operator/internal/security"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -73,7 +74,34 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 			return false, fmt.Errorf("failed to generate backup key: %w", err)
 		}
 
-		job, buildErr := buildBackupJob(cluster, jobName, backupKey)
+		verifiedExecutorDigest := ""
+		executorImage := getBackupExecutorImage(cluster)
+		if executorImage != "" && cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
+			verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+			defer cancel()
+
+			digest, err := security.VerifyImageForCluster(verifyCtx, logger, m.client, cluster, executorImage)
+			if err != nil {
+				failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+				if failurePolicy == "" {
+					failurePolicy = constants.ImageVerificationFailurePolicyBlock
+				}
+				if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+					m.setBackingUpCondition(cluster, false, constants.ReasonBackupExecutorImageVerificationFailed,
+						fmt.Sprintf("Backup executor image verification failed: %v", err))
+					return false, fmt.Errorf("backup executor image verification failed (policy=Block): %w", err)
+				}
+
+				m.setBackingUpCondition(cluster, false, constants.ReasonBackupExecutorImageVerificationFailed,
+					fmt.Sprintf("Backup executor image verification failed but proceeding due to Warn policy: %v", err))
+				logger.Error(err, "Backup executor image verification failed but proceeding due to Warn policy", "image", executorImage)
+			} else {
+				verifiedExecutorDigest = digest
+				logger.Info("Backup executor image verified successfully", "digest", digest)
+			}
+		}
+
+		job, buildErr := buildBackupJob(cluster, jobName, backupKey, verifiedExecutorDigest)
 		if buildErr != nil {
 			return false, fmt.Errorf("failed to build backup Job %s/%s: %w", cluster.Namespace, jobName, buildErr)
 		}
@@ -177,7 +205,7 @@ func backupJobName(cluster *openbaov1alpha1.OpenBaoCluster, scheduledTime time.T
 	return backupJobNamePrefix + cluster.Name + "-" + scheduledTime.UTC().Format("20060102-150405")
 }
 
-func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, backupKey string) (*batchv1.Job, error) {
+func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, backupKey, verifiedExecutorDigest string) (*batchv1.Job, error) {
 	region := cluster.Spec.Backup.Target.Region
 	if region == "" {
 		region = constants.DefaultS3Region
@@ -273,7 +301,10 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, backupKey 
 	backoffLimit := int32(0) // Don't retry failed backups automatically
 	ttlSecondsAfterFinished := int32(backupJobTTLSeconds)
 
-	image := getBackupExecutorImage(cluster)
+	image := verifiedExecutorDigest
+	if image == "" {
+		image = getBackupExecutorImage(cluster)
+	}
 	if image == "" {
 		return nil, fmt.Errorf("backup executor image is required (spec.backup.executorImage)")
 	}

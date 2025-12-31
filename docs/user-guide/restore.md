@@ -11,6 +11,8 @@ The OpenBao Operator supports restoring clusters from snapshots stored in S3-com
 - The target OpenBao cluster must exist and be initialized
 - Restore authentication configured (JWT Auth or static token)
 
+If image verification is enabled on the target cluster (`spec.imageVerification.enabled: true`), the operator verifies the restore executor image and pins the restore Job to the verified digest.
+
 ## Creating a Restore Request
 
 The `OpenBaoRestore` CRD acts as a "job request" - it is immutable after creation. Each restore operation is a separate Kubernetes resource.

@@ -126,7 +126,9 @@ spec:
   # The operator verifies container image signatures using Cosign before deployment.
   # By default, signatures are verified against the Rekor transparency log for non-repudiation.
   # The operator resolves image tags to digests during verification and uses the verified
-  # digest in StatefulSets to prevent TOCTOU (Time-of-Check to Time-of-Use) attacks.
+  # digest in operator-managed workloads (StatefulSets/Deployments/Jobs) to prevent TOCTOU
+  # (Time-of-Check to Time-of-Use) attacks. Ensure all helper images used by this spec are signed
+  # (init container, Sentinel, backup executor, upgrade executor, etc.).
   imageVerification:
     enabled: true
     issuer: "https://token.actions.githubusercontent.com"

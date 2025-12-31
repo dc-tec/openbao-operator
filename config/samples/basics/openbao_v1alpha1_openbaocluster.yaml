@@ -8,6 +8,16 @@ metadata:
 spec:
   version: "2.4.4"
   image: "openbao/openbao:2.4.4"
+  # Optional: Supply chain security (Cosign image verification + digest pinning).
+  # When enabled, verification applies to all operator-managed images for this cluster
+  # (StatefulSets, Deployments, and Jobs), including helper images like backup/upgrade executors.
+  # imageVerification:
+  #   enabled: true
+  #   # publicKey: |
+  #   #   -----BEGIN PUBLIC KEY-----
+  #   #   ...
+  #   #   -----END PUBLIC KEY-----
+  #   failurePolicy: Block # or Warn
   replicas: 3
   profile: Development
   tls:

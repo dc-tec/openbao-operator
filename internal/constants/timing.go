@@ -11,6 +11,8 @@ const (
 	RequeueSafetyNetJitter = 5 * time.Minute
 
 	SecurityWarningInterval = 1 * time.Hour
+
+	ImageVerificationTimeout = 5 * time.Second
 )
 
 // Sentinel trigger rate limiting constants.

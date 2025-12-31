@@ -21,25 +21,31 @@ import (
 	"github.com/openbao/operator/internal/provisioner"
 )
 
-// getSentinelImage returns the Sentinel image to use.
+// SentinelImage returns the Sentinel image to use.
+//
 // If cluster.Spec.Sentinel.Image is set, it is used.
-// Otherwise, derives from operator version (OPERATOR_VERSION env var).
-// Falls back to "openbao/operator-sentinel:latest" if version is not available.
-func getSentinelImage(cluster *openbaov1alpha1.OpenBaoCluster, logger logr.Logger) string {
+// Otherwise, derives from operator version (OPERATOR_VERSION env var) and OPERATOR_SENTINEL_IMAGE_REPOSITORY.
+// Falls back to "<repo>:latest" if OPERATOR_VERSION is not available.
+func SentinelImage(cluster *openbaov1alpha1.OpenBaoCluster, logger logr.Logger) string {
 	if cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Image != "" {
 		return cluster.Spec.Sentinel.Image
+	}
+
+	repo := strings.TrimSpace(os.Getenv(constants.EnvOperatorSentinelImageRepo))
+	if repo == "" {
+		repo = constants.DefaultSentinelImageRepository
 	}
 
 	// Derive from operator version
 	operatorVersion := os.Getenv(constants.EnvOperatorVersion)
 	if operatorVersion != "" {
-		return fmt.Sprintf("openbao/operator-sentinel:%s", operatorVersion)
+		return fmt.Sprintf("%s:%s", repo, operatorVersion)
 	}
 
 	// Fallback (should not happen in production)
 	logger.Info("OPERATOR_VERSION not set; using latest tag for Sentinel image. This should not happen in production.",
-		"fallback_image", "openbao/operator-sentinel:latest")
-	return "openbao/operator-sentinel:latest"
+		"fallback_image", repo+":latest")
+	return repo + ":latest"
 }
 
 // ensureSentinelServiceAccount creates the ServiceAccount for the Sentinel.
@@ -103,7 +109,7 @@ func (m *Manager) ensureSentinelDeployment(ctx context.Context, logger logr.Logg
 	const defaultDebounceJitterSeconds = "5"
 
 	// Get Sentinel image
-	sentinelImage := getSentinelImage(cluster, logger)
+	sentinelImage := SentinelImage(cluster, logger)
 	if verifiedImageDigest != "" {
 		sentinelImage = verifiedImageDigest
 	}

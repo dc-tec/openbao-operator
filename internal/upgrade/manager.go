@@ -14,6 +14,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,6 +30,7 @@ import (
 	"github.com/openbao/operator/internal/logging"
 	openbaoapi "github.com/openbao/operator/internal/openbao"
 	"github.com/openbao/operator/internal/operationlock"
+	"github.com/openbao/operator/internal/security"
 )
 
 const (
@@ -501,7 +503,43 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 	jobName = m.backupJobName(cluster)
 	logger.Info("Creating pre-upgrade backup job", "job", jobName)
 
-	job, err := m.buildBackupJob(cluster, jobName)
+	verifiedExecutorDigest := ""
+	executorImage := strings.TrimSpace(cluster.Spec.Backup.ExecutorImage)
+	if executorImage != "" && cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
+		verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+		defer cancel()
+
+		digest, err := security.VerifyImageForCluster(verifyCtx, logger, m.client, cluster, executorImage)
+		if err != nil {
+			failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+			if failurePolicy == "" {
+				failurePolicy = constants.ImageVerificationFailurePolicyBlock
+			}
+			if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+				original := cluster.DeepCopy()
+				now := metav1.Now()
+				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+					Type:               string(openbaov1alpha1.ConditionDegraded),
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: cluster.Generation,
+					LastTransitionTime: now,
+					Reason:             constants.ReasonPreUpgradeBackupImageVerificationFailed,
+					Message:            fmt.Sprintf("Pre-upgrade backup executor image verification failed: %v", err),
+				})
+				if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status after pre-upgrade backup executor image verification failure")
+				}
+				return false, fmt.Errorf("pre-upgrade backup executor image verification failed (policy=Block): %w", err)
+			}
+
+			logger.Error(err, "Pre-upgrade backup executor image verification failed but proceeding due to Warn policy", "image", executorImage)
+		} else {
+			verifiedExecutorDigest = digest
+			logger.Info("Pre-upgrade backup executor image verified successfully", "digest", digest)
+		}
+	}
+
+	job, err := m.buildBackupJob(cluster, jobName, verifiedExecutorDigest)
 	if err != nil {
 		return false, fmt.Errorf("failed to build backup job: %w", err)
 	}
@@ -577,7 +615,7 @@ func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *
 		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
 		constants.LabelOpenBaoCluster: cluster.Name,
 		"openbao.org/component":       backup.ComponentBackup,
-		"openbao.org/backup-type":     "pre-upgrade",
+		"openbao.org/backup-type":     "pre-upgrade", // TODO: Add constant
 	})
 
 	if err := m.client.List(ctx, jobList,
@@ -630,7 +668,7 @@ func (m *Manager) backupJobName(cluster *openbaov1alpha1.OpenBaoCluster) string 
 
 // buildBackupJob builds a Kubernetes Job for executing a backup.
 // This mirrors the logic from internal/backup/job.go but is adapted for pre-upgrade use.
-func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*batchv1.Job, error) {
+func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string, verifiedExecutorDigest string) (*batchv1.Job, error) {
 	backupCfg := cluster.Spec.Backup
 	if backupCfg == nil {
 		return nil, fmt.Errorf("backup configuration is required")
@@ -644,7 +682,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 		{Name: constants.EnvBackupEndpoint, Value: backupCfg.Target.Endpoint},
 		{Name: constants.EnvBackupBucket, Value: backupCfg.Target.Bucket},
 		{Name: constants.EnvBackupPathPrefix, Value: backupCfg.Target.PathPrefix},
-		{Name: constants.EnvBackupFilenamePrefix, Value: "pre-upgrade"}, // Prefix filenames with "pre-upgrade-"
+		{Name: constants.EnvBackupFilenamePrefix, Value: "pre-upgrade"}, // TODO: Add constant
 		{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", backupCfg.Target.UsePathStyle)},
 	}
 
@@ -690,7 +728,10 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 	backoffLimit := int32(0)               // Don't retry failed backups automatically
 	ttlSecondsAfterFinished := int32(3600) // 1 hour TTL
 
-	image := strings.TrimSpace(backupCfg.ExecutorImage)
+	image := verifiedExecutorDigest
+	if image == "" {
+		image = strings.TrimSpace(backupCfg.ExecutorImage)
+	}
 	if image == "" {
 		return nil, fmt.Errorf("backup executor image is required")
 	}
@@ -780,7 +821,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 						constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
 						constants.LabelOpenBaoCluster:    cluster.Name,
 						constants.LabelOpenBaoComponent:  backup.ComponentBackup,
-						constants.LabelOpenBaoBackupType: "pre-upgrade",
+						constants.LabelOpenBaoBackupType: "pre-upgrade", // TODO: Add constant
 					},
 				},
 				Spec: corev1.PodSpec{

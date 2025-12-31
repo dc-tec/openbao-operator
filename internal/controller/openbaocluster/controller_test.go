@@ -394,7 +394,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			infraMgr := infra.NewManager(k8sClient, k8sClient.Scheme(), "openbao-operator-system", "", nil)
 
 			// Use the infra manager directly to reconcile networking resources for this cluster.
-			err := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "")
+			err := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "", "")
 			if errors.Is(err, infra.ErrGatewayAPIMissing) {
 				Skip("Skipping test: Gateway API CRDs not installed in envtest environment")
 			}
@@ -404,7 +404,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			assertWeights := func(step int32, wantBlue, wantGreen int32) {
 				cluster.Status.BlueGreen.TrafficStep = step
 				// Reconcile again to apply new backend weights.
-				reconcileErr := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "")
+				reconcileErr := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "", "")
 				if errors.Is(reconcileErr, infra.ErrGatewayAPIMissing) {
 					Skip("Skipping test: Gateway API CRDs not installed in envtest environment")
 				}

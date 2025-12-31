@@ -19,8 +19,8 @@ spec:
   # Sentinel drift detection (enabled by default when sentinel is specified)
   sentinel:
     enabled: true
-    # Optional: Override Sentinel image (defaults to openbao/operator-sentinel:<operator-version>)
-    # image: "openbao/operator-sentinel:v2.1.0"
+    # Optional: Override Sentinel image (defaults to ghcr.io/dc-tec/openbao-operator-sentinel:<operator-version>)
+    # image: "ghcr.io/dc-tec/openbao-operator-sentinel:v2.1.0"
     # Optional: Override resource limits (defaults: 64Mi memory, 100m CPU requests; 128Mi memory, 200m CPU limits)
     # resources:
     #   requests:
@@ -37,3 +37,4 @@ spec:
     ui: true
     # Log level
     logLevel: "info"
+

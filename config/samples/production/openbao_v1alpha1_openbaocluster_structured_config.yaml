@@ -83,3 +83,4 @@ spec:
   #   static:
   #     currentKey: "file:///custom/path/key"
   #     currentKeyID: "custom-key-v1"
+

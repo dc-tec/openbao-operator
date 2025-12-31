@@ -11,6 +11,8 @@
 
 The operator supports scheduled backups of OpenBao Raft snapshots to S3-compatible object storage. Backups are executed using Kubernetes Jobs with a dedicated backup executor container.
 
+If image verification is enabled (`spec.imageVerification.enabled: true`), the operator verifies `spec.backup.executorImage` and pins the Job to the verified digest.
+
 ### Configuration Example
 
 ```yaml

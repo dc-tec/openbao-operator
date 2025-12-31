@@ -69,6 +69,7 @@ spec:
                 description: |-
                   ExecutorImage is the container image to use for restore operations.
                   Defaults to the same image used for backup operations if not specified.
+                  If the target OpenBaoCluster has image verification enabled, the operator will verify this image and pin the restore Job to the verified digest.
                 minLength: 1
                 type: string
               force:

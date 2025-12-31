@@ -80,7 +80,7 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return result, err
 	}
 
-	if result.Requeue || result.RequeueAfter > 0 {
+	if result.RequeueAfter > 0 {
 		logger.V(1).Info("Requeuing reconciliation", "requeueAfter", result.RequeueAfter)
 	}
 

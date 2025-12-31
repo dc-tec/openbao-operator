@@ -171,14 +171,14 @@ spec:
 - `enabled`: Enable or disable image verification (required).
 - `publicKey`: PEM-encoded Cosign public key used to verify signatures (required when enabled).
 - `failurePolicy`: Behavior on verification failure:
-  - `Block` (default): Sets `ConditionDegraded=True` with `Reason=ImageVerificationFailed` and blocks StatefulSet updates.
+  - `Block` (default): Blocks reconciliation of the affected workload and records an image verification failure condition.
   - `Warn`: Logs an error and emits a Kubernetes Event but proceeds with deployment.
 - `ignoreTlog`: Set to `true` to disable Rekor transparency log verification (default: `false`). When `false`, signatures are verified against Rekor for non-repudiation, following OpenBao's verification guidance.
 - `imagePullSecrets`: List of ImagePullSecrets (type `kubernetes.io/dockerconfigjson` or `kubernetes.io/dockercfg`) for private registry authentication during verification.
 
 **Security Features:**
 
-- **TOCTOU Mitigation**: The operator resolves image tags to digests during verification and uses the verified digest in StatefulSets, preventing Time-of-Check to Time-of-Use attacks where a tag could be updated between verification and deployment.
+- **TOCTOU Mitigation**: The operator resolves image tags to digests during verification and uses the verified digest in operator-managed workloads (StatefulSets/Deployments/Jobs), preventing Time-of-Check to Time-of-Use attacks where a tag could be updated between verification and deployment.
 - **Rekor Verification**: By default, signatures are verified against the Rekor transparency log, providing strong non-repudiation guarantees as recommended by OpenBao.
 - **Private Registry Support**: ImagePullSecrets can be provided for authentication when verifying images from private registries.
 

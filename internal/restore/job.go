@@ -25,20 +25,29 @@ const (
 	restoreTokenMountPath         = "/etc/bao/restore/token" // #nosec G101 -- mount path not credential
 )
 
+func getRestoreExecutorImage(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	if restore.Spec.ExecutorImage != "" {
+		return restore.Spec.ExecutorImage, nil
+	}
+	if cluster.Spec.Backup != nil && cluster.Spec.Backup.ExecutorImage != "" {
+		return cluster.Spec.Backup.ExecutorImage, nil
+	}
+	return "", fmt.Errorf("no executor image specified in restore or cluster backup config")
+}
+
 // buildRestoreJob creates a Kubernetes Job for executing the restore.
-func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (*batchv1.Job, error) {
+func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster, verifiedExecutorDigest string) (*batchv1.Job, error) {
 	jobName := restoreJobName(restore)
 	labels := restoreLabels(cluster)
 
-	// Determine executor image
-	executorImage := restore.Spec.ExecutorImage
-	if executorImage == "" {
-		// Fall back to backup executor image from cluster spec
-		if cluster.Spec.Backup != nil && cluster.Spec.Backup.ExecutorImage != "" {
-			executorImage = cluster.Spec.Backup.ExecutorImage
-		} else {
-			return nil, fmt.Errorf("no executor image specified in restore or cluster backup config")
-		}
+	executorImage, err := getRestoreExecutorImage(restore, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	image := verifiedExecutorDigest
+	if image == "" {
+		image = executorImage
 	}
 
 	// Build environment variables
@@ -51,7 +60,7 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 	// Build container
 	container := corev1.Container{
 		Name:  "restore",
-		Image: executorImage,
+		Image: image,
 		Env:   envVars,
 		SecurityContext: &corev1.SecurityContext{
 			AllowPrivilegeEscalation: ptr.To(false),

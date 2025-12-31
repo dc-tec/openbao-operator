@@ -20,6 +20,7 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	"github.com/openbao/operator/internal/security"
 )
 
 const (
@@ -63,7 +64,31 @@ func ensureUpgradeExecutorJob(
 			return nil, fmt.Errorf("failed to get upgrade Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
 
-		job, err := buildUpgradeExecutorJob(cluster, jobName, action, runID, blueRevision, greenRevision)
+		verifiedExecutorDigest := ""
+		if cluster.Spec.Upgrade != nil {
+			executorImage := strings.TrimSpace(cluster.Spec.Upgrade.ExecutorImage)
+			if executorImage != "" && cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
+				verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+				defer cancel()
+
+				digest, err := security.VerifyImageForCluster(verifyCtx, logger, c, cluster, executorImage)
+				if err != nil {
+					failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+					if failurePolicy == "" {
+						failurePolicy = constants.ImageVerificationFailurePolicyBlock
+					}
+					if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+						return nil, fmt.Errorf("upgrade executor image verification failed (policy=Block): %w", err)
+					}
+					logger.Error(err, "Upgrade executor image verification failed but proceeding due to Warn policy", "image", executorImage)
+				} else {
+					verifiedExecutorDigest = digest
+					logger.Info("Upgrade executor image verified successfully", "digest", digest)
+				}
+			}
+		}
+
+		job, err := buildUpgradeExecutorJob(cluster, jobName, action, runID, blueRevision, greenRevision, verifiedExecutorDigest)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build upgrade Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
@@ -110,12 +135,16 @@ func buildUpgradeExecutorJob(
 	runID string,
 	blueRevision string,
 	greenRevision string,
+	verifiedExecutorDigest string,
 ) (*batchv1.Job, error) {
 	if cluster.Spec.Upgrade == nil {
 		return nil, fmt.Errorf("spec.upgrade is required for upgrade Jobs")
 	}
 
-	image := strings.TrimSpace(cluster.Spec.Upgrade.ExecutorImage)
+	image := verifiedExecutorDigest
+	if image == "" {
+		image = strings.TrimSpace(cluster.Spec.Upgrade.ExecutorImage)
+	}
 	if image == "" {
 		return nil, fmt.Errorf("spec.upgrade.executorImage is required for upgrade Jobs")
 	}

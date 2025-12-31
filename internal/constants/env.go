@@ -59,6 +59,16 @@ const (
 	EnvSentinelDebounceWindowSeconds = "SENTINEL_DEBOUNCE_WINDOW_SECONDS"
 	EnvSentinelDebounceJitterSeconds = "SENTINEL_DEBOUNCE_JITTER_SECONDS"
 	EnvOperatorVersion               = "OPERATOR_VERSION"
+	EnvOperatorSentinelImageRepo     = "OPERATOR_SENTINEL_IMAGE_REPOSITORY"
+)
+
+// Default image repositories.
+const (
+	// DefaultSentinelImageRepository is the default image repository used for the Sentinel
+	// helper when spec.sentinel.image is not set.
+	//
+	// This can be overridden by setting OPERATOR_SENTINEL_IMAGE_REPOSITORY in the operator Deployment.
+	DefaultSentinelImageRepository = "ghcr.io/dc-tec/openbao-operator-sentinel"
 )
 
 // Backup authentication method values.

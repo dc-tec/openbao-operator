@@ -17,7 +17,7 @@ import (
 	"github.com/openbao/operator/internal/constants"
 )
 
-func TestGetSentinelImage(t *testing.T) {
+func TestSentinelImage(t *testing.T) {
 	tests := []struct {
 		name           string
 		cluster        *openbaov1alpha1.OpenBaoCluster
@@ -46,7 +46,7 @@ func TestGetSentinelImage(t *testing.T) {
 				},
 			},
 			envVersion:     "v2.1.0",
-			wantImage:      "openbao/operator-sentinel:v2.1.0",
+			wantImage:      constants.DefaultSentinelImageRepository + ":v2.1.0",
 			wantWarningLog: false,
 		},
 		{
@@ -57,7 +57,7 @@ func TestGetSentinelImage(t *testing.T) {
 				},
 			},
 			envVersion:     "",
-			wantImage:      "openbao/operator-sentinel:latest",
+			wantImage:      constants.DefaultSentinelImageRepository + ":latest",
 			wantWarningLog: true,
 		},
 		{
@@ -93,9 +93,9 @@ func TestGetSentinelImage(t *testing.T) {
 				_ = os.Unsetenv(constants.EnvOperatorVersion)
 			}
 
-			got := getSentinelImage(tt.cluster, logr.Discard())
+			got := SentinelImage(tt.cluster, logr.Discard())
 			if got != tt.wantImage {
-				t.Errorf("getSentinelImage() = %v, want %v", got, tt.wantImage)
+				t.Errorf("SentinelImage() = %v, want %v", got, tt.wantImage)
 			}
 		})
 	}

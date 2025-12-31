@@ -6,11 +6,11 @@ The Operator runs a single `OpenBaoCluster` controller which delegates to five s
 
 | Manager | Responsibility |
 |---------|----------------|
-| [CertManager](cert-manager.md) | Bootstrap PKI and rotate certificates |
-| [InfrastructureManager](infra-manager.md) | Render configuration and maintain StatefulSet |
-| [InitManager](init-manager.md) | Automate initial cluster initialization |
-| [UpgradeManager](upgrade-manager.md) | Safe rolling and blue/green updates |
-| [BackupManager](backup-manager.md) | Schedule and execute Raft snapshots |
+| [Cert Manager](cert-manager.md) | Bootstrap PKI and rotate certificates |
+| [Infrastructure Manager](infra-manager.md) | Render configuration and maintain StatefulSet |
+| [Init Manager](init-manager.md) | Automate initial cluster initialization |
+| [Upgrade Manager](upgrade-manager.md) | Safe rolling and blue/green updates |
+| [Backup Manager](backup-manager.md) | Schedule and execute Raft snapshots |
 
 ## Pausing Reconciliation
 
@@ -21,31 +21,31 @@ All controllers MUST honor `spec.paused`:
 
 ## Manager Details
 
-### CertManager (TLS Lifecycle)
+### Cert Manager (TLS Lifecycle)
 
 Supports three TLS modes: `OperatorManaged`, `External`, and `ACME`. Handles certificate generation, rotation, and hot-reload signaling.
 
 [Read more →](cert-manager.md)
 
-### InfrastructureManager (Config & StatefulSet)
+### Infrastructure Manager (Config & StatefulSet)
 
 Generates `config.hcl` dynamically, manages the StatefulSet, handles auto-unseal configuration, and performs image verification.
 
 [Read more →](infra-manager.md)
 
-### InitManager (Cluster Initialization)
+### Init Manager (Cluster Initialization)
 
 Handles single-pod bootstrap, cluster initialization via HTTP API, and root token storage.
 
 [Read more →](init-manager.md)
 
-### UpgradeManager (Rolling & Blue/Green)
+### Upgrade Manager (Rolling & Blue/Green)
 
 Implements StatefulSet partitioning for rolling updates and a 10-phase state machine for blue/green upgrades with automatic rollback.
 
 [Read more →](upgrade-manager.md)
 
-### BackupManager (Snapshots)
+### Backup Manager (Snapshots)
 
 Creates backup Jobs that stream Raft snapshots directly to object storage with cron scheduling and retention management.
 

@@ -6,7 +6,16 @@ The Operator implements container image signature verification to protect agains
 
 - **Verification Method:** Uses Cosign to verify container image signatures against a trusted public key.
 - **Configuration:** Enabled via `spec.imageVerification.enabled` with a public key provided in `spec.imageVerification.publicKey`.
-- **Timing:** Verification occurs before StatefulSet creation or updates, blocking deployment of unverified images when `failurePolicy` is `Block`.
+- **Timing:** Verification occurs before workload creation/updates, blocking deployment of unverified images when `failurePolicy` is `Block`.
+
+When enabled, verification applies to all operator-managed images, including:
+
+- OpenBao StatefulSet container image (`spec.image`)
+- OpenBao StatefulSet init container image (`spec.initContainer.image`, when configured)
+- Sentinel Deployment image (`spec.sentinel.image`, when enabled)
+- Backup executor Job image (`spec.backup.executorImage`)
+- Upgrade executor Job image (`spec.upgrade.executorImage`)
+- Restore executor Job image (`OpenBaoRestore.spec.executorImage`, falling back to `spec.backup.executorImage` when unset)
 
 ## Rekor Transparency Log
 
@@ -17,7 +26,7 @@ By default, signatures are verified against the Rekor transparency log (`ignoreT
 
 ## Digest Pinning (TOCTOU Mitigation)
 
-The operator resolves image tags to immutable digests during verification and uses the verified digest in StatefulSets instead of the mutable tag.
+The operator resolves image tags to immutable digests during verification and uses the verified digest in workloads instead of the mutable tag.
 
 - **Attack Prevention:** Prevents an attacker from updating a tag to point to a malicious image between verification and deployment.
 - **Immutability:** Ensures the exact verified image is deployed.
@@ -36,8 +45,8 @@ Verification results are cached in-memory keyed by image digest (not tag) and pu
 
 | Policy | Behavior |
 |--------|----------|
-| `Block` (default) | Prevents StatefulSet updates and sets `ConditionDegraded=True` with `Reason=ImageVerificationFailed` |
-| `Warn` | Logs an error and emits a Kubernetes Event but proceeds with deployment |
+| `Block` (default) | Blocks reconciliation of the affected workload and records a failure condition (for example `ConditionDegraded=True` with an image verification failure reason) |
+| `Warn` | Logs an error and proceeds (the workload may be created/updated using the original image reference) |
 
 ## Security Benefits
 

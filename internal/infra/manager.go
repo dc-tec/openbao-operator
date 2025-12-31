@@ -113,7 +113,8 @@ func NewManagerWithSentinelAdmission(c client.Client, scheme *runtime.Scheme, op
 // If provided, it will be used instead of cluster.Spec.Image to prevent TOCTOU attacks.
 // If empty, cluster.Spec.Image will be used.
 // verifiedSentinelDigest is the verified Sentinel image digest (if provided).
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string, verifiedSentinelDigest string) error {
+// verifiedInitContainerDigest is the verified init container image digest (if provided).
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string, verifiedSentinelDigest string, verifiedInitContainerDigest string) error {
 	// Only create unseal secret if using static seal (default or explicit)
 	if usesStaticSeal(cluster) {
 		if err := m.ensureUnsealSecret(ctx, logger, cluster); err != nil {
@@ -145,7 +146,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return nil
 	}
 
-	if err := m.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, verifiedImageDigest, revisionName, false); err != nil {
+	if err := m.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, verifiedImageDigest, verifiedInitContainerDigest, revisionName, false); err != nil {
 		return err
 	}
 

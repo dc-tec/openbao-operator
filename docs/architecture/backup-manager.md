@@ -17,6 +17,7 @@ Backups are executed using Kubernetes Jobs that run the `bao-backup` executor co
 
 - Create a Kubernetes Job with a unique name: `backup-<cluster-name>-<timestamp>`
 - Job runs the backup executor image (`spec.backup.executorImage`)
+- If image verification is enabled (`spec.imageVerification.enabled`), the Job is pinned to the verified digest
 - Job Pod uses the backup ServiceAccount
 - Job Pod mounts TLS CA certificate and configures object storage access:
   - Static credentials via `spec.backup.target.credentialsSecretRef` (Secret volume mount), or

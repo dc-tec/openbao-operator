@@ -594,7 +594,7 @@ spec:
                     default: Block
                     description: |-
                       FailurePolicy defines behavior on verification failure.
-                      "Block" prevents StatefulSet updates when verification fails.
+                      "Block" blocks reconciliation of the affected workload when verification fails.
                       "Warn" logs an error and emits a Kubernetes Event but proceeds.
                     enum:
                     - Warn
@@ -1519,7 +1519,8 @@ spec:
                   image:
                     description: |-
                       Image allows overriding the Sentinel container image.
-                      If not specified, defaults to "openbao/operator-sentinel:vX.Y.Z" (matching operator version).
+                      If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_SENTINEL_IMAGE_REPOSITORY
+                      (default: "ghcr.io/dc-tec/openbao-operator-sentinel") and the tag matches OPERATOR_VERSION.
                     type: string
                   resources:
                     description: |-

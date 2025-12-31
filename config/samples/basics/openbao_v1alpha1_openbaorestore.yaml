@@ -1,0 +1,22 @@
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoRestore
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaorestore-sample
+spec:
+  cluster: openbaocluster-sample
+  source:
+    target:
+      endpoint: https://s3.amazonaws.com
+      bucket: openbao-backups
+      region: us-east-1
+      credentialsSecretRef:
+        name: s3-credentials
+    key: clusters/openbaocluster-sample/2025-01-01-120000.snap
+  # jwtAuthRole: restore
+  # tokenSecretRef:
+  #   name: restore-token
+  # executorImage: openbao/backup-executor:v0.1.0
+

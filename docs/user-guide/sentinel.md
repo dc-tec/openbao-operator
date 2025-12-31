@@ -28,7 +28,7 @@ spec:
   # ... other spec fields ...
   sentinel:
     enabled: true  # Enable Sentinel (default: true when sentinel is set)
-    image: ""      # Optional: Override Sentinel image (defaults to openbao/operator-sentinel:<operator-version>)
+    image: ""      # Optional: Override Sentinel image (defaults to ghcr.io/dc-tec/openbao-operator-sentinel:<operator-version>)
     resources:     # Optional: Override resource limits
       requests:
         memory: "64Mi"
@@ -53,7 +53,7 @@ spec:
 
 #### `image`
 
-Allows overriding the Sentinel container image. If not specified, defaults to `openbao/operator-sentinel:<operator-version>` where `<operator-version>` is derived from the `OPERATOR_VERSION` environment variable in the operator Deployment.
+Allows overriding the Sentinel container image. If not specified, defaults to `ghcr.io/dc-tec/openbao-operator-sentinel:<operator-version>` where `<operator-version>` is derived from the `OPERATOR_VERSION` environment variable in the operator Deployment.
 
 ```yaml
 spec:
@@ -291,3 +291,4 @@ The operator will clean up the Sentinel Deployment, ServiceAccount, Role, and Ro
 - [Architecture: Sentinel](../architecture/sentinel.md)
 - [Security: Admission Policies](../security/admission-policies.md)
 - [Advanced Configuration](advanced-configuration.md)
+

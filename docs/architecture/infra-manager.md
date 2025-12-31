@@ -40,12 +40,13 @@ If `spec.imageVerification.enabled` is `true`, the operator verifies the contain
 
 - The verification uses the public key provided in `spec.imageVerification.publicKey`.
 - Verification results are cached in-memory to avoid redundant network calls for the same image digest.
+- When verification succeeds, the operator pins `spec.image` to the verified digest and (when configured) also pins `spec.initContainer.image` to the verified digest to prevent TOCTOU attacks.
 
 **Failure Policy:**
 
 | Policy | Behavior |
 | ------ | -------- |
-| `Block` (default) | Sets `ConditionDegraded=True` with `Reason=ImageVerificationFailed` and blocks StatefulSet updates |
+| `Block` (default) | Blocks reconciliation of the StatefulSet and records an image verification failure condition |
 | `Warn` | Logs an error and emits a Kubernetes Event but proceeds with StatefulSet updates |
 
 ## Reconciliation Semantics

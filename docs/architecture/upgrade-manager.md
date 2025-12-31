@@ -6,6 +6,8 @@
 
 The UpgradeManager uses **StatefulSet Partitioning** to control exactly which Pods are updated by Kubernetes, rather than letting Kubernetes update them all at once.
 
+If image verification is enabled (`spec.imageVerification.enabled`), the operator verifies and pins upgrade executor Jobs to the verified digest for `spec.upgrade.executorImage`.
+
 ### The Algorithm
 
 1. **Trigger:** User changes `Spec.Version` to `2.1.0`. `Status.CurrentVersion` is `2.0.0`.
@@ -60,6 +62,8 @@ Upgrades are designed to survive Operator restarts:
 ## Blue/Green Upgrade Strategy
 
 When `spec.updateStrategy.type` is `BlueGreen`, the operator uses a parallel cluster upgrade approach instead of rolling updates.
+
+If image verification is enabled (`spec.imageVerification.enabled`), the operator verifies and pins the Green StatefulSet image (and its init container image, when configured) to verified digests.
 
 ### Architecture
 

@@ -43,7 +43,7 @@ sequenceDiagram
 ## Configuration
 
 - `spec.sentinel.enabled`: Enable/disable Sentinel (default: `true` when `spec.sentinel` is set).
-- `spec.sentinel.image`: Override the Sentinel container image (defaults to `openbao/operator-sentinel:<operator-version>`).
+- `spec.sentinel.image`: Override the Sentinel container image (defaults to `ghcr.io/dc-tec/openbao-operator-sentinel:<operator-version>`).
 - `spec.sentinel.resources`: Configure resource limits (defaults: 64Mi memory, 100m CPU requests; 128Mi memory, 200m CPU limits).
 - `spec.sentinel.debounceWindowSeconds`: Configure debounce window (default: 2 seconds, range: 1-60).
 

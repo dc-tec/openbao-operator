@@ -23,7 +23,9 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	operatorerrors "github.com/openbao/operator/internal/errors"
 	"github.com/openbao/operator/internal/operationlock"
+	"github.com/openbao/operator/internal/security"
 )
 
 const (
@@ -35,6 +37,8 @@ const (
 	RestoreServiceAccountSuffix = constants.SuffixRestoreServiceAccount
 	// RestoreConditionType is the condition type for restore operations.
 	RestoreConditionType = constants.RestoreConditionType // This will need to be added to conditions.go if missed
+
+	restoreRequeueImmediately = 1 * time.Second
 )
 
 // Manager orchestrates restore operations for OpenBao clusters.
@@ -54,8 +58,7 @@ func NewManager(c client.Client, scheme *runtime.Scheme, recorder record.EventRe
 }
 
 // Reconcile processes an OpenBaoRestore resource through its lifecycle.
-// Returns (result, error) where result.Requeue or result.RequeueAfter
-// indicates if reconciliation should be rescheduled.
+// Returns (result, error) where result.RequeueAfter indicates if reconciliation should be rescheduled.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
 	if restore.DeletionTimestamp != nil {
 		return m.handleDeletion(ctx, logger, restore)
@@ -100,7 +103,7 @@ func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore
 		return ctrl.Result{}, fmt.Errorf("failed to update restore status: %w", err)
 	}
 
-	return ctrl.Result{Requeue: true}, nil
+	return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
 }
 
 // handleValidating validates preconditions and transitions to Running.
@@ -158,10 +161,10 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 				"OverrideOperationLock used; cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder)
 		}
 		meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
-			Type:               "OperationLockOverride",
+			Type:               "OperationLockOverride", // TODO: Add constant
 			Status:             metav1.ConditionTrue,
 			LastTransitionTime: metav1.Now(),
-			Reason:             "OperationLockOverridden",
+			Reason:             "OperationLockOverridden", // TODO: Add constant
 			Message:            fmt.Sprintf("Cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder),
 		})
 	}
@@ -199,7 +202,7 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 	}
 
 	logger.Info("Restore validation passed, transitioning to Running phase")
-	return ctrl.Result{Requeue: true}, nil
+	return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
 }
 
 // handleRunning manages the restore job and checks for completion.
@@ -236,7 +239,40 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 
 	if apierrors.IsNotFound(err) {
 		// Create the restore job
-		job, err = m.buildRestoreJob(restore, cluster)
+		executorImage, err := getRestoreExecutorImage(restore, cluster)
+		if err != nil {
+			return m.failRestore(ctx, logger, restore, fmt.Sprintf("failed to determine restore executor image: %v", err))
+		}
+
+		verifiedExecutorDigest := ""
+		if executorImage != "" && cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
+			verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+			defer cancel()
+
+			digest, err := security.VerifyImageForCluster(verifyCtx, logger, m.client, cluster, executorImage)
+			if err != nil {
+				failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+				if failurePolicy == "" {
+					failurePolicy = constants.ImageVerificationFailurePolicyBlock
+				}
+				if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+					if operatorerrors.IsTransient(err) {
+						restore.Status.Message = fmt.Sprintf("Waiting for restore executor image verification: %v", err)
+						if statusErr := m.client.Status().Update(ctx, restore); statusErr != nil {
+							return ctrl.Result{}, fmt.Errorf("failed to update restore status after transient image verification failure: %w", statusErr)
+						}
+						return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+					}
+					return m.failRestore(ctx, logger, restore, fmt.Sprintf("restore executor image verification failed: %v", err))
+				}
+				logger.Error(err, "Restore executor image verification failed but proceeding due to Warn policy", "image", executorImage)
+			} else {
+				verifiedExecutorDigest = digest
+				logger.Info("Restore executor image verified successfully", "digest", digest)
+			}
+		}
+
+		job, err = m.buildRestoreJob(restore, cluster, verifiedExecutorDigest)
 		if err != nil {
 			return m.failRestore(ctx, logger, restore, fmt.Sprintf("failed to build restore job: %v", err))
 		}
@@ -264,7 +300,10 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 
 	// Check job status
 	if job.Status.Succeeded > 0 {
-		return m.completeRestore(ctx, logger, restore, "Restore completed successfully")
+		if err := m.completeRestore(ctx, logger, restore, "Restore completed successfully"); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 
 	if job.Status.Failed > 0 {
@@ -317,7 +356,7 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 }
 
 // completeRestore transitions the restore to Completed phase.
-func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
+func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) error {
 	now := metav1.Now()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseCompleted
 	restore.Status.CompletionTime = &now
@@ -332,14 +371,14 @@ func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, resto
 	})
 
 	if err := m.client.Status().Update(ctx, restore); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update restore status: %w", err)
+		return fmt.Errorf("failed to update restore status: %w", err)
 	}
 
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
 		logger.Error(err, "Failed to release cluster operation lock after restore completion")
 	}
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (m *Manager) ensureFinalizer(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore) error {
@@ -443,7 +482,7 @@ func (m *Manager) ensureRestoreServiceAccount(ctx context.Context, logger logr.L
 }
 
 // ensureRestoreRBAC creates RBAC for the restore service account.
-func (m *Manager) ensureRestoreRBAC(ctx context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoRestore, _ *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) ensureRestoreRBAC(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoRestore, _ *openbaov1alpha1.OpenBaoCluster) error {
 	// For now, we rely on the existing RBAC from the backup setup
 	// The restore SA needs permission to list pods (to find leader)
 	// This can be expanded later if needed

@@ -62,7 +62,7 @@ func TestOpenBaoRestoreReconciler_Reconcile(t *testing.T) {
 
 			result, err := r.Reconcile(context.Background(), req)
 			assert.NoError(t, err)
-			assert.True(t, result.Requeue || result.RequeueAfter > 0)
+			assert.True(t, result.RequeueAfter > 0)
 
 			updated := &openbaov1alpha1.OpenBaoRestore{}
 			err = c.Get(context.Background(), req.NamespacedName, updated)

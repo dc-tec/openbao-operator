@@ -43,6 +43,8 @@ The upgrade executor requires:
 - `spec.upgrade.executorImage`
 - `spec.upgrade.jwtAuthRole`
 
+If image verification is enabled (`spec.imageVerification.enabled: true`), the operator verifies `spec.upgrade.executorImage` and pins upgrade executor Jobs to the verified digest.
+
 ### JWT Auth (Preferred)
 
 Configure JWT Auth for upgrade operations:

@@ -166,7 +166,7 @@ func TestBuildBackupJob(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	jobName := testBackupJobName
 
-	job, err := buildBackupJob(cluster, jobName, "test-key-12345")
+	job, err := buildBackupJob(cluster, jobName, "test-key-12345", "")
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -268,6 +268,26 @@ func TestBuildBackupJob(t *testing.T) {
 	}
 }
 
+func TestBuildBackupJob_UsesVerifiedExecutorDigest(t *testing.T) {
+	cluster := newTestClusterWithBackup("test-cluster", "default")
+	jobName := testBackupJobName
+	verifiedDigest := "openbao/backup-executor@sha256:deadbeef"
+
+	job, err := buildBackupJob(cluster, jobName, "test-key-12345", verifiedDigest)
+	if err != nil {
+		t.Fatalf("buildBackupJob() error = %v", err)
+	}
+
+	if len(job.Spec.Template.Spec.Containers) != 1 {
+		t.Fatalf("buildBackupJob() containers count = %v, want 1", len(job.Spec.Template.Spec.Containers))
+	}
+
+	container := job.Spec.Template.Spec.Containers[0]
+	if container.Image != verifiedDigest {
+		t.Errorf("buildBackupJob() container.Image = %v, want %v", container.Image, verifiedDigest)
+	}
+}
+
 func TestBuildBackupJob_WithCredentialsSecret(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	cluster.Spec.Backup.Target.CredentialsSecretRef = &corev1.SecretReference{
@@ -276,7 +296,7 @@ func TestBuildBackupJob_WithCredentialsSecret(t *testing.T) {
 	}
 
 	jobName := testBackupJobName
-	job, err := buildBackupJob(cluster, jobName, "test-key")
+	job, err := buildBackupJob(cluster, jobName, "test-key", "")
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -336,7 +356,7 @@ func TestBuildBackupJob_WithJWTAuth(t *testing.T) {
 	cluster.Spec.Backup.JWTAuthRole = "backup-role"
 
 	jobName := testBackupJobName
-	job, err := buildBackupJob(cluster, jobName, "test")
+	job, err := buildBackupJob(cluster, jobName, "test", "")
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -398,7 +418,7 @@ func TestBuildBackupJob_WithRoleARN(t *testing.T) {
 	cluster.Spec.Backup.Target.RoleARN = "arn:aws:iam::123456789012:role/backup-role"
 
 	jobName := testBackupJobName
-	job, err := buildBackupJob(cluster, jobName, "test")
+	job, err := buildBackupJob(cluster, jobName, "test", "")
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -464,7 +484,7 @@ func TestBuildBackupJob_WithTokenSecret(t *testing.T) {
 	}
 
 	jobName := testBackupJobName
-	job, err := buildBackupJob(cluster, jobName, "test")
+	job, err := buildBackupJob(cluster, jobName, "test", "")
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -500,7 +520,7 @@ func TestBuildBackupJob_MissingExecutorImage(t *testing.T) {
 	cluster.Spec.Backup.ExecutorImage = ""
 
 	jobName := testBackupJobName
-	job, err := buildBackupJob(cluster, jobName, "test")
+	job, err := buildBackupJob(cluster, jobName, "test", "")
 
 	if err == nil {
 		t.Error("buildBackupJob() with missing executor image should return error")

@@ -83,13 +83,14 @@ func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *op
 // EnsureStatefulSetWithRevision manages the StatefulSet for the OpenBaoCluster using Server-Side Apply.
 // This is exported for use by BlueGreenManager.
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
+// verifiedInitContainerDigest is the verified init container image digest to use (if provided, overrides cluster.Spec.InitContainer.Image).
 // revision is an optional revision identifier for blue/green deployments (e.g., "blue-v1hash" or "green-v2hash").
 // disableSelfInit prevents the pod from attempting to initialize itself (used for Green pods that must join).
 // If revision is empty, uses the cluster name (backward compatible behavior).
 //
 // Note: UpdateStrategy is intentionally not set here to allow UpgradeManager to manage it.
 // SSA will preserve fields not specified in the desired object.
-func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string, verifiedImageDigest string, revision string, disableSelfInit bool) error {
+func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool) error {
 	name := statefulSetNameWithRevision(cluster, revision)
 
 	if err := m.ensureConfigMapWithRevision(ctx, cluster, revision, configContent); err != nil {
@@ -115,7 +116,7 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 			"desiredReplicas", desiredReplicas)
 	}
 
-	desired, buildErr := buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, revision, disableSelfInit)
+	desired, buildErr := buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, revision, disableSelfInit)
 	if buildErr != nil {
 		return fmt.Errorf("failed to build StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, buildErr)
 	}
@@ -188,7 +189,7 @@ func computeConfigHash(configContent string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster, disableSelfInit bool) []corev1.Container {
+func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedInitContainerDigest string, disableSelfInit bool) []corev1.Container {
 	renderedConfigDir := path.Dir(openBaoRenderedConfig)
 
 	args := []string{
@@ -224,10 +225,15 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster, disableSelfIni
 		})
 	}
 
+	initImage := getInitContainerImage(cluster)
+	if verifiedInitContainerDigest != "" {
+		initImage = verifiedInitContainerDigest
+	}
+
 	return []corev1.Container{
 		{
 			Name:  "bao-config-init",
-			Image: getInitContainerImage(cluster),
+			Image: initImage,
 			// The init container is responsible for rendering the final
 			// config.hcl from the template using environment variables
 			// such as HOSTNAME and POD_IP. It writes the result to a
@@ -539,15 +545,16 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 // This is a convenience wrapper that calls buildStatefulSetWithRevision with an empty revision.
 //
 //nolint:unparam // configContent varies in production with actual config values
-func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string) (*appsv1.StatefulSet, error) {
-	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, "", false)
+func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string) (*appsv1.StatefulSet, error) {
+	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, "", false)
 }
 
 // buildStatefulSetWithRevision constructs a StatefulSet for the given OpenBaoCluster.
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
+// verifiedInitContainerDigest is the verified init container image digest to use (if provided, overrides cluster.Spec.InitContainer.Image).
 // revision is an optional revision identifier for blue/green deployments.
 // disableSelfInit prevents adding self-init logic (used for Green pods).
-func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, revision string, disableSelfInit bool) (*appsv1.StatefulSet, error) {
+func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool) (*appsv1.StatefulSet, error) {
 	// Use the helper function from manager.go
 	labels := podSelectorLabelsWithRevision(cluster, revision)
 
@@ -852,7 +859,7 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
 					},
-					InitContainers: buildInitContainers(cluster, disableSelfInit),
+					InitContainers: buildInitContainers(cluster, verifiedInitContainerDigest, disableSelfInit),
 					Containers:     buildContainers(cluster, verifiedImageDigest, renderedConfigDir, startupProbeExec, livenessProbeExec, readinessProbeExec),
 					Volumes:        volumes,
 				},
