@@ -1,7 +1,7 @@
 site_name: OpenBao Operator
-site_url: https://openbao.github.io/openbao-operator/
-repo_url: https://github.com/openbao/openbao-operator
-repo_name: openbao/openbao-operator
+site_url: https://dc-tec.github.io/openbao-operator/
+repo_url: https://github.com/dc-tec/openbao-operator
+repo_name: dc-tec/openbao-operator
 edit_uri: edit/main/docs/
 
 theme:
@@ -12,6 +12,7 @@ theme:
     - navigation.expand
     - navigation.sections
     - content.code.copy
+    - content.tabs.link
   palette:
     - scheme: default
       primary: custom
@@ -73,6 +74,8 @@ nav:
           - Multi-Tenancy: user-guide/multi-tenancy.md
           - Tenant Namespaces: user-guide/tenant-namespaces.md
           - Security Considerations: user-guide/security-considerations.md
+      - Production:
+          - Production Checklist: user-guide/production-checklist.md
       - Recovery:
           - Break Glass / Safe Mode: user-guide/recovery-safe-mode.md
           - No Leader / No Quorum: user-guide/recovery-no-leader.md
@@ -82,29 +85,50 @@ nav:
   - Architecture:
       - Overview: architecture/index.md
       - Component Design: architecture/components.md
-      - CertManager: architecture/cert-manager.md
-      - InfraManager: architecture/infra-manager.md
-      - InitManager: architecture/init-manager.md
-      - UpgradeManager: architecture/upgrade-manager.md
-      - BackupManager: architecture/backup-manager.md
+      - Components:
+          - Certificates: architecture/cert-manager.md
+          - Infrastructure: architecture/infra-manager.md
+          - Cluster Initialization: architecture/init-manager.md
+          - Upgrade: architecture/upgrade-manager.md
+          - Backup: architecture/backup-manager.md
       - Lifecycle Management: architecture/lifecycle.md
       - Sentinel Sidecar: architecture/sentinel.md
   - Security:
       - Overview: security/index.md
-      - Admission Policies: security/admission-policies.md
-      - Network Security: security/network-security.md
-      - Workload Security: security/workload-security.md
-      - Secrets Management: security/secrets-management.md
-      - TLS: security/tls.md
-      - Supply Chain: security/supply-chain.md
-      - Security Profiles: security/profiles.md
-      - RBAC: security/rbac.md
-      - Tenant Isolation: security/tenant-isolation.md
-      - Threat Model: security/threat-model.md
+      - Fundamentals:
+          - security/fundamentals/index.md
+          - Threat Model: security/fundamentals/threat-model.md
+          - Security Profiles: security/fundamentals/profiles.md
+          - Secrets Management: security/fundamentals/secrets-management.md
+      - Infrastructure:
+          - security/infrastructure/index.md
+          - RBAC: security/infrastructure/rbac.md
+          - Admission Policies: security/infrastructure/admission-policies.md
+          - Network Security: security/infrastructure/network-security.md
+      - Workload:
+          - security/workload/index.md
+          - Pod Security: security/workload/workload-security.md
+          - TLS: security/workload/tls.md
+          - Supply Chain: security/workload/supply-chain.md
+      - Multi-Tenancy:
+          - security/multi-tenancy/index.md
+          - Tenant Isolation: security/multi-tenancy/tenant-isolation.md
   - Contributing:
-      - Basics: contributing/index.md
-      - Development: contributing/development.md
-      - Testing Strategy: contributing/testing.md
-      - Style Guide: contributing/style-guide.md
+      - Overview: contributing/index.md
+      - Getting Started:
+          - contributing/getting-started/index.md
+          - Development Setup: contributing/getting-started/development.md
+      - Coding Standards:
+          - contributing/standards/index.md
+          - Go Style: contributing/standards/go-style.md
+          - Error Handling: contributing/standards/error-handling.md
+          - Kubernetes Patterns: contributing/standards/kubernetes-patterns.md
+          - Security Practices: contributing/standards/security-practices.md
+          - Project Conventions: contributing/standards/project-conventions.md
+      - Testing: contributing/testing.md
+      - CI/CD: contributing/ci.md
+      - Release Management: contributing/release-management.md
+      - SDLC: contributing/sdlc.md
+      - Documentation Style Guide: contributing/docs-style-guide.md
   - Reference:
       - Compatibility Matrix: reference/compatibility.md

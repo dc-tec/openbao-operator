@@ -37,7 +37,7 @@ While the operator enforces a default deny posture, users can extend the Network
 - For transit seal backends, prefer namespace selectors over broad IP ranges
 - Consider using backup jobs (excluded from NetworkPolicy) rather than adding broad egress rules for object storage access
 
-See also: [Network Configuration](../user-guide/network.md)
+See also: [Network Configuration](../../user-guide/network.md)
 
 ## PodDisruptionBudget
 

@@ -48,4 +48,4 @@ When `spec.tls.mode` is `ACME`, OpenBao manages certificates internally via its 
 - **Conditions:** Failures update a `TLSReady=False` condition with a clear reason and message.
 - **External Mode:** The operator waits gracefully for external Secrets without erroring, allowing cert-manager or other tools time to provision certificates.
 
-See also: [TLS Security](../security/tls.md)
+See also: [TLS Security](../security/workload/tls.md)

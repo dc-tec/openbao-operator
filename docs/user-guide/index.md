@@ -40,6 +40,7 @@ Secure your deployment:
 - [Multi-Tenancy](multi-tenancy.md) - Tenant isolation and governance
 - [Tenant Namespaces](tenant-namespaces.md) - Provisioner setup
 - [Security Considerations](security-considerations.md) - Best practices
+- [Production Checklist](production-checklist.md) - Pre-production verification
 
 ## Recovery
 

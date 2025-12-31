@@ -1,14 +1,27 @@
 # Contributing
 
-Development, testing, and CI guidance lives under `docs/contributing/`.
+Thank you for your interest in contributing to the OpenBao Operator!
 
-Start here:
+## Getting Started
 
-- `docs/contributing/index.md`
-- `docs/contributing/development.md`
-- `docs/contributing/ci.md`
-- `docs/contributing/testing.md`
-- `docs/contributing/release-management.md`
+Full documentation lives under `docs/contributing/`. Start here:
+
+- [Contributing Overview](docs/contributing/index.md) — Submitting changes, AI notice
+- [Getting Started](docs/contributing/getting-started/index.md) — First-time setup
+- [Development Setup](docs/contributing/getting-started/development.md) — Build & run locally
+- [Coding Standards](docs/contributing/standards/index.md) — Code style & patterns
+- [Testing](docs/contributing/testing.md) — Unit, integration, E2E tests
+- [CI/CD](docs/contributing/ci.md) — Pipeline overview
+
+## AI-Assisted Contributions
+
+We welcome AI-assisted contributions. However, all code must meet our quality standards:
+
+- **Understand what you submit** — You are responsible for your code
+- **Follow standards** — See [Coding Standards](docs/contributing/standards/index.md)
+- **Test your changes** — PRs must pass CI
+
+> **Tip**: Configure your AI tool to use `.agent/rules/` for project-specific rules.
 
 ## Local Checks (PR-equivalent)
 

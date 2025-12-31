@@ -37,5 +37,5 @@ The `Development` profile allows relaxed security for development and testing:
 
 See also:
 
-- User guide: [Security Profiles](../user-guide/security-profiles.md)
-- User guide: [Advanced Configuration](../user-guide/advanced-configuration.md)
+- User guide: [Security Profiles](../../user-guide/security-profiles.md)
+- User guide: [Advanced Configuration](../../user-guide/advanced-configuration.md)

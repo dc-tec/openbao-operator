@@ -1,185 +1,178 @@
-# OpenBao Supervisor Operator
+# OpenBao Operator
 
-The OpenBao Supervisor Operator manages the full lifecycle of OpenBao clusters on Kubernetes. It adopts a **Supervisor Pattern**, delegating data consistency to OpenBao (Raft) while managing the external ecosystem (PKI, Upgrades, Backups).
+[![CI](https://github.com/dc-tec/openbao-operator/actions/workflows/ci.yml/badge.svg)](https://github.com/dc-tec/openbao-operator/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/dc-tec/openbao-operator)](https://go.dev/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-## Architecture Overview
+The OpenBao Operator manages the lifecycle of [OpenBao](https://openbao.org) clusters on Kubernetes.
+It follows a Supervisor Pattern: OpenBao owns data consistency (Raft), the operator owns orchestration (PKI, backups, upgrades, multi-tenancy, and hardening).
 
-The Operator is split into two distinct components to enforce strict security boundaries:
+## Documentation
 
-1. **Provisioner:** A privileged component that creates namespaces and grants specific, limited RBAC permissions.
-2. **Controller:** A low-privilege workload that manages OpenBao clusters. It cannot access resources outside of its provisioned namespaces.
+Docs site: https://dc-tec.github.io/openbao-operator/
 
-```mermaid
-flowchart LR
-  %% High-level view showing the separation of Provisioner and Controller
-  user["Platform team / tenant admin"]
+| Guide | Description |
+|-------|-------------|
+| [User Guide](docs/user-guide/index.md) | Installation, configuration, operations, and day-2 tasks |
+| [Architecture](docs/architecture/index.md) | Component design, boundaries, lifecycle flows |
+| [Security](docs/security/index.md) | Threat model, RBAC, admission policies, hardening |
+| [Compatibility](docs/reference/compatibility.md) | Supported Kubernetes and OpenBao versions |
+| [Contributing](docs/contributing/index.md) | Development setup, CI, release management |
 
-  api["Kubernetes API server"]
-  
-  subgraph "Operator System"
-    provisioner["Provisioner<br/>(Cluster Privileges)"]
-    controller["Controller<br/>(Namespace Privileges)"]
-  end
+## Features
 
-  tenantNS["Tenant namespace<br/>- OpenBaoCluster (CR)<br/>- Tenant RBAC"]
-  clusterNS["OpenBao cluster namespace<br/>(managed resources)"]
+- Zero trust architecture: split provisioner/controller with explicit, least-privilege permissions
+- Automated PKI: operator-managed CA, cert rotation, safe reloads
+- Raft-aware upgrades: rolling and blue/green flows with safety checks
+- Backups and restore: streaming Raft snapshots to object storage
+- Multi-tenancy: namespace-scoped isolation with RBAC + admission controls
+- Supply chain security: signature verification and digest-pinning for operator-managed images
 
-  access["OpenBao endpoint<br/>(Service)"]
-  obj["Object storage<br/>(S3 / GCS / Azure)"]
+## Installation
 
-  user -->|apply CRs| api
-  
-  provisioner <-->|watch Tenants| api
-  provisioner -->|1. create NS & RBAC| tenantNS
-  
-  controller <-->|watch Clusters| api
-  controller -->|2. reconcile resources| clusterNS
+Prerequisites: Kubernetes v1.33+ (see `docs/reference/compatibility.md`), `kubectl`, and (recommended) `helm`.
 
-  clusterNS --> access
-  user -->|OpenBao API| access
+Default namespace: `openbao-operator-system`.
 
-  controller -->|stream snapshots| obj
+### Install via Helm (recommended)
 
-  classDef core fill:#EBFBEE,stroke:#2F9E44,color:#1B5E20;
-  classDef api fill:#F1F3F5,stroke:#495057,color:#212529;
-  classDef ns fill:#FFF4E6,stroke:#F08C00,color:#7A3E00;
+```sh
+kubectl create namespace openbao-operator-system
 
-  class provisioner,controller core;
-  class api api;
-  class tenantNS,clusterNS ns;
+helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
+  --version <chart-version> \
+  --namespace openbao-operator-system
 ```
 
-```mermaid
-flowchart TB
-  %% Per OpenBaoCluster: showing the Sentinel interaction
-  clusterCtl["Reconciler"]
-  
-  subgraph "Data Plane"
-    secrets["Secrets"]
-    config["ConfigMap"]
-    
-    subgraph "StatefulSet Pod"
-      bao["OpenBao Container"]
-      sentinel["Sentinel Sidecar"]
-    end
-    
-    svc["Service"]
-  end
+To pin the operator image by digest:
 
-  clusterCtl -->|reconcile| secrets
-  clusterCtl -->|reconcile| config
-  clusterCtl -->|reconcile| svc
-  
-  config -.->|mount| bao
-  secrets -.->|mount| bao
-  
-  sentinel -.->|watch for drift| config
-  sentinel -.->|watch for drift| secrets
-  sentinel -->|trigger fast-path| clusterCtl
-
-  classDef controller fill:#EBFBEE,stroke:#2F9E44,color:#1B5E20;
-  classDef workload fill:#FFF4E6,stroke:#F08C00,color:#7A3E00;
-  classDef sidecar fill:#E7F5FF,stroke:#1C7ED6,color:#1864AB;
-  
-  class clusterCtl controller;
-  class secrets,config,bao,svc workload;
-  class sentinel sidecar;
+```sh
+helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
+  --version <chart-version> \
+  --namespace openbao-operator-system \
+  --set image.repository=ghcr.io/dc-tec/openbao-operator \
+  --set image.digest=sha256:<digest>
 ```
 
-## Key Features
+CRD upgrades: when upgrading with Helm, apply updated CRDs first, then `helm upgrade`. See `docs/user-guide/installation.md`.
 
-* **Zero Trust Architecture:** The Controller runs with minimal permissions. Access is granted dynamically per-tenant by the Provisioner.
-* **Automated PKI:** Manages internal Root CA, rotates certificates, and triggers hot-reloads.
-* **Raft-Aware Upgrades:** Orchestrates safe, step-down based rolling upgrades.
-* **Disaster Recovery:** Streams snapshots directly to S3/GCS/Azure without disk buffering.
-* **Secure by Default:** Rootless, read-only filesystem, strict NetworkPolicies, and auto-unseal.
-* **Multi-Tenant:** Namespace-scoped isolation with strict RBAC boundaries.
+### Install via release `install.yaml`
 
-## Quick Start
+Download `install.yaml` from the GitHub Release and apply it:
 
-**Prerequisites**: Kubernetes v1.33+ (see `docs/compatibility.md`), `kubectl`, `helm` (optional).
+```sh
+kubectl apply -f install.yaml
+```
 
-### 1. Install the Operator
+### Developer install (Kustomize)
+
+For local development only:
 
 ```sh
 make install
-make deploy IMG=ghcr.io/openbao/openbao-operator:latest
+make deploy IMG=ghcr.io/dc-tec/openbao-operator:dev
 ```
 
-### 2. Deploy a Cluster
+## Quick start (multi-tenant mode)
 
-If you are running in multi-tenant mode, provision your target namespace first (recommended):
+### 1) Onboard a tenant namespace
+
+Create a tenant that maps to a target namespace. The Provisioner will create the namespace (if needed) and install tenant-scoped RBAC.
 
 ```sh
-kubectl create namespace default || true
 kubectl apply -f - <<'YAML'
 apiVersion: openbao.org/v1alpha1
 kind: OpenBaoTenant
 metadata:
-  name: default-tenant
+  name: my-tenant
   namespace: openbao-operator-system
 spec:
-  targetNamespace: default
+  targetNamespace: my-namespace
 YAML
 ```
 
-Create a minimal `OpenBaoCluster`:
+### 2) Create an OpenBao cluster
 
 ```yaml
 apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
-  name: dev-cluster
-  namespace: default
+  name: my-cluster
+  namespace: my-namespace
 spec:
   version: "2.4.4"
   image: "openbao/openbao:2.4.4"
   replicas: 3
-  profile: Development
+  profile: Development # use Hardened for production
   tls:
     enabled: true
     mode: OperatorManaged
-    rotationPeriod: "720h"
   storage:
     size: "10Gi"
 ```
 
 ```sh
-kubectl apply -f config/samples/dev-cluster.yaml
-kubectl get pods -l openbao.org/cluster=dev-cluster -w
+kubectl apply -f cluster.yaml
+kubectl -n my-namespace get pods -l openbao.org/cluster=my-cluster -w
 ```
 
-## Documentation
+Production note: the example above uses `Development`. For production, use `profile: Hardened` and follow `docs/user-guide/production-checklist.md`.
 
-* [User Guide](docs/user-guide/README.md): Configuration, Backups, Upgrades, and Day 2 Ops.
-* [Architecture](docs/architecture/index.md): Internal controller design and state machines.
-* [Security & RBAC](docs/security/index.md): Threat model, RBAC design, and hardening guide.
-* [Contributing](docs/contributing/index.md): Build instructions and testing strategy.
+## Helm chart maintenance
+
+The chart includes CRDs and a templated installer manifest. CI enforces that these stay in sync:
+
+- Sync chart inputs: `make helm-sync`
+- Verify (PR-equivalent): `make verify-helm`
+
+See `docs/contributing/ci.md`.
+
+## Architecture
+
+The operator is split into two components to enforce security boundaries:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Kubernetes API Server                      │
+└─────────────────────────────────────────────────────────────────┘
+         ▲                                    ▲
+         │ watch Tenants                      │ watch Clusters
+         │                                    │
+┌────────┴────────┐                ┌──────────┴──────────┐
+│   Provisioner   │                │    Controller       │
+│ (Cluster-scoped)│                │ (Namespace-scoped)  │
+│                 │                │                     │
+│ • Creates NS    │                │ • StatefulSet       │
+│ • Grants RBAC   │                │ • ConfigMaps        │
+│ • Tenant CRs    │                │ • Secrets (TLS)     │
+└─────────────────┘                │ • Backups           │
+                                   │ • Upgrades          │
+                                   └─────────────────────┘
+```
+
+For detailed architecture diagrams and component interactions, see [Architecture Documentation](docs/architecture/index.md).
 
 ## Contributing
 
-We welcome issues and pull requests. When contributing:
+We welcome contributions! Before submitting:
 
-* Follow the coding guidelines in `AGENTS.md`.
-* Ensure `go test ./...` and `golangci-lint` pass locally.
-* Keep documentation in sync with any non-trivial behavior changes.
+1. Follow the coding standards in [Contributing Guide](docs/contributing/index.md)
+2. Ensure `make test` and `make lint` pass locally (or run `make verify-fmt verify-tidy verify-generated verify-helm test-ci`)
+3. Keep documentation in sync with behavior changes
 
-**NOTE:** Run `make help` for more information on all potential `make` targets
+### AI-Assisted Contributions
 
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+We welcome contributions that leverage AI tools. However, all contributions—AI-assisted or not—must meet our quality standards:
+
+- **Understand what you're submitting.** You are responsible for the code you contribute.
+- **Follow the coding standards** in our [Contributing Guide](docs/contributing/index.md).
+- **Test your changes.** PRs must pass CI and include appropriate test coverage.
+- **Write meaningful commit messages** that explain the "why," not just the "what."
+
+PRs that appear to be low-effort AI-generated content without proper review, testing, or understanding will be closed without merge.
+
+> **Tip for AI users**: Configure your AI tool to use `.agent/rules/` as workspace rules for project-specific standards.
 
 ## License
 
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Apache-2.0. See `LICENSE`.

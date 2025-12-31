@@ -29,4 +29,4 @@ The InitManager handles the bootstrapping of a new OpenBao cluster, including in
 !!! warning "Security"
     The initialization response (which contains sensitive unseal keys and root token) is NEVER logged.
 
-See also: [Secrets Management](../security/secrets-management.md)
+See also: [Secrets Management](../security/fundamentals/secrets-management.md)

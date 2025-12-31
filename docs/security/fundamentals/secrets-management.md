@@ -18,7 +18,7 @@ The Operator manages several high-value secrets for OpenBao clusters.
 - **Credentials:** If `spec.unseal.credentialsSecretRef` is provided, credentials are mounted at `/etc/bao/seal-creds`. For GCP Cloud KMS, the `GOOGLE_APPLICATION_CREDENTIALS` environment variable is set to point to the mounted credentials file.
 - **Workload Identity:** When using workload identity mechanisms (IRSA for AWS, GKE Workload Identity for GCP), credentials may be omitted as the pod identity is used for authentication.
 
-See also: [Security Considerations](../user-guide/security-considerations.md)
+See also: [Security Considerations](../../user-guide/security-considerations.md)
 
 ## Root Token
 
@@ -66,7 +66,7 @@ Backup and upgrade executors use JWT authentication when `jwtAuthRole` is config
 - **Upgrade Executor:** Uses projected ServiceAccount token from `<cluster-name>-upgrade-serviceaccount` to authenticate via JWT.
 - **Backup Fallback:** Backup can fall back to a static token via `spec.backup.tokenSecretRef` when JWT is not available.
 
-See also: [Backups](../user-guide/backups.md)
+See also: [Backups](../../user-guide/backups.md)
 
 ### JWT Flow Overview
 

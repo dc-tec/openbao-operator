@@ -18,21 +18,53 @@ The Operator enforces a "Secure by Default" posture:
 
 ## Security Topics
 
+### Fundamentals
+
+Core security concepts and threat modeling.
+
 | Topic | Description |
 |-------|-------------|
-| [Admission Policies](admission-policies.md) | ValidatingAdmissionPolicy, configuration allowlist, RBAC delegation |
-| [Network Security](network-security.md) | NetworkPolicies, egress control, PDB, rate limiting |
-| [Workload Security](workload-security.md) | Pod security context, ServiceAccount tokens, PSS labels |
-| [Secrets Management](secrets-management.md) | Auto-unseal, root tokens, JWT/OIDC authentication |
-| [TLS](tls.md) | Operator-Managed, External, and ACME TLS modes |
-| [Supply Chain](supply-chain.md) | Cosign image verification, Rekor, digest pinning |
-| [Security Profiles](profiles.md) | Hardened vs Development profiles |
-| [RBAC](rbac.md) | Role-based access control architecture |
-| [Tenant Isolation](tenant-isolation.md) | Multi-tenant security boundaries |
-| [Threat Model](threat-model.md) | Threat analysis and mitigations |
+| [Threat Model](fundamentals/threat-model.md) | Attack vectors and mitigations |
+| [Security Profiles](fundamentals/profiles.md) | Hardened vs Development profiles |
+| [Secrets Management](fundamentals/secrets-management.md) | Auto-unseal, root tokens, authentication |
+
+---
+
+### Infrastructure
+
+Platform-level security controls.
+
+| Topic | Description |
+|-------|-------------|
+| [RBAC](infrastructure/rbac.md) | Role-based access control architecture |
+| [Admission Policies](infrastructure/admission-policies.md) | ValidatingAdmissionPolicy configuration |
+| [Network Security](infrastructure/network-security.md) | NetworkPolicies and egress controls |
+
+---
+
+### Workload
+
+Pod and container-level security.
+
+| Topic | Description |
+|-------|-------------|
+| [Pod Security](workload/workload-security.md) | Security contexts, PSS labels, ServiceAccounts |
+| [TLS](workload/tls.md) | Operator-Managed, External, and ACME TLS modes |
+| [Supply Chain](workload/supply-chain.md) | Cosign image verification, digest pinning |
+
+---
+
+### Multi-Tenancy
+
+Tenant isolation for shared deployments.
+
+| Topic | Description |
+|-------|-------------|
+| [Tenant Isolation](multi-tenancy/tenant-isolation.md) | Namespace isolation, RBAC boundaries |
 
 ## See Also
 
 - User guide: [Security Profiles](../user-guide/security-profiles.md)
 - User guide: [Security Considerations](../user-guide/security-considerations.md)
 - User guide: [Multi-Tenancy](../user-guide/multi-tenancy.md)
+- User guide: [Production Checklist](../user-guide/production-checklist.md)

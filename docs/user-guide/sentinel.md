@@ -289,6 +289,5 @@ The operator will clean up the Sentinel Deployment, ServiceAccount, Role, and Ro
 ## See Also
 
 - [Architecture: Sentinel](../architecture/sentinel.md)
-- [Security: Admission Policies](../security/admission-policies.md)
+- [Security: Admission Policies](../security/infrastructure/admission-policies.md)
 - [Advanced Configuration](advanced-configuration.md)
-
