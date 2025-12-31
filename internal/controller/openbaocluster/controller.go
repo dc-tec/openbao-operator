@@ -612,15 +612,17 @@ func (r *OpenBaoClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				phaseChanged = statusBeforeReconcile.BlueGreen.Phase != cluster.Status.BlueGreen.Phase
 			}
 			versionChanged := statusBeforeReconcile.CurrentVersion != cluster.Status.CurrentVersion
+			breakGlassChanged := breakGlassStatusChanged(statusBeforeReconcile.BreakGlass, cluster.Status.BreakGlass)
 
-			if (wasNil && isInitialized) || phaseChanged || versionChanged {
+			if (wasNil && isInitialized) || phaseChanged || versionChanged || breakGlassChanged {
 				if statusErr := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
 					logger.Error(statusErr, "Failed to persist blue/green status changes")
 				} else {
-					if phaseChanged || versionChanged {
+					if phaseChanged || versionChanged || breakGlassChanged {
 						logger.Info("Persisted blue/green status changes",
 							"phaseChanged", phaseChanged,
 							"versionChanged", versionChanged,
+							"breakGlassChanged", breakGlassChanged,
 							"newPhase", cluster.Status.BlueGreen.Phase,
 							"newVersion", cluster.Status.CurrentVersion)
 					} else {
@@ -1401,6 +1403,27 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func breakGlassStatusChanged(before, after *openbaov1alpha1.BreakGlassStatus) bool {
+	if before == nil && after == nil {
+		return false
+	}
+	if (before == nil) != (after == nil) {
+		return true
+	}
+
+	if before.Active != after.Active {
+		return true
+	}
+	if before.Reason != after.Reason {
+		return true
+	}
+	if before.Nonce != after.Nonce {
+		return true
+	}
+
+	return false
 }
 
 func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster) (metav1.ConditionStatus, string, string) {

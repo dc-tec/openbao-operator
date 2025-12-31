@@ -310,8 +310,9 @@ func Run(args []string) {
 
 	// Set up OpenBaoRestore controller
 	if err := (&openbaorestorecontroller.OpenBaoRestoreReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor(constants.ControllerNameOpenBaoRestore),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoRestore")
 		os.Exit(1)

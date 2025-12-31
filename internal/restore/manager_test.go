@@ -106,8 +106,12 @@ func TestReconcile(t *testing.T) {
 			}
 			objects = append(objects, tt.existingOb...)
 
-			c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).WithObjects(objects...).Build()
-			m := NewManager(c, scheme)
+			c := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
+				WithObjects(objects...).
+				Build()
+			m := NewManager(c, scheme, nil)
 
 			_, err := m.Reconcile(context.Background(), logger, tt.restore)
 			if tt.wantErr {
@@ -173,8 +177,12 @@ func TestHandleRunning(t *testing.T) {
 	}
 
 	// 1. First run: Should create job
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).WithObjects(cluster, restore).Build()
-	m := NewManager(c, scheme)
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, restore).
+		Build()
+	m := NewManager(c, scheme, nil)
 
 	result, err := m.Reconcile(context.Background(), logger, restore)
 	assert.NoError(t, err)
@@ -189,8 +197,12 @@ func TestHandleRunning(t *testing.T) {
 	// 2. Second run: Job succeeded
 	succeededJob := job.DeepCopy()
 	succeededJob.Status.Succeeded = 1
-	c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).WithObjects(cluster, restore, succeededJob).Build()
-	m = NewManager(c, scheme)
+	c = fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, restore, succeededJob).
+		Build()
+	m = NewManager(c, scheme, nil)
 
 	_, err = m.Reconcile(context.Background(), logger, restore)
 	assert.NoError(t, err)

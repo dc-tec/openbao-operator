@@ -41,7 +41,11 @@ func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {
 		},
 	}
 
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		Build()
 	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil)
 	mgr := NewManager(c, scheme, infraMgr)
 
@@ -112,7 +116,11 @@ func TestManager_Reconcile_CreatesJobsAndAdvancesPhases(t *testing.T) {
 		},
 	}
 
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, greenLeaderPod).Build()
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, greenLeaderPod).
+		Build()
 	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil)
 	mgr := NewManager(c, scheme, infraMgr)
 
@@ -148,6 +156,9 @@ func TestManager_Reconcile_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseSyncing {
 		t.Fatalf("phase=%s want=%s", cluster.Status.BlueGreen.Phase, openbaov1alpha1.PhaseSyncing)
 	}
+	if err := c.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("persist cluster status after JoiningMesh->Syncing: %v", err)
+	}
 
 	// Phase: Syncing -> create wait sync job
 	requeue, err = mgr.Reconcile(ctx, logr.Discard(), cluster)
@@ -179,6 +190,9 @@ func TestManager_Reconcile_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	}
 	if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhasePromoting {
 		t.Fatalf("phase=%s want=%s", cluster.Status.BlueGreen.Phase, openbaov1alpha1.PhasePromoting)
+	}
+	if err := c.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("persist cluster status after Syncing->Promoting: %v", err)
 	}
 
 	// Phase: Promoting -> create promote job
@@ -212,10 +226,16 @@ func TestManager_Reconcile_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseTrafficSwitching {
 		t.Fatalf("phase=%s want=%s", cluster.Status.BlueGreen.Phase, openbaov1alpha1.PhaseTrafficSwitching)
 	}
+	if err := c.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("persist cluster status after Promoting->TrafficSwitching: %v", err)
+	}
 
 	// Phase: TrafficSwitching -> wait for stabilization period
 	// For the test, we need to set the TrafficSwitchedTime in the past to pass stabilization
 	cluster.Status.BlueGreen.TrafficSwitchedTime = &metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
+	if err := c.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("persist cluster status after TrafficSwitchedTime change: %v", err)
+	}
 	requeue, err = mgr.Reconcile(ctx, logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("reconcile TrafficSwitching: %v", err)
@@ -288,7 +308,11 @@ func TestManager_TrafficSwitching_GatewayWeightsTrafficSteps(t *testing.T) {
 		},
 	}
 
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		Build()
 	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil)
 	mgr := NewManager(c, scheme, infraMgr)
 
@@ -308,9 +332,15 @@ func TestManager_TrafficSwitching_GatewayWeightsTrafficSteps(t *testing.T) {
 	if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseTrafficSwitching {
 		t.Fatalf("phase=%s want=%s", cluster.Status.BlueGreen.Phase, openbaov1alpha1.PhaseTrafficSwitching)
 	}
+	if err := c.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("persist cluster status after TrafficStep 0->1: %v", err)
+	}
 
 	// Simulate stabilization elapsed for step 1 -> 2
 	cluster.Status.BlueGreen.TrafficSwitchedTime = &metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
+	if err := c.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("persist cluster status after TrafficSwitchedTime change: %v", err)
+	}
 	requeue, err = mgr.Reconcile(ctx, logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("reconcile TrafficSwitching step 1: %v", err)
@@ -321,9 +351,15 @@ func TestManager_TrafficSwitching_GatewayWeightsTrafficSteps(t *testing.T) {
 	if cluster.Status.BlueGreen.TrafficStep != 2 {
 		t.Fatalf("TrafficStep=%d want=%d", cluster.Status.BlueGreen.TrafficStep, 2)
 	}
+	if err := c.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("persist cluster status after TrafficStep 1->2: %v", err)
+	}
 
 	// Simulate stabilization elapsed for step 2 -> 3
 	cluster.Status.BlueGreen.TrafficSwitchedTime = &metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
+	if err := c.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("persist cluster status after TrafficSwitchedTime change: %v", err)
+	}
 	requeue, err = mgr.Reconcile(ctx, logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("reconcile TrafficSwitching step 2: %v", err)
@@ -334,9 +370,15 @@ func TestManager_TrafficSwitching_GatewayWeightsTrafficSteps(t *testing.T) {
 	if cluster.Status.BlueGreen.TrafficStep != 3 {
 		t.Fatalf("TrafficStep=%d want=%d", cluster.Status.BlueGreen.TrafficStep, 3)
 	}
+	if err := c.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("persist cluster status after TrafficStep 2->3: %v", err)
+	}
 
 	// Simulate stabilization elapsed for final step -> DemotingBlue
 	cluster.Status.BlueGreen.TrafficSwitchedTime = &metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
+	if err := c.Status().Update(ctx, cluster); err != nil {
+		t.Fatalf("persist cluster status after TrafficSwitchedTime change: %v", err)
+	}
 	requeue, err = mgr.Reconcile(ctx, logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("reconcile TrafficSwitching final step: %v", err)

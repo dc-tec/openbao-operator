@@ -28,6 +28,7 @@ import (
 	operatorerrors "github.com/openbao/operator/internal/errors"
 	"github.com/openbao/operator/internal/logging"
 	openbaoapi "github.com/openbao/operator/internal/openbao"
+	"github.com/openbao/operator/internal/operationlock"
 )
 
 const (
@@ -99,14 +100,53 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return false, nil
 	}
 
+	if cluster.Status.BreakGlass != nil && cluster.Status.BreakGlass.Active && cluster.Spec.BreakGlassAck != cluster.Status.BreakGlass.Nonce {
+		logger.Info("Cluster is in break glass mode; halting upgrade reconciliation",
+			"breakGlassReason", cluster.Status.BreakGlass.Reason,
+			"breakGlassNonce", cluster.Status.BreakGlass.Nonce)
+		return false, nil
+	}
+
 	// Phase 1: Detection - determine if upgrade is needed
 	upgradeNeeded, resumeUpgrade := m.detectUpgradeState(logger, cluster)
 
 	if !upgradeNeeded && !resumeUpgrade {
+		if cluster.Status.OperationLock != nil &&
+			cluster.Status.OperationLock.Operation == openbaov1alpha1.ClusterOperationUpgrade &&
+			cluster.Status.OperationLock.Holder == constants.ControllerNameOpenBaoCluster+"/upgrade" {
+			if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/upgrade", openbaov1alpha1.ClusterOperationUpgrade); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
+				logger.Error(err, "Failed to release stale upgrade operation lock")
+			}
+		}
+
 		// No upgrade needed, ensure metrics reflect idle state
 		metrics.SetInProgress(false)
 		metrics.SetStatus(UpgradeStatusNone)
 		return false, nil
+	}
+
+	lockMessage := fmt.Sprintf("upgrade to %s", cluster.Spec.Version)
+	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.TargetVersion != "" {
+		lockMessage = fmt.Sprintf("upgrade to %s (in progress)", cluster.Status.Upgrade.TargetVersion)
+	}
+	if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
+		Holder:    constants.ControllerNameOpenBaoCluster + "/upgrade",
+		Operation: openbaov1alpha1.ClusterOperationUpgrade,
+		Message:   lockMessage,
+	}); err != nil {
+		if errors.Is(err, operationlock.ErrLockHeld) {
+			if cluster.Status.Upgrade != nil {
+				SetUpgradeFailed(&cluster.Status, ReasonUpgradeFailed, "upgrade halted due to concurrent operation lock", cluster.Generation)
+				metrics.SetStatus(UpgradeStatusFailed)
+				if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status after upgrade lock loss")
+				}
+				return false, fmt.Errorf("upgrade in progress but operation lock is held by another operation: %w", err)
+			}
+			logger.Info("Upgrade blocked by operation lock", "error", err.Error())
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 	}
 
 	// Handle resume scenario where spec.version changed mid-upgrade

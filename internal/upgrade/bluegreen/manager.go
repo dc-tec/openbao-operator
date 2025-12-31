@@ -2,6 +2,8 @@ package bluegreen
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -24,6 +26,7 @@ import (
 	"github.com/openbao/operator/internal/constants"
 	"github.com/openbao/operator/internal/infra"
 	openbaoapi "github.com/openbao/operator/internal/openbao"
+	"github.com/openbao/operator/internal/operationlock"
 	"github.com/openbao/operator/internal/revision"
 )
 
@@ -76,25 +79,42 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if cluster.Annotations != nil {
 		if value, ok := cluster.Annotations[AnnotationForceRollback]; ok && value == "true" {
 			if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
-				logger.Info("Force rollback annotation detected, initiating rollback",
-					"annotation", AnnotationForceRollback,
-					"phase", cluster.Status.BlueGreen.Phase)
+				// If rollback is already in progress, do not re-trigger rollback on every reconcile.
+				// Allow the normal state machine to continue creating/observing rollback Jobs.
+				if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollingBack ||
+					cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollbackCleanup {
+					logger.Info("Force rollback annotation detected during rollback; continuing rollback state machine",
+						"annotation", AnnotationForceRollback,
+						"phase", cluster.Status.BlueGreen.Phase)
+				} else {
+					logger.Info("Force rollback annotation detected, initiating rollback",
+						"annotation", AnnotationForceRollback,
+						"phase", cluster.Status.BlueGreen.Phase)
 
-				// If there is no Green revision yet, abort behaves more safely than rollback.
-				if cluster.Status.BlueGreen.GreenRevision == "" {
-					if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
-						return false, fmt.Errorf("failed to abort upgrade via force-rollback annotation: %w", err)
+					// If there is no Green revision yet, abort behaves more safely than rollback.
+					if cluster.Status.BlueGreen.GreenRevision == "" {
+						if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
+							return false, fmt.Errorf("failed to abort upgrade via force-rollback annotation: %w", err)
+						}
+						return false, nil
 					}
-					return false, nil
-				}
 
-				return m.triggerRollback(logger, cluster, "manual force-rollback annotation")
+					return m.triggerRollback(logger, cluster, "manual force-rollback annotation")
+				}
 			}
 		}
 	}
 
 	// Use spec image (infra reconciler handles verification)
 	verifiedImageDigest := cluster.Spec.Image
+
+	handled, shouldRequeue, err := m.handleBreakGlassAck(logger, cluster)
+	if err != nil {
+		return false, err
+	}
+	if handled {
+		return shouldRequeue, nil
+	}
 
 	return m.reconcileBlueGreen(ctx, logger, cluster, verifiedImageDigest)
 }
@@ -125,6 +145,32 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 		cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
 			Phase:        openbaov1alpha1.PhaseIdle,
 			BlueRevision: m.calculateRevision(cluster),
+		}
+	}
+
+	if cluster.Status.BreakGlass != nil && cluster.Status.BreakGlass.Active && cluster.Spec.BreakGlassAck != cluster.Status.BreakGlass.Nonce {
+		logger.Info("Cluster is in break glass mode; halting blue/green reconciliation",
+			"breakGlassReason", cluster.Status.BreakGlass.Reason,
+			"breakGlassNonce", cluster.Status.BreakGlass.Nonce)
+		return false, nil
+	}
+
+	upgradeActive := cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle
+	upgradeNeeded := cluster.Status.CurrentVersion != "" && cluster.Spec.Version != cluster.Status.CurrentVersion
+	if upgradeActive || upgradeNeeded {
+		if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
+			Holder:    constants.ControllerNameOpenBaoCluster + "/upgrade",
+			Operation: openbaov1alpha1.ClusterOperationUpgrade,
+			Message:   fmt.Sprintf("blue/green upgrade phase %s", cluster.Status.BlueGreen.Phase),
+		}); err != nil {
+			if errors.Is(err, operationlock.ErrLockHeld) {
+				if upgradeActive {
+					return false, fmt.Errorf("blue/green upgrade in progress but operation lock is held by another operation: %w", err)
+				}
+				logger.Info("Blue/green upgrade blocked by operation lock", "error", err.Error())
+				return true, nil
+			}
+			return false, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 		}
 	}
 
@@ -234,9 +280,6 @@ func (m *Manager) executeStateMachine(ctx context.Context, logger logr.Logger, c
 
 // handlePhaseIdle transitions from Idle to DeployingGreen when an upgrade is detected.
 func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, _ string) (bool, error) {
-	logger.Info("DEBUG: handlePhaseIdle entered",
-		"PreUpgradeSnapshot", cluster.Spec.UpdateStrategy.BlueGreen.PreUpgradeSnapshot,
-		"SnapshotJobName", cluster.Status.BlueGreen.PreUpgradeSnapshotJobName)
 	logger.Info("Starting blue/green upgrade",
 		"fromVersion", cluster.Status.CurrentVersion,
 		"targetVersion", cluster.Spec.Version)
@@ -250,7 +293,6 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 			jobName, err := m.createPreUpgradeSnapshotJob(ctx, logger, cluster)
 			if err != nil {
 				logger.Error(err, "Failed to create pre-upgrade snapshot job")
-				fmt.Printf("DEBUG: Failed to create pre-upgrade snapshot job: %v\n", err)
 				return false, err // Block upgrade on snapshot failure
 			} else {
 				cluster.Status.BlueGreen.PreUpgradeSnapshotJobName = jobName
@@ -741,31 +783,9 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 	blueRevision := cluster.Status.BlueGreen.BlueRevision
 	greenRevision := cluster.Status.BlueGreen.GreenRevision
 
-	// Step 1: Eject Blue nodes from Raft peer list
-	// Get Green leader (should be the current leader after cutover)
-	greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
-	if err != nil {
-		return false, fmt.Errorf("failed to get Green pods: %w", err)
-	}
-
-	var greenLeader *corev1.Pod
-	for i := range greenPods {
-		pod := &greenPods[i]
-		active, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
-		if err != nil {
-			continue
-		}
-		if present && active {
-			greenLeader = pod
-			break
-		}
-	}
-
-	if greenLeader == nil {
-		logger.Info("Green leader not found, waiting...")
-		return true, nil // Requeue to wait for leader
-	}
-
+	// Step 1: Eject Blue nodes from Raft peer list.
+	// Note: Do not gate this on the service registration leader label; the executor
+	// determines leadership via the health endpoint and can proceed even if labels lag.
 	result, err := EnsureExecutorJob(
 		ctx,
 		m.client,
@@ -835,6 +855,10 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
 	cluster.Status.BlueGreen.StartTime = nil
 
+	if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/upgrade", openbaov1alpha1.ClusterOperationUpgrade); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
+		logger.Error(err, "Failed to release upgrade operation lock after blue/green completion")
+	}
+
 	// Update conditions
 	now := metav1.Now()
 	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
@@ -849,6 +873,95 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 	logger.Info("Blue/green upgrade completed", "newVersion", cluster.Spec.Version)
 
 	return false, nil
+}
+
+func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (handled bool, shouldRequeue bool, err error) {
+	if cluster.Status.BreakGlass == nil || !cluster.Status.BreakGlass.Active {
+		return false, false, nil
+	}
+
+	if cluster.Status.BreakGlass.Nonce == "" || cluster.Spec.BreakGlassAck != cluster.Status.BreakGlass.Nonce {
+		return true, false, nil
+	}
+
+	now := metav1.Now()
+	cluster.Status.BreakGlass.Active = false
+	cluster.Status.BreakGlass.AcknowledgedAt = &now
+
+	logger.Info("Break glass acknowledged; resuming automation", "reason", cluster.Status.BreakGlass.Reason)
+
+	if cluster.Status.BlueGreen != nil &&
+		cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollingBack &&
+		cluster.Status.BreakGlass.Reason == openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed {
+		cluster.Status.BlueGreen.RollbackAttempt++
+		cluster.Status.BlueGreen.JobFailureCount = 0
+		cluster.Status.BlueGreen.LastJobFailure = ""
+		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type:               string(openbaov1alpha1.ConditionDegraded),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: cluster.Generation,
+			LastTransitionTime: now,
+			Reason:             ReasonUpgradeRollback,
+			Message:            "Break glass acknowledged; retrying rollback consensus repair",
+		})
+		return true, true, nil
+	}
+
+	return true, true, nil
+}
+
+const breakGlassNonceBytes = 16
+
+func rollbackRunID(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	if cluster.Status.BlueGreen == nil || cluster.Status.BlueGreen.RollbackAttempt <= 0 {
+		return "rollback"
+	}
+	return fmt.Sprintf("rollback-retry-%d", cluster.Status.BlueGreen.RollbackAttempt)
+}
+
+func (m *Manager) enterBreakGlassRollbackConsensusRepairFailed(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) {
+	if cluster.Status.BreakGlass != nil && cluster.Status.BreakGlass.Active {
+		return
+	}
+
+	now := metav1.Now()
+
+	nonce := newBreakGlassNonce()
+	message := fmt.Sprintf("Rollback consensus repair Job %s failed; manual intervention required", jobName)
+
+	steps := []string{
+		fmt.Sprintf("Inspect rollback Job logs: kubectl -n %s logs job/%s", cluster.Namespace, jobName),
+		fmt.Sprintf("Inspect pod status: kubectl -n %s get pods -l %s=%s -o wide", cluster.Namespace, constants.LabelOpenBaoCluster, cluster.Name),
+		fmt.Sprintf("Attempt to identify Raft leader: kubectl -n %s exec -it %s-0 -- bao operator raft list-peers", cluster.Namespace, cluster.Name),
+		"Perform any required Raft recovery steps (peer removal, snapshot restore) per the user-guide runbook.",
+		fmt.Sprintf("Acknowledge break glass to retry rollback automation: kubectl -n %s patch openbaocluster %s --type merge -p '{\"spec\":{\"breakGlassAck\":\"%s\"}}'", cluster.Namespace, cluster.Name, nonce),
+	}
+
+	cluster.Status.BreakGlass = &openbaov1alpha1.BreakGlassStatus{
+		Active:    true,
+		Reason:    openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed,
+		Message:   message,
+		Nonce:     nonce,
+		EnteredAt: &now,
+		Steps:     steps,
+	}
+
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:               string(openbaov1alpha1.ConditionDegraded),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: cluster.Generation,
+		LastTransitionTime: now,
+		Reason:             constants.ReasonBreakGlassRequired,
+		Message:            "Break glass required; see status.breakGlass for recovery steps",
+	})
+}
+
+func newBreakGlassNonce() string {
+	buf := make([]byte, breakGlassNonceBytes)
+	if _, err := rand.Read(buf); err == nil {
+		return hex.EncodeToString(buf)
+	}
+	return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
 }
 
 // getPodsByRevision returns all pods belonging to the specified revision.
@@ -1360,7 +1473,7 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 		logger,
 		cluster,
 		ActionRepairConsensus,
-		"rollback",
+		rollbackRunID(cluster),
 		blueRevision,
 		greenRevision,
 	)
@@ -1372,16 +1485,10 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 		return true, nil
 	}
 	if result.Failed {
-		// Rollback failed - this is serious, set critical condition and stop.
-		logger.Error(nil, "Rollback consensus repair job failed", "job", result.Name)
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionDegraded),
-			Status:             metav1.ConditionTrue,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: metav1.Now(),
-			Reason:             ReasonRollbackFailed,
-			Message:            fmt.Sprintf("Rollback consensus repair job %s failed - manual intervention required", result.Name),
-		})
+		// This is an expected failure path that intentionally halts automation. Avoid Error-level
+		// logging here to prevent confusing stack traces in controller logs.
+		logger.Info("Rollback consensus repair job failed; entering break glass mode", "job", result.Name)
+		m.enterBreakGlassRollbackConsensusRepairFailed(cluster, result.Name)
 		return false, nil
 	}
 
@@ -1436,7 +1543,7 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 		logger,
 		cluster,
 		ActionRemoveBluePeers, // Reuse peer removal action, targeting Green handled by executor config
-		"rollback",
+		rollbackRunID(cluster),
 		blueRevision,
 		greenRevision,
 	)

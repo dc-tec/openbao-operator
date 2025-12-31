@@ -299,6 +299,17 @@ spec:
                 - schedule
                 - target
                 type: object
+              breakGlassAck:
+                description: |-
+                  BreakGlassAck is an explicit acknowledgment token used to exit Break Glass / Safe Mode.
+
+                  When the operator enters break glass mode, it writes a nonce to status.breakGlass.nonce.
+                  To acknowledge and allow the operator to resume quorum-risk automation, set this field
+                  to match that nonce.
+
+                  Example:
+                    kubectl -n <ns> patch openbaocluster <name> --type merge -p '{"spec":{"breakGlassAck":"<nonce>"}}'
+                type: string
               configuration:
                 description: Configuration defines the server configuration.
                 properties:
@@ -2457,6 +2468,12 @@ spec:
                     description: PreUpgradeSnapshotJobName is the name of the backup
                       job triggered at upgrade start.
                     type: string
+                  rollbackAttempt:
+                    description: |-
+                      RollbackAttempt increments each time rollback automation is retried.
+                      It is used to produce stable, deterministic Job names per attempt.
+                    format: int32
+                    type: integer
                   rollbackReason:
                     description: RollbackReason records why a rollback was triggered
                       (if any).
@@ -2484,6 +2501,43 @@ spec:
                       Used for calculating stabilization period.
                     format: date-time
                     type: string
+                type: object
+              breakGlass:
+                description: |-
+                  BreakGlass records when the operator has halted quorum-risk automation and requires
+                  explicit operator acknowledgment to continue.
+                properties:
+                  acknowledgedAt:
+                    description: AcknowledgedAt records when break glass was acknowledged.
+                    format: date-time
+                    type: string
+                  active:
+                    description: Active indicates whether break glass mode is currently
+                      active.
+                    type: boolean
+                  enteredAt:
+                    description: EnteredAt is when break glass mode became active.
+                    format: date-time
+                    type: string
+                  message:
+                    description: Message provides a short summary of the detected
+                      unsafe state.
+                    type: string
+                  nonce:
+                    description: Nonce is the acknowledgment token required to resume
+                      automation.
+                    type: string
+                  reason:
+                    description: Reason is a stable, typed reason for entering break
+                      glass mode.
+                    enum:
+                    - RollbackConsensusRepairFailed
+                    type: string
+                  steps:
+                    description: Steps provides deterministic recovery guidance.
+                    items:
+                      type: string
+                    type: array
                 type: object
               conditions:
                 description: Conditions represent the current state of the OpenBaoCluster
@@ -2600,6 +2654,37 @@ spec:
                   Deprecated: Use Backup.LastBackupTime instead.
                 format: date-time
                 type: string
+              operationLock:
+                description: |-
+                  OperationLock prevents concurrent long-running operations (upgrade/backup/restore)
+                  from acting on the same cluster at the same time.
+                properties:
+                  acquiredAt:
+                    description: AcquiredAt is when the lock was first acquired.
+                    format: date-time
+                    type: string
+                  holder:
+                    description: Holder is a stable identifier for the lock holder
+                      (controller/component).
+                    type: string
+                  message:
+                    description: Message provides human-readable context for why the
+                      lock is held.
+                    type: string
+                  operation:
+                    description: Operation is the operation currently holding the
+                      lock.
+                    enum:
+                    - Upgrade
+                    - Backup
+                    - Restore
+                    type: string
+                  renewedAt:
+                    description: RenewedAt is updated when the holder reasserts the
+                      lock during reconciliation.
+                    format: date-time
+                    type: string
+                type: object
               phase:
                 description: Phase is a high-level summary of the cluster state.
                 enum:

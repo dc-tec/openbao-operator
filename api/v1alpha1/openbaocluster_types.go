@@ -1389,6 +1389,17 @@ type OpenBaoClusterSpec struct {
 	// Paused, when true, pauses reconciliation for this OpenBaoCluster (except delete and finalizers).
 	// +optional
 	Paused bool `json:"paused,omitempty"`
+	// BreakGlassAck is an explicit acknowledgment token used to exit Break Glass / Safe Mode.
+	//
+	// When the operator enters break glass mode, it writes a nonce to status.breakGlass.nonce.
+	// To acknowledge and allow the operator to resume quorum-risk automation, set this field
+	// to match that nonce.
+	//
+	// Example:
+	//   kubectl -n <ns> patch openbaocluster <name> --type merge -p '{"spec":{"breakGlassAck":"<nonce>"}}'
+	//
+	// +optional
+	BreakGlassAck string `json:"breakGlassAck,omitempty"`
 	// TLS configures TLS for the cluster.
 	TLS TLSConfig `json:"tls"`
 	// Storage configures persistent storage for the cluster.
@@ -1550,6 +1561,10 @@ type BlueGreenStatus struct {
 	// RollbackStartTime is when the rollback was initiated.
 	// +optional
 	RollbackStartTime *metav1.Time `json:"rollbackStartTime,omitempty"`
+	// RollbackAttempt increments each time rollback automation is retried.
+	// It is used to produce stable, deterministic Job names per attempt.
+	// +optional
+	RollbackAttempt int32 `json:"rollbackAttempt,omitempty"`
 	// TrafficSwitchedTime records when traffic was switched to Green.
 	// Used for calculating stabilization period.
 	// +optional
@@ -1666,11 +1681,81 @@ type OpenBaoClusterStatus struct {
 	// BlueGreen tracks the state of blue/green upgrades (if enabled).
 	// +optional
 	BlueGreen *BlueGreenStatus `json:"blueGreen,omitempty"`
+	// OperationLock prevents concurrent long-running operations (upgrade/backup/restore)
+	// from acting on the same cluster at the same time.
+	// +optional
+	OperationLock *OperationLockStatus `json:"operationLock,omitempty"`
+	// BreakGlass records when the operator has halted quorum-risk automation and requires
+	// explicit operator acknowledgment to continue.
+	// +optional
+	BreakGlass *BreakGlassStatus `json:"breakGlass,omitempty"`
 	// Conditions represent the current state of the OpenBaoCluster resource.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// ClusterOperation identifies a mutually-exclusive operator operation.
+// +kubebuilder:validation:Enum=Upgrade;Backup;Restore
+type ClusterOperation string
+
+const (
+	ClusterOperationUpgrade ClusterOperation = "Upgrade"
+	ClusterOperationBackup  ClusterOperation = "Backup"
+	ClusterOperationRestore ClusterOperation = "Restore"
+)
+
+// OperationLockStatus represents a status-based lock held by the operator.
+type OperationLockStatus struct {
+	// Operation is the operation currently holding the lock.
+	// +optional
+	Operation ClusterOperation `json:"operation,omitempty"`
+	// Holder is a stable identifier for the lock holder (controller/component).
+	// +optional
+	Holder string `json:"holder,omitempty"`
+	// Message provides human-readable context for why the lock is held.
+	// +optional
+	Message string `json:"message,omitempty"`
+	// AcquiredAt is when the lock was first acquired.
+	// +optional
+	AcquiredAt *metav1.Time `json:"acquiredAt,omitempty"`
+	// RenewedAt is updated when the holder reasserts the lock during reconciliation.
+	// +optional
+	RenewedAt *metav1.Time `json:"renewedAt,omitempty"`
+}
+
+// BreakGlassReason describes why the operator required manual intervention.
+// +kubebuilder:validation:Enum=RollbackConsensusRepairFailed
+type BreakGlassReason string
+
+const (
+	BreakGlassReasonRollbackConsensusRepairFailed BreakGlassReason = "RollbackConsensusRepairFailed"
+)
+
+// BreakGlassStatus captures safe-mode / break-glass state and recovery guidance.
+type BreakGlassStatus struct {
+	// Active indicates whether break glass mode is currently active.
+	// +optional
+	Active bool `json:"active,omitempty"`
+	// Reason is a stable, typed reason for entering break glass mode.
+	// +optional
+	Reason BreakGlassReason `json:"reason,omitempty"`
+	// Message provides a short summary of the detected unsafe state.
+	// +optional
+	Message string `json:"message,omitempty"`
+	// Nonce is the acknowledgment token required to resume automation.
+	// +optional
+	Nonce string `json:"nonce,omitempty"`
+	// EnteredAt is when break glass mode became active.
+	// +optional
+	EnteredAt *metav1.Time `json:"enteredAt,omitempty"`
+	// Steps provides deterministic recovery guidance.
+	// +optional
+	Steps []string `json:"steps,omitempty"`
+	// AcknowledgedAt records when break glass was acknowledged.
+	// +optional
+	AcknowledgedAt *metav1.Time `json:"acknowledgedAt,omitempty"`
 }
 
 // +kubebuilder:object:root=true

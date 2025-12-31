@@ -26,6 +26,7 @@ import (
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	"github.com/openbao/operator/internal/operationlock"
 	"github.com/openbao/operator/internal/storage"
 )
 
@@ -61,6 +62,31 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	logger = logger.WithValues("component", constants.ComponentBackup)
 	metrics := NewMetrics(cluster.Namespace, cluster.Name)
 	now := time.Now().UTC()
+
+	// If a restore is in progress for this cluster, do not start new backups.
+	// This prevents scheduled backups from repeatedly acquiring the operation lock
+	// and starving the restore controller.
+	restoreInProgress, err := m.hasInProgressRestore(ctx, logger, cluster)
+	if err != nil {
+		return false, err
+	}
+	if restoreInProgress {
+		if cluster.Status.OperationLock != nil &&
+			cluster.Status.OperationLock.Operation == openbaov1alpha1.ClusterOperationBackup &&
+			cluster.Status.OperationLock.Holder == constants.ControllerNameOpenBaoCluster+"/backup" {
+			hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
+			if err != nil {
+				return false, fmt.Errorf("failed to check for active backup job while restore is in progress: %w", err)
+			}
+			if !hasActiveJob {
+				if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
+					logger.Error(err, "Failed to release backup operation lock while restore is in progress")
+				}
+			}
+		}
+		logger.Info("Restore in progress; skipping backup reconciliation")
+		return false, nil
+	}
 
 	// Ensure backup ServiceAccount exists (for JWT Auth)
 	if err := m.ensureBackupServiceAccount(ctx, logger, cluster); err != nil {
@@ -230,9 +256,24 @@ func (m *Manager) executeAndProcessBackup(
 	}
 	metrics.SetInProgress(true)
 
+	if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
+		Holder:    constants.ControllerNameOpenBaoCluster + "/backup",
+		Operation: openbaov1alpha1.ClusterOperationBackup,
+		Message:   fmt.Sprintf("backup job %s", jobName),
+	}); err != nil {
+		if errors.Is(err, operationlock.ErrLockHeld) {
+			logger.Info("Backup blocked by operation lock", "error", err.Error())
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to acquire backup operation lock: %w", err)
+	}
+
 	// Create or check backup Job
 	jobInProgress, err := m.ensureBackupJob(ctx, logger, cluster, jobName, scheduledTime)
 	if err != nil {
+		if releaseErr := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); releaseErr != nil && !errors.Is(releaseErr, operationlock.ErrLockHeld) {
+			logger.Error(releaseErr, "Failed to release backup operation lock after job ensure failure")
+		}
 		return false, fmt.Errorf("failed to ensure backup Job: %w", err)
 	}
 
@@ -244,11 +285,14 @@ func (m *Manager) executeAndProcessBackup(
 	m.recordBackupAttempt(cluster, now, scheduledTime, nextScheduled)
 
 	if jobInProgress {
-		statusUpdated, err := m.processBackupJobResult(ctx, logger, cluster, jobName)
+		_, err := m.processBackupJobResult(ctx, logger, cluster, jobName)
 		if err != nil {
 			return false, fmt.Errorf("failed to process backup Job result: %w", err)
 		}
-		return statusUpdated, nil
+		// The OpenBaoCluster controller does not watch Job resources (zero-trust model),
+		// so we must request requeues while a backup Job is running to observe completion
+		// and release the operation lock promptly.
+		return true, nil
 	}
 
 	// Process completed job
@@ -266,6 +310,10 @@ func (m *Manager) executeAndProcessBackup(
 		}
 		nextScheduledMeta := metav1.NewTime(nextScheduled)
 		cluster.Status.Backup.NextScheduledBackup = &nextScheduledMeta
+	}
+
+	if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
+		logger.Error(err, "Failed to release backup operation lock after completion")
 	}
 
 	return statusUpdated, nil
@@ -292,6 +340,36 @@ type BackupResult struct {
 	Key string
 	// Size is the size of the backup in bytes.
 	Size int64
+}
+
+func (m *Manager) hasInProgressRestore(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+	restoreList := &openbaov1alpha1.OpenBaoRestoreList{}
+	if err := m.client.List(ctx, restoreList, client.InNamespace(cluster.Namespace)); err != nil {
+		// In some zero-trust deployments, the OpenBaoCluster controller may not have permissions
+		// to list restore resources. Fallback to "no restore detected" in that case.
+		if apierrors.IsForbidden(err) {
+			logger.V(1).Info("Insufficient permissions to list OpenBaoRestore resources; cannot detect restore-in-progress", "error", err.Error())
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to list OpenBaoRestore resources: %w", err)
+	}
+
+	for i := range restoreList.Items {
+		restore := &restoreList.Items[i]
+		if restore.DeletionTimestamp != nil {
+			continue
+		}
+		if restore.Spec.Cluster != cluster.Name {
+			continue
+		}
+		if restore.Status.Phase == openbaov1alpha1.RestorePhaseCompleted ||
+			restore.Status.Phase == openbaov1alpha1.RestorePhaseFailed {
+			continue
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // checkPreconditions verifies that backup can proceed.

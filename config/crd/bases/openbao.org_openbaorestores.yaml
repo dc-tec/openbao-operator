@@ -88,6 +88,16 @@ spec:
                   sys/storage/raft/snapshot-force. The role must bind to the restore ServiceAccount
                   (<cluster-name>-restore-serviceaccount) in the cluster namespace.
                 type: string
+              overrideOperationLock:
+                default: false
+                description: |-
+                  OverrideOperationLock allows the restore controller to clear an active cluster
+                  operation lock (upgrade/backup) and proceed with restore. This is a break-glass
+                  escape hatch intended for disaster recovery.
+
+                  For safety, this requires force: true. When used, the controller emits a Warning
+                  event and records a Condition on the OpenBaoRestore.
+                type: boolean
               source:
                 description: Source defines where the snapshot comes from.
                 properties:

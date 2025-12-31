@@ -26,6 +26,10 @@ import (
 type RestorePhase string
 
 const (
+	// OpenBaoRestoreFinalizer is the finalizer used to ensure lock cleanup logic
+	// runs before an OpenBaoRestore is fully deleted.
+	OpenBaoRestoreFinalizer = "openbao.org/openbaorestore-finalizer"
+
 	// RestorePhasePending indicates the restore has been created but not yet started.
 	RestorePhasePending RestorePhase = "Pending"
 	// RestorePhaseValidating indicates the controller is validating preconditions.
@@ -92,6 +96,17 @@ type OpenBaoRestoreSpec struct {
 	// +kubebuilder:default=false
 	// +optional
 	Force bool `json:"force,omitempty"`
+
+	// OverrideOperationLock allows the restore controller to clear an active cluster
+	// operation lock (upgrade/backup) and proceed with restore. This is a break-glass
+	// escape hatch intended for disaster recovery.
+	//
+	// For safety, this requires force: true. When used, the controller emits a Warning
+	// event and records a Condition on the OpenBaoRestore.
+	//
+	// +kubebuilder:default=false
+	// +optional
+	OverrideOperationLock bool `json:"overrideOperationLock,omitempty"`
 }
 
 // OpenBaoRestoreStatus defines the observed state of OpenBaoRestore.

@@ -1415,7 +1415,7 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 					{
 						Key:      "openbao.org/component",
 						Operator: metav1.LabelSelectorOpNotIn,
-						Values:   []string{"backup", "restore"},
+						Values:   []string{"backup", "restore", "upgrade-snapshot"},
 					},
 				},
 			},

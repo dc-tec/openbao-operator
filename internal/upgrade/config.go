@@ -58,7 +58,8 @@ func (c *ExecutorConfig) Validate() error {
 		ExecutorActionBlueGreenWaitGreenSynced,
 		ExecutorActionBlueGreenPromoteGreenVoters,
 		ExecutorActionBlueGreenDemoteBlueNonVotersStepDown,
-		ExecutorActionBlueGreenRemoveBluePeers:
+		ExecutorActionBlueGreenRemoveBluePeers,
+		ExecutorActionBlueGreenRepairConsensus:
 		if strings.TrimSpace(c.BlueRevision) == "" {
 			return fmt.Errorf("blue revision is required for blue/green actions")
 		}

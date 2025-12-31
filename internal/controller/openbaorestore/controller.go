@@ -23,6 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -36,6 +37,7 @@ type OpenBaoRestoreReconciler struct {
 	client.Client
 	Scheme         *runtime.Scheme
 	RestoreManager *restore.Manager
+	Recorder       record.EventRecorder
 }
 
 // SECURITY: RBAC is provided via namespace-scoped tenant Roles, not cluster-wide.
@@ -68,7 +70,7 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Create restore manager if not set
 	if r.RestoreManager == nil {
-		r.RestoreManager = restore.NewManager(r.Client, r.Scheme)
+		r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder)
 	}
 
 	// Delegate to restore manager
@@ -92,7 +94,10 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // uses direct API calls (GET) and RequeueAfter polling to monitor job status.
 func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Initialize the restore manager
-	r.RestoreManager = restore.NewManager(r.Client, r.Scheme)
+	if r.Recorder == nil {
+		r.Recorder = mgr.GetEventRecorderFor("openbaorestore")
+	}
+	r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoRestore{}).

@@ -40,7 +40,11 @@ func TestHandlePreUpgradeSnapshot_NotEnabled(t *testing.T) {
 	_ = corev1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		Build()
 	manager := NewManager(k8sClient, scheme)
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
@@ -68,7 +72,11 @@ func TestHandlePreUpgradeSnapshot_NoBackupConfig(t *testing.T) {
 	_ = corev1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		Build()
 	manager := NewManager(k8sClient, scheme)
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
@@ -120,7 +128,11 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 		},
 	}
 
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, secret).Build()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, secret).
+		Build()
 	manager := NewManager(k8sClient, scheme)
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
@@ -187,7 +199,11 @@ func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
 	_ = corev1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, runningJob).Build()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, runningJob).
+		Build()
 	manager := NewManager(k8sClient, scheme)
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
@@ -247,7 +263,11 @@ func TestHandlePreUpgradeSnapshot_JobCompleted(t *testing.T) {
 	_ = corev1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, completedJob).Build()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, completedJob).
+		Build()
 	manager := NewManager(k8sClient, scheme)
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
@@ -307,7 +327,11 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 	_ = corev1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, failedJob).Build()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, failedJob).
+		Build()
 	manager := NewManager(k8sClient, scheme)
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
@@ -419,7 +443,11 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 	objs := []client.Object{cluster, runningJob, sts, caSecret}
 	objs = append(objs, pods...)
 
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(objs...).
+		Build()
 
 	// Mock Client Factory that uses MockClusterActions to avoid HTTP servers
 	// verifyClusterHealth expects: healthyCount >= quorum, leaderCount == 1.

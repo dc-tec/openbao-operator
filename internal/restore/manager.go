@@ -4,6 +4,7 @@ package restore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -15,12 +16,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"github.com/openbao/operator/internal/constants"
+	"github.com/openbao/operator/internal/operationlock"
 )
 
 const (
@@ -36,15 +39,17 @@ const (
 
 // Manager orchestrates restore operations for OpenBao clusters.
 type Manager struct {
-	client client.Client
-	scheme *runtime.Scheme
+	client   client.Client
+	scheme   *runtime.Scheme
+	recorder record.EventRecorder
 }
 
 // NewManager creates a new restore Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, recorder record.EventRecorder) *Manager {
 	return &Manager{
-		client: c,
-		scheme: scheme,
+		client:   c,
+		scheme:   scheme,
+		recorder: recorder,
 	}
 }
 
@@ -52,6 +57,13 @@ func NewManager(c client.Client, scheme *runtime.Scheme) *Manager {
 // Returns (result, error) where result.Requeue or result.RequeueAfter
 // indicates if reconciliation should be rescheduled.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
+	if restore.DeletionTimestamp != nil {
+		return m.handleDeletion(ctx, logger, restore)
+	}
+	if err := m.ensureFinalizer(ctx, restore); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to ensure restore finalizer: %w", err)
+	}
+
 	// Initialize status if not set
 	if restore.Status.Phase == "" {
 		restore.Status.Phase = openbaov1alpha1.RestorePhasePending
@@ -100,40 +112,71 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 		Name:      restore.Spec.Cluster,
 	}, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			return m.failRestore(ctx, restore, fmt.Sprintf("target cluster %q not found", restore.Spec.Cluster))
+			return m.failRestore(ctx, logger, restore, fmt.Sprintf("target cluster %q not found", restore.Spec.Cluster))
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get target cluster: %w", err)
+	}
+
+	lockHolder := fmt.Sprintf("%s/%s", constants.ControllerNameOpenBaoRestore, restore.Name)
+	lockMessage := fmt.Sprintf("restore %s/%s", restore.Namespace, restore.Name)
+	forceAcquire := false
+
+	if restore.Spec.OverrideOperationLock {
+		if !restore.Spec.Force {
+			return m.failRestore(ctx, logger, restore, "overrideOperationLock requires force: true")
+		}
+		if cluster.Status.OperationLock != nil && cluster.Status.OperationLock.Operation != openbaov1alpha1.ClusterOperationRestore {
+			forceAcquire = true
+		}
+	}
+
+	lockBefore := cluster.Status.OperationLock
+	if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
+		Holder:    lockHolder,
+		Operation: openbaov1alpha1.ClusterOperationRestore,
+		Message:   lockMessage,
+		Force:     forceAcquire,
+	}); err != nil {
+		if errors.Is(err, operationlock.ErrLockHeld) {
+			var held *operationlock.HeldError
+			if errors.As(err, &held) {
+				restore.Status.Message = fmt.Sprintf("Waiting for cluster operation lock: operation=%s holder=%s", held.Operation, held.Holder)
+			} else {
+				restore.Status.Message = "Waiting for cluster operation lock"
+			}
+			if statusErr := m.client.Status().Update(ctx, restore); statusErr != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to update restore status after lock contention: %w", statusErr)
+			}
+			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+		}
+		return ctrl.Result{}, fmt.Errorf("failed to acquire cluster operation lock: %w", err)
+	}
+
+	if forceAcquire && lockBefore != nil {
+		if m.recorder != nil {
+			m.recorder.Eventf(restore, corev1.EventTypeWarning, "OperationLockOverride",
+				"OverrideOperationLock used; cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder)
+		}
+		meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
+			Type:               "OperationLockOverride",
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "OperationLockOverridden",
+			Message:            fmt.Sprintf("Cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder),
+		})
 	}
 
 	// Check if cluster is in a valid state for restore (unless Force is set)
 	if !restore.Spec.Force {
 		// Check if cluster is initialized
 		if !cluster.Status.Initialized {
-			return m.failRestore(ctx, restore, "target cluster is not initialized (use force: true to override)")
+			return m.failRestore(ctx, logger, restore, "target cluster is not initialized (use force: true to override)")
 		}
 
 		// Check if cluster is upgrading
 		upgradingCond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionUpgrading))
 		if upgradingCond != nil && upgradingCond.Status == metav1.ConditionTrue {
-			return m.failRestore(ctx, restore, "cannot restore while cluster is upgrading")
-		}
-	}
-
-	// Check for existing restore in progress for this cluster
-	restoreList := &openbaov1alpha1.OpenBaoRestoreList{}
-	if err := m.client.List(ctx, restoreList, client.InNamespace(restore.Namespace)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to list restores: %w", err)
-	}
-
-	for i := range restoreList.Items {
-		other := &restoreList.Items[i]
-		if other.Name == restore.Name {
-			continue // Skip self
-		}
-		if other.Spec.Cluster == restore.Spec.Cluster &&
-			(other.Status.Phase == openbaov1alpha1.RestorePhaseRunning ||
-				other.Status.Phase == openbaov1alpha1.RestorePhaseValidating) {
-			return m.failRestore(ctx, restore, fmt.Sprintf("another restore %q is already in progress for cluster %q", other.Name, restore.Spec.Cluster))
+			return m.failRestore(ctx, logger, restore, "cannot restore while cluster is upgrading")
 		}
 	}
 
@@ -170,6 +213,19 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 		return ctrl.Result{}, fmt.Errorf("failed to get target cluster: %w", err)
 	}
 
+	lockHolder := fmt.Sprintf("%s/%s", constants.ControllerNameOpenBaoRestore, restore.Name)
+	lockMessage := fmt.Sprintf("restore %s/%s", restore.Namespace, restore.Name)
+	if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
+		Holder:    lockHolder,
+		Operation: openbaov1alpha1.ClusterOperationRestore,
+		Message:   lockMessage,
+	}); err != nil {
+		if errors.Is(err, operationlock.ErrLockHeld) {
+			return m.failRestore(ctx, logger, restore, "cluster operation lock was taken by another operation while restore was running")
+		}
+		return ctrl.Result{}, fmt.Errorf("failed to renew cluster operation lock: %w", err)
+	}
+
 	// Check if job already exists
 	jobName := restoreJobName(restore)
 	job := &batchv1.Job{}
@@ -182,7 +238,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 		// Create the restore job
 		job, err = m.buildRestoreJob(restore, cluster)
 		if err != nil {
-			return m.failRestore(ctx, restore, fmt.Sprintf("failed to build restore job: %v", err))
+			return m.failRestore(ctx, logger, restore, fmt.Sprintf("failed to build restore job: %v", err))
 		}
 
 		// Set owner reference
@@ -196,7 +252,9 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 
 		logger.Info("Created restore job", "job", jobName)
 		restore.Status.Message = "Restore job running"
-		_ = m.client.Status().Update(ctx, restore)
+		if err := m.client.Status().Update(ctx, restore); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update restore status after job creation: %w", err)
+		}
 
 		// Requeue to check job status
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
@@ -206,7 +264,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 
 	// Check job status
 	if job.Status.Succeeded > 0 {
-		return m.completeRestore(ctx, restore, "Restore completed successfully")
+		return m.completeRestore(ctx, logger, restore, "Restore completed successfully")
 	}
 
 	if job.Status.Failed > 0 {
@@ -220,18 +278,20 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 				break
 			}
 		}
-		return m.failRestore(ctx, restore, message)
+		return m.failRestore(ctx, logger, restore, message)
 	}
 
 	// Job still running
 	restore.Status.Message = "Restore job in progress"
-	_ = m.client.Status().Update(ctx, restore)
+	if err := m.client.Status().Update(ctx, restore); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update restore status while job is running: %w", err)
+	}
 
 	return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 }
 
 // failRestore transitions the restore to Failed phase.
-func (m *Manager) failRestore(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
+func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
 	now := metav1.Now()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseFailed
 	restore.Status.CompletionTime = &now
@@ -249,11 +309,15 @@ func (m *Manager) failRestore(ctx context.Context, restore *openbaov1alpha1.Open
 		return ctrl.Result{}, fmt.Errorf("failed to update restore status: %w", err)
 	}
 
+	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
+		logger.Error(err, "Failed to release cluster operation lock after restore failure")
+	}
+
 	return ctrl.Result{}, nil
 }
 
 // completeRestore transitions the restore to Completed phase.
-func (m *Manager) completeRestore(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
+func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
 	now := metav1.Now()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseCompleted
 	restore.Status.CompletionTime = &now
@@ -271,7 +335,70 @@ func (m *Manager) completeRestore(ctx context.Context, restore *openbaov1alpha1.
 		return ctrl.Result{}, fmt.Errorf("failed to update restore status: %w", err)
 	}
 
+	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
+		logger.Error(err, "Failed to release cluster operation lock after restore completion")
+	}
+
 	return ctrl.Result{}, nil
+}
+
+func (m *Manager) ensureFinalizer(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore) error {
+	if controllerutil.ContainsFinalizer(restore, openbaov1alpha1.OpenBaoRestoreFinalizer) {
+		return nil
+	}
+
+	original := restore.DeepCopy()
+	controllerutil.AddFinalizer(restore, openbaov1alpha1.OpenBaoRestoreFinalizer)
+	if err := m.client.Patch(ctx, restore, client.MergeFrom(original)); err != nil {
+		return fmt.Errorf("failed to add finalizer: %w", err)
+	}
+	return nil
+}
+
+func (m *Manager) handleDeletion(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(restore, openbaov1alpha1.OpenBaoRestoreFinalizer) {
+		return ctrl.Result{}, nil
+	}
+
+	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
+		logger.Error(err, "Failed to release cluster operation lock during restore deletion")
+	}
+
+	original := restore.DeepCopy()
+	controllerutil.RemoveFinalizer(restore, openbaov1alpha1.OpenBaoRestoreFinalizer)
+	if err := m.client.Patch(ctx, restore, client.MergeFrom(original)); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to remove finalizer: %w", err)
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (m *Manager) releaseClusterLock(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) error {
+	if restore.Spec.Cluster == "" {
+		return nil
+	}
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	if err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: restore.Namespace,
+		Name:      restore.Spec.Cluster,
+	}, cluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get target cluster for lock release: %w", err)
+	}
+
+	holder := fmt.Sprintf("%s/%s", constants.ControllerNameOpenBaoRestore, restore.Name)
+	if err := operationlock.Release(ctx, m.client, cluster, holder, openbaov1alpha1.ClusterOperationRestore); err != nil {
+		if errors.Is(err, operationlock.ErrLockHeld) {
+			return nil
+		}
+		return err
+	}
+
+	logger.V(1).Info("Released cluster operation lock for restore", "cluster", cluster.Name)
+	return nil
 }
 
 // restoreJobName returns the name for the restore job.

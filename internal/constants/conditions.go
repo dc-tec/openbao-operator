@@ -15,6 +15,8 @@ const (
 	ReasonIdle = "Idle"
 	// Unknown indicates an unknown state.
 	ReasonUnknown = "Unknown"
+	// ReasonBreakGlassRequired indicates the operator has halted automation and requires manual intervention.
+	ReasonBreakGlassRequired = "BreakGlassRequired"
 )
 
 const (
