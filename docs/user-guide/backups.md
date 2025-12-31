@@ -42,11 +42,11 @@ spec:
       maxAge: "168h"  # 7 days
 ```
 
-### 10.2 Authentication Methods
+## Authentication Methods
 
 The operator supports two authentication methods for backup operations:
 
-#### 10.2.1 JWT Auth (Preferred)
+### JWT Auth (Preferred)
 
 JWT Auth uses projected ServiceAccount tokens that are automatically rotated by Kubernetes, providing better security than static tokens.
 
@@ -115,7 +115,7 @@ spec:
 
 **Note:** For `Hardened` profile clusters, JWT authentication is automatically bootstrapped during self-init, so you only need to create the backup policy and role.
 
-#### 10.2.2 Static Token (Fallback)
+### Static Token (Fallback)
 
 **Important:** Root tokens are no longer used for backup operations. All clusters (both standard and self-init) must use either JWT Auth or a dedicated backup token Secret.
 
@@ -152,7 +152,7 @@ spec:
       bucket: "openbao-backups"
 ```
 
-### 10.3 Backup ServiceAccount
+## Backup ServiceAccount
 
 The operator automatically creates `<cluster-name>-backup-serviceaccount` when backups are enabled. This ServiceAccount:
 
@@ -160,7 +160,7 @@ The operator automatically creates `<cluster-name>-backup-serviceaccount` when b
 - Has its token mounted at `/var/run/secrets/tokens/openbao-token` (projected volume with audience `openbao-internal`)
 - Is owned by the OpenBaoCluster for automatic cleanup
 
-### 10.4 Backup Execution
+## Backup Execution
 
 When a backup is scheduled:
 
@@ -173,7 +173,7 @@ When a backup is scheduled:
    - Verifies the upload
 4. Job status is monitored and backup status is updated in `Status.Backup`
 
-### 10.5 Backup Status
+## Backup Status
 
 Monitor backup status via the cluster status:
 
@@ -188,7 +188,7 @@ Status fields:
 - `Status.Backup.ConsecutiveFailures`: Number of consecutive failures
 - `Status.Conditions`: `BackingUp` condition shows current backup state
 
-### 10.6 Retention Policies
+## Retention Policies
 
 Configure automatic cleanup of old backups:
 
@@ -204,7 +204,7 @@ Retention is applied after successful backup upload. Deletion failures are logge
 **Note:** When using Web Identity for object storage (`spec.backup.target.roleArn`), the controller does not perform
 retention deletes. Prefer enforcing retention via storage-native lifecycle policies (for example, S3 Lifecycle Rules).
 
-### 10.7 Pre-Upgrade Snapshots
+## Pre-Upgrade Snapshots
 
 Enable automatic snapshots before upgrades:
 
@@ -222,7 +222,7 @@ spec:
 
 This ensures you have a backup before any version upgrade begins. The pre-upgrade backup uses the same backup configuration (`spec.backup.target`, `spec.backup.executorImage`, etc.) as regular scheduled backups.
 
-### 10.8 S3 Upload Performance Tuning
+## S3 Upload Performance Tuning
 
 For large snapshots or specific network conditions, you can tune the multipart upload parameters:
 

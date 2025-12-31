@@ -85,7 +85,7 @@ spec:
         deny: {}
 ```
 
-### 16.3 Network Policies
+### Network Policies
 
 The operator automatically creates a NetworkPolicy for each OpenBaoCluster that enforces default-deny ingress and restricts egress. The operator auto-detects the Kubernetes API server CIDR by querying the `kubernetes` Service in the `default` namespace. If auto-detection fails (e.g., due to restricted permissions in multi-tenant environments), you can manually configure `spec.network.apiServerCIDR` as a fallback (see [Network Configuration](network.md#api-server-cidr-fallback)).
 
@@ -206,7 +206,7 @@ spec:
           protocol: TCP
 ```
 
-### 16.4 Resource Quotas
+### Resource Quotas
 
 Prevent one tenant from exhausting cluster resources:
 
@@ -230,7 +230,7 @@ spec:
     limits.memory: "16Gi"
 ```
 
-### 16.5 Backup Credential Isolation
+### Backup Credential Isolation
 
 Each tenant should have **separate backup credentials** with access only to their backup prefix:
 
@@ -290,7 +290,7 @@ spec:
         namespace: team-a-prod
 ```
 
-### 16.6 Pod Security Standards
+### Pod Security Standards
 
 OpenBao pods created by the operator run with these security settings:
 
@@ -311,7 +311,7 @@ metadata:
     pod-security.kubernetes.io/warn: restricted
 ```
 
-### 16.7 Operator Audit Logging
+### Operator Audit Logging
 
 The Operator emits structured audit logs for critical operations, tagged with `audit=true` and `event_type` for easy filtering in log aggregation systems. Audit events are logged for:
 
@@ -320,7 +320,7 @@ The Operator emits structured audit logs for critical operations, tagged with `a
 
 These audit logs are distinct from regular debug/info logs and can be filtered using the `audit=true` label.
 
-### 16.8 Kubernetes Audit Logging
+### Kubernetes Audit Logging
 
 Enable Kubernetes audit logging to monitor access to sensitive resources:
 
@@ -346,7 +346,7 @@ rules:
     verbs: ["create", "update", "patch", "delete"]
 ```
 
-### 16.9 Etcd Encryption Warning
+### Etcd Encryption Warning
 
 The Operator sets an `EtcdEncryptionWarning` condition to remind users that security relies on underlying Kubernetes secret encryption at rest. The operator cannot verify etcd encryption status, so this condition is always set to `True` with a message reminding users to ensure etcd encryption is enabled.
 
@@ -356,7 +356,7 @@ Check the condition:
 kubectl -n security get openbaocluster dev-cluster -o jsonpath='{.status.conditions[?(@.type=="EtcdEncryptionWarning")]}'
 ```
 
-### 16.10 Multi-Tenancy Checklist
+### Multi-Tenancy Checklist
 
 Before deploying OpenBao in a multi-tenant environment, verify:
 

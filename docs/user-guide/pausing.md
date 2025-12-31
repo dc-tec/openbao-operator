@@ -13,3 +13,14 @@ While paused:
 - Finalizers and delete handling still run if the CR is deleted.
 
 Set `spec.paused` back to `false` to resume reconciliation.
+
+## Recovery Notes
+
+- If a cluster appears “stuck”, first confirm whether it is paused:
+
+  ```sh
+  kubectl -n <ns> get openbaocluster <name> -o jsonpath='{.spec.paused}'
+  ```
+
+- If the operator has entered break glass mode, unpausing is not sufficient; follow the recovery steps in `status.breakGlass`:
+  - [Break Glass / Safe Mode](recovery-safe-mode.md)

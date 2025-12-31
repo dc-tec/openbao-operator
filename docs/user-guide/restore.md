@@ -141,11 +141,22 @@ After a force restore:
 
 ### Mutual Exclusion
 
-Only one restore can run per cluster at a time. Attempting to create a second restore while one is in progress will fail.
+Only one restore can run per cluster at a time.
 
-### Upgrade Lock  
+### Operation Lock  
 
-Restores are blocked during cluster upgrades, and upgrades are blocked during restores.
+The operator enforces mutual exclusion across upgrades, backups, and restores using a status-based lock on the `OpenBaoCluster` (`status.operationLock`).
+
+Restores do not start while an upgrade or backup is active.
+
+### Break-Glass Override
+
+If you must restore while a cluster is stuck behind an upgrade/backup lock, set:
+
+- `spec.force: true`
+- `spec.overrideOperationLock: true`
+
+When used, the operator emits a Warning event on the `OpenBaoRestore` and records a Condition.
 
 ### Force Flag
 

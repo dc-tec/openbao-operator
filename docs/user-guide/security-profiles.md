@@ -1,6 +1,6 @@
 # Security Profiles
 
-**IMPORTANT FOR PRODUCTION:** Always use the `Hardened` profile for production deployments. The `Development` profile stores root tokens in Kubernetes Secrets, which poses a significant security risk. See the [Hardened Profile](#22-hardened-profile) section for details.
+**IMPORTANT FOR PRODUCTION:** Always use the `Hardened` profile for production deployments. The `Development` profile stores root tokens in Kubernetes Secrets, which poses a significant security risk. See the [Hardened Profile](#hardened-profile) section for details.
 
 The Operator supports two security profiles via `spec.profile`:
 
@@ -14,7 +14,7 @@ flowchart LR
     Cluster --> Hard
 ```
 
-### 2.0 Optional AppArmor
+## Optional AppArmor
 
 AppArmor is **opt-in** because it is not available in all Kubernetes environments. When enabled, the operator sets `RuntimeDefault` AppArmor profiles on generated Pods/Jobs.
 
@@ -24,7 +24,7 @@ spec:
     appArmorEnabled: true
 ```
 
-### 2.1 Development Profile
+## Development Profile
 
 The `Development` profile allows relaxed security for development and testing:
 
@@ -50,7 +50,7 @@ spec:
 
 **WARNING:** The Development profile stores root tokens in Kubernetes Secrets, which poses a security risk. **DO NOT use the Development profile in production.** Always use the Hardened profile for production deployments.
 
-### 2.2 Hardened Profile
+## Hardened Profile
 
 **IMPORTANT: The Hardened profile is REQUIRED for production deployments.** The Development profile stores root tokens in Kubernetes Secrets, which poses a significant security risk in production environments. Always use the Hardened profile for production workloads.
 

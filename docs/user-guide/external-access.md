@@ -33,7 +33,7 @@ With this configuration:
 
 Always validate connectivity through your ingress or load balancer after the cluster reports `Available=True`.
 
-### 6.1 Traefik v3 Configuration
+### Traefik v3 Configuration
 
 When using Traefik v3 with TLS termination at the ingress and HTTPS backend communication, you need to configure Traefik to trust the OpenBaoCluster CA certificate:
 
@@ -65,7 +65,7 @@ When using Traefik v3 with TLS termination at the ingress and HTTPS backend comm
 
 This ensures Traefik validates the OpenBao backend certificate using the cluster's CA, maintaining secure end-to-end TLS.
 
-### 6.2 External TLS Provider (cert-manager)
+### External TLS Provider (cert-manager)
 
 For production environments that require integration with corporate PKI or cert-manager, you can configure the operator to use externally-managed TLS certificates.
 
@@ -93,7 +93,7 @@ spec:
 - `<cluster-name>-tls-ca` - CA certificate Secret with keys `ca.crt` and optionally `ca.key`
 - `<cluster-name>-tls-server` - Server certificate Secret with keys `tls.crt`, `tls.key`, and `ca.crt`
 
-### 6.3 ACME TLS (Native OpenBao ACME Client)
+### ACME TLS (Native OpenBao ACME Client)
 
 For zero-trust architectures and environments where you want OpenBao to manage certificates automatically via the ACME protocol (e.g., Let's Encrypt), you can configure ACME mode.
 

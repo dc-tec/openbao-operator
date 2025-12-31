@@ -34,7 +34,7 @@ spec:
 
 ---
 
-## 12.2 Upgrade Authentication
+## Upgrade Authentication
 
 Upgrade operations that require OpenBao permissions run in Kubernetes Jobs (upgrade executor). These Jobs authenticate to OpenBao via JWT using a projected ServiceAccount token.
 
@@ -43,7 +43,7 @@ The upgrade executor requires:
 - `spec.upgrade.executorImage`
 - `spec.upgrade.jwtAuthRole`
 
-### 12.2.1 JWT Auth (Preferred)
+### JWT Auth (Preferred)
 
 Configure JWT Auth for upgrade operations:
 
@@ -103,7 +103,7 @@ spec:
 
 ---
 
-## 12.3 Upgrade ServiceAccount
+## Upgrade ServiceAccount
 
 The operator automatically creates `<cluster-name>-upgrade-serviceaccount` when upgrade authentication is configured. This ServiceAccount:
 
@@ -113,7 +113,7 @@ The operator automatically creates `<cluster-name>-upgrade-serviceaccount` when 
 
 ---
 
-## 12.4 Performing Upgrades
+## Performing Upgrades
 
 To upgrade an OpenBao cluster, update the `spec.version` field:
 
@@ -122,7 +122,7 @@ kubectl -n security patch openbaocluster dev-cluster \
   --type merge -p '{"spec":{"version":"2.5.0"}}'
 ```
 
-### 12.4.1 Rolling Update Strategy
+### Rolling Update Strategy
 
 The upgrade manager will:
 
@@ -132,7 +132,7 @@ The upgrade manager will:
 4. Perform a rolling upgrade, pod-by-pod, with leader step-down handling
 5. Update `Status.CurrentVersion` when complete
 
-### 12.4.2 Blue/Green Upgrade Strategy
+### Blue/Green Upgrade Strategy
 
 The Blue/Green upgrade follows a multi-phase process with safety checkpoints.
 
@@ -192,9 +192,9 @@ stateDiagram-v2
 
 ---
 
-## 12.5 Advanced Blue/Green Configuration
+## Advanced Blue/Green Configuration
 
-### 12.5.1 Snapshots
+### Snapshots
 
 Create automatic backups during upgrades:
 
@@ -212,7 +212,7 @@ spec:
       bucket: openbao-backups
 ```
 
-### 12.5.2 Pre-Promotion Validation Hook
+### Pre-Promotion Validation Hook
 
 Run custom validation before promoting Green:
 
@@ -228,7 +228,7 @@ spec:
           timeoutSeconds: 300
 ```
 
-### 12.5.3 Auto-Rollback Configuration
+### Auto-Rollback Configuration
 
 Configure automatic rollback on failure:
 
@@ -245,7 +245,7 @@ spec:
         stabilizationSeconds: 60 # Observation period during TrafficSwitching
 ```
 
-### 12.5.4 Traffic Switching
+### Traffic Switching
 
 The `TrafficSwitching` phase provides a safety window:
 
@@ -256,7 +256,7 @@ The `TrafficSwitching` phase provides a safety window:
 
 ---
 
-## 12.6 Monitoring Upgrades
+## Monitoring Upgrades
 
 Monitor upgrade progress:
 
@@ -284,7 +284,7 @@ Check `Status.Conditions` for upgrade state:
 kubectl -n security get openbaocluster dev-cluster -o jsonpath='{.status.conditions}' | jq
 ```
 
-### 12.6.1 Rollback Status
+### Rollback Status
 
 If a rollback is triggered:
 
@@ -295,3 +295,7 @@ status:
     rollbackReason: "job failure threshold exceeded"
     rollbackStartTime: "2024-01-15T10:36:00Z"
 ```
+
+If rollback automation cannot proceed safely (for example, a failed consensus repair), the operator may enter break glass mode and halt further quorum-risk actions:
+
+- [Break Glass / Safe Mode](recovery-safe-mode.md)

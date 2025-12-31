@@ -1,6 +1,6 @@
 # Security Considerations
 
-### 15.1 Root Token Secret
+## Root Token Secret
 
 During cluster initialization (when **not** using self-initialization), the Operator stores the initial root token in a Secret named `<cluster>-root-token`. This token grants **full administrative access** to the OpenBao cluster.
 
@@ -24,9 +24,9 @@ kubectl -n security get secret dev-cluster-root-token -o jsonpath='{.data.token}
   kubectl -n security delete secret dev-cluster-root-token
   ```
 
-### 15.2 Auto-Unseal Configuration
+## Auto-Unseal Configuration
 
-#### 15.2.1 Static Auto-Unseal (Default)
+### Static Auto-Unseal (Default)
 
 The Operator manages a static auto-unseal key stored in `<cluster>-unseal-key`. This key is used by OpenBao to automatically unseal on startup.
 
@@ -37,11 +37,11 @@ The Operator manages a static auto-unseal key stored in `<cluster>-unseal-key`. 
 
 **OpenBao Version Requirement:** The static auto-unseal feature requires **OpenBao v2.4.0 or later**. Earlier versions do not support the `seal "static"` configuration and will fail to start.
 
-#### 15.2.2 External KMS Auto-Unseal
+### External KMS Auto-Unseal
 
 For enhanced security, you can configure external KMS providers (AWS KMS, GCP Cloud KMS, Azure Key Vault, or OpenBao with the Transit Secret Engine) to manage the unseal key instead of storing it in Kubernetes Secrets.
 
-**Example: AWS KMS**
+#### AWS KMS
 
 ```yaml
 apiVersion: openbao.org/v1alpha1
@@ -70,7 +70,7 @@ spec:
     size: "10Gi"
 ```
 
-**Example: GCP Cloud KMS**
+#### GCP Cloud KMS
 
 ```yaml
 apiVersion: openbao.org/v1alpha1
@@ -103,11 +103,11 @@ spec:
 
 **Note:** When using external KMS, the operator does NOT create the `<cluster>-unseal-key` Secret. The Root of Trust shifts from Kubernetes Secrets to the cloud provider's KMS service. For GCP, the credentials Secret must contain a key named `credentials.json` with the GCP service account JSON credentials.
 
-### 15.3 Image Verification (Supply Chain Security)
+## Image Verification (Supply Chain Security)
 
 To protect against compromised registries and supply chain attacks, you can enable container image signature verification using Cosign. The operator verifies image signatures against the Rekor transparency log by default, providing strong non-repudiation guarantees.
 
-**Example: Enable Image Verification**
+### Enable Image Verification
 
 ```yaml
 apiVersion: openbao.org/v1alpha1
@@ -135,7 +135,7 @@ spec:
     size: "10Gi"
 ```
 
-**Example: Image Verification with Private Registry**
+### Image Verification with Private Registry
 
 When using images from private registries, provide ImagePullSecrets for authentication:
 

@@ -64,7 +64,7 @@ spec:
 
 See `config/samples/production/openbao_v1alpha1_openbaocluster_structured_config.yaml` for a comprehensive example.
 
-### 9.2 Audit Devices
+### Audit Devices
 
 Configure declarative audit devices for OpenBao clusters. Audit devices are created automatically on server startup and SIGHUP events.
 
@@ -93,7 +93,7 @@ spec:
 
 See the [OpenBao audit documentation](https://openbao.org/docs/configuration/audit/) for available audit device types and options.
 
-### 9.3 Plugins
+### Plugins
 
 Configure declarative plugins for OCI-based plugin management. Plugins are automatically downloaded and registered on server startup.
 
@@ -122,7 +122,7 @@ spec:
 
 See the [OpenBao plugin documentation](https://openbao.org/docs/configuration/plugins/) for more details.
 
-### 9.4 Telemetry
+### Telemetry
 
 Configure telemetry reporting for metrics and observability.
 
@@ -151,7 +151,7 @@ spec:
 
 See the [OpenBao telemetry documentation](https://openbao.org/docs/configuration/telemetry/) for all available options.
 
-### 9.5 Custom Container Images
+### Custom Container Images
 
 Override default container images for air-gapped environments or custom registries:
 

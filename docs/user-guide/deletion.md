@@ -12,7 +12,7 @@ All resources created by the operator (StatefulSet, Services, ConfigMaps, Secret
 - **Reconciliation on Drift:** The controller watches all owned resources, so any out-of-band modifications trigger immediate reconciliation to restore the desired state.
 - **Clear Ownership:** Each resource is clearly associated with its parent cluster via the `OwnerReference`, making it easy to identify which resources belong to which cluster.
 
-### 14.2 Deletion Policies
+### Deletion Policies
 
 `spec.deletionPolicy` controls additional cleanup behavior when the `OpenBaoCluster` is deleted:
 

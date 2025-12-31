@@ -288,6 +288,6 @@ The operator will clean up the Sentinel Deployment, ServiceAccount, Role, and Ro
 
 ## See Also
 
-- [Architecture: Sentinel](../architecture/index.md#36-the-sentinel-drift-detection--fast-path-reconciliation)
-- [Security: ValidatingAdmissionPolicy](../security/index.md#validatingadmissionpolicy-for-sentinel)
+- [Architecture: Sentinel](../architecture/sentinel.md)
+- [Security: Admission Policies](../security/admission-policies.md)
 - [Advanced Configuration](advanced-configuration.md)

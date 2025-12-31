@@ -8,7 +8,7 @@ OpenBao supports [self-initialization](https://openbao.org/docs/configuration/se
 
 **Important:** When self-initialization is enabled, no root token Secret is created. The root token is automatically revoked by OpenBao after the init requests complete.
 
-### 7.1 Basic Self-Initialization Example
+## Basic Self-Initialization Example
 
 ```yaml
 apiVersion: openbao.org/v1alpha1
@@ -61,12 +61,12 @@ spec:
   deletionPolicy: Retain
 ```
 
-### 7.2 Self-Init Request Structure
+## Self-Init Request Structure
 
 Each request in `spec.selfInit.requests[]` maps to an OpenBao API call:
 
 | Field | Description | Required |
-|-------|-------------|----------|
+| ----- | ----------- | -------- |
 | `name` | Unique identifier (must match `^[A-Za-z_][A-Za-z0-9_-]*$`) | Yes |
 | `operation` | API operation: `create`, `read`, `update`, `delete`, `list`, or `patch`. | Yes |
 | `path` | API path (e.g., `sys/audit/stdout`, `sys/auth/jwt`, `sys/mounts/secret`, `sys/policies/acl/app-policy`) | Yes |
@@ -77,7 +77,7 @@ Each request in `spec.selfInit.requests[]` maps to an OpenBao API call:
 | `policy` | Structured configuration for policies (only for `sys/policies/*` paths). See [policy types](#policy-types) below. | No |
 | `allowFailure` | If `true`, failures don't block initialization | No |
 
-### 7.3 Common Self-Init Patterns
+## Common Self-Init Patterns
 
 **Enable KV Secrets Engine (Structured):**
 
@@ -116,7 +116,7 @@ Each request in `spec.selfInit.requests[]` maps to an OpenBao API call:
       }
 ```
 
-### 7.4 Standard vs Self-Initialization
+## Standard vs Self-Initialization
 
 ```mermaid
 flowchart LR
@@ -144,13 +144,13 @@ flowchart LR
 ```
 
 | Aspect | Standard Init | Self-Init |
-|--------|---------------|-----------|
+| ------ | ------------- | --------- |
 | Root Token | Stored in `<cluster>-root-token` Secret | Auto-revoked, not available |
 | Initial Config | Manual post-init via CLI/API | Declarative in CR |
 | Recovery | Root token available for recovery | Must use other auth methods |
 | Use Case | Dev/test, manual management | Production, GitOps workflows |
 
-### 7.5 Audit Device Types
+## Audit Device Types
 
 For audit device requests (`sys/audit/*`), use the structured `auditDevice` field instead of raw `data`:
 
@@ -209,7 +209,7 @@ For audit device requests (`sys/audit/*`), use the structured `auditDevice` fiel
       writeTimeout: "2s"
 ```
 
-### 7.6 Auth Method Types
+## Auth Method Types
 
 For auth method requests (`sys/auth/*`), use the structured `authMethod` field:
 
@@ -227,7 +227,7 @@ For auth method requests (`sys/auth/*`), use the structured `authMethod` field:
 
 Common auth method types include: `jwt`, `kubernetes`, `userpass`, `ldap`, `oidc`, `cert`.
 
-### 7.7 Secret Engine Types
+## Secret Engine Types
 
 For secret engine requests (`sys/mounts/*`), use the structured `secretEngine` field:
 
@@ -244,7 +244,7 @@ For secret engine requests (`sys/mounts/*`), use the structured `secretEngine` f
 
 Common secret engine types include: `kv`, `pki`, `transit`, `database`, `aws`, `azure`, `gcp`.
 
-### 7.8 Policy Types
+## Policy Types
 
 For policy requests (`sys/policies/*`), use the structured `policy` field:
 

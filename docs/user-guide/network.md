@@ -70,7 +70,7 @@ spec:
 - **Managed clusters (EKS, GKE, AKS)**: Use the service network CIDR (e.g., `10.43.0.0/16`). You can find this by checking the ClusterIP of the `kubernetes` Service: `kubectl get svc kubernetes -n default -o jsonpath='{.spec.clusterIP}'`
 - **Self-managed clusters (k3d, kubeadm)**: Use the control plane node CIDR or the specific API server endpoint IP with `/32` (e.g., `192.168.1.100/32`)
 
-### 11.2 API Server Endpoint IPs
+### API Server Endpoint IPs
 
 For some CNI implementations (e.g., k3d), egress enforcement happens on the post-NAT destination (the API server endpoint) rather than the Kubernetes Service IP. In these cases, you can specify the API server endpoint IPs directly:
 
@@ -93,7 +93,7 @@ spec:
 - Auto-detection of API server endpoints fails
 - You want explicit control over which API server endpoints are allowed
 
-### 11.3 Custom Ingress and Egress Rules
+### Custom Ingress and Egress Rules
 
 The operator automatically creates NetworkPolicies with default ingress and egress rules for essential cluster operations. However, you may need to allow additional network access for:
 
@@ -150,7 +150,7 @@ spec:
 - Rules follow standard Kubernetes NetworkPolicy semantics
 - For backup operations, consider using backup jobs (which are excluded from the NetworkPolicy) rather than adding broad egress rules
 
-**Example: Transit Seal Backend**
+#### Transit Seal Backend Example
 
 When using a transit seal backend in another namespace (e.g., the operator namespace), you need to allow egress to that namespace:
 

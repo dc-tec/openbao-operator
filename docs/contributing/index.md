@@ -268,5 +268,5 @@ While we aim to reduce redundancy, we adhere to the Go proverb: **"A little copy
 - [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
 - [Effective Go](https://go.dev/doc/effective_go)
 - Project documentation in `docs/` directory
-- [Documentation Style Guide](../STYLE_GUIDE.md): Guidelines for writing and formatting documentation.
-- [AGENTS.md](AGENTS.md): Complete coding standards and guidelines (reference for AI agents and detailed conventions)
+- [Documentation Style Guide](style-guide.md): Guidelines for writing and formatting documentation.
+- `AGENTS.md` (at repo root): Complete coding standards and guidelines for AI agents

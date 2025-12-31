@@ -65,10 +65,10 @@ spec:
 
 A full sample using Gateway API (including TLS and a realistic Gateway reference) is provided in `config/samples/integrations/openbao_v1alpha1_openbaocluster_gateway.yaml`.
 
-### 8.3 Gateway Configuration Options
+### Gateway Configuration Options
 
 | Field | Description | Required |
-|-------|-------------|----------|
+| ----- | ----------- | -------- |
 | `enabled` | Enable Gateway API support | Yes |
 | `gatewayRef.name` | Name of the Gateway resource | Yes |
 | `gatewayRef.namespace` | Namespace of the Gateway (defaults to cluster namespace) | No |
@@ -77,7 +77,7 @@ A full sample using Gateway API (including TLS and a realistic Gateway reference
 | `annotations` | Annotations for the HTTPRoute/TLSRoute | No |
 | `tlsPassthrough` | Enable TLS passthrough using TLSRoute (defaults to `false`) | No |
 
-### 8.4 What the Operator Creates
+### What the Operator Creates
 
 When Gateway API is enabled, the Operator creates either an `HTTPRoute` (default) or a `TLSRoute` (when `tlsPassthrough: true`):
 
@@ -170,10 +170,10 @@ spec:
 
 **Note:** TLSRoute is in the Experimental channel of Gateway API. Ensure your Gateway implementation supports it.
 
-### 8.5 Gateway API vs Ingress
+### Gateway API vs Ingress
 
 | Feature | Ingress | Gateway API |
-|---------|---------|-------------|
+| ------- | ------- | ----------- |
 | Configuration | `spec.ingress` | `spec.gateway` |
 | Resource Created | `Ingress` | `HTTPRoute` |
 | TLS Handling | Per-Ingress | Per-Gateway (shared) |
@@ -182,7 +182,7 @@ spec:
 
 You can use either Ingress or Gateway API, but not both simultaneously on the same cluster.
 
-### 8.6 End-to-End TLS with Gateway API
+### End-to-End TLS with Gateway API
 
 **HTTPRoute with TLS Termination:**
 
