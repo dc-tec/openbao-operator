@@ -1,0 +1,10 @@
+image:
+  repository: ghcr.io/dc-tec/openbao-operator
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+operatorVersion: ""
+
+sentinel:
+  imageRepository: ghcr.io/dc-tec/openbao-operator-sentinel

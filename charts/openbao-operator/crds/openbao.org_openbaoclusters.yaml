@@ -1,0 +1,2755 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaoclusters.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoCluster
+    listKind: OpenBaoClusterList
+    plural: openbaoclusters
+    shortNames:
+    - bao
+    - baoc
+    singular: openbaocluster
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoCluster is the Schema for the openbaoclusters API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec defines the desired state of OpenBaoCluster.
+            properties:
+              audit:
+                description: |-
+                  Audit configures declarative audit devices for the OpenBao cluster.
+                  See: https://openbao.org/docs/configuration/audit/
+                items:
+                  description: |-
+                    AuditDevice defines a declarative audit device configuration.
+                    See: https://openbao.org/docs/configuration/audit/
+                  properties:
+                    description:
+                      description: Description is an optional description for the
+                        audit device.
+                      type: string
+                    fileOptions:
+                      description: |-
+                        FileOptions configures options for file audit devices.
+                        Only used when Type is "file".
+                      properties:
+                        filePath:
+                          description: |-
+                            FilePath is the path to where the audit log will be written.
+                            Special keywords: "stdout" writes to standard output, "discard" discards output.
+                          minLength: 1
+                          type: string
+                        mode:
+                          description: |-
+                            Mode is a string containing an octal number representing the bit pattern for the file mode.
+                            Defaults to "0600" if not specified. Set to "0000" to prevent OpenBao from modifying the file mode.
+                          type: string
+                      required:
+                      - filePath
+                      type: object
+                    httpOptions:
+                      description: |-
+                        HTTPOptions configures options for HTTP audit devices.
+                        Only used when Type is "http".
+                      properties:
+                        headers:
+                          description: |-
+                            Headers is a JSON object describing headers. Must take the shape map[string][]string,
+                            i.e., an object of headers, with each having one or more values.
+                            Headers without values will be ignored.
+                          x-kubernetes-preserve-unknown-fields: true
+                        uri:
+                          description: URI is the URI of the remote server where the
+                            audit logs will be written.
+                          minLength: 1
+                          type: string
+                      required:
+                      - uri
+                      type: object
+                    options:
+                      description: |-
+                        Options contains device-specific configuration options as a map.
+                        This is a fallback for backward compatibility and advanced use cases.
+                        If structured options (FileOptions, HTTPOptions, etc.) are provided, they take precedence.
+                        The structure depends on the audit device type.
+                      x-kubernetes-preserve-unknown-fields: true
+                    path:
+                      description: Path is the path of the audit device in the root
+                        namespace.
+                      minLength: 1
+                      type: string
+                    socketOptions:
+                      description: |-
+                        SocketOptions configures options for socket audit devices.
+                        Only used when Type is "socket".
+                      properties:
+                        address:
+                          description: |-
+                            Address is the socket server address to use.
+                            Example: "127.0.0.1:9090" or "/tmp/audit.sock".
+                          type: string
+                        socketType:
+                          description: |-
+                            SocketType is the socket type to use, any type compatible with net.Dial is acceptable.
+                            Defaults to "tcp" if not specified.
+                          type: string
+                        writeTimeout:
+                          description: |-
+                            WriteTimeout is the (deadline) time in seconds to allow writes to be completed over the socket.
+                            A zero value means that write attempts will not time out.
+                            Defaults to "2s" if not specified.
+                          type: string
+                      type: object
+                    syslogOptions:
+                      description: |-
+                        SyslogOptions configures options for syslog audit devices.
+                        Only used when Type is "syslog".
+                      properties:
+                        facility:
+                          description: |-
+                            Facility is the syslog facility to use.
+                            Defaults to "AUTH" if not specified.
+                          type: string
+                        tag:
+                          description: |-
+                            Tag is the syslog tag to use.
+                            Defaults to "openbao" if not specified.
+                          type: string
+                      type: object
+                    type:
+                      description: Type is the type of audit device (e.g., "file",
+                        "syslog", "socket", "http").
+                      enum:
+                      - file
+                      - syslog
+                      - socket
+                      - http
+                      minLength: 1
+                      type: string
+                  required:
+                  - path
+                  - type
+                  type: object
+                type: array
+              backup:
+                description: Backup configures scheduled backups for the cluster.
+                properties:
+                  executorImage:
+                    description: |-
+                      ExecutorImage is the container image to use for backup operations.
+                      Defaults to "openbao/backup-executor:v0.1.0" if not specified.
+                      This allows users to override the image for air-gapped environments or custom registries.
+                    minLength: 1
+                    type: string
+                  jwtAuthRole:
+                    description: |-
+                      JWTAuthRole is the name of the JWT Auth role configured in OpenBao
+                      for backup operations. When set, the backup executor will use JWT Auth
+                      (projected ServiceAccount token) instead of a static token. This is the preferred authentication
+                      method as tokens are automatically rotated by Kubernetes.
+
+                      The role must be configured in OpenBao and must grant the "read" capability on
+                      sys/storage/raft/snapshot. The role must bind to the backup ServiceAccount
+                      (<cluster-name>-backup-serviceaccount) in the cluster namespace.
+                    type: string
+                  retention:
+                    description: Retention defines optional backup retention policy.
+                    properties:
+                      maxAge:
+                        description: |-
+                          MaxAge is the maximum age of backups to retain, e.g., "168h" for 7 days.
+                          Backups older than this are deleted after successful new backup upload.
+                        type: string
+                      maxCount:
+                        description: MaxCount is the maximum number of backups to
+                          retain (0 = unlimited).
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
+                  schedule:
+                    description: Schedule is a cron-style schedule, for example "0
+                      3 * * *".
+                    minLength: 1
+                    type: string
+                  target:
+                    description: Target is the object storage configuration for backups.
+                    properties:
+                      bucket:
+                        description: Bucket is the bucket or container name.
+                        minLength: 1
+                        type: string
+                      concurrency:
+                        default: 3
+                        description: |-
+                          Concurrency is the number of concurrent parts to upload during multipart uploads.
+                          Defaults to 3. Higher values may improve throughput on fast networks but increase
+                          memory usage and may overwhelm slower storage backends.
+                        format: int32
+                        maximum: 10
+                        minimum: 1
+                        type: integer
+                      credentialsSecretRef:
+                        description: CredentialsSecretRef optionally references a
+                          Secret containing credentials for the object store.
+                        properties:
+                          name:
+                            description: name is unique within a namespace to reference
+                              a secret resource.
+                            type: string
+                          namespace:
+                            description: namespace defines the space within which
+                              the secret name must be unique.
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      endpoint:
+                        description: Endpoint is the HTTP(S) endpoint for the object
+                          storage service.
+                        minLength: 1
+                        type: string
+                      partSize:
+                        default: 10485760
+                        description: |-
+                          PartSize is the size of each part in multipart uploads (in bytes).
+                          Defaults to 10MB (10485760 bytes). Larger values may improve performance for large snapshots
+                          on fast networks, while smaller values may be better for slow or unreliable networks.
+                        format: int64
+                        minimum: 5242880
+                        type: integer
+                      pathPrefix:
+                        description: PathPrefix is an optional prefix within the bucket
+                          for this cluster's snapshots.
+                        type: string
+                      region:
+                        default: us-east-1
+                        description: |-
+                          Region is the AWS region to use for S3-compatible clients.
+                          For AWS, this should match the bucket region (for example, "eu-west-1").
+                          For many S3-compatible stores (MinIO/Ceph), this can be any non-empty value.
+                        type: string
+                      roleArn:
+                        description: |-
+                          RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
+                          When set, the backup Job mounts a projected ServiceAccount token and relies on the
+                          cloud provider SDK default credential chain (for example, AWS IRSA).
+                        type: string
+                      usePathStyle:
+                        default: false
+                        description: |-
+                          UsePathStyle controls whether to use path-style addressing (bucket.s3.amazonaws.com/object)
+                          or virtual-hosted-style addressing (bucket.s3.amazonaws.com/object).
+                          Set to true for MinIO and S3-compatible stores that require path-style.
+                          Set to false for AWS S3 (default, as AWS is deprecating path-style).
+                        type: boolean
+                    required:
+                    - bucket
+                    - endpoint
+                    type: object
+                  tokenSecretRef:
+                    description: |-
+                      TokenSecretRef optionally references a Secret containing an OpenBao API
+                      token to use for backup operations (fallback method).
+
+                      For standard clusters (non self-init), this is typically omitted and the
+                      operator uses the root token from <cluster>-root-token. For self-init
+                      clusters (no root token Secret), this field must reference a token with
+                      permission to read sys/storage/raft/snapshot.
+
+                      If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                required:
+                - schedule
+                - target
+                type: object
+              breakGlassAck:
+                description: |-
+                  BreakGlassAck is an explicit acknowledgment token used to exit Break Glass / Safe Mode.
+
+                  When the operator enters break glass mode, it writes a nonce to status.breakGlass.nonce.
+                  To acknowledge and allow the operator to resume quorum-risk automation, set this field
+                  to match that nonce.
+
+                  Example:
+                    kubectl -n <ns> patch openbaocluster <name> --type merge -p '{"spec":{"breakGlassAck":"<nonce>"}}'
+                type: string
+              configuration:
+                description: Configuration defines the server configuration.
+                properties:
+                  acmeCARoot:
+                    description: |-
+                      ACMECARoot is the path to the ACME CA root certificate file.
+                      This is used when TLS mode is ACME to specify a custom CA root for ACME certificate validation.
+                    type: string
+                  allowAuditLogPrefixing:
+                    description: |-
+                      AllowAuditLogPrefixing allows audit log prefixing.
+                      This enables custom prefixes in audit log entries.
+                    type: boolean
+                  cacheSize:
+                    description: |-
+                      CacheSize is the size of the cache in bytes.
+                      If not specified, OpenBao uses its default cache size.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  defaultLeaseTTL:
+                    description: |-
+                      DefaultLeaseTTL is the default lease TTL for tokens and secrets (e.g., "720h", "30m").
+                      If not specified, OpenBao uses its default.
+                    type: string
+                  detectDeadlocks:
+                    description: |-
+                      DetectDeadlocks enables deadlock detection in OpenBao.
+                      This is an experimental feature for debugging.
+                    type: boolean
+                  disableCache:
+                    description: |-
+                      DisableCache disables the cache entirely.
+                      When true, all caching is disabled.
+                    type: boolean
+                  disableStandbyReads:
+                    description: |-
+                      DisableStandbyReads disables reads from standby nodes.
+                      When true, all reads must go to the active node.
+                    type: boolean
+                  enableResponseHeaderHostname:
+                    description: |-
+                      EnableResponseHeaderHostname enables the hostname in response headers.
+                      When true, OpenBao includes the hostname in HTTP response headers.
+                    type: boolean
+                  enableResponseHeaderRaftNodeID:
+                    description: |-
+                      EnableResponseHeaderRaftNodeID enables the Raft node ID in response headers.
+                      When true, OpenBao includes the Raft node ID in HTTP response headers.
+                    type: boolean
+                  impreciseLeaseRoleTracking:
+                    description: |-
+                      ImpreciseLeaseRoleTracking enables imprecise lease role tracking.
+                      This is an experimental feature that may improve performance in some scenarios.
+                    type: boolean
+                  introspectionEndpoint:
+                    description: |-
+                      IntrospectionEndpoint enables the introspection endpoint.
+                      This is an experimental feature for debugging and introspection.
+                    type: boolean
+                  listener:
+                    description: |-
+                      Listener allows tuning the TCP listener.
+                      Note: Address and ClusterAddress are managed by the operator and cannot be changed.
+                    properties:
+                      proxyProtocolBehavior:
+                        description: ProxyProtocolBehavior allows configuring proxy
+                          protocol (e.g. for LoadBalancers).
+                        enum:
+                        - use_always
+                        - allow_any
+                        - deny_unauthorized
+                        type: string
+                      tlsDisable:
+                        description: |-
+                          TLSDisable controls TLS on the listener.
+                          Note: This is typically managed by the operator based on spec.tls.enabled.
+                        type: boolean
+                    type: object
+                  logLevel:
+                    default: info
+                    description: LogLevel specifies the log level.
+                    enum:
+                    - trace
+                    - debug
+                    - info
+                    - warn
+                    - err
+                    type: string
+                  logging:
+                    description: Logging allows configuring logging behavior.
+                    properties:
+                      file:
+                        description: |-
+                          File is the path to the log file.
+                          If not specified, logs are written to stderr.
+                        type: string
+                      format:
+                        description: Format specifies the log format.
+                        enum:
+                        - standard
+                        - json
+                        type: string
+                      pidFile:
+                        description: PIDFile is the path to write the PID file.
+                        type: string
+                      rotateBytes:
+                        description: RotateBytes specifies the maximum size in bytes
+                          before rotating logs.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      rotateDuration:
+                        description: RotateDuration specifies how often to rotate
+                          logs (e.g., "24h", "7d").
+                        type: string
+                      rotateMaxFiles:
+                        description: RotateMaxFiles is the maximum number of rotated
+                          log files to keep.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
+                  maxLeaseTTL:
+                    description: |-
+                      MaxLeaseTTL is the maximum lease TTL for tokens and secrets (e.g., "8760h", "1y").
+                      This must be greater than or equal to DefaultLeaseTTL.
+                      If not specified, OpenBao uses its default.
+                    type: string
+                  plugin:
+                    description: |-
+                      Plugin allows configuring plugin behavior.
+                      Note: This is separate from spec.plugins which defines plugin instances.
+                    properties:
+                      autoDownload:
+                        description: AutoDownload controls automatic plugin downloads
+                          from OCI registries.
+                        type: boolean
+                      autoRegister:
+                        description: AutoRegister controls automatic plugin registration.
+                        type: boolean
+                      downloadBehavior:
+                        description: DownloadBehavior specifies how plugins are downloaded.
+                        enum:
+                        - standard
+                        - direct
+                        type: string
+                      filePermissions:
+                        description: FilePermissions are the file permissions for
+                          plugin files (e.g., "0755").
+                        type: string
+                      fileUID:
+                        description: FileUID is the UID to use for plugin files.
+                        format: int64
+                        type: integer
+                    type: object
+                  raft:
+                    description: Raft allows tuning the Raft storage backend.
+                    properties:
+                      performanceMultiplier:
+                        description: PerformanceMultiplier scales the Raft timing
+                          parameters.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
+                  rawStorageEndpoint:
+                    description: |-
+                      RawStorageEndpoint enables the raw storage endpoint.
+                      This is an experimental feature that exposes raw storage operations.
+                    type: boolean
+                  ui:
+                    default: true
+                    description: UI enables the built-in web interface.
+                    type: boolean
+                  unsafeAllowAPIAuditCreation:
+                    description: |-
+                      UnsafeAllowAPIAuditCreation allows API-based audit device creation.
+                      This bypasses the normal audit device configuration validation.
+                      Use with caution.
+                    type: boolean
+                type: object
+              deletionPolicy:
+                description: DeletionPolicy controls what happens to underlying resources
+                  when the CR is deleted.
+                enum:
+                - Retain
+                - DeletePVCs
+                - DeleteAll
+                type: string
+              gateway:
+                description: |-
+                  Gateway configures Kubernetes Gateway API access (alternative to Ingress).
+                  When enabled, the Operator creates an HTTPRoute that routes traffic through
+                  a user-managed Gateway resource.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations to apply to the HTTPRoute resource.
+                    type: object
+                  backendTLS:
+                    description: |-
+                      BackendTLS configures BackendTLSPolicy for end-to-end TLS between the Gateway and OpenBao.
+                      When enabled, the Operator creates a BackendTLSPolicy that configures the Gateway to use
+                      HTTPS when communicating with the OpenBao backend service and validates the backend
+                      certificate using the cluster's CA certificate.
+                    properties:
+                      enabled:
+                        default: true
+                        description: |-
+                          Enabled controls whether the Operator creates a BackendTLSPolicy.
+                          When true (default when Gateway is enabled), the Operator creates a BackendTLSPolicy
+                          that enables HTTPS and certificate validation for backend connections.
+                          When false, no BackendTLSPolicy is created and the Gateway will use HTTP (or rely on
+                          external configuration for TLS).
+                        type: boolean
+                      hostname:
+                        description: |-
+                          Hostname is the hostname to verify in the backend certificate.
+                          If not specified, defaults to the Service DNS name: <service-name>.<namespace>.svc
+                          This should match the certificate SAN or the service DNS name.
+                        type: string
+                    type: object
+                  enabled:
+                    description: |-
+                      Enabled activates Gateway API support for this cluster.
+                      When true, the Operator creates an HTTPRoute for the cluster.
+                    type: boolean
+                  gatewayRef:
+                    description: |-
+                      GatewayRef references an existing Gateway resource that will handle
+                      traffic for this OpenBao cluster. The Gateway must already exist.
+                    properties:
+                      name:
+                        description: Name of the Gateway resource.
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: Namespace of the Gateway resource. If empty,
+                          uses the OpenBaoCluster namespace.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  hostname:
+                    description: |-
+                      Hostname for routing traffic to this OpenBao cluster.
+                      This hostname will be automatically added to the TLS SANs.
+                    minLength: 1
+                    type: string
+                  path:
+                    description: Path prefix for the HTTPRoute (defaults to "/").
+                    type: string
+                  tlsPassthrough:
+                    description: |-
+                      TLSPassthrough enables TLS passthrough mode using TLSRoute instead of HTTPRoute.
+                      When true, the Operator creates a TLSRoute that routes encrypted TLS traffic based on SNI
+                      without terminating TLS at the Gateway. OpenBao terminates TLS directly.
+                      When false (default), the Operator creates an HTTPRoute with TLS termination at the Gateway.
+                      Note: TLSRoute and HTTPRoute are mutually exclusive - only one can be used per cluster.
+                      BackendTLSPolicy is not needed when TLSPassthrough is enabled since the Gateway does not
+                      decrypt traffic. The Gateway listener must be configured with protocol: TLS and mode: Passthrough.
+                    type: boolean
+                required:
+                - enabled
+                - gatewayRef
+                - hostname
+                type: object
+              image:
+                description: Image is the container image to run; defaults may be
+                  derived from Version.
+                minLength: 1
+                type: string
+              imageVerification:
+                description: ImageVerification configures supply chain security checks.
+                properties:
+                  enabled:
+                    description: Enabled controls whether image verification is enforced.
+                    type: boolean
+                  failurePolicy:
+                    default: Block
+                    description: |-
+                      FailurePolicy defines behavior on verification failure.
+                      "Block" prevents StatefulSet updates when verification fails.
+                      "Warn" logs an error and emits a Kubernetes Event but proceeds.
+                    enum:
+                    - Warn
+                    - Block
+                    type: string
+                  ignoreTlog:
+                    default: false
+                    description: |-
+                      IgnoreTlog controls whether to verify against the Rekor transparency log.
+                      When false (default), signatures are verified against Rekor for non-repudiation.
+                      When true, only signature verification is performed without transparency log checks.
+                    type: boolean
+                  imagePullSecrets:
+                    description: |-
+                      ImagePullSecrets is a list of references to secrets in the same namespace
+                      to use for pulling images from private registries during verification.
+                      These secrets must be of type kubernetes.io/dockerconfigjson or kubernetes.io/dockercfg.
+                    items:
+                      description: |-
+                        LocalObjectReference contains enough information to let you locate the
+                        referenced object inside the same namespace.
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                  issuer:
+                    description: |-
+                      Issuer is the OIDC issuer for keyless verification (e.g., https://token.actions.githubusercontent.com).
+                      Required for keyless verification when PublicKey is not provided.
+                      For official OpenBao images, use: https://token.actions.githubusercontent.com
+                    type: string
+                  publicKey:
+                    description: |-
+                      PublicKey is the Cosign public key content used to verify the signature.
+                      Required for static key verification. If empty, keyless verification will be used
+                      (requires Issuer and Subject to be set).
+                    type: string
+                  subject:
+                    description: |-
+                      Subject is the OIDC subject for keyless verification.
+                      Required for keyless verification when PublicKey is not provided.
+                      For official OpenBao images, use: https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v<VERSION>
+                      The version in the subject MUST match the image tag version.
+                    type: string
+                required:
+                - enabled
+                - failurePolicy
+                type: object
+              ingress:
+                description: Ingress configures optional HTTP(S) ingress in front
+                  of the OpenBao Service.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations are additional annotations to apply to
+                      the Ingress.
+                    type: object
+                  className:
+                    description: ClassName is an optional IngressClassName (for example,
+                      "nginx", "traefik").
+                    type: string
+                  enabled:
+                    description: Enabled controls whether the Operator manages an
+                      Ingress for external access.
+                    type: boolean
+                  host:
+                    description: Host is the primary host for external access, for
+                      example "bao.example.com".
+                    minLength: 1
+                    type: string
+                  path:
+                    description: Path is the HTTP path to route to OpenBao, defaulting
+                      to "/".
+                    type: string
+                  tlsSecretName:
+                    description: TLSSecretName is an optional TLS Secret name; when
+                      empty the cluster TLS Secret is used.
+                    type: string
+                required:
+                - host
+                type: object
+              initContainer:
+                description: |-
+                  InitContainer configures the init container used to render OpenBao configuration.
+                  The init container renders the final config.hcl from a template using environment
+                  variables such as HOSTNAME and POD_IP.
+                properties:
+                  enabled:
+                    default: true
+                    description: |-
+                      Enabled controls whether the init container is used to render the configuration.
+                      The operator requires the init container; disabling it is not supported.
+                    type: boolean
+                  image:
+                    description: |-
+                      Image is the container image to use for the init container.
+                      This value is required; the operator does not apply a default image.
+                      When omitted or empty, validation will reject the OpenBaoCluster.
+                    minLength: 1
+                    type: string
+                type: object
+              network:
+                description: Network configures network-related settings for the cluster.
+                properties:
+                  apiServerCIDR:
+                    description: |-
+                      APIServerCIDR is an optional CIDR block for the Kubernetes API server.
+                      When specified, this value is used instead of auto-detection for NetworkPolicy egress rules.
+                      This is useful in restricted multi-tenant environments where the operator may not have
+                      permissions to read Services/Endpoints in the default namespace.
+                      Example: "10.43.0.0/16" for service network or "192.168.1.0/24" for control plane nodes.
+                    type: string
+                  apiServerEndpointIPs:
+                    description: |-
+                      APIServerEndpointIPs is an optional list of Kubernetes API server endpoint IPs.
+                      When set, the operator adds least-privilege NetworkPolicy egress rules for these IPs on port 6443.
+                      This is required on some CNI implementations where egress enforcement happens on the post-NAT
+                      destination (the API server endpoint) rather than the kubernetes Service IP (10.43.0.1:443).
+
+                      Use this in restricted environments where the operator cannot list EndpointSlices/Endpoints in
+                      the default namespace to auto-detect endpoint IPs.
+                      Example (k3d): ["192.168.166.2"]
+                    items:
+                      type: string
+                    type: array
+                  egressRules:
+                    description: |-
+                      EgressRules allows users to specify additional egress rules that will be merged into
+                      the operator-managed NetworkPolicy. This is useful for allowing access to external
+                      services such as transit seal backends, object storage endpoints, or other dependencies.
+
+                      The operator's default egress rules (DNS, API server, cluster pods) are always included
+                      and cannot be overridden. User-provided rules are appended to the operator-managed rules.
+
+                      Example: Allow egress to a transit seal backend in another namespace:
+                        egressRules:
+                        - to:
+                          - namespaceSelector:
+                              matchLabels:
+                                kubernetes.io/metadata.name: transit-namespace
+                          ports:
+                          - protocol: TCP
+                            port: 8200
+                    items:
+                      description: |-
+                        NetworkPolicyEgressRule describes a particular set of traffic that is allowed out of pods
+                        matched by a NetworkPolicySpec's podSelector. The traffic must match both ports and to.
+                        This type is beta-level in 1.8
+                      properties:
+                        ports:
+                          description: |-
+                            ports is a list of destination ports for outgoing traffic.
+                            Each item in this list is combined using a logical OR. If this field is
+                            empty or missing, this rule matches all ports (traffic not restricted by port).
+                            If this field is present and contains at least one item, then this rule allows
+                            traffic only if the traffic matches at least one port in the list.
+                          items:
+                            description: NetworkPolicyPort describes a port to allow
+                              traffic on
+                            properties:
+                              endPort:
+                                description: |-
+                                  endPort indicates that the range of ports from port to endPort if set, inclusive,
+                                  should be allowed by the policy. This field cannot be defined if the port field
+                                  is not defined or if the port field is defined as a named (string) port.
+                                  The endPort must be equal or greater than port.
+                                format: int32
+                                type: integer
+                              port:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                description: |-
+                                  port represents the port on the given protocol. This can either be a numerical or named
+                                  port on a pod. If this field is not provided, this matches all port names and
+                                  numbers.
+                                  If present, only traffic on the specified protocol AND port will be matched.
+                                x-kubernetes-int-or-string: true
+                              protocol:
+                                description: |-
+                                  protocol represents the protocol (TCP, UDP, or SCTP) which traffic must match.
+                                  If not specified, this field defaults to TCP.
+                                type: string
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        to:
+                          description: |-
+                            to is a list of destinations for outgoing traffic of pods selected for this rule.
+                            Items in this list are combined using a logical OR operation. If this field is
+                            empty or missing, this rule matches all destinations (traffic not restricted by
+                            destination). If this field is present and contains at least one item, this rule
+                            allows traffic only if the traffic matches at least one item in the to list.
+                          items:
+                            description: |-
+                              NetworkPolicyPeer describes a peer to allow traffic to/from. Only certain combinations of
+                              fields are allowed
+                            properties:
+                              ipBlock:
+                                description: |-
+                                  ipBlock defines policy on a particular IPBlock. If this field is set then
+                                  neither of the other fields can be.
+                                properties:
+                                  cidr:
+                                    description: |-
+                                      cidr is a string representing the IPBlock
+                                      Valid examples are "192.168.1.0/24" or "2001:db8::/64"
+                                    type: string
+                                  except:
+                                    description: |-
+                                      except is a slice of CIDRs that should not be included within an IPBlock
+                                      Valid examples are "192.168.1.0/24" or "2001:db8::/64"
+                                      Except values will be rejected if they are outside the cidr range
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - cidr
+                                type: object
+                              namespaceSelector:
+                                description: |-
+                                  namespaceSelector selects namespaces using cluster-scoped labels. This field follows
+                                  standard label selector semantics; if present but empty, it selects all namespaces.
+
+                                  If podSelector is also set, then the NetworkPolicyPeer as a whole selects
+                                  the pods matching podSelector in the namespaces selected by namespaceSelector.
+                                  Otherwise it selects all pods in the namespaces selected by namespaceSelector.
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: |-
+                                        A label selector requirement is a selector that contains values, a key, and an operator that
+                                        relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: |-
+                                            operator represents a key's relationship to a set of values.
+                                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: |-
+                                            values is an array of string values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array is replaced during a strategic
+                                            merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: |-
+                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                    type: object
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              podSelector:
+                                description: |-
+                                  podSelector is a label selector which selects pods. This field follows standard label
+                                  selector semantics; if present but empty, it selects all pods.
+
+                                  If namespaceSelector is also set, then the NetworkPolicyPeer as a whole selects
+                                  the pods matching podSelector in the Namespaces selected by NamespaceSelector.
+                                  Otherwise it selects the pods matching podSelector in the policy's own namespace.
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: |-
+                                        A label selector requirement is a selector that contains values, a key, and an operator that
+                                        relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: |-
+                                            operator represents a key's relationship to a set of values.
+                                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: |-
+                                            values is an array of string values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array is replaced during a strategic
+                                            merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: |-
+                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                    type: object
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                      type: object
+                    type: array
+                  ingressRules:
+                    description: |-
+                      IngressRules allows users to specify additional ingress rules that will be merged into
+                      the operator-managed NetworkPolicy. This is useful for allowing access from external
+                      services, monitoring tools, or other components that need to reach OpenBao pods.
+
+                      The operator's default ingress rules (cluster pods, kube-system, operator, gateway)
+                      are always included and cannot be overridden. User-provided rules are appended to
+                      the operator-managed rules.
+
+                      Example: Allow ingress from a monitoring namespace:
+                        ingressRules:
+                        - from:
+                          - namespaceSelector:
+                              matchLabels:
+                                kubernetes.io/metadata.name: monitoring
+                          ports:
+                          - protocol: TCP
+                            port: 8200
+                    items:
+                      description: |-
+                        NetworkPolicyIngressRule describes a particular set of traffic that is allowed to the pods
+                        matched by a NetworkPolicySpec's podSelector. The traffic must match both ports and from.
+                      properties:
+                        from:
+                          description: |-
+                            from is a list of sources which should be able to access the pods selected for this rule.
+                            Items in this list are combined using a logical OR operation. If this field is
+                            empty or missing, this rule matches all sources (traffic not restricted by
+                            source). If this field is present and contains at least one item, this rule
+                            allows traffic only if the traffic matches at least one item in the from list.
+                          items:
+                            description: |-
+                              NetworkPolicyPeer describes a peer to allow traffic to/from. Only certain combinations of
+                              fields are allowed
+                            properties:
+                              ipBlock:
+                                description: |-
+                                  ipBlock defines policy on a particular IPBlock. If this field is set then
+                                  neither of the other fields can be.
+                                properties:
+                                  cidr:
+                                    description: |-
+                                      cidr is a string representing the IPBlock
+                                      Valid examples are "192.168.1.0/24" or "2001:db8::/64"
+                                    type: string
+                                  except:
+                                    description: |-
+                                      except is a slice of CIDRs that should not be included within an IPBlock
+                                      Valid examples are "192.168.1.0/24" or "2001:db8::/64"
+                                      Except values will be rejected if they are outside the cidr range
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - cidr
+                                type: object
+                              namespaceSelector:
+                                description: |-
+                                  namespaceSelector selects namespaces using cluster-scoped labels. This field follows
+                                  standard label selector semantics; if present but empty, it selects all namespaces.
+
+                                  If podSelector is also set, then the NetworkPolicyPeer as a whole selects
+                                  the pods matching podSelector in the namespaces selected by namespaceSelector.
+                                  Otherwise it selects all pods in the namespaces selected by namespaceSelector.
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: |-
+                                        A label selector requirement is a selector that contains values, a key, and an operator that
+                                        relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: |-
+                                            operator represents a key's relationship to a set of values.
+                                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: |-
+                                            values is an array of string values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array is replaced during a strategic
+                                            merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: |-
+                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                    type: object
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              podSelector:
+                                description: |-
+                                  podSelector is a label selector which selects pods. This field follows standard label
+                                  selector semantics; if present but empty, it selects all pods.
+
+                                  If namespaceSelector is also set, then the NetworkPolicyPeer as a whole selects
+                                  the pods matching podSelector in the Namespaces selected by NamespaceSelector.
+                                  Otherwise it selects the pods matching podSelector in the policy's own namespace.
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: |-
+                                        A label selector requirement is a selector that contains values, a key, and an operator that
+                                        relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: |-
+                                            operator represents a key's relationship to a set of values.
+                                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: |-
+                                            values is an array of string values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array is replaced during a strategic
+                                            merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: |-
+                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                    type: object
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        ports:
+                          description: |-
+                            ports is a list of ports which should be made accessible on the pods selected for
+                            this rule. Each item in this list is combined using a logical OR. If this field is
+                            empty or missing, this rule matches all ports (traffic not restricted by port).
+                            If this field is present and contains at least one item, then this rule allows
+                            traffic only if the traffic matches at least one port in the list.
+                          items:
+                            description: NetworkPolicyPort describes a port to allow
+                              traffic on
+                            properties:
+                              endPort:
+                                description: |-
+                                  endPort indicates that the range of ports from port to endPort if set, inclusive,
+                                  should be allowed by the policy. This field cannot be defined if the port field
+                                  is not defined or if the port field is defined as a named (string) port.
+                                  The endPort must be equal or greater than port.
+                                format: int32
+                                type: integer
+                              port:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                description: |-
+                                  port represents the port on the given protocol. This can either be a numerical or named
+                                  port on a pod. If this field is not provided, this matches all port names and
+                                  numbers.
+                                  If present, only traffic on the specified protocol AND port will be matched.
+                                x-kubernetes-int-or-string: true
+                              protocol:
+                                description: |-
+                                  protocol represents the protocol (TCP, UDP, or SCTP) which traffic must match.
+                                  If not specified, this field defaults to TCP.
+                                type: string
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                      type: object
+                    type: array
+                type: object
+              paused:
+                description: Paused, when true, pauses reconciliation for this OpenBaoCluster
+                  (except delete and finalizers).
+                type: boolean
+              plugins:
+                description: |-
+                  Plugins configures declarative plugins for the OpenBao cluster.
+                  See: https://openbao.org/docs/configuration/plugins/
+                items:
+                  description: |-
+                    Plugin defines a declarative plugin configuration.
+                    See: https://openbao.org/docs/configuration/plugins/
+                  properties:
+                    args:
+                      description: |-
+                        Args are arguments to pass to the running plugin.
+                        Only used if plugin_auto_register=true is set.
+                      items:
+                        type: string
+                      type: array
+                    binaryName:
+                      description: BinaryName is the name of the plugin binary file
+                        within the OCI image.
+                      minLength: 1
+                      type: string
+                    command:
+                      description: |-
+                        Command is the command name of a manually downloaded plugin.
+                        Required if Image is not set. Conflicts with Image.
+                      type: string
+                    env:
+                      description: |-
+                        Env are environment variables to pass to the running plugin.
+                        Only used if plugin_auto_register=true is set.
+                      items:
+                        type: string
+                      type: array
+                    image:
+                      description: |-
+                        Image is the OCI image URL including registry and repository.
+                        Required if Command is not set. Conflicts with Command.
+                      type: string
+                    name:
+                      description: Name is the name of the plugin.
+                      minLength: 1
+                      type: string
+                    sha256sum:
+                      description: |-
+                        SHA256Sum is the expected SHA256 checksum of the plugin binary.
+                        Must be a 64-character hexadecimal string.
+                      maxLength: 64
+                      minLength: 64
+                      pattern: ^[0-9a-fA-F]{64}$
+                      type: string
+                    type:
+                      description: Type is the plugin type (e.g., "secret", "auth").
+                      minLength: 1
+                      type: string
+                    version:
+                      description: Version is the image version or tag.
+                      minLength: 1
+                      type: string
+                  required:
+                  - binaryName
+                  - name
+                  - sha256sum
+                  - type
+                  - version
+                  type: object
+                type: array
+              profile:
+                allOf:
+                - enum:
+                  - Hardened
+                  - Development
+                - enum:
+                  - Hardened
+                  - Development
+                description: |-
+                  Profile defines the security posture for this cluster.
+                  When set to "Hardened", the operator enforces strict security requirements:
+                  - TLS must be External (cert-manager/CSI managed)
+                  - Unseal must use external KMS (no static unseal)
+                  - SelfInit must be enabled (no root token)
+                  When set to "Development", relaxed security is allowed but a security warning
+                  condition is set.
+                type: string
+              replicas:
+                default: 3
+                description: Replicas is the desired number of OpenBao pods.
+                format: int32
+                minimum: 1
+                type: integer
+              selfInit:
+                description: |-
+                  SelfInit configures OpenBao's native self-initialization feature.
+                  When enabled, OpenBao initializes itself on first start using the configured
+                  requests, and the root token is automatically revoked.
+                  See: https://openbao.org/docs/configuration/self-init/
+                properties:
+                  bootstrapJWTAuth:
+                    default: false
+                    description: |-
+                      BootstrapJWTAuth, when true, enables automatic JWT authentication bootstrap
+                      for the operator. This configures JWT auth in OpenBao, sets up OIDC discovery,
+                      creates the operator policy and role, and optionally creates backup/upgrade
+                      policies and roles if those features are configured with JWTAuthRole.
+
+                      When false (default), JWT auth must be manually configured via SelfInit requests.
+                      This is the recommended approach for users who want full control over JWT auth setup.
+
+                      Bootstrap requires:
+                      - OIDC issuer URL to be discoverable at operator startup
+                      - OIDC JWKS public keys to be available at operator startup
+                      - Operator namespace and service account to be known
+                    type: boolean
+                  enabled:
+                    default: false
+                    description: |-
+                      Enabled activates OpenBao's self-initialization feature.
+                      When true, the Operator injects initialize stanzas into config.hcl
+                      and does NOT create a root token Secret (root token is auto-revoked).
+                    type: boolean
+                  requests:
+                    description: |-
+                      Requests defines the API operations to execute during self-initialization.
+                      Each request becomes a named request block inside an initialize stanza.
+                    items:
+                      description: SelfInitRequest defines a single API operation
+                        to execute during self-initialization.
+                      properties:
+                        allowFailure:
+                          description: |-
+                            AllowFailure allows this request to fail without blocking initialization.
+                            Defaults to false.
+                          type: boolean
+                        auditDevice:
+                          description: |-
+                            AuditDevice configures an audit device when Path starts with "sys/audit/".
+                            This provides structured configuration for audit devices instead of raw JSON.
+                            Only used when Path matches the pattern "sys/audit/*".
+                          properties:
+                            description:
+                              description: Description is an optional description
+                                for the audit device.
+                              type: string
+                            fileOptions:
+                              description: |-
+                                FileOptions configures options for file audit devices.
+                                Only used when Type is "file".
+                              properties:
+                                filePath:
+                                  description: |-
+                                    FilePath is the path to where the audit log will be written.
+                                    Special keywords: "stdout" writes to standard output, "discard" discards output.
+                                  minLength: 1
+                                  type: string
+                                mode:
+                                  description: |-
+                                    Mode is a string containing an octal number representing the bit pattern for the file mode.
+                                    Defaults to "0600" if not specified. Set to "0000" to prevent OpenBao from modifying the file mode.
+                                  type: string
+                              required:
+                              - filePath
+                              type: object
+                            httpOptions:
+                              description: |-
+                                HTTPOptions configures options for HTTP audit devices.
+                                Only used when Type is "http".
+                              properties:
+                                headers:
+                                  description: |-
+                                    Headers is a JSON object describing headers. Must take the shape map[string][]string,
+                                    i.e., an object of headers, with each having one or more values.
+                                    Headers without values will be ignored.
+                                  x-kubernetes-preserve-unknown-fields: true
+                                uri:
+                                  description: URI is the URI of the remote server
+                                    where the audit logs will be written.
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - uri
+                              type: object
+                            socketOptions:
+                              description: |-
+                                SocketOptions configures options for socket audit devices.
+                                Only used when Type is "socket".
+                              properties:
+                                address:
+                                  description: |-
+                                    Address is the socket server address to use.
+                                    Example: "127.0.0.1:9090" or "/tmp/audit.sock".
+                                  type: string
+                                socketType:
+                                  description: |-
+                                    SocketType is the socket type to use, any type compatible with net.Dial is acceptable.
+                                    Defaults to "tcp" if not specified.
+                                  type: string
+                                writeTimeout:
+                                  description: |-
+                                    WriteTimeout is the (deadline) time in seconds to allow writes to be completed over the socket.
+                                    A zero value means that write attempts will not time out.
+                                    Defaults to "2s" if not specified.
+                                  type: string
+                              type: object
+                            syslogOptions:
+                              description: |-
+                                SyslogOptions configures options for syslog audit devices.
+                                Only used when Type is "syslog".
+                              properties:
+                                facility:
+                                  description: |-
+                                    Facility is the syslog facility to use.
+                                    Defaults to "AUTH" if not specified.
+                                  type: string
+                                tag:
+                                  description: |-
+                                    Tag is the syslog tag to use.
+                                    Defaults to "openbao" if not specified.
+                                  type: string
+                              type: object
+                            type:
+                              description: Type is the type of audit device (e.g.,
+                                "file", "syslog", "socket", "http").
+                              enum:
+                              - file
+                              - syslog
+                              - socket
+                              - http
+                              minLength: 1
+                              type: string
+                          required:
+                          - type
+                          type: object
+                        authMethod:
+                          description: |-
+                            AuthMethod configures an auth method when Path starts with "sys/auth/".
+                            This provides structured configuration for enabling auth methods.
+                            Only used when Path matches the pattern "sys/auth/*".
+                          properties:
+                            config:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                Config contains optional configuration for the auth method mount.
+                                Common fields include: default_lease_ttl, max_lease_ttl, listing_visibility, etc.
+                              type: object
+                            description:
+                              description: Description is an optional description
+                                for the auth method.
+                              type: string
+                            type:
+                              description: Type is the type of auth method (e.g.,
+                                "jwt", "kubernetes", "userpass", "ldap").
+                              minLength: 1
+                              type: string
+                          required:
+                          - type
+                          type: object
+                        data:
+                          description: |-
+                            Data contains the request payload for paths that don't have structured types.
+                            This must be a JSON/YAML object whose shape matches the target API endpoint.
+                            Nested maps and lists are supported and are rendered into the initialize stanza as HCL objects.
+
+                            **Note:** For common paths, use structured types instead:
+                            - `sys/audit/*` → use `auditDevice`
+                            - `sys/auth/*` → use `authMethod`
+                            - `sys/mounts/*` → use `secretEngine`
+                            - `sys/policies/*` → use `policy`
+
+                            This payload is stored in the OpenBaoCluster resource and persisted in etcd;
+                            it must not contain sensitive values such as tokens, passwords, or unseal keys.
+                          x-kubernetes-preserve-unknown-fields: true
+                        name:
+                          description: |-
+                            Name is a unique identifier for this request (used as the block name).
+                            Must match regex ^[A-Za-z_][A-Za-z0-9_-]*$
+                          maxLength: 64
+                          minLength: 1
+                          pattern: ^[A-Za-z_][A-Za-z0-9_-]*$
+                          type: string
+                        operation:
+                          allOf:
+                          - enum:
+                            - create
+                            - read
+                            - update
+                            - delete
+                            - list
+                          - enum:
+                            - create
+                            - read
+                            - update
+                            - delete
+                            - list
+                            - patch
+                          description: 'Operation is the API operation type: create,
+                            read, update, delete, or list.'
+                          type: string
+                        path:
+                          description: Path is the API path to call (e.g., "sys/audit/stdout",
+                            "auth/kubernetes/config").
+                          minLength: 1
+                          type: string
+                        policy:
+                          description: |-
+                            Policy configures a policy when Path starts with "sys/policies/".
+                            This provides structured configuration for creating/updating policies.
+                            Only used when Path matches the pattern "sys/policies/*".
+                          properties:
+                            policy:
+                              description: |-
+                                Policy is the HCL or JSON policy content.
+                                This is the actual policy rules that will be applied.
+                              minLength: 1
+                              type: string
+                          required:
+                          - policy
+                          type: object
+                        secretEngine:
+                          description: |-
+                            SecretEngine configures a secret engine when Path starts with "sys/mounts/".
+                            This provides structured configuration for enabling secret engines.
+                            Only used when Path matches the pattern "sys/mounts/*".
+                          properties:
+                            description:
+                              description: Description is an optional description
+                                for the secret engine.
+                              type: string
+                            options:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                Options contains optional configuration specific to the secret engine type.
+                                For KV engines, common options include: version ("1" or "2").
+                                For other engines, options vary by type.
+                              type: object
+                            type:
+                              description: Type is the type of secret engine (e.g.,
+                                "kv", "pki", "transit", "database").
+                              minLength: 1
+                              type: string
+                          required:
+                          - type
+                          type: object
+                      required:
+                      - name
+                      - operation
+                      - path
+                      type: object
+                    type: array
+                required:
+                - enabled
+                type: object
+              sentinel:
+                description: Sentinel configures the high-availability watcher/healer.
+                properties:
+                  debounceWindowSeconds:
+                    default: 2
+                    description: |-
+                      DebounceWindowSeconds controls the debounce window for drift detection.
+                      Multiple drift events within this window will be coalesced into a single trigger.
+                    format: int32
+                    maximum: 60
+                    minimum: 1
+                    type: integer
+                  enabled:
+                    default: true
+                    description: Enabled controls whether the Sentinel sidecar controller
+                      is deployed.
+                    type: boolean
+                  image:
+                    description: |-
+                      Image allows overriding the Sentinel container image.
+                      If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_SENTINEL_IMAGE_REPOSITORY
+                      (default: "ghcr.io/dc-tec/openbao-operator-sentinel") and the tag matches OPERATOR_VERSION.
+                    type: string
+                  resources:
+                    description: |-
+                      Resources allows configuring resource limits for the Sentinel.
+                      If not specified, defaults to requests/limits: 64Mi memory, 100m CPU.
+                    properties:
+                      claims:
+                        description: |-
+                          Claims lists the names of resources, defined in spec.resourceClaims,
+                          that are used by this container.
+
+                          This field depends on the
+                          DynamicResourceAllocation feature gate.
+
+                          This field is immutable. It can only be set for containers.
+                        items:
+                          description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                          properties:
+                            name:
+                              description: |-
+                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                the Pod where this field is used. It makes that resource available
+                                inside a container.
+                              type: string
+                            request:
+                              description: |-
+                                Request is the name chosen for a request in the referenced claim.
+                                If empty, everything from the claim is made available, otherwise
+                                only the result of this request.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Limits describes the maximum amount of compute resources allowed.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Requests describes the minimum amount of compute resources required.
+                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                    type: object
+                required:
+                - enabled
+                type: object
+              service:
+                description: Service configures the primary Service used to expose
+                  OpenBao inside or outside the cluster.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations are additional annotations to apply to
+                      the Service.
+                    type: object
+                  type:
+                    description: Type is the Kubernetes Service type, for example
+                      "ClusterIP" or "LoadBalancer".
+                    type: string
+                type: object
+              storage:
+                description: Storage configures persistent storage for the cluster.
+                properties:
+                  size:
+                    description: Size is the requested persistent volume size, for
+                      example "10Gi".
+                    minLength: 1
+                    type: string
+                  storageClassName:
+                    description: StorageClassName is an optional StorageClass for
+                      the PVCs.
+                    type: string
+                required:
+                - size
+                type: object
+              telemetry:
+                description: |-
+                  Telemetry configures telemetry reporting for the OpenBao cluster.
+                  See: https://openbao.org/docs/configuration/telemetry/
+                properties:
+                  circonusAPIApp:
+                    description: CirconusAPIApp is the API app name for Circonus.
+                    type: string
+                  circonusAPIKey:
+                    description: |-
+                      Circonus-specific options
+                      CirconusAPIKey is the API key for Circonus.
+                    type: string
+                  circonusAPIURL:
+                    description: CirconusAPIURL is the API URL for Circonus.
+                    type: string
+                  circonusBrokerID:
+                    description: CirconusBrokerID is the broker ID for Circonus.
+                    type: string
+                  circonusBrokerSelectTag:
+                    description: CirconusBrokerSelectTag is the broker select tag
+                      for Circonus.
+                    type: string
+                  circonusCheckDisplayName:
+                    description: CirconusCheckDisplayName is the display name for
+                      Circonus.
+                    type: string
+                  circonusCheckForceMetricActivation:
+                    description: CirconusCheckForceMetricActivation forces metric
+                      activation in Circonus.
+                    type: string
+                  circonusCheckID:
+                    description: CirconusCheckID is the check ID for Circonus.
+                    type: string
+                  circonusCheckInstanceID:
+                    description: CirconusCheckInstanceID is the instance ID for Circonus.
+                    type: string
+                  circonusCheckSearchTag:
+                    description: CirconusCheckSearchTag is the search tag for Circonus.
+                    type: string
+                  circonusCheckTags:
+                    description: CirconusCheckTags is the tags for Circonus.
+                    type: string
+                  circonusSubmissionInterval:
+                    description: CirconusSubmissionInterval is the submission interval
+                      for Circonus.
+                    type: string
+                  disableHostname:
+                    description: DisableHostname specifies if gauge values should
+                      be prefixed with the local hostname.
+                    type: boolean
+                  dogStatsdAddress:
+                    description: |-
+                      DogStatsD-specific options
+                      DogStatsdAddress is the address of the DogStatsD server.
+                    type: string
+                  dogStatsdTags:
+                    description: DogStatsdTags are tags to add to all metrics.
+                    items:
+                      type: string
+                    type: array
+                  enableHostnameLabel:
+                    description: EnableHostnameLabel specifies if all metric values
+                      should contain the host label.
+                    type: boolean
+                  leaseMetricsEpsilon:
+                    description: LeaseMetricsEpsilon specifies the size of the bucket
+                      used to measure future lease expiration.
+                    type: string
+                  maximumGaugeCardinality:
+                    description: MaximumGaugeCardinality is the maximum cardinality
+                      of gauge labels.
+                    format: int32
+                    type: integer
+                  metricsPrefix:
+                    description: MetricsPrefix specifies the prefix used for metric
+                      values.
+                    type: string
+                  prometheusRetentionTime:
+                    description: |-
+                      Prometheus-specific options
+                      PrometheusRetentionTime specifies how long to retain metrics in Prometheus format.
+                    type: string
+                  stackdriverDebugLogs:
+                    description: StackdriverDebugLogs specifies if OpenBao writes
+                      additional stackdriver debug logs.
+                    type: boolean
+                  stackdriverLocation:
+                    description: StackdriverLocation is the GCP or AWS region.
+                    type: string
+                  stackdriverNamespace:
+                    description: StackdriverNamespace is a namespace identifier for
+                      the telemetry data.
+                    type: string
+                  stackdriverProjectID:
+                    description: |-
+                      Stackdriver-specific options
+                      StackdriverProjectID is the Google Cloud Project ID.
+                    type: string
+                  statsdAddress:
+                    description: |-
+                      StatsD-specific options
+                      StatsdAddress is the address of the StatsD server.
+                    type: string
+                  statsiteAddress:
+                    description: |-
+                      Statsite-specific options
+                      StatsiteAddress is the address of the statsite server.
+                    type: string
+                  usageGaugePeriod:
+                    description: |-
+                      Common telemetry options
+                      UsageGaugePeriod specifies the interval at which high-cardinality usage data is collected.
+                    type: string
+                type: object
+              tls:
+                description: TLS configures TLS for the cluster.
+                properties:
+                  acme:
+                    description: ACME configures settings when Mode is 'ACME'.
+                    properties:
+                      directoryURL:
+                        description: DirectoryURL is the ACME directory URL (e.g.,
+                          "https://acme-v02.api.letsencrypt.org/directory").
+                        minLength: 1
+                        type: string
+                      domain:
+                        description: Domain is the domain name for which to obtain
+                          the certificate.
+                        minLength: 1
+                        type: string
+                      email:
+                        description: Email is the email address to use for ACME registration.
+                        type: string
+                    required:
+                    - directoryURL
+                    - domain
+                    type: object
+                  enabled:
+                    description: Enabled controls whether TLS is enabled for the cluster.
+                    type: boolean
+                  extraSANs:
+                    description: |-
+                      ExtraSANs lists additional subject alternative names to include in server certificates.
+                      Only used when Mode is OperatorManaged.
+                    items:
+                      type: string
+                    type: array
+                  mode:
+                    allOf:
+                    - enum:
+                      - OperatorManaged
+                      - External
+                      - ACME
+                    - enum:
+                      - OperatorManaged
+                      - External
+                      - ACME
+                    default: OperatorManaged
+                    description: Mode controls who manages the certificate lifecycle.
+                    type: string
+                  rotationPeriod:
+                    description: |-
+                      RotationPeriod is a duration string (for example, "720h") controlling certificate rotation.
+                      Only used when Mode is OperatorManaged.
+                    minLength: 1
+                    type: string
+                required:
+                - enabled
+                type: object
+              unseal:
+                description: |-
+                  Unseal defines the auto-unseal configuration.
+                  If omitted, defaults to "static" mode managed by the operator.
+                properties:
+                  awskms:
+                    description: |-
+                      AWSKMS configures the AWS KMS seal type.
+                      Required when Type is "awskms".
+                    properties:
+                      accessKey:
+                        description: |-
+                          AccessKey is the AWS access key ID to use.
+                          Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity (IRSA) instead.
+                        type: string
+                      endpoint:
+                        description: |-
+                          Endpoint is the KMS API endpoint to be used for AWS KMS requests.
+                          Useful when connecting to KMS over a VPC Endpoint.
+                        type: string
+                      kmsKeyID:
+                        description: |-
+                          KMSKeyID is the AWS KMS key ID or ARN to use for encryption and decryption.
+                          An alias in the format "alias/key-alias-name" may also be used.
+                        minLength: 1
+                        type: string
+                      region:
+                        description: Region is the AWS region where the encryption
+                          key lives.
+                        minLength: 1
+                        type: string
+                      secretKey:
+                        description: |-
+                          SecretKey is the AWS secret access key to use.
+                          Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity (IRSA) instead.
+                        type: string
+                      sessionToken:
+                        description: SessionToken specifies the AWS session token.
+                        type: string
+                    required:
+                    - kmsKeyID
+                    - region
+                    type: object
+                  azureKeyVault:
+                    description: |-
+                      AzureKeyVault configures the Azure Key Vault seal type.
+                      Required when Type is "azurekeyvault".
+                    properties:
+                      clientID:
+                        description: ClientID is the Azure client ID.
+                        type: string
+                      clientSecret:
+                        description: |-
+                          ClientSecret is the Azure client secret.
+                          Note: It is strongly recommended to use CredentialsSecretRef or Managed Service Identity instead.
+                        type: string
+                      environment:
+                        description: Environment is the Azure environment (e.g., "AzurePublicCloud",
+                          "AzureUSGovernmentCloud").
+                        type: string
+                      keyName:
+                        description: KeyName is the name of the key in the Azure Key
+                          Vault.
+                        minLength: 1
+                        type: string
+                      resource:
+                        description: |-
+                          Resource is the Azure AD resource endpoint.
+                          For Managed HSM, this should usually be "managedhsm.azure.net".
+                        type: string
+                      tenantID:
+                        description: TenantID is the Azure tenant ID.
+                        type: string
+                      vaultName:
+                        description: VaultName is the name of the Azure Key Vault.
+                        minLength: 1
+                        type: string
+                    required:
+                    - keyName
+                    - vaultName
+                    type: object
+                  credentialsSecretRef:
+                    description: |-
+                      CredentialsSecretRef references a Secret containing provider credentials
+                      (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON, Azure client secret, etc.).
+                      If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  gcpCloudKMS:
+                    description: |-
+                      GCPCloudKMS configures the GCP Cloud KMS seal type.
+                      Required when Type is "gcpckms".
+                    properties:
+                      credentials:
+                        description: |-
+                          Credentials is the path to the GCP credentials JSON file.
+                          Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity instead.
+                        type: string
+                      cryptoKey:
+                        description: CryptoKey is the name of the GCP KMS crypto key.
+                        minLength: 1
+                        type: string
+                      keyRing:
+                        description: KeyRing is the name of the GCP KMS key ring.
+                        minLength: 1
+                        type: string
+                      project:
+                        description: Project is the GCP project ID.
+                        minLength: 1
+                        type: string
+                      region:
+                        description: Region is the GCP region where the key ring lives.
+                        minLength: 1
+                        type: string
+                    required:
+                    - cryptoKey
+                    - keyRing
+                    - project
+                    - region
+                    type: object
+                  kmip:
+                    description: |-
+                      KMIP configures the KMIP seal type.
+                      Required when Type is "kmip".
+                    properties:
+                      address:
+                        description: Address is the address of the KMIP server.
+                        minLength: 1
+                        type: string
+                      caCert:
+                        description: CACert is the path to the CA certificate for
+                          KMIP communication.
+                        type: string
+                      certificate:
+                        description: Certificate is the path to the client certificate
+                          for KMIP communication.
+                        type: string
+                      key:
+                        description: Key is the path to the private key for KMIP communication.
+                        type: string
+                      tlsServerName:
+                        description: TLSServerName is the SNI host name to use when
+                          connecting via TLS.
+                        type: string
+                      tlsSkipVerify:
+                        description: TLSSkipVerify disables verification of TLS certificates.
+                        type: boolean
+                    required:
+                    - address
+                    type: object
+                  ocikms:
+                    description: |-
+                      OCIKMS configures the OCI KMS seal type.
+                      Required when Type is "ocikms".
+                    properties:
+                      authType:
+                        description: AuthType is the authentication type (e.g., "instance_principal",
+                          "user_principal").
+                        type: string
+                      compartmentID:
+                        description: CompartmentID is the OCID of the compartment
+                          containing the key.
+                        type: string
+                      cryptoEndpoint:
+                        description: CryptoEndpoint is the OCI KMS crypto endpoint.
+                        minLength: 1
+                        type: string
+                      keyID:
+                        description: KeyID is the OCID of the master encryption key.
+                        minLength: 1
+                        type: string
+                      managementEndpoint:
+                        description: ManagementEndpoint is the OCI KMS management
+                          endpoint.
+                        minLength: 1
+                        type: string
+                    required:
+                    - cryptoEndpoint
+                    - keyID
+                    - managementEndpoint
+                    type: object
+                  pkcs11:
+                    description: |-
+                      PKCS11 configures the PKCS#11 seal type.
+                      Required when Type is "pkcs11".
+                    properties:
+                      generateKey:
+                        description: GenerateKey indicates whether OpenBao should
+                          generate the key if it doesn't exist.
+                        type: boolean
+                      hmacKeyLabel:
+                        description: HMACKeyLabel is the label for the HMAC key used
+                          by OpenBao.
+                        type: string
+                      keyLabel:
+                        description: KeyLabel is the label for the encryption key
+                          used by OpenBao.
+                        minLength: 1
+                        type: string
+                      lib:
+                        description: Lib is the path to the PKCS#11 library provided
+                          by the HSM vendor.
+                        minLength: 1
+                        type: string
+                      pin:
+                        description: |-
+                          PIN is the PIN for accessing the HSM token.
+                          Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly.
+                        type: string
+                      rsaEncryptLocal:
+                        description: RSAEncryptLocal allows performing encryption
+                          locally for HSMs that don't support encryption for RSA keys.
+                        type: boolean
+                      rsaOAEPHash:
+                        description: |-
+                          RSAOAEPHash specifies the hash algorithm to use for RSA with OAEP padding.
+                          Valid values: sha1, sha224, sha256, sha384, sha512.
+                        enum:
+                        - sha1
+                        - sha224
+                        - sha256
+                        - sha384
+                        - sha512
+                        type: string
+                      slot:
+                        description: Slot is the slot number where the HSM token is
+                          located.
+                        type: string
+                    required:
+                    - keyLabel
+                    - lib
+                    type: object
+                  static:
+                    description: |-
+                      Static configures the static seal type.
+                      Optional when Type is "static" (operator provides defaults if omitted).
+                    properties:
+                      currentKey:
+                        description: |-
+                          CurrentKey is the path to the static unseal key file.
+                          Defaults to "file:///etc/bao/unseal/key" (operator-managed).
+                        type: string
+                      currentKeyID:
+                        description: |-
+                          CurrentKeyID is the identifier for the current unseal key.
+                          Defaults to "operator-generated-v1" (operator-managed).
+                        type: string
+                    type: object
+                  transit:
+                    description: |-
+                      Transit configures the Transit seal type.
+                      Required when Type is "transit".
+                    properties:
+                      address:
+                        description: Address is the full address to the OpenBao cluster.
+                        minLength: 1
+                        type: string
+                      disableRenewal:
+                        description: |-
+                          DisableRenewal disables automatic token renewal.
+                          Set to true if token lifecycle is managed externally (e.g., by OpenBao Agent).
+                        type: boolean
+                      keyName:
+                        description: KeyName is the transit key to use for encryption
+                          and decryption.
+                        minLength: 1
+                        type: string
+                      mountPath:
+                        description: MountPath is the mount path to the transit secret
+                          engine.
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: Namespace is the namespace path to the transit
+                          secret engine.
+                        type: string
+                      tlsCACert:
+                        description: TLSCACert is the path to the CA certificate file
+                          for TLS communication.
+                        type: string
+                      tlsClientCert:
+                        description: TLSClientCert is the path to the client certificate
+                          for TLS communication.
+                        type: string
+                      tlsClientKey:
+                        description: TLSClientKey is the path to the private key for
+                          TLS communication.
+                        type: string
+                      tlsServerName:
+                        description: TLSServerName is the SNI host name to use when
+                          connecting via TLS.
+                        type: string
+                      tlsSkipVerify:
+                        description: |-
+                          TLSSkipVerify disables verification of TLS certificates.
+                          Using this option is highly discouraged and decreases security.
+                        type: boolean
+                      token:
+                        description: |-
+                          Token is the OpenBao token to use for authentication.
+                          Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly.
+                        type: string
+                    required:
+                    - address
+                    - keyName
+                    - mountPath
+                    type: object
+                  type:
+                    default: static
+                    description: |-
+                      Type specifies the seal type.
+                      Defaults to "static".
+                    enum:
+                    - static
+                    - awskms
+                    - gcpckms
+                    - azurekeyvault
+                    - transit
+                    - kmip
+                    - ocikms
+                    - pkcs11
+                    type: string
+                type: object
+              updateStrategy:
+                description: UpdateStrategy controls how the operator handles version
+                  changes.
+                properties:
+                  blueGreen:
+                    description: BlueGreen configures the behavior when Type is BlueGreen.
+                    properties:
+                      autoPromote:
+                        default: true
+                        description: |-
+                          AutoPromote controls whether the operator automatically switches traffic
+                          and deletes the old cluster after sync. If false, it pauses at PhaseSynced
+                          waiting for manual approval (annotation or field update).
+                        type: boolean
+                      autoRollback:
+                        description: AutoRollback configures automatic rollback behavior.
+                        properties:
+                          enabled:
+                            default: true
+                            description: Enabled controls whether automatic rollback
+                              is active.
+                            type: boolean
+                          onJobFailure:
+                            default: true
+                            description: |-
+                              OnJobFailure triggers rollback when job failures exceed MaxJobFailures.
+                              Only applies during early phases (before TrafficSwitching).
+                            type: boolean
+                          onTrafficFailure:
+                            default: false
+                            description: |-
+                              OnTrafficFailure triggers rollback if Green fails health checks
+                              during TrafficSwitching phase (stabilization period).
+                            type: boolean
+                          onValidationFailure:
+                            default: true
+                            description: OnValidationFailure triggers rollback if
+                              pre-promotion hook fails.
+                            type: boolean
+                          stabilizationSeconds:
+                            default: 60
+                            description: |-
+                              StabilizationSeconds is the observation period during TrafficSwitching.
+                              Green must remain healthy for this duration before proceeding to DemotingBlue.
+                            format: int32
+                            minimum: 0
+                            type: integer
+                        required:
+                        - enabled
+                        type: object
+                      maxJobFailures:
+                        default: 5
+                        description: |-
+                          MaxJobFailures is the maximum consecutive job failures before aborting/rolling back.
+                          Defaults to 5 if not specified.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                      preUpgradeSnapshot:
+                        description: |-
+                          PreUpgradeSnapshot triggers a backup at the start of an upgrade.
+                          Creates a recovery point before any changes are made.
+                          Requires spec.backup to be configured.
+                        type: boolean
+                      trafficStrategy:
+                        description: |-
+                          TrafficStrategy controls how traffic is routed during blue/green upgrades.
+                          When empty, the effective strategy defaults to ServiceSelectors when
+                          Gateway is disabled, and GatewayWeights when spec.gateway.enabled is true.
+                        enum:
+                        - ServiceSelectors
+                        - GatewayWeights
+                        type: string
+                      verification:
+                        description: VerificationConfig allows defining custom health
+                          checks before promotion.
+                        properties:
+                          minSyncDuration:
+                            description: |-
+                              MinSyncDuration ensures the Green cluster stays healthy as a non-voter
+                              for at least this duration before promotion (e.g., "5m").
+                            type: string
+                          postSwitchHook:
+                            description: |-
+                              PostSwitchHook specifies a Job template to run after switching traffic
+                              to the Green cluster. The job must complete successfully (exit 0) before
+                              the upgrade proceeds beyond the TrafficSwitching phase. If the job fails
+                              and auto-rollback on traffic failure is enabled, the operator triggers
+                              a rollback; otherwise, the upgrade remains paused in TrafficSwitching
+                              until manually resolved.
+                            properties:
+                              args:
+                                description: Args are arguments passed to the command.
+                                items:
+                                  type: string
+                                type: array
+                              command:
+                                description: Command is the command to run.
+                                items:
+                                  type: string
+                                type: array
+                              image:
+                                description: Image is the container image for the
+                                  validation job.
+                                minLength: 1
+                                type: string
+                              timeoutSeconds:
+                                default: 300
+                                description: 'TimeoutSeconds is the job timeout (default:
+                                  300s).'
+                                format: int32
+                                type: integer
+                            required:
+                            - image
+                            type: object
+                          prePromotionHook:
+                            description: |-
+                              PrePromotionHook specifies a Job template to run before promoting Green.
+                              The job must complete successfully (exit 0) for promotion to proceed.
+                              If the job fails, the upgrade enters a paused state until manually resolved.
+                            properties:
+                              args:
+                                description: Args are arguments passed to the command.
+                                items:
+                                  type: string
+                                type: array
+                              command:
+                                description: Command is the command to run.
+                                items:
+                                  type: string
+                                type: array
+                              image:
+                                description: Image is the container image for the
+                                  validation job.
+                                minLength: 1
+                                type: string
+                              timeoutSeconds:
+                                default: 300
+                                description: 'TimeoutSeconds is the job timeout (default:
+                                  300s).'
+                                format: int32
+                                type: integer
+                            required:
+                            - image
+                            type: object
+                        type: object
+                    required:
+                    - autoPromote
+                    type: object
+                  type:
+                    default: RollingUpdate
+                    description: Type controls how the operator handles version changes.
+                    enum:
+                    - RollingUpdate
+                    - BlueGreen
+                    type: string
+                type: object
+              upgrade:
+                description: |-
+                  Upgrade configures upgrade operations.
+
+                  When spec.upgrade.preUpgradeSnapshot is true, if upgrade authentication is not
+                  Upgrade authentication must be explicitly configured via spec.upgrade.jwtAuthRole
+                  or spec.upgrade.tokenSecretRef. The operator automatically creates an upgrade ServiceAccount
+                  (<cluster-name>-upgrade-serviceaccount) for JWT Auth authentication.
+                properties:
+                  executorImage:
+                    description: |-
+                      ExecutorImage is the container image to use for upgrade operations.
+
+                      This image is used by Kubernetes Jobs created during upgrades (for example, blue/green
+                      cluster orchestration actions). The executor runs inside the tenant namespace and
+                      authenticates to OpenBao using a projected ServiceAccount token (JWT auth).
+                    type: string
+                  jwtAuthRole:
+                    description: |-
+                      JWTAuthRole is the name of the JWT Auth role configured in OpenBao
+                      for upgrade operations. When set, the upgrade manager will use JWT Auth
+                      (projected ServiceAccount token) instead of a static token. This is the preferred authentication
+                      method as tokens are automatically rotated by Kubernetes.
+
+                      The role must be configured in OpenBao and must grant:
+                      - "read" capability on sys/health
+                      - "update" capability on sys/step-down
+                      - "read" capability on sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
+                      The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),
+                      which is automatically created by the operator.
+
+                      Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
+                    type: string
+                  preUpgradeSnapshot:
+                    description: |-
+                      PreUpgradeSnapshot, when true, triggers a backup before any upgrade.
+                      When enabled, the upgrade manager will create a backup using the backup
+                      configuration (spec.backup.target, spec.backup.executorImage, etc.) and
+                      wait for it to complete before proceeding with the upgrade.
+
+                      If the backup fails, the upgrade will be blocked and a Degraded condition
+                      will be set with Reason=PreUpgradeBackupFailed.
+
+                      Requires spec.backup to be configured with target, executorImage, and
+                      authentication (jwtAuthRole or tokenSecretRef).
+                    type: boolean
+                  tokenSecretRef:
+                    description: |-
+                      TokenSecretRef optionally references a Secret containing an OpenBao API
+                      token to use for upgrade operations.
+
+                      The token must have permission to:
+                      - read sys/health
+                      - update sys/step-down
+                      - read sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
+
+                      Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
+                      If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                type: object
+              version:
+                description: |-
+                  Version is the semantic OpenBao version, used for upgrade orchestration.
+                  The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.
+                  Versions below 2.4.0 do not support the static seal feature and will fail to start.
+                minLength: 1
+                type: string
+              workloadHardening:
+                description: WorkloadHardening configures opt-in workload hardening
+                  features.
+                properties:
+                  appArmorEnabled:
+                    description: |-
+                      AppArmorEnabled controls whether the operator sets AppArmor profiles on
+                      generated Pods and Jobs. Some Kubernetes environments do not support AppArmor;
+                      this is opt-in to avoid scheduling failures.
+                    type: boolean
+                type: object
+            required:
+            - image
+            - replicas
+            - storage
+            - tls
+            - version
+            type: object
+            x-kubernetes-validations:
+            - message: spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged
+              rule: self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod)
+                > 0
+          status:
+            description: Status defines the observed state of OpenBaoCluster.
+            properties:
+              activeLeader:
+                description: ActiveLeader is the current Raft leader pod name, for
+                  example "prod-cluster-0".
+                type: string
+              backup:
+                description: Backup tracks the state of backups for this cluster.
+                properties:
+                  consecutiveFailures:
+                    description: ConsecutiveFailures is the number of consecutive
+                      backup failures.
+                    format: int32
+                    type: integer
+                  lastAttemptScheduledTime:
+                    description: |-
+                      LastAttemptScheduledTime is the scheduled time of the last backup attempt.
+                      It is derived from the cron schedule and used to ensure at-most-once execution
+                      per scheduled window.
+                    format: date-time
+                    type: string
+                  lastAttemptTime:
+                    description: |-
+                      LastAttemptTime is the timestamp of the last backup attempt, regardless of outcome.
+                      This is used to avoid retry loops when a scheduled backup fails.
+                    format: date-time
+                    type: string
+                  lastBackupDuration:
+                    description: LastBackupDuration is how long the last backup took
+                      (e.g., "45s").
+                    type: string
+                  lastBackupName:
+                    description: LastBackupName is the object key/path of the last
+                      successful backup.
+                    type: string
+                  lastBackupSize:
+                    description: LastBackupSize is the size in bytes of the last successful
+                      backup.
+                    format: int64
+                    type: integer
+                  lastBackupTime:
+                    description: LastBackupTime is the timestamp of the last successful
+                      backup.
+                    format: date-time
+                    type: string
+                  lastFailureReason:
+                    description: LastFailureReason describes why the last backup failed
+                      (if applicable).
+                    type: string
+                  nextScheduledBackup:
+                    description: NextScheduledBackup is when the next backup is scheduled.
+                    format: date-time
+                    type: string
+                type: object
+              blueGreen:
+                description: BlueGreen tracks the state of blue/green upgrades (if
+                  enabled).
+                properties:
+                  blueRevision:
+                    description: BlueRevision is the hash/name of the currently active
+                      cluster.
+                    type: string
+                  greenRevision:
+                    description: GreenRevision is the hash/name of the next cluster
+                      (if upgrade in progress).
+                    type: string
+                  jobFailureCount:
+                    description: |-
+                      JobFailureCount tracks consecutive job failures in the current phase.
+                      Reset to 0 on phase transition or successful job completion.
+                    format: int32
+                    type: integer
+                  lastJobFailure:
+                    description: LastJobFailure records the name of the last failed
+                      job for debugging.
+                    type: string
+                  phase:
+                    description: Phase is the current phase of the blue/green upgrade.
+                    enum:
+                    - Idle
+                    - DeployingGreen
+                    - JoiningMesh
+                    - Syncing
+                    - Promoting
+                    - TrafficSwitching
+                    - DemotingBlue
+                    - Cleanup
+                    - RollingBack
+                    - RollbackCleanup
+                    type: string
+                  preUpgradeSnapshotJobName:
+                    description: PreUpgradeSnapshotJobName is the name of the backup
+                      job triggered at upgrade start.
+                    type: string
+                  rollbackAttempt:
+                    description: |-
+                      RollbackAttempt increments each time rollback automation is retried.
+                      It is used to produce stable, deterministic Job names per attempt.
+                    format: int32
+                    type: integer
+                  rollbackReason:
+                    description: RollbackReason records why a rollback was triggered
+                      (if any).
+                    type: string
+                  rollbackStartTime:
+                    description: RollbackStartTime is when the rollback was initiated.
+                    format: date-time
+                    type: string
+                  startTime:
+                    description: StartTime is when the current phase began.
+                    format: date-time
+                    type: string
+                  trafficStep:
+                    description: |-
+                      TrafficStep indicates the current traffic shifting step when using
+                      GatewayWeights traffic strategy. It is used by the infra layer to
+                      derive Gateway backend weights. The operator treats 0 as initial
+                      state (100% Blue), 1 as canary (e.g., 90/10), 2 as mid-step (e.g., 50/50),
+                      and 3 as final (0/100).
+                    format: int32
+                    type: integer
+                  trafficSwitchedTime:
+                    description: |-
+                      TrafficSwitchedTime records when traffic was switched to Green.
+                      Used for calculating stabilization period.
+                    format: date-time
+                    type: string
+                type: object
+              breakGlass:
+                description: |-
+                  BreakGlass records when the operator has halted quorum-risk automation and requires
+                  explicit operator acknowledgment to continue.
+                properties:
+                  acknowledgedAt:
+                    description: AcknowledgedAt records when break glass was acknowledged.
+                    format: date-time
+                    type: string
+                  active:
+                    description: Active indicates whether break glass mode is currently
+                      active.
+                    type: boolean
+                  enteredAt:
+                    description: EnteredAt is when break glass mode became active.
+                    format: date-time
+                    type: string
+                  message:
+                    description: Message provides a short summary of the detected
+                      unsafe state.
+                    type: string
+                  nonce:
+                    description: Nonce is the acknowledgment token required to resume
+                      automation.
+                    type: string
+                  reason:
+                    description: Reason is a stable, typed reason for entering break
+                      glass mode.
+                    enum:
+                    - RollbackConsensusRepairFailed
+                    type: string
+                  steps:
+                    description: Steps provides deterministic recovery guidance.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              conditions:
+                description: Conditions represent the current state of the OpenBaoCluster
+                  resource.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              currentVersion:
+                description: CurrentVersion is the OpenBao version currently running
+                  on the cluster.
+                type: string
+              drift:
+                description: Drift tracks drift detection and correction events for
+                  this cluster.
+                properties:
+                  consecutiveFastPaths:
+                    description: |-
+                      ConsecutiveFastPaths tracks consecutive Sentinel-triggered reconciliations
+                      without a full reconcile. Reset to 0 after each full reconcile.
+                    format: int32
+                    type: integer
+                  driftCorrectionCount:
+                    description: DriftCorrectionCount is the total number of times
+                      drift has been detected and corrected.
+                    format: int32
+                    type: integer
+                  lastCorrectionTime:
+                    description: LastCorrectionTime is the timestamp when drift was
+                      last corrected by the operator.
+                    format: date-time
+                    type: string
+                  lastDriftDetected:
+                    description: LastDriftDetected is the timestamp when drift was
+                      last detected by Sentinel.
+                    format: date-time
+                    type: string
+                  lastDriftResource:
+                    description: |-
+                      LastDriftResource is the resource that triggered the last drift detection
+                      (e.g., "Service/sentinel-cluster" or "StatefulSet/sentinel-cluster").
+                    type: string
+                  lastFullReconcileTime:
+                    description: |-
+                      LastFullReconcileTime is the timestamp of the last full reconciliation
+                      (including UpgradeManager and BackupManager). Used to prevent Sentinel-triggered
+                      fast path from indefinitely blocking administrative operations.
+                    format: date-time
+                    type: string
+                type: object
+              initialized:
+                description: |-
+                  Initialized indicates whether the OpenBao cluster has been initialized.
+                  This is set to true after the first pod is initialized using bao operator init
+                  or after self-initialization completes.
+                type: boolean
+              lastBackupTime:
+                description: |-
+                  LastBackupTime is the timestamp of the last successful backup, if configured.
+                  Deprecated: Use Backup.LastBackupTime instead.
+                format: date-time
+                type: string
+              operationLock:
+                description: |-
+                  OperationLock prevents concurrent long-running operations (upgrade/backup/restore)
+                  from acting on the same cluster at the same time.
+                properties:
+                  acquiredAt:
+                    description: AcquiredAt is when the lock was first acquired.
+                    format: date-time
+                    type: string
+                  holder:
+                    description: Holder is a stable identifier for the lock holder
+                      (controller/component).
+                    type: string
+                  message:
+                    description: Message provides human-readable context for why the
+                      lock is held.
+                    type: string
+                  operation:
+                    description: Operation is the operation currently holding the
+                      lock.
+                    enum:
+                    - Upgrade
+                    - Backup
+                    - Restore
+                    type: string
+                  renewedAt:
+                    description: RenewedAt is updated when the holder reasserts the
+                      lock during reconciliation.
+                    format: date-time
+                    type: string
+                type: object
+              phase:
+                description: Phase is a high-level summary of the cluster state.
+                enum:
+                - Initializing
+                - Running
+                - Upgrading
+                - BackingUp
+                - Failed
+                type: string
+              readyReplicas:
+                description: ReadyReplicas is the number of replicas that are currently
+                  Ready.
+                format: int32
+                type: integer
+              selfInitialized:
+                description: |-
+                  SelfInitialized indicates whether the cluster was initialized using
+                  OpenBao's self-initialization feature. When true, no root token Secret
+                  exists for this cluster (the root token was auto-revoked).
+                type: boolean
+              upgrade:
+                description: |-
+                  Upgrade tracks the state of an in-progress upgrade (if any).
+                  When non-nil, an upgrade is in progress and the UpgradeManager is orchestrating
+                  the pod-by-pod rolling update with leader step-down.
+                properties:
+                  completedPods:
+                    description: CompletedPods lists ordinals of pods that have been
+                      successfully upgraded.
+                    items:
+                      format: int32
+                      type: integer
+                    type: array
+                  currentPartition:
+                    description: CurrentPartition is the current StatefulSet partition
+                      value.
+                    format: int32
+                    type: integer
+                  fromVersion:
+                    description: FromVersion is the version being upgraded from.
+                    type: string
+                  lastStepDownTime:
+                    description: LastStepDownTime records when the last leader step-down
+                      was performed.
+                    format: date-time
+                    type: string
+                  startedAt:
+                    description: StartedAt is when the upgrade began.
+                    format: date-time
+                    type: string
+                  targetVersion:
+                    description: TargetVersion is the version being upgraded to.
+                    type: string
+                required:
+                - currentPartition
+                - fromVersion
+                - targetVersion
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

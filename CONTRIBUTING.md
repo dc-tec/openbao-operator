@@ -17,5 +17,6 @@ make lint-config lint
 make verify-fmt
 make verify-tidy
 make verify-generated
+make verify-helm
 make test-ci
 ```

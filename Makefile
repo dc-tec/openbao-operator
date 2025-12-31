@@ -113,6 +113,26 @@ verify-generated: manifests generate ## Verify generated artifacts are up-to-dat
 		exit 1; \
 	}
 
+.PHONY: helm-sync
+helm-sync: ## Sync Helm chart generated inputs (CRDs and installer template).
+	@$(MAKE) build-installer \
+		IMG=controller:latest \
+		OPERATOR_VERSION=v0.0.0 \
+		OPERATOR_SENTINEL_IMAGE_REPOSITORY=ghcr.io/dc-tec/openbao-operator-sentinel
+	@go run ./hack/helmchart \
+		-in dist/install.yaml \
+		-out charts/openbao-operator/files/install.yaml.tpl
+
+.PHONY: verify-helm
+verify-helm: helm-sync ## Verify Helm chart generated inputs are up-to-date (does not modify tracked files).
+	@{ \
+		git diff --exit-code -- charts/openbao-operator/crds charts/openbao-operator/files/install.yaml.tpl; \
+	} || { \
+		echo "Helm chart generated inputs are out of date. Run 'make helm-sync' and commit the result."; \
+		git --no-pager diff -- charts/openbao-operator/crds charts/openbao-operator/files/install.yaml.tpl; \
+		exit 1; \
+	}
+
 .PHONY: test-update-golden
 test-update-golden: ## Update golden files for HCL generation tests. Run this when modifying internal/config/builder.go or related config generation logic.
 	UPDATE_GOLDEN=true go test ./internal/config/... -v

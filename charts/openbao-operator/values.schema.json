@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "digest": { "type": "string" },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      },
+      "required": ["repository", "pullPolicy"]
+    },
+    "operatorVersion": { "type": "string" },
+    "sentinel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "imageRepository": { "type": "string", "minLength": 1 }
+      },
+      "required": ["imageRepository"]
+    }
+  },
+  "required": ["image", "sentinel"]
+}

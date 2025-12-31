@@ -14,7 +14,7 @@ This page maps the OpenBao Operator SDLC (software development lifecycle) to con
 ## Implement
 
 - Coding standards: `AGENTS.md`
-- Development setup: `docs/contributing/development.md`
+- Development setup: `docs/contributing/getting-started/development.md`
 
 ## Review
 

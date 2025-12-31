@@ -1,0 +1,6 @@
+apiVersion: v2
+name: openbao-operator
+description: OpenBao Operator installs the OpenBao Kubernetes operator and its required cluster-scoped resources.
+type: application
+version: 0.0.0
+appVersion: v0.0.0

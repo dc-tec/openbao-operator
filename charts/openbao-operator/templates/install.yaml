@@ -1,0 +1,5 @@
+{{- /*
+This chart renders the operator's non-CRD resources from a curated installer manifest.
+CRDs are rendered separately to support Helm-managed lifecycle.
+*/ -}}
+{{- tpl (.Files.Get "files/install.yaml.tpl") . -}}

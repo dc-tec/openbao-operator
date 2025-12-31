@@ -55,6 +55,25 @@ Releases are created via `.github/workflows/release.yml` (manual `workflow_dispa
 - `oci://ghcr.io/<org>/charts/openbao-operator:<chart-version>`
 - Chart version is the semver **without** the leading `v` (e.g. `0.1.0`), while `appVersion` remains `v0.1.0`.
 
+## Maintaining the Helm Chart
+
+The Helm chart is maintained as a first-class install path, with a small “generated surface area”:
+
+- **CRDs** are generated from Go types into `config/crd/bases/*.yaml` and synced into `charts/openbao-operator/crds/`.
+- The chart’s installer template `charts/openbao-operator/files/install.yaml.tpl` is derived from `dist/install.yaml` with Helm templating applied.
+
+To sync these inputs after changing API types or manifests:
+
+```sh
+make helm-sync
+```
+
+To validate that the chart inputs are up-to-date (CI gate):
+
+```sh
+make verify-helm
+```
+
 ### Installer Manifest
 
 - GitHub Release asset: `dist/install.yaml` (digest-pinned operator image)
@@ -91,6 +110,14 @@ helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
   --set image.repository=ghcr.io/dc-tec/openbao-operator \
   --set image.digest=sha256:...
 ```
+
+### CRD upgrades and Helm
+
+Helm does not reliably upgrade CRDs from the chart `crds/` directory on `helm upgrade`.
+For releases that change CRDs, the recommended process is:
+
+1. Apply updated CRDs from the GitHub Release assets (or from `config/crd/bases/`) first.
+2. Then run `helm upgrade`.
 
 ## Operator Versioning Notes
 
