@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
-	"github.com/openbao/operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 // testClusterName is the cluster name used in drift predicate tests.

@@ -4,7 +4,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/openbao/operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 const (

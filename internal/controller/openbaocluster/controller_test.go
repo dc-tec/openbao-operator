@@ -35,10 +35,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	"github.com/openbao/operator/internal/admission"
-	"github.com/openbao/operator/internal/constants"
-	"github.com/openbao/operator/internal/infra"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/admission"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/infra"
 )
 
 var _ = Describe("OpenBaoCluster Controller", func() {

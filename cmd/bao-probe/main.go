@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/openbao/operator/internal/constants"
-	"github.com/openbao/operator/internal/probe"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/probe"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
 var (

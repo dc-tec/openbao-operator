@@ -24,9 +24,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	"github.com/openbao/operator/internal/constants"
-	operatorerrors "github.com/openbao/operator/internal/errors"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 )
 
 const (

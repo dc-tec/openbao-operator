@@ -35,9 +35,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	provisionercontroller "github.com/openbao/operator/internal/controller/provisioner"
-	"github.com/openbao/operator/internal/provisioner"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	provisionercontroller "github.com/dc-tec/openbao-operator/internal/controller/provisioner"
+	"github.com/dc-tec/openbao-operator/internal/provisioner"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )

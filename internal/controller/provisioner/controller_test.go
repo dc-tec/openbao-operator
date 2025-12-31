@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	"github.com/openbao/operator/internal/provisioner"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/provisioner"
 )
 
 var testScheme = func() *runtime.Scheme {

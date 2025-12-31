@@ -34,7 +34,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

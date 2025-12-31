@@ -28,7 +28,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/openbao/operator/test/utils"
+	"github.com/dc-tec/openbao-operator/test/utils"
 )
 
 // serviceAccountName created for the project

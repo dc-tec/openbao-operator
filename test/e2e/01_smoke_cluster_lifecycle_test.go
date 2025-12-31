@@ -21,8 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	"github.com/openbao/operator/test/e2e/framework"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 )
 
 var _ = Describe("Smoke: Tenant + Cluster lifecycle", Label("smoke", "critical", "tenant", "cluster"), Ordered, func() {

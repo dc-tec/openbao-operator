@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openbao/operator/internal/constants"
-	"github.com/openbao/operator/internal/storage"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/storage"
 )
 
 // ExecutorConfig holds the backup executor configuration.

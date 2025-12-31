@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/openbao/operator/internal/storage"
+	"github.com/dc-tec/openbao-operator/internal/storage"
 )
 
 // RetentionPolicy defines the retention policy for backups.

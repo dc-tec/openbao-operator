@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openbao/operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 func TestExecutorConfig_Validate(t *testing.T) {

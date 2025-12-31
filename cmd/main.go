@@ -26,8 +26,8 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/openbao/operator/cmd/controller"
-	"github.com/openbao/operator/cmd/provisioner"
+	"github.com/dc-tec/openbao-operator/cmd/controller"
+	"github.com/dc-tec/openbao-operator/cmd/provisioner"
 )
 
 var (

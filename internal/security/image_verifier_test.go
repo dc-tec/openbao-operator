@@ -8,7 +8,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-const testImageDigest = "test-image@sha256:abc123"
+const (
+	testImageDigest = "test-image@sha256:abc123"
+	testOIDCIssuer  = "https://token.actions.githubusercontent.com"
+	testOIDCSubject = "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v2.0.0"
+)
 
 func TestNewImageVerifier(t *testing.T) {
 	logger := logr.Discard()
@@ -58,7 +62,7 @@ func TestImageVerifier_Verify_KeylessMissingIssuer(t *testing.T) {
 
 	ctx := context.Background()
 	config := VerifyConfig{
-		Subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0",
+		Subject: testOIDCSubject,
 	}
 	_, err := verifier.Verify(ctx, "test-image:latest", config)
 
@@ -184,7 +188,7 @@ func TestVerificationCache_MarkVerifiedByKey(t *testing.T) {
 
 	cacheKey1 := "test-image-1@sha256:abc123@key:1234567890abcdef"
 	cacheKey2 := "test-image-2@sha256:def456@key:fedcba0987654321"
-	cacheKey3 := "test-image-1@sha256:abc123@oidc:https://token.actions.githubusercontent.com|https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0"
+	cacheKey3 := "test-image-1@sha256:abc123@oidc:" + testOIDCIssuer + "|" + testOIDCSubject
 
 	// Mark first image as verified
 	cache.markVerifiedByKey(cacheKey1)
@@ -321,12 +325,12 @@ func TestImageVerifier_CacheKey_Keyless(t *testing.T) {
 
 	digest := testImageDigest
 	config := VerifyConfig{
-		Issuer:  "https://token.actions.githubusercontent.com",
-		Subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0",
+		Issuer:  testOIDCIssuer,
+		Subject: testOIDCSubject,
 	}
 
 	key := verifier.cacheKey(digest, config)
-	expectedPrefix := testImageDigest + "@oidc:https://token.actions.githubusercontent.com|https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0"
+	expectedPrefix := testImageDigest + "@oidc:" + testOIDCIssuer + "|" + testOIDCSubject
 
 	if key != expectedPrefix {
 		t.Errorf("cacheKey() = %v, want %v", key, expectedPrefix)
@@ -349,8 +353,8 @@ func TestImageVerifier_CacheKey_DifferentModes(t *testing.T) {
 		PublicKey: "test-key",
 	}
 	keylessConfig := VerifyConfig{
-		Issuer:  "https://token.actions.githubusercontent.com",
-		Subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.0.0",
+		Issuer:  testOIDCIssuer,
+		Subject: testOIDCSubject,
 	}
 
 	key1 := verifier.cacheKey(digest, staticKeyConfig)

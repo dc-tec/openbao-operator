@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
 var _ = Describe("Tenant Self-Service", Label("security", "tenant", "critical"), Ordered, func() {

@@ -8,7 +8,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/openbao/operator/internal/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 const (

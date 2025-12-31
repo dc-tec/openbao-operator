@@ -1,4 +1,4 @@
-module github.com/openbao/operator
+module github.com/dc-tec/openbao-operator
 
 go 1.25
 

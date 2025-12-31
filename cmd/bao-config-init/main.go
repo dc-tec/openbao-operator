@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openbao/operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 const (

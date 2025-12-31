@@ -37,10 +37,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	"github.com/openbao/operator/internal/constants"
-	"github.com/openbao/operator/test/e2e/framework"
-	e2ehelpers "github.com/openbao/operator/test/e2e/helpers"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/test/e2e/framework"
+	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
 
 func sentinelDebounceJitterSeconds(clusterName string, jitterRangeSeconds uint64) uint64 {

@@ -15,11 +15,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	"github.com/openbao/operator/internal/constants"
-	operatorerrors "github.com/openbao/operator/internal/errors"
-	"github.com/openbao/operator/internal/logging"
-	"github.com/openbao/operator/internal/openbao"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/logging"
+	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 const (

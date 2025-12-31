@@ -23,14 +23,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	"github.com/openbao/operator/internal/backup"
-	"github.com/openbao/operator/internal/constants"
-	operatorerrors "github.com/openbao/operator/internal/errors"
-	"github.com/openbao/operator/internal/logging"
-	openbaoapi "github.com/openbao/operator/internal/openbao"
-	"github.com/openbao/operator/internal/operationlock"
-	"github.com/openbao/operator/internal/security"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/backup"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/logging"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 const (

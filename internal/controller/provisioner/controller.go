@@ -33,10 +33,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	"github.com/openbao/operator/internal/constants"
-	controllerpredicates "github.com/openbao/operator/internal/controller"
-	"github.com/openbao/operator/internal/provisioner"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	controllerpredicates "github.com/dc-tec/openbao-operator/internal/controller"
+	"github.com/dc-tec/openbao-operator/internal/provisioner"
 )
 
 // NamespaceProvisionerReconciler reconciles OpenBaoTenant objects to provision

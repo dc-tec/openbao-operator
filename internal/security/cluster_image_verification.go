@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/go-logr/logr"
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 

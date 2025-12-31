@@ -21,14 +21,14 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	configbuilder "github.com/openbao/operator/internal/config"
-	"github.com/openbao/operator/internal/constants"
-	"github.com/openbao/operator/internal/infra"
-	openbaoapi "github.com/openbao/operator/internal/openbao"
-	"github.com/openbao/operator/internal/operationlock"
-	"github.com/openbao/operator/internal/revision"
-	"github.com/openbao/operator/internal/security"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/infra"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	"github.com/dc-tec/openbao-operator/internal/revision"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 var (

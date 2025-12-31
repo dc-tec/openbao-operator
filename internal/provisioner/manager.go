@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorerrors "github.com/openbao/operator/internal/errors"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 )
 
 // Manager handles the provisioning of RBAC resources for tenant namespaces.

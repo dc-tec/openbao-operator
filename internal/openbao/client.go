@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openbao/operator/internal/constants"
-	operatorerrors "github.com/openbao/operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 )
 
 const (

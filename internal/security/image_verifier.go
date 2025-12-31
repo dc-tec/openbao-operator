@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorerrors "github.com/openbao/operator/internal/errors"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 )
 
 //go:embed trusted_root.json

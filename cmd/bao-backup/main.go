@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	backupconfig "github.com/openbao/operator/internal/backup"
-	"github.com/openbao/operator/internal/constants"
-	"github.com/openbao/operator/internal/openbao"
-	"github.com/openbao/operator/internal/storage"
+	backupconfig "github.com/dc-tec/openbao-operator/internal/backup"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/storage"
 )
 
 const (

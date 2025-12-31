@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/openbao/operator/internal/constants"
-	openbao "github.com/openbao/operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 // RunExecutor runs the upgrade executor action.

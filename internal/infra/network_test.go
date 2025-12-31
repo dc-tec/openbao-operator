@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/go-logr/logr"
-	"github.com/openbao/operator/internal/constants"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
 func TestEnsureHeadlessServiceCreatesAndUpdates(t *testing.T) {

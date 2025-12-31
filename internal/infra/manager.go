@@ -10,11 +10,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	configbuilder "github.com/openbao/operator/internal/config"
-	"github.com/openbao/operator/internal/constants"
-	operatorerrors "github.com/openbao/operator/internal/errors"
-	"github.com/openbao/operator/internal/revision"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/revision"
 )
 
 const (

@@ -7,7 +7,7 @@ domain: openbao.org
 layout:
 - go.kubebuilder.io/v4
 projectName: openbao-operator
-repo: github.com/openbao/operator
+repo: github.com/dc-tec/openbao-operator
 resources:
 - api:
     crdVersion: v1
@@ -16,7 +16,7 @@ resources:
   domain: openbao.org
   group: openbao
   kind: OpenBaoCluster
-  path: github.com/openbao/operator/api/v1alpha1
+  path: github.com/dc-tec/openbao-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -25,6 +25,6 @@ resources:
   domain: openbao.org
   group: openbao
   kind: OpenBaoRestore
-  path: github.com/openbao/operator/api/v1alpha1
+  path: github.com/dc-tec/openbao-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

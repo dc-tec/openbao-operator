@@ -3,7 +3,7 @@ package provisioner
 import (
 	"testing"
 
-	"github.com/openbao/operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 //nolint:gocyclo // Table-driven test with multiple assertions

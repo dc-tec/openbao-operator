@@ -86,6 +86,7 @@ type OpenBaoRestoreSpec struct {
 
 	// ExecutorImage is the container image to use for restore operations.
 	// Defaults to the same image used for backup operations if not specified.
+	// If the target OpenBaoCluster has image verification enabled, the operator will verify this image and pin the restore Job to the verified digest.
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	ExecutorImage string `json:"executorImage,omitempty"`

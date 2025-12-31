@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openbao/operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 // ExecutorConfig holds the configuration for the upgrade executor Job.

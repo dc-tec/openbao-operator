@@ -14,10 +14,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	"github.com/openbao/operator/internal/constants"
-	"github.com/openbao/operator/internal/infra"
-	openbaoapi "github.com/openbao/operator/internal/openbao"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/infra"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {

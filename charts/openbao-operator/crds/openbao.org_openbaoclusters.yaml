@@ -3,7 +3,6 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    helm.sh/resource-policy: keep
     controller-gen.kubebuilder.io/version: v0.19.0
   name: openbaoclusters.openbao.org
 spec:
@@ -595,7 +594,7 @@ spec:
                     default: Block
                     description: |-
                       FailurePolicy defines behavior on verification failure.
-                      "Block" prevents StatefulSet updates when verification fails.
+                      "Block" blocks reconciliation of the affected workload when verification fails.
                       "Warn" logs an error and emits a Kubernetes Event but proceeds.
                     enum:
                     - Warn
@@ -634,7 +633,7 @@ spec:
                     description: |-
                       Issuer is the OIDC issuer for keyless verification (e.g., https://token.actions.githubusercontent.com).
                       Required for keyless verification when PublicKey is not provided.
-                      For official OpenBao images, use: https://token.actions.githubusercontent.com
+                      For GitHub Actions keyless verification, use: https://token.actions.githubusercontent.com
                     type: string
                   publicKey:
                     description: |-
@@ -646,7 +645,7 @@ spec:
                     description: |-
                       Subject is the OIDC subject for keyless verification.
                       Required for keyless verification when PublicKey is not provided.
-                      For official OpenBao images, use: https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v<VERSION>
+                      Example (GitHub Actions): https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v<VERSION>
                       The version in the subject MUST match the image tag version.
                     type: string
                 required:

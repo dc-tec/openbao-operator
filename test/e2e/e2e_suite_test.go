@@ -41,14 +41,14 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
-	"github.com/openbao/operator/test/utils"
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/test/utils"
 )
 
 const (
 	defaultProjectImage         = "example.com/openbao-operator:v0.0.1"
 	defaultConfigInitImage      = "openbao-config-init:dev"
-	defaultSentinelImage        = "openbao/operator-sentinel:v0.0.0"
+	defaultSentinelImage        = "ghcr.io/dc-tec/openbao-operator-sentinel:v0.0.0"
 	defaultBackupExecutorImage  = "openbao/backup-executor:dev"
 	defaultUpgradeExecutorImage = "openbao/upgrade-executor:dev"
 )
@@ -95,6 +95,11 @@ var (
 	// skipCleanup controls whether to clean up resources after the suite finishes.
 	// Set E2E_SKIP_CLEANUP=true environment variable to preserve the cluster state for debugging.
 	skipCleanup = os.Getenv("E2E_SKIP_CLEANUP") == "true"
+
+	// skipImageBuild controls whether to skip building local images during suite setup.
+	// This is useful for release workflows that build images once (externally) and only need
+	// to load pre-built images into kind.
+	skipImageBuild = os.Getenv("E2E_SKIP_IMAGE_BUILD") == "true"
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -123,10 +128,19 @@ func envOrDefault(key, defaultValue string) string {
 
 var _ = SynchronizedBeforeSuite(func() []byte {
 	// THIS BLOCK RUNS ONCE (on node 1)
-	By("building the manager(Operator) image")
-	cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
-	_, err := utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image")
+	var (
+		cmd *exec.Cmd
+		err error
+	)
+
+	if skipImageBuild {
+		By("skipping build of the manager(Operator) image")
+	} else {
+		By("building the manager(Operator) image")
+		cmd = exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
+		_, err = utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image")
+	}
 
 	// TODO(user): If you want to change the e2e test vendor from Kind, ensure the image is
 	// built and available before running the tests. Also, remove the following block.
@@ -134,37 +148,53 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	err = utils.LoadImageToKindClusterWithName(projectImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
 
-	By("building the config-init image")
-	cmd = exec.Command("make", "docker-build-init", fmt.Sprintf("IMG=%s", configInitImage))
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the config-init image")
+	if skipImageBuild {
+		By("skipping build of the config-init image")
+	} else {
+		By("building the config-init image")
+		cmd = exec.Command("make", "docker-build-init", fmt.Sprintf("IMG=%s", configInitImage))
+		_, err = utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the config-init image")
+	}
 
 	By("loading the config-init image on Kind")
 	err = utils.LoadImageToKindClusterWithName(configInitImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the config-init image into Kind")
 
-	By("building the Sentinel image")
-	cmd = exec.Command("make", "docker-build-sentinel", fmt.Sprintf("IMG=%s", sentinelImage))
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the Sentinel image")
+	if skipImageBuild {
+		By("skipping build of the Sentinel image")
+	} else {
+		By("building the Sentinel image")
+		cmd = exec.Command("make", "docker-build-sentinel", fmt.Sprintf("IMG=%s", sentinelImage))
+		_, err = utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the Sentinel image")
+	}
 
 	By("loading the Sentinel image on Kind")
 	err = utils.LoadImageToKindClusterWithName(sentinelImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the Sentinel image into Kind")
 
-	By("building the backup executor image")
-	cmd = exec.Command("make", "docker-build-backup", fmt.Sprintf("IMG=%s", backupExecutorImage))
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the backup executor image")
+	if skipImageBuild {
+		By("skipping build of the backup executor image")
+	} else {
+		By("building the backup executor image")
+		cmd = exec.Command("make", "docker-build-backup", fmt.Sprintf("IMG=%s", backupExecutorImage))
+		_, err = utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the backup executor image")
+	}
 
 	By("loading the backup executor image on Kind")
 	err = utils.LoadImageToKindClusterWithName(backupExecutorImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the backup executor image into Kind")
 
-	By("building the upgrade executor image")
-	cmd = exec.Command("make", "docker-build-upgrade", fmt.Sprintf("IMG=%s", upgradeExecutorImage))
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the upgrade executor image")
+	if skipImageBuild {
+		By("skipping build of the upgrade executor image")
+	} else {
+		By("building the upgrade executor image")
+		cmd = exec.Command("make", "docker-build-upgrade", fmt.Sprintf("IMG=%s", upgradeExecutorImage))
+		_, err = utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the upgrade executor image")
+	}
 
 	By("loading the upgrade executor image on Kind")
 	err = utils.LoadImageToKindClusterWithName(upgradeExecutorImage)

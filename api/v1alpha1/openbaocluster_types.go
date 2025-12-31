@@ -1109,6 +1109,7 @@ type UnsealConfig struct {
 }
 
 // ImageVerificationConfig configures supply chain security checks for container images.
+// When enabled, verification applies to all operator-managed images for this cluster (StatefulSets, Deployments, and Jobs).
 type ImageVerificationConfig struct {
 	// Enabled controls whether image verification is enforced.
 	Enabled bool `json:"enabled"`
@@ -1121,19 +1122,19 @@ type ImageVerificationConfig struct {
 
 	// Issuer is the OIDC issuer for keyless verification (e.g., https://token.actions.githubusercontent.com).
 	// Required for keyless verification when PublicKey is not provided.
-	// For official OpenBao images, use: https://token.actions.githubusercontent.com
+	// For GitHub Actions keyless verification, use: https://token.actions.githubusercontent.com
 	// +optional
 	Issuer string `json:"issuer,omitempty"`
 
 	// Subject is the OIDC subject for keyless verification.
 	// Required for keyless verification when PublicKey is not provided.
-	// For official OpenBao images, use: https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v<VERSION>
+	// Example (GitHub Actions): https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v<VERSION>
 	// The version in the subject MUST match the image tag version.
 	// +optional
 	Subject string `json:"subject,omitempty"`
 
 	// FailurePolicy defines behavior on verification failure.
-	// "Block" prevents StatefulSet updates when verification fails.
+	// "Block" blocks reconciliation of the affected workload when verification fails.
 	// "Warn" logs an error and emits a Kubernetes Event but proceeds.
 	// +kubebuilder:validation:Enum=Warn;Block
 	// +kubebuilder:default=Block
@@ -1169,7 +1170,8 @@ type SentinelConfig struct {
 	Enabled bool `json:"enabled"`
 
 	// Image allows overriding the Sentinel container image.
-	// If not specified, defaults to "openbao/operator-sentinel:vX.Y.Z" (matching operator version).
+	// If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_SENTINEL_IMAGE_REPOSITORY
+	// (default: "ghcr.io/dc-tec/openbao-operator-sentinel") and the tag matches OPERATOR_VERSION.
 	// +optional
 	Image string `json:"image,omitempty"`
 
