@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -21,9 +22,35 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/openbao/operator/api/v1alpha1"
+	"github.com/openbao/operator/internal/constants"
+	"github.com/openbao/operator/internal/upgrade"
+	"github.com/openbao/operator/internal/upgrade/bluegreen"
 	"github.com/openbao/operator/test/e2e/framework"
 	e2ehelpers "github.com/openbao/operator/test/e2e/helpers"
 )
+
+const (
+	upgradeActionAnnotationKey = "openbao.org/upgrade-action"
+	upgradeRunIDAnnotationKey  = "openbao.org/upgrade-run-id"
+	rollbackRunID              = "rollback"
+)
+
+func findUpgradeExecutorJob(jobs []batchv1.Job, action bluegreen.ExecutorAction, runID string) *batchv1.Job {
+	for i := range jobs {
+		job := &jobs[i]
+		if job.Annotations == nil {
+			continue
+		}
+		if job.Annotations[upgradeActionAnnotationKey] != string(action) {
+			continue
+		}
+		if job.Annotations[upgradeRunIDAnnotationKey] != runID {
+			continue
+		}
+		return job
+	}
+	return nil
+}
 
 var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "cluster", "slow"), Ordered, func() {
 	ctx := context.Background()
@@ -314,6 +341,230 @@ var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "clust
 				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
 				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
 			}, 30*time.Minute, 30*time.Second).Should(Succeed())
+		})
+	})
+
+	Context("Safe Mode (chaos)", Label("chaos"), Ordered, func() {
+		var (
+			tenantNamespace string
+			tenantFW        *framework.Framework
+			chaosCluster    *openbaov1alpha1.OpenBaoCluster
+			initialVersion  string
+			targetVersion   string
+		)
+
+		BeforeAll(func() {
+			var err error
+
+			tenantFW, err = framework.New(ctx, admin, "tenant-safemode-chaos", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+
+			initialVersion = getEnvOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+			targetVersion = getEnvOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+
+			if initialVersion == targetVersion {
+				Skip(fmt.Sprintf("Safe mode chaos test skipped: from version (%s) equals to version (%s). Set E2E_UPGRADE_TO_VERSION to a different version to test upgrades.", initialVersion, targetVersion))
+			}
+
+			selfInitRequests, err := createBlueGreenUpgradeSelfInitRequests(ctx, tenantNamespace, "safemode-chaos-cluster", cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Ensure the rollback consensus repair job can authenticate, but cannot perform
+			// the repair operation. This simulates a repair job failure deterministically
+			// without relying on missing roles or external chaos tooling.
+			for i := range selfInitRequests {
+				if selfInitRequests[i].Name != "create-upgrade-policy" {
+					continue
+				}
+				if selfInitRequests[i].Policy == nil {
+					continue
+				}
+
+				selfInitRequests[i].Policy.Policy = `path "sys/health" {
+  capabilities = ["read"]
+}`
+			}
+
+			autoPromote := false
+			chaosCluster = &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "safemode-chaos-cluster",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  initialVersion,
+					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
+					Replicas: 3,
+					UpdateStrategy: openbaov1alpha1.UpdateStrategy{
+						Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+							AutoPromote: autoPromote,
+							Verification: &openbaov1alpha1.VerificationConfig{
+								MinSyncDuration: "30s",
+							},
+						},
+					},
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled:  true,
+						Requests: selfInitRequests,
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: kindDefaultServiceCIDR,
+					},
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						ExecutorImage: upgradeExecutorImage,
+						JWTAuthRole:   "upgrade",
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, chaosCluster)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.Initialized).To(BeTrue(), "cluster should be initialized")
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion), "current version should match initial version")
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "blue/green status should be initialized")
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle), "initial blue/green phase should be Idle")
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		AfterAll(func() {
+			if tenantFW == nil {
+				return
+			}
+			cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancel()
+
+			_ = tenantFW.Cleanup(cleanupCtx)
+		})
+
+		It("enters safe mode when rollback consensus repair job fails", func() {
+			By("Triggering a Blue/Green upgrade")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", targetVersion)
+
+				err = admin.Patch(ctx, updated, client.MergeFrom(original))
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for Green revision to be created")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).NotTo(Equal(openbaov1alpha1.PhaseIdle))
+				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty())
+			}, 15*time.Minute, 10*time.Second).Should(Succeed())
+
+			By("Forcing rollback")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				original := updated.DeepCopy()
+				if updated.Annotations == nil {
+					updated.Annotations = make(map[string]string)
+				}
+				updated.Annotations[constants.AnnotationForceRollback] = "true"
+
+				err = admin.Patch(ctx, updated, client.MergeFrom(original))
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for rollback to start")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseRollingBack))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Clearing force-rollback annotation (one-shot trigger)")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				original := updated.DeepCopy()
+				annotations := updated.GetAnnotations()
+				if annotations == nil {
+					return
+				}
+				delete(annotations, constants.AnnotationForceRollback)
+				updated.SetAnnotations(annotations)
+
+				err = admin.Patch(ctx, updated, client.MergeFrom(original))
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			var rollbackRepairJobName string
+			By("Finding the rollback consensus repair job")
+			Eventually(func(g Gomega) {
+				jobs := &batchv1.JobList{}
+				err := admin.List(ctx, jobs,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelOpenBaoCluster:   chaosCluster.Name,
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+					},
+				)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				job := findUpgradeExecutorJob(jobs.Items, bluegreen.ActionRepairConsensus, rollbackRunID)
+				g.Expect(job).NotTo(BeNil(), "rollback repair job should exist")
+				rollbackRepairJobName = job.Name
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for the rollback consensus repair job to fail")
+			Eventually(func(g Gomega) {
+				job := &batchv1.Job{}
+				err := admin.Get(ctx, types.NamespacedName{Name: rollbackRepairJobName, Namespace: tenantNamespace}, job)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(job.Status.Failed).To(BeNumerically(">", 0), "rollback repair job should fail")
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Asserting safe mode is set on the cluster")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				g.Expect(updated.Status.BreakGlass).NotTo(BeNil(), "breakGlass status should be set")
+				g.Expect(updated.Status.BreakGlass.Active).To(BeTrue(), "breakGlass should be active")
+				g.Expect(updated.Status.BreakGlass.Reason).To(Equal(openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed))
+				g.Expect(updated.Status.BreakGlass.Nonce).NotTo(BeEmpty(), "breakGlass nonce should be set")
+
+				degraded := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
+				g.Expect(degraded).NotTo(BeNil(), "Degraded condition should be present")
+				g.Expect(degraded.Status).To(Equal(metav1.ConditionTrue), "Degraded should be true in safe mode")
+				g.Expect(degraded.Reason).To(Equal(constants.ReasonBreakGlassRequired))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 	})
 
