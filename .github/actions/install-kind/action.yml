@@ -1,0 +1,36 @@
+name: Install kind
+description: Install a pinned kind release binary and verify its SHA256 checksum.
+
+inputs:
+  kind-version:
+    description: kind version to install (e.g., v0.31.0).
+    required: false
+    default: v0.31.0
+  install-dir:
+    description: Directory to install kind into.
+    required: false
+    default: ~/.local/bin
+
+runs:
+  using: composite
+  steps:
+    - name: Install kind
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        version="${{ inputs.kind-version }}"
+        install_dir="${{ inputs.install-dir }}"
+
+        arch="$(go env GOARCH)"
+        bin="kind-linux-${arch}"
+
+        curl -fsSLo "${bin}" "https://github.com/kubernetes-sigs/kind/releases/download/${version}/${bin}"
+        curl -fsSLo "${bin}.sha256sum" "https://github.com/kubernetes-sigs/kind/releases/download/${version}/${bin}.sha256sum"
+        sha256sum -c "${bin}.sha256sum"
+
+        install -d "${install_dir}"
+        install -m 0755 "${bin}" "${install_dir}/kind"
+        echo "${install_dir}" >> "${GITHUB_PATH}"
+
+        "${install_dir}/kind" version

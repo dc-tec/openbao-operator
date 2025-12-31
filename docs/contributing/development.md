@@ -5,7 +5,7 @@
 - **Go:** version v1.25.5+ (check with `go version`)
 - **Docker:** version 28.3.3+ (check with `docker version`)
 - **kubectl:** version v1.33+ (check with `kubectl version --client`)
-- **Access to a Kubernetes cluster:** v1.33+ (for testing; see `docs/compatibility.md`)
+- **Access to a Kubernetes cluster:** v1.33+ (for testing; see `docs/reference/compatibility.md`)
 - **Kind:** For local E2E testing (optional but recommended)
 - **Make:** For running build targets
 
@@ -17,7 +17,7 @@ You should also have:
 ## 2. Clone the Repository
 
 ```sh
-git clone https://github.com/openbao/openbao-operator.git
+git clone https://github.com/dc-tec/openbao-operator.git
 cd openbao-operator
 ```
 

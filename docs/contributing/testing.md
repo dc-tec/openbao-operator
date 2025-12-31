@@ -175,7 +175,7 @@ go test ./internal/controller/openbaocluster/... -v
 
 E2E tests validate real-system behavior using kind:
 
-- kind cluster with Kubernetes versions from the compatibility matrix (see `docs/compatibility.md`).
+- kind cluster with Kubernetes versions from the compatibility matrix (see `docs/reference/compatibility.md`).
 - Deployed Operator image built from the current codebase.
 - Real OpenBao image.
 - Optional MinIO deployment for backup tests.
@@ -192,7 +192,7 @@ Images:
   Image used for the operator (`projectImage` in `test/e2e/e2e_suite_test.go`).
 - `E2E_CONFIG_INIT_IMAGE` (default: `openbao-config-init:dev`)  
   Image used by the OpenBao config-init container.
-- `E2E_SENTINEL_IMAGE` (default: `openbao/operator-sentinel:v0.0.0`)  
+- `E2E_SENTINEL_IMAGE` (default: `ghcr.io/dc-tec/openbao-operator-sentinel:v0.0.0`)  
   Image used by the Sentinel deployment.
 - `E2E_BACKUP_EXECUTOR_IMAGE` (default: `openbao/backup-executor:dev`)  
   Image used by backup jobs.
@@ -470,7 +470,7 @@ CI should:
 - Run envtest-based controller tests on every PR to validate reconciliation behavior and CRD semantics.
 - Run E2E suites (including MinIO backup tests and multi-tenant scenarios):
   - On main branch and/or nightly.
-  - Across the supported Kubernetes versions listed in the compatibility matrix (`docs/compatibility.md`).
+  - Across the supported Kubernetes versions listed in the compatibility matrix (`docs/reference/compatibility.md`).
 
 New functionality MUST include:
 

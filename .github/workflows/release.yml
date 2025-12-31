@@ -1,0 +1,499 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version tag (e.g., v0.1.0)
+        required: true
+        type: string
+      ref:
+        description: Git ref to release (defaults to the workflow ref)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
+      chart_version: ${{ steps.vars.outputs.chart_version }}
+      build_tag: ${{ steps.vars.outputs.build_tag }}
+      manager_image: ${{ steps.vars.outputs.manager_image }}
+      sentinel_image: ${{ steps.vars.outputs.sentinel_image }}
+      config_init_image: ${{ steps.vars.outputs.config_init_image }}
+      backup_executor_image: ${{ steps.vars.outputs.backup_executor_image }}
+      upgrade_executor_image: ${{ steps.vars.outputs.upgrade_executor_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 1
+
+      - name: Compute release variables
+        id: vars
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"
+          if ! [[ "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
+            echo "version must be a semver tag with leading v (e.g., v0.1.0)" >&2
+            exit 1
+          fi
+
+          chart_version="${version#v}"
+          sha="$(git rev-parse HEAD)"
+          build_tag="build-${sha}"
+
+          owner="${GITHUB_REPOSITORY_OWNER}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "chart_version=${chart_version}" >> "${GITHUB_OUTPUT}"
+          echo "build_tag=${build_tag}" >> "${GITHUB_OUTPUT}"
+
+          echo "manager_image=ghcr.io/${owner}/openbao-operator" >> "${GITHUB_OUTPUT}"
+          echo "sentinel_image=ghcr.io/${owner}/openbao-operator-sentinel" >> "${GITHUB_OUTPUT}"
+          echo "config_init_image=ghcr.io/${owner}/openbao-config-init" >> "${GITHUB_OUTPUT}"
+          echo "backup_executor_image=ghcr.io/${owner}/openbao-backup-executor" >> "${GITHUB_OUTPUT}"
+          echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade-executor" >> "${GITHUB_OUTPUT}"
+
+  build-images:
+    name: Build Images (Build Tag)
+    runs-on: ubuntu-24.04
+    needs: prepare
+    outputs:
+      manager_digest: ${{ steps.build_manager.outputs.digest }}
+      sentinel_digest: ${{ steps.build_sentinel.outputs.digest }}
+      config_init_digest: ${{ steps.build_config_init.outputs.digest }}
+      backup_executor_digest: ${{ steps.build_backup_executor.outputs.digest }}
+      upgrade_executor_digest: ${{ steps.build_upgrade_executor.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
+
+      - name: Build and push manager
+        id: build_manager
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ needs.prepare.outputs.manager_image }}:${{ needs.prepare.outputs.build_tag }}
+
+      - name: Build and push Sentinel
+        id: build_sentinel
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: .
+          file: Dockerfile.sentinel
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ needs.prepare.outputs.sentinel_image }}:${{ needs.prepare.outputs.build_tag }}
+
+      - name: Build and push config-init
+        id: build_config_init
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: .
+          file: Dockerfile.init
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ needs.prepare.outputs.config_init_image }}:${{ needs.prepare.outputs.build_tag }}
+
+      - name: Build and push backup executor
+        id: build_backup_executor
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: .
+          file: Dockerfile.backup
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ needs.prepare.outputs.backup_executor_image }}:${{ needs.prepare.outputs.build_tag }}
+
+      - name: Build and push upgrade executor
+        id: build_upgrade_executor
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: .
+          file: Dockerfile.upgrade
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ needs.prepare.outputs.upgrade_executor_image }}:${{ needs.prepare.outputs.build_tag }}
+
+  security-govulncheck:
+    name: Security Gate (govulncheck)
+    runs-on: ubuntu-24.04
+    needs: prepare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Run govulncheck
+        env:
+          GOFLAGS: -mod=readonly
+        run: |
+          set -euo pipefail
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          govulncheck -test ./...
+
+  security-images:
+    name: Security Gate (Trivy image ${{ matrix.image_name }})
+    runs-on: ubuntu-24.04
+    needs: [prepare, build-images]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image_name: manager
+            image_ref: ${{ needs.prepare.outputs.manager_image }}:${{ needs.prepare.outputs.build_tag }}
+          - image_name: sentinel
+            image_ref: ${{ needs.prepare.outputs.sentinel_image }}:${{ needs.prepare.outputs.build_tag }}
+          - image_name: config-init
+            image_ref: ${{ needs.prepare.outputs.config_init_image }}:${{ needs.prepare.outputs.build_tag }}
+          - image_name: backup-executor
+            image_ref: ${{ needs.prepare.outputs.backup_executor_image }}:${{ needs.prepare.outputs.build_tag }}
+          - image_name: upgrade-executor
+            image_ref: ${{ needs.prepare.outputs.upgrade_executor_image }}:${{ needs.prepare.outputs.build_tag }}
+    steps:
+      - name: Login to GHCR (pull)
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image_ref }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  e2e:
+    name: E2E Gate (kind ${{ matrix.k8s }})
+    runs-on: ubuntu-24.04
+    needs: [prepare, build-images]
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        k8s:
+          - 1.33.7
+          - 1.34.3
+          - 1.35.0
+    env:
+      KIND_NODE_IMAGE: kindest/node:v${{ matrix.k8s }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Login to GHCR (pull)
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install kind (pinned)
+        uses: ./.github/actions/install-kind
+
+      - name: Pull images (amd64) for kind load
+        run: |
+          set -euo pipefail
+          docker pull "${{ needs.prepare.outputs.manager_image }}:${{ needs.prepare.outputs.build_tag }}"
+          docker pull "${{ needs.prepare.outputs.config_init_image }}:${{ needs.prepare.outputs.build_tag }}"
+          docker pull "${{ needs.prepare.outputs.sentinel_image }}:${{ needs.prepare.outputs.build_tag }}"
+          docker pull "${{ needs.prepare.outputs.backup_executor_image }}:${{ needs.prepare.outputs.build_tag }}"
+          docker pull "${{ needs.prepare.outputs.upgrade_executor_image }}:${{ needs.prepare.outputs.build_tag }}"
+
+      - name: Run full E2E
+        env:
+          GOFLAGS: -mod=readonly
+          E2E_TIMEOUT: 90m
+          E2E_PARALLEL_NODES: "2"
+          E2E_SKIP_IMAGE_BUILD: "true"
+
+          OPERATOR_VERSION: ${{ needs.prepare.outputs.build_tag }}
+          OPERATOR_SENTINEL_IMAGE_REPOSITORY: ${{ needs.prepare.outputs.sentinel_image }}
+
+          E2E_OPERATOR_IMAGE: ${{ needs.prepare.outputs.manager_image }}:${{ needs.prepare.outputs.build_tag }}
+          E2E_CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}:${{ needs.prepare.outputs.build_tag }}
+          E2E_SENTINEL_IMAGE: ${{ needs.prepare.outputs.sentinel_image }}:${{ needs.prepare.outputs.build_tag }}
+          E2E_BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}:${{ needs.prepare.outputs.build_tag }}
+          E2E_UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}:${{ needs.prepare.outputs.build_tag }}
+        run: make test-e2e-ci
+
+  promote:
+    name: Promote + Publish Release
+    runs-on: ubuntu-24.04
+    needs: [prepare, build-images, security-govulncheck, security-images, e2e]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
+
+      - name: Promote tags (no rebuild)
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BUILD_TAG: ${{ needs.prepare.outputs.build_tag }}
+          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+          SENTINEL_IMAGE: ${{ needs.prepare.outputs.sentinel_image }}
+          CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
+          BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
+          UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
+          MANAGER_DIGEST: ${{ needs.build-images.outputs.manager_digest }}
+          SENTINEL_DIGEST: ${{ needs.build-images.outputs.sentinel_digest }}
+          CONFIG_INIT_DIGEST: ${{ needs.build-images.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.build-images.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.build-images.outputs.upgrade_executor_digest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create -t "${MANAGER_IMAGE}:${VERSION}" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          docker buildx imagetools create -t "${SENTINEL_IMAGE}:${VERSION}" "${SENTINEL_IMAGE}@${SENTINEL_DIGEST}"
+          docker buildx imagetools create -t "${CONFIG_INIT_IMAGE}:${VERSION}" "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:${VERSION}" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:${VERSION}" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+        with:
+          cosign-release: v2.6.1
+
+      - name: Sign images (keyless)
+        env:
+          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+          SENTINEL_IMAGE: ${{ needs.prepare.outputs.sentinel_image }}
+          CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
+          BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
+          UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
+          MANAGER_DIGEST: ${{ needs.build-images.outputs.manager_digest }}
+          SENTINEL_DIGEST: ${{ needs.build-images.outputs.sentinel_digest }}
+          CONFIG_INIT_DIGEST: ${{ needs.build-images.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.build-images.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.build-images.outputs.upgrade_executor_digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          cosign sign --yes "${SENTINEL_IMAGE}@${SENTINEL_DIGEST}"
+          cosign sign --yes "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          cosign sign --yes "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          cosign sign --yes "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+
+      - name: Attest build provenance (GitHub) - manager
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-name: ${{ needs.prepare.outputs.manager_image }}
+          subject-digest: ${{ needs.build-images.outputs.manager_digest }}
+          push-to-registry: true
+
+      - name: Attest build provenance (GitHub) - Sentinel
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-name: ${{ needs.prepare.outputs.sentinel_image }}
+          subject-digest: ${{ needs.build-images.outputs.sentinel_digest }}
+          push-to-registry: true
+
+      - name: Attest build provenance (GitHub) - config-init
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-name: ${{ needs.prepare.outputs.config_init_image }}
+          subject-digest: ${{ needs.build-images.outputs.config_init_digest }}
+          push-to-registry: true
+
+      - name: Attest build provenance (GitHub) - backup executor
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-name: ${{ needs.prepare.outputs.backup_executor_image }}
+          subject-digest: ${{ needs.build-images.outputs.backup_executor_digest }}
+          push-to-registry: true
+
+      - name: Attest build provenance (GitHub) - upgrade executor
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-name: ${{ needs.prepare.outputs.upgrade_executor_image }}
+          subject-digest: ${{ needs.build-images.outputs.upgrade_executor_digest }}
+          push-to-registry: true
+
+      - name: Setup Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: Package and push Helm chart (OCI)
+        env:
+          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          helm registry login ghcr.io -u "${GITHUB_ACTOR}" -p "${{ secrets.GITHUB_TOKEN }}"
+          helm package charts/openbao-operator \
+            --version "${CHART_VERSION}" \
+            --app-version "${VERSION}"
+          helm push "openbao-operator-${CHART_VERSION}.tgz" "oci://ghcr.io/${OWNER}/charts"
+
+      - name: Sign Helm chart (OCI)
+        env:
+          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "ghcr.io/${OWNER}/charts/openbao-operator:${CHART_VERSION}"
+
+      - name: Generate digest-pinned installer manifest
+        env:
+          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+          MANAGER_DIGEST: ${{ needs.build-images.outputs.manager_digest }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SENTINEL_IMAGE: ${{ needs.prepare.outputs.sentinel_image }}
+        run: |
+          set -euo pipefail
+          make build-installer \
+            IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" \
+            OPERATOR_VERSION="${VERSION}" \
+            OPERATOR_SENTINEL_IMAGE_REPOSITORY="${SENTINEL_IMAGE}"
+
+      - name: Generate SBOMs (SPDX JSON)
+        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
+        with:
+          image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.build-images.outputs.manager_digest }}
+          format: spdx-json
+          output-file: dist/sbom-openbao-operator.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOMs (SPDX JSON) - Sentinel
+        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
+        with:
+          image: ${{ needs.prepare.outputs.sentinel_image }}@${{ needs.build-images.outputs.sentinel_digest }}
+          format: spdx-json
+          output-file: dist/sbom-openbao-operator-sentinel.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOMs (SPDX JSON) - config-init
+        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
+        with:
+          image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.build-images.outputs.config_init_digest }}
+          format: spdx-json
+          output-file: dist/sbom-openbao-config-init.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOMs (SPDX JSON) - backup executor
+        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
+        with:
+          image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.build-images.outputs.backup_executor_digest }}
+          format: spdx-json
+          output-file: dist/sbom-openbao-backup-executor.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOMs (SPDX JSON) - upgrade executor
+        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
+        with:
+          image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.build-images.outputs.upgrade_executor_digest }}
+          format: spdx-json
+          output-file: dist/sbom-openbao-upgrade-executor.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          sha256sum dist/install.yaml dist/sbom-*.spdx.json > dist/checksums.txt
+
+      - name: Create git tag
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git rev-parse "${VERSION}" >/dev/null 2>&1; then
+            echo "Tag ${VERSION} already exists" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${VERSION}" -m "Release ${VERSION}"
+          git push origin "${VERSION}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          tag_name: ${{ needs.prepare.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/install.yaml
+            dist/sbom-openbao-operator.spdx.json
+            dist/sbom-openbao-operator-sentinel.spdx.json
+            dist/sbom-openbao-config-init.spdx.json
+            dist/sbom-openbao-backup-executor.spdx.json
+            dist/sbom-openbao-upgrade-executor.spdx.json
+            dist/checksums.txt

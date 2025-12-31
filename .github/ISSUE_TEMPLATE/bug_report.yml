@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a defect or regression
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please avoid posting secrets or sensitive logs.
+
+  - type: input
+    id: version
+    attributes:
+      label: Operator version
+      description: The operator version/tag you are running (e.g., v0.1.0)
+      placeholder: vX.Y.Z
+    validations:
+      required: true
+
+  - type: input
+    id: kubernetes
+    attributes:
+      label: Kubernetes version
+      description: "`kubectl version --short` (server version)`"
+      placeholder: v1.34.x
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps and manifests to reproduce
+      render: shell
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs/events
+      description: Redact sensitive information (tokens, keys, credentials)
+      render: shell
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Anything else that helps triage (cluster topology, storage class, etc.)

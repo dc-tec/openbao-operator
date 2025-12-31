@@ -126,27 +126,11 @@ The `Reconcile` function may be called multiple times for the same state.
 
 #### 2.5.5 RBAC Annotations
 
-When creating or managing Kubernetes resources that require RBAC permissions, you **must** add the corresponding `// +kubebuilder:rbac` annotation to the controller file (`internal/controller/openbaocluster/controller.go`).
+This operator follows a Zero Trust model and does **not** use standard Kubebuilder RBAC annotations for the OpenBaoCluster controller.
 
-- **Format:** `// +kubebuilder:rbac:groups=<apiGroup>,resources=<resource>,verbs=<verb1>;<verb2>;...`
-- **Location:** Place annotations directly above the `Reconcile` function or the reconciler struct definition.
-- **Verbs:** Use appropriate verbs: `get`, `list`, `watch`, `create`, `update`, `patch`, `delete`.
-- **Examples:**
-
-  ```go
-  // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
-  // +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch
-  ```
-
-- **After adding annotations:**
-  1. Run `make manifests` to regenerate `config/rbac/role.yaml`
-  2. Verify the generated permissions match your code's requirements
-  3. Commit both the code changes and the updated `config/rbac/role.yaml`
-
-- **Common resources that need annotations:**
-  - ClusterRoleBindings (cluster-scoped RBAC)
-  - RoleBindings (namespace-scoped RBAC)
-  - Any new Kubernetes resources created by the operator
+- Do **not** add `// +kubebuilder:rbac` annotations to `internal/controller/openbaocluster/controller.go`.
+- If new permissions are needed, they must be added to the Provisioner RBAC logic in `internal/provisioner/rbac.go`.
+- Update `internal/provisioner/rbac_test.go` to lock the expected permissions and prevent regressions.
 
 ### 2.6 Concurrency
 

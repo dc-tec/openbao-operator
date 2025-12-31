@@ -11,10 +11,10 @@ validated in CI for this operator. The Operator is intended to support
 **Kubernetes v1.33 and newer**; older versions are not supported.
 
 | Kubernetes Version | Status     | Notes                                |
-|--------------------|-----------|--------------------------------------|
-| v1.33              | Supported | Primary CI coverage                  |
-| v1.34              | Supported | Primary CI coverage                  |
-| v1.35+             | Supported | Best-effort; validate before upgrade |
+|--------------------|------------|--------------------------------------|
+| v1.33              | Supported  | Primary CI coverage                  |
+| v1.34              | Supported  | Primary CI coverage                  |
+| v1.35              | Supported  | Primary CI coverage                  |
 
 ## 2. OpenBao Versions
 

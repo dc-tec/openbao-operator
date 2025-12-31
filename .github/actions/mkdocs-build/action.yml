@@ -1,0 +1,21 @@
+name: MkDocs build
+description: Build MkDocs documentation using a pinned mkdocs-material container image.
+
+inputs:
+  image:
+    description: Container image reference (prefer a digest-pinned image).
+    required: false
+    default: squidfunk/mkdocs-material@sha256:3bba0a99bc6e635bb8e53f379d32ab9cecb554adee9cc8f59a347f93ecf82f3b
+
+runs:
+  using: composite
+  steps:
+    - name: Build docs
+      shell: bash
+      run: |
+        set -euo pipefail
+        docker run --rm \
+          -v "${PWD}:/docs" \
+          -w /docs \
+          "${{ inputs.image }}" \
+          build -s

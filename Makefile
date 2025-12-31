@@ -1,6 +1,14 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 
+# OPERATOR_VERSION is injected into the controller/provisioner Deployments.
+# This is used by the controller to derive version-matched helper images (e.g., Sentinel).
+OPERATOR_VERSION ?= v0.0.0
+
+# OPERATOR_SENTINEL_IMAGE_REPOSITORY controls the base image repository used for deriving the
+# Sentinel image when spec.sentinel.image is not set.
+OPERATOR_SENTINEL_IMAGE_REPOSITORY ?= ghcr.io/dc-tec/openbao-operator-sentinel
+
 # INIT_IMG is the image for the config-init helper used as an init container
 # in OpenBao pods to render the final config.hcl from the template.
 # When running init-image targets, you can either set INIT_IMG explicitly:
@@ -63,6 +71,15 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
+.PHONY: verify-fmt
+verify-fmt: ## Verify all Go code is gofmt'd (does not modify files).
+	@unformatted="$$(gofmt -l .)"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "The following files are not gofmt'd:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+
 .PHONY: vet
 vet: ## Run go vet against code.
 	go vet ./...
@@ -70,6 +87,31 @@ vet: ## Run go vet against code.
 .PHONY: test
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+
+.PHONY: test-ci
+test-ci: manifests generate vet setup-envtest ## Run tests in CI mode (does not modify files).
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+
+.PHONY: verify-tidy
+verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
+	@go mod tidy
+	@{ \
+		git diff --exit-code -- go.mod go.sum; \
+	} || { \
+		echo "go.mod/go.sum are not tidy. Run 'go mod tidy' and commit the result."; \
+		git --no-pager diff -- go.mod go.sum; \
+		exit 1; \
+	}
+
+.PHONY: verify-generated
+verify-generated: manifests generate ## Verify generated artifacts are up-to-date (does not modify tracked files).
+	@{ \
+		git diff --exit-code -- api/v1alpha1 config/crd/bases; \
+	} || { \
+		echo "Generated artifacts are out of date. Run 'make manifests generate' and commit the result."; \
+		git --no-pager diff -- api/v1alpha1 config/crd/bases; \
+		exit 1; \
+	}
 
 .PHONY: test-update-golden
 test-update-golden: ## Update golden files for HCL generation tests. Run this when modifying internal/config/builder.go or related config generation logic.
@@ -92,6 +134,9 @@ verify-trusted-root: ## Verify that trusted_root.json exists and is valid JSON.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
 KIND_CLUSTER ?= openbao-operator-test-e2e
+# KIND_NODE_IMAGE pins the Kind node image (and thus Kubernetes version) used for E2E.
+# Example: make test-e2e KIND_NODE_IMAGE=kindest/node:v1.34.3
+KIND_NODE_IMAGE ?=
 # E2E_PARALLEL_NODES controls the number of parallel nodes for e2e tests.
 # Set to 1 for sequential execution (default), or a higher number for parallel execution.
 # Example: make test-e2e E2E_PARALLEL_NODES=4
@@ -132,11 +177,60 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
 		*) \
 			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
+			if [ -n "$(KIND_NODE_IMAGE)" ]; then \
+				$(KIND) create cluster --name $(KIND_CLUSTER) --image "$(KIND_NODE_IMAGE)" ; \
+			else \
+				$(KIND) create cluster --name $(KIND_CLUSTER) ; \
+			fi ;; \
 	esac
 
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests. Expected an isolated environment using Kind. Use E2E_PARALLEL_NODES=N to run tests in parallel (default: 1). Use E2E_FOCUS="Backup" to run only specific tests. See Makefile for additional E2E_* variables.
+	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
+	if [ -n "$(E2E_FOCUS)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=$(E2E_FOCUS)"; \
+	fi; \
+	if [ -n "$(E2E_LABEL_FILTER)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --label-filter=$(E2E_LABEL_FILTER)"; \
+	fi; \
+	if [ "$(E2E_TRACE)" = "true" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --trace"; \
+	fi; \
+	if [ "$(E2E_NO_COLOR)" = "true" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --no-color"; \
+	fi; \
+	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --junit-report=$(E2E_JUNIT_REPORT)"; \
+	fi; \
+	if [ "$(E2E_KEEP_GOING)" = "true" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --keep-going"; \
+	fi; \
+	if [ "$(E2E_PARALLEL_NODES)" -eq 1 ]; then \
+		GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
+		if [ -n "$(E2E_FOCUS)" ]; then \
+			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=$(E2E_FOCUS)"; \
+		fi; \
+		if [ -n "$(E2E_LABEL_FILTER)" ]; then \
+			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.label-filter=$(E2E_LABEL_FILTER)"; \
+		fi; \
+		if [ "$(E2E_TRACE)" = "true" ]; then \
+			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.trace"; \
+		fi; \
+		if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
+			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
+		fi; \
+		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test $$GO_TEST_FLAGS ./test/e2e/; \
+	else \
+		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/; \
+	fi
+	@if [ "$(E2E_SKIP_CLEANUP)" != "true" ]; then \
+		$(MAKE) cleanup-test-e2e; \
+	else \
+		echo "E2E_SKIP_CLEANUP=true: Keeping Kind cluster $(KIND_CLUSTER) for debugging"; \
+	fi
+
+.PHONY: test-e2e-ci
+test-e2e-ci: setup-test-e2e manifests generate vet ginkgo ## Run the e2e tests in CI mode (does not modify files).
 	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=$(E2E_FOCUS)"; \
@@ -280,9 +374,16 @@ docker-buildx: ## Build and push docker image for the manager (dispatcher) for c
 
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployments (provisioner and controller).
-	mkdir -p dist
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/default > dist/install.yaml
+	@tmp="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	out="$(PWD)/dist/install.yaml"; \
+	mkdir -p dist; \
+	cp -R config "$$tmp/config"; \
+	for f in "$$tmp/config/manager/controller.yaml" "$$tmp/config/manager/provisioner.yaml"; do \
+		python3 -c 'import pathlib,re,sys; p=pathlib.Path(sys.argv[1]); v=sys.argv[2]; r=sys.argv[3]; q=chr(34); s=p.read_text(encoding="utf-8"); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_VERSION\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+v+q, s, count=1); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_SENTINEL_IMAGE_REPOSITORY\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+r+q, s, count=1); p.write_text(s, encoding="utf-8")' "$$f" "$(OPERATOR_VERSION)" "$(OPERATOR_SENTINEL_IMAGE_REPOSITORY)"; \
+	done; \
+	( cd "$$tmp/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
+	"$(KUSTOMIZE)" build "$$tmp/config/default" > "$$out"
 
 ##@ Deployment
 
@@ -306,8 +407,14 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy both provisioner and controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
+	@tmp="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	cp -R config "$$tmp/config"; \
+	for f in "$$tmp/config/manager/controller.yaml" "$$tmp/config/manager/provisioner.yaml"; do \
+		python3 -c 'import pathlib,re,sys; p=pathlib.Path(sys.argv[1]); v=sys.argv[2]; r=sys.argv[3]; q=chr(34); s=p.read_text(encoding="utf-8"); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_VERSION\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+v+q, s, count=1); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_SENTINEL_IMAGE_REPOSITORY\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+r+q, s, count=1); p.write_text(s, encoding="utf-8")' "$$f" "$(OPERATOR_VERSION)" "$(OPERATOR_SENTINEL_IMAGE_REPOSITORY)"; \
+	done; \
+	( cd "$$tmp/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
+	"$(KUSTOMIZE)" build "$$tmp/config/default" | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy both provisioner and controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion. Call with wait=false to avoid waiting for finalizers.

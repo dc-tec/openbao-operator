@@ -1,0 +1,107 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: Security (govulncheck + Trivy FS)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Run govulncheck
+        env:
+          GOFLAGS: -mod=readonly
+        run: |
+          set -euo pipefail
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          govulncheck -test ./...
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,config
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-files: config/rbac/provisioner_delegate_clusterrole.yaml
+
+  e2e:
+    name: E2E (kind ${{ matrix.k8s }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        k8s:
+          - 1.33.7
+          - 1.34.3
+          - 1.35.0
+    env:
+      KIND_NODE_IMAGE: kindest/node:v${{ matrix.k8s }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Install kind (pinned)
+        uses: ./.github/actions/install-kind
+
+      - name: Run full E2E
+        env:
+          GOFLAGS: -mod=readonly
+          E2E_TIMEOUT: 90m
+          E2E_PARALLEL_NODES: "2"
+        run: make test-e2e-ci
+
+  docs:
+    name: Docs Build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Build docs
+        uses: ./.github/actions/mkdocs-build
+
+  helm:
+    name: Helm Chart
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: Lint
+        run: helm lint charts/openbao-operator --namespace openbao-operator-system
+
+      - name: Template
+        run: helm template openbao-operator charts/openbao-operator --namespace openbao-operator-system --include-crds > /dev/null
