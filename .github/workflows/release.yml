@@ -497,3 +497,41 @@ jobs:
             dist/sbom-openbao-backup-executor.spdx.json
             dist/sbom-openbao-upgrade-executor.spdx.json
             dist/checksums.txt
+
+  deploy-docs:
+    name: Deploy Versioned Docs
+    runs-on: ubuntu-24.04
+    needs: [prepare, promote]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.x"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv pip install --system mkdocs-material mike
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch gh-pages
+        run: git fetch origin gh-pages --depth=1 || true
+
+      - name: Deploy versioned docs
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: mike deploy --push --update-aliases "${VERSION}" latest
+

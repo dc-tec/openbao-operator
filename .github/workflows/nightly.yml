@@ -46,6 +46,29 @@ jobs:
           exit-code: "1"
           skip-files: config/rbac/provisioner_delegate_clusterrole.yaml
 
+  openbao-config-compat:
+    name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.5.0)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Validate HCL fixtures against upstream OpenBao parser
+        env:
+          REPORT_SCHEMA_DRIFT: "true"
+        run: bash hack/ci/openbao-config-compat.sh 2.4.0 2.4.1 2.4.3 2.4.4
+
+      - name: Report operator-vs-upstream config schema drift (informational)
+        run: go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
+
   e2e:
     name: E2E (kind ${{ matrix.k8s }})
     runs-on: ubuntu-24.04

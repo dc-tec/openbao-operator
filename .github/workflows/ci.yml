@@ -28,12 +28,13 @@ jobs:
           check-latest: true
           cache: true
 
+      # TODO: Pin sha256 for govulncheck
       - name: Run govulncheck
         env:
           GOFLAGS: -mod=readonly
         run: |
           set -euo pipefail
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4 
           govulncheck -test ./...
 
       - name: Run Trivy filesystem scan
@@ -133,6 +134,24 @@ jobs:
 
       - name: Run tests
         run: make test-ci
+
+  openbao-config-compat:
+    name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.5.0)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Validate HCL fixtures against upstream OpenBao parser
+        run: bash hack/ci/openbao-config-compat.sh 2.4.0 2.4.4
 
   docs:
     name: Docs Build
