@@ -21,7 +21,7 @@ The `Hardened` profile enforces strict security requirements suitable for produc
 - **No Root Tokens:** Root tokens are never created or stored, eliminating the risk of token compromise.
 - **External KMS:** Provides stronger root of trust than Kubernetes Secrets for unseal keys.
 - **External TLS:** Integrates with organizational PKI and certificate management systems.
-- **Automatic JWT Bootstrap:** Reduces configuration errors and ensures proper authentication setup.
+- **Optional JWT Bootstrap:** When `spec.selfInit.bootstrapJWTAuth=true`, the operator can bootstrap OpenBao JWT auth during self-init to reduce configuration drift.
 
 ## Development Profile
 
@@ -37,5 +37,5 @@ The `Development` profile allows relaxed security for development and testing:
 
 See also:
 
-- User guide: [Security Profiles](../../user-guide/security-profiles.md)
-- User guide: [Advanced Configuration](../../user-guide/advanced-configuration.md)
+- User guide: [Security Profiles](../../user-guide/openbaocluster/configuration/security-profiles.md)
+- User guide: [Server Configuration](../../user-guide/openbaocluster/configuration/server.md)

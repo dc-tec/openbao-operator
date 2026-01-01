@@ -147,9 +147,9 @@ At minimum, envtest suites should cover:
   - Sentinel Deployment is created when `spec.sentinel.enabled` is true.
   - Sentinel ServiceAccount, Role, and RoleBinding are created with correct permissions.
   - Sentinel Deployment is deleted when `spec.sentinel.enabled` is false.
-  - Sentinel trigger annotation (`openbao.org/sentinel-trigger`) triggers fast-path reconciliation.
-  - Fast-path mode skips UpgradeManager and BackupManager when trigger annotation is present.
-  - Trigger annotation is cleared after successful reconciliation.
+  - Sentinel trigger status (`status.sentinel.triggerID`) triggers fast-path reconciliation.
+  - Fast-path mode skips UpgradeManager and BackupManager when trigger is present and unhandled.
+  - Trigger is marked handled after successful reconciliation (`status.sentinel.lastHandledTriggerID`).
 
 Where individual envtest assertions involve small decision functions, we still prefer table-driven subtests to cover multiple variations per scenario.
 
@@ -314,12 +314,12 @@ You can run only tests matching a label expression via the Makefile:
     - Sentinel health endpoint (`/healthz`) returns 200 OK.
   - Drift detection:
     - Manually modify a managed ConfigMap (e.g., change `config.hcl` content).
-    - Verify Sentinel detects the change and patches `OpenBaoCluster` with `openbao.org/sentinel-trigger` annotation.
+    - Verify Sentinel detects the change and patches `OpenBaoCluster` status (`status.sentinel.triggerID`).
     - Verify operator enters fast-path mode (skips Upgrade and Backup managers).
-    - Verify operator corrects the drift and clears the trigger annotation.
+    - Verify operator corrects the drift and marks the trigger handled (`status.sentinel.lastHandledTriggerID`).
   - Debouncing:
     - Rapidly modify multiple resources (StatefulSet, Service, ConfigMap) within the debounce window.
-    - Verify only one trigger annotation is set (not multiple).
+    - Verify only one trigger is emitted (not multiple).
   - Actor filtering:
     - Operator updates a StatefulSet (e.g., during normal reconciliation).
     - Verify Sentinel does NOT trigger (ignores operator updates).
@@ -328,9 +328,8 @@ You can run only tests matching a label expression via the Makefile:
     - Verify Sentinel does NOT trigger (hash comparison prevents false positives).
   - VAP enforcement:
     - Attempt to use Sentinel ServiceAccount to modify `OpenBaoCluster.Spec` (should be blocked by VAP).
-    - Attempt to modify `OpenBaoCluster.Status` (should be blocked by VAP).
-    - Attempt to add other annotations (should be blocked by VAP).
-    - Verify only `openbao.org/sentinel-trigger` annotation can be added/updated.
+    - Attempt to modify operator-owned `OpenBaoCluster.Status` fields (conditions/phase/etc.) (should be blocked by VAP).
+    - Verify Sentinel can only modify `status.sentinel` trigger fields.
   - Cleanup:
     - Disable Sentinel (`spec.sentinel.enabled: false`).
     - Verify Sentinel Deployment, ServiceAccount, Role, and RoleBinding are deleted.

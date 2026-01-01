@@ -1,23 +1,25 @@
 # Key Flows (Day 0, Day 2, Day N)
 
+These flows describe manager-level responsibilities; in code, `OpenBaoCluster` reconciliation is split across `openbaocluster-workload` (certs/infra/init), `openbaocluster-adminops` (upgrade/backup), and `openbaocluster-status` (conditions/finalizers).
+
 ## 1. Cluster Creation (Day 0) - Standard Initialization
 
 1. User creates an `OpenBaoCluster` CR in a namespace (without `spec.selfInit`).
-2. CertController bootstraps PKI (CA + leaf certs).
+2. Cert Manager (workload controller) bootstraps PKI (CA + leaf certs).
 3. If image verification is enabled (`spec.imageVerification.enabled`), the operator verifies the container image signature using Cosign before proceeding.
-4. Infrastructure/ConfigController ensures a per-cluster auto-unseal configuration:
+4. Infrastructure Manager (workload controller) ensures a per-cluster auto-unseal configuration:
    - If `spec.unseal` is omitted or `spec.unseal.type` is `"static"`, creates a static auto-unseal key Secret (`<cluster>-unseal-key`) if missing.
    - If `spec.unseal.type` is an external KMS provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`), configures the seal with the provided options and credentials (if specified).
-5. ConfigController renders `config.hcl` with TLS, Raft storage, `retry_join`, `service_registration "kubernetes"`, and the appropriate `seal` stanza (static or external KMS).
+5. Infrastructure Manager renders `config.hcl` with TLS, Raft storage, `retry_join`, `service_registration "kubernetes"`, and the appropriate `seal` stanza (static or external KMS).
    - The Operator injects `BAO_K8S_NAMESPACE` into the OpenBao container environment so service registration can determine the Pod namespace.
-6. StatefulSetController creates the StatefulSet with **1 replica initially** (regardless of `spec.replicas`), mounting TLS and unseal Secrets (if using static seal) or KMS credentials (if using external KMS).
-7. InitController waits for pod-0 to be running, then:
+6. Infrastructure Manager creates the StatefulSet with **1 replica initially** (regardless of `spec.replicas`), mounting TLS and unseal Secrets (if using static seal) or KMS credentials (if using external KMS).
+7. Init Manager waits for pod-0 to be running, then:
    - Prefers Kubernetes service registration Pod labels (`openbao-initialized`, `openbao-sealed`) when available.
    - Falls back to the HTTP health endpoint (`GET /v1/sys/health`) when labels are not yet available.
    - If not, calls the HTTP initialization endpoint (`PUT /v1/sys/init`) against pod-0 to initialize the cluster.
    - Stores the root token in a per-cluster Secret (`<cluster>-root-token`).
    - Sets `Status.Initialized = true`.
-8. Once initialized, InfrastructureController scales the StatefulSet to the desired `spec.replicas`.
+8. Once initialized, Infrastructure Manager scales the StatefulSet to the desired `spec.replicas`.
 9. Additional OpenBao pods start, auto-unseal using the static key, join the Raft cluster via `retry_join`, and become Ready.
 
 ### 1.1 Day 0 Sequence (Standard Initialization)
@@ -52,18 +54,18 @@ sequenceDiagram
 When `spec.selfInit.enabled = true`, the cluster uses OpenBao's native self-initialization feature:
 
 1. User creates an `OpenBaoCluster` CR with `spec.selfInit` configured.
-2. CertController bootstraps PKI (CA + leaf certs).
+2. Cert Manager (workload controller) bootstraps PKI (CA + leaf certs).
 3. If image verification is enabled, the operator verifies the container image signature before proceeding.
-4. Infrastructure/ConfigController ensures a per-cluster auto-unseal configuration (static seal by default, or external KMS if configured).
-5. ConfigController renders `config.hcl` with TLS, Raft storage, `retry_join`, `service_registration "kubernetes"`, and the appropriate `seal` stanza.
+4. Infrastructure Manager (workload controller) ensures a per-cluster auto-unseal configuration (static seal by default, or external KMS if configured).
+5. Infrastructure Manager renders `config.hcl` with TLS, Raft storage, `retry_join`, `service_registration "kubernetes"`, and the appropriate `seal` stanza.
    - The init container appends the self-init `initialize` stanzas (rendered from `spec.selfInit.requests[]`) to the rendered config for pod-0 only.
-6. StatefulSetController creates the StatefulSet with **1 replica initially**.
+6. Infrastructure Manager creates the StatefulSet with **1 replica initially**.
 7. OpenBao automatically initializes itself on first start using the `initialize` stanzas:
    - Auto-unseals using the static key.
    - Executes all configured `initialize` requests (audit, auth, secrets, policies).
    - **The root token is NOT returned and is automatically revoked after use.**
-8. InitController detects initialization via Kubernetes service registration labels (preferred) and sets `Status.Initialized = true`.
-9. InfrastructureController scales the StatefulSet to the desired `spec.replicas`.
+8. Init Manager detects initialization via Kubernetes service registration labels (preferred) and sets `Status.Initialized = true`.
+9. Infrastructure Manager scales the StatefulSet to the desired `spec.replicas`.
 10. Additional OpenBao pods start, auto-unseal, and join the Raft cluster.
 
 **Note:** Self-initialization requires an auto-unseal mechanism (which the Operator provides via static auto-unseal by default, or external KMS if configured). No root token Secret is created when self-init is enabled.
@@ -101,11 +103,11 @@ sequenceDiagram
    - Set `spec.upgrade.executorImage` (container image used by upgrade Jobs)
    - Set `spec.upgrade.jwtAuthRole` and configure the role in OpenBao (binds to `<cluster-name>-upgrade-serviceaccount`, automatically created by operator)
 2. User updates `OpenBaoCluster.Spec.Version` and/or `Spec.Image`.
-3. UpgradeController detects version drift and performs pre-upgrade validation:
+3. Upgrade Manager (adminops controller) detects version drift and performs pre-upgrade validation:
    - Validates semantic versioning (blocks downgrades by default).
    - Verifies all pods are Ready and quorum is healthy.
    - Optionally triggers a pre-upgrade backup if `spec.upgrade.preUpgradeSnapshot` is enabled.
-4. UpgradeController orchestrates Raft-aware rolling updates:
+4. Upgrade Manager orchestrates Raft-aware rolling updates:
    - Locks StatefulSet updates using partitioning.
    - Iterates pods in reverse ordinal order.
    - Runs an upgrade Job to perform leader step-down before updating the leader pod.
@@ -155,8 +157,8 @@ sequenceDiagram
 2. User configures authentication method:
    - **JWT Auth (Preferred):** Set `spec.backup.jwtAuthRole` and configure the role in OpenBao
    - **Static Token (Fallback):** For all clusters, set `spec.backup.tokenSecretRef` pointing to a backup token Secret (root tokens are not used)
-3. BackupController schedules backups using cron expressions (e.g., `"0 3 * * *"` for daily at 3 AM).
-4. On schedule, BackupController:
+3. Backup Manager (adminops controller) schedules backups using cron expressions (e.g., `"0 3 * * *"` for daily at 3 AM).
+4. On schedule, Backup Manager:
    - Creates a Kubernetes Job with the backup executor container
    - Job uses `<cluster-name>-backup-serviceaccount` (automatically created by operator)
    - Backup executor:

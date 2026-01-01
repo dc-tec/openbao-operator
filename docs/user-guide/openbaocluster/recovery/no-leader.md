@@ -46,7 +46,7 @@ If you use NetworkPolicies, confirm they allow pod-to-pod traffic within the nam
 
 - If a majority of peers are reachable and you can identify stale peers, you may be able to remove dead peers and restore quorum.
 - If the cluster state is uncertain or you suspect split-brain, stop and follow the operator’s break glass guidance if present:
-  - [Break Glass / Safe Mode](recovery-safe-mode.md)
+  - [Break Glass / Safe Mode](safe-mode.md)
 
 ## 5. After Recovery
 
@@ -58,5 +58,4 @@ kubectl -n <ns> get openbaocluster <name> -o yaml
 
 If the operator is in break glass mode, acknowledge it to resume automation:
 
-- [Break Glass / Safe Mode](recovery-safe-mode.md)
-
+- [Break Glass / Safe Mode](safe-mode.md)

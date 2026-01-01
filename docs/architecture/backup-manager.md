@@ -10,6 +10,7 @@ Backups are executed using Kubernetes Jobs that run the `bao-backup` executor co
 
 - Verify cluster is healthy (`Phase == Running`).
 - Verify no upgrade is in progress (`Status.Upgrade == nil`).
+- Verify no restore is in progress for the cluster (active `OpenBaoRestore`), to avoid lock contention.
 - Verify no other backup is in progress (`BackingUp` condition is False).
 - Verify authentication is configured (JWT Auth role or token Secret).
 
@@ -56,6 +57,11 @@ Backups are named predictably:
 - `Status.Backup.NextScheduledBackup` stores the next scheduled time.
 - On Operator restart, the next schedule is recalculated from the cron expression.
 
+## Manual Backups
+
+- A one-off backup can be triggered by setting the `openbao.org/trigger-backup` annotation on the `OpenBaoCluster`.
+- After observing the trigger, the operator clears the annotation to make it edge-triggered.
+
 ## Configuration Options
 
 | Field | Description |
@@ -72,5 +78,5 @@ Backups are named predictably:
 
 See also:
 
-- [Backups User Guide](../user-guide/backups.md)
-- [Restore User Guide](../user-guide/restore.md)
+- [Restore User Guide](../user-guide/openbaorestore/restore.md)
+- [Backups User Guide](../user-guide/openbaocluster/operations/backups.md)

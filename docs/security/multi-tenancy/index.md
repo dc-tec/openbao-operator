@@ -20,7 +20,7 @@ The OpenBao Operator supports multi-tenant deployments where multiple teams shar
 
 The multi-tenant security model relies on the separation of:
 
-- **Provisioner** — Cluster-scoped, creates namespaces and grants RBAC
+- **Provisioner** — Cluster-scoped, grants RBAC and applies namespace security labels (it does not create namespaces)
 - **Controller** — Namespace-scoped, operates only within granted permissions
 
 This ensures no single component has both the ability to expand its own permissions AND access tenant secrets.
@@ -28,5 +28,5 @@ This ensures no single component has both the ability to expand its own permissi
 ## See Also
 
 - [RBAC Architecture](../infrastructure/rbac.md) — Detailed permission model
-- [User Guide: Multi-Tenancy](../../user-guide/multi-tenancy.md) — Configuration guide
-- [User Guide: Tenant Namespaces](../../user-guide/tenant-namespaces.md) — Provisioner setup
+- [User Guide: Multi-Tenancy](../../user-guide/openbaotenant/multi-tenancy.md) — Configuration guide
+- [User Guide: Tenant Onboarding](../../user-guide/openbaotenant/onboarding.md) — Provisioner setup

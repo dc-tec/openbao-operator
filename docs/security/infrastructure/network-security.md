@@ -9,7 +9,7 @@ For every `OpenBaoCluster`, the operator automatically creates a Kubernetes `Net
 - **Default Ingress Deny:** All ingress traffic is blocked by default.
 - **Allow Rules:**
   - **Inter-Pod Traffic:** Allows traffic between OpenBao pods within the same cluster (required for Raft replication).
-  - **Operator Access:** Allows ingress from the OpenBao Operator pods on port 8200 (required for upgrade operations such as leader step-down; initialization prefers Kubernetes service-registration signals but the operator may still need API access for non-self-init initialization and as a fallback).
+  - **Operator Access:** Allows ingress from the OpenBao Operator pods on port 8200 (required for health checks and the manual init fallback via the OpenBao HTTP API).
   - **Kube-System:** Allows ingress from `kube-system` for necessary components like DNS.
   - **Gateway API:** If `spec.gateway` is enabled, traffic is allowed from the Gateway's namespace.
 
@@ -23,7 +23,7 @@ Egress is restricted to essential services:
 - **Cluster Peers:** Communication with other Raft peers.
 
 !!! note "Backup Jobs"
-    Backup job pods run in separate pods that are excluded from this strict policy to allow them to reach external object storage endpoints (S3, GCS, etc.).
+    Backup/restore/upgrade-snapshot Job pods are excluded from the OpenBao pod NetworkPolicy so they can reach external endpoints (for example object storage). OpenBao pods still allow ingress from backup/restore pods on port 8200 for snapshot/restore operations.
 
 ## Custom Network Rules
 
@@ -37,7 +37,7 @@ While the operator enforces a default deny posture, users can extend the Network
 - For transit seal backends, prefer namespace selectors over broad IP ranges
 - Consider using backup jobs (excluded from NetworkPolicy) rather than adding broad egress rules for object storage access
 
-See also: [Network Configuration](../../user-guide/network.md)
+See also: [Network Configuration](../../user-guide/openbaocluster/configuration/network.md)
 
 ## PodDisruptionBudget
 

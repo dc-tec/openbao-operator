@@ -44,8 +44,7 @@ If the issue is still present, the operator may re-enter break glass (with a new
 
 ## Related Runbooks
 
-- [Recovering From No Leader / No Quorum](recovery-no-leader.md)
-- [Recovering From a Sealed Cluster](recovery-sealed-cluster.md)
-- [Recovering From a Failed Blue/Green Rollback](recovery-failed-rollback.md)
-- [Restore After a Partial Upgrade](recovery-restore-after-upgrade.md)
-
+- [Recovering From No Leader / No Quorum](no-leader.md)
+- [Recovering From a Sealed Cluster](sealed-cluster.md)
+- [Recovering From a Failed Blue/Green Rollback](failed-rollback.md)
+- [Restore After a Partial Upgrade](../../openbaorestore/recovery-restore-after-upgrade.md)

@@ -23,7 +23,6 @@ spec:
     blueGreen:
       autoPromote: true          # Automatically promote after sync (default: true)
       preUpgradeSnapshot: true   # Create backup before upgrade starts
-      preCleanupSnapshot: true   # Create backup before removing Blue
       verification:
         minSyncDuration: "30s"   # Wait before promotion (optional)
       autoRollback:
@@ -121,7 +120,7 @@ To upgrade an OpenBao cluster, update the `spec.version` field:
 
 ```sh
 kubectl -n security patch openbaocluster dev-cluster \
-  --type merge -p '{"spec":{"version":"2.5.0"}}'
+  --type merge -p '{"spec":{"version":"2.4.4"}}'
 ```
 
 ### Rolling Update Strategy
@@ -136,61 +135,26 @@ The upgrade manager will:
 
 ### Blue/Green Upgrade Strategy
 
-The Blue/Green upgrade follows a multi-phase process with safety checkpoints.
+The Blue/Green upgrade creates a parallel “Green” revision, validates it, switches traffic, and then removes the old “Blue” revision.
 
-#### Phase Flow
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> Idle
-    Idle --> DeployingGreen: Version change detected
-    DeployingGreen --> JoiningMesh: Pods ready
-    JoiningMesh --> Syncing: Non-voters joined
-    Syncing --> Promoting: Data synced
-    Promoting --> TrafficSwitching: Voters promoted
-    TrafficSwitching --> DemotingBlue: Stabilization passed
-    DemotingBlue --> Cleanup: Blue demoted
-    Cleanup --> Idle: Complete
-    
-    state "Pre-Upgrade Snapshot" as PreSnap
-    Idle --> PreSnap: preUpgradeSnapshot=true
-    PreSnap --> DeployingGreen
-    
-    state "Pre-Cleanup Snapshot" as PreCleanup
-    DemotingBlue --> PreCleanup: preCleanupSnapshot=true
-    PreCleanup --> Cleanup
-```
-
-#### Rollback Flow
+#### High-level Flow
 
 ```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> RollingBack: Failure detected
-    RollingBack --> RollbackCleanup: Blue re-promoted
-    RollbackCleanup --> Idle: Green removed
-    
-    note right of RollingBack
-        Triggered by:
-        - Job failure threshold
-        - Validation hook failure
-        - Traffic failure during stabilization
-    end note
+flowchart LR
+    Start["spec.version/spec.image change"] --> PreSnap{"preUpgradeSnapshot?"}
+    PreSnap -->|yes| Backup["Take snapshot"]
+    PreSnap -->|no| Green["Deploy Green revision"]
+    Backup --> Green
+    Green --> Sync["Join + sync data"]
+    Sync --> Promote["Promote Green voters"]
+    Promote --> Switch["Switch traffic to Green"]
+    Switch --> Cleanup["Remove Blue"]
+    Switch -->|failure + autoRollback| Rollback["Rollback to Blue"]
+    Cleanup --> Done["Done"]
+    Rollback --> Done
 ```
 
-#### Phase Details
-
-| Phase | Description |
-| :--- | :--- |
-| **Idle** | No upgrade in progress. Pre-upgrade snapshot taken if configured. |
-| **DeployingGreen** | Creating Green StatefulSet with new version, waiting for pods to be ready and unsealed |
-| **JoiningMesh** | Green pods join the Raft cluster as non-voters |
-| **Syncing** | Green pods replicate data from Blue leader. Pre-promotion hook runs (if configured). |
-| **Promoting** | Green pods promoted to voters |
-| **TrafficSwitching** | Service selectors point to Green. Stabilization period monitors health. |
-| **DemotingBlue** | Blue pods demoted to non-voters |
-| **Cleanup** | Pre-cleanup snapshot taken (if configured). Blue pods removed from Raft, Blue StatefulSet deleted. |
+See [Architecture: Upgrade Manager](../../../architecture/upgrade-manager.md) for the full state machine and detailed phase semantics.
 
 ---
 
@@ -205,7 +169,6 @@ spec:
   updateStrategy:
     blueGreen:
       preUpgradeSnapshot: true   # Backup before any changes
-      preCleanupSnapshot: true   # Backup before removing Blue (point of no return)
   backup:                         # Required for snapshots
     executorImage: openbao/backup-executor:v0.1.0
     jwtAuthRole: backup
@@ -300,4 +263,4 @@ status:
 
 If rollback automation cannot proceed safely (for example, a failed consensus repair), the operator may enter break glass mode and halt further quorum-risk actions:
 
-- [Break Glass / Safe Mode](recovery-safe-mode.md)
+- [Break Glass / Safe Mode](../recovery/safe-mode.md)

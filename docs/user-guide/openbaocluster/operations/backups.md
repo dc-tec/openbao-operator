@@ -1,6 +1,6 @@
 # Backups
 
-> **See also:** [Restore from Backup](restore.md) for restore procedures.
+> **See also:** [Restore from Backup](../../openbaorestore/restore.md) for restore procedures.
 >
 ## Prerequisites
 

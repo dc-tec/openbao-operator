@@ -27,7 +27,7 @@ When `spec.tls.mode` is `ACME`, OpenBao uses its native ACME client to automatic
 - **Native ACME:** OpenBao fetches certificates over the network using the ACME protocol (e.g., Let's Encrypt) and stores them in-memory (or cached per `tls_acme_cache_path`).
 - **No Secrets:** No Kubernetes Secrets are created or mounted for server certificates. Certificates are managed entirely by OpenBao.
 - **Automatic Rotation:** OpenBao handles certificate acquisition and rotation automatically via the ACME protocol, eliminating the need for external certificate management tools.
-- **No Wrapper Needed:** No TLS reload wrapper is needed, and `ShareProcessNamespace` is disabled, providing better container isolation and security.
+- **No TLS Reload Sidecar Needed:** ACME certificates are managed by OpenBao, so no TLS reload sidecar is needed. `ShareProcessNamespace` remains disabled, providing better container isolation and security.
 - **Zero Trust:** The operator never possesses private keys, making this mode ideal for zero-trust architectures.
 - **Configuration:** ACME parameters (`directoryURL`, `domain`, `email`) are configured via `spec.tls.acme` and rendered directly in the OpenBao listener configuration.
 

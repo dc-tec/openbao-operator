@@ -25,6 +25,11 @@ operator release.
 |-----------------|-----------|---------------------------------|
 | 2.4.x           | Supported | Primary target for this release |
 
+CI expectations for this range:
+
+- PR CI validates operator-generated HCL against upstream OpenBao config parsing for **min supported + latest supported** (currently `2.4.0` and `2.4.4`).
+- Nightly CI validates the same check across a broader 2.4.x patch set.
+
 > **Note:** Platform teams should validate new Kubernetes or OpenBao versions
 > in a non-production environment before rolling them out widely, even if they
 > fall within a “Supported” range.

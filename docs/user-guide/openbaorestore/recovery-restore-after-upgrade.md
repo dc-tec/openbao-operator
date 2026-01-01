@@ -51,7 +51,6 @@ When used, the operator emits a Warning event on the `OpenBaoRestore` and record
 ## After Restore
 
 - Re-check cluster health and seal state:
-  - [Recovering From a Sealed Cluster](recovery-sealed-cluster.md)
+  - [Recovering From a Sealed Cluster](../openbaocluster/recovery/sealed-cluster.md)
 - If the operator is in break glass mode, acknowledge it to resume automation:
-  - [Break Glass / Safe Mode](recovery-safe-mode.md)
-
+  - [Break Glass / Safe Mode](../openbaocluster/recovery/safe-mode.md)

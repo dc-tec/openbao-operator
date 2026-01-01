@@ -13,7 +13,7 @@ The Provisioner ServiceAccount has **minimal cluster-wide permissions**:
 - **Namespace Access:** Permissions to `get`, `update`, and `patch` namespaces (no `list` or `watch`). The Provisioner only accesses namespaces that are explicitly declared via `OpenBaoTenant` CRDs, eliminating the ability to survey the cluster topology.
 - **OpenBaoTenant CRD Management:** Permissions to `get`, `list`, `watch`, `update`, and `patch` `OpenBaoTenant` resources, which explicitly declare target namespaces for provisioning.
 - **RBAC Management:** Permissions to create, update, patch, and delete Roles and RoleBindings in tenant namespaces.
-- **Workload Permissions (Grant-Only):** The Provisioner has cluster-wide permissions for all workload resources (StatefulSets, Secrets, Services, etc.), but **these are only used to grant permissions in tenant Roles**. Kubernetes RBAC requires that you have permissions to grant them. The Provisioner does NOT use these permissions to access workload resources directly.
+- **Impersonation + Grant-Only Template:** The Provisioner impersonates a dedicated delegate ServiceAccount that is bound to a “tenant template” ClusterRole (`openbao-operator-tenant-template`). This template exists to satisfy Kubernetes RBAC escalation checks while generating tenant-scoped Roles; the Provisioner itself is not granted broad workload permissions.
 
 **Security Benefit:** Even if the Provisioner is compromised, it cannot read or modify workload resources in tenant namespaces. It can only create Roles/RoleBindings. Additionally, the Provisioner cannot enumerate namespaces to discover cluster topology, as it only accesses namespaces explicitly declared in `OpenBaoTenant` CRDs.
 
@@ -22,6 +22,8 @@ The Provisioner ServiceAccount has **minimal cluster-wide permissions**:
 The OpenBaoCluster Controller ServiceAccount has **very limited cluster-wide permissions**:
 
 - **Cluster-wide watch on `OpenBaoCluster`:** A ClusterRole grants `get;list;watch` on `openbaoclusters` so the controller can establish a shared cache for the primary CRD.
+- **Admission Dependency Reads:** A ClusterRole grants `get` on `validatingadmissionpolicies` / `validatingadmissionpolicybindings` so the controller can verify required security dependencies.
+- **Metrics Auth (Cluster-wide):** A ClusterRole grants `create` on `tokenreviews` and `subjectaccessreviews` to support the protected metrics endpoint.
 - **Tenant-scoped writes and all child resources:** All write operations on `OpenBaoCluster` and all managed child resources (Secrets, StatefulSets, Services, Jobs, etc.) are namespace-scoped via Roles created by the Provisioner in tenant namespaces.
 - **Namespace Isolation:** Can only access resources in namespaces where the Provisioner has created a tenant Role and RoleBinding.
 
@@ -41,9 +43,11 @@ flowchart LR
         Pcr["ClusterRole: provisioner-role (minimal)"]
         Ttmpl["ClusterRole: provisioner-delegate-template (grant-only)"]
         Ccr["ClusterRole: controller-openbaocluster (read-only watch)"]
+        Mcr["ClusterRole: metrics-auth-role"]
         Pcrb["ClusterRoleBinding: provisioner-rolebinding"]
         Tbind["ClusterRoleBinding: provisioner-delegate-template-binding"]
         Ccrb["ClusterRoleBinding: controller-openbaocluster-binding"]
+        Mcrb["ClusterRoleBinding: controller-metrics-auth-rolebinding"]
     end
 
     subgraph TenantNS["Tenant Namespace (tenant-a)"]
@@ -59,6 +63,8 @@ flowchart LR
 
     Csa --> Ccrb
     Ccrb --> Ccr
+    Csa --> Mcrb
+    Mcrb --> Mcr
 
     Psa -.->|"Impersonate delegate"| Dsa
     Dsa -->|"Create/Update"| Trole
@@ -83,12 +89,13 @@ flowchart LR
 - Namespace access permissions (`get`, `update`, `patch` only - no `list` or `watch`)
 - OpenBaoTenant CRD management permissions
 - RBAC management permissions (Roles, RoleBindings)
-- Workload permissions (grant-only, for creating tenant Roles)
+- Delegate template ClusterRole holds the “grant-only” union of tenant permissions (used via impersonation)
 
 **Controller Permissions:**
 
-- No cluster-wide permissions
-- Receives permissions only via namespace-scoped tenant Roles
+- Cluster-wide read/watch on `openbaoclusters` (shared cache) and `get` for admission policy dependencies
+- Cluster-wide `create` on `tokenreviews`/`subjectaccessreviews` (protected metrics auth)
+- Receives all write permissions for cluster child resources via namespace-scoped tenant Roles
 - Tenant Roles grant permissions for:
   - OpenBaoCluster management
   - Workload infrastructure (StatefulSets, Services, ConfigMaps, ServiceAccounts)

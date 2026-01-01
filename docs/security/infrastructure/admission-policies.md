@@ -2,18 +2,26 @@
 
 The Operator uses Kubernetes `ValidatingAdmissionPolicy` to enforce security invariants at admission time.
 
+## Policies Shipped With The Operator
+
+The operator ships several admission policies under `config/policy/` to enforce “GitOps-safe” and “least privilege” boundaries:
+
+- **Managed Resource Lockdown (`lock-managed-resource-mutations`)**: Blocks direct CREATE/UPDATE/DELETE of operator-managed resources (labeled `app.kubernetes.io/managed-by=openbao-operator`). Users must change the parent `OpenBaoCluster` / `OpenBaoTenant` instead. A small set of exceptions exist for Kubernetes control-plane components, cert-manager, OpenBao service registration Pod label updates, and explicit break-glass maintenance.
+- **Controller Self-Lockdown (`lock-controller-statefulset-mutations`)**: Defense-in-depth guard that prevents the OpenBaoCluster controller itself from mutating high-risk `StatefulSet` fields (volumes, commands/args, security context, token mounting, and volume mounts).
+- **OpenBaoCluster Validation (`validate-openbaocluster`)**: Enforces baseline spec invariants (for example Hardened profile requirements, self-init request constraints, gateway requirements, backup configuration requirements, and backup endpoint SSRF protections).
+- **Sentinel Hardening (`restrict-sentinel-mutations`)**: Restricts Sentinel to status-only trigger writes.
+- **Provisioner Delegation Hardening (`restrict-provisioner-delegate`)**: Restricts what the impersonated delegate can create/bind when provisioning tenant RBAC.
+
 ## ValidatingAdmissionPolicy for Sentinel
 
 A dedicated `ValidatingAdmissionPolicy` (`openbao-restrict-sentinel-mutations`) hardens the Sentinel drift detector:
 
 - **Subject Scoping:** The policy only applies when the caller is the Sentinel ServiceAccount (`system:serviceaccount:<tenant-namespace>:openbao-sentinel`).
-- **Spec & Status Protection:** For Sentinel requests, `object.spec` and `object.status` must match `oldObject.spec` and `oldObject.status`. The Sentinel cannot change desired state or status.
-- **Metadata Restrictions:** The only metadata changes allowed are:
-  - Adding or updating `openbao.org/sentinel-trigger`
-  - Adding or updating `openbao.org/sentinel-trigger-resource`
-- **All Other Changes Blocked:** Any attempt by Sentinel to modify labels, finalizers, or other annotations is rejected.
+- **Status-Only Trigger:** The Sentinel is only allowed to update `status.sentinel` trigger fields (`triggerID`, `triggeredAt`, `triggerResource`).
+- **Spec & Metadata Protection:** For Sentinel requests, `object.spec` and key metadata fields (labels/annotations/finalizers) must match `oldObject`.
+- **All Other Status Blocked:** Any attempt by Sentinel to modify other status fields (conditions, phase, backup/upgrade state) is rejected.
 
-**Result:** Even if the Sentinel binary is compromised, it can only signal drift via the trigger annotations and cannot escalate privileges or mutate configuration.
+**Result:** Even if the Sentinel binary is compromised, it can only signal drift via `status.sentinel` and cannot escalate privileges or mutate configuration.
 
 !!! important "Required Dependency"
     These admission policies are not optional. If the Operator cannot verify the Sentinel mutation policy is installed and correctly bound, it will treat Sentinel as unsafe and will not deploy Sentinel. The supported Kubernetes baseline for these controls is v1.33+.
@@ -21,16 +29,21 @@ A dedicated `ValidatingAdmissionPolicy` (`openbao-restrict-sentinel-mutations`) 
 !!! note "Kustomize Name Prefixes"
     When deploying via `config/default`, `kustomize` applies a `namePrefix` (for example, `openbao-operator-`) to cluster-scoped admission resources. Ensure any referenced policy names/bindings match the rendered names.
 
-## Configuration Allowlist
+## Configuration Ownership (Operator-Owned Stanzas)
 
-The operator rejects `OpenBaoCluster` resources that attempt to override protected configuration stanzas. This prevents tenants from weakening security controls managed by the operator.
+The operator’s `config.hcl` is generated from typed CRD fields and operator-owned stanzas:
 
-- **Protected Stanzas:** Users cannot override `listener`, `storage`, `seal`, `api_addr`, or `cluster_addr` via `spec.configuration` or legacy `spec.config`. These are strictly owned by the operator to ensure mTLS and Raft integrity.
-- **Parameter Allowlist:** Only known-safe OpenBao configuration parameters are accepted. Unknown or arbitrary keys are rejected by admission.
+- **Operator-Owned By Construction:** The operator always renders core stanzas like `listener "tcp"`, `storage "raft"`, and `seal` based on `spec.*` (and renders fixed identity attributes like `api_addr`/`cluster_addr`).
+- **User-Tunable Fields Are Typed:** User configuration under `spec.configuration` is a typed object (CRD schema). This is not a generic “accept arbitrary OpenBao HCL keys” escape hatch.
 
 ## Immutability
 
-Certain security-critical fields, such as the enabling/disabling of the Init Container, are validated to ensure the cluster cannot be put into an unsupported or insecure state.
+Certain security-critical fields are enforced at admission time via `validate-openbaocluster`, for example:
+
+- Hardened profile requirements (TLS mode, external unseal, self-init enabled, disallowing `tlsSkipVerify=true` in supported seal configs)
+- Init container required and enabled (and must specify an image)
+- Self-init request constraints (non-empty, bounded list with unique names)
+- Gateway and backup configuration invariants
 
 ## RBAC Delegation Hardening
 
@@ -46,10 +59,11 @@ Together, these controls provide defense-in-depth: even if the delegate's Cluste
 
 ## Backup Endpoint SSRF Protection
 
-To prevent Server-Side Request Forgery (SSRF) attacks, backup endpoint URLs are validated via `ValidatingAdmissionPolicy`:
+To prevent Server-Side Request Forgery (SSRF) attacks, backup endpoint URLs are validated via `validate-openbaocluster`:
 
 - **Blocked Endpoints:**
   - `localhost`, `127.0.0.1`, `::1` (loopback)
   - `169.254.x.x` (link-local addresses, including cloud metadata services like `169.254.169.254`)
 - **Hardened Profile:** Requires HTTPS or S3 scheme for backup endpoints.
-- **Defense-in-Depth:** Go-side validation in `BackupManager.checkPreconditions` provides runtime verification.
+
+**Note:** Runtime checks still exist for other backup safety properties (for example cross-namespace SecretRef protections), but SSRF endpoint validation is enforced at admission.

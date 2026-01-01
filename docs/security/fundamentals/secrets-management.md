@@ -18,7 +18,7 @@ The Operator manages several high-value secrets for OpenBao clusters.
 - **Credentials:** If `spec.unseal.credentialsSecretRef` is provided, credentials are mounted at `/etc/bao/seal-creds`. For GCP Cloud KMS, the `GOOGLE_APPLICATION_CREDENTIALS` environment variable is set to point to the mounted credentials file.
 - **Workload Identity:** When using workload identity mechanisms (IRSA for AWS, GKE Workload Identity for GCP), credentials may be omitted as the pod identity is used for authentication.
 
-See also: [Security Considerations](../../user-guide/security-considerations.md)
+See also: [Security Considerations](../../user-guide/openbaocluster/security-considerations.md)
 
 ## Root Token
 
@@ -31,30 +31,30 @@ See also: [Security Considerations](../../user-guide/security-considerations.md)
 
 ## JWT Authentication & OIDC Integration
 
-The Operator uses JWT authentication (OIDC-based) for all operator-to-OpenBao communication.
+The operator supports Kubernetes OIDC-based JWT authentication for **backup and upgrade executor Jobs** (and can optionally bootstrap OpenBao’s JWT auth during self-init).
 
 ### OIDC Discovery
 
-- **Startup Discovery:** The operator discovers the Kubernetes OIDC issuer URL and CA bundle at startup by querying the well-known OIDC endpoint.
+- **Startup Discovery:** The operator discovers the Kubernetes OIDC issuer URL and fetches JWKS public keys at startup by querying the well-known OIDC endpoint.
 - **Caching:** OIDC configuration is cached in the operator's memory for use during cluster reconciliation.
 - **Failure Handling:** If OIDC discovery fails, the operator logs an error but continues operation (Development profile clusters can function without OIDC).
 
 ### Projected ServiceAccount Tokens
 
-- **Controller Token Source:** The controller does not create ServiceAccount TokenRequests. Upgrade and backup operations that require OpenBao permissions run in dedicated Jobs.
-- **Job Token Source:** Upgrade and backup Jobs mount a projected ServiceAccount token at `/var/run/secrets/tokens/openbao-token` (audience `openbao-internal`).
+- **Controller Token Source:** The controller does not create ServiceAccount TokenRequests.
+- **Job Token Source:** Backup and upgrade Jobs mount a projected ServiceAccount token at `/var/run/secrets/tokens/openbao-token` (audience `openbao-internal`).
 - **Automatic Rotation:** Kubernetes automatically rotates these tokens, providing better security than static tokens.
 - **Short Lifetime:** Tokens have a limited lifetime (default 1 hour), reducing the impact of token compromise.
 
-### Automatic Bootstrap (Hardened Profile)
+### Optional JWT Bootstrap During Self-Init
 
-For `Hardened` profile clusters, JWT authentication is automatically bootstrapped during self-initialization:
+When `spec.selfInit.bootstrapJWTAuth=true`, the operator injects additional self-init requests to bootstrap JWT auth in OpenBao:
 
 - **JWT Auth Enablement:** The operator automatically enables JWT authentication in OpenBao.
-- **OIDC Configuration:** Configures OIDC discovery URL and CA bundle pointing to the Kubernetes API server.
+- **OIDC/JWKS Configuration:** Configures the bound issuer and JWT validation public keys (JWKS) captured from Kubernetes at operator startup.
 - **Operator Policy:** Creates a least-privilege policy (`openbao-operator`) granting only necessary permissions:
   - `sys/health` (read)
-  - `sys/step-down` (sudo)
+  - `sys/step-down` (sudo) *(when used by executor Jobs)*
   - `sys/storage/raft/snapshot` (read)
 - **Operator Role:** Creates a JWT role (`openbao-operator`) that binds to the operator's ServiceAccount with appropriate token policies.
 
@@ -66,7 +66,7 @@ Backup and upgrade executors use JWT authentication when `jwtAuthRole` is config
 - **Upgrade Executor:** Uses projected ServiceAccount token from `<cluster-name>-upgrade-serviceaccount` to authenticate via JWT.
 - **Backup Fallback:** Backup can fall back to a static token via `spec.backup.tokenSecretRef` when JWT is not available.
 
-See also: [Backups](../../user-guide/backups.md)
+See also: [Backups](../../user-guide/openbaocluster/operations/backups.md)
 
 ### JWT Flow Overview
 
@@ -90,3 +90,7 @@ sequenceDiagram
     Job->>Bao: Call sys/health / sys/storage/raft/snapshot / upgrade APIs
     Job-->>Op: Report status<br/>(success/failure)
 ```
+
+### Operator-to-OpenBao API Calls (No JWT)
+
+The operator itself uses TLS and relies on unauthenticated endpoints where possible (for example `sys/health` and the manual initialization fallback via `sys/init`). Privileged OpenBao actions that require authentication (snapshots, leader step-down, raft operations) are performed by the dedicated executor Jobs using JWT (preferred) or static tokens (fallback).

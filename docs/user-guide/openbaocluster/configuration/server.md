@@ -6,7 +6,7 @@
 
 ## Structured Configuration
 
-Configure OpenBao server settings using the structured `spec.configuration` API. This provides type safety, `kubectl explain` support, and better IDE autocomplete compared to the legacy `spec.config` map.
+Configure OpenBao server settings using the structured `spec.configuration` API. This provides type safety and `kubectl explain` support.
 
 ```yaml
 apiVersion: openbao.org/v1alpha1

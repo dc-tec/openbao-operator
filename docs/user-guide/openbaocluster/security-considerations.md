@@ -50,8 +50,8 @@ metadata:
   name: prod-cluster
   namespace: security
 spec:
-  version: "2.1.0"
-  image: "openbao/openbao:2.1.0"
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
   replicas: 3
   profile: Development
   unseal:
@@ -79,8 +79,8 @@ metadata:
   name: prod-cluster
   namespace: security
 spec:
-  version: "2.1.0"
-  image: "openbao/openbao:2.1.0"
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
   replicas: 3
   profile: Development
   unseal:
@@ -89,7 +89,7 @@ spec:
       project: "my-gcp-project"
       region: "us-central1"
       keyRing: "openbao-keyring"
-      crypto_key: "openbao-unseal-key"
+      cryptoKey: "openbao-unseal-key"
     # Optional: If not using GKE Workload Identity
     credentialsSecretRef:
       name: gcp-kms-credentials
@@ -116,8 +116,8 @@ metadata:
   name: prod-cluster
   namespace: security
 spec:
-  version: "2.1.0"
-  image: "openbao/openbao:2.1.0"
+  version: "2.4.4"
+  image: "openbao/openbao:2.4.4"
   imageVerification:
     enabled: true
     publicKey: |
@@ -146,8 +146,8 @@ metadata:
   name: prod-cluster
   namespace: security
 spec:
-  version: "2.1.0"
-  image: "private-registry.example.com/openbao/openbao:2.1.0"
+  version: "2.4.4"
+  image: "private-registry.example.com/openbao/openbao:2.4.4"
   imageVerification:
     enabled: true
     publicKey: |

@@ -10,4 +10,4 @@ Once you have basic cluster creation working:
 - Integrate Operator metrics with your monitoring stack using the manifests under `config/prometheus`.
 
 For deeper architectural details and the full roadmap (upgrades, backups, multi-tenancy),
-refer to [Architecture](../architecture/index.md) and [Security](../security/index.md).
+refer to [Architecture](../../architecture/index.md) and [Security](../../security/index.md).

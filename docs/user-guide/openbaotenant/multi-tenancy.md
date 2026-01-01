@@ -78,7 +78,7 @@ spec:
         any:
           - subjects:
               - kind: ServiceAccount
-                name: openbao-operator-controller-manager
+                name: openbao-operator-controller
                 namespace: openbao-operator-system
       validate:
         message: "Access to OpenBao root token and unseal key secrets is restricted"
@@ -87,7 +87,7 @@ spec:
 
 ### Network Policies
 
-The operator automatically creates a NetworkPolicy for each OpenBaoCluster that enforces default-deny ingress and restricts egress. The operator auto-detects the Kubernetes API server CIDR by querying the `kubernetes` Service in the `default` namespace. If auto-detection fails (e.g., due to restricted permissions in multi-tenant environments), you can manually configure `spec.network.apiServerCIDR` as a fallback (see [Network Configuration](network.md#api-server-cidr-fallback)).
+The operator automatically creates a NetworkPolicy for each OpenBaoCluster that enforces default-deny ingress and restricts egress. The operator auto-detects the Kubernetes API server CIDR by querying the `kubernetes` Service in the `default` namespace. If auto-detection fails (e.g., due to restricted permissions in multi-tenant environments), you can manually configure `spec.network.apiServerCIDR` as a fallback (see [Network Configuration](../openbaocluster/configuration/network.md#api-server-cidr-fallback)).
 
 **Backup job pods are excluded from this NetworkPolicy** (they have the label `openbao.org/component=backup`) to allow access to object storage services.
 

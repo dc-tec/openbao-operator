@@ -29,7 +29,10 @@ This section provides a comprehensive threat analysis using the STRIDE framework
 
 **Threat:** User manually edits the StatefulSet (e.g., changes image tag).
 
-**Mitigation:** The Operator's Reconciliation loop runs constantly. It will revert any out-of-band changes to the StatefulSet to match the CRD "Source of Truth" immediately.
+**Mitigation:** Direct mutation of operator-managed resources is rejected at admission time (`lock-managed-resource-mutations`) unless an explicit exception applies (for example kube-system controllers, cert-manager, OpenBao service-registration label updates, or break-glass maintenance). If a change does land, the operator reconciles it back to the desired state on the next reconcile:
+
+- immediately on `OpenBaoCluster` changes (and on Sentinel trigger events when enabled), and
+- via a periodic “safety net” requeue (roughly every 20–25 minutes).
 
 **Threat:** Malicious or misconfigured tenant modifies their `OpenBaoCluster` to point backups to an unauthorized object storage location.
 
@@ -43,8 +46,9 @@ This section provides a comprehensive threat analysis using the STRIDE framework
 
 - Operator runs as non-root.
 - **Least-Privilege RBAC Model:** The Operator uses separate ServiceAccounts:
-  - **Provisioner ServiceAccount:** Has minimal cluster-wide permissions (namespace watching + RBAC management). Cannot access workload resources directly.
-  - **OpenBaoCluster Controller ServiceAccount:** Has cluster-wide read access to `openbaoclusters` (`get;list;watch`) to support controller-runtime watches/caching, and cluster-wide `create` on `tokenreviews`/`subjectaccessreviews` for the protected metrics endpoint; all OpenBaoCluster writes and all child resources remain tenant-scoped via namespace Roles.
+  - **Provisioner ServiceAccount:** Has minimal cluster-wide permissions (namespace `get/update/patch`, `OpenBaoTenant` watch, RBAC cleanup). It does not list/watch namespaces, and it does not manage tenant workload resources directly.
+  - **Provisioner Delegate ServiceAccount:** Holds a “tenant template” ClusterRole purely for RBAC escalation checks; the Provisioner impersonates this delegate to create tenant-scoped Roles/RoleBindings.
+  - **OpenBaoCluster Controller ServiceAccount:** Has cluster-wide read access to `openbaoclusters` (`get;list;watch`) to support controller-runtime caching and cluster-wide `create` on `tokenreviews`/`subjectaccessreviews` for the protected metrics endpoint; all OpenBaoCluster writes and all child resources remain tenant-scoped via namespace Roles.
 - **Namespace Isolation:** The OpenBaoCluster controller cannot access resources outside tenant namespaces or non-OpenBao resources within tenant namespaces.
 - Operator does NOT have permission to read the *data* inside OpenBao (KV engine), only the API system endpoints.
 - **Blind Writes:** For sensitive assets like the Unseal Key Secret, the operator uses a "blind create" pattern. It attempts to create the Secret but does not require `GET` or `LIST` permissions on the generated secret data after creation, minimizing the attack surface if the operator is compromised.
@@ -64,9 +68,9 @@ This section provides a comprehensive threat analysis using the STRIDE framework
 
 **Mitigation:**
 
-- The Provisioner ServiceAccount has cluster-wide permissions only for granting permissions (required by Kubernetes RBAC), but the Provisioner controller code does NOT use these permissions to access workload resources.
+- The Provisioner uses a delegated “tenant template” ClusterRole via impersonation to satisfy Kubernetes RBAC escalation checks while creating tenant-scoped Roles; it does not use broad workload access for direct reads/writes.
 - The Provisioner only creates Roles/RoleBindings; it does not perform GET/LIST operations on StatefulSets, Secrets, Services, etc.
-- The OpenBaoCluster controller (which does access workload resources) uses a separate ServiceAccount with NO cluster-wide permissions, only namespace-scoped permissions in tenant namespaces.
+- The OpenBaoCluster controller has minimal cluster-wide permissions (to watch `openbaoclusters` and authenticate access to the protected metrics endpoint), but it only receives workload write permissions via namespace-scoped tenant Roles.
 - This separation ensures that even if the Provisioner is compromised, it cannot read or modify workload resources.
 
 **Threat:** Compromised Provisioner enumerates namespaces to discover cluster topology and project names.
@@ -75,7 +79,7 @@ This section provides a comprehensive threat analysis using the STRIDE framework
 
 - The Provisioner no longer has `list` or `watch` permissions on namespaces. It can only `get` namespaces that are explicitly declared in `OpenBaoTenant` CRDs.
 - The Provisioner watches `OpenBaoTenant` CRDs instead of namespaces, making it a "blind executor" that only acts on explicit governance instructions.
-- Creating an `OpenBaoTenant` CRD requires write access to the operator's namespace, which should be highly restricted (Cluster Admin only).
+- In **Centralized Admin** mode, creating an `OpenBaoTenant` in the operator namespace should be restricted (Cluster Admin only). In **Self-Service** mode, namespace admins can create an `OpenBaoTenant` only for their own namespace (target must match `metadata.namespace`).
 - This eliminates the ability for a compromised Provisioner to survey the cluster topology.
 
 ### D. Information Disclosure

@@ -2,12 +2,12 @@
 
 The OpenBao Operator supports restoring clusters from snapshots stored in S3-compatible object storage using the `OpenBaoRestore` CRD.
 
-> [!WARNING]
-> **Destructive Operation**: Force-restoring a snapshot replaces **all** Raft data. After restore, the cluster will have the exact state from the snapshot, including all secrets, policies, auth configurations, and unseal keys.
+!!! important "Destructive Operation"
+    Force-restoring a snapshot replaces **all** Raft data. After restore, the cluster will have the exact state from the snapshot, including all secrets, policies, auth configurations, and unseal keys.
 
 ## Prerequisites
 
-- A functioning backup in S3-compatible storage (see [Backups](backups.md))
+- A functioning backup in S3-compatible storage (see [Backups](../openbaocluster/operations/backups.md))
 - The target OpenBao cluster must exist and be initialized
 - Restore authentication configured (JWT Auth or static token)
 

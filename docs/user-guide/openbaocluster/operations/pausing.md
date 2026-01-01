@@ -23,4 +23,4 @@ Set `spec.paused` back to `false` to resume reconciliation.
   ```
 
 - If the operator has entered break glass mode, unpausing is not sufficient; follow the recovery steps in `status.breakGlass`:
-  - [Break Glass / Safe Mode](recovery-safe-mode.md)
+  - [Break Glass / Safe Mode](../recovery/safe-mode.md)

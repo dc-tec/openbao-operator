@@ -29,6 +29,8 @@ theme:
   font:
     text: DM Sans
     code: DM Mono
+  logo: assets/logo.svg
+  favicon: assets/favicon.png
 
 extra_css:
   - stylesheets/extra.css
@@ -47,41 +49,56 @@ markdown_extensions:
       permalink: true
   - tables
 
+plugins:
+  - search
+  - mike:
+      canonical_version: latest
+      version_selector: true
+
+extra:
+  version:
+    provider: mike
+    default: latest
+
 nav:
   - Home: index.md
   - User Guide:
       - Introduction: user-guide/index.md
-      - Getting Started:
-          - Installation: user-guide/installation.md
-          - Basic Cluster: user-guide/cluster-basic.md
-          - Next Steps: user-guide/next-steps.md
-      - Configuration:
-          - External Access: user-guide/external-access.md
-          - Network: user-guide/network.md
-          - Resources & Storage: user-guide/resources.md
-          - Advanced Configuration: user-guide/advanced-configuration.md
-          - Gateway API: user-guide/gateway-api.md
-      - Operations:
-          - Upgrades: user-guide/upgrades.md
-          - Backups: user-guide/backups.md
-          - Restore: user-guide/restore.md
-          - Pausing: user-guide/pausing.md
-          - Deletion: user-guide/deletion.md
-      - Security & Multi-Tenancy:
-          - Security Profiles: user-guide/security-profiles.md
-          - Self-Initialization: user-guide/self-init.md
-          - Sentinel: user-guide/sentinel.md
-          - Multi-Tenancy: user-guide/multi-tenancy.md
-          - Tenant Namespaces: user-guide/tenant-namespaces.md
-          - Security Considerations: user-guide/security-considerations.md
-      - Production:
-          - Production Checklist: user-guide/production-checklist.md
-      - Recovery:
-          - Break Glass / Safe Mode: user-guide/recovery-safe-mode.md
-          - No Leader / No Quorum: user-guide/recovery-no-leader.md
-          - Sealed Cluster: user-guide/recovery-sealed-cluster.md
-          - Failed Rollback: user-guide/recovery-failed-rollback.md
-          - Restore After Partial Upgrade: user-guide/recovery-restore-after-upgrade.md
+      - Operator:
+          - Installation: user-guide/operator/installation.md
+      - OpenBaoTenant:
+          - Overview: user-guide/openbaotenant/overview.md
+          - Onboarding: user-guide/openbaotenant/onboarding.md
+          - Multi-Tenancy: user-guide/openbaotenant/multi-tenancy.md
+      - OpenBaoCluster:
+          - Overview: user-guide/openbaocluster/overview.md
+          - Getting Started: user-guide/openbaocluster/getting-started.md
+          - Next Steps: user-guide/openbaocluster/next-steps.md
+          - Configuration:
+              - Security Profiles: user-guide/openbaocluster/configuration/security-profiles.md
+              - Self-Initialization: user-guide/openbaocluster/configuration/self-init.md
+              - Sentinel: user-guide/openbaocluster/configuration/sentinel.md
+              - Server Configuration: user-guide/openbaocluster/configuration/server.md
+              - External Access: user-guide/openbaocluster/configuration/external-access.md
+              - Network: user-guide/openbaocluster/configuration/network.md
+              - Resources & Storage: user-guide/openbaocluster/configuration/resources-storage.md
+              - Gateway API: user-guide/openbaocluster/configuration/gateway-api.md
+          - Operations:
+              - Upgrades: user-guide/openbaocluster/operations/upgrades.md
+              - Backups: user-guide/openbaocluster/operations/backups.md
+              - Pausing: user-guide/openbaocluster/operations/pausing.md
+              - Deletion: user-guide/openbaocluster/operations/deletion.md
+              - Production Checklist: user-guide/openbaocluster/operations/production-checklist.md
+          - Security Considerations: user-guide/openbaocluster/security-considerations.md
+          - Recovery:
+              - Break Glass / Safe Mode: user-guide/openbaocluster/recovery/safe-mode.md
+              - No Leader / No Quorum: user-guide/openbaocluster/recovery/no-leader.md
+              - Sealed Cluster: user-guide/openbaocluster/recovery/sealed-cluster.md
+              - Failed Rollback: user-guide/openbaocluster/recovery/failed-rollback.md
+      - OpenBaoRestore:
+          - Overview: user-guide/openbaorestore/overview.md
+          - Restore: user-guide/openbaorestore/restore.md
+          - Restore After Partial Upgrade: user-guide/openbaorestore/recovery-restore-after-upgrade.md
   - Architecture:
       - Overview: architecture/index.md
       - Component Design: architecture/components.md
@@ -91,8 +108,9 @@ nav:
           - Cluster Initialization: architecture/init-manager.md
           - Upgrade: architecture/upgrade-manager.md
           - Backup: architecture/backup-manager.md
+          - Restore: architecture/restore-manager.md
       - Lifecycle Management: architecture/lifecycle.md
-      - Sentinel Sidecar: architecture/sentinel.md
+      - Sentinel Drift Detector: architecture/sentinel.md
   - Security:
       - Overview: security/index.md
       - Fundamentals:

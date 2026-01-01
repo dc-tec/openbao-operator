@@ -6,14 +6,14 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
 
 - [ ] **Set `spec.profile: Hardened`** in your `OpenBaoCluster` manifest
   - Development profile is insecure and emits warnings
-  - See [Security Profiles](security-profiles.md) for details
+  - See [Security Profiles](../configuration/security-profiles.md) for details
 
 ## Unseal Configuration
 
 - [ ] **Configure external unseal** (do not use static auto-unseal in production)
   - Recommended: Transit unseal with external OpenBao/Vault
   - Alternative: Cloud KMS (AWS KMS, GCP KMS, Azure Key Vault)
-  - See [Self-Initialization](self-init.md) for setup
+  - See [Self-Initialization](../configuration/self-init.md) for setup
 
 - [ ] **Verify etcd encryption at rest** is enabled on your cluster
   - Static unseal keys are stored in Kubernetes Secrets
@@ -26,35 +26,35 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
   - `OperatorManaged`: Operator generates and rotates internal CA (simplest)
   - `External`: Bring your own certificates (for compliance requirements)
   - `ACME`: Automated certificates via cert-manager (for public endpoints)
-  - See [TLS Configuration](../security/workload/tls.md) for details
+  - See [TLS Configuration](../../../security/workload/tls.md) for details
 
 ## Self-Initialization
 
 - [ ] **Enable self-init** to avoid root token Secrets
   - Configure: `spec.selfInit.enabled: true`
   - Prevents root token from being stored in Kubernetes
-  - See [Self-Initialization](self-init.md) for complete setup
+  - See [Self-Initialization](../configuration/self-init.md) for complete setup
 
 ## Admission Policies
 
 - [ ] **Verify ValidatingAdmissionPolicies are installed and enforced**
   - Required for Sentinel security
   - Policies: `openbao-restrict-sentinel-mutations`, `openbao-restrict-provisioner-delegate`
-  - See [Admission Policies](../security/infrastructure/admission-policies.md)
+  - See [Admission Policies](../../../security/infrastructure/admission-policies.md)
 
 ## Network Security
 
 - [ ] **Review NetworkPolicy configuration**
   - Default policies enforce deny-all ingress
   - Configure egress rules for backup targets and external services
-  - See [Network Security](../security/infrastructure/network-security.md)
+  - See [Network Security](../../../security/infrastructure/network-security.md)
 
 ## Backup Configuration
 
 - [ ] **Configure scheduled backups** to object storage
   - S3, GCS, or Azure Blob Storage
   - Test restore procedures before production
-  - See [Backups](backups.md) and [Restore](restore.md)
+  - See [Backups](backups.md) and [Restore](../../openbaorestore/restore.md)
 
 - [ ] **Verify backup credentials** are properly secured
   - Use cloud provider workload identity where possible
@@ -65,7 +65,7 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
 - [ ] **Set appropriate resource requests and limits**
   - Memory: Minimum 256Mi for small deployments
   - CPU: Scale based on request volume
-  - See [Resources & Storage](resources.md)
+  - See [Resources & Storage](../configuration/resources-storage.md)
 
 - [ ] **Size storage appropriately**
   - Raft storage grows with secret count
@@ -83,10 +83,10 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
 ## Recovery Preparation
 
 - [ ] **Familiarize with recovery runbooks**:
-  - [Break Glass / Safe Mode](recovery-safe-mode.md)
-  - [No Leader / No Quorum](recovery-no-leader.md)
-  - [Sealed Cluster](recovery-sealed-cluster.md)
-  - [Failed Rollback](recovery-failed-rollback.md)
+  - [Break Glass / Safe Mode](../recovery/safe-mode.md)
+  - [No Leader / No Quorum](../recovery/no-leader.md)
+  - [Sealed Cluster](../recovery/sealed-cluster.md)
+  - [Failed Rollback](../recovery/failed-rollback.md)
 
 ## Final Verification
 

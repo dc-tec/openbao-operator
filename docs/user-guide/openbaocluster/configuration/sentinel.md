@@ -1,6 +1,6 @@
 # Sentinel Drift Detection
 
-The Sentinel is an optional per-cluster sidecar controller that provides high-availability drift detection and fast-path reconciliation. When enabled, the Sentinel watches for unauthorized changes to managed infrastructure resources and immediately triggers the operator to correct them.
+The Sentinel is an optional per-cluster drift detector that provides high-availability drift detection and fast-path reconciliation. When enabled, the Sentinel watches for unauthorized changes to managed infrastructure resources and immediately triggers the operator to correct them.
 
 ## Overview
 
@@ -136,37 +136,39 @@ Multiple drift events within the debounce window are coalesced into a single tri
 
 The Sentinel does **not** have access to Secrets. RBAC for the Sentinel is strictly limited to read-only access for StatefulSets, Services, and ConfigMaps, plus patch access on `OpenBaoCluster` resources for drift triggers. Drift that involves unseal keys or root tokens is detected indirectly via OpenBao health and status, not by inspecting Secret data.
 
-### 6. Trigger
+### 6. Trigger (GitOps-friendly)
 
-When drift is detected, the Sentinel patches the `OpenBaoCluster` with:
+When drift is detected, the Sentinel patches the `OpenBaoCluster` **status** with:
 
 ```yaml
-annotations:
-  openbao.org/sentinel-trigger: "2025-01-15T10:30:45.123456789Z"
-  openbao.org/sentinel-trigger-resource: "StatefulSet/my-cluster"
+status:
+  sentinel:
+    triggerID: "2025-01-15T10:30:45.123456789Z"
+    triggeredAt: "2025-01-15T10:30:45.123456789Z"
+    triggerResource: "StatefulSet/my-cluster"
 ```
 
-These annotations are the **only** metadata mutations the Sentinel is authorized to make (enforced by ValidatingAdmissionPolicy).
+This is GitOps-friendly: tools like ArgoCD ignore `status` diffs by default, so the cluster stays in sync without needing `ignoreDifferences` rules for trigger annotations.
 
 ### 7. Fast Path
 
-The operator detects the trigger annotation and enters "fast path" mode:
+The operator detects the trigger in `status.sentinel.triggerID` and enters "fast path" mode:
 
 - **CertManager** and **InfrastructureManager** run normally (to fix the drift)
 - **InitManager** runs if needed
 - **UpgradeManager** and **BackupManager** are **skipped** to minimize latency
 
-After successful reconciliation, the operator clears the trigger annotation, which causes a second reconciliation (normal path) to ensure full consistency.
+After successful reconciliation, the operator marks the trigger as handled (by updating `status.sentinel.lastHandledTriggerID`) and schedules a follow-up normal reconciliation to ensure full consistency.
 
 ## Security
 
 ### ValidatingAdmissionPolicy
 
-A cluster-scoped ValidatingAdmissionPolicy (`openbao-restrict-sentinel-mutations`) enforces that the Sentinel can only modify the drift trigger annotations. All other mutations are blocked at the API server level:
+A cluster-scoped ValidatingAdmissionPolicy (`openbao-restrict-sentinel-mutations`) enforces that the Sentinel can only modify `status.sentinel` trigger fields. All other mutations are blocked at the API server level:
 
 - **Spec changes:** Blocked
-- **Status changes:** Blocked
-- **Other annotations (besides `openbao.org/sentinel-trigger` and `openbao.org/sentinel-trigger-resource`):** Blocked
+- **Metadata changes (labels/annotations/finalizers):** Blocked
+- **Other status fields (besides `status.sentinel` trigger fields):** Blocked
 - **Labels and finalizers:** Blocked
 
 This provides **mathematical security**: even if the Sentinel binary is compromised, it cannot escalate privileges or modify cluster configuration.
@@ -180,12 +182,14 @@ This provides **mathematical security**: even if the Sentinel binary is compromi
 The Sentinel has minimal permissions:
 
 - **Read-only access** to infrastructure resources (`get`, `list`, `watch`)
-- **Limited patch access** to `OpenBaoCluster` resources (`get`, `patch`)
+- **Read access** to `OpenBaoCluster` resources (`get`, `list`, `watch`)
+- **Limited patch access** to `OpenBaoCluster` status (`patch` on `openbaoclusters/status`)
 
 The Sentinel cannot:
 
 - Create or delete resources
-- Modify Spec or Status
+- Modify Spec
+- Modify operator-owned status (conditions, phase, backup/upgrade state, etc.)
 - Access resources outside the cluster namespace
 - Modify labels or finalizers
 
@@ -288,6 +292,6 @@ The operator will clean up the Sentinel Deployment, ServiceAccount, Role, and Ro
 
 ## See Also
 
-- [Architecture: Sentinel](../architecture/sentinel.md)
-- [Security: Admission Policies](../security/infrastructure/admission-policies.md)
-- [Advanced Configuration](advanced-configuration.md)
+- [Architecture: Sentinel](../../../architecture/sentinel.md)
+- [Security: Admission Policies](../../../security/infrastructure/admission-policies.md)
+- [Server Configuration](server.md)

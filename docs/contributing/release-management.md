@@ -26,19 +26,20 @@ Releases are created via `.github/workflows/release.yml` (manual `workflow_dispa
 2. **Security gates**:
    - `govulncheck -test ./...`
    - Trivy image scan for HIGH/CRITICAL vulns (build-tag images)
-3. **E2E gate**: full E2E suite on a Kubernetes version matrix (from `docs/reference/compatibility.md`).
-4. **Promote by digest (no rebuild)**:
+3. **Config compatibility gate**: validate operator-generated HCL against the upstream OpenBao config parser for the supported OpenBao version range (`>=2.4.0 <2.5.0`).
+4. **E2E gate**: full E2E suite on a Kubernetes version matrix (from `docs/reference/compatibility.md`).
+5. **Promote by digest (no rebuild)**:
    - Retag images by digest to `:<version>` (e.g. `:v0.1.0`)
-5. **Sign artifacts** (keyless):
+6. **Sign artifacts** (keyless):
    - Sign each image by digest
    - Package and push the OCI Helm chart to `oci://ghcr.io/<org>/charts`
    - Sign the OCI chart
-6. **Publish release assets**:
+7. **Publish release assets**:
    - Generate `dist/install.yaml` pinned to the operator image digest
    - Generate SPDX JSON SBOMs for each published image and attach them to the GitHub Release
    - Generate `dist/checksums.txt`
-7. **Create git tag**: annotated `vX.Y.Z` tag is pushed.
-8. **Create GitHub Release**: release notes are generated and assets are attached.
+8. **Create git tag**: annotated `vX.Y.Z` tag is pushed.
+9. **Create GitHub Release**: release notes are generated and assets are attached.
 
 ## Artifact Locations
 

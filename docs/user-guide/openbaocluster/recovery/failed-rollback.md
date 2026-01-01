@@ -44,5 +44,4 @@ The operator retries rollback automation using a new, deterministic Job attempt.
 
 If rollback cannot be repaired, consider restoring from a known-good snapshot:
 
-- [Restore After a Partial Upgrade](recovery-restore-after-upgrade.md)
-
+- [Restore After a Partial Upgrade](../../openbaorestore/recovery-restore-after-upgrade.md)

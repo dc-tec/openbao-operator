@@ -4,7 +4,7 @@ This guide walks you through creating your first OpenBaoCluster. Choose the path
 
 ## Prerequisites
 
-- **OpenBao Operator**: Installed and running (see [Installation](installation.md))
+- **OpenBao Operator**: Installed and running (see [Installation](../operator/installation.md))
 - **Storage Class**: Default storage class configured in the cluster
 
 ## Choose Your Path
@@ -20,8 +20,8 @@ This guide walks you through creating your first OpenBaoCluster. Choose the path
       name: dev-cluster
       namespace: default
     spec:
-      version: "2.1.0"
-      image: "openbao/openbao:2.1.0"
+      version: "2.4.4"
+      image: "openbao/openbao:2.4.4"
       replicas: 3
       profile: Development
       tls:
@@ -48,32 +48,26 @@ This guide walks you through creating your first OpenBaoCluster. Choose the path
       name: prod-cluster
       namespace: openbao
     spec:
-      version: "2.1.0"
-      image: "openbao/openbao:2.1.0"
+      version: "2.4.4"
+      image: "openbao/openbao:2.4.4"
       replicas: 3
       profile: Hardened
       tls:
         enabled: true
-        mode: OperatorManaged
-        rotationPeriod: "720h"
+        mode: External
       storage:
         size: "50Gi"
       selfInit:
         enabled: true
-        config:
-          policies:
-            - name: admin
-              rules: |
-                path "sys/*" { capabilities = ["create", "read", "update", "delete", "list", "sudo"] }
-          authMethods:
-            - type: kubernetes
-              path: kubernetes
-              config:
-                kubernetes_host: "https://kubernetes.default.svc"
+      unseal:
+        type: awskms
+        awskms:
+          region: us-east-1
+          kmsKeyID: alias/openbao-unseal
     ```
 
     !!! tip "Production Checklist"
-        Before deploying to production, complete the [Production Checklist](production-checklist.md) 
+        Before deploying to production, complete the [Production Checklist](operations/production-checklist.md) 
         to ensure proper security configuration.
 
 ## Apply the Configuration
@@ -115,6 +109,6 @@ Look for:
 
 ## Next Steps
 
-- [External Access](external-access.md) — Expose your cluster
-- [Security Profiles](security-profiles.md) — Understand profile differences
-- [Backups](backups.md) — Configure disaster recovery
+- [External Access](configuration/external-access.md) — Expose your cluster
+- [Security Profiles](configuration/security-profiles.md) — Understand profile differences
+- [Backups](operations/backups.md) — Configure disaster recovery

@@ -24,14 +24,14 @@ The Provisioner supports two modes of operation:
 * The OpenBaoCluster controller cannot access resources unrelated to OpenBao in tenant namespaces (e.g., other applications' Secrets, Deployments, etc.).
 * The Provisioner cannot access workload resources directly, only create Roles/RoleBindings.
 * **Information Disclosure Mitigation:** The Provisioner cannot enumerate namespaces to discover cluster topology. It can only access namespaces explicitly declared in `OpenBaoTenant` CRDs.
-* **Elevation of Privilege Mitigation:** Creating an `OpenBaoTenant` CRD requires write access to the operator's namespace, which should be highly restricted (Cluster Admin only).
+* **Elevation of Privilege Mitigation:** In **Centralized Admin** mode, creating an `OpenBaoTenant` in the operator namespace should be restricted to cluster admins; in **Self-Service** mode, namespace admins can only provision their *own* namespace.
 
-**Recommendation:** Tenants should typically be granted `edit` or `view` roles for `OpenBaoCluster` resources but should **not** have `get` access to Secrets matching `*-root-token` or `*-unseal-key`. Additionally, only cluster administrators should have permission to create `OpenBaoTenant` resources.
+**Recommendation:** Tenants should typically be granted `edit` or `view` roles for `OpenBaoCluster` resources but should **not** have `get` access to Secrets matching `*-root-token` or `*-unseal-key`. Restrict **Centralized Admin** `OpenBaoTenant` creation in the operator namespace to cluster admins; allow **Self-Service** `OpenBaoTenant` creation only within the tenant’s own namespace.
 
 ## Tenant Namespace Provisioning Flow
 
 1. User creates a namespace (target namespace for OpenBao clusters)
-2. User creates an `OpenBaoTenant` CRD in the operator's namespace (typically `openbao-operator-system`) with `spec.targetNamespace` set to the target namespace
+2. User creates an `OpenBaoTenant` CRD (either in their own namespace for **Self-Service**, or in the operator namespace for **Centralized Admin**) with `spec.targetNamespace` set to the target namespace
 3. Provisioner controller detects the `OpenBaoTenant` CRD via watch
 4. Provisioner verifies the target namespace exists (using `get` permission)
 5. Provisioner creates the tenant Role (`openbao-operator-tenant-role`) in the target namespace

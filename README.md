@@ -1,5 +1,8 @@
 # OpenBao Operator
 
+**This is an experimental Operator**
+
+
 [![CI](https://github.com/dc-tec/openbao-operator/actions/workflows/ci.yml/badge.svg)](https://github.com/dc-tec/openbao-operator/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/dc-tec/openbao-operator)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -54,7 +57,7 @@ helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
   --set image.digest=sha256:<digest>
 ```
 
-CRD upgrades: when upgrading with Helm, apply updated CRDs first, then `helm upgrade`. See `docs/user-guide/installation.md`.
+CRD upgrades: when upgrading with Helm, apply updated CRDs first, then `helm upgrade`. See `docs/user-guide/operator/installation.md`.
 
 ### Install via release `install.yaml`
 
@@ -116,7 +119,7 @@ kubectl apply -f cluster.yaml
 kubectl -n my-namespace get pods -l openbao.org/cluster=my-cluster -w
 ```
 
-Production note: the example above uses `Development`. For production, use `profile: Hardened` and follow `docs/user-guide/production-checklist.md`.
+Production note: the example above uses `Development`. For production, use `profile: Hardened` and follow `docs/user-guide/openbaocluster/operations/production-checklist.md`.
 
 ## Helm chart maintenance
 
@@ -162,7 +165,7 @@ We welcome contributions! Before submitting:
 
 ### AI-Assisted Contributions
 
-We welcome contributions that leverage AI tools. However, all contributions—AI-assisted or not—must meet our quality standards:
+We welcome contributions that leverage AI tools. However, all contributions, AI-assisted or not must meet our quality standards:
 
 - **Understand what you're submitting.** You are responsible for the code you contribute.
 - **Follow the coding standards** in our [Contributing Guide](docs/contributing/index.md).

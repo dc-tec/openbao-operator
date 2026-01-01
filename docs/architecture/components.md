@@ -1,8 +1,18 @@
 # Component Design
 
-The Operator runs a single `OpenBaoCluster` controller which delegates to five specific internal "Managers" to separate concerns.
+The Operator runs a controller manager process hosting multiple controller-runtime controllers. The primary API (`OpenBaoCluster`) is reconciled by three dedicated controllers to keep responsibilities clear and avoid status write contention.
 
-## Manager Overview
+## Controller Overview
+
+| Controller | Responsibility |
+|------------|----------------|
+| `openbaocluster-workload` | Workload reconciliation (certs, infra, init) + Sentinel fast-path drift correction |
+| `openbaocluster-adminops` | Admin operations (upgrades, backups) + periodic/forced full reconciles after Sentinel fast-path |
+| `openbaocluster-status` | Single-writer for `status.conditions` + finalizers + status/phase aggregation |
+| [`openbaorestore`](restore-manager.md) | Reconcile `OpenBaoRestore` jobs and restore lifecycle |
+| `openbao-provisioner` | Reconcile `OpenBaoTenant` and provision tenant-scoped RBAC |
+
+## Manager Overview (OpenBaoCluster)
 
 | Manager | Responsibility |
 |---------|----------------|
@@ -14,7 +24,7 @@ The Operator runs a single `OpenBaoCluster` controller which delegates to five s
 
 ## Pausing Reconciliation
 
-All controllers MUST honor `spec.paused`:
+All `OpenBaoCluster` controllers MUST honor `spec.paused`:
 
 - When `OpenBaoCluster.Spec.Paused == true`, reconcilers SHOULD short-circuit early and avoid mutating cluster resources, allowing safe manual maintenance (e.g., manual restore).
 - Finalizers and deletion handling MAY still proceed to ensure cleanup when the CR is deleted.

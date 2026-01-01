@@ -35,5 +35,4 @@ If you use external unseal:
 
 If the operator has entered break glass mode, follow the steps in `status.breakGlass`:
 
-- [Break Glass / Safe Mode](recovery-safe-mode.md)
-
+- [Break Glass / Safe Mode](safe-mode.md)

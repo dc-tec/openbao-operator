@@ -15,9 +15,14 @@ The design is intentionally **cloud-agnostic** and **multi-tenant**:
 
 At a high level, the architecture consists of:
 
-- **Operator Controller Manager:** Runs multiple reconcilers (Cert, Config, StatefulSet, Upgrade, Backup) in a single process.
+- **Operator Controller Manager:** Runs multiple controller-runtime controllers in a single process:
+  - `openbaocluster-workload` (certs/infra/init + Sentinel fast-path drift correction)
+  - `openbaocluster-adminops` (upgrades/backups)
+  - `openbaocluster-status` (finalizers + single-writer `status.conditions` aggregation)
+  - `openbaorestore` (`OpenBaoRestore` lifecycle)
+  - `openbao-provisioner` (`OpenBaoTenant` RBAC provisioning)
 - **OpenBao StatefulSets:** One StatefulSet per `OpenBaoCluster` providing Raft storage and HA.
-- **Sentinel Sidecar Controller:** An optional per-cluster Deployment that watches for infrastructure drift and triggers fast-path reconciliation. When enabled, the Sentinel detects unauthorized changes to managed infrastructure resources (StatefulSets, Services, ConfigMaps) and immediately triggers the operator to correct them, bypassing expensive operations like upgrades and backups.
+- **Sentinel Drift Detector:** An optional per-cluster Deployment that watches for infrastructure drift and triggers fast-path reconciliation. When enabled, the Sentinel detects unauthorized changes to managed infrastructure resources (StatefulSets, Services, ConfigMaps) and immediately triggers the operator to correct them, bypassing expensive operations like upgrades and backups.
 - **Persistent Volumes:** Provided by the cluster's StorageClass for durable Raft data.
 - **Object Storage:** Generic HTTP/S-compatible object storage for snapshots (S3/GCS/Azure Blob or compatible endpoints).
 - **Users / Tenants:** Developers and platform teams who create and manage `OpenBaoCluster` resources in their own namespaces.
@@ -29,15 +34,16 @@ At a high level, the architecture consists of:
 
 The Operator treats `OpenBaoCluster.Spec` as the declarative source of truth and continuously reconciles Kubernetes resources and OpenBao state to match this desired state.
 
+Due to the least-privilege, tenant-scoped RBAC model, the OpenBaoCluster controllers do not register ownership watches (`Owns()`) for child resources; they rely on `OpenBaoCluster` events, explicit `RequeueAfter` polling where needed, and Sentinel status triggers for drift correction.
+
 ### 1.2 Component Interaction
 
 1. **User:** Submits `OpenBaoCluster` Custom Resource (CR).
-2. **CertController:** Observes CR, generates CA and Leaf Certs into Kubernetes Secrets.
-3. **ConfigController:** Generates the `config.hcl` (ConfigMap) injecting TLS paths and `retry_join` stanzas.
-4. **StatefulSetController:** Ensures the StatefulSet exists, matches the desired version, and mounts the Secrets/ConfigMaps.
-5. **UpgradeController:** Intercepts version changes to perform Raft-aware rolling updates.
-6. **Sentinel (if enabled):** Watches for infrastructure drift and triggers fast-path reconciliation when unauthorized changes are detected.
-7. **OpenBao Pods:** Boot up, mount certs, read config, and auto-join the cluster using the K8s API peer discovery.
+2. **Workload controller (`openbaocluster-workload`):** Ensures TLS material, renders `config.hcl`, and reconciles Services/StatefulSet; initializes the cluster on Day 0 when needed.
+3. **AdminOps controller (`openbaocluster-adminops`):** Performs upgrades and scheduled/manual backups, and runs full reconciles after drift correction as needed.
+4. **Status controller (`openbaocluster-status`):** Owns finalizers and aggregates `status.conditions` from per-domain status subtrees.
+5. **Sentinel (if enabled):** Detects drift and patches `OpenBaoCluster` **status** (`status.sentinel.triggerID`, etc.) to trigger fast-path reconciliation.
+6. **OpenBao Pods:** Boot up, mount certs, read config, and auto-join the cluster using the K8s API peer discovery.
 
 ### 1.3 Assumptions
 

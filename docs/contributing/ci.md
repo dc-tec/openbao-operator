@@ -25,6 +25,7 @@ The CI jobs are designed to be deterministic:
 - `make verify-generated`
 - `make verify-helm` (chart synced inputs)
 - `make test-ci` (unit + envtest)
+- OpenBao config compatibility (semantic parse): validate `internal/config/testdata/*.hcl` against upstream OpenBao `>=2.4.0 <2.5.0` (min + latest supported)
 - Docs build (MkDocs container)
 - Helm chart validation (`helm lint`, `helm template --include-crds`)
 - Security checks:
@@ -35,6 +36,7 @@ The CI jobs are designed to be deterministic:
 ### Nightly (`.github/workflows/nightly.yml`)
 
 - Full E2E suite on a Kubernetes matrix from `docs/reference/compatibility.md`
+- OpenBao config compatibility (semantic parse) across a broader 2.4.x patch set
 - Security checks (same as PRs)
 - Docs build, Helm chart validation
 
@@ -63,6 +65,32 @@ make verify-tidy
 make verify-generated
 make verify-helm
 make test-ci
+make verify-openbao-config-compat
+```
+
+### OpenBao config compatibility (semantic)
+
+This checks that the HCL we generate is still accepted by upstream OpenBao's config parser
+for the supported OpenBao version range.
+
+Requirements:
+
+- Docker (to fetch the OpenBao image and resolve the exact git SHA)
+- Go (to run the upstream parser via `go get`)
+
+Run the PR-equivalent version set:
+
+```sh
+bash hack/ci/openbao-config-compat.sh 2.4.0 2.4.4
+```
+
+### OpenBao schema drift (report-only)
+
+To get a heads-up on newly introduced (or removed) upstream config keys within the supported range,
+run the same compatibility check with schema reporting enabled:
+
+```sh
+make report-openbao-config-schema-drift
 ```
 
 ## Helm Chart Maintenance

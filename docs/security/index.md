@@ -64,7 +64,7 @@ Tenant isolation for shared deployments.
 
 ## See Also
 
-- User guide: [Security Profiles](../user-guide/security-profiles.md)
-- User guide: [Security Considerations](../user-guide/security-considerations.md)
-- User guide: [Multi-Tenancy](../user-guide/multi-tenancy.md)
-- User guide: [Production Checklist](../user-guide/production-checklist.md)
+- User guide: [Security Profiles](../user-guide/openbaocluster/configuration/security-profiles.md)
+- User guide: [Security Considerations](../user-guide/openbaocluster/security-considerations.md)
+- User guide: [Multi-Tenancy](../user-guide/openbaotenant/multi-tenancy.md)
+- User guide: [Production Checklist](../user-guide/openbaocluster/operations/production-checklist.md)

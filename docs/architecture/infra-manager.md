@@ -4,15 +4,16 @@
 
 ## Configuration Strategy
 
-- We do not use a static ConfigMap. We generate it dynamically based on the cluster topology and merge in user-supplied configuration where safe.
+- We do not use a static ConfigMap. We generate it dynamically from `OpenBaoCluster.spec` and cluster topology (service name/namespace/ports).
 - **Injection:** We explicitly inject the `listener "tcp"` block:
   - For `OperatorManaged` and `External` modes: Points to mounted TLS Secrets at `/etc/bao/tls`.
   - For `ACME` mode: Includes ACME parameters (`tls_acme_ca_directory`, `tls_acme_domains`, etc.) and no file paths.
 
 ## Discovery Strategy
 
-- **Bootstrap:** During initial cluster creation, we configure a single `retry_join` with `leader_api_addr` pointing to the deterministic DNS name of pod-0 (for example, `cluster-0.cluster-name.namespace.svc`). This ensures a stable leader for Day 0 initialization.
-- **Post-Initialization:** After the cluster is marked initialized, we switch to a Kubernetes go-discover based `retry_join` that uses `auto_join = "provider=k8s namespace=<ns> label_selector=\"openbao.org/cluster=<cluster-name>\""` so new pods can join dynamically based on labels rather than a static peer list.
+- The operator uses Kubernetes go-discover based `retry_join` with `auto_join = "provider=k8s namespace=<ns> label_selector=\"openbao.org/cluster=<cluster-name>\""` so pods can join dynamically based on labels rather than a static peer list.
+- For blue/green upgrades, the operator can narrow the `label_selector` to include the active revision label so that joining pods discover the correct peer set.
+- `leader_tls_servername` is set to a stable per-cluster name (`openbao-cluster-<cluster-name>.local`) to support mTLS verification.
 
 ## Auto-Unseal Integration
 
@@ -51,12 +52,12 @@ If `spec.imageVerification.enabled` is `true`, the operator verifies the contain
 
 ## Reconciliation Semantics
 
-- Watches `OpenBaoCluster` and all owned resources (StatefulSet, Services, ConfigMaps, Secrets, ServiceAccounts, Ingresses, NetworkPolicies).
+- Watches `OpenBaoCluster` only (no child `Owns()` watches) due to the least-privilege RBAC model.
 - Ensures the rendered `config.hcl` and StatefulSet template are consistent with Spec (including multi-tenant naming conventions).
 - Performs image signature verification before StatefulSet creation/updates when `spec.imageVerification.enabled` is `true`.
 - Automatically creates NetworkPolicies to enforce cluster isolation.
 - Uses controller-runtime patch semantics to apply only necessary changes.
-- Updates `Available`/`Degraded` conditions based on StatefulSet readiness.
+- Surfaces readiness/errors via the workload status subtree; `status.conditions` is aggregated by the status controller.
 - **OwnerReferences:** All created resources have `OwnerReferences` pointing to the parent `OpenBaoCluster`, enabling automatic garbage collection when the cluster is deleted.
 
 ## Configuration Generation
@@ -84,32 +85,24 @@ seal "static" {
 
 storage "raft" {
   path = "/bao/data"
+  node_id = "${HOSTNAME}"
 
-  # Bootstrap retry_join targeting pod-0
-  retry_join {
-    leader_api_addr = "https://prod-cluster-0.prod-cluster.security.svc:8200"
-    leader_ca_cert_file = "/etc/bao/tls/ca.crt"
-    leader_client_cert_file = "/etc/bao/tls/tls.crt"
-    leader_client_key_file = "/etc/bao/tls/tls.key"
-  }
-
-  # Post-initialization dynamic join
   retry_join {
     auto_join               = "provider=k8s namespace=security label_selector=\"openbao.org/cluster=prod-cluster\""
+    leader_tls_servername   = "openbao-cluster-prod-cluster.local"
     leader_ca_cert_file     = "/etc/bao/tls/ca.crt"
     leader_client_cert_file = "/etc/bao/tls/tls.crt"
     leader_client_key_file  = "/etc/bao/tls/tls.key"
   }
 }
-```
 
-!!! note "Hybrid Join Approach"
-    We use a hybrid approach. A deterministic bootstrap `retry_join` to pod-0 avoids split-brain during Day 0, while the post-initialization `auto_join` with the Kubernetes provider (`provider=k8s`) enables dynamic, label-driven scaling without editing the ConfigMap.
+service_registration "kubernetes" {}
+```
 
 ### Configuration Ownership and Merging
 
 - The Operator owns the critical `listener "tcp"` and `storage "raft"` stanzas to guarantee mTLS and Raft stability.
-- Users may provide additional non-protected configuration settings via `spec.config` as key/value pairs, but attempts to override protected stanzas are rejected by validation enforced at admission time:
-  - CRD-level CEL rules block obvious misuse (for example, top-level `listener`, `storage`, `seal` keys).
-  - A `ValidatingAdmissionPolicy` performs deeper, semantic checks and enforces additional constraints on `spec.config` keys and values.
-- The ConfigController merges user attributes into an operator-generated template in a deterministic, idempotent way, skipping any operator-owned keys.
+- User-tunable configuration is expressed via typed fields:
+  - `spec.configuration` (logging, cache flags, plugin behavior, etc.)
+  - `spec.audit`, `spec.plugins`, `spec.telemetry` (rendered into dedicated HCL stanzas)
+- Operator-owned fields are rendered deterministically and are not user-overridable (for example: listener address/cluster_address, raft path, retry_join, and seal when using static unseal).

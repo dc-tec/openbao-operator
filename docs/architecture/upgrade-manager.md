@@ -40,7 +40,7 @@ For each pod from highest ordinal to 0:
 ### Upgrade State Machine
 
 1. **Detect Drift:** `Spec.Version` != `Status.CurrentVersion` AND `Status.Upgrade == nil`.
-2. **Pre-upgrade Snapshot:** If `spec.backup.preUpgradeSnapshot == true`, trigger a backup and wait for completion.
+2. **Pre-upgrade Snapshot:** If `spec.upgrade.preUpgradeSnapshot == true`, trigger a backup and wait for completion.
 3. **Initialize Upgrade State:** Create `Status.Upgrade`, set `Status.Phase = Upgrading`, set `Upgrading=True` condition.
 4. **Lock StatefulSet:** Patch `updateStrategy.rollingUpdate.partition` to `Replicas`.
 5. **Update Pods:** Execute pod-by-pod update.
@@ -64,6 +64,10 @@ Upgrades are designed to survive Operator restarts:
 When `spec.updateStrategy.type` is `BlueGreen`, the operator uses a parallel cluster upgrade approach instead of rolling updates.
 
 If image verification is enabled (`spec.imageVerification.enabled`), the operator verifies and pins the Green StatefulSet image (and its init container image, when configured) to verified digests.
+
+### Break-glass: Force Rollback
+
+If a blue/green upgrade becomes stuck, operators can force a rollback by setting the `openbao.org/force-rollback` annotation on the `OpenBaoCluster`. The operator evaluates this early and transitions into the rollback flow.
 
 ### Architecture
 
@@ -89,7 +93,6 @@ stateDiagram-v2
     Cleanup --> Idle: Complete
     
     note right of Idle: Pre-upgrade snapshot (optional)
-    note right of Cleanup: Pre-cleanup snapshot (optional)
     
     TrafficSwitching --> RollingBack: Failure detected
     Syncing --> RollingBack: Validation hook failed
@@ -107,7 +110,7 @@ stateDiagram-v2
 | **Promoting** | Runs executor Job to promote Green pods to voters |
 | **TrafficSwitching** | Service selectors point to Green, stabilization period monitors health |
 | **DemotingBlue** | Runs executor Job to demote Blue pods to non-voters, verifies Green leader election |
-| **Cleanup** | Pre-cleanup snapshot created if configured. Runs executor Job to remove Blue peers from Raft, deletes Blue StatefulSet |
+| **Cleanup** | Runs executor Job to remove Blue peers from Raft, deletes Blue StatefulSet |
 | **RollingBack** | Triggered on failure. Re-promotes Blue voters, demotes Green non-voters |
 | **RollbackCleanup** | Removes Green peers from Raft, deletes Green StatefulSet |
 
@@ -117,7 +120,7 @@ stateDiagram-v2
 2. **Shared headless service**: Blue and Green StatefulSets share the same headless service for Raft discovery.
 3. **Executor Jobs**: Long-running Raft operations run in isolated Jobs to avoid blocking the controller.
 4. **Automatic rollback**: Configurable via `autoRollback` with triggers for job failures, validation failures, and traffic failures.
-5. **Pre-upgrade/Pre-cleanup snapshots**: Optional backup jobs created before upgrade starts and before Blue removal.
+5. **Pre-upgrade snapshot**: Optional backup job created before the upgrade starts.
 
 ### Upgrade Executor Jobs
 
@@ -141,4 +144,4 @@ Each phase transition that requires Raft operations creates an upgrade executor 
 - The manager requeues (returns `true`) when waiting for external state changes.
 - Executor Jobs are owned by the OpenBaoCluster for automatic cleanup.
 
-See also: [Upgrades User Guide](../user-guide/upgrades.md)
+See also: [Upgrades User Guide](../user-guide/openbaocluster/operations/upgrades.md)
