@@ -2,13 +2,6 @@ package constants
 
 // Annotation keys used by the operator and Sentinel.
 const (
-	// AnnotationSentinelTrigger is the annotation key used by the Sentinel to trigger reconciliation.
-	// The Sentinel sets this annotation to a timestamp (RFC3339Nano) when it detects infrastructure drift.
-	AnnotationSentinelTrigger = "openbao.org/sentinel-trigger"
-	// AnnotationSentinelTriggerResource is the annotation key used by the Sentinel to record
-	// which resource triggered the drift detection (e.g., "Service/sentinel-cluster").
-	// This is set alongside AnnotationSentinelTrigger for observability.
-	AnnotationSentinelTriggerResource = "openbao.org/sentinel-trigger-resource"
 	// AnnotationTriggerBackup is the annotation key used to trigger an immediate manual backup.
 	AnnotationTriggerBackup = "openbao.org/trigger-backup"
 	// AnnotationConfigHash is the annotation key used to track ConfigMap/Secret changes.

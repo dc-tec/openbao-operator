@@ -35,7 +35,10 @@ const (
 
 // Controller names for observability.
 const (
-	ControllerNameOpenBaoCluster       = "openbaocluster"
-	ControllerNameOpenBaoRestore       = "openbaorestore"
-	ControllerNameNamespaceProvisioner = "namespace-provisioner"
+	ControllerNameOpenBaoCluster         = "openbaocluster"
+	ControllerNameOpenBaoClusterStatus   = "openbaocluster-status"
+	ControllerNameOpenBaoClusterWorkload = "openbaocluster-workload"
+	ControllerNameOpenBaoClusterAdminOps = "openbaocluster-adminops"
+	ControllerNameOpenBaoRestore         = "openbaorestore"
+	ControllerNameNamespaceProvisioner   = "namespace-provisioner"
 )
