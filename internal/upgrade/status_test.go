@@ -1,11 +1,7 @@
 package upgrade
 
 import (
-	"errors"
 	"testing"
-
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
@@ -65,32 +61,6 @@ func TestSetUpgradeStarted(t *testing.T) {
 			}
 			if len(status.Upgrade.CompletedPods) != 0 {
 				t.Errorf("CompletedPods should be empty, got %v", status.Upgrade.CompletedPods)
-			}
-
-			// Verify phase is set to Upgrading
-			if status.Phase != openbaov1alpha1.ClusterPhaseUpgrading {
-				t.Errorf("Phase = %q, want %q", status.Phase, openbaov1alpha1.ClusterPhaseUpgrading)
-			}
-
-			// Verify Upgrading condition is True
-			upgradingCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionUpgrading))
-			if upgradingCond == nil {
-				t.Fatal("expected Upgrading condition to be set")
-			}
-			if upgradingCond.Status != metav1.ConditionTrue {
-				t.Errorf("Upgrading condition status = %v, want True", upgradingCond.Status)
-			}
-			if upgradingCond.Reason != ReasonUpgradeStarted {
-				t.Errorf("Upgrading condition reason = %q, want %q", upgradingCond.Reason, ReasonUpgradeStarted)
-			}
-
-			// Verify Degraded condition is cleared
-			degradedCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionDegraded))
-			if degradedCond == nil {
-				t.Fatal("expected Degraded condition to be set")
-			}
-			if degradedCond.Status != metav1.ConditionFalse {
-				t.Errorf("Degraded condition status = %v, want False", degradedCond.Status)
 			}
 		})
 	}
@@ -153,15 +123,6 @@ func TestSetUpgradeProgress(t *testing.T) {
 			}
 			if len(status.Upgrade.CompletedPods) != tt.wantPodCount {
 				t.Errorf("CompletedPods count = %d, want %d", len(status.Upgrade.CompletedPods), tt.wantPodCount)
-			}
-
-			// Verify Upgrading condition is updated
-			upgradingCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionUpgrading))
-			if upgradingCond == nil {
-				t.Fatal("expected Upgrading condition to be set")
-			}
-			if upgradingCond.Reason != ReasonUpgradeInProgress {
-				t.Errorf("Upgrading condition reason = %q, want %q", upgradingCond.Reason, ReasonUpgradeInProgress)
 			}
 		})
 	}
@@ -248,23 +209,6 @@ func TestSetUpgradeComplete(t *testing.T) {
 			if status.CurrentVersion != tt.version {
 				t.Errorf("CurrentVersion = %q, want %q", status.CurrentVersion, tt.version)
 			}
-
-			// Verify phase is Running
-			if status.Phase != openbaov1alpha1.ClusterPhaseRunning {
-				t.Errorf("Phase = %q, want %q", status.Phase, openbaov1alpha1.ClusterPhaseRunning)
-			}
-
-			// Verify Upgrading condition is False
-			upgradingCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionUpgrading))
-			if upgradingCond == nil {
-				t.Fatal("expected Upgrading condition to be set")
-			}
-			if upgradingCond.Status != metav1.ConditionFalse {
-				t.Errorf("Upgrading condition status = %v, want False", upgradingCond.Status)
-			}
-			if upgradingCond.Reason != ReasonUpgradeComplete {
-				t.Errorf("Upgrading condition reason = %q, want %q", upgradingCond.Reason, ReasonUpgradeComplete)
-			}
 		})
 	}
 }
@@ -314,66 +258,16 @@ func TestSetUpgradeFailed(t *testing.T) {
 			if status.Upgrade == nil {
 				t.Error("expected Upgrade to be preserved")
 			}
-
-			// Verify phase is Failed
-			if status.Phase != openbaov1alpha1.ClusterPhaseFailed {
-				t.Errorf("Phase = %q, want %q", status.Phase, openbaov1alpha1.ClusterPhaseFailed)
+			if status.Upgrade.LastErrorReason != tt.reason {
+				t.Errorf("LastErrorReason = %q, want %q", status.Upgrade.LastErrorReason, tt.reason)
 			}
-
-			// Verify Upgrading condition is False
-			upgradingCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionUpgrading))
-			if upgradingCond == nil {
-				t.Fatal("expected Upgrading condition to be set")
+			if status.Upgrade.LastErrorMessage != tt.message {
+				t.Errorf("LastErrorMessage = %q, want %q", status.Upgrade.LastErrorMessage, tt.message)
 			}
-			if upgradingCond.Status != metav1.ConditionFalse {
-				t.Errorf("Upgrading condition status = %v, want False", upgradingCond.Status)
-			}
-			if upgradingCond.Reason != tt.reason {
-				t.Errorf("Upgrading condition reason = %q, want %q", upgradingCond.Reason, tt.reason)
-			}
-
-			// Verify Degraded condition is True
-			degradedCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionDegraded))
-			if degradedCond == nil {
-				t.Fatal("expected Degraded condition to be set")
-			}
-			if degradedCond.Status != metav1.ConditionTrue {
-				t.Errorf("Degraded condition status = %v, want True", degradedCond.Status)
-			}
-			if degradedCond.Reason != tt.reason {
-				t.Errorf("Degraded condition reason = %q, want %q", degradedCond.Reason, tt.reason)
+			if status.Upgrade.LastErrorAt == nil {
+				t.Error("expected LastErrorAt to be set")
 			}
 		})
-	}
-}
-
-func TestSetUpgradePaused(t *testing.T) {
-	status := &openbaov1alpha1.OpenBaoClusterStatus{
-		Phase: openbaov1alpha1.ClusterPhaseUpgrading,
-		Upgrade: &openbaov1alpha1.UpgradeProgress{
-			TargetVersion:    "2.5.0",
-			FromVersion:      "2.4.0",
-			CurrentPartition: 2,
-		},
-	}
-
-	SetUpgradePaused(status, 1)
-
-	// Verify Upgrading condition is False with Paused reason
-	upgradingCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionUpgrading))
-	if upgradingCond == nil {
-		t.Fatal("expected Upgrading condition to be set")
-	}
-	if upgradingCond.Status != metav1.ConditionFalse {
-		t.Errorf("Upgrading condition status = %v, want False", upgradingCond.Status)
-	}
-	if upgradingCond.Reason != ReasonUpgradePaused {
-		t.Errorf("Upgrading condition reason = %q, want %q", upgradingCond.Reason, ReasonUpgradePaused)
-	}
-
-	// Verify upgrade progress is preserved
-	if status.Upgrade == nil {
-		t.Error("expected Upgrade to be preserved")
 	}
 }
 
@@ -415,76 +309,7 @@ func TestClearUpgrade(t *testing.T) {
 			if status.Upgrade != nil {
 				t.Error("expected Upgrade to be nil")
 			}
-
-			// Verify phase is Running
-			if status.Phase != openbaov1alpha1.ClusterPhaseRunning {
-				t.Errorf("Phase = %q, want %q", status.Phase, openbaov1alpha1.ClusterPhaseRunning)
-			}
-
-			// Verify Upgrading condition is False
-			upgradingCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionUpgrading))
-			if upgradingCond == nil {
-				t.Fatal("expected Upgrading condition to be set")
-			}
-			if upgradingCond.Status != metav1.ConditionFalse {
-				t.Errorf("Upgrading condition status = %v, want False", upgradingCond.Status)
-			}
-			if upgradingCond.Reason != tt.reason {
-				t.Errorf("Upgrading condition reason = %q, want %q", upgradingCond.Reason, tt.reason)
-			}
 		})
-	}
-}
-
-func TestSetDowngradeBlocked(t *testing.T) {
-	status := &openbaov1alpha1.OpenBaoClusterStatus{}
-
-	SetDowngradeBlocked(status, "2.5.0", "2.4.0", 1)
-
-	degradedCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionDegraded))
-	if degradedCond == nil {
-		t.Fatal("expected Degraded condition to be set")
-	}
-	if degradedCond.Status != metav1.ConditionTrue {
-		t.Errorf("Degraded condition status = %v, want True", degradedCond.Status)
-	}
-	if degradedCond.Reason != ReasonDowngradeBlocked {
-		t.Errorf("Degraded condition reason = %q, want %q", degradedCond.Reason, ReasonDowngradeBlocked)
-	}
-}
-
-func TestSetInvalidVersion(t *testing.T) {
-	status := &openbaov1alpha1.OpenBaoClusterStatus{}
-
-	testErr := errors.New("invalid format")
-	SetInvalidVersion(status, "invalid", testErr, 1)
-
-	degradedCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionDegraded))
-	if degradedCond == nil {
-		t.Fatal("expected Degraded condition to be set")
-	}
-	if degradedCond.Status != metav1.ConditionTrue {
-		t.Errorf("Degraded condition status = %v, want True", degradedCond.Status)
-	}
-	if degradedCond.Reason != ReasonInvalidVersion {
-		t.Errorf("Degraded condition reason = %q, want %q", degradedCond.Reason, ReasonInvalidVersion)
-	}
-}
-
-func TestSetClusterNotReady(t *testing.T) {
-	status := &openbaov1alpha1.OpenBaoClusterStatus{}
-
-	SetClusterNotReady(status, "only 1/3 replicas ready", 1)
-
-	degradedCond := meta.FindStatusCondition(status.Conditions, string(openbaov1alpha1.ConditionDegraded))
-	if degradedCond == nil {
-		t.Fatal("expected Degraded condition to be set")
-	}
-	if degradedCond.Status != metav1.ConditionTrue {
-		t.Errorf("Degraded condition status = %v, want True", degradedCond.Status)
-	}
-	if degradedCond.Reason != ReasonClusterNotReady {
-		t.Errorf("Degraded condition reason = %q, want %q", degradedCond.Reason, ReasonClusterNotReady)
 	}
 }
 

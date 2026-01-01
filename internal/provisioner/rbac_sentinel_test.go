@@ -18,13 +18,13 @@ func TestGenerateSentinelRole(t *testing.T) {
 			name:      "default namespace",
 			namespace: "default",
 			wantName:  constants.SentinelRoleName,
-			wantRules: 3, // StatefulSets, Services/ConfigMaps, OpenBaoCluster
+			wantRules: 4, // StatefulSets, Services/ConfigMaps, OpenBaoCluster read, OpenBaoCluster status patch
 		},
 		{
 			name:      "custom namespace",
 			namespace: "tenant-1",
 			wantName:  constants.SentinelRoleName,
-			wantRules: 3,
+			wantRules: 4,
 		},
 	}
 
@@ -63,7 +63,8 @@ func TestGenerateSentinelRole(t *testing.T) {
 			// Verify least-privilege rules
 			hasStatefulSetRule := false
 			hasServiceConfigMapRule := false
-			hasOpenBaoClusterRule := false
+			hasOpenBaoClusterReadRule := false
+			hasOpenBaoClusterStatusPatchRule := false
 
 			for _, rule := range role.Rules {
 				// Check for StatefulSet read rule (apps)
@@ -95,17 +96,30 @@ func TestGenerateSentinelRole(t *testing.T) {
 					hasServiceConfigMapRule = true
 				}
 
-				// Check for OpenBaoCluster patch rule (needs list/watch for controller-runtime cache)
+				// Check for OpenBaoCluster read rule (needs list/watch for controller-runtime cache)
 				if contains(rule.APIGroups, "openbao.org") &&
 					contains(rule.Resources, "openbaoclusters") &&
 					contains(rule.Verbs, "get") &&
 					contains(rule.Verbs, "list") &&
-					contains(rule.Verbs, "patch") &&
 					contains(rule.Verbs, "watch") &&
 					!contains(rule.Verbs, "create") &&
 					!contains(rule.Verbs, "update") &&
+					!contains(rule.Verbs, "patch") &&
 					!contains(rule.Verbs, "delete") {
-					hasOpenBaoClusterRule = true
+					hasOpenBaoClusterReadRule = true
+				}
+
+				// Check for OpenBaoCluster status patch rule (drift triggers)
+				if contains(rule.APIGroups, "openbao.org") &&
+					contains(rule.Resources, "openbaoclusters/status") &&
+					contains(rule.Verbs, "patch") &&
+					!contains(rule.Verbs, "get") &&
+					!contains(rule.Verbs, "list") &&
+					!contains(rule.Verbs, "watch") &&
+					!contains(rule.Verbs, "create") &&
+					!contains(rule.Verbs, "update") &&
+					!contains(rule.Verbs, "delete") {
+					hasOpenBaoClusterStatusPatchRule = true
 				}
 			}
 
@@ -115,8 +129,11 @@ func TestGenerateSentinelRole(t *testing.T) {
 			if !hasServiceConfigMapRule {
 				t.Error("GenerateSentinelRole() missing Service/ConfigMap read rule")
 			}
-			if !hasOpenBaoClusterRule {
-				t.Error("GenerateSentinelRole() missing OpenBaoCluster patch rule")
+			if !hasOpenBaoClusterReadRule {
+				t.Error("GenerateSentinelRole() missing OpenBaoCluster read rule")
+			}
+			if !hasOpenBaoClusterStatusPatchRule {
+				t.Error("GenerateSentinelRole() missing OpenBaoCluster status patch rule")
 			}
 		})
 	}

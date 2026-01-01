@@ -38,7 +38,7 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: "provisioner",
+				constants.LabelAppComponent: "provisioner", // TODO: Create constant for this
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
@@ -179,8 +179,8 @@ func GenerateTenantRoleBinding(namespace string, operatorSA OperatorServiceAccou
 // - Read-only access to resources Sentinel watches (StatefulSets, Services, ConfigMaps)
 // - No access to Secrets (Sentinel does not detect drift in unseal keys or root tokens)
 // - No access to Pods or Ingresses (not used by Sentinel)
-// - Minimal write access: only "patch" on OpenBaoCluster to add trigger annotation
-// - list/watch on OpenBaoCluster required for controller-runtime cache to function
+// - Minimal write access: only "patch" on OpenBaoCluster status to emit drift triggers
+// - list/watch on OpenBaoCluster required for controller-runtime cache to function (best-effort)
 func GenerateSentinelRole(namespace string) *rbacv1.Role {
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -206,11 +206,15 @@ func GenerateSentinelRole(namespace string) *rbacv1.Role {
 				Verbs:     []string{"get", "list", "watch"},
 			},
 			// Trigger Access (Limited by Admission Policy)
-			// Sentinel needs list/watch for controller-runtime cache to function
 			{
 				APIGroups: []string{"openbao.org"},
 				Resources: []string{"openbaoclusters"},
-				Verbs:     []string{"get", "list", "patch", "watch"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+			{
+				APIGroups: []string{"openbao.org"},
+				Resources: []string{"openbaoclusters/status"},
+				Verbs:     []string{"patch"},
 			},
 		},
 	}

@@ -14,7 +14,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -142,9 +141,6 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			if cluster.Status.Upgrade != nil {
 				SetUpgradeFailed(&cluster.Status, ReasonUpgradeFailed, "upgrade halted due to concurrent operation lock", cluster.Generation)
 				metrics.SetStatus(UpgradeStatusFailed)
-				if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
-					logger.Error(statusErr, "Failed to update status after upgrade lock loss")
-				}
 				return false, fmt.Errorf("upgrade in progress but operation lock is held by another operation: %w", err)
 			}
 			logger.Info("Upgrade blocked by operation lock", "error", err.Error())
@@ -275,15 +271,8 @@ func (m *Manager) detectUpgradeState(logger logr.Logger, cluster *openbaov1alpha
 
 // validateUpgrade performs pre-upgrade validation checks.
 func (m *Manager) validateUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	// Capture original state for status patching to avoid optimistic locking conflicts
-	original := cluster.DeepCopy()
-
 	// Validate target version format
 	if err := ValidateVersion(cluster.Spec.Version); err != nil {
-		SetInvalidVersion(&cluster.Status, cluster.Spec.Version, err, cluster.Generation)
-		if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
-			logger.Error(statusErr, "Failed to update status after invalid version")
-		}
 		return fmt.Errorf("invalid target version: %w", err)
 	}
 
@@ -294,10 +283,6 @@ func (m *Manager) validateUpgrade(ctx context.Context, logger logr.Logger, clust
 			logger.Info("Downgrade detected and blocked",
 				"from", cluster.Status.CurrentVersion,
 				"to", cluster.Spec.Version)
-			SetDowngradeBlocked(&cluster.Status, cluster.Status.CurrentVersion, cluster.Spec.Version, cluster.Generation)
-			if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
-				logger.Error(statusErr, "Failed to update status after downgrade block")
-			}
 			return fmt.Errorf("downgrade from %s to %s is not allowed",
 				cluster.Status.CurrentVersion, cluster.Spec.Version)
 		}
@@ -318,10 +303,6 @@ func (m *Manager) validateUpgrade(ctx context.Context, logger logr.Logger, clust
 
 	// Verify cluster health
 	if err := m.verifyClusterHealth(ctx, logger, cluster); err != nil {
-		SetClusterNotReady(&cluster.Status, err.Error(), cluster.Generation)
-		if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
-			logger.Error(statusErr, "Failed to update status after health check failure")
-		}
 		return err
 	}
 
@@ -456,13 +437,7 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 
 	// Verify backup configuration is valid
 	if err := m.validateBackupConfig(ctx, cluster); err != nil {
-		// Capture original state for status patching to avoid optimistic locking conflicts
-		original := cluster.DeepCopy()
-		SetPreUpgradeBackupFailed(&cluster.Status, err.Error(), cluster.Generation)
-		if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
-			logger.Error(statusErr, "Failed to update status after pre-upgrade backup validation failure")
-		}
-		return false, fmt.Errorf("pre-upgrade backup configuration invalid: %w", err)
+		return false, operatorerrors.WithReason(ReasonPreUpgradeBackupFailed, fmt.Errorf("pre-upgrade backup configuration invalid: %w", err))
 	}
 
 	// Check if there's an existing pre-upgrade backup job (running or failed)
@@ -479,12 +454,6 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 
 		// If job failed, return error immediately
 		if existingJobStatus == "failed" {
-			// Capture original state for status patching to avoid optimistic locking conflicts
-			original := cluster.DeepCopy()
-			SetPreUpgradeBackupFailed(&cluster.Status, fmt.Sprintf("backup job %s failed", jobName), cluster.Generation)
-			if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
-				logger.Error(statusErr, "Failed to update status after pre-upgrade backup failure")
-			}
 			return false, fmt.Errorf("pre-upgrade backup job %s failed", jobName)
 		}
 
@@ -516,20 +485,7 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 				failurePolicy = constants.ImageVerificationFailurePolicyBlock
 			}
 			if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-				original := cluster.DeepCopy()
-				now := metav1.Now()
-				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-					Type:               string(openbaov1alpha1.ConditionDegraded),
-					Status:             metav1.ConditionTrue,
-					ObservedGeneration: cluster.Generation,
-					LastTransitionTime: now,
-					Reason:             constants.ReasonPreUpgradeBackupImageVerificationFailed,
-					Message:            fmt.Sprintf("Pre-upgrade backup executor image verification failed: %v", err),
-				})
-				if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
-					logger.Error(statusErr, "Failed to update status after pre-upgrade backup executor image verification failure")
-				}
-				return false, fmt.Errorf("pre-upgrade backup executor image verification failed (policy=Block): %w", err)
+				return false, operatorerrors.WithReason(constants.ReasonPreUpgradeBackupImageVerificationFailed, fmt.Errorf("pre-upgrade backup executor image verification failed (policy=Block): %w", err))
 			}
 
 			logger.Error(err, "Pre-upgrade backup executor image verification failed but proceeding due to Warn policy", "image", executorImage)

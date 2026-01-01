@@ -13,7 +13,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -24,6 +23,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/infra"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
@@ -82,16 +82,7 @@ func (m *Manager) verifyImageDigest(ctx context.Context, logger logr.Logger, clu
 
 	failurePolicy := imageVerificationFailurePolicy(cluster)
 	if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-		now := metav1.Now()
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionDegraded),
-			Status:             metav1.ConditionTrue,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             failureReason,
-			Message:            fmt.Sprintf("%s: %v", failureMessagePrefix, err),
-		})
-		return "", fmt.Errorf("%s (policy=Block): %w", failureMessagePrefix, err)
+		return "", operatorerrors.WithReason(failureReason, fmt.Errorf("%s (policy=Block): %w", failureMessagePrefix, err))
 	}
 
 	logger.Error(err, failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
@@ -373,16 +364,7 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 		}
 	}
 
-	// Set upgrading condition
 	now := metav1.Now()
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionUpgrading),
-		Status:             metav1.ConditionTrue,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonUpgradeStarted,
-		Message:            fmt.Sprintf("Blue/green upgrade from %s to %s has started", cluster.Status.CurrentVersion, cluster.Spec.Version),
-	})
 
 	// Calculate Green revision
 	greenRevision := m.calculateRevision(cluster)
@@ -566,38 +548,13 @@ func (m *Manager) handlePhaseJoiningMesh(ctx context.Context, logger logr.Logger
 		return false, fmt.Errorf("blue/green status is nil")
 	}
 
-	greenRevision := cluster.Status.BlueGreen.GreenRevision
-	blueRevision := cluster.Status.BlueGreen.BlueRevision
-
-	result, err := EnsureExecutorJob(
-		ctx,
-		m.client,
-		m.scheme,
-		logger,
-		cluster,
-		ActionJoinGreenNonVoters,
-		"",
-		blueRevision,
-		greenRevision,
-	)
+	shouldRequeue, err := m.runExecutorJob(ctx, logger, cluster, ActionJoinGreenNonVoters, "job failure threshold exceeded")
 	if err != nil {
 		return false, err
 	}
-	if result.Failed {
-		// Track job failure
-		if shouldAbort := m.handleJobFailure(logger, cluster, result.Name); shouldAbort {
-			return m.triggerRollbackOrAbort(ctx, logger, cluster, "job failure threshold exceeded")
-		}
-		return true, nil // Requeue to retry with new job
-	}
-	if result.Running {
-		logger.Info("Upgrade executor Job is in progress", "job", result.Name, "action", ActionJoinGreenNonVoters)
+	if shouldRequeue {
 		return true, nil
 	}
-
-	// Job succeeded - reset failure count
-	cluster.Status.BlueGreen.JobFailureCount = 0
-	cluster.Status.BlueGreen.LastJobFailure = ""
 
 	// All pods joined, transition to Syncing
 	m.transitionToPhase(cluster, openbaov1alpha1.PhaseSyncing)
@@ -633,35 +590,13 @@ func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cl
 		}
 	}
 
-	result, err := EnsureExecutorJob(
-		ctx,
-		m.client,
-		m.scheme,
-		logger,
-		cluster,
-		ActionWaitGreenSynced,
-		"",
-		cluster.Status.BlueGreen.BlueRevision,
-		cluster.Status.BlueGreen.GreenRevision,
-	)
+	shouldRequeue, err := m.runExecutorJob(ctx, logger, cluster, ActionWaitGreenSynced, "job failure threshold exceeded")
 	if err != nil {
 		return false, err
 	}
-	if result.Failed {
-		// Track job failure
-		if shouldAbort := m.handleJobFailure(logger, cluster, result.Name); shouldAbort {
-			return m.triggerRollbackOrAbort(ctx, logger, cluster, "job failure threshold exceeded")
-		}
-		return true, nil // Requeue to retry
-	}
-	if result.Running {
-		logger.Info("Upgrade executor Job is in progress", "job", result.Name, "action", ActionWaitGreenSynced)
+	if shouldRequeue {
 		return true, nil
 	}
-
-	// Job succeeded - reset failure count
-	cluster.Status.BlueGreen.JobFailureCount = 0
-	cluster.Status.BlueGreen.LastJobFailure = ""
 
 	// Check for pre-promotion hook
 	if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
@@ -711,35 +646,13 @@ func (m *Manager) handlePhasePromoting(ctx context.Context, logger logr.Logger, 
 		return false, fmt.Errorf("blue/green status is nil")
 	}
 
-	result, err := EnsureExecutorJob(
-		ctx,
-		m.client,
-		m.scheme,
-		logger,
-		cluster,
-		ActionPromoteGreenVoters,
-		"",
-		cluster.Status.BlueGreen.BlueRevision,
-		cluster.Status.BlueGreen.GreenRevision,
-	)
+	shouldRequeue, err := m.runExecutorJob(ctx, logger, cluster, ActionPromoteGreenVoters, "promotion job failure threshold exceeded")
 	if err != nil {
 		return false, err
 	}
-	if result.Failed {
-		// Track job failure
-		if shouldAbort := m.handleJobFailure(logger, cluster, result.Name); shouldAbort {
-			return m.triggerRollbackOrAbort(ctx, logger, cluster, "promotion job failure threshold exceeded")
-		}
-		return true, nil // Requeue to retry
-	}
-	if result.Running {
-		logger.Info("Upgrade executor Job is in progress", "job", result.Name, "action", ActionPromoteGreenVoters)
+	if shouldRequeue {
 		return true, nil
 	}
-
-	// Job succeeded - reset failure count
-	cluster.Status.BlueGreen.JobFailureCount = 0
-	cluster.Status.BlueGreen.LastJobFailure = ""
 
 	// Transition to TrafficSwitching (instead of DemotingBlue)
 	// This decouples traffic switching from Blue demotion for safer rollbacks
@@ -925,17 +838,6 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 		logger.Error(err, "Failed to release upgrade operation lock after blue/green completion")
 	}
 
-	// Update conditions
-	now := metav1.Now()
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionUpgrading),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonUpgradeComplete,
-		Message:            fmt.Sprintf("Blue/green upgrade to %s completed", cluster.Spec.Version),
-	})
-
 	logger.Info("Blue/green upgrade completed", "newVersion", cluster.Spec.Version)
 
 	return false, nil
@@ -962,14 +864,6 @@ func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alph
 		cluster.Status.BlueGreen.RollbackAttempt++
 		cluster.Status.BlueGreen.JobFailureCount = 0
 		cluster.Status.BlueGreen.LastJobFailure = ""
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionDegraded),
-			Status:             metav1.ConditionTrue,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             ReasonUpgradeRollback,
-			Message:            "Break glass acknowledged; retrying rollback consensus repair",
-		})
 		return true, true
 	}
 
@@ -1012,14 +906,6 @@ func (m *Manager) enterBreakGlassRollbackConsensusRepairFailed(cluster *openbaov
 		Steps:     steps,
 	}
 
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionDegraded),
-		Status:             metav1.ConditionTrue,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             constants.ReasonBreakGlassRequired,
-		Message:            "Break glass required; see status.breakGlass for recovery steps",
-	})
 }
 
 func newBreakGlassNonce() string {
@@ -1189,26 +1075,6 @@ func (m *Manager) abortUpgrade(ctx context.Context, logger logr.Logger, cluster 
 	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
 	cluster.Status.BlueGreen.StartTime = nil
 
-	// Set degraded condition
-	now := metav1.Now()
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionDegraded),
-		Status:             metav1.ConditionTrue,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonUpgradeFailed,
-		Message:            "Blue/green upgrade aborted due to Green cluster failure",
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionUpgrading),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonUpgradeFailed,
-		Message:            "Blue/green upgrade aborted",
-	})
-
 	logger.Info("Blue/green upgrade aborted successfully")
 
 	return nil
@@ -1273,16 +1139,6 @@ func (m *Manager) triggerRollback(logger logr.Logger, cluster *openbaov1alpha1.O
 	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseRollingBack
 
 	logger.Info("Rollback initiated", "reason", reason)
-
-	// Set condition
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionDegraded),
-		Status:             metav1.ConditionTrue,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonUpgradeRollback,
-		Message:            fmt.Sprintf("Blue/green upgrade rolling back: %s", reason),
-	})
 
 	return true, nil // Requeue to process rollback
 }
@@ -1655,26 +1511,6 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 	cluster.Status.BlueGreen.LastJobFailure = ""
 	// Keep RollbackReason and RollbackStartTime for observability
 
-	// Update conditions
-	now := metav1.Now()
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionUpgrading),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonUpgradeRollback,
-		Message:            fmt.Sprintf("Blue/green upgrade rolled back: %s", rollbackReason),
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionDegraded),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonUpgradeComplete,
-		Message:            "Rollback completed, cluster restored to previous version",
-	})
-
 	logger.Info("Blue/green rollback completed", "reason", rollbackReason)
 
 	return false, nil
@@ -1690,176 +1526,103 @@ func isPodReady(pod *corev1.Pod) bool {
 	return false
 }
 
-// PrePromotionHookResult represents the result of checking a pre-promotion hook job.
-type PrePromotionHookResult struct {
+type ValidationHookJobResult struct {
 	Name    string
 	Running bool
 	Failed  bool
 }
 
-// ensurePrePromotionHookJob creates or checks the status of a pre-promotion validation job.
+func (m *Manager) ensureValidationHookJob(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	jobName string,
+	component string,
+	hook *openbaov1alpha1.ValidationHookConfig,
+) (*ValidationHookJobResult, error) {
+	existingJob := &batchv1.Job{}
+	err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      jobName,
+	}, existingJob)
+
+	if err == nil {
+		if existingJob.Status.Succeeded > 0 {
+			return &ValidationHookJobResult{Name: jobName, Running: false, Failed: false}, nil
+		}
+		if existingJob.Status.Failed > 0 {
+			return &ValidationHookJobResult{Name: jobName, Running: false, Failed: true}, nil
+		}
+		return &ValidationHookJobResult{Name: jobName, Running: true, Failed: false}, nil
+	}
+
+	if !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get job %s: %w", jobName, err)
+	}
+
+	timeout := int32(300)
+	if hook.TimeoutSeconds != nil {
+		timeout = *hook.TimeoutSeconds
+	}
+	backoffLimit := int32(0)
+	ttlSeconds := int32(3600)
+
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:      cluster.Name,
+				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:   cluster.Name,
+				constants.LabelOpenBaoComponent: component,
+			},
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoffLimit,
+			ActiveDeadlineSeconds:   ptr.To(int64(timeout)),
+			TTLSecondsAfterFinished: &ttlSeconds,
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:    "validation",
+							Image:   hook.Image,
+							Command: hook.Command,
+							Args:    hook.Args,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := m.client.Create(ctx, job); err != nil {
+		return nil, fmt.Errorf("failed to create validation hook job %s: %w", jobName, err)
+	}
+
+	logger.Info("Created validation hook job", "job", jobName, "component", component)
+	return &ValidationHookJobResult{Name: jobName, Running: true, Failed: false}, nil
+}
+
 func (m *Manager) ensurePrePromotionHookJob(
 	ctx context.Context,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	hook *openbaov1alpha1.ValidationHookConfig,
-) (*PrePromotionHookResult, error) {
-	jobName := fmt.Sprintf("%s-validation-hook", cluster.Name)
-
-	// Check if job exists
-	existingJob := &batchv1.Job{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      jobName,
-	}, existingJob)
-
-	if err == nil {
-		// Job exists, check status
-		if existingJob.Status.Succeeded > 0 {
-			return &PrePromotionHookResult{Name: jobName, Running: false, Failed: false}, nil
-		}
-		if existingJob.Status.Failed > 0 {
-			return &PrePromotionHookResult{Name: jobName, Running: false, Failed: true}, nil
-		}
-		return &PrePromotionHookResult{Name: jobName, Running: true, Failed: false}, nil
-	}
-
-	if !apierrors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get job %s: %w", jobName, err)
-	}
-
-	// Create the validation job
-	timeout := int32(300)
-	if hook.TimeoutSeconds != nil {
-		timeout = *hook.TimeoutSeconds
-	}
-	backoffLimit := int32(0) // No retries
-	ttlSeconds := int32(3600)
-
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:      cluster.Name,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: ComponentValidationHook,
-			},
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoffLimit,
-			ActiveDeadlineSeconds:   ptr.To(int64(timeout)),
-			TTLSecondsAfterFinished: &ttlSeconds,
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers: []corev1.Container{
-						{
-							Name:    "validation",
-							Image:   hook.Image,
-							Command: hook.Command,
-							Args:    hook.Args,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	if err := m.client.Create(ctx, job); err != nil {
-		return nil, fmt.Errorf("failed to create validation hook job: %w", err)
-	}
-
-	logger.Info("Created pre-promotion validation hook job", "job", jobName)
-	return &PrePromotionHookResult{Name: jobName, Running: true, Failed: false}, nil
+) (*ValidationHookJobResult, error) {
+	return m.ensureValidationHookJob(ctx, logger, cluster, fmt.Sprintf("%s-validation-hook", cluster.Name), ComponentValidationHook, hook)
 }
 
-// PostSwitchHookResult represents the result of checking a post-switch validation job.
-type PostSwitchHookResult struct {
-	Name    string
-	Running bool
-	Failed  bool
-}
-
-// ensurePostSwitchHookJob creates or checks the status of a post-switch validation job.
 func (m *Manager) ensurePostSwitchHookJob(
 	ctx context.Context,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	hook *openbaov1alpha1.ValidationHookConfig,
-) (*PostSwitchHookResult, error) {
-	jobName := fmt.Sprintf("%s-post-switch-validation-hook", cluster.Name)
-
-	// Check if job exists
-	existingJob := &batchv1.Job{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      jobName,
-	}, existingJob)
-
-	if err == nil {
-		// Job exists, check status
-		if existingJob.Status.Succeeded > 0 {
-			return &PostSwitchHookResult{Name: jobName, Running: false, Failed: false}, nil
-		}
-		if existingJob.Status.Failed > 0 {
-			return &PostSwitchHookResult{Name: jobName, Running: false, Failed: true}, nil
-		}
-		return &PostSwitchHookResult{Name: jobName, Running: true, Failed: false}, nil
-	}
-
-	if !apierrors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get job %s: %w", jobName, err)
-	}
-
-	// Create the validation job
-	timeout := int32(300)
-	if hook.TimeoutSeconds != nil {
-		timeout = *hook.TimeoutSeconds
-	}
-	backoffLimit := int32(0) // No retries
-	ttlSeconds := int32(3600)
-
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:      cluster.Name,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: ComponentPostSwitchValidationHook,
-			},
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoffLimit,
-			ActiveDeadlineSeconds:   ptr.To(int64(timeout)),
-			TTLSecondsAfterFinished: &ttlSeconds,
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers: []corev1.Container{
-						{
-							Name:    "validation",
-							Image:   hook.Image,
-							Command: hook.Command,
-							Args:    hook.Args,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	if err := m.client.Create(ctx, job); err != nil {
-		return nil, fmt.Errorf("failed to create post-switch validation hook job: %w", err)
-	}
-
-	logger.Info("Created post-switch validation hook job", "job", jobName)
-	return &PostSwitchHookResult{Name: jobName, Running: true, Failed: false}, nil
+) (*ValidationHookJobResult, error) {
+	return m.ensureValidationHookJob(ctx, logger, cluster, fmt.Sprintf("%s-post-switch-validation-hook", cluster.Name), ComponentPostSwitchValidationHook, hook)
 }
 
 // createPreUpgradeSnapshotJob creates a backup job at the start of an upgrade.
@@ -1894,16 +1657,7 @@ func (m *Manager) createPreUpgradeSnapshotJob(
 				failurePolicy = constants.ImageVerificationFailurePolicyBlock
 			}
 			if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-				now := metav1.Now()
-				meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-					Type:               string(openbaov1alpha1.ConditionDegraded),
-					Status:             metav1.ConditionTrue,
-					ObservedGeneration: cluster.Generation,
-					LastTransitionTime: now,
-					Reason:             constants.ReasonBlueGreenSnapshotImageVerificationFailed,
-					Message:            fmt.Sprintf("Pre-upgrade snapshot executor image verification failed: %v", err),
-				})
-				return "", fmt.Errorf("pre-upgrade snapshot executor image verification failed (policy=Block): %w", err)
+				return "", operatorerrors.WithReason(constants.ReasonBlueGreenSnapshotImageVerificationFailed, fmt.Errorf("pre-upgrade snapshot executor image verification failed (policy=Block): %w", err))
 			}
 			logger.Error(err, "Pre-upgrade snapshot executor image verification failed but proceeding due to Warn policy", "image", executorImage)
 		} else {
