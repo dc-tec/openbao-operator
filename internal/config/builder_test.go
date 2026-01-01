@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -167,6 +168,64 @@ func TestRenderHCLIncludesLeaderTLSServerNameForAutoJoin(t *testing.T) {
 	}
 
 	compareGolden(t, "render_hcl_auto_join", got)
+}
+
+func TestRenderHCLWithAuditPluginsTelemetry(t *testing.T) {
+	cluster := newMinimalCluster("gitops-contract", "default")
+	maxCardinality := int32(2000)
+	cluster.Spec.Audit = []openbaov1alpha1.AuditDevice{
+		{
+			Type:        "file",
+			Path:        "stdout",
+			Description: "File audit device",
+			FileOptions: &openbaov1alpha1.FileAuditOptions{
+				FilePath: "stdout",
+				Mode:     "0600",
+			},
+		},
+		{
+			Type:        "socket",
+			Path:        "custom-socket",
+			Description: "Socket audit device (raw options)",
+			Options: &apiextensionsv1.JSON{
+				Raw: []byte(`{"address":"127.0.0.1:9000","timeout":42}`),
+			},
+		},
+	}
+	cluster.Spec.Plugins = []openbaov1alpha1.Plugin{
+		{
+			Type:       "secret",
+			Name:       "example",
+			Image:      "ghcr.io/example/openbao-plugin",
+			Version:    "1.2.3",
+			BinaryName: "openbao-plugin",
+			SHA256Sum:  strings.Repeat("a", 64),
+			Args:       []string{"--flag"},
+			Env:        []string{"KEY=value"},
+		},
+	}
+	cluster.Spec.Telemetry = &openbaov1alpha1.TelemetryConfig{
+		UsageGaugePeriod:        "10m",
+		MaximumGaugeCardinality: &maxCardinality,
+		DisableHostname:         true,
+		EnableHostnameLabel:     true,
+		DogStatsdAddress:        "127.0.0.1:8125",
+		DogStatsdTags:           []string{"env:test", "cluster:gitops-contract"},
+	}
+
+	infraDetails := InfrastructureDetails{
+		HeadlessServiceName: cluster.Name,
+		Namespace:           cluster.Namespace,
+		APIPort:             8200,
+		ClusterPort:         8201,
+	}
+
+	got, err := RenderHCL(cluster, infraDetails)
+	if err != nil {
+		t.Fatalf("RenderHCL() error = %v", err)
+	}
+
+	compareGolden(t, "render_hcl_audit_plugins_telemetry", got)
 }
 
 func TestRenderHCLWithSelfInitRequests(t *testing.T) {
