@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 )
 
 const (
@@ -180,7 +179,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 // We parse the response body regardless of status code since it contains
 // the health information we need.
 func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+constants.APIPathSysHealth, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, constants.APIPathSysHealth, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create health request: %w", err)
 	}
@@ -190,24 +189,9 @@ func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
 		req.Header.Set("X-Vault-Token", c.token)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	_, body, err := c.doAndReadAll(req, nil, "failed to query health endpoint")
 	if err != nil {
-		// Wrap connection errors as transient to allow retry
-		if operatorerrors.IsTransientConnection(err) {
-			return nil, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to query health endpoint: %w", err))
-		}
-		return nil, fmt.Errorf("failed to query health endpoint: %w", err)
-	}
-	defer func() {
-		// Drain and close the body to enable connection reuse
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
-
-	// Read the response body regardless of status code
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read health response: %w", err)
+		return nil, err
 	}
 
 	var health HealthResponse
@@ -248,30 +232,21 @@ func (c *Client) StepDown(ctx context.Context) error {
 		return fmt.Errorf("authentication token required for step-down operation")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+constants.APIPathSysStepDown, nil)
+	req, err := c.newRequest(ctx, http.MethodPut, constants.APIPathSysStepDown, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create step-down request: %w", err)
 	}
 
 	req.Header.Set("X-Vault-Token", c.token)
 
-	resp, err := c.httpClient.Do(req)
+	resp, body, err := c.doAndReadAll(req, nil, "failed to execute step-down request")
 	if err != nil {
-		// Wrap connection errors as transient to allow retry
-		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute step-down request: %w", err))
-		}
-		return fmt.Errorf("failed to execute step-down request: %w", err)
+		return err
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
 
 	// 204 No Content is the expected success response
 	// 200 OK is also acceptable
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("step-down request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -338,7 +313,7 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 		return fmt.Errorf("authentication token required for snapshot operation")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+constants.APIPathRaftSnapshot, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, constants.APIPathRaftSnapshot, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot request: %w", err)
 	}
@@ -352,17 +327,12 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 		Timeout:   DefaultSnapshotTimeout,
 	}
 
-	resp, err := snapshotClient.Do(req)
+	resp, err := c.doRequest(req, snapshotClient, "failed to execute snapshot request")
 	if err != nil {
-		// Wrap connection errors as transient to allow retry
-		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute snapshot request: %w", err))
-		}
-		return fmt.Errorf("failed to execute snapshot request: %w", err)
+		return err
 	}
 	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
+		drainAndClose(resp)
 	}()
 
 	// Check for non-success status codes
@@ -393,7 +363,7 @@ func (c *Client) Restore(ctx context.Context, reader io.Reader) error {
 		return fmt.Errorf("authentication token required for restore operation")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+constants.APIPathRaftSnapshotForceRestore, reader)
+	req, err := c.newRequest(ctx, http.MethodPost, constants.APIPathRaftSnapshotForceRestore, reader)
 	if err != nil {
 		return fmt.Errorf("failed to create restore request: %w", err)
 	}
@@ -408,22 +378,13 @@ func (c *Client) Restore(ctx context.Context, reader io.Reader) error {
 		Timeout:   DefaultSnapshotTimeout,
 	}
 
-	resp, err := restoreClient.Do(req)
+	resp, body, err := c.doAndReadAll(req, restoreClient, "failed to execute restore request")
 	if err != nil {
-		// Wrap connection errors as transient to allow retry
-		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute restore request: %w", err))
-		}
-		return fmt.Errorf("failed to execute restore request: %w", err)
+		return err
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
 
 	// Check for success status codes (200 OK or 204 No Content)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("restore request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -443,7 +404,7 @@ func (c *Client) Init(ctx context.Context, req InitRequest) (*InitResponse, erro
 		return nil, fmt.Errorf("failed to marshal init request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+constants.APIPathSysInit, bytes.NewReader(body))
+	httpReq, err := c.newRequest(ctx, http.MethodPut, constants.APIPathSysInit, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create init request: %w", err)
 	}
@@ -451,27 +412,13 @@ func (c *Client) Init(ctx context.Context, req InitRequest) (*InitResponse, erro
 	// /v1/sys/init is unauthenticated; no token header is required.
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(httpReq)
+	resp, respBody, err := c.doAndReadAll(httpReq, nil, "failed to execute init request")
 	if err != nil {
-		// Wrap connection errors as transient to allow retry
-		if operatorerrors.IsTransientConnection(err) {
-			return nil, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute init request: %w", err))
-		}
-		return nil, fmt.Errorf("failed to execute init request: %w", err)
+		return nil, err
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("init request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read init response: %w", err)
+		return nil, fmt.Errorf("init request failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var initResp InitResponse
@@ -528,34 +475,20 @@ func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, e
 		return "", fmt.Errorf("failed to marshal JWT auth request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+constants.APIPathAuthJWTLogin, bytes.NewReader(bodyBytes))
+	req, err := c.newRequest(ctx, http.MethodPost, constants.APIPathAuthJWTLogin, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return "", fmt.Errorf("failed to create JWT auth request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, respBody, err := c.doAndReadAll(req, nil, "failed to execute JWT auth request")
 	if err != nil {
-		// Wrap connection errors as transient to allow retry
-		if operatorerrors.IsTransientConnection(err) {
-			return "", operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute JWT auth request: %w", err))
-		}
-		return "", fmt.Errorf("failed to execute JWT auth request: %w", err)
+		return "", err
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("JWT auth request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read JWT auth response: %w", err)
+		return "", fmt.Errorf("JWT auth request failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var authResp JWTAuthLoginResponse
@@ -617,7 +550,7 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 		return fmt.Errorf("failed to marshal raft join request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+constants.APIPathRaftJoin, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPut, constants.APIPathRaftJoin, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create raft join request: %w", err)
 	}
@@ -625,20 +558,9 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 	httpReq.Header.Set("X-Vault-Token", c.token)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(httpReq)
+	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft join request")
 	if err != nil {
-		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft join request: %w", err))
-		}
-		return fmt.Errorf("failed to execute raft join request: %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read raft join response: %w", err)
+		return err
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
@@ -705,33 +627,20 @@ func (c *Client) ReadRaftConfiguration(ctx context.Context) (*RaftConfigurationR
 		return nil, fmt.Errorf("authentication token required for raft configuration read")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+constants.APIPathRaftConfiguration, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, constants.APIPathRaftConfiguration, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create raft configuration request: %w", err)
 	}
 
 	req.Header.Set("X-Vault-Token", c.token)
 
-	resp, err := c.httpClient.Do(req)
+	resp, body, err := c.doAndReadAll(req, nil, "failed to execute raft configuration request")
 	if err != nil {
-		if operatorerrors.IsTransientConnection(err) {
-			return nil, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft configuration request: %w", err))
-		}
-		return nil, fmt.Errorf("failed to execute raft configuration request: %w", err)
+		return nil, err
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("raft configuration request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read raft configuration response: %w", err)
 	}
 
 	type raftConfigEnvelope struct {
@@ -786,36 +695,23 @@ func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*RaftAutopilotStat
 		return nil, fmt.Errorf("authentication token required for raft autopilot state read")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+constants.APIPathRaftAutopilotState, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, constants.APIPathRaftAutopilotState, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create raft autopilot state request: %w", err)
 	}
 
 	req.Header.Set("X-Vault-Token", c.token)
 
-	resp, err := c.httpClient.Do(req)
+	resp, body, err := c.doAndReadAll(req, nil, "failed to execute raft autopilot state request")
 	if err != nil {
-		if operatorerrors.IsTransientConnection(err) {
-			return nil, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft autopilot state request: %w", err))
-		}
-		return nil, fmt.Errorf("failed to execute raft autopilot state request: %w", err)
+		return nil, err
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, ErrAutopilotNotAvailable
 	}
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("raft autopilot state request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read raft autopilot state response: %w", err)
 	}
 
 	type raftAutopilotEnvelope struct {
@@ -865,7 +761,7 @@ func (c *Client) RemoveRaftPeer(ctx context.Context, serverID string) error {
 		return fmt.Errorf("failed to marshal raft remove-peer request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+constants.APIPathRaftRemovePeer, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPost, constants.APIPathRaftRemovePeer, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create raft remove-peer request: %w", err)
 	}
@@ -873,20 +769,12 @@ func (c *Client) RemoveRaftPeer(ctx context.Context, serverID string) error {
 	httpReq.Header.Set("X-Vault-Token", c.token)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(httpReq)
+	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft remove-peer request")
 	if err != nil {
-		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft remove-peer request: %w", err))
-		}
-		return fmt.Errorf("failed to execute raft remove-peer request: %w", err)
+		return err
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("raft remove-peer request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -923,7 +811,7 @@ func (c *Client) PromoteRaftPeer(ctx context.Context, serverID string) error {
 		return fmt.Errorf("failed to marshal raft promote request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+constants.APIPathRaftPromotePeer, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPost, constants.APIPathRaftPromotePeer, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create raft promote request: %w", err)
 	}
@@ -931,20 +819,12 @@ func (c *Client) PromoteRaftPeer(ctx context.Context, serverID string) error {
 	httpReq.Header.Set("X-Vault-Token", c.token)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(httpReq)
+	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft promote request")
 	if err != nil {
-		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft promote request: %w", err))
-		}
-		return fmt.Errorf("failed to execute raft promote request: %w", err)
+		return err
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("raft promote request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -981,7 +861,7 @@ func (c *Client) DemoteRaftPeer(ctx context.Context, serverID string) error {
 		return fmt.Errorf("failed to marshal raft demote request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+constants.APIPathRaftDemotePeer, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPost, constants.APIPathRaftDemotePeer, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create raft demote request: %w", err)
 	}
@@ -989,20 +869,12 @@ func (c *Client) DemoteRaftPeer(ctx context.Context, serverID string) error {
 	httpReq.Header.Set("X-Vault-Token", c.token)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(httpReq)
+	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft demote request")
 	if err != nil {
-		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft demote request: %w", err))
-		}
-		return fmt.Errorf("failed to execute raft demote request: %w", err)
+		return err
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("raft demote request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -1039,7 +911,7 @@ func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []RaftServ
 		return fmt.Errorf("failed to marshal raft configuration update request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+constants.APIPathRaftUpdateConfig, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPut, constants.APIPathRaftUpdateConfig, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create raft configuration update request: %w", err)
 	}
@@ -1047,20 +919,12 @@ func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []RaftServ
 	httpReq.Header.Set("X-Vault-Token", c.token)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(httpReq)
+	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft configuration update request")
 	if err != nil {
-		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to execute raft configuration update request: %w", err))
-		}
-		return fmt.Errorf("failed to execute raft configuration update request: %w", err)
+		return err
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("raft configuration update request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 

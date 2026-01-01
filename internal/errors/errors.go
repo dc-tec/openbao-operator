@@ -8,6 +8,52 @@ import (
 	"time"
 )
 
+// ReasonedError wraps an error with a low-cardinality reason string that can be
+// surfaced in status without forcing consumers to parse error text.
+type ReasonedError struct {
+	Reason string
+	Err    error
+}
+
+func (e *ReasonedError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Err == nil {
+		return e.Reason
+	}
+	if strings.TrimSpace(e.Reason) == "" {
+		return e.Err.Error()
+	}
+	return fmt.Sprintf("%s: %v", e.Reason, e.Err)
+}
+
+func (e *ReasonedError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+// WithReason annotates err with a reason string.
+func WithReason(reason string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &ReasonedError{Reason: reason, Err: err}
+}
+
+// Reason extracts a reason string from an error annotated via WithReason.
+func Reason(err error) (string, bool) {
+	var rerr *ReasonedError
+	if errors.As(err, &rerr) {
+		if rerr != nil && strings.TrimSpace(rerr.Reason) != "" {
+			return rerr.Reason, true
+		}
+	}
+	return "", false
+}
+
 // Transient errors indicate temporary conditions that should be retried.
 // These errors typically result in requeue with a delay.
 
