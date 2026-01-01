@@ -886,41 +886,53 @@ spec:
       operations:
       - UPDATE
       resources:
-      - openbaoclusters
+      - openbaoclusters/status
   validations:
-  - expression: '!variables.is_sentinel || object.spec == oldObject.spec'
-    message: The Sentinel is not authorized to modify the OpenBaoCluster Spec.
-  - expression: |-
-      !variables.is_sentinel || (has(object.status) == has(oldObject.status) &&
-
-       (!has(object.status) || object.status == oldObject.status))
-    message: The Sentinel is not authorized to modify the OpenBaoCluster Status.
   - expression: |-
       !variables.is_sentinel || (
 
+        # Spec must not change.
+        object.spec == oldObject.spec &&
+        # Metadata must not change.
         ((!has(object.metadata.labels) && !has(oldObject.metadata.labels)) ||
          (has(object.metadata.labels) && has(oldObject.metadata.labels) && object.metadata.labels == oldObject.metadata.labels)) &&
+        ((!has(object.metadata.annotations) && !has(oldObject.metadata.annotations)) ||
+         (has(object.metadata.annotations) && has(oldObject.metadata.annotations) && object.metadata.annotations == oldObject.metadata.annotations)) &&
         ((!has(object.metadata.finalizers) && !has(oldObject.metadata.finalizers)) ||
          (has(object.metadata.finalizers) && has(oldObject.metadata.finalizers) && object.metadata.finalizers == oldObject.metadata.finalizers)) &&
+
+        # All non-sentinel status fields must remain unchanged.
+        object.status.phase == oldObject.status.phase &&
+        object.status.activeLeader == oldObject.status.activeLeader &&
+        object.status.readyReplicas == oldObject.status.readyReplicas &&
+        object.status.currentVersion == oldObject.status.currentVersion &&
+        object.status.initialized == oldObject.status.initialized &&
+        object.status.selfInitialized == oldObject.status.selfInitialized &&
+        object.status.lastBackupTime == oldObject.status.lastBackupTime &&
+        object.status.upgrade == oldObject.status.upgrade &&
+        object.status.backup == oldObject.status.backup &&
+        object.status.drift == oldObject.status.drift &&
+        object.status.blueGreen == oldObject.status.blueGreen &&
+        object.status.operationLock == oldObject.status.operationLock &&
+        object.status.breakGlass == oldObject.status.breakGlass &&
+        object.status.conditions == oldObject.status.conditions &&
+
+        # Sentinel status: allow only trigger fields to change.
+        has(object.status.sentinel) &&
         (
-          ((!has(object.metadata.annotations) && !has(oldObject.metadata.annotations)) ||
-           (has(object.metadata.annotations) && has(oldObject.metadata.annotations) && object.metadata.annotations == oldObject.metadata.annotations)) ||
-          (has(object.metadata.annotations) &&
-           "openbao.org/sentinel-trigger" in object.metadata.annotations &&
-           object.metadata.annotations.all(k,
-             (has(oldObject.metadata.annotations) && k in oldObject.metadata.annotations &&
-              object.metadata.annotations[k] == oldObject.metadata.annotations[k]) ||
-             k == "openbao.org/sentinel-trigger" ||
-             k == "openbao.org/sentinel-trigger-resource"
-           ) &&
-           (!has(oldObject.metadata.annotations) ||
-            oldObject.metadata.annotations.all(k, k in object.metadata.annotations))
+          # Operator-owned fields must not be changed by Sentinel.
+          (!has(oldObject.status.sentinel) &&
+            !has(object.status.sentinel.lastHandledTriggerID) &&
+            !has(object.status.sentinel.lastHandledAt)
+          ) ||
+          (has(oldObject.status.sentinel) &&
+            object.status.sentinel.lastHandledTriggerID == oldObject.status.sentinel.lastHandledTriggerID &&
+            object.status.sentinel.lastHandledAt == oldObject.status.sentinel.lastHandledAt
           )
         )
       )
-    message: The Sentinel can only add or update the openbao.org/sentinel-trigger
-      and openbao.org/sentinel-trigger-resource annotations. All other metadata changes
-      are forbidden.
+    message: The Sentinel may only update status.sentinel trigger fields (triggerID/triggeredAt/triggerResource).
+      Spec, metadata, and all other status fields are forbidden.
   variables:
   - expression: request.userInfo.username.startsWith("system:serviceaccount:") &&
       request.userInfo.username.endsWith(":openbao-sentinel")
