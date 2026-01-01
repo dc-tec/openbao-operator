@@ -2380,6 +2380,27 @@ spec:
                 description: ActiveLeader is the current Raft leader pod name, for
                   example "prod-cluster-0".
                 type: string
+              adminOps:
+                description: AdminOps holds signals owned by the adminops controller
+                  (upgrade + backup).
+                properties:
+                  lastError:
+                    description: LastError is the last adminops-controller error observed
+                      for this cluster.
+                    properties:
+                      at:
+                        description: At is when the error was observed (best-effort).
+                        format: date-time
+                        type: string
+                      message:
+                        description: Message is a human-readable error message (best-effort).
+                        type: string
+                      reason:
+                        description: Reason is a low-cardinality identifier for the
+                          error.
+                        type: string
+                    type: object
+                type: object
               backup:
                 description: Backup tracks the state of backups for this cluster.
                 properties:
@@ -2705,6 +2726,35 @@ spec:
                   OpenBao's self-initialization feature. When true, no root token Secret
                   exists for this cluster (the root token was auto-revoked).
                 type: boolean
+              sentinel:
+                description: Sentinel records drift triggers emitted by the Sentinel
+                  component.
+                properties:
+                  lastHandledAt:
+                    description: LastHandledAt is when the operator last handled a
+                      Sentinel trigger (best-effort).
+                    format: date-time
+                    type: string
+                  lastHandledTriggerID:
+                    description: |-
+                      LastHandledTriggerID is the last TriggerID that the operator has fully processed.
+                      This prevents re-processing the same trigger across reconciles.
+                    type: string
+                  triggerID:
+                    description: |-
+                      TriggerID is an edge-trigger identifier set by Sentinel whenever it detects drift.
+                      The operator treats a trigger as new when TriggerID != LastHandledTriggerID.
+                      Recommended format: RFC3339Nano timestamp string or UUID.
+                    type: string
+                  triggerResource:
+                    description: TriggerResource optionally indicates what drifted
+                      (e.g., "Service/foo", "StatefulSet/bar").
+                    type: string
+                  triggeredAt:
+                    description: TriggeredAt is when Sentinel detected drift (best-effort).
+                    format: date-time
+                    type: string
+                type: object
               upgrade:
                 description: |-
                   Upgrade tracks the state of an in-progress upgrade (if any).
@@ -2726,6 +2776,20 @@ spec:
                   fromVersion:
                     description: FromVersion is the version being upgraded from.
                     type: string
+                  lastErrorAt:
+                    description: LastErrorAt is when the last upgrade error was recorded
+                      (best-effort).
+                    format: date-time
+                    type: string
+                  lastErrorMessage:
+                    description: LastErrorMessage is a human-readable failure message
+                      (best-effort).
+                    type: string
+                  lastErrorReason:
+                    description: |-
+                      LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).
+                      When set, the status controller should consider the cluster Degraded.
+                    type: string
                   lastStepDownTime:
                     description: LastStepDownTime records when the last leader step-down
                       was performed.
@@ -2742,6 +2806,27 @@ spec:
                 - currentPartition
                 - fromVersion
                 - targetVersion
+                type: object
+              workload:
+                description: Workload holds signals owned by the workload controller
+                  (infrastructure + drift correction).
+                properties:
+                  lastError:
+                    description: LastError is the last workload-controller error observed
+                      for this cluster.
+                    properties:
+                      at:
+                        description: At is when the error was observed (best-effort).
+                        format: date-time
+                        type: string
+                      message:
+                        description: Message is a human-readable error message (best-effort).
+                        type: string
+                      reason:
+                        description: Reason is a low-cardinality identifier for the
+                          error.
+                        type: string
+                    type: object
                 type: object
             type: object
         required:
@@ -4093,41 +4178,53 @@ spec:
       operations:
       - UPDATE
       resources:
-      - openbaoclusters
+      - openbaoclusters/status
   validations:
-  - expression: '!variables.is_sentinel || object.spec == oldObject.spec'
-    message: The Sentinel is not authorized to modify the OpenBaoCluster Spec.
-  - expression: |-
-      !variables.is_sentinel || (has(object.status) == has(oldObject.status) &&
-
-       (!has(object.status) || object.status == oldObject.status))
-    message: The Sentinel is not authorized to modify the OpenBaoCluster Status.
   - expression: |-
       !variables.is_sentinel || (
 
+        # Spec must not change.
+        object.spec == oldObject.spec &&
+        # Metadata must not change.
         ((!has(object.metadata.labels) && !has(oldObject.metadata.labels)) ||
          (has(object.metadata.labels) && has(oldObject.metadata.labels) && object.metadata.labels == oldObject.metadata.labels)) &&
+        ((!has(object.metadata.annotations) && !has(oldObject.metadata.annotations)) ||
+         (has(object.metadata.annotations) && has(oldObject.metadata.annotations) && object.metadata.annotations == oldObject.metadata.annotations)) &&
         ((!has(object.metadata.finalizers) && !has(oldObject.metadata.finalizers)) ||
          (has(object.metadata.finalizers) && has(oldObject.metadata.finalizers) && object.metadata.finalizers == oldObject.metadata.finalizers)) &&
+
+        # All non-sentinel status fields must remain unchanged.
+        object.status.phase == oldObject.status.phase &&
+        object.status.activeLeader == oldObject.status.activeLeader &&
+        object.status.readyReplicas == oldObject.status.readyReplicas &&
+        object.status.currentVersion == oldObject.status.currentVersion &&
+        object.status.initialized == oldObject.status.initialized &&
+        object.status.selfInitialized == oldObject.status.selfInitialized &&
+        object.status.lastBackupTime == oldObject.status.lastBackupTime &&
+        object.status.upgrade == oldObject.status.upgrade &&
+        object.status.backup == oldObject.status.backup &&
+        object.status.drift == oldObject.status.drift &&
+        object.status.blueGreen == oldObject.status.blueGreen &&
+        object.status.operationLock == oldObject.status.operationLock &&
+        object.status.breakGlass == oldObject.status.breakGlass &&
+        object.status.conditions == oldObject.status.conditions &&
+
+        # Sentinel status: allow only trigger fields to change.
+        has(object.status.sentinel) &&
         (
-          ((!has(object.metadata.annotations) && !has(oldObject.metadata.annotations)) ||
-           (has(object.metadata.annotations) && has(oldObject.metadata.annotations) && object.metadata.annotations == oldObject.metadata.annotations)) ||
-          (has(object.metadata.annotations) &&
-           "openbao.org/sentinel-trigger" in object.metadata.annotations &&
-           object.metadata.annotations.all(k,
-             (has(oldObject.metadata.annotations) && k in oldObject.metadata.annotations &&
-              object.metadata.annotations[k] == oldObject.metadata.annotations[k]) ||
-             k == "openbao.org/sentinel-trigger" ||
-             k == "openbao.org/sentinel-trigger-resource"
-           ) &&
-           (!has(oldObject.metadata.annotations) ||
-            oldObject.metadata.annotations.all(k, k in object.metadata.annotations))
+          # Operator-owned fields must not be changed by Sentinel.
+          (!has(oldObject.status.sentinel) &&
+            !has(object.status.sentinel.lastHandledTriggerID) &&
+            !has(object.status.sentinel.lastHandledAt)
+          ) ||
+          (has(oldObject.status.sentinel) &&
+            object.status.sentinel.lastHandledTriggerID == oldObject.status.sentinel.lastHandledTriggerID &&
+            object.status.sentinel.lastHandledAt == oldObject.status.sentinel.lastHandledAt
           )
         )
       )
-    message: The Sentinel can only add or update the openbao.org/sentinel-trigger
-      and openbao.org/sentinel-trigger-resource annotations. All other metadata changes
-      are forbidden.
+    message: The Sentinel may only update status.sentinel trigger fields (triggerID/triggeredAt/triggerResource).
+      Spec, metadata, and all other status fields are forbidden.
   variables:
   - expression: request.userInfo.username.startsWith("system:serviceaccount:") &&
       request.userInfo.username.endsWith(":openbao-sentinel")
