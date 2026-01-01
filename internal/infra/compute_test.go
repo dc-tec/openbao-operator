@@ -335,6 +335,11 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 	}
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
 		Type: "transit",
+		Transit: &openbaov1alpha1.TransitSealConfig{
+			Address:   "https://openbao:8200",
+			KeyName:   "transit-key",
+			MountPath: "transit/",
+		},
 		CredentialsSecretRef: &corev1.SecretReference{
 			Name: "infra-bao-token",
 		},

@@ -26,6 +26,26 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+// OpenBaoClusterPredicateOptions controls which OpenBaoCluster changes should trigger reconciliation.
+type OpenBaoClusterPredicateOptions struct {
+	// ReconcileOnSentinelTrigger enables reconciliation when status.sentinel.triggerID changes.
+	ReconcileOnSentinelTrigger bool
+	// ReconcileOnSentinelHandled enables reconciliation when status.sentinel.lastHandledTriggerID changes.
+	ReconcileOnSentinelHandled bool
+	// ReconcileOnUpgradeStatus enables reconciliation when status.upgrade changes.
+	ReconcileOnUpgradeStatus bool
+	// ReconcileOnBackupStatus enables reconciliation when status.backup changes.
+	ReconcileOnBackupStatus bool
+	// ReconcileOnBlueGreenStatus enables reconciliation when status.blueGreen changes.
+	ReconcileOnBlueGreenStatus bool
+	// ReconcileOnBreakGlass enables reconciliation when status.breakGlass changes.
+	ReconcileOnBreakGlass bool
+	// ReconcileOnWorkloadError enables reconciliation when status.workload.lastError changes.
+	ReconcileOnWorkloadError bool
+	// ReconcileOnAdminOpsError enables reconciliation when status.adminOps.lastError changes.
+	ReconcileOnAdminOpsError bool
+}
+
 // OpenBaoClusterPredicate filters OpenBaoCluster events to only reconcile on
 // meaningful changes. This reduces noise and CPU usage by preventing the
 // operator from waking up for irrelevant changes like status-only updates.
@@ -42,6 +62,14 @@ import (
 // since they don't require reconciliation - the controller updates status
 // based on observed state, not in response to status changes.
 func OpenBaoClusterPredicate() predicate.Predicate {
+	return OpenBaoClusterPredicateWithOptions(OpenBaoClusterPredicateOptions{
+		ReconcileOnSentinelTrigger: true,
+	})
+}
+
+// OpenBaoClusterPredicateWithOptions is like OpenBaoClusterPredicate but allows opting into
+// reconciliation on specific status-based signals (such as Sentinel triggers).
+func OpenBaoClusterPredicateWithOptions(opts OpenBaoClusterPredicateOptions) predicate.Predicate {
 	return predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			// Always reconcile on create
@@ -59,6 +87,85 @@ func OpenBaoClusterPredicate() predicate.Predicate {
 			newCluster, ok := e.ObjectNew.(*openbaov1alpha1.OpenBaoCluster)
 			if !ok {
 				return true // If type assertion fails, allow reconciliation to be safe
+			}
+
+			if opts.ReconcileOnSentinelTrigger {
+				// Reconcile if Sentinel emitted a new drift trigger via status.
+				oldTriggerID := ""
+				if oldCluster.Status.Sentinel != nil {
+					oldTriggerID = oldCluster.Status.Sentinel.TriggerID
+				}
+				newTriggerID := ""
+				if newCluster.Status.Sentinel != nil {
+					newTriggerID = newCluster.Status.Sentinel.TriggerID
+				}
+				if newTriggerID != "" && newTriggerID != oldTriggerID {
+					return true
+				}
+			}
+
+			if opts.ReconcileOnSentinelHandled {
+				oldHandled := ""
+				if oldCluster.Status.Sentinel != nil {
+					oldHandled = oldCluster.Status.Sentinel.LastHandledTriggerID
+				}
+				newHandled := ""
+				if newCluster.Status.Sentinel != nil {
+					newHandled = newCluster.Status.Sentinel.LastHandledTriggerID
+				}
+				if newHandled != "" && newHandled != oldHandled {
+					return true
+				}
+			}
+
+			if opts.ReconcileOnUpgradeStatus {
+				if !equality.Semantic.DeepEqual(oldCluster.Status.Upgrade, newCluster.Status.Upgrade) {
+					return true
+				}
+			}
+
+			if opts.ReconcileOnBackupStatus {
+				if !equality.Semantic.DeepEqual(oldCluster.Status.Backup, newCluster.Status.Backup) {
+					return true
+				}
+			}
+
+			if opts.ReconcileOnBlueGreenStatus {
+				if !equality.Semantic.DeepEqual(oldCluster.Status.BlueGreen, newCluster.Status.BlueGreen) {
+					return true
+				}
+			}
+
+			if opts.ReconcileOnBreakGlass {
+				if !equality.Semantic.DeepEqual(oldCluster.Status.BreakGlass, newCluster.Status.BreakGlass) {
+					return true
+				}
+			}
+
+			if opts.ReconcileOnWorkloadError {
+				var oldErr, newErr *openbaov1alpha1.ControllerErrorStatus
+				if oldCluster.Status.Workload != nil {
+					oldErr = oldCluster.Status.Workload.LastError
+				}
+				if newCluster.Status.Workload != nil {
+					newErr = newCluster.Status.Workload.LastError
+				}
+				if !equality.Semantic.DeepEqual(oldErr, newErr) {
+					return true
+				}
+			}
+
+			if opts.ReconcileOnAdminOpsError {
+				var oldErr, newErr *openbaov1alpha1.ControllerErrorStatus
+				if oldCluster.Status.AdminOps != nil {
+					oldErr = oldCluster.Status.AdminOps.LastError
+				}
+				if newCluster.Status.AdminOps != nil {
+					newErr = newCluster.Status.AdminOps.LastError
+				}
+				if !equality.Semantic.DeepEqual(oldErr, newErr) {
+					return true
+				}
 			}
 
 			// Reconcile if Generation changed (indicates Spec change)

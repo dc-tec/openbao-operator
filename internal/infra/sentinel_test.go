@@ -175,7 +175,8 @@ func TestEnsureSentinelRBAC(t *testing.T) {
 	// The role has 3 separate rules: StatefulSets (apps), Services/ConfigMaps (core), and OpenBaoClusters
 	hasStatefulSetRule := false
 	hasServiceConfigMapRule := false
-	hasOpenBaoClusterRule := false
+	hasOpenBaoClusterReadRule := false
+	hasOpenBaoClusterStatusPatchRule := false
 	for _, rule := range role.Rules {
 		// Check for StatefulSet read rule (apps API group)
 		if contains(rule.APIGroups, "apps") &&
@@ -195,14 +196,19 @@ func TestEnsureSentinelRBAC(t *testing.T) {
 			contains(rule.Verbs, "watch") {
 			hasServiceConfigMapRule = true
 		}
-		// Check for OpenBaoCluster patch rule
+		// Check for OpenBaoCluster read rule
 		if contains(rule.APIGroups, "openbao.org") &&
 			contains(rule.Resources, "openbaoclusters") &&
 			contains(rule.Verbs, "get") &&
 			contains(rule.Verbs, "list") &&
-			contains(rule.Verbs, "patch") &&
 			contains(rule.Verbs, "watch") {
-			hasOpenBaoClusterRule = true
+			hasOpenBaoClusterReadRule = true
+		}
+		// Check for OpenBaoCluster status patch rule
+		if contains(rule.APIGroups, "openbao.org") &&
+			contains(rule.Resources, "openbaoclusters/status") &&
+			contains(rule.Verbs, "patch") {
+			hasOpenBaoClusterStatusPatchRule = true
 		}
 	}
 
@@ -212,8 +218,11 @@ func TestEnsureSentinelRBAC(t *testing.T) {
 	if !hasServiceConfigMapRule {
 		t.Error("expected Sentinel Role to have Service/ConfigMap read rule")
 	}
-	if !hasOpenBaoClusterRule {
-		t.Error("expected Sentinel Role to have OpenBaoCluster patch rule")
+	if !hasOpenBaoClusterReadRule {
+		t.Error("expected Sentinel Role to have OpenBaoCluster read rule")
+	}
+	if !hasOpenBaoClusterStatusPatchRule {
+		t.Error("expected Sentinel Role to have OpenBaoCluster status patch rule")
 	}
 
 	// Verify RoleBinding exists

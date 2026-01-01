@@ -20,6 +20,11 @@ const (
 	ReasonStaticUnsealInUse     = "StaticUnsealInUse"
 	ReasonOperatorManagedTLS    = "OperatorManagedTLS"
 	ReasonSecurityViolation     = "SecurityViolation"
+	ReasonTLSSecretMissing      = "TLSSecretMissing"
+	ReasonTLSSecretInvalid      = "TLSSecretInvalid"
+	ReasonNotReady              = "NotReady"
+	ReasonAllReplicasReady      = "AllReplicasReady"
+	ReasonNoReplicasReady       = "NoReplicasReady"
 
 	// ComponentSentinel is the component name for sentinel resources.
 	ComponentSentinel = "sentinel"

@@ -87,13 +87,15 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 					failurePolicy = constants.ImageVerificationFailurePolicyBlock
 				}
 				if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-					m.setBackingUpCondition(cluster, false, constants.ReasonBackupExecutorImageVerificationFailed,
-						fmt.Sprintf("Backup executor image verification failed: %v", err))
+					if cluster.Status.Backup != nil {
+						cluster.Status.Backup.LastFailureReason = fmt.Sprintf("%s: %v", constants.ReasonBackupExecutorImageVerificationFailed, err)
+					}
 					return false, fmt.Errorf("backup executor image verification failed (policy=Block): %w", err)
 				}
 
-				m.setBackingUpCondition(cluster, false, constants.ReasonBackupExecutorImageVerificationFailed,
-					fmt.Sprintf("Backup executor image verification failed but proceeding due to Warn policy: %v", err))
+				if cluster.Status.Backup != nil {
+					cluster.Status.Backup.LastFailureReason = fmt.Sprintf("%s: %v", constants.ReasonBackupExecutorImageVerificationFailed, err)
+				}
 				logger.Error(err, "Backup executor image verification failed but proceeding due to Warn policy", "image", executorImage)
 			} else {
 				verifiedExecutorDigest = digest
@@ -174,9 +176,6 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		cluster.Status.Backup.ConsecutiveFailures = 0
 		cluster.Status.Backup.LastFailureReason = ""
 
-		m.setBackingUpCondition(cluster, false, "BackupSucceeded",
-			fmt.Sprintf("Backup Job %s completed successfully", jobName))
-
 		logger.Info("Backup Job completed successfully, status updated", "job", jobName, "lastBackupTime", now, "backupKey", backupKey)
 		return true, nil // Status was updated - request requeue to persist
 	}
@@ -186,9 +185,6 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		cluster.Status.Backup.ConsecutiveFailures++
 		cluster.Status.Backup.LastFailureReason = fmt.Sprintf("Backup Job %s failed", jobName)
 
-		m.setBackingUpCondition(cluster, false, "BackupFailed",
-			fmt.Sprintf("Backup Job %s failed", jobName))
-
 		logger.Error(fmt.Errorf("backup job failed"), "Backup Job failed, status updated",
 			"job", jobName,
 			"consecutiveFailures", cluster.Status.Backup.ConsecutiveFailures)
@@ -196,8 +192,6 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 	}
 
 	// Job is still running
-	m.setBackingUpCondition(cluster, true, "BackupInProgress",
-		fmt.Sprintf("Backup Job %s is in progress", jobName))
 	return false, nil // Status updated but job still running - no requeue needed yet
 }
 

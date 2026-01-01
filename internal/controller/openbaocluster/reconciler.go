@@ -1,0 +1,24 @@
+package openbaocluster
+
+import (
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/dc-tec/openbao-operator/internal/admission"
+	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
+	initmanager "github.com/dc-tec/openbao-operator/internal/init"
+)
+
+// OpenBaoClusterReconciler reconciles a OpenBaoCluster object.
+type OpenBaoClusterReconciler struct {
+	client.Client
+	Scheme            *runtime.Scheme
+	TLSReload         certmanager.ReloadSignaler
+	InitManager       *initmanager.Manager
+	OperatorNamespace string
+	OIDCIssuer        string // OIDC issuer URL discovered at startup
+	OIDCJWTKeys       []string
+	AdmissionStatus   *admission.Status
+	Recorder          record.EventRecorder
+}

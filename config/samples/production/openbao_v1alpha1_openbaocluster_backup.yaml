@@ -10,7 +10,7 @@
 # - JWT authentication enabled in OpenBao (for JWT Auth method)
 #   OR a backup token Secret (for static token method)
 #
-# See: docs/user-guide/backups.md
+# See: docs/user-guide/openbaocluster/operations/backups.md
 apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:

@@ -281,7 +281,7 @@ found:
 	return ctrl.Result{RequeueAfter: r.debounceWindow}, nil
 }
 
-// triggerReconciliation patches the OpenBaoCluster with the trigger annotation.
+// triggerReconciliation patches the OpenBaoCluster status with a drift trigger.
 // resourceKind and resourceName identify the resource that triggered the drift detection.
 func (r *SentinelReconciler) triggerReconciliation(ctx context.Context, resourceKind, resourceName string) error {
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
@@ -297,81 +297,47 @@ func (r *SentinelReconciler) triggerReconciliation(ctx context.Context, resource
 		return fmt.Errorf("failed to get OpenBaoCluster: %w", err)
 	}
 
-	// Check if annotation already exists with the same value (idempotency)
-	existingValue, exists := cluster.Annotations[constants.AnnotationSentinelTrigger]
-	newValue := time.Now().Format(time.RFC3339Nano)
-	if exists && existingValue == newValue {
-		// Annotation already set with current timestamp, no need to patch
-		r.logger.V(1).Info("Trigger annotation already set with current value, skipping patch")
-		return nil
-	}
-
-	// Patch annotation with trigger timestamp and resource info
+	triggerID := time.Now().UTC().Format(time.RFC3339Nano)
 	original := cluster.DeepCopy()
-	if cluster.Annotations == nil {
-		cluster.Annotations = make(map[string]string)
+
+	if cluster.Status.Sentinel == nil {
+		cluster.Status.Sentinel = &openbaov1alpha1.SentinelStatus{}
 	}
-	cluster.Annotations[constants.AnnotationSentinelTrigger] = newValue
-	// Include resource info for observability (e.g., "Service/sentinel-cluster" or "StatefulSet/sentinel-cluster")
+	cluster.Status.Sentinel.TriggerID = triggerID
+	now := metav1.Now()
+	cluster.Status.Sentinel.TriggeredAt = &now
 	if resourceKind != "" && resourceName != "" {
-		cluster.Annotations[constants.AnnotationSentinelTriggerResource] = fmt.Sprintf("%s/%s", resourceKind, resourceName)
+		cluster.Status.Sentinel.TriggerResource = fmt.Sprintf("%s/%s", resourceKind, resourceName)
 	}
 
-	if err := r.client.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
-		// Check for admission errors (VAP rejection)
+	if err := r.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+		// Status writes are blocked only by RBAC or API errors; there is no admission policy on status.
 		if apierrors.IsForbidden(err) || apierrors.IsInvalid(err) {
-			r.logger.Error(err, "Patch rejected by admission control - check ValidatingAdmissionPolicy",
-				"annotation", constants.AnnotationSentinelTrigger,
-				"existing_annotations", cluster.Annotations)
-			return fmt.Errorf("patch rejected by admission control: %w", err)
+			r.logger.Error(err, "Status patch rejected; check RBAC for openbaoclusters/status")
+			return fmt.Errorf("status patch rejected: %w", err)
 		}
 		if apierrors.IsConflict(err) {
-			// Conflict is transient, will retry via controller-runtime backoff
-			return fmt.Errorf("conflict patching OpenBaoCluster: %w", err)
+			return fmt.Errorf("conflict patching OpenBaoCluster status: %w", err)
 		}
-		return fmt.Errorf("failed to patch OpenBaoCluster: %w", err)
+		return fmt.Errorf("failed to patch OpenBaoCluster status: %w", err)
 	}
 
-	// Verify the patch succeeded by reading back the resource
-	// This helps catch cases where the patch appears to succeed but the annotation isn't actually set
-	// Note: There are several race conditions that can occur:
-	// 1. The operator might have already processed the trigger and cleared the annotation
-	// 2. Another sentinel reconciliation might have set a different (newer) value
-	// 3. API server eventual consistency might not reflect our patch yet
-	// We only log verification results but don't fail, as the patch operation itself succeeded
-	// and any of these race conditions are acceptable outcomes
 	verifyCluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := r.client.Get(ctx, key, verifyCluster); err != nil {
-		r.logger.V(1).Info("Could not verify patch - failed to read back OpenBaoCluster",
-			"error", err)
-		// Don't fail here - the patch might have succeeded but we just can't verify it
-	} else {
-		if val, ok := verifyCluster.Annotations[constants.AnnotationSentinelTrigger]; ok {
-			// Annotation exists - check if it has the expected value
-			if val == newValue {
-				r.logger.V(1).Info("Successfully patched and verified OpenBaoCluster with trigger annotation",
-					"annotation", constants.AnnotationSentinelTrigger,
-					"value", newValue)
-			} else {
-				// Annotation has a different value - could be due to:
-				// concurrent reconciliation, eventual consistency, or persisted old value.
-				// We log at debug level but don't fail, as the patch operation succeeded
-				r.logger.V(1).Info(
-					"Patch verification: annotation has different value",
-					"annotation", constants.AnnotationSentinelTrigger,
-					"expected_value", newValue,
-					"actual_value", val)
-			}
-		} else {
-			// Annotation doesn't exist - this could mean:
-			// 1. The operator already processed the trigger and cleared it (acceptable - drift was handled)
-			// 2. The patch failed (but Patch() didn't return an error - rare but acceptable, will retry)
-			// We log at debug level but don't fail, as the operator processing it is acceptable
-			r.logger.V(1).Info("Patch verification: annotation not found - may have been cleared by operator",
-				"annotation", constants.AnnotationSentinelTrigger,
-				"expected_value", newValue)
-		}
+		r.logger.V(1).Info("Could not verify status patch - failed to read back OpenBaoCluster", "error", err)
+		return nil
 	}
+	if verifyCluster.Status.Sentinel == nil || verifyCluster.Status.Sentinel.TriggerID == "" {
+		r.logger.V(1).Info("Status patch verification: trigger not present yet (eventual consistency)", "triggerID", triggerID)
+		return nil
+	}
+	if verifyCluster.Status.Sentinel.TriggerID != triggerID {
+		r.logger.V(1).Info("Status patch verification: triggerID differs (concurrent trigger?)",
+			"expected", triggerID,
+			"actual", verifyCluster.Status.Sentinel.TriggerID)
+		return nil
+	}
+	r.logger.V(1).Info("Successfully patched OpenBaoCluster status with trigger", "triggerID", triggerID)
 
 	return nil
 }

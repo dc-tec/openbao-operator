@@ -2381,6 +2381,27 @@ spec:
                 description: ActiveLeader is the current Raft leader pod name, for
                   example "prod-cluster-0".
                 type: string
+              adminOps:
+                description: AdminOps holds signals owned by the adminops controller
+                  (upgrade + backup).
+                properties:
+                  lastError:
+                    description: LastError is the last adminops-controller error observed
+                      for this cluster.
+                    properties:
+                      at:
+                        description: At is when the error was observed (best-effort).
+                        format: date-time
+                        type: string
+                      message:
+                        description: Message is a human-readable error message (best-effort).
+                        type: string
+                      reason:
+                        description: Reason is a low-cardinality identifier for the
+                          error.
+                        type: string
+                    type: object
+                type: object
               backup:
                 description: Backup tracks the state of backups for this cluster.
                 properties:
@@ -2706,6 +2727,35 @@ spec:
                   OpenBao's self-initialization feature. When true, no root token Secret
                   exists for this cluster (the root token was auto-revoked).
                 type: boolean
+              sentinel:
+                description: Sentinel records drift triggers emitted by the Sentinel
+                  component.
+                properties:
+                  lastHandledAt:
+                    description: LastHandledAt is when the operator last handled a
+                      Sentinel trigger (best-effort).
+                    format: date-time
+                    type: string
+                  lastHandledTriggerID:
+                    description: |-
+                      LastHandledTriggerID is the last TriggerID that the operator has fully processed.
+                      This prevents re-processing the same trigger across reconciles.
+                    type: string
+                  triggerID:
+                    description: |-
+                      TriggerID is an edge-trigger identifier set by Sentinel whenever it detects drift.
+                      The operator treats a trigger as new when TriggerID != LastHandledTriggerID.
+                      Recommended format: RFC3339Nano timestamp string or UUID.
+                    type: string
+                  triggerResource:
+                    description: TriggerResource optionally indicates what drifted
+                      (e.g., "Service/foo", "StatefulSet/bar").
+                    type: string
+                  triggeredAt:
+                    description: TriggeredAt is when Sentinel detected drift (best-effort).
+                    format: date-time
+                    type: string
+                type: object
               upgrade:
                 description: |-
                   Upgrade tracks the state of an in-progress upgrade (if any).
@@ -2727,6 +2777,20 @@ spec:
                   fromVersion:
                     description: FromVersion is the version being upgraded from.
                     type: string
+                  lastErrorAt:
+                    description: LastErrorAt is when the last upgrade error was recorded
+                      (best-effort).
+                    format: date-time
+                    type: string
+                  lastErrorMessage:
+                    description: LastErrorMessage is a human-readable failure message
+                      (best-effort).
+                    type: string
+                  lastErrorReason:
+                    description: |-
+                      LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).
+                      When set, the status controller should consider the cluster Degraded.
+                    type: string
                   lastStepDownTime:
                     description: LastStepDownTime records when the last leader step-down
                       was performed.
@@ -2743,6 +2807,27 @@ spec:
                 - currentPartition
                 - fromVersion
                 - targetVersion
+                type: object
+              workload:
+                description: Workload holds signals owned by the workload controller
+                  (infrastructure + drift correction).
+                properties:
+                  lastError:
+                    description: LastError is the last workload-controller error observed
+                      for this cluster.
+                    properties:
+                      at:
+                        description: At is when the error was observed (best-effort).
+                        format: date-time
+                        type: string
+                      message:
+                        description: Message is a human-readable error message (best-effort).
+                        type: string
+                      reason:
+                        description: Reason is a low-cardinality identifier for the
+                          error.
+                        type: string
+                    type: object
                 type: object
             type: object
         required:

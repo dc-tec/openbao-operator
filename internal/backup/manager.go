@@ -16,7 +16,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -125,9 +124,6 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	// Pre-flight checks
 	if err := m.checkPreconditions(ctx, logger, cluster); err != nil {
-		if errors.Is(err, ErrNoBackupToken) {
-			m.setBackingUpCondition(cluster, false, ReasonNoBackupToken, err.Error())
-		}
 		logger.Info("Backup preconditions not met", "reason", err.Error())
 		return false, nil
 	}
@@ -426,8 +422,11 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 	}
 
 	// Check if another backup is in progress
-	backingUpCond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionBackingUp))
-	if backingUpCond != nil && backingUpCond.Status == metav1.ConditionTrue {
+	hasBackupJob, err := m.hasActiveBackupJob(ctx, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to check for active backup job: %w", err)
+	}
+	if hasBackupJob {
 		return fmt.Errorf("backup already in progress")
 	}
 
@@ -788,23 +787,6 @@ func (m *Manager) hasActiveBackupJob(ctx context.Context, cluster *openbaov1alph
 	}
 
 	return false, nil
-}
-
-// setBackingUpCondition sets the BackingUp condition on the cluster status.
-func (m *Manager) setBackingUpCondition(cluster *openbaov1alpha1.OpenBaoCluster, isBackingUp bool, reason, message string) {
-	status := metav1.ConditionFalse
-	if isBackingUp {
-		status = metav1.ConditionTrue
-	}
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionBackingUp),
-		Status:             status,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: metav1.Now(),
-		Reason:             reason,
-		Message:            message,
-	})
 }
 
 // countingReader wraps an io.Reader to count bytes read.

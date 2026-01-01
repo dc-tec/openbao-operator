@@ -310,8 +310,8 @@ type AutoRollbackConfig struct {
 // BlueGreenConfig configures the behavior when Type is BlueGreen.
 type BlueGreenConfig struct {
 	// AutoPromote controls whether the operator automatically switches traffic
-	// and deletes the old cluster after sync. If false, it pauses at PhaseSynced
-	// waiting for manual approval (annotation or field update).
+	// and deletes the old cluster after sync. If false, it stays in the Syncing
+	// phase waiting for the user to enable it (set autoPromote=true).
 	// +kubebuilder:default=true
 	AutoPromote bool `json:"autoPromote"`
 
@@ -1505,6 +1505,44 @@ type UpgradeProgress struct {
 	// LastStepDownTime records when the last leader step-down was performed.
 	// +optional
 	LastStepDownTime *metav1.Time `json:"lastStepDownTime,omitempty"`
+	// LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).
+	// When set, the status controller should consider the cluster Degraded.
+	// +optional
+	LastErrorReason string `json:"lastErrorReason,omitempty"`
+	// LastErrorMessage is a human-readable failure message (best-effort).
+	// +optional
+	LastErrorMessage string `json:"lastErrorMessage,omitempty"`
+	// LastErrorAt is when the last upgrade error was recorded (best-effort).
+	// +optional
+	LastErrorAt *metav1.Time `json:"lastErrorAt,omitempty"`
+}
+
+// ControllerErrorStatus captures a controller-scoped error signal that the status controller
+// can translate into high-level conditions.
+type ControllerErrorStatus struct {
+	// Reason is a low-cardinality identifier for the error.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+	// Message is a human-readable error message (best-effort).
+	// +optional
+	Message string `json:"message,omitempty"`
+	// At is when the error was observed (best-effort).
+	// +optional
+	At *metav1.Time `json:"at,omitempty"`
+}
+
+// WorkloadControllerStatus holds status owned by the workload controller.
+type WorkloadControllerStatus struct {
+	// LastError is the last workload-controller error observed for this cluster.
+	// +optional
+	LastError *ControllerErrorStatus `json:"lastError,omitempty"`
+}
+
+// AdminOpsControllerStatus holds status owned by the adminops controller.
+type AdminOpsControllerStatus struct {
+	// LastError is the last adminops-controller error observed for this cluster.
+	// +optional
+	LastError *ControllerErrorStatus `json:"lastError,omitempty"`
 }
 
 // BlueGreenPhase is a high-level summary of blue/green upgrade state.
@@ -1641,6 +1679,29 @@ type DriftStatus struct {
 	ConsecutiveFastPaths int32 `json:"consecutiveFastPaths,omitempty"`
 }
 
+// SentinelStatus records drift triggers emitted by the Sentinel component.
+// This lives in status (not annotations) to be GitOps-friendly (e.g., ArgoCD).
+type SentinelStatus struct {
+	// TriggerID is an edge-trigger identifier set by Sentinel whenever it detects drift.
+	// The operator treats a trigger as new when TriggerID != LastHandledTriggerID.
+	// Recommended format: RFC3339Nano timestamp string or UUID.
+	// +optional
+	TriggerID string `json:"triggerID,omitempty"`
+	// TriggeredAt is when Sentinel detected drift (best-effort).
+	// +optional
+	TriggeredAt *metav1.Time `json:"triggeredAt,omitempty"`
+	// TriggerResource optionally indicates what drifted (e.g., "Service/foo", "StatefulSet/bar").
+	// +optional
+	TriggerResource string `json:"triggerResource,omitempty"`
+	// LastHandledTriggerID is the last TriggerID that the operator has fully processed.
+	// This prevents re-processing the same trigger across reconciles.
+	// +optional
+	LastHandledTriggerID string `json:"lastHandledTriggerID,omitempty"`
+	// LastHandledAt is when the operator last handled a Sentinel trigger (best-effort).
+	// +optional
+	LastHandledAt *metav1.Time `json:"lastHandledAt,omitempty"`
+}
+
 // OpenBaoClusterStatus defines the observed state of an OpenBaoCluster.
 type OpenBaoClusterStatus struct {
 	// Phase is a high-level summary of the cluster state.
@@ -1680,6 +1741,9 @@ type OpenBaoClusterStatus struct {
 	// Drift tracks drift detection and correction events for this cluster.
 	// +optional
 	Drift *DriftStatus `json:"drift,omitempty"`
+	// Sentinel records drift triggers emitted by the Sentinel component.
+	// +optional
+	Sentinel *SentinelStatus `json:"sentinel,omitempty"`
 	// BlueGreen tracks the state of blue/green upgrades (if enabled).
 	// +optional
 	BlueGreen *BlueGreenStatus `json:"blueGreen,omitempty"`
@@ -1691,6 +1755,12 @@ type OpenBaoClusterStatus struct {
 	// explicit operator acknowledgment to continue.
 	// +optional
 	BreakGlass *BreakGlassStatus `json:"breakGlass,omitempty"`
+	// Workload holds signals owned by the workload controller (infrastructure + drift correction).
+	// +optional
+	Workload *WorkloadControllerStatus `json:"workload,omitempty"`
+	// AdminOps holds signals owned by the adminops controller (upgrade + backup).
+	// +optional
+	AdminOps *AdminOpsControllerStatus `json:"adminOps,omitempty"`
 	// Conditions represent the current state of the OpenBaoCluster resource.
 	// +listType=map
 	// +listMapKey=type

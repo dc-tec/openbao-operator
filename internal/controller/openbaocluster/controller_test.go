@@ -41,16 +41,37 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/infra"
 )
 
+type testCompositeReconciler struct {
+	parent *OpenBaoClusterReconciler
+}
+
+func (r *testCompositeReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
+	statusReconciler := &openBaoClusterStatusReconciler{parent: r.parent}
+	workloadReconciler := &openBaoClusterWorkloadReconciler{parent: r.parent}
+	adminOpsReconciler := &openBaoClusterAdminOpsReconciler{parent: r.parent}
+
+	if result, err := statusReconciler.Reconcile(ctx, req); err != nil {
+		return result, err
+	}
+	if result, err := workloadReconciler.Reconcile(ctx, req); err != nil {
+		return result, err
+	}
+	if result, err := adminOpsReconciler.Reconcile(ctx, req); err != nil {
+		return result, err
+	}
+	return statusReconciler.Reconcile(ctx, req)
+}
+
 var _ = Describe("OpenBaoCluster Controller", func() {
 	Context("When reconciling a resource", func() {
 		ctx := context.Background()
 
-		newReconciler := func() *OpenBaoClusterReconciler {
-			controllerReconciler := &OpenBaoClusterReconciler{
+		newReconciler := func() *testCompositeReconciler {
+			parent := &OpenBaoClusterReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
-			return controllerReconciler
+			return &testCompositeReconciler{parent: parent}
 		}
 
 		createMinimalCluster := func(name string, paused bool) *openbaov1alpha1.OpenBaoCluster {
@@ -549,11 +570,12 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 
 			reloader := &tlsReloadRecorder{}
 
-			controllerReconciler := &OpenBaoClusterReconciler{
+			parent := &OpenBaoClusterReconciler{
 				Client:    k8sClient,
 				Scheme:    k8sClient.Scheme(),
 				TLSReload: reloader,
 			}
+			controllerReconciler := &testCompositeReconciler{parent: parent}
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
@@ -721,12 +743,12 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 	Context("When managing multiple clusters in different namespaces", func() {
 		ctx := context.Background()
 
-		newReconciler := func() *OpenBaoClusterReconciler {
-			controllerReconciler := &OpenBaoClusterReconciler{
+		newReconciler := func() *testCompositeReconciler {
+			parent := &OpenBaoClusterReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
-			return controllerReconciler
+			return &testCompositeReconciler{parent: parent}
 		}
 
 		createClusterInNamespace := func(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
@@ -1033,17 +1055,17 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 		Context("When Sentinel is enabled", func() {
 			ctx := context.Background()
 
-			newReconciler := func() *OpenBaoClusterReconciler {
-				controllerReconciler := &OpenBaoClusterReconciler{
+			newReconciler := func() *testCompositeReconciler {
+				parent := &OpenBaoClusterReconciler{
 					Client:            k8sClient,
 					Scheme:            k8sClient.Scheme(),
 					OperatorNamespace: "openbao-operator-system",
 				}
-				return controllerReconciler
+				return &testCompositeReconciler{parent: parent}
 			}
 
-			newReconcilerWithAdmission := func(sentinelReady bool) *OpenBaoClusterReconciler {
-				controllerReconciler := &OpenBaoClusterReconciler{
+			newReconcilerWithAdmission := func(sentinelReady bool) *testCompositeReconciler {
+				parent := &OpenBaoClusterReconciler{
 					Client:            k8sClient,
 					Scheme:            k8sClient.Scheme(),
 					OperatorNamespace: "openbao-operator-system",
@@ -1052,7 +1074,7 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 						SentinelReady: sentinelReady,
 					},
 				}
-				return controllerReconciler
+				return &testCompositeReconciler{parent: parent}
 			}
 
 			createClusterWithSentinel := func(name string, sentinelEnabled bool) *openbaov1alpha1.OpenBaoCluster {
@@ -1372,33 +1394,43 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 				_, err = newReconciler().Reconcile(ctx, req)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Add trigger annotation to simulate Sentinel drift detection
+				// Add Sentinel trigger status to simulate drift detection.
 				updatedCluster := &openbaov1alpha1.OpenBaoCluster{}
 				err = k8sClient.Get(ctx, types.NamespacedName{
 					Name:      cluster.Name,
 					Namespace: cluster.Namespace,
 				}, updatedCluster)
 				Expect(err).NotTo(HaveOccurred())
-				originalAnno := updatedCluster.DeepCopy()
-				if updatedCluster.Annotations == nil {
-					updatedCluster.Annotations = make(map[string]string)
+				originalStatus := updatedCluster.DeepCopy()
+				if updatedCluster.Status.Sentinel == nil {
+					updatedCluster.Status.Sentinel = &openbaov1alpha1.SentinelStatus{}
 				}
-				updatedCluster.Annotations[constants.AnnotationSentinelTrigger] = "2025-01-15T10:30:45.123456789Z"
-				Expect(k8sClient.Patch(ctx, updatedCluster, client.MergeFrom(originalAnno))).To(Succeed())
+				updatedCluster.Status.Sentinel.TriggerID = "2025-01-15T10:30:45.123456789Z"
+				now := metav1.Now()
+				updatedCluster.Status.Sentinel.TriggeredAt = &now
+				updatedCluster.Status.Sentinel.TriggerResource = "StatefulSet/test-sentinel-cluster"
+				Expect(k8sClient.Status().Patch(ctx, updatedCluster, client.MergeFrom(originalStatus))).To(Succeed())
 
-				// Reconcile - should detect trigger and clear annotation
+				// Reconcile - should detect trigger and mark it handled.
 				_, err = newReconciler().Reconcile(ctx, req)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Verify trigger annotation is cleared
+				// Verify trigger is handled and legacy annotations are not used.
 				finalCluster := &openbaov1alpha1.OpenBaoCluster{}
 				err = k8sClient.Get(ctx, types.NamespacedName{
 					Name:      cluster.Name,
 					Namespace: cluster.Namespace,
 				}, finalCluster)
 				Expect(err).NotTo(HaveOccurred())
-				_, hasTrigger := finalCluster.Annotations[constants.AnnotationSentinelTrigger]
-				Expect(hasTrigger).To(BeFalse())
+				Expect(finalCluster.Status.Sentinel).NotTo(BeNil())
+				Expect(finalCluster.Status.Sentinel.LastHandledTriggerID).To(Equal(finalCluster.Status.Sentinel.TriggerID))
+				Expect(finalCluster.Status.Sentinel.LastHandledAt).NotTo(BeNil())
+				if finalCluster.Annotations != nil {
+					_, hasTrigger := finalCluster.Annotations["openbao.org/sentinel-trigger"]
+					Expect(hasTrigger).To(BeFalse())
+					_, hasResource := finalCluster.Annotations["openbao.org/sentinel-trigger-resource"]
+					Expect(hasResource).To(BeFalse())
+				}
 			})
 
 			It("does not deploy Sentinel when admission policies are not ready", func() {
