@@ -113,6 +113,18 @@ verify-generated: manifests generate ## Verify generated artifacts are up-to-dat
 		exit 1; \
 	}
 
+.PHONY: verify-openbao-config-compat
+verify-openbao-config-compat: ## Validate generated HCL fixtures against upstream OpenBao config parser (semantic).
+	@bash hack/ci/openbao-config-compat.sh 2.4.0 2.4.4
+
+.PHONY: report-openbao-config-schema-drift
+report-openbao-config-schema-drift: ## Report upstream OpenBao config schema drift across the supported range (non-failing).
+	@REPORT_SCHEMA_DRIFT=true bash hack/ci/openbao-config-compat.sh 2.4.0 2.4.4
+
+.PHONY: report-openbao-operator-schema-drift
+report-openbao-operator-schema-drift: ## Report operator-vs-upstream OpenBao config schema drift (non-failing).
+	@go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
+
 .PHONY: helm-sync
 helm-sync: ## Sync Helm chart generated inputs (CRDs and installer template).
 	@$(MAKE) build-installer \
