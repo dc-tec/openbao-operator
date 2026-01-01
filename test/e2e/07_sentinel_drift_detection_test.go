@@ -315,46 +315,43 @@ var _ = Describe("Sentinel: Drift Detection and Fast-Path Reconciliation", Label
 				cluster.Status.Drift.LastDriftResource)
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-		By("verifying Sentinel can trigger reconciliation via annotation")
-		// Verify that the trigger annotation mechanism works by checking that
-		// annotations are properly cleared after reconciliation (if they exist)
+		By("verifying the operator responds to a Sentinel trigger via status")
+		// Simulate Sentinel emitting a drift trigger by patching status.sentinel.*.
+		// This avoids relying on non-deterministic timing of real drift detection.
+		triggerID := time.Now().UTC().Format(time.RFC3339Nano)
+		cluster := &openbaov1alpha1.OpenBaoCluster{}
+		Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
+		original := cluster.DeepCopy()
+		if cluster.Status.Sentinel == nil {
+			cluster.Status.Sentinel = &openbaov1alpha1.SentinelStatus{}
+		}
+		cluster.Status.Sentinel.TriggerID = triggerID
+		now := metav1.Now()
+		cluster.Status.Sentinel.TriggeredAt = &now
+		cluster.Status.Sentinel.TriggerResource = fmt.Sprintf("StatefulSet/%s", clusterName)
+		Expect(c.Status().Patch(ctx, cluster, client.MergeFrom(original))).To(Succeed())
+
 		Eventually(func(g Gomega) {
-			cluster := &openbaov1alpha1.OpenBaoCluster{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
+			updated := &openbaov1alpha1.OpenBaoCluster{}
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, updated)).To(Succeed())
 
-			// If trigger annotations exist, they should be cleared after reconciliation
-			// If they don't exist, that's also fine - it means reconciliation already completed
-			_, hasTrigger := cluster.Annotations[constants.AnnotationSentinelTrigger]
-			_, hasResource := cluster.Annotations[constants.AnnotationSentinelTriggerResource]
+			g.Expect(updated.Status.Sentinel).NotTo(BeNil())
+			g.Expect(updated.Status.Sentinel.LastHandledTriggerID).To(Equal(triggerID), "expected operator to mark trigger as handled")
+			g.Expect(updated.Status.Sentinel.LastHandledAt).NotTo(BeNil())
 
-			if hasTrigger || hasResource {
-				// Annotations exist - trigger a reconcile to ensure they get cleared
-				Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
-				// Wait a bit for reconciliation
-				time.Sleep(2 * time.Second)
+			g.Expect(updated.Status.Drift).NotTo(BeNil(), "expected drift status to exist after trigger handling")
+			g.Expect(updated.Status.Drift.LastDriftDetected).NotTo(BeNil())
+			g.Expect(updated.Status.Drift.LastCorrectionTime).NotTo(BeNil())
+			g.Expect(updated.Status.Drift.LastDriftResource).NotTo(BeEmpty())
+
+			// GitOps contract: legacy trigger annotations must not be used.
+			if updated.Annotations != nil {
+				_, hasTrigger := updated.Annotations["openbao.org/sentinel-trigger"]
+				g.Expect(hasTrigger).To(BeFalse())
+				_, hasResource := updated.Annotations["openbao.org/sentinel-trigger-resource"]
+				g.Expect(hasResource).To(BeFalse())
 			}
-
-			// After reconciliation, annotations should be cleared
-			// We check this in a separate Eventually to allow time for reconciliation
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-
-		// Final check that annotations are cleared (if they were present)
-		Eventually(func(g Gomega) {
-			cluster := &openbaov1alpha1.OpenBaoCluster{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
-			_, hasTrigger := cluster.Annotations[constants.AnnotationSentinelTrigger]
-			_, hasResource := cluster.Annotations[constants.AnnotationSentinelTriggerResource]
-
-			// Annotations should be cleared after reconciliation completes
-			// If they're not present, that's fine - it means reconciliation already completed
-			if hasTrigger || hasResource {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Trigger annotations still present, waiting for reconciliation to clear them\n")
-				g.Expect(hasTrigger).To(BeFalse(), "expected Sentinel trigger annotation to be cleared after reconciliation")
-				g.Expect(hasResource).To(BeFalse(), "expected Sentinel trigger resource annotation to be cleared after reconciliation")
-			} else {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Trigger annotations cleared (or never present)\n")
-			}
-		}, 30*time.Second, 2*time.Second).Should(Succeed())
 	})
 
 	It("removes Sentinel resources when Sentinel is disabled", func() {
