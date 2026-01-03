@@ -1,41 +1,68 @@
 # Security Profiles
 
-The Operator supports two security profiles via `spec.profile` to enforce different security postures.
+!!! abstract "Concept"
+    OpenBao Operator supports two distinct security profiles via `spec.profile`. These profiles enforce different validation rules and default behaviors to match the environment's risk level.
 
-## Hardened Profile
+## Profile Comparison
 
-!!! important "Production Requirement"
-    The Hardened profile is **REQUIRED** for all production deployments. The Development profile stores root tokens in Kubernetes Secrets, which creates a significant security risk.
+| Feature | :material-shield-check: Hardened (Production) | :material-test-tube: Development (Testing) |
+| :--- | :--- | :--- |
+| **Root Token** | **Never Generated** | Stored in Secret |
+| **Unseal Keys** | External KMS Required | Stored in Secret |
+| **TLS** | External / ACME Required | Operator Managed Allowed |
+| **Self-Init** | Required (`enabled=true`) | Optional |
+| **Admission Check** | Strict Validation | Relaxed Validation |
+| **Use Case** | **Production** | Proof of Concept, Local Dev |
 
-The `Hardened` profile enforces strict security requirements suitable for production environments:
+## Detailed Configuration
 
-| Requirement | Configuration |
-|-------------|---------------|
-| TLS | `spec.tls.mode` MUST be `External` or `ACME` |
-| Unseal | MUST use external KMS (`awskms`, `gcpckms`, `azurekeyvault`, `transit`) |
-| Self-Init | `spec.selfInit.enabled` MUST be `true` |
-| TLS Verification | `tlsSkipVerify=true` is rejected |
+=== ":material-shield-check: Hardened Profile"
 
-**Security Benefits:**
+    !!! success "Production Ready"
+        The `hardened` profile is **MANDATORY** for all production deployments. It enforces a "Secure by Default" posture that eliminates Root Tokens and ensures strong encryption.
 
-- **No Root Tokens:** Root tokens are never created or stored, eliminating the risk of token compromise.
-- **External KMS:** Provides stronger root of trust than Kubernetes Secrets for unseal keys.
-- **External TLS:** Integrates with organizational PKI and certificate management systems.
-- **Optional JWT Bootstrap:** When `spec.selfInit.bootstrapJWTAuth=true`, the operator can bootstrap OpenBao JWT auth during self-init to reduce configuration drift.
+    To use this profile, your `OpenBaoCluster` must meet these requirements:
 
-## Development Profile
+    1.  **External KMS:** You must provide a KMS key (AWS, GCP, Azure, or Vault Transit) for auto-unseal.
+    2.  **Valid TLS:** You must provide valid TLS certificates (via `cert-manager` or external secret); `tlsSkipVerify` is rejected.
+    3.  **Self-Initialization:** The Operator must drive the initialization process to ensure no humans handle initial secrets.
 
-The `Development` profile allows relaxed security for development and testing:
+    ```yaml
+    apiVersion: openbao.org/v1alpha1
+    kind: OpenBaoCluster
+    metadata:
+      name: production-cluster
+    spec:
+      profile: hardened
+      selfInit:
+        enabled: true
+      unseal:
+        mode: awskms # or gcpckms, azurekeyvault
+    ```
 
-- **Flexible Configuration:** Allows operator-managed TLS, static unseal, and optional self-init.
-- **Security Warning:** Sets `ConditionSecurityRisk=True` to indicate relaxed security posture.
-- **Root Token Storage:** Creates and stores root tokens in Kubernetes Secrets.
-- **Use Case:** Suitable for development, testing, and non-production environments.
+=== ":material-test-tube: Development Profile"
 
-!!! warning "Development Profile Warning"
-    Development profile clusters **MUST NOT** be used in production. The Development profile stores root tokens in Kubernetes Secrets, which can be compromised through Secret enumeration, etcd access, or RBAC misconfiguration.
+    !!! warning "Non-Production Only"
+        The `development` profile creates significant security risks by storing the **Root Token** in a Kubernetes Secret. This allows any user with Secret read permissions to take full control of the cluster.
 
-See also:
+    This profile is useful for:
+    
+    -   Local testing (Minikube/Kind).
+    -   CI/CD integration tests.
+    -   Rapid prototyping where long-term security is not required.
 
-- User guide: [Security Profiles](../../user-guide/openbaocluster/configuration/security-profiles.md)
-- User guide: [Server Configuration](../../user-guide/openbaocluster/configuration/server.md)
+    **Key Behaviors:**
+    
+    -   **Root Token:** Generated and stored in `<cluster-name>-root-token`.
+    -   **Unseal Keys:** Generated and stored in `<cluster-name>-unseal-key` (unless KMS is configured).
+    -   **Status Warning:** The Operator sets `ConditionSecurityRisk=True` on the cluster status.
+
+## Guidance
+
+!!! tip "Migration Path"
+    Teams often start with **Development** for initial exploration. When moving to **Staging** or **Production**, you should create a *new* cluster with the **Hardened** profile rather than trying to converting an existing Development cluster. Trust roots established in Development are typically not secure enough for Production.
+
+## See Also
+
+- [:material-server-network: Infrastructure Security](../infrastructure/index.md)
+- [Server Configuration](../../user-guide/openbaocluster/configuration/server.md)

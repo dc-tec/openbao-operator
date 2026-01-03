@@ -1,69 +1,98 @@
 # Network Security
 
-The Operator adopts a "Default Deny" network posture for every OpenBao cluster it creates.
+!!! abstract "Core Concept"
+    The Operator enforces a **Default Deny** network posture for every OpenBao cluster. This means the OpenBao pods start in total isolation, and the Operator explicitly whitelists only the traffic required for clustering, monitoring, and management.
 
-## Automated NetworkPolicies
+## Network Perimeter
 
-For every `OpenBaoCluster`, the operator automatically creates a Kubernetes `NetworkPolicy`.
+The following diagram illustrates the trusted communication paths allowed through the NetworkPolicy firewall:
 
-- **Default Ingress Deny:** All ingress traffic is blocked by default.
-- **Allow Rules:**
-  - **Inter-Pod Traffic:** Allows traffic between OpenBao pods within the same cluster (required for Raft replication).
-  - **Operator Access:** Allows ingress from the OpenBao Operator pods on port 8200 (required for health checks and the manual init fallback via the OpenBao HTTP API).
-  - **Kube-System:** Allows ingress from `kube-system` for necessary components like DNS.
-  - **Gateway API:** If `spec.gateway` is enabled, traffic is allowed from the Gateway's namespace.
+```mermaid
+flowchart TB
+    %% External Actors
+    Operator["Operator Pod"]
+    K8sAPI["Kubernetes API"]
+    DNS["CoreDNS"]
+    Peer["Raft Peers"]
 
-## Egress Control
+    %% The OpenBao Cluster
+    subgraph Cluster ["OpenBao Perimeter (Default Deny)"]
+        Yield["Active Node"]
+    end
 
-Egress is restricted to essential services:
+    %% Ingress Rules
+    Operator --"Ingress (8200)"--> Yield
+    Peer --"Ingress (8200/8201)"--> Yield
 
-- **DNS:** UDP/TCP on port 53.
-- **Kubernetes API:** TCP on port 443/6443 (required for the `discover-k8s` provider to find peer pods).
-- **Kubernetes API (Service Registration):** OpenBao uses Kubernetes service registration to update Pod labels (leader/initialized/sealed/version), which requires in-cluster API access from the OpenBao pods.
-- **Cluster Peers:** Communication with other Raft peers.
+    %% Egress Rules
+    Yield --"Egress (443)"--> K8sAPI
+    Yield --"Egress (53)"--> DNS
+    Yield --"Egress (8201)"--> Peer
 
-!!! note "Backup Jobs"
-    Backup/restore/upgrade-snapshot Job pods are excluded from the OpenBao pod NetworkPolicy so they can reach external endpoints (for example object storage). OpenBao pods still allow ingress from backup/restore pods on port 8200 for snapshot/restore operations.
+    %% Styling
+    classDef external fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef secure fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef blocked fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
 
-## Custom Network Rules
+    class Operator,K8sAPI,DNS,Peer external;
+    class Yield secure;
+```
 
-While the operator enforces a default deny posture, users can extend the NetworkPolicy with custom ingress and egress rules via `spec.network.ingressRules` and `spec.network.egressRules`. These custom rules are merged with the operator-managed rules, ensuring that essential operator rules (DNS, API server, cluster peers) are always present and cannot be overridden.
+## Traffic Rules
 
-**Security Considerations:**
+=== ":material-login: Ingress (Incoming)"
 
-- Custom rules should follow the principle of least privilege
-- Only allow access to specific namespaces, IPs, or ports as needed
-- Review custom rules regularly to ensure they remain necessary
-- For transit seal backends, prefer namespace selectors over broad IP ranges
-- Consider using backup jobs (excluded from NetworkPolicy) rather than adding broad egress rules for object storage access
+    By default, **all** incoming traffic is blocked. The following exceptions are made to allow the cluster to function:
 
-See also: [Network Configuration](../../user-guide/openbaocluster/configuration/network.md)
+    | Source | Port | Reason |
+    | :--- | :--- | :--- |
+    | **Operator** | `8200` (HTTP) | Required for liveness probes, initialization checks, and status updates. |
+    | **Raft Peers** | `8201` (TCP) | Required for Raft consensus and replication between pods in the StatefulSet. |
+    | **Gateway** | `8200` (HTTP) | (Optional) Allowed only if `spec.gateway` is enabled, permitting traffic from the Gateway API namespace. |
+    | **Kube System** | Any | Required for some CNI/DNS health checks from the system namespace. |
 
-## PodDisruptionBudget
+    !!! warning "Custom Ingress"
+        You can allow additional traffic (e.g., from your application namespaces) via `spec.network.ingressRules`. These rules are **additive** and cannot disable the core operator rules.
 
-The operator automatically creates a `PodDisruptionBudget` (PDB) for every `OpenBaoCluster`:
+=== ":material-logout: Egress (Outgoing)"
 
-- **Configuration:** `maxUnavailable: 1` ensures at least N-1 pods remain available during voluntary disruptions.
-- **Purpose:** Prevents simultaneous pod evictions during node drains, cluster upgrades, or autoscaler actions that could cause Raft quorum loss.
-- **Automatic Creation:** PDB is created alongside the StatefulSet and owned by the `OpenBaoCluster` for garbage collection.
-- **Single-Replica Exclusion:** PDB is skipped for single-replica clusters where it provides no benefit.
+    Egress is strictly limited to prevent data exfiltration and restrict the blast radius of a compromised path:
 
-## Sentinel Rate Limiting
+    | Destination | Port | Reason |
+    | :--- | :--- | :--- |
+    | **Kubernetes API** | `443` | Required for **Service Registration** (updating Pod labels) and **Peer Discovery**. |
+    | **CoreDNS** | `53` (UDP/TCP) | Required for resolving external services and peer addresses. |
+    | **Raft Peers** | `8201` (TCP) | Required for replication traffic. |
 
-To prevent Sentinel-triggered reconciliations from indefinitely blocking administrative operations (backups, upgrades), rate limiting is enforced:
+    !!! note "Backup Jobs"
+        Backup and Restore jobs are **excluded** from this restrictive policy. They run as separate pods that need broad access to reach external object storage (S3, GCS, Azure).
 
-- **Consecutive Fast Path Limit:** After 5 consecutive Sentinel-triggered reconciliations, a full reconcile (including Upgrade and Backup managers) is forced.
-- **Time-Based Limit:** If 5 minutes have elapsed since the last full reconcile, the next reconcile runs all managers regardless of Sentinel trigger status.
-- **Tracking Fields:** `status.drift.lastFullReconcileTime` and `status.drift.consecutiveFastPaths` track reconciliation patterns.
-- **Security Purpose:** Prevents a compromised or misbehaving Sentinel from causing a denial-of-service of administrative functions.
+## Sentinel Protection
 
-## Job Resource Limits
+To prevent the Sentinel sidecar (which watches for config drift) from overwhelming the Operator or the Kubernetes API, a strict **Rate Limiting** logic is enforced:
 
-Backup and restore Jobs have resource limits to prevent resource exhaustion:
+```mermaid
+stateDiagram-v2
+    [*] --> CheckCount
+    
+    CheckCount --> FastPath: Count < 5
+    CheckCount --> ForceFull: Count >= 5
+    
+    FastPath --> CheckTime
+    CheckTime --> Reconcile: < 5 mins
+    CheckTime --> ForceFull: > 5 mins
 
-| Resource | Request | Limit |
-|----------|---------|-------|
-| CPU      | 100m    | 500m  |
-| Memory   | 128Mi   | 512Mi |
+    Reconcile --> [*]: Quick Drift Fix
+    ForceFull --> [*]: Full Reconcile (Backup/Upgrade)
 
-This prevents runaway jobs from consuming excessive node resources and impacting other workloads.
+    classDef logic fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    class CheckCount,FastPath,CheckTime,Reconcile,ForceFull logic;
+```
+
+- **Fast Path:** Simple drift correction (e.g., fixing a label).
+- **Force Full:** Limits "fast checks" to prevents loops. After 5 fast corrections or 5 minutes, a full reconciliation (checking backups, upgrades, statefulsets) is forced to ensure overall system consistency.
+
+## See Also
+
+- [:material-network-outline: Network Configuration](../../user-guide/openbaocluster/configuration/network.md)
+- [:material-policy: Admission Policies](admission-policies.md)

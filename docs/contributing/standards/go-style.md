@@ -2,116 +2,188 @@
 
 General Go coding style and conventions for the OpenBao Operator.
 
-## Formatting
-
-- **All code must be formatted** with `gofmt` (or `goimports`)
-- **Linting:** Code must pass `golangci-lint` with the project's configuration
-- **Idioms:** Follow [Effective Go](https://go.dev/doc/effective_go) and [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
-
-## Project Structure
-
-We adhere to a modified Kubebuilder scaffolding that promotes internal encapsulation:
-
-| Directory | Purpose |
-|-----------|---------|
-| `api/v1alpha1/` | CRD structs and simple validation. **No business logic.** |
-| `cmd/` | Binary entry points (controller, provisioner, sentinel) |
-| `internal/controller/` | Reconciliation logic, delegates to internal packages |
-| `internal/` | Core business logic (infra, config, backup, upgrade) |
-
-The `internal/` convention prevents external imports, allowing us to change APIs freely.
-
-## Naming Conventions
-
-### Casing
-
-- **PascalCase** for exported (public) types, functions, and variables
-- **camelCase** for unexported (private) items
+## 1. Naming Conventions
 
 ### Acronyms
 
-Keep acronyms in consistent case:
+Keep acronyms consistent in casing. Avoid "Java-style" mixed capitalization for acronyms.
 
-```go
-// Good
-ServeHTTP, userID, parseURL
+=== ":material-check: Good Pattern"
+    ```go
+    // Keep acronyms all-caps
+    ServeHTTP
+    NewUUID
+    ParseURL
+    userID
+    ```
 
-// Bad
-ServeHttp, UserId, ParseUrl
-```
+=== ":material-close: Bad Pattern"
+    ```go
+    // Do not mix case in acronyms
+    ServeHttp
+    NewUuid
+    ParseUrl
+    userId
+    ```
 
 ### Getters
 
-Do **not** use `Get` prefix for getters:
+Go prefers direct naming for getters. Do NOT prefix with `Get`.
 
-```go
-// Bad
-func (c *Cluster) GetName() string
+=== ":material-check: Good Pattern"
+    ```go
+    func (c *Cluster) Name() string
+    func (c *Cluster) Status() string
+    ```
 
-// Good
-func (c *Cluster) Name() string
-```
+=== ":material-close: Bad Pattern"
+    ```go
+    func (c *Cluster) GetName() string
+    func (c *Cluster) GetStatus() string
+    ```
 
 ### Interfaces
 
-Single-method interfaces should use `-er` suffix:
+Interfaces with a single method should end in `-er`.
+
+=== ":material-check: Good Pattern"
+    ```go
+    type Reader interface { Read(p []byte) (n int, err error) }
+    type CertRotator interface { Rotate(ctx context.Context) error }
+    ```
+
+## 2. Error Handling
+
+### Wrapping
+
+Always wrap errors to preserve context using `%w`.
+
+=== ":material-check: Good Pattern"
+    ```go
+    if err != nil {
+        return fmt.Errorf("failed to sync secret: %w", err)
+    }
+    ```
+
+=== ":material-close: Bad Pattern"
+    ```go
+    if err != nil {
+        // Context is lost
+        return err
+    }
+    ```
+
+### Sentinel Errors
+
+Define exported sentinel errors for conditions callers might need to check.
 
 ```go
-type Reader interface { Read([]byte) (int, error) }
-type CertGenerator interface { Generate(Config) (*tls.Certificate, error) }
+var (
+    ErrClusterNotReady = errors.New("cluster not ready")
+    ErrSecretNotFound  = errors.New("secret not found")
+)
 ```
 
-## Imports
+## 3. Structured Logging
 
-Group imports in this order, separated by blank lines:
+Use `logr` with key-value pairs. Never use `fmt.Printf` or `log.Println`.
 
-1. Standard library
-2. Third-party packages
-3. Local packages
+=== ":material-check: Good Pattern"
+    ```go
+    log.Info("Reconciling Cluster",
+        "namespace", req.Namespace,
+        "name", req.Name,
+    )
+    ```
+
+=== ":material-close: Bad Pattern"
+    ```go
+    // Unstructured and lacks context
+    log.Info(fmt.Sprintf("Reconciling Cluster %s/%s", req.Namespace, req.Name))
+
+    // Forbidden
+    fmt.Printf("Reconciling %s\n", req.Name)
+    ```
+
+!!! danger "Security Warning"
+    **NEVER** log secrets, tokens, keys, or passwords. Even in debug mode.
+
+## 4. Concurrency & Reconcilers
+
+### No Goroutines in Reconcile
+
+The `Reconcile` loop is already concurrent (if configured). Do not spawn unmanaged goroutines.
+
+=== ":material-check: Good Pattern"
+    ```go
+    // Do work synchronously
+    if err := r.ensurePods(ctx, cluster); err != nil {
+        return ctrl.Result{}, err
+    }
+    ```
+
+=== ":material-close: Bad Pattern"
+    ```go
+    // Fails silently, loses context, risks race conditions
+    go func() {
+        r.ensurePods(ctx, cluster)
+    }()
+    ```
+
+### No `time.Sleep`
+
+Blocking a reconciler thread degrades the entire controller's performance.
+
+=== ":material-check: Good Pattern"
+    ```go
+    // Requeue nicely
+    return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+    ```
+
+=== ":material-close: Bad Pattern"
+    ```go
+    // Blocks the worker thread
+    time.Sleep(5 * time.Second)
+    ```
+
+## 5. Imports
+
+Group imports into three blocks separated by newlines:
+
+1. Standard Library
+2. Third-party (e.g., K8s, Controller Runtime)
+3. Local (`github.com/dc-tec/openbao-operator/...`)
 
 ```go
 import (
     "context"
     "fmt"
 
+    appsv1 "k8s.io/api/apps/v1"
     "sigs.k8s.io/controller-runtime/pkg/client"
 
     "github.com/dc-tec/openbao-operator/internal/config"
 )
 ```
 
-## Comments
+## 6. Constants
 
-### GoDoc
+Avoid "Magic Numbers" or raw strings in logic.
 
-Exported functions **must** have GoDoc comments:
+=== ":material-check: Good Pattern"
+    ```go
+    const (
+        DefaultReplicas   = 3
+        TLSSecretSuffix   = "-tls"
+        ReconcileInterval = 10 * time.Second
+    )
+    ```
 
-```go
-// ReconcileTLS ensures TLS certificates exist and are valid.
-// It returns true if certificates were rotated.
-func ReconcileTLS(ctx context.Context, cluster *v1alpha1.OpenBaoCluster) (bool, error) {
-```
+=== ":material-close: Bad Pattern"
+    ```go
+    // What does "3" mean here?
+    if cluster.Spec.Replicas < 3 { ... }
 
-### Inline Comments
-
-Use inline comments to explain **why**, not what:
-
-```go
-// Use uncached client to avoid race conditions with concurrent updates.
-// The cache may be stale if another controller just modified this resource.
-if err := r.UncachedClient.Get(ctx, key, secret); err != nil {
-```
-
-## Constants
-
-Avoid magic numbers and string literals. Use constants:
-
-```go
-const (
-    DefaultReplicas    = 3
-    TLSSecretSuffix    = "-tls"
-    ReconcileInterval  = 30 * time.Second
-)
-```
-
-For shared constants, use `internal/constants/` package.
+    // Hardcoded strings are prone to typos
+    secretName := cluster.Name + "-tls"
+    ```

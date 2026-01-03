@@ -1,167 +1,156 @@
 # Architecture: OpenBao Supervisor Operator
 
-This document provides a comprehensive overview of the OpenBao Operator's architecture, internal design, and implementation details. It merges the high-level design and technical design documentation into a single reference for contributors.
+This document provides a comprehensive overview of the OpenBao Operator's architecture.
+
+<div class="grid cards" markdown>
+
+- :material-view-dashboard-outline: **Overview**
+
+    ---
+
+    High-level design and supervisor pattern.
+
+    [:material-arrow-down: Jump to Overview](#1-architecture-overview)
+
+- :material-cogs: **Components**
+
+    ---
+
+    Controller manager, interacting controllers, and state.
+
+    [:material-arrow-down: Jump to Components](#11-system-components)
+
+- :material-shield-key: **Security**
+
+    ---
+
+    Least-privilege RBAC and zero-trust model.
+
+    [:material-arrow-right: Security Docs](../security/index.md)
+
+- :material-api: **API Spec**
+
+    ---
+
+    CRD specification and status fields.
+
+    [:material-arrow-down: Jump to API](#api-specification)
+
+</div>
 
 ## 1. Architecture Overview
 
-The OpenBao Operator acts as an autonomous administrator for OpenBao clusters on Kubernetes. Unlike legacy operators that attempt to micro-manage internal consensus (Raft), this Operator adopts a **Supervisor Pattern**. It delegates data consistency to the OpenBao binary (via `retry_join` and static auto-unseal) while managing the external ecosystem: PKI lifecycle, Infrastructure state, and Safe Version Upgrades.
-
-The design is intentionally **cloud-agnostic** and **multi-tenant**:
-
-- **Cloud-agnostic**: The Operator relies only on standard Kubernetes APIs and generic HTTP/S-compatible object storage, without hard-coding provider-specific features.
-- **Multi-tenant**: A single Operator instance manages multiple `OpenBaoCluster` resources across namespaces, while ensuring isolation and independence between clusters.
+The OpenBao Operator adopts a **Supervisor Pattern**. It delegates data consistency to the OpenBao binary while managing the external ecosystem: PKI lifecycle, Infrastructure state, and Safe Version Upgrades.
 
 ### 1.1 System Components
 
-At a high level, the architecture consists of:
+```mermaid
+graph TD
+    User([User]) -->|CRD| API[Kubernetes API]
+    
+    subgraph "Operator Controller Manager"
+        Workload[Workload Ctrl]
+        AdminOps[AdminOps Ctrl]
+        Status[Status Ctrl]
+        Provisioner[Provisioner Ctrl]
+    end
 
-- **Operator Controller Manager:** Runs multiple controller-runtime controllers in a single process:
-  - `openbaocluster-workload` (certs/infra/init + Sentinel fast-path drift correction)
-  - `openbaocluster-adminops` (upgrades/backups)
-  - `openbaocluster-status` (finalizers + single-writer `status.conditions` aggregation)
-  - `openbaorestore` (`OpenBaoRestore` lifecycle)
-  - `openbao-provisioner` (`OpenBaoTenant` RBAC provisioning)
-- **OpenBao StatefulSets:** One StatefulSet per `OpenBaoCluster` providing Raft storage and HA.
-- **Sentinel Drift Detector:** An optional per-cluster Deployment that watches for infrastructure drift and triggers fast-path reconciliation. When enabled, the Sentinel detects unauthorized changes to managed infrastructure resources (StatefulSets, Services, ConfigMaps) and immediately triggers the operator to correct them, bypassing expensive operations like upgrades and backups.
-- **Persistent Volumes:** Provided by the cluster's StorageClass for durable Raft data.
-- **Object Storage:** Generic HTTP/S-compatible object storage for snapshots (S3/GCS/Azure Blob or compatible endpoints).
-- **Users / Tenants:** Developers and platform teams who create and manage `OpenBaoCluster` resources in their own namespaces.
-- **Static Auto-Unseal Key:** A per-cluster unseal key managed by the Operator and stored in a Kubernetes Secret, used by OpenBao's static auto-unseal mechanism.
-- **RBAC Architecture (Least-Privilege Model):**
-  - **Provisioner ServiceAccount (`openbao-operator-provisioner`):** Has minimal cluster-wide permissions to manage `OpenBaoTenant` CRDs and create Roles/RoleBindings in tenant namespaces using impersonation of a dedicated delegate ServiceAccount bound to the `openbao-operator-tenant-template` ClusterRole. Cannot access workload resources directly. Does not have `list` or `watch` permissions on namespaces, preventing cluster topology enumeration.
-  - **OpenBaoCluster Controller ServiceAccount (`openbao-operator-controller`):** Has cluster-wide read access to `openbaoclusters` (`get;list;watch`) and cluster-wide `create` on `tokenreviews`/`subjectaccessreviews` (for the protected metrics endpoint). All OpenBaoCluster writes and all child resources are tenant-scoped via namespace Roles created by the Provisioner.
-  - **Namespace Provisioner Controller:** Watches `OpenBaoTenant` CRDs that explicitly declare target namespaces for provisioning. Creates namespace-scoped Roles and RoleBindings that grant the OpenBaoCluster Controller ServiceAccount the permissions needed to manage OpenBaoCluster resources in those namespaces.
-
-The Operator treats `OpenBaoCluster.Spec` as the declarative source of truth and continuously reconciles Kubernetes resources and OpenBao state to match this desired state.
-
-Due to the least-privilege, tenant-scoped RBAC model, the OpenBaoCluster controllers do not register ownership watches (`Owns()`) for child resources; they rely on `OpenBaoCluster` events, explicit `RequeueAfter` polling where needed, and Sentinel status triggers for drift correction.
+    API -->|Watch| Operator[Operator Manager]
+    Operator --> Workload & AdminOps & Status & Provisioner
+    
+    Workload -->|Reconcile| STS[StatefulSet]
+    Workload -->|Reconcile| Svc[Services]
+    AdminOps -->|Backup| ObjStore[Object Storage]
+    
+    STS -->|Run| Pods[OpenBao Pods]
+    Pods -->|Data| PVC[Persistent Volumes]
+    
+    Sentinel[Sentinel Deployment] -.->|Drift Detect| API
+```
 
 ### 1.2 Component Interaction
 
-1. **User:** Submits `OpenBaoCluster` Custom Resource (CR).
-2. **Workload controller (`openbaocluster-workload`):** Ensures TLS material, renders `config.hcl`, and reconciles Services/StatefulSet; initializes the cluster on Day 0 when needed.
-3. **AdminOps controller (`openbaocluster-adminops`):** Performs upgrades and scheduled/manual backups, and runs full reconciles after drift correction as needed.
-4. **Status controller (`openbaocluster-status`):** Owns finalizers and aggregates `status.conditions` from per-domain status subtrees.
-5. **Sentinel (if enabled):** Detects drift and patches `OpenBaoCluster` **status** (`status.sentinel.triggerID`, etc.) to trigger fast-path reconciliation.
-6. **OpenBao Pods:** Boot up, mount certs, read config, and auto-join the cluster using the K8s API peer discovery.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant API as K8s API
+    participant Workload as Workload Ctrl
+    participant AdminOps as AdminOps Ctrl
+    participant Pods as OpenBao Pods
+
+    User->>API: Apply OpenBaoCluster
+    API->>Workload: Reconcile Event
+    Workload->>API: Create ConfigMaps & Secrets
+    Workload->>API: Create StatefulSet
+    API->>Pods: Schedule Pods
+    Pods->>Pods: Peer Discovery & Join
+    
+    loop Monitoring
+        AdminOps->>API: Check Status
+        opt Backup Scheduled
+            AdminOps->>Pods: Trigger Snapshot
+        end
+    end
+```
 
 ### 1.3 Assumptions
 
-**Assumptions:**
-
-- The Kubernetes cluster provides:
-  - A default StorageClass for persistent volumes.
-  - Working DNS for StatefulSet pod and service names.
-  - A mechanism to provide credentials for object storage (e.g., Secrets, workload identity).
-- **OpenBao Version:** The Operator uses static auto-unseal, which requires **OpenBao v2.4.0 or later**. Versions below 2.4.0 do not support the `seal "static"` configuration and will fail to start.
-- Platform teams are responsible for:
-  - Deploying and upgrading the Operator itself (or enabling an optional self-managed mode).
-  - Wiring the Operator and OpenBao telemetry into their observability stack.
+!!! note "Core Assumptions"
+    - **Storage**: Default StorageClass available.
+    - **Network**: Working DNS for StatefulSet identity.
+    - **Version**: OpenBao v2.4.0+ (required for static auto-unseal).
 
 ## Cross-Cutting Concerns
 
-### Error Handling & Rate Limiting
+### Observability
 
-All Managers (Cert, Infrastructure, Upgrade, Backup) share the following error-handling and reconciliation semantics:
-
-- External operations (Kubernetes API, OpenBao API, object storage SDKs) MUST:
-  - Accept `context.Context` as the first parameter.
-  - Use time-bounded contexts so that calls respect reconciliation deadlines and cancellation.
-- Transient errors (e.g., network timeouts, optimistic concurrency conflicts) are retried via the controller-runtime workqueue rate limiter rather than custom `time.Sleep` loops.
-- Per-controller `MaxConcurrentReconciles` values are configured to:
-  - Prevent a single noisy `OpenBaoCluster` from starving others.
-  - Support at least 10 concurrent `OpenBaoCluster` resources under normal load.
-- Persistent failures MUST:
-  - Surface as typed `Conditions` (e.g., `ConditionDegraded`, `ConditionUpgrading`, `ConditionBackingUp`) with clear reasons and messages.
-  - Avoid hot reconcile loops by relying on exponential backoff from the rate limiter.
-- Audit logging:
-  - Critical operations (initialization, leader step-down) MUST emit structured audit logs tagged with `audit=true` and `event_type` for security monitoring.
-
-### Observability & Metrics
-
-The Operator exposes metrics suitable for Prometheus-style scraping and emits structured audit logs for critical operations.
-
-**Core Metrics:**
-
-- `openbao_cluster_ready_replicas` - Number of Ready replicas
-- `openbao_cluster_phase` - Current cluster phase
-- `openbao_reconcile_duration_seconds` - Reconciliation duration
-- `openbao_reconcile_errors_total` - Reconciliation errors
-
-**Upgrade Metrics:**
-
-- `openbao_upgrade_status` - Upgrade status
-- `openbao_upgrade_duration_seconds` - Total upgrade duration
-- `openbao_upgrade_stepdown_total` - Total leader step-down operations
-
-**Backup Metrics:**
-
-- `openbao_backup_last_success_timestamp` - Timestamp of last successful backup
-- `openbao_backup_success_total` - Total successful backups
-- `openbao_backup_failure_total` - Total backup failures
-
-**TLS Metrics:**
-
-- `openbao_tls_cert_expiry_timestamp` - Unix timestamp when the current server certificate expires (per `namespace`, `name`, `type`)
-- `openbao_tls_rotation_total` - Total number of server certificate rotations per cluster
-
-**Drift Metrics:**
-
-- `openbao_drift_detected_total` - Total number of drift events detected by Sentinel
-- `openbao_drift_corrected_total` - Total number of drift events corrected by the operator
-- `openbao_drift_last_detected_timestamp` - Unix timestamp when drift was last detected
-
-**Logging:**
-
-- Structured logs include: `namespace`, `name`, `controller`, `reconcile_id`
-- Log levels: Error (failures), Warn (recoverable issues), Info (normal operations), Debug (detailed operations)
-- **Sensitive Data:** The following MUST NEVER be logged:
-  - Root tokens or any authentication tokens
-  - Unseal keys or key material
-  - Backup contents or snapshot data
-  - Credentials for object storage
+| Metric | Description |
+| :--- | :--- |
+| `openbao_cluster_ready_replicas` | Number of Ready replicas |
+| `openbao_reconcile_duration_seconds` | Reconciliation duration |
+| `openbao_upgrade_status` | Upgrade status (0=Idle, 1=Upgrading) |
 
 ## API Specification
 
-The `OpenBaoCluster` Custom Resource Definition defines the desired state and observed status of an OpenBao cluster.
+The `OpenBaoCluster` CRD defines the desired state.
 
 ### Spec (Desired State)
 
-Key fields include:
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+spec:
+  version: "2.4.4"       # (1)!
+  image: "openbao:2.4.4" # (2)!
+  replicas: 3            # (3)!
+  tls:
+    enabled: true        # (4)!
+  unseal:
+    type: awskms         # (5)!
+  profile: Hardened      # (6)!
+```
 
-- `version`: Semantic OpenBao version (e.g., "2.1.0")
-- `image`: Container image to run
-- `replicas`: Number of replicas (default: 3)
-- `paused`: If true, reconciliation is paused
-- `tls`: TLS configuration (enabled, mode, rotationPeriod, ACME support)
-- `unseal`: Auto-unseal configuration (static or external KMS providers)
-- `storage`: Storage configuration (size, storageClassName)
-- `configuration`: Server configuration (listener, storage, audit, telemetry, etc.)
-- `backup`: Backup schedule and target configuration
-- `upgrade`: Upgrade configuration (including optional pre-upgrade snapshots)
-- `selfInit`: Self-initialization configuration
-- `gateway`: Gateway API configuration
-- `service` / `ingress`: Service exposure and optional Ingress configuration
-- `network`: Network-related settings for the cluster
-- `audit` / `plugins` / `telemetry`: Declarative OpenBao audit devices, plugins, and telemetry sinks
-- `imageVerification`: Supply chain security configuration for container images
-- `workloadHardening`: Opt-in workload hardening (Pod security settings, automount, etc.)
-- `profile`: Security posture (`Hardened` or `Development`)
-- `sentinel`: Drift detection and fast-path reconciliation configuration
-- `updateStrategy`: Version update strategy (rolling vs blue/green)
+1. Semantic OpenBao version.
+2. Container image reference.
+3. Number of replicas (default: 3).
+4. Enable Operator-managed TLS.
+5. Auto-unseal mechanism (static or external).
+6. Security posture (`Hardened` or `Development`).
 
 ### Status (Observability)
 
-Key fields include:
+```yaml
+status:
+  phase: Running  # (1)!
+  activeLeader: pod-0  # (2)!
+  readyReplicas: 3  # (3)!
+  conditions:  # (4)!
+    - Type: Available
+      Status: True
+```
 
-- `phase`: High-level summary (Initializing, Running, Upgrading, BackingUp, Failed)
-- `activeLeader`: Current Raft Leader pod name
-- `readyReplicas`: Number of Ready replicas
-- `currentVersion`: Current OpenBao version running
-- `initialized`: Whether cluster has been initialized
-- `selfInitialized`: Whether cluster was initialized using self-init
-- `upgrade`: Upgrade progress state
-- `backup`: Backup status
-- `drift`: Drift detection and correction history reported by Sentinel
-- `blueGreen`: Blue/green upgrade status when blue/green strategy is enabled
-- `conditions`: Kubernetes-style conditions (Available, TLSReady, Upgrading, Degraded, etc.)
+1. High-level lifecycle phase.
+2. Current Raft leader.
+3. Number of ready pods.
+4. Standard Kubernetes conditions.

@@ -18,49 +18,53 @@ The Operator enforces a "Secure by Default" posture:
 
 ## Security Topics
 
-### Fundamentals
+<div class="grid cards" markdown>
 
-Core security concepts and threat modeling.
+- :material-shield-check: **Fundamentals**
 
-| Topic | Description |
-|-------|-------------|
-| [Threat Model](fundamentals/threat-model.md) | Attack vectors and mitigations |
-| [Security Profiles](fundamentals/profiles.md) | Hardened vs Development profiles |
-| [Secrets Management](fundamentals/secrets-management.md) | Auto-unseal, root tokens, authentication |
+    ---
 
----
+    Threat model, profiles, and secrets management.
 
-### Infrastructure
+    [:material-arrow-right: Threat Model](fundamentals/threat-model.md)
 
-Platform-level security controls.
+    [:material-arrow-right: Profiles](fundamentals/profiles.md)
 
-| Topic | Description |
-|-------|-------------|
-| [RBAC](infrastructure/rbac.md) | Role-based access control architecture |
-| [Admission Policies](infrastructure/admission-policies.md) | ValidatingAdmissionPolicy configuration |
-| [Network Security](infrastructure/network-security.md) | NetworkPolicies and egress controls |
+    [:material-arrow-right: Secrets](fundamentals/secrets-management.md)
 
----
+- :material-server-network: **Infrastructure**
 
-### Workload
+    ---
 
-Pod and container-level security.
+    RBAC, Admission Policies, and Network Security.
 
-| Topic | Description |
-|-------|-------------|
-| [Pod Security](workload/workload-security.md) | Security contexts, PSS labels, ServiceAccounts |
-| [TLS](workload/tls.md) | Operator-Managed, External, and ACME TLS modes |
-| [Supply Chain](workload/supply-chain.md) | Cosign image verification, digest pinning |
+    [:material-arrow-right: RBAC](infrastructure/rbac.md)
 
----
+    [:material-arrow-right: Policies](infrastructure/admission-policies.md)
 
-### Multi-Tenancy
+    [:material-arrow-right: Networking](infrastructure/network-security.md)
 
-Tenant isolation for shared deployments.
+- :material-docker: **Workload**
 
-| Topic | Description |
-|-------|-------------|
-| [Tenant Isolation](multi-tenancy/tenant-isolation.md) | Namespace isolation, RBAC boundaries |
+    ---
+
+    Pod security, TLS, and Supply Chain.
+
+    [:material-arrow-right: Pod Security](workload/workload-security.md)
+
+    [:material-arrow-right: TLS](workload/tls.md)
+
+    [:material-arrow-right: Supply Chain](workload/supply-chain.md)
+
+- :material-account-group: **Multi-Tenancy**
+
+    ---
+
+    Namespace isolation and tenant boundaries.
+
+    [:material-arrow-right: Tenant Isolation](multi-tenancy/tenant-isolation.md)
+
+</div>
 
 ## See Also
 

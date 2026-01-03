@@ -1,56 +1,68 @@
-# Restore After a Partial Upgrade
+# Emergency Restore (Override Lock)
 
-This runbook applies when an upgrade is partially applied (or stuck) and you need to restore from a snapshot.
+This guide describes how to **Force Restore** a cluster that is stuck in a locked state, typically after a [Failed Upgrade](../openbaocluster/recovery/failed-rollback.md) or a crashed automation loop.
 
-## Mutual Exclusion and the Operation Lock
+!!! failure "Operation Locked"
+    The OpenBao Operator enforces **Mutual Exclusion** using `status.operationLock` on the `OpenBaoCluster`.
 
-The operator enforces mutual exclusion across:
+    Normally, you cannot start a Restore while an Upgrade or Backup is active (or presumed active). This prevents split-brain scenarios.
 
-- upgrades (rolling and blue/green),
-- backups, and
-- restores
+## 1. When to use this
 
-using a status-based lock on the `OpenBaoCluster` (`status.operationLock`).
+Use this procedure **ONLY** if:
 
-Restores do not start while an upgrade or backup is active.
+1. Use are recovering from a **Failed Rollback** where the cluster state is corrupted.
+2. The Operator is blocking your standard `OpenBaoRestore` with a "Cluster is locked" error.
+3. You accept **Total Data Loss** of the current cluster state (replacing it with the snapshot).
 
-## Break-Glass Restore Override
+## 2. Break-Glass Configuration
 
-If you must restore while the cluster is stuck behind an upgrade/backup lock, use the explicit override flag on the `OpenBaoRestore`.
+To bypass the safety check, you must perform a "Break Glass" procedure by setting `spec.overrideOperationLock: true`.
 
-> [!WARNING]
-> This is a break-glass escape hatch. It clears the existing lock and proceeds with restore.
+!!! danger "Data Overwrite & Lock Removal"
+    This action will:
 
-Requirements:
-
-- `spec.force: true`
-- `spec.overrideOperationLock: true`
-
-Example:
+    1.  **Ignore** the existing Operation Lock (clearing it).
+    2.  **Overwrite** the cluster data with the snapshot.
+    3.  **Reset** the cluster status to match the snapshot.
 
 ```yaml
 apiVersion: openbao.org/v1alpha1
 kind: OpenBaoRestore
 metadata:
-  name: dr-restore
-  namespace: <ns>
+  name: emergency-restore-001
+  namespace: security
 spec:
-  cluster: <name>
+  cluster: prod-cluster
+  
+  # Standard Source Config (see Restore Guide)
   source:
     target:
-      endpoint: <s3-endpoint>
-      bucket: <bucket>
-    key: <snapshot-key>
+      type: s3
+      s3:
+        bucket: openbao-backups
+        region: us-east-1
+        credentialsSecretRef:
+          name: s3-credentials
+    key: clusters/prod/last-good-snapshot.snap
+  
   jwtAuthRole: restore
-  force: true
-  overrideOperationLock: true
+  
+  # --- BREAK GLASS CONFIGURATION ---
+  force: true                  # (1)!
+  overrideOperationLock: true  # (2)!
 ```
 
-When used, the operator emits a Warning event on the `OpenBaoRestore` and records a Condition.
+1. Required to run restore on an "Unhealthy" cluster.
+2. Required to bypass the `status.operationLock`.
 
-## After Restore
+## 3. Post-Restore Recovery
 
-- Re-check cluster health and seal state:
-  - [Recovering From a Sealed Cluster](../openbaocluster/recovery/sealed-cluster.md)
-- If the operator is in break glass mode, acknowledge it to resume automation:
-  - [Break Glass / Safe Mode](../openbaocluster/recovery/safe-mode.md)
+After the emergency restore completes:
+
+1. **Check Seal Status**: The restored cluster may be sealed.
+    - [:material-arrow-right: Recover Sealed Cluster](../openbaocluster/recovery/sealed-cluster.md)
+2. **Check Raft Quorum**: If the restored snapshot had different peers, you might need to fix the peer list.
+    - [:material-arrow-right: Recover No Leader](../openbaocluster/recovery/no-leader.md)
+3. **Acknowledge Safe Mode**: If the operator was in Safe Mode, you may need to patch the `breakGlassAck`.
+    - [:material-arrow-right: Safe Mode Guide](../openbaocluster/recovery/safe-mode.md)

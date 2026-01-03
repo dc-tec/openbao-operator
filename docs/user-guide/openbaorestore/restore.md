@@ -1,211 +1,202 @@
 # Restore Operations
 
-The OpenBao Operator supports restoring clusters from snapshots stored in S3-compatible object storage using the `OpenBaoRestore` CRD.
+The OpenBao Operator supports restoring clusters from snapshots stored in object storage (S3, GCS, Azure) using the `OpenBaoRestore` CRD.
 
-!!! important "Destructive Operation"
-    Force-restoring a snapshot replaces **all** Raft data. After restore, the cluster will have the exact state from the snapshot, including all secrets, policies, auth configurations, and unseal keys.
+!!! danger "DATA OVERWRITE"
+    A Restore operation **completely overwrites** the existing data in the target OpenBaoCluster.
 
-## Prerequisites
+    All secrets, policies, auth methods, and keys will be replaced by the snapshot's state. This is destructive and irreversible.
 
-- A functioning backup in S3-compatible storage (see [Backups](../openbaocluster/operations/backups.md))
-- The target OpenBao cluster must exist and be initialized
-- Restore authentication configured (JWT Auth or static token)
+## 1. Prerequisites
 
-If image verification is enabled on the target cluster (`spec.imageVerification.enabled: true`), the operator verifies the restore executor image and pins the restore Job to the verified digest.
+!!! tip "Network Requirements"
+    The target OpenBao cluster must be able to reach your Object Storage endpoint. Use `spec.network.egressRules` in your `OpenBaoCluster` configuration if you are running in a restricted environment.
 
-## Creating a Restore Request
+- [x] A valid snapshot in your Object Storage bucket (see [Backups](../openbaocluster/operations/backups.md)).
+- [x] The **Target Cluster** must exist and be initialized (even if it's just a fresh, empty cluster).
+- [x] Authentication credentials (JWT Role or Admin Token) to perform the restore.
 
-The `OpenBaoRestore` CRD acts as a "job request" - it is immutable after creation. Each restore operation is a separate Kubernetes resource.
+---
 
-### Basic Example
+## 2. Restore Workflow
+
+The restore process involves multiple phases to validate, download, and inject the snapshot.
+
+```mermaid
+graph TD
+    User([User]) -->|Apply CRD| Pending{Pending}
+    Pending -->|Validate| Validating
+    Validating -->|Download Snapshot| Job[Restore Job]
+    
+    subgraph Execution ["Phase: Running"]
+        Job -->|Authenticate| Cluster[("fa:fa-server OpenBao Leader")]
+        Job -->|Force Restore /sys/storage/raft/snapshot-force| Cluster
+    end
+    
+    Cluster -->|Success| Completed([Completed])
+    Cluster -->|Error| Failed([Failed])
+    
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    
+    class Completed write;
+    class Job,Execution process;
+    class User,Pending,Validating read;
+```
+
+---
+
+## 3. Configuration
+
+### Source Configuration
+
+Define where your snapshot is located.
+
+=== "S3 (AWS/MinIO)"
+
+    ```yaml
+    source:
+      target:
+        type: s3
+        s3:
+          endpoint: https://s3.amazonaws.com
+          bucket: openbao-backups
+          region: us-east-1
+          credentialsSecretRef:
+            name: s3-credentials
+      key: clusters/prod/snapshot-latest.snap
+    ```
+
+=== "GCS (Google Cloud)"
+
+    ```yaml
+    source:
+      target:
+        type: gcs
+        gcs:
+          bucket: my-gcs-backups
+          credentialsSecretRef:
+            name: gcs-credentials
+      key: clusters/prod/snapshot-latest.snap
+    ```
+
+=== "Azure Blob Storage"
+
+    ```yaml
+    source:
+      target:
+        type: azure
+        azure:
+          container: my-container
+          accountName: myaccount
+          accountKeySecretRef:
+            name: azure-credentials
+            key: account-key
+      key: clusters/prod/snapshot-latest.snap
+    ```
+
+### Authentication
+
+How the Restore Job authenticates to the OpenBao cluster leader.
+
+=== "JWT Auth (Recommended)"
+
+    Uses a short-lived Kubernetes ServiceAccount token. Requires `sys/auth/jwt` to be enabled on the target.
+
+    ```yaml
+    spec:
+      jwtAuthRole: restore  # Must match the role configured in OpenBao
+    ```
+
+    ??? example "OpenBao Config for JWT Auth"
+        Run this in OpenBao to configure the role:
+        ```bash
+        bao write auth/jwt/role/restore \
+            role_type=jwt \
+            bound_audiences=openbao-internal \
+            bound_subject="system:serviceaccount:openbao:prod-cluster-restore-serviceaccount" \
+            token_policies=restore \
+            ttl=1h
+        ```
+
+=== "Static Token"
+
+    Uses a long-lived OpenBao token stored in a Kubernetes Secret.
+
+    ```yaml
+    spec:
+      tokenSecretRef:
+        name: restore-token
+        namespace: openbao-operator-system
+    ```
+
+---
+
+## 4. Full Example
 
 ```yaml
 apiVersion: openbao.org/v1alpha1
 kind: OpenBaoRestore
 metadata:
-  name: disaster-recovery-restore
-  namespace: openbao
+  name: dr-restore-001
+  namespace: security
 spec:
-  # Target cluster to restore INTO (must exist in same namespace)
-  cluster: my-cluster
+  cluster: prod-cluster
+  force: true
   
-  # Source snapshot location
   source:
     target:
-      endpoint: https://s3.amazonaws.com
-      bucket: openbao-backups
-      region: us-east-1
-      credentialsSecretRef:
-        name: s3-credentials
-    # Full path to the snapshot in the bucket
-    key: clusters/my-cluster/2025-01-01-120000.snap
-  
-  # Authentication to OpenBao
-  jwtAuthRole: restore
-  
-  # Optional: Override executor image
-  # executorImage: openbao/backup-executor:v0.1.0
-  
-  # Force restore even if cluster appears unhealthy
-  force: false
-```
-
-## Authentication
-
-### JWT Auth (Recommended)
-
-Configure a restore-specific JWT role in OpenBao:
-
-```yaml
-# Add to selfInit.requests on your OpenBaoCluster
-- name: create-restore-policy
-  operation: update
-  path: sys/policies/acl/restore
-  policy:
-    policy: |
-      path "sys/storage/raft/snapshot-force" {
-        capabilities = ["update"]
-      }
-
-- name: create-restore-jwt-role
-  operation: update
-  path: auth/jwt/role/restore
-  data:
-    role_type: jwt
-    bound_audiences: ["openbao-internal"]
-    bound_subject: "system:serviceaccount:<namespace>:<cluster>-restore-serviceaccount"
-    token_policies: ["restore"]
-    ttl: 1h
-```
-
-### Static Token
-
-For clusters that cannot use JWT Auth:
-
-```yaml
-spec:
-  tokenSecretRef:
-    name: restore-token-secret
-    namespace: openbao-operator-system
-```
-
-## Monitoring Restore Progress
-
-### Watch Status
-
-```bash
-kubectl get openbaorestore disaster-recovery-restore -w
-```
-
-### Status Phases
-
-| Phase | Description |
-| :--- | :--- |
-| `Pending` | Restore created, waiting to start |
-| `Validating` | Checking preconditions |
-| `Running` | Restore job executing |
-| `Completed` | Restore succeeded |
-| `Failed` | Restore failed (check message) |
-
-### View Details
-
-```bash
-kubectl describe openbaorestore disaster-recovery-restore
-```
-
-Key status fields:
-
-- `status.phase`: Current phase
-- `status.message`: Detailed status or error message
-- `status.startTime`: When restore started
-- `status.completionTime`: When restore completed
-- `status.snapshotKey`: Which snapshot was restored
-- `status.snapshotSize`: Size of restored snapshot
-
-## Post-Restore Considerations
-
-### Unsealing
-
-| Seal Type | Same Cluster | Different Cluster |
-| :--- | :--- | :--- |
-| Auto-unseal (KMS/Transit) | ✅ Works if seal config unchanged | ✅ Works if seal config unchanged |
-| Static unseal | ✅ Existing unseal key works | ❌ Must update unseal Secret |
-
-### Raft Cluster Recovery
-
-After a force restore:
-
-1. The cluster's Raft configuration is from the snapshot
-2. If pod IPs have changed, the `retry_join` configuration allows pods to re-discover each other
-3. For best results, restore to a cluster with the **same replica count** as when the backup was taken
-
-## Safety Features
-
-### Mutual Exclusion
-
-Only one restore can run per cluster at a time.
-
-### Operation Lock  
-
-The operator enforces mutual exclusion across upgrades, backups, and restores using a status-based lock on the `OpenBaoCluster` (`status.operationLock`).
-
-Restores do not start while an upgrade or backup is active.
-
-### Break-Glass Override
-
-If you must restore while a cluster is stuck behind an upgrade/backup lock, set:
-
-- `spec.force: true`
-- `spec.overrideOperationLock: true`
-
-When used, the operator emits a Warning event on the `OpenBaoRestore` and records a Condition.
-
-### Force Flag
-
-Set `force: true` to restore even if:
-
-- The cluster appears unhealthy
-- The cluster is sealed (disaster recovery scenario)
-
-## Example: Disaster Recovery Flow
-
-1. **Identify the backup to restore:**
-
-   ```bash
-   # List available backups
-   aws s3 ls s3://openbao-backups/clusters/my-cluster/
-   ```
-
-2. **Create restore request:**
-
-   ```yaml
-   apiVersion: openbao.org/v1alpha1
-   kind: OpenBaoRestore
-   metadata:
-     name: dr-$(date +%Y%m%d-%H%M%S)
-     namespace: openbao
-   spec:
-     cluster: my-cluster
-     source:
-       target:
-         endpoint: https://s3.amazonaws.com
+      type: s3
+      s3:
          bucket: openbao-backups
          region: us-east-1
          credentialsSecretRef:
-           name: s3-credentials
-       key: clusters/my-cluster/2025-01-01-120000.snap
-     jwtAuthRole: restore
-     force: true
-   ```
+           name: s3-creds
+    key: clusters/prod/backup-2024.snap
+  
+  jwtAuthRole: restore
+```
 
-3. **Monitor progress:**
+---
 
-   ```bash
-   kubectl get openbaorestore -w
-   ```
+## 5. Operations
 
-4. **Verify cluster health:**
+### Monitoring Status
 
-   ```bash
-   kubectl exec -it my-cluster-0 -- bao status
-   ```
+Check the phases (`Pending` -> `Running` -> `Completed`).
+
+```bash
+kubectl get OBrestore -w
+```
+
+*(Shortname `OBrestore` available)*
+
+### Troubleshooting
+
+| Phase | Common Error | Resolution |
+| :--- | :--- | :--- |
+| `Validating` | `cluster not found` | Ensure `spec.cluster` matches a valid `OpenBaoCluster` in the same namespace. |
+| `Running` | `403 Forbidden` | The Authentication (JWT Role/Token) lacks permission to `sys/storage/raft/snapshot-force`. |
+| `Running` | `checksum mismatch` | The snapshot size/hash changed during download. Check network stability. |
+| `Failed` | `context deadline exceeded` | The restore operation timed out. Check `spec.network` rules. |
+
+---
+
+## 6. Safety Mechanics
+
+### Operation Lock
+
+The Operator ensures **Mutal Exclusion**. You cannot run a Restore while an Upgrade or Backup is in progress.
+
+### Break Glass
+
+If the cluster is stuck in a locked state (e.g., a failed upgrade) and you MUST restore:
+
+```yaml
+spec:
+  force: true
+  overrideOperationLock: true # (1)!
+```
+
+1. Bypasses the safety lock. Events will appear as Warnings.

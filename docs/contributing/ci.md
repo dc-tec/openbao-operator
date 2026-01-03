@@ -1,187 +1,128 @@
-# CI
+# Continuous Integration
 
-This document describes how CI is structured and how to run CI-equivalent checks locally.
+We use GitHub Actions for all CI checks. The pipeline is designed to be deterministic and reproducible locally.
 
-## CI Overview
+## 1. CI Pipeline
 
-GitHub Actions is the source of truth for CI:
+The pipeline runs on every PR and `main` push.
 
-- PR and `main` pushes run `.github/workflows/ci.yml`.
-- Nightly runs `.github/workflows/nightly.yml` (full E2E matrix).
+```mermaid
+graph TD
+    PR([PR Created]) --> Static
+    PR --> Build
+    PR --> Unit
 
-The CI jobs are designed to be deterministic:
+    subgraph Static [Static Analysis]
+        Lint[Lint & Tidy]
+        Gen[Verify Generated]
+        Helm[Verify Helm]
+        Sec[Security Scan]
+    end
 
-- Dependency drift is checked explicitly (`verify-tidy`), tests run with `GOFLAGS=-mod=readonly`.
-- Kind is installed from a pinned release and checksum-verified.
-- E2E uses pinned `kindest/node` images to lock Kubernetes versions.
+    subgraph Build [Build Artifacts]
+        Docs[Build Docs]
+        Chart[Lint Chart]
+    end
 
-## What Runs Where
+    subgraph Unit [Verification]
+        Sanity[Unit Tests]
+        Compat[OpenBao Compat]
+    end
 
-### PRs / `main` pushes (`.github/workflows/ci.yml`)
+    Static --> E2E{E2E Tests}
+    Build --> E2E
+    Unit --> E2E
 
-- `make lint-config lint`
-- `make verify-fmt`
-- `make verify-tidy`
-- `make verify-generated`
-- `make verify-helm` (chart synced inputs)
-- `make test-ci` (unit + envtest)
-- OpenBao config compatibility (semantic parse): validate `internal/config/testdata/*.hcl` against upstream OpenBao `>=2.4.0 <2.5.0` (min + latest supported)
-- Docs build (MkDocs container)
-- Helm chart validation (`helm lint`, `helm template --include-crds`)
-- Security checks:
-  - `govulncheck -test ./...`
-  - Trivy filesystem scan (vuln + config, HIGH/CRITICAL only)
-- E2E smoke on kind v1.34.x (label filter `smoke`)
+    E2E --> Smoke["Smoke Tests"]
+    E2E --> Full["Full Matrix (Nightly)"]
 
-### Nightly (`.github/workflows/nightly.yml`)
-
-- Full E2E suite on a Kubernetes matrix from `docs/reference/compatibility.md`
-- OpenBao config compatibility (semantic parse) across a broader 2.4.x patch set
-- Security checks (same as PRs)
-- Docs build, Helm chart validation
-
-## Preparing Your Local Environment
-
-### Required
-
-- Go: match the version in `go.mod`
-- Docker: required for E2E (kind) and docs builds
-- `kubectl`
-- `make`
-
-### Recommended
-
-- `kind` (CI installs it automatically)
-- `trivy` (for local security scans)
-
-## Running CI Locally
-
-Run the same checks CI runs for PRs:
-
-```sh
-make lint-config lint
-make verify-fmt
-make verify-tidy
-make verify-generated
-make verify-helm
-make test-ci
-make verify-openbao-config-compat
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px;
+    classDef check fill:transparent,stroke:#60a5fa,stroke-width:2px;
+    
+    class PR process;
+    class Lint,Gen,Helm,Sec,Docs,Chart,Sanity,Compat,Smoke,Full check;
 ```
 
-### OpenBao config compatibility (semantic)
+## 2. CI vs Local Commands ("The Rosetta Stone")
 
-This checks that the HCL we generate is still accepted by upstream OpenBao's config parser
-for the supported OpenBao version range.
+Run these locally to debug CI failures.
 
-Requirements:
+| CI Job | Local Command | Description |
+| :--- | :--- | :--- |
+| **Lint Check** | `make lint` | Runs `golangci-lint` |
+| **Formatting** | `make verify-fmt` | Checks `gofmt` compliance |
+| **Dependencies** | `make verify-tidy` | Ensures `go.mod` is clean |
+| **Generators** | `make verify-generated` | Checks for drift in CRDs/RBAC |
+| **Helm Sync** | `make verify-helm` | Checks drift in `charts/` |
+| **Unit Tests** | `make test-ci` | Runs unit + integration tests |
+| **Compatibility** | `make verify-openbao-config-compat` | Checks HCL against upstream OpenBao |
 
-- Docker (to fetch the OpenBao image and resolve the exact git SHA)
-- Go (to run the upstream parser via `go get`)
+## 3. End-to-End Testing
 
-Run the PR-equivalent version set:
+We use [Kind](https://kind.sigs.k8s.io/) for E2E tests.
 
-```sh
-bash hack/ci/openbao-config-compat.sh 2.4.0 2.4.4
-```
+### Prerequisites
 
-### OpenBao schema drift (report-only)
+- [x] Docker running
+- [x] `kubectl` installed
+- [x] 4 CPU / 8GB RAM recommended
 
-To get a heads-up on newly introduced (or removed) upstream config keys within the supported range,
-run the same compatibility check with schema reporting enabled:
+### Running Tests
 
-```sh
-make report-openbao-config-schema-drift
-```
+=== ":material-rocket-launch: Smoke Test (Fast)"
+    Runs a subset of critical tests. Best for quick feedback.
 
-## Helm Chart Maintenance
+    ```sh
+    make test-e2e-ci \
+      KIND_NODE_IMAGE=kindest/node:v1.34.3 \
+      E2E_LABEL_FILTER=smoke \
+      E2E_PARALLEL_NODES=1
+    ```
 
-The Helm chart intentionally has a small “generated surface area” to avoid drift:
+=== "🧪 Full Suite (Thorough)"
+    Runs the entire test matrix (Upgrade, Backup, Restore, etc).
 
-- **CRDs** are generated by `controller-gen` into `config/crd/bases/*.yaml` and must be synced to `charts/openbao-operator/crds/`.
-- The chart’s installer template `charts/openbao-operator/files/install.yaml.tpl` is derived from `dist/install.yaml` with Helm templating applied (namespace + images + operator env vars).
+    ```sh
+    make test-e2e-ci KIND_NODE_IMAGE=kindest/node:v1.34.3
+    ```
 
-### When to run `make helm-sync`
+=== "🐛 Debug Mode"
+    Keeps the cluster alive after failure for inspection.
 
-Run this whenever you change:
+    ```sh
+    make test-e2e-ci E2E_SKIP_CLEANUP=true
+    ```
 
-- Any API types (`api/`) that affect CRDs
-- Any operator manifests under `config/` that affect the installer YAML
-- Anything in the Helm chart that depends on the installer template
+## 4. Security Checks
 
-```sh
-make helm-sync
-```
+We run vulnerability scanning on every PR.
 
-### Verify chart inputs are up to date
+=== "Govulncheck"
+    Detects known vulnerabilities in Go dependencies.
 
-CI enforces this. You can run it locally:
+    ```sh
+    go install golang.org/x/vuln/cmd/govulncheck@latest
+    govulncheck -test ./...
+    ```
 
-```sh
-make verify-helm
-```
+=== "Trivy"
+    Scans the operator image for OS vulnerabilities.
 
-## Security Checks Locally
+    ```sh
+    make security-scan IMG=ghcr.io/dc-tec/openbao-operator:latest
+    ```
 
-Run Go vulnerability scanning:
+## 5. Documentation Build
 
-```sh
-go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-govulncheck -test ./...
-```
-
-Run Trivy scans (requires `trivy` installed):
-
-```sh
-make security-scan IMG=ghcr.io/dc-tec/openbao-operator:vX.Y.Z
-```
-
-## E2E (kind)
-
-### Smoke tests (PR-equivalent)
-
-```sh
-make test-e2e-ci \
-  KIND_NODE_IMAGE=kindest/node:v1.34.3 \
-  E2E_LABEL_FILTER=smoke \
-  E2E_PARALLEL_NODES=1
-```
-
-### Full suite (nightly-equivalent)
+Docs are built with MkDocs and Material.
 
 ```sh
-make test-e2e-ci KIND_NODE_IMAGE=kindest/node:v1.34.3
+# Local preview
+make docs-serve
+
+# Build distribution (checks internal links)
+make docs-build
 ```
 
-### Debugging
-
-Keep the cluster after failures:
-
-```sh
-make test-e2e-ci E2E_SKIP_CLEANUP=true
-```
-
-## Docs Build and Publishing
-
-### Build docs locally (CI-equivalent)
-
-CI builds docs using a pinned `mkdocs-material` container image:
-
-```sh
-docker run --rm \
-  -v "${PWD}:/docs" \
-  -w /docs \
-  squidfunk/mkdocs-material@sha256:3bba0a99bc6e635bb8e53f379d32ab9cecb554adee9cc8f59a347f93ecf82f3b \
-  build -s
-```
-
-This writes the static site to `./site/`.
-
-### GitHub Pages deployment
-
-On pushes to `main`, `.github/workflows/pages.yml` deploys the contents of `site/` to GitHub Pages.
-
-Repository settings must be configured once:
-
-- Settings → Pages → Source: GitHub Actions
-
-The expected public URL is configured in `mkdocs.yml` as `site_url`.
+!!! tip "Preview Deployment"
+    Every PR deploys a temporary preview environment URL directly in the GitHub comment.

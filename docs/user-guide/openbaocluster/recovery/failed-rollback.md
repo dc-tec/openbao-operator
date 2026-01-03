@@ -1,47 +1,84 @@
-# Recovering From a Failed Blue/Green Rollback
+# Recovering From a Failed Rollback
 
-This runbook applies when a blue/green upgrade rollback cannot safely complete (for example, the rollback consensus repair Job fails).
+This runbook addresses a **Failed Blue/Green Rollback**. This occurs when you attempt to rollback an upgrade (e.g., changing `spec.version` back to an older version), but the Operator halts the process to prevent data corruption.
 
-## 1. Check Break Glass Status
+!!! failure "Split Brain Risk"
+    The Operator stops automation because it suspects a **Split Brain** scenario where both the Blue (Old) and Green (New) clusters might have accepted writes, or Raft consensus cannot be safely transferred back.
 
-If the operator detected an unsafe rollback failure, it enters break glass mode and halts further quorum-risk automation.
+---
 
-```sh
-kubectl -n <ns> get openbaocluster <name> -o jsonpath='{.status.breakGlass}'
-```
+## 1. Assess the Situation
 
-Follow the recovery steps in `status.breakGlass.steps`.
-
-## 2. Inspect the Rollback Executor Job
-
-The rollback logic runs in an upgrade executor Job. Inspect the Job and logs:
+Check the **Safe Mode / Break Glass** status to understand why the Operator halted.
 
 ```sh
-kubectl -n <ns> get jobs | rg <name>
-kubectl -n <ns> logs job/<job-name>
+kubectl -n security get openbaocluster prod-cluster -o jsonpath='{.status.breakGlass}' | jq
 ```
 
-## 3. Inspect Raft Membership
+**Common Reasons:**
 
-If you can exec into a pod:
+- `ConsensusFailure`: The Blue cluster could not rejoin the Raft quorum.
+- `DirtyWrite`: The Green cluster accepted writes that would be lost on rollback (if configured to check).
+- `Timeout`: The rollback job took too long.
+
+## 2. Inspect the Rollback Job
+
+The logic for transferring leadership back to the Blue cluster runs in a Kubernetes Job named `inter-cluster-rev<Revision>`.
+
+Find and log the failed job:
 
 ```sh
-kubectl -n <ns> exec -it <name>-0 -- bao operator raft list-peers
+# Find the job
+kubectl -n security get jobs -l openbao.org/cluster=prod-cluster
+
+# View logs
+kubectl -n security logs job/inter-cluster-rev4-rollback
 ```
 
-## 4. Resume Automation (Explicit Ack)
+**Log Analysis:**
 
-After manual remediation, acknowledge break glass using the nonce:
+| Log Message | Meaning | Resolution |
+| :--- | :--- | :--- |
+| `failed to join blue pilot to green leader` | Network connectivity issue between clusters. | Check NetworkPolicies / DNS. Retry. |
+| `raft log index mismatch` | The Blue cluster is too far behind (Green accepted too many writes). | **Cannot Rollback**. You must proceed with Green or Restore from Snapshot. |
+| `context deadline exceeded` | Operation timed out. | Retry (Acknowledge Break Glass). |
 
-```sh
-kubectl -n <ns> patch openbaocluster <name> --type merge \
-  -p '{"spec":{"breakGlassAck":"<nonce>"}}'
-```
+## 3. Resolution Paths
 
-The operator retries rollback automation using a new, deterministic Job attempt.
+Choose the path that matches your diagnosis.
 
-## 5. If You Need to Restore
+=== "Path A: Retry (Transient)"
 
-If rollback cannot be repaired, consider restoring from a known-good snapshot:
+    If the failure was due to a network blip or timeout, and you believe the clusters are healthy:
 
-- [Restore After a Partial Upgrade](../../openbaorestore/recovery-restore-after-upgrade.md)
+    1. **Acknowledge** the Break Glass nonce. This tells the Operator to "Try Again".
+
+        ```sh
+        kubectl -n security patch openbaocluster prod-cluster --type merge \
+          -p '{"spec":{"breakGlassAck":"<NONCE_FROM_STEP_1>"}}'
+        ```
+
+    2. The Operator will spawn a **new** Rollback Job. Monitor it closely.
+
+=== "Path B: Abort (Stay Green)"
+
+    If the rollback is impossible (e.g., data divergence), it may be safer to **stay on the new version** (Green) and fix the application issues forward, or perform a fresh restore.
+
+    1. **Update Spec**: Set `spec.version` back to the **Green** (New) version.
+    2. **Acknowledge**: Acknowledge the nonce.
+    3. The Operator will reconcile the Green cluster as the primary.
+
+=== "Path C: Restore (Data Loss)"
+
+    If the cluster state is corrupted beyond repair:
+
+    1. **Stop Operator**: Scale down the operator deployment.
+    2. **Delete PVCs**: Clean up the corrupted data.
+    3. **Restore**: Follow the [Restore Guide](../../openbaorestore/recovery-restore-after-upgrade.md) to bring back the cluster from the last known good snapshot (Pre-Upgrade).
+
+---
+
+## Preventative Measures
+
+- Always ensure **Snapshots** are taken before triggering a Rollback (The Operator does this automatically if `spec.backup.enabled` is true).
+- Monitor `etcd` or `raft` metrics during upgrades.

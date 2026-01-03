@@ -1,51 +1,92 @@
-# CertManager (TLS Lifecycle)
+# Cert Manager (TLS Lifecycle)
 
-**Responsibility:** Bootstrap PKI and Rotate Certificates (or wait for external Secrets in External mode, or skip reconciliation in ACME mode).
+**Responsibility:** Bootstrap PKI, Rotate Certificates, and signal Hot Reloads.
 
-The CertManager supports three modes controlled by `spec.tls.mode`:
+The CertManager ensures that OpenBao always has valid TLS certificates without requiring manual intervention or pod restarts.
 
-## OperatorManaged Mode (Default)
+## 1. Operating Modes
 
-When `spec.tls.mode` is `OperatorManaged` (or omitted), the operator generates and manages certificates:
+Controlled by `spec.tls.mode`.
 
-**Logic Flow:**
+| Feature | OperatorManaged (Default) | External | ACME |
+| :--- | :--- | :--- | :--- |
+| **CA Source** | Generated Self-Signed Root CA | User provided Secret | Let's Encrypt / ACME |
+| **Server Cert** | Operator Generated (ECDSA P-256) | User provided Secret | OpenBao Internal |
+| **Rotation** | **Automatic** (Operator) | External (cert-manager) | **Automatic** (OpenBao) |
+| **Reload** | **Automatic** (Signal) | **Automatic** (Signal) | Internal |
 
-1. **Reconcile:** Check if `Secret/<cluster>-tls-ca` exists.
-2. **Bootstrap:** If missing, generate ECDSA P-256 Root CA. Store PEM in Secret.
-3. **Issue:** Check if `Secret/<cluster>-tls-server` exists and is valid (for example, expiry > configured rotation window).
-4. **Rotate:** If the server certificate is within the rotation window, regenerate it using the CA and update the Secret atomically.
-5. **Trigger:** Compute a SHA256 hash of the active server certificate and annotate OpenBao pods with it (for example, `openbao.org/tls-cert-hash`) so the operator and in-pod components can track which certificate each pod is using.
-6. **Hot Reload:** When the hash changes, the operator uses a `ReloadSignaler` to update the annotation on each ready OpenBao pod. A wrapper binary running as pid 1 in the OpenBao container watches the mounted TLS certificate file and sends `SIGHUP` to the OpenBao process when it detects changes, avoiding the need for `pods/exec` privileges in the operator and eliminating the need for `ShareProcessNamespace`.
+---
 
-## External Mode
+## 2. Architecture
 
-When `spec.tls.mode` is `External`, the operator does not generate or rotate certificates:
+### TLS Rotation Loop (`OperatorManaged`)
 
-**Logic Flow:**
+allows the operator to rotate certificates **atomically** without downtime.
 
-1. **Wait:** Check if `Secret/<cluster>-tls-ca` exists. If missing, log "Waiting for external TLS CA Secret" and return (no error).
-2. **Wait:** Check if `Secret/<cluster>-tls-server` exists. If missing, log "Waiting for external TLS server Secret" and return (no error).
-3. **Monitor:** When both secrets exist, compute the SHA256 hash of the server certificate.
-4. **Hot Reload:** Trigger hot-reload via `ReloadSignaler` when the certificate hash changes (enables seamless rotation by cert-manager or other external providers).
-5. **No Rotation:** Do not check expiry or attempt to rotate certificates; assume the external provider handles this.
+```mermaid
+graph TD
+    Check{Check Expiry} -->|Expired?| Generate[Generate New Cert]
+    Generate -->|Update| Secret[("fa:fa-key TLS Secret")]
+    
+    Secret -.->|Watch| Operator
+    Operator -->|Compute Hash| Annotation["Pod Annotation\n(openbao.org/tls-hash)"]
+    Annotation -->|Update| StatefulSet
+    
+    StatefulSet -->|Reconcile| Pods[OpenBao Pods]
+    
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    
+    class Check,Generate process;
+    class Secret,Annotation,StatefulSet write;
+    class Operator,Pods read;
+```
 
-## ACME Mode
+### Hot Reload Mechanism
 
-When `spec.tls.mode` is `ACME`, OpenBao manages certificates internally via its native ACME client:
+We avoid `ShareProcessNamespace` or `exec` privileges by using a lightweight wrapper process (PID 1).
 
-**Logic Flow:**
+```mermaid
+sequenceDiagram
+    participant Op as Operator
+    participant K8s as Kubernetes
+    participant Pod as Pod (PID 1 Wrapper)
+    participant Bao as OpenBao (PID 2)
 
-1. **Skip Reconciliation:** The operator does not generate, rotate, or monitor certificates. OpenBao handles certificate lifecycle internally.
-2. **Configuration:** The operator renders ACME parameters (`tls_acme_ca_directory`, `tls_acme_domains`, `tls_acme_email`) directly in the listener configuration.
-3. **No Secrets:** No TLS Secrets are created or mounted. Certificates are stored in-memory (or cached per `tls_acme_cache_path`) by OpenBao.
-4. **No Wrapper Needed:** No TLS reload wrapper is needed, and `ShareProcessNamespace` is disabled for better container isolation.
-5. **Automatic Rotation:** OpenBao automatically handles certificate acquisition and rotation via the ACME protocol.
+    Op->>K8s: Update Secret (New Cert)
+    K8s->>Pod: Update Volume Mount (/vault/tls/server.crt)
+    Pod->>Pod: Detect File Change (fsnotify)
+    Pod->>Bao: Send SIGHUP
+    Bao->>Bao: Reload Certificate
+    
+    note right of Op: No Pod Restart Required
+```
 
-## Reconciliation Semantics
+---
 
-- **Idempotency:** Re-running reconciliation with the same Spec MUST lead to the same Secrets and annotations.
-- **Backoff:** Transient errors (e.g., failed Secret update due to concurrent modification) are retried with exponential backoff.
-- **Conditions:** Failures update a `TLSReady=False` condition with a clear reason and message.
-- **External Mode:** The operator waits gracefully for external Secrets without erroring, allowing cert-manager or other tools time to provision certificates.
+## 3. Implementation Details
 
-See also: [TLS Security](../security/workload/tls.md)
+=== "OperatorManaged"
+
+    **Best for:** Most users, development, and self-contained environments.
+
+    1.  **Bootstrap:** Checks for `Secret/<cluster>-tls-ca`. If missing, generates a 10-year ECDSA P-256 Root CA.
+    2.  **Issuance:** Checks `Secret/<cluster>-tls-server`. If missing or near expiry (default < 24h), signs a new certificate using the CA.
+    3.  **Trust:** The CA is automatically mounted to all OpenBao pods and exported to a `ConfigMap` for clients.
+
+=== "External"
+
+    **Best for:** Production environments using `cert-manager` or external PKI.
+
+    1.  **Passive:** The operator stops generating secrets.
+    2.  **Wait:** It waits for `Secret/<cluster>-tls-ca` and `Secret/<cluster>-tls-server` to be created by an external tool.
+    3.  **Signaling:** It continues to monitor the *content* of these secrets. When your external tool rotates the cert, the operator detects the hash change and triggers the hot-reload signal.
+
+=== "ACME"
+
+    **Best for:** Public-facing clusters needing trusted browser certificates.
+
+    1.  **Passthrough:** The operator renders ACME configuration (`tls_acme_...`) directly into `config.hcl`.
+    2.  **No Secrets:** Kubernetes Secrets are NOT used. OpenBao stores certs internally (or in a persistent cache).
+    3.  **No Reload:** The Operator is effectively bypassed for TLS logic. OpenBao handles its own rotation loop.

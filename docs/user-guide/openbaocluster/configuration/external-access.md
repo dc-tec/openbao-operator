@@ -1,172 +1,105 @@
 # External Access
 
-## Prerequisites
+OpenBao clusters can be exposed using **Gateway API** (Recommended), **Ingress**, or standard **LoadBalancer** services.
 
-- **Ingress Controller**: Installed (e.g., NGINX, Traefik, AWS Load Balancer Controller)
-- **DNS**: Domain name configured (e.g., `bao.example.com`)
+## Access Methods
 
-## Configuration
+=== "Gateway API (Recommended)"
+    The Operator provides first-class support for [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/), offering advanced routing, portability, and cleaner multi-tenancy.
 
-To expose OpenBao externally, configure `spec.service` and/or `spec.ingress`:
+    !!! tip "Full Guide"
+        See the [Gateway API Guide](gateway-api.md) for complete configuration details, including TLS Passthrough and backend policies.
 
-```yaml
-spec:
-  service:
-    type: LoadBalancer
-    annotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-  ingress:
-    enabled: true
-    host: "bao.example.com"
-    path: "/"
-    annotations:
-      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-```
+    ```yaml
+    spec:
+      gateway:
+        enabled: true
+        hostname: bao.example.com
+        gatewayRef:
+          name: main-gateway
+          namespace: gateway-system
+    ```
 
-With this configuration:
+=== "Ingress"
+    Standard Kubernetes Ingress support.
 
-- The Operator ensures `dev-cluster-public` exists as an external Service.
-- An `Ingress` named `dev-cluster` routes `https://bao.example.com/` to `dev-cluster-public`.
-- The TLS Secret for the Ingress defaults to `dev-cluster-tls-server` unless `tlsSecretName` is set.
-- The `bao.example.com` host is automatically added to the server certificate SANs.
-- The external service DNS name (`{cluster-name}-public.{namespace}.svc`) is automatically added to the server certificate SANs when service or ingress is configured.
+    ```yaml
+    spec:
+      ingress:
+        enabled: true
+        host: "bao.example.com"
+        annotations:
+          nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    ```
 
-Always validate connectivity through your ingress or load balancer after the cluster reports `Available=True`.
+    !!! info "Traefik v3"
+        Traefik v3 requires a `ServersTransport` to trust the internal CA. See the [Traefik v3 Configuration](#traefik-v3-configuration) section below.
+
+=== "Service (L4)"
+    Expose the cluster directly via a LoadBalancer or NodePort service.
+
+    ```yaml
+    spec:
+      service:
+        type: LoadBalancer
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    ```
+
+## TLS Configuration
+
+Secure your cluster using one of the following TLS modes.
+
+=== "ACME (Let's Encrypt)"
+    **Zero-Trust:** OpenBao acts as a native ACME client (e.g., Let's Encrypt), managing its own certificates without mounting Secrets.
+
+    ```yaml
+    spec:
+      tls:
+        enabled: true
+        mode: ACME
+        acme:
+          directoryURL: "https://acme-v02.api.letsencrypt.org/directory"
+          domain: "bao.example.com"
+          email: "admin@example.com"
+    ```
+
+=== "External PKI"
+    **BYO-Cert:** Integrate with `cert-manager` or corporate PKI. You provide the Secrets; the Operator uses them.
+
+    ```yaml
+    spec:
+      tls:
+        enabled: true
+        mode: External
+    ```
+
+    **Requirements:**
+    - Secret `<name>-tls-ca`: Keys `ca.crt` (optional `ca.key`)
+    - Secret `<name>-tls-server`: Keys `tls.crt`, `tls.key`, `ca.crt`
+
+=== "Operator Managed"
+    **Default:** The Operator manages an internal CA and rotates certificates automatically. Good for internal use or testing.
+
+    ```yaml
+    spec:
+      tls:
+        enabled: true
+        # mode defaults to OperatorManaged
+    ```
+
+## Advanced Configuration
 
 ### Traefik v3 Configuration
 
-When using Traefik v3 with TLS termination at the ingress and HTTPS backend communication, you need to configure Traefik to trust the OpenBaoCluster CA certificate:
-
-1. **Create a ServersTransport** resource that references the existing CA secret (see `config/samples/traefik-servers-transport.yaml`):
-
-   ```yaml
-   apiVersion: traefik.io/v1alpha1
-   kind: ServersTransport
-   metadata:
-     name: openbao-tls-transport
-     namespace: <your-namespace>
-   spec:
-     rootCAsSecrets:
-       - <cluster-name>-tls-ca  # e.g., openbaocluster-external-tls-ca
-   ```
-
-   The operator automatically creates the CA secret named `<cluster-name>-tls-ca`. Traefik will read the `ca.crt` key from this secret directly - no mounting required!
-
-2. **Reference the transport** in your OpenBaoCluster service annotations (already included in the sample):
-
-   ```yaml
-   service:
-     annotations:
-       traefik.ingress.kubernetes.io/service.serversscheme: https
-       traefik.ingress.kubernetes.io/service.serverstransport: openbao-tls-transport
-   ```
-
-   Note: If the ServersTransport is in the same namespace as the Service, use just the name. For cross-namespace references, use `<namespace>-<name>@kubernetescrd` and ensure `allowCrossNamespace` is enabled in Traefik.
-
-This ensures Traefik validates the OpenBao backend certificate using the cluster's CA, maintaining secure end-to-end TLS.
-
-### External TLS Provider (cert-manager)
-
-For production environments that require integration with corporate PKI or cert-manager, you can configure the operator to use externally-managed TLS certificates.
-
-Set `spec.tls.mode` to `External`:
+Traefik v3 enforces potential CA validation for backends. The Operator creates a Secret named `<cluster>-tls-ca` which Traefik can reference directly in a `ServersTransport`.
 
 ```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
 metadata:
-  name: prod-cluster
-  namespace: security
+  name: openbao-tls-transport
 spec:
-  version: "2.4.4"
-  image: "openbao/openbao:2.4.4"
-  replicas: 3
-  tls:
-    enabled: true
-    mode: External  # Use external certificate management
-  storage:
-    size: "10Gi"
+  rootCAsSecrets:
+    - my-cluster-tls-ca
 ```
-
-**Important:** When using External mode, you must create the TLS Secrets before the operator can proceed. The operator expects:
-
-- `<cluster-name>-tls-ca` - CA certificate Secret with keys `ca.crt` and optionally `ca.key`
-- `<cluster-name>-tls-server` - Server certificate Secret with keys `tls.crt`, `tls.key`, and `ca.crt`
-
-### ACME TLS (Native OpenBao ACME Client)
-
-For zero-trust architectures and environments where you want OpenBao to manage certificates automatically via the ACME protocol (e.g., Let's Encrypt), you can configure ACME mode.
-
-Set `spec.tls.mode` to `ACME`:
-
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
-metadata:
-  name: prod-cluster
-  namespace: security
-spec:
-  version: "2.4.4"
-  image: "openbao/openbao:2.4.4"
-  replicas: 3
-  profile: Hardened  # ACME mode is compatible with Hardened profile
-  tls:
-    enabled: true
-    mode: ACME
-    acme:
-      directoryURL: "https://acme-v02.api.letsencrypt.org/directory"
-      domain: "openbao.example.com"
-      email: "admin@example.com"  # Optional: for CA notifications
-  storage:
-    size: "10Gi"
-  selfInit:
-    enabled: true
-  unseal:
-    type: awskms
-    awskms:
-      region: us-east-1
-      kmsKeyID: alias/openbao-unseal
-```
-
-**Key Characteristics of ACME Mode:**
-
-- **No Secrets:** No TLS Secrets are created or mounted. Certificates are managed entirely by OpenBao.
-- **No Wrapper Needed:** No TLS reload wrapper is needed, and `ShareProcessNamespace` is disabled for better container isolation.
-- **Automatic Rotation:** OpenBao handles certificate acquisition and rotation automatically via the ACME protocol.
-- **Zero Trust:** The operator never possesses private keys, making this ideal for zero-trust architectures.
-- **Hardened Profile Compatible:** ACME mode is accepted by the Hardened security profile.
-
-**ACME Configuration Parameters:**
-
-- `directoryURL` (required): The ACME directory URL (e.g., `https://acme-v02.api.letsencrypt.org/directory` for Let's Encrypt production)
-- `domain` (required): The domain name for which to obtain the certificate
-- `email` (optional): Email address for CA notifications about certificate expiration
-
-**Note:** For internal networks, you may need to use DNS challenges instead of HTTP challenges. See [OpenBao's ACME documentation](https://openbao.org/docs/configuration/listener/tcp/#acme-parameters) for advanced configuration options.
-
-**Example with cert-manager:**
-
-```yaml
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: prod-cluster-server
-  namespace: security
-spec:
-  secretName: prod-cluster-tls-server  # Must match operator expectation
-  dnsNames:
-    - prod-cluster.security.svc
-    - *.prod-cluster.security.svc
-    - prod-cluster-public.security.svc
-  issuerRef:
-    name: corporate-ca-issuer
-    kind: ClusterIssuer
-```
-
-The operator will:
-
-- Wait for the Secrets to be created (no error if missing)
-- Monitor certificate changes and trigger hot-reloads when cert-manager rotates certificates
-- Not attempt to generate or rotate certificates itself
-
-**Note:** The `rotationPeriod` field is ignored in External mode, as certificate rotation is handled by the external provider.

@@ -1,297 +1,89 @@
 # Sentinel Drift Detection
 
-The Sentinel is an optional per-cluster drift detector that provides high-availability drift detection and fast-path reconciliation. When enabled, the Sentinel watches for unauthorized changes to managed infrastructure resources and immediately triggers the operator to correct them.
+The Sentinel is an optional, high-availability component that detects and corrects infrastructure drift in real-time.
 
-## Overview
-
-The Sentinel addresses a critical gap in Kubernetes operators: **detecting and correcting infrastructure drift in real-time**. While the operator reconciles based on `OpenBaoCluster.Spec`, there's a window where manual changes or external actors could modify managed resources (StatefulSets, Services, ConfigMaps) before the next reconciliation cycle.
-
-**Key Benefits:**
-
-- **Fast Drift Correction:** Detects unauthorized changes within seconds and triggers immediate reconciliation
-- **High Availability:** Runs as a separate Deployment, independent of the operator controller
-- **Security:** ValidatingAdmissionPolicy (VAP) prevents privilege escalation even if the Sentinel binary is compromised
-- **Efficiency:** Fast-path mode skips expensive operations (upgrades, backups) during drift correction
+!!! abstract "Goal"
+    Sentinel watches managed resources (StatefulSets, Services, ConfigMaps) and triggers an immediate "Fast Path" reconciliation if unauthorized changes occur, bypassing slower operations like Upgrades or Backups.
 
 ## Configuration
 
-The Sentinel is configured via `spec.sentinel` in the `OpenBaoCluster` resource:
-
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
-metadata:
-  name: my-cluster
-  namespace: default
-spec:
-  profile: Development
-  # ... other spec fields ...
-  sentinel:
-    enabled: true  # Enable Sentinel (default: true when sentinel is set)
-    image: ""      # Optional: Override Sentinel image (defaults to ghcr.io/dc-tec/openbao-operator-sentinel:<operator-version>)
-    resources:     # Optional: Override resource limits
-      requests:
-        memory: "64Mi"
-        cpu: "100m"
-      limits:
-        memory: "128Mi"
-        cpu: "200m"
-    debounceWindowSeconds: 2  # Optional: Debounce window in seconds (default: 2, range: 1-60)
-```
+Sentinel is configured via the `spec.sentinel` block.
 
-### Configuration Options
+=== "Basic"
+    Enable Sentinel with default settings.
 
-#### `enabled`
+    ```yaml
+    apiVersion: openbao.org/v1alpha1
+    kind: OpenBaoCluster
+    spec:
+      sentinel:
+        enabled: true
+    ```
 
-Controls whether the Sentinel is deployed. Defaults to `true` when `spec.sentinel` is set.
+=== "Tuning"
+    Adjust the **Debounce Window** to prevent "thundering herd" triggers during mass updates, or tune resource limits.
 
-```yaml
-spec:
-  sentinel:
-    enabled: false  # Disable Sentinel
-```
+    ```yaml
+    spec:
+      sentinel:
+        enabled: true
+        debounceWindowSeconds: 5  # Wait 5s to coalesce events (Default: 2)
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+    ```
 
-#### `image`
+=== "Advanced"
+    Override the Sentinel image or disable it explicitly.
 
-Allows overriding the Sentinel container image. If not specified, defaults to `ghcr.io/dc-tec/openbao-operator-sentinel:<operator-version>` where `<operator-version>` is derived from the `OPERATOR_VERSION` environment variable in the operator Deployment.
+    ```yaml
+    spec:
+      sentinel:
+        enabled: true
+        image: "my-registry/sentinel:custom-tag"
+    ```
 
-```yaml
-spec:
-  sentinel:
-    image: "my-registry/operator-sentinel:v1.0.0"  # Custom image
-```
+## Security Model
 
-**Note:** If image verification is enabled (`spec.imageVerification.enabled`), the Sentinel image will be verified using the same configuration as the main OpenBao image.
+Sentinel operates with strictly limited permissions to ensure cluster safety.
 
-#### `resources`
+!!! security "Validating Admission Policy"
+    A **ValidatingAdmissionPolicy** (`openbao-restrict-sentinel-mutations`) is required. It enforces that Sentinel can **only** patch specific status fields (`status.sentinel.*`). All other mutations (Spec, Labels, Secrets) are blocked at the API server level.
 
-Configures resource limits for the Sentinel container. Defaults to:
+    This provides **mathematical security**: even if the Sentinel binary is compromised, it cannot escalate privileges.
 
-```yaml
-resources:
-  requests:
-    memory: "64Mi"
-    cpu: "100m"
-  limits:
-    memory: "128Mi"
-    cpu: "200m"
-```
+## Operations
 
-You can override these defaults:
+### Monitoring
 
-```yaml
-spec:
-  sentinel:
-    resources:
-      requests:
-        memory: "128Mi"
-        cpu: "200m"
-      limits:
-        memory: "256Mi"
-        cpu: "500m"
-```
+Sentinel exposes a standard Kubernetes health endpoint.
 
-#### `debounceWindowSeconds`
+- **Port**: `8080` (default)
+- **Path**: `/healthz`
+- **Success**: `200 OK`
 
-Controls the debounce window for drift detection. Multiple drift events within this window are coalesced into a single trigger to prevent "thundering herd" scenarios.
+### Troubleshooting
 
-- **Default:** `2` seconds
-- **Range:** `1` to `60` seconds
-- **Use Case:** Increase this value if you expect rapid, simultaneous changes to multiple resources (e.g., during node failures)
+??? failure "Sentinel Not Triggering"
+    If drift is not being detected:
 
-```yaml
-spec:
-  sentinel:
-    debounceWindowSeconds: 5  # Wait 5 seconds before triggering
-```
+    1. **Check Labels:** Resources must have `app.kubernetes.io/managed-by=openbao-operator`.
+    2. **Check Actor Filtering:** Sentinel ignores changes made by the Operator itself. Verify the change was made by a different actor:
+       ```bash
+       kubectl get statefulset <name> -o jsonpath='{.metadata.managedFields[*].manager}'
+       ```
+    3. **Check Logs:**
+       ```bash
+       kubectl logs -l app.kubernetes.io/name=openbao-sentinel
+       ```
 
-## How It Works
+??? failure "Triggering Too Often"
+    If Sentinel fires constantly:
 
-### 1. Deployment
+    1. **Increase Debounce:** Raise `debounceWindowSeconds` (e.g., to `10`).
+    2. **Check Controllers:** Ensure no external controllers (e.g., HPA, Flux/Argo) are fighting the Operator for resource ownership without proper exclusions.
 
-When `spec.sentinel.enabled` is `true`, the operator creates:
+## Architecture
 
-- **ServiceAccount:** `openbao-sentinel` in the cluster namespace
-- **Role:** `openbao-sentinel-role` with read-only access to infrastructure and limited patch access to `OpenBaoCluster`
-- **RoleBinding:** Binds the ServiceAccount to the Role
-- **Deployment:** Single-replica Deployment running the Sentinel binary
-
-### 2. Watching
-
-The Sentinel watches for changes to:
-
-- **StatefulSets** labeled with `app.kubernetes.io/managed-by=openbao-operator` and `app.kubernetes.io/instance=<cluster-name>`
-- **Services** with the same labels
-- **ConfigMaps** with the same labels
-
-### 3. Actor Filtering
-
-To prevent infinite loops, the Sentinel inspects `object.metadata.managedFields` and ignores changes made by the operator itself. This ensures that when the operator updates a resource (e.g., during normal reconciliation), the Sentinel doesn't immediately trigger another reconciliation.
-
-### 4. Debouncing
-
-Multiple drift events within the debounce window are coalesced into a single trigger. For example, if a node fails and 50 pods change state simultaneously, the Sentinel will fire only one trigger after the debounce window expires.
-
-### 5. Scope and Secret Safety
-
-The Sentinel does **not** have access to Secrets. RBAC for the Sentinel is strictly limited to read-only access for StatefulSets, Services, and ConfigMaps, plus patch access on `OpenBaoCluster` resources for drift triggers. Drift that involves unseal keys or root tokens is detected indirectly via OpenBao health and status, not by inspecting Secret data.
-
-### 6. Trigger (GitOps-friendly)
-
-When drift is detected, the Sentinel patches the `OpenBaoCluster` **status** with:
-
-```yaml
-status:
-  sentinel:
-    triggerID: "2025-01-15T10:30:45.123456789Z"
-    triggeredAt: "2025-01-15T10:30:45.123456789Z"
-    triggerResource: "StatefulSet/my-cluster"
-```
-
-This is GitOps-friendly: tools like ArgoCD ignore `status` diffs by default, so the cluster stays in sync without needing `ignoreDifferences` rules for trigger annotations.
-
-### 7. Fast Path
-
-The operator detects the trigger in `status.sentinel.triggerID` and enters "fast path" mode:
-
-- **CertManager** and **InfrastructureManager** run normally (to fix the drift)
-- **InitManager** runs if needed
-- **UpgradeManager** and **BackupManager** are **skipped** to minimize latency
-
-After successful reconciliation, the operator marks the trigger as handled (by updating `status.sentinel.lastHandledTriggerID`) and schedules a follow-up normal reconciliation to ensure full consistency.
-
-## Security
-
-### ValidatingAdmissionPolicy
-
-A cluster-scoped ValidatingAdmissionPolicy (`openbao-restrict-sentinel-mutations`) enforces that the Sentinel can only modify `status.sentinel` trigger fields. All other mutations are blocked at the API server level:
-
-- **Spec changes:** Blocked
-- **Metadata changes (labels/annotations/finalizers):** Blocked
-- **Other status fields (besides `status.sentinel` trigger fields):** Blocked
-- **Labels and finalizers:** Blocked
-
-This provides **mathematical security**: even if the Sentinel binary is compromised, it cannot escalate privileges or modify cluster configuration.
-
-**Required dependency:** These admission policies are required. If the operator cannot verify that the Sentinel mutation policy (and its binding) is installed and correctly bound, it will treat Sentinel as unsafe and will not deploy the Sentinel Deployment, and Sentinel-triggered fast-path is disabled. The supported Kubernetes baseline for these controls is v1.33+.
-
-**Note on names:** When deploying via `config/default`, `kustomize` applies a `namePrefix` (for example, `openbao-operator-`) to cluster-scoped admission resources.
-
-### RBAC
-
-The Sentinel has minimal permissions:
-
-- **Read-only access** to infrastructure resources (`get`, `list`, `watch`)
-- **Read access** to `OpenBaoCluster` resources (`get`, `list`, `watch`)
-- **Limited patch access** to `OpenBaoCluster` status (`patch` on `openbaoclusters/status`)
-
-The Sentinel cannot:
-
-- Create or delete resources
-- Modify Spec
-- Modify operator-owned status (conditions, phase, backup/upgrade state, etc.)
-- Access resources outside the cluster namespace
-- Modify labels or finalizers
-
-## Monitoring
-
-The Sentinel exposes a health endpoint at `/healthz` for Kubernetes liveness and readiness probes. The endpoint returns:
-
-- **200 OK:** Sentinel is ready and watching
-- **503 Service Unavailable:** Sentinel is not ready (e.g., manager not started, watches not established)
-
-## Troubleshooting
-
-### Sentinel Not Triggering
-
-If the Sentinel is not detecting drift:
-
-1. **Check Deployment Status:**
-
-   ```bash
-   kubectl get deployment <cluster-name>-sentinel -n <namespace>
-   kubectl logs deployment/<cluster-name>-sentinel -n <namespace>
-   ```
-
-2. **Verify Labels:** Ensure managed resources have the correct labels:
-
-   ```bash
-   kubectl get statefulset <cluster-name> -n <namespace> --show-labels
-   ```
-
-   Should show: `app.kubernetes.io/managed-by=openbao-operator` and `app.kubernetes.io/instance=<cluster-name>`
-
-3. **Check Actor Filtering:** The Sentinel ignores operator updates. Verify the change was made by a different actor:
-
-   ```bash
-   kubectl get statefulset <cluster-name> -n <namespace> -o jsonpath='{.metadata.managedFields[*].manager}'
-   ```
-
-### Sentinel Triggering Too Often
-
-If the Sentinel is triggering too frequently:
-
-1. **Increase Debounce Window:**
-
-   ```yaml
-   spec:
-     sentinel:
-       debounceWindowSeconds: 10  # Increase from default 2 seconds
-   ```
-
-2. **Check for Legitimate Drift:** Verify that resources are actually being modified by unauthorized actors (not just metadata updates).
-
-### Sentinel Not Deploying
-
-If the Sentinel Deployment is not created:
-
-1. **Check Spec:**
-
-   ```bash
-   kubectl get openbaocluster <cluster-name> -n <namespace> -o yaml | grep -A 10 sentinel
-   ```
-
-2. **Check Operator Logs:**
-
-   ```bash
-   kubectl logs deployment/openbao-operator-controller -n openbao-operator-system | grep -i sentinel
-   ```
-
-3. **Verify Image:** If image verification is enabled, ensure the Sentinel image is signed with the same key/identity as the main OpenBao image.
-
-## Disabling Sentinel
-
-To disable the Sentinel:
-
-```yaml
-spec:
-  sentinel:
-    enabled: false
-```
-
-Or remove the `sentinel` field entirely:
-
-```yaml
-spec:
-  # sentinel field removed
-```
-
-The operator will clean up the Sentinel Deployment, ServiceAccount, Role, and RoleBinding when Sentinel is disabled.
-
-## Best Practices
-
-1. **Enable Sentinel in Production:** Sentinel provides critical drift detection and should be enabled for production clusters.
-
-2. **Use Image Verification:** If image verification is enabled for the main OpenBao image, ensure the Sentinel image is signed with the same key/identity.
-
-3. **Monitor Sentinel Health:** Add alerts for Sentinel Deployment failures or health probe failures.
-
-4. **Tune Debounce Window:** Adjust `debounceWindowSeconds` based on your cluster's change patterns. Higher values reduce trigger frequency but increase detection latency.
-
-5. **Resource Limits:** The default resource limits are conservative. Monitor Sentinel resource usage and adjust if needed.
-
-## See Also
-
-- [Architecture: Sentinel](../../../architecture/sentinel.md)
-- [Security: Admission Policies](../../../security/infrastructure/admission-policies.md)
-- [Server Configuration](server.md)
+For a deep dive into the internal design, actor filtering logic, and fast-path reconciliation flow, see the [Sentinel Architecture](../../../architecture/sentinel.md) guide.

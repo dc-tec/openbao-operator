@@ -1,60 +1,101 @@
-# Contributing to the OpenBao Operator
+# Contributing to OpenBao Operator
 
-Welcome! We're glad you want to contribute to the OpenBao Operator.
+Welcome! We are glad you want to contribute to the OpenBao Operator. Whether you're fixing a bug, adding a feature, or improving documentation, this guide will help you get started.
 
-## Getting Started
+## Quick Start
 
-New to the project? Start here:
+<div class="grid cards" markdown>
 
-1. [Getting Started](getting-started/index.md) — Fork, clone, and set up your environment
-2. [Development Setup](getting-started/development.md) — Build and run locally
-3. [Coding Standards](standards/index.md) — Code style and patterns
+- :material-flag-checkered: **Getting Started**
+
+    ---
+
+    New to the project? Start here to set up your environment and make your first contribution.
+
+    [:material-arrow-right: Start Here](getting-started/index.md)
+
+- :material-ruler-square: **Coding Standards**
+
+    ---
+
+    Review our conventions for Go code, Kubernetes patterns, and error handling.
+
+    [:material-arrow-right: View Standards](standards/index.md)
+
+- :material-test-tube: **Testing Guide**
+
+    ---
+
+    Learn how to run our unit tests, integration tests, and E2E suites.
+
+    [:material-arrow-right: Run Tests](testing.md)
+
+</div>
 
 ## AI-Assisted Contributions
 
-This project was developed with AI assistance, and we welcome contributions that leverage AI tools.
-However, all contributions—AI-assisted or not—must meet our quality standards:
+!!! info "Policy on AI Tools"
+    We welcome contributions that leverage AI tools! However, you **must** verify all generated code.
 
-- **Understand what you're submitting.** You are responsible for the code you contribute.
-- **Follow the coding standards** in our [Coding Standards](standards/index.md) guide.
-- **Test your changes.** PRs must pass CI and include appropriate test coverage.
-- **Write meaningful commit messages** that explain the "why," not just the "what."
-
-PRs that appear to be low-effort AI-generated content ("slop PRs") without proper review,
-testing, or understanding will be closed without merge.
-
-!!! tip "For AI Tool Users"
-    Configure your AI assistant to use `.agent/rules/` as workspace rules. These rules
-    reference the project's coding standards and ensure AI-generated code follows
-    our conventions.
+    *   **Responsibility:** You are responsible for the code you submit. "The AI wrote it" is not a valid excuse for bugs or security issues.
+    *   **Context:** Use our `.agent/rules/` to ensure your AI assistant follows our project conventions.
+    *   **Quality:** PRs that appear to be low-effort AI dumps ("slop PRs") without proper understanding or testing will be closed.
 
 ## Submitting Changes
 
-1. **Fork the repository** and create a feature branch
-2. **Make your changes** following the [Coding Standards](standards/index.md)
-3. **Add tests** for new functionality
-4. **Run tests locally**:
+Follow this checklist to ensure your Pull Request is ready for review:
 
-   ```sh
-   make test
-   make lint
-   ```
+1. **Code:** Conform to the [Coding Standards](standards/index.md).
+2. **Tests:** Add unit tests for logic and E2E tests for features.
+3. **Validation:** Run the local verification suite:
 
-5. **Update documentation** if needed
-6. **Commit with clear messages** explaining the change
-7. **Submit a pull request**
+    ```bash
+    # 1. Linting & Formatting
+    make lint-config lint verify-fmt verify-tidy
 
-## Documentation
+    # 2. Generated Artifacts
+    make verify-generated verify-helm
 
-| Guide | Description |
-|-------|-------------|
-| [Getting Started](getting-started/index.md) | First-time contributor setup |
-| [Coding Standards](standards/index.md) | Code style and patterns |
-| [Testing](testing.md) | Unit, integration, and E2E tests |
-| [CI/CD](ci.md) | Continuous integration pipeline |
-| [Release Management](release-management.md) | Versioning and releases |
-| [SDLC Overview](sdlc.md) | Development lifecycle |
-| [Documentation Style Guide](docs-style-guide.md) | Writing documentation |
+    # 3. Tests
+    make test-ci
+    ```
+
+4. **Commits:** Write clear, descriptive commit messages.
+5. **Documentation:** Update relevant docs if behavior changed.
+
+## Documentation Guides
+
+<div class="grid cards" markdown>
+
+- **CI/CD Pipeline**
+
+    ---
+    Understanding our GitHub Actions workflows.
+
+    [:material-arrow-right: CI Guide](ci.md)
+
+- **Release Management**
+
+    ---
+    How we version and release the operator.
+
+    [:material-arrow-right: Release Process](release-management.md)
+
+- **SDLC Overview**
+
+    ---
+    Our development lifecycle and philosophy.
+
+    [:material-arrow-right: Read SDLC](sdlc.md)
+
+- **Docs Style Guide**
+
+    ---
+    Writing documentation for the project.
+
+    [:material-arrow-right: Style Guide](docs-style-guide.md)
+
+</div>
 
 ## Quick Links
 
@@ -63,9 +104,3 @@ testing, or understanding will be closed without merge.
 - [Kubernetes Patterns](standards/kubernetes-patterns.md) — Operator best practices
 - [Security Practices](standards/security-practices.md) — Secure coding
 - [Project Conventions](standards/project-conventions.md) — Metrics, logging, testing
-
-## Additional Resources
-
-- [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-- [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
-- [Effective Go](https://go.dev/doc/effective_go)

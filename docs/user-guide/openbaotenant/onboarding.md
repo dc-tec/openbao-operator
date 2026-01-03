@@ -2,59 +2,65 @@
 
 Before creating an `OpenBaoCluster`, the target namespace must be provisioned with the necessary RBAC. The operator supports two governance models: **Self-Service** (decentralized) and **Centralized Admin** (strict control).
 
-## 1. Self-Service Onboarding (Recommended)
+=== ":material-account-cog: Self-Service (Recommended)"
 
-In this model, namespace owners can onboard themselves without cluster-admin intervention. This relies on the `Confused Deputy` prevention logic: users can only provision the namespace they already have access to.
+    In this model, namespace owners can onboard themselves without cluster-admin intervention. This relies on the `Confused Deputy` prevention logic: users can only provision the namespace they already have access to.
 
-### Prerequisites
+    ### Prerequisites
 
-Ensure the `openbaotenant-editor-role` is bound to your user (this is aggregated to the standard `admin` and `edit` ClusterRoles by default).
+    Ensure the `openbaotenant-editor-role` is bound to your user (this is aggregated to the standard `admin` and `edit` ClusterRoles by default).
 
-### Self-Service Steps
+    ### Steps {: #self-service-onboarding }
 
-1. Create an `OpenBaoTenant` resource **in your own namespace**, targeting **that same namespace**:
+    1. Create an `OpenBaoTenant` resource **in your own namespace**, targeting **that same namespace**:
 
-    ```yaml
-    apiVersion: openbao.org/v1alpha1
-    kind: OpenBaoTenant
-    metadata:
-      name: my-tenant-onboarding
-      namespace: team-a-prod  # Your namespace
-    spec:
-      targetNamespace: team-a-prod # MUST match metadata.namespace
-    ```
+        ```yaml
+        apiVersion: openbao.org/v1alpha1
+        kind: OpenBaoTenant
+        metadata:
+          name: my-tenant-onboarding
+          namespace: team-a-prod  # (1)!
+        spec:
+          targetNamespace: team-a-prod # (2)!
+        ```
 
-2. Apply the resource:
+        1.  Your namespace.
+        2.  MUST match metadata.namespace.
 
-    ```sh
-    kubectl apply -f my-tenant.yaml
-    ```
+    2. Apply the resource:
 
-3. The Provisioner controller will detect this valid request and create the necessary `Role` and `RoleBinding` in `team-a-prod` to allow the operator to manage resources.
+        ```sh
+        kubectl apply -f my-tenant.yaml
+        ```
 
-### Security Note
+    3. The Provisioner controller will detect this valid request and create the necessary `Role` and `RoleBinding` in `team-a-prod` to allow the operator to manage resources.
 
-If you attempt to target a different namespace (e.g., `targetNamespace: kube-system`), the controller will **block** the request and update the status with a `SecurityViolation` error.
+    ### Security Note
 
-## 2. Centralized Admin Onboarding
+    If you attempt to target a different namespace (e.g., `targetNamespace: kube-system`), the controller will **block** the request and update the status with a `SecurityViolation` error.
 
-In this model, cluster administrators explicitly declare which namespaces are valid tenants. This is useful for strict environments where users should not self-provision.
+=== ":material-police-badge-outline: Centralized Admin"
 
-### Centralized Admin Steps
+    In this model, cluster administrators explicitly declare which namespaces are valid tenants. This is useful for strict environments where users should not self-provision.
 
-1. As a cluster administrator, create an `OpenBaoTenant` resource in the **operator's namespace** (typically `openbao-operator-system`):
+    ### Steps {: #centralized-admin-onboarding }
 
-    ```yaml
-    apiVersion: openbao.org/v1alpha1
-    kind: OpenBaoTenant
-    metadata:
-      name: team-b-authorization
-      namespace: openbao-operator-system # Trusted namespace
-    spec:
-      targetNamespace: team-b-prod      # Can be any namespace
-    ```
+    1. As a cluster administrator, create an `OpenBaoTenant` resource in the **operator's namespace** (typically `openbao-operator-system`):
 
-2. Since the request originates from the trusted operator namespace, the controller allows cross-namespace provisioning.
+        ```yaml
+        apiVersion: openbao.org/v1alpha1
+        kind: OpenBaoTenant
+        metadata:
+          name: team-b-authorization
+          namespace: openbao-operator-system # (1)!
+        spec:
+          targetNamespace: team-b-prod      # (2)!
+        ```
+
+        1.  Trusted namespace.
+        2.  Can be any namespace.
+
+    2. Since the request originates from the trusted operator namespace, the controller allows cross-namespace provisioning.
 
 ## 3. Verifying Provisioning
 

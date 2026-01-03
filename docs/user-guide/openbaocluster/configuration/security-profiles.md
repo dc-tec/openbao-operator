@@ -1,107 +1,115 @@
 # Security Profiles
 
-**IMPORTANT FOR PRODUCTION:** Always use the `Hardened` profile for production deployments. The `Development` profile stores root tokens in Kubernetes Secrets, which poses a significant security risk. See the [Hardened Profile](#hardened-profile) section for details.
+Configure the security posture of your OpenBao cluster.
 
-The Operator supports two security profiles via `spec.profile`:
+!!! danger "Production Readiness"
+    **Always** use the `Hardened` profile for production deployments. The `Development` profile creates root tokens and stores them in Kubernetes Secrets, which is a critical security risk.
+
+## Profile Comparison
+
+The Operator supports two distinct security profiles via `spec.profile`.
+
+| Feature | Development | Hardened (Production) |
+| :--- | :--- | :--- |
+| **Use Case** | Local Testing, POC | **Production Workloads** |
+| **Root Token** | Created & Stored in Secret | **Never Created** |
+| **Unseal** | Static (Kubernetes Secret) | **External KMS** (AWS, GCP, Azure, etc.) |
+| **TLS** | Optional / Self-Signed | **Mandatory** (External or ACME) |
+| **Status** | `ConditionSecurityRisk=True` | Secure by Default |
 
 ```mermaid
 flowchart LR
-    Cluster["OpenBaoCluster.spec.profile"]
-    Dev["Development Profile<br/>- OperatorManaged TLS allowed<br/>- Static unseal allowed<br/>- Self-init optional<br/>- Root token Secret stored<br/>- ConditionSecurityRisk=True"]
-    Hard["Hardened Profile<br/>- TLS = External or ACME only<br/>- External KMS seal only<br/>- Self-init required<br/>- No root token Secret<br/>- JWT auto-bootstrap"]
+    Cluster["OpenBaoCluster"]
+    Dev["Development Profile"]
+    Hard["Hardened Profile"]
 
-    Cluster --> Dev
-    Cluster --> Hard
+    Cluster -->|spec.profile| Dev
+    Cluster -->|spec.profile| Hard
+
+    Dev -.->|Risk| RootToken[Root Token Created]
+    Hard -.->|Secure| NoRoot[No Root Token]
+    Hard -.->|Secure| KMS[External KMS Unseal]
+    Hard -.->|Secure| EXT_TLS[Verified TLS]
 ```
 
-## Optional AppArmor
+## Configuration
 
-AppArmor is **opt-in** because it is not available in all Kubernetes environments. When enabled, the operator sets `RuntimeDefault` AppArmor profiles on generated Pods/Jobs.
+=== "Hardened (Production)"
+    The `Hardened` profile enforces strict security best practices. It is **REQUIRED** for all production environments.
+
+    ```yaml
+    apiVersion: openbao.org/v1alpha1
+    kind: OpenBaoCluster
+    metadata:
+      name: prod-cluster
+    spec:
+      profile: Hardened  # REQUIRED
+      version: "2.4.4"
+      tls:
+        enabled: true
+        mode: External   # Required (or ACME)
+      unseal:
+        type: awskms     # Required (External KMS)
+        awskms:
+          region: us-east-1
+          kmsKeyID: alias/openbao-unseal
+      selfInit:
+        enabled: true    # Required
+        requests:
+          - name: enable-audit
+            operation: update
+            path: sys/audit/file
+            auditDevice:
+              type: file
+              fileOptions:
+                filePath: /tmp/audit.log
+    ```
+
+    ### Requirements
+
+    - :material-check: **External TLS**: `spec.tls.mode` MUST be `External` or `ACME`.
+    - :material-check: **External KMS**: `spec.unseal.type` MUST use a cloud provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`).
+    - :material-check: **Self-Initialization**: `spec.selfInit.enabled` MUST be `true`.
+    - :material-check: **Secure Network**: If backups are enabled, explicit egress rules are required (fail-closed networking).
+
+    ### Benefits
+
+    - **Zero Trust**: No root tokens are ever generated.
+    - **Identity**: Automatic JWT identity bootstrapping.
+    - **Encryption**: Root of trust is delegated to a hardware-backed KMS, not Kubernetes etcd.
+
+=== "Development"
+    The `Development` profile allows relaxed security settings for rapid iteration and testing.
+
+    ```yaml
+    apiVersion: openbao.org/v1alpha1
+    kind: OpenBaoCluster
+    metadata:
+      name: dev-cluster
+    spec:
+      profile: Development
+      version: "2.4.4"
+      # TLS and Self-Init are optional
+    ```
+
+    ### Characteristics
+
+    - :material-alert: **Relaxed TLS**: Allows `OperatorManaged` (self-signed) TLS.
+    - :material-alert: **Static Unseal**: Uses a simple Kubernetes Secret for the unseal key.
+    - :material-alert: **Root Token**: Generates and stores a root token in a Secret if self-init is disabled.
+    - :material-alert: **Risk Indicator**: Sets `ConditionSecurityRisk=True` on the CR status.
+
+    !!! warning "Risk Acceptance"
+        By using this profile, you accept the risk of storing sensitive keys and root tokens in the cluster. Do not expose this cluster to public traffic.
+
+## Workload Hardening (AppArmor)
+
+AppArmor support is **opt-in** as it depends on the underlying Kubernetes node OS support.
+
+To enable `RuntimeDefault` AppArmor profiles on all OpenBao Pods:
 
 ```yaml
 spec:
   workloadHardening:
     appArmorEnabled: true
 ```
-
-## Development Profile
-
-The `Development` profile allows relaxed security for development and testing:
-
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
-metadata:
-  name: dev-cluster
-spec:
-  profile: Development  # Required: must be explicit
-  version: "2.4.4"
-  # ... other fields ...
-```
-
-**Characteristics:**
-
-- Allows operator-managed TLS (`spec.tls.mode: OperatorManaged`)
-- Allows static unseal (default)
-- Allows self-init to be disabled (root token created)
-- Sets `ConditionSecurityRisk=True` to indicate relaxed posture
-
-**Use Case:** Development, testing, and non-production environments.
-
-**WARNING:** The Development profile stores root tokens in Kubernetes Secrets, which poses a security risk. **DO NOT use the Development profile in production.** Always use the Hardened profile for production deployments.
-
-## Hardened Profile
-
-**IMPORTANT: The Hardened profile is REQUIRED for production deployments.** The Development profile stores root tokens in Kubernetes Secrets, which poses a significant security risk in production environments. Always use the Hardened profile for production workloads.
-
-The `Hardened` profile enforces strict security requirements for production:
-
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
-metadata:
-  name: prod-cluster
-spec:
-  profile: Hardened  # REQUIRED for production
-  version: "2.4.4"
-  tls:
-    enabled: true
-    mode: External  # Required for Hardened profile
-  unseal:
-    type: awskms  # Required: external KMS only
-    awskms:
-      region: us-east-1
-      kmsKeyID: alias/openbao-unseal
-  selfInit:
-    enabled: true  # Required for Hardened profile
-    requests:
-      # Your initialization requests
-      - name: enable-audit
-        operation: update
-        path: sys/audit/file
-        auditDevice:
-          type: file
-          fileOptions:
-            filePath: /tmp/audit.log
-```
-
-**Requirements:**
-
-- `spec.tls.mode` MUST be `External` (cert-manager or CSI managed) OR `ACME` (OpenBao native ACME client)
-- `spec.unseal.type` MUST be external KMS (`awskms`, `gcpckms`, `azurekeyvault`, or `transit`)
-- `spec.selfInit.enabled` MUST be `true` (no root token)
-- `tlsSkipVerify=true` in seal configuration (e.g., `spec.unseal.transit.tlsSkipVerify` or `spec.unseal.kmip.tlsSkipVerify`) is rejected
-
-**Automatic Features:**
-
-- JWT authentication is automatically bootstrapped during self-init
-- No manual JWT configuration required
-
-**Security Benefits:**
-
-- **No Root Tokens:** Root tokens are never created or stored, eliminating the risk of token compromise
-- **External KMS:** Stronger root of trust than Kubernetes Secrets for unseal keys
-- **External TLS:** Integrates with organizational PKI and certificate management
-- **Automatic JWT Bootstrap:** Reduces configuration errors and ensures proper authentication setup
-
-**Use Case:** **Production environments requiring maximum security. The Hardened profile MUST be used for all production deployments.**

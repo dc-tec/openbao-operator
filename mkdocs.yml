@@ -12,7 +12,9 @@ theme:
     - navigation.expand
     - navigation.sections
     - content.code.copy
+    - content.code.annotation
     - content.tabs.link
+    - navigation.top
   palette:
     - scheme: default
       primary: custom
@@ -37,7 +39,28 @@ extra_css:
 
 markdown_extensions:
   - admonition
+  - abbr
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - pymdownx.arithmatex:
+      generic: true
   - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      base_path: ["."]
+  - pymdownx.magiclink
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -45,6 +68,8 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
   - toc:
       permalink: true
   - tables
@@ -109,7 +134,12 @@ nav:
           - Upgrade: architecture/upgrade-manager.md
           - Backup: architecture/backup-manager.md
           - Restore: architecture/restore-manager.md
-      - Lifecycle Management: architecture/lifecycle.md
+      - Lifecycle Management:
+          - Overview: architecture/lifecycle/index.md
+          - Day 0 (Provisioning): architecture/lifecycle/day0-provisioning.md
+          - Day 1 (Creation): architecture/lifecycle/day1-creation.md
+          - Day 2 (Operations): architecture/lifecycle/day2-operations.md
+          - Day N (Backups): architecture/lifecycle/dayN-backups.md
       - Sentinel Drift Detector: architecture/sentinel.md
   - Security:
       - Overview: security/index.md
@@ -140,10 +170,12 @@ nav:
           - contributing/standards/index.md
           - Go Style: contributing/standards/go-style.md
           - Error Handling: contributing/standards/error-handling.md
+          - Generated Artifacts: contributing/standards/generated-artifacts.md
           - Kubernetes Patterns: contributing/standards/kubernetes-patterns.md
           - Security Practices: contributing/standards/security-practices.md
           - Project Conventions: contributing/standards/project-conventions.md
-      - Testing: contributing/testing.md
+      - Testing:
+          - Overview: contributing/testing.md
       - CI/CD: contributing/ci.md
       - Release Management: contributing/release-management.md
       - SDLC: contributing/sdlc.md

@@ -1,185 +1,124 @@
 # Cluster Upgrades
 
-## Prerequisites
+The Operator supports two powerful upgrade strategies: **Rolling Update** (default) for efficiency, and **Blue/Green** for zero-downtime safety.
 
-- **Running Cluster**: An initialized `OpenBaoCluster`
-- **Permissions**: RBAC to patch the CR and creating Jobs (for Blue/Green)
+## One-Time Setup
 
-## Upgrade Strategies
+To perform upgrades safely, the Operator uses a temporary "Upgrade Executor" job that requires permissions to talk to OpenBao.
 
-The OpenBao Operator supports two upgrade strategies:
+??? abstract "Prerequisite: Configure Upgrade Authentication"
+    The Upgrade Executor needs a JWT Auth Role to authenticate with the cluster during upgrades.
 
-| Strategy | Description | Use Case |
-| :--- | :--- | :--- |
-| **RollingUpdate** (default) | Updates pods one-by-one with leader step-down | Standard upgrades, minimal resource usage |
-| **BlueGreen** | Creates a parallel "Green" cluster before switching traffic | Zero-downtime upgrades, safer rollback path |
+    **1. Configure OpenBao (via `selfInit`)**
 
-Configure the strategy in your `OpenBaoCluster` spec:
+    ```yaml
+    spec:
+      selfInit:
+        requests:
+          # Create policy for upgrade operations
+          - name: create-upgrade-policy
+            operation: update
+            path: sys/policies/acl/upgrade
+            policy:
+              policy: |
+                path "sys/health" { capabilities = ["read"] }
+                path "sys/step-down" { capabilities = ["update"] }
+                path "sys/storage/raft/snapshot" { capabilities = ["read"] }
+          # Create JWT role bound to the upgrade ServiceAccount
+          - name: create-upgrade-jwt-role
+            operation: update
+            path: auth/jwt/role/upgrade
+            data:
+              role_type: jwt
+              bound_audiences: ["openbao-internal"]
+              bound_claims:
+                kubernetes.io/namespace: openbao
+                kubernetes.io/serviceaccount/name: upgrade-cluster-upgrade-serviceaccount
+              token_policies: upgrade
+              ttl: 1h
+    ```
 
-```yaml
-spec:
-  updateStrategy:
-    type: BlueGreen  # or RollingUpdate (default)
-    blueGreen:
-      autoPromote: true          # Automatically promote after sync (default: true)
-      preUpgradeSnapshot: true   # Create backup before upgrade starts
-      verification:
-        minSyncDuration: "30s"   # Wait before promotion (optional)
-      autoRollback:
-        enabled: true
-        onJobFailure: true
-        stabilizationSeconds: 60
-```
+    **2. Configure the Operator to use this role**
 
----
+    ```yaml
+    spec:
+      upgrade:
+        executorImage: openbao/upgrade-executor:v0.1.0
+        jwtAuthRole: upgrade
+    ```
 
-## Upgrade Authentication
+## Executing Upgrades
 
-Upgrade operations that require OpenBao permissions run in Kubernetes Jobs (upgrade executor). These Jobs authenticate to OpenBao via JWT using a projected ServiceAccount token.
+To upgrade, simply update the `spec.version` field. The `updateStrategy` determines how this change is applied.
 
-The upgrade executor requires:
+=== "Rolling Update (Default)"
+    **Best for:** Standard upgrades, Dev/Test environments, Minimizing resource usage.
 
-- `spec.upgrade.executorImage`
-- `spec.upgrade.jwtAuthRole`
+    The Operator updates pods one by one, ensuring the active leader steps down gracefully before termination to maintain availability.
 
-If image verification is enabled (`spec.imageVerification.enabled: true`), the operator verifies `spec.upgrade.executorImage` and pins upgrade executor Jobs to the verified digest.
+    ```yaml
+    spec:
+      version: "2.4.4"
+      updateStrategy:
+        type: RollingUpdate
+    ```
 
-### JWT Auth (Preferred)
+    **How it works:**
+    1.  **Validation**: Checks if the new version is valid.
+    2.  **Snapshot** (Optional): Takes a pre-upgrade backup.
+    3.  **Rolling Replace**: Updates Pod 0 -> Pod 1 -> Pod 2.
+    4.  **Leader Handling**: If updating the active leader, triggers `sys/step-down` first.
 
-Configure JWT Auth for upgrade operations:
+=== "Blue/Green (Zero Downtime)"
+    **Best for:** Production critical paths, Major version jumps, Instant rollback capability.
 
-1. **Create the JWT Auth role in OpenBao:**
+    The Operator spins up a **parallel** "Green" cluster, syncs data, validates it, and then switches traffic over atomically.
 
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
-metadata:
-  name: upgrade-cluster
-spec:
-  profile: Development
-  selfInit:
-    enabled: true
-    requests:
-      # Create upgrade policy
-      - name: create-upgrade-policy
-        operation: update
-        path: sys/policies/acl/upgrade
-        policy:
-          policy: |
-            path "sys/health" {
-              capabilities = ["read"]
-            }
-            path "sys/step-down" {
-              capabilities = ["update"]
-            }
-            path "sys/storage/raft/snapshot" {
-              capabilities = ["read"]
-            }
-      # Create JWT Auth role for upgrades
-      - name: create-upgrade-jwt-role
-        operation: update
-        path: auth/jwt/role/upgrade
-        data:
-          role_type: jwt
-          bound_audiences: ["openbao-internal"]
-          bound_claims:
-            kubernetes.io/namespace: openbao
-            kubernetes.io/serviceaccount/name: upgrade-cluster-upgrade-serviceaccount
-          token_policies: upgrade
-          ttl: 1h
-  upgrade:
-    executorImage: openbao/upgrade-executor:v0.1.0
-    jwtAuthRole: upgrade
-    preUpgradeSnapshot: true
-```
+    ```mermaid
+    flowchart TB
+        Start[Start Upgrade]
+        
+        subgraph Blue["Blue Revision (Current)"]
+            B[Active Cluster]
+        end
 
-1. **Configure the upgrade manager to use the role:**
+        subgraph Green["Green Revision (New)"]
+            direction TB
+            Deploy[1. Deploy Green Pods]
+            Sync[2. Sync Data form Blue]
+            Test[3. Run Verification]
+        end
 
-```yaml
-spec:
-  upgrade:
-    executorImage: openbao/upgrade-executor:v0.1.0
-    jwtAuthRole: upgrade
-```
+        Start --> Deploy
+        Deploy --> Sync
+        Sync --> Test
+        Test -- "Success" --> Switch[4. Switch Traffic to Green]
+        Switch --> Cleanup[5. Delete Blue Cluster]
 
----
+        style Blue fill:transparent,stroke:#2979ff,stroke-width:2px
+        style Green fill:transparent,stroke:#00e676,stroke-width:2px,color:#fff
+        style Switch fill:transparent,stroke:#ffa726,stroke-width:2px
+    ```
 
-## Upgrade ServiceAccount
+    **Configuration:**
 
-The operator automatically creates `<cluster-name>-upgrade-serviceaccount` when upgrade authentication is configured. This ServiceAccount:
+    ```yaml
+    spec:
+      version: "2.4.4"
+      updateStrategy:
+        type: BlueGreen
+        blueGreen:
+          autoPromote: true          # Automatically switch traffic if healthy
+          preUpgradeSnapshot: true   # Backup before starting
+          autoRollback:
+            enabled: true            # Revert if Green fails validation
+    ```
 
-- Is used by upgrade executor Jobs for JWT Auth (via projected ServiceAccount token)
-- Is mounted into the Job Pod via a projected token volume with audience `openbao-internal`
-- Is owned by the OpenBaoCluster for automatic cleanup
+## Advanced Upgrade Options
 
----
+### Verification Hooks
 
-## Performing Upgrades
-
-To upgrade an OpenBao cluster, update the `spec.version` field:
-
-```sh
-kubectl -n security patch openbaocluster dev-cluster \
-  --type merge -p '{"spec":{"version":"2.4.4"}}'
-```
-
-### Rolling Update Strategy
-
-The upgrade manager will:
-
-1. Validate the target version
-2. Perform pre-upgrade validation (cluster health, quorum, leader detection)
-3. Create a pre-upgrade snapshot (if `spec.upgrade.preUpgradeSnapshot` is enabled)
-4. Perform a rolling upgrade, pod-by-pod, with leader step-down handling
-5. Update `Status.CurrentVersion` when complete
-
-### Blue/Green Upgrade Strategy
-
-The Blue/Green upgrade creates a parallel “Green” revision, validates it, switches traffic, and then removes the old “Blue” revision.
-
-#### High-level Flow
-
-```mermaid
-flowchart LR
-    Start["spec.version/spec.image change"] --> PreSnap{"preUpgradeSnapshot?"}
-    PreSnap -->|yes| Backup["Take snapshot"]
-    PreSnap -->|no| Green["Deploy Green revision"]
-    Backup --> Green
-    Green --> Sync["Join + sync data"]
-    Sync --> Promote["Promote Green voters"]
-    Promote --> Switch["Switch traffic to Green"]
-    Switch --> Cleanup["Remove Blue"]
-    Switch -->|failure + autoRollback| Rollback["Rollback to Blue"]
-    Cleanup --> Done["Done"]
-    Rollback --> Done
-```
-
-See [Architecture: Upgrade Manager](../../../architecture/upgrade-manager.md) for the full state machine and detailed phase semantics.
-
----
-
-## Advanced Blue/Green Configuration
-
-### Snapshots
-
-Create automatic backups during upgrades:
-
-```yaml
-spec:
-  updateStrategy:
-    blueGreen:
-      preUpgradeSnapshot: true   # Backup before any changes
-  backup:                         # Required for snapshots
-    executorImage: openbao/backup-executor:v0.1.0
-    jwtAuthRole: backup
-    target:
-      endpoint: http://rustfs-svc.rustfs.svc:9000
-      bucket: openbao-backups
-```
-
-### Pre-Promotion Validation Hook
-
-Run custom validation before promoting Green:
+Run a custom container to "smoke test" the Green cluster before traffic is switched.
 
 ```yaml
 spec:
@@ -187,80 +126,28 @@ spec:
     blueGreen:
       verification:
         prePromotionHook:
-          image: busybox:latest
-          command: ["sh", "-c"]
-          args: ["curl -fs https://green-cluster:8200/v1/sys/health"]
-          timeoutSeconds: 300
+          image: curlimages/curl
+          command: ["curl", "-f", "https://green-cluster:8200/v1/sys/health"]
 ```
 
-### Auto-Rollback Configuration
+### Auto-Rollback
 
-Configure automatic rollback on failure:
+If the Green cluster fails validation or crashes during the "Traffic Switching" window (default 60s), the Operator can automatically revert traffic to Blue.
 
 ```yaml
 spec:
   updateStrategy:
     blueGreen:
-      maxJobFailures: 3           # Max failures before rollback (default: 5)
       autoRollback:
         enabled: true
-        onJobFailure: true       # Rollback on job failures
-        onValidationFailure: true # Rollback if hook fails
-        onTrafficFailure: true   # Rollback if Green fails during stabilization
-        stabilizationSeconds: 60 # Observation period during TrafficSwitching
+        onValidationFailure: true
+        onTrafficFailure: true 
 ```
 
-### Traffic Switching
+### Monitoring Progress
 
-The `TrafficSwitching` phase provides a safety window:
-
-1. Service selectors are updated to point to Green pods
-2. Green is monitored for `stabilizationSeconds` (default: 60s)
-3. If Green remains healthy, upgrade proceeds to DemotingBlue
-4. If Green fails and `onTrafficFailure` is true, automatic rollback is triggered
-
----
-
-## Monitoring Upgrades
-
-Monitor upgrade progress:
+Track the upgrade status directly on the CR:
 
 ```sh
-kubectl -n security get openbaocluster dev-cluster -o yaml
+kubectl get openbaocluster my-cluster -o jsonpath='{.status.blueGreen}'
 ```
-
-Check `Status.BlueGreen` for Blue/Green upgrade progress:
-
-```yaml
-status:
-  blueGreen:
-    phase: TrafficSwitching
-    blueRevision: "e8983038c519c718"
-    greenRevision: "269c4f7ba494030d"
-    startTime: "2024-01-15T10:30:00Z"
-    trafficSwitchedTime: "2024-01-15T10:35:00Z"
-    preUpgradeSnapshotJobName: "dev-cluster-preupgrade-snapshot-1705315800"
-    jobFailureCount: 0
-```
-
-Check `Status.Conditions` for upgrade state:
-
-```sh
-kubectl -n security get openbaocluster dev-cluster -o jsonpath='{.status.conditions}' | jq
-```
-
-### Rollback Status
-
-If a rollback is triggered:
-
-```yaml
-status:
-  blueGreen:
-    phase: RollingBack
-    rollbackReason: "job failure threshold exceeded"
-    rollbackStartTime: "2024-01-15T10:36:00Z"
-```
-
-If rollback automation cannot proceed safely (for example, a failed consensus repair), the operator may enter break glass mode and halt further quorum-risk actions:
-
-- [Break Glass / Safe Mode](../recovery/safe-mode.md)

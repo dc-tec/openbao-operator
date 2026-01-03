@@ -1,181 +1,110 @@
 # Project Conventions
 
-Project-specific conventions for the OpenBao Operator beyond general Go and Kubernetes patterns.
+Specific conventions for the OpenBao Operator codebase that go beyond standard Go idioms.
 
-## Type Safety
+## 1. Type Safety
 
-Go is strongly typed. We leverage this to prevent runtime crashes.
+We leverage Go's strong typing to prevent runtime errors.
 
-### No `interface{}` or `any`
+### Strict Prohibitions
 
-The use of `interface{}` or `any` is **strictly prohibited** unless required by external libraries:
+!!! failure "No `any` or `interface{}`"
+    The use of `interface{}` or `any` is **strictly prohibited** in core logic.
+    It defeats compile-time safety and requires runtime type assertions.
+
+    **Exception:** Interaction with external libraries that require it (e.g., `json.Unmarshal`).
+
+=== ":material-close: Bad Pattern"
+    ```go
+    func process(data any) error {
+        // Runtime crash risk!
+        return data.(string)
+    }
+    ```
+
+=== ":material-check: Good Pattern"
+    ```go
+    func process(data ConfigType) error {
+        // Compile-time safe
+        return nil
+    }
+    ```
+
+### Enum Constants
+
+Avoid "stringly-typed" code. Use defined types for status fields.
 
 ```go
-// Bad
-func process(data interface{}) error
-
-// Good
-func process(data ConfigData) error
-```
-
-If you must use `interface{}` (e.g., for `json.Unmarshal`), add a comment explaining why.
-
-### Avoid Stringly-Typed Code
-
-Use type definitions and constants instead of raw strings:
-
-```go
-// Bad
-cr.Status.Phase = "Running"
-
-// Good
 type Phase string
+
 const (
     PhaseRunning Phase = "Running"
     PhaseFailed  Phase = "Failed"
 )
-cr.Status.Phase = PhaseRunning
 ```
 
-### Nil Pointer Safety
+## 2. Code Organization (DRY)
 
-- Use pointers only for optional CRD fields (marked `+optional`)
-- Never dereference without checking for nil
-- Always initialize maps before writing
+### The Rule of Three
 
-```go
-// CRD optional field
-Replicas *int `json:"replicas,omitempty"`
+!!! note "Don't Abstract Too Early"
+    Do not create a helper function or shared package until logic is repeated **three times**.
 
-// Safe access
-replicas := 3 // default
-if cluster.Spec.Replicas != nil {
-    replicas = *cluster.Spec.Replicas
-}
+    1.  **First time:** Write it inline.
+    2.  **Second time:** Copy-paste (yes, really).
+    3.  **Third time:** Refactor into a shared helper.
 
-// Map initialization
-labels := make(map[string]string)  // Not: var labels map[string]string
-labels["app"] = "openbao"
-```
+### Package Naming
 
-## DRY Guidelines
+Avoid generic names that become "junk drawers".
 
-### Rule of Three
+| :material-close: Avoid | :material-check: Prefer |
+| :--- | :--- |
+| `util`, `common`, `shared` | `slice`, `pointer`, `k8sutil` |
+| `types`, `models` | `api`, `config`, `schema` |
 
-Do not abstract into a helper function until logic is repeated **three times**:
+## 3. Review Hygiene
 
-```go
-// First occurrence - inline is fine
-// Second occurrence - still inline
-// Third occurrence - now extract to helper
-```
+To keep code reviews high-signal, adhere to these scoping rules:
 
-### No "Common" or "Util" Packages
+- [ ] **One Theme**: A PR should fix a bug OR add a feature OR refactor. Not all three.
+- [ ] **No Drive-By Changes**: Do not reformat unrelated files.
+- [ ] **Update Generated Files**: If you change `api/`, run `make manifests generate`.
 
-Avoid generic utility packages like `package util`. Instead:
+## 4. Observability Standards
 
-```go
-// Bad
-package util  // Becomes a junk drawer
+### Metrics
 
-// Good
-package slice     // internal/slice
-package k8sutil   // pkg/k8sutil  
-package tlsutil   // internal/tlsutil
-```
+Must use the `openbao_` prefix and standard labels.
 
-### Test Helpers
+| Type | Name | Labels |
+| :--- | :--- | :--- |
+| **Gauge** | `openbao_cluster_replicas` | `namespace`, `name` |
+| **Counter** | `openbao_reconcile_errors_total` | `controller`, `type` |
 
-DRY applies less strictly to tests. Prefer readable, slightly repetitive tests over complex test frameworks.
+### Logging
 
-## Metrics Conventions
+See [Kubernetes Patterns](kubernetes-patterns.md#4-structured-logging) for detailed logging rules.
 
-All per-cluster metrics must follow these conventions:
+## 5. Testing Requirements
 
-| Requirement | Example |
-|-------------|---------|
-| Prefix with `openbao_` | `openbao_cluster_replicas` |
-| Label with `namespace` | `namespace="production"` |
-| Label with `name` | `name="my-cluster"` |
+Every change requires verification.
 
-```go
-var clusterReplicas = prometheus.NewGaugeVec(
-    prometheus.GaugeOpts{
-        Name: "openbao_cluster_replicas",
-        Help: "Number of replicas in the cluster",
-    },
-    []string{"namespace", "name"},
-)
-```
+| Change Type | Required Test | Command |
+| :--- | :--- | :--- |
+| **Business Logic** | Unit Test (Table-driven) | `make test` |
+| **HCL Config** | Golden File Update | `make test-update-golden` |
+| **Controller Logic** | EnvTest Integration | `make test-integration` |
+| **Critical Path** | End-to-End Test | `make test-e2e` |
 
-## Logging Conventions
+!!! tip "Golden Files"
+    Changes to `internal/config/builder.go` will often break tests.
+    Run `make test-update-golden` to update the expected output in `internal/config/testdata/`.
 
-Use structured logging with standard fields:
+## 6. CRD Evolution
 
-```go
-log.Info("Reconciling cluster",
-    "cluster_namespace", cluster.Namespace,
-    "cluster_name", cluster.Name,
-    "controller", "openbaocluster",
-    "reconcile_id", reconcileID,
-)
-```
+Breaking changes to `OpenBaoCluster` are **expensive**.
 
-## Reconciliation Patterns
-
-### Use Controller-Runtime Rate Limiting
-
-Do **not** implement custom retry loops with `time.Sleep`:
-
-```go
-// Bad
-for {
-    if err := doWork(); err != nil {
-        time.Sleep(5 * time.Second)
-        continue
-    }
-    break
-}
-
-// Good - return with requeue
-if err := doWork(); err != nil {
-    return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-}
-```
-
-### Context Requirements
-
-All external calls must:
-
-- Accept `context.Context` as first parameter
-- Use appropriate timeouts
-- Respect context cancellation
-
-## CRD Evolution
-
-Breaking changes to the `OpenBaoCluster` API require:
-
-1. **New CRD version** (e.g., `v1beta1`)
-2. **Documented migration path** in design docs
-3. **User-facing documentation** updates
-
-Prefer additive, backwards-compatible changes over modifications.
-
-## Testing Requirements
-
-| Change Type | Required Tests |
-|-------------|----------------|
-| Logic in `internal/` | Table-driven unit tests |
-| HCL generation | Updated golden files |
-| Reconciliation flows | At least one envtest integration test |
-| Upgrade/backup changes | At least one E2E scenario update |
-
-### Golden Files
-
-Changes to HCL generation require updating golden files:
-
-```sh
-make test-update-golden
-```
-
-Review the changes in `internal/config/testdata/*.hcl` carefully before committing.
+1. **Prefer Additive Changes**: Add new optional fields; do not rename or remove existing ones.
+2. **Versioning**: Significant changes require a new API version (e.g., `v1beta1`).
+3. **Migration**: You must document how to migrate from the old version.

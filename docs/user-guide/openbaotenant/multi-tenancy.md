@@ -1,375 +1,202 @@
 # Multi-Tenancy Security
 
-## Prerequisites
+Running multiple `OpenBaoCluster` resources in a shared Kubernetes cluster requires strict isolation layers. This guide outlines how to secure tenants using RBAC, Network Policies, and Resource Quotas.
 
-- **RBAC**: Administrator permissions to create Roles/RoleBindings.
-- **NetworkPolicies**: CNI that supports NetworkPolicies.
+## Isolation Model
 
-## Overview
+The Operator facilitates a **Zero Trust** model where each tenant is isolated by default.
 
-When running multiple `OpenBaoCluster` resources in a shared Kubernetes cluster (multi-tenant), additional security considerations apply.
+```mermaid
+graph TD
+    subgraph Cluster["Kubernetes Cluster"]
+        
+        subgraph TenantA["Tenant A (Namespace)"]
+            RBAC_A[("RBAC Role")]
+            NetPol_A[("NetworkPolicy")]
+            Secret_A["Secrets (Root Token)"]
+            Pod_A["OpenBao Pods"]
+        end
 
-## RBAC for Tenant Isolation
+        subgraph TenantB["Tenant B (Namespace)"]
+            RBAC_B[("RBAC Role")]
+            NetPol_B[("NetworkPolicy")]
+            Secret_B["Secrets (Root Token)"]
+            Pod_B["OpenBao Pods"]
+        end
 
-The operator provides ClusterRoles that can be bound at the namespace level to isolate tenant access:
+        Admin["Platform Admin"] --> RBAC_A
+        Admin --> RBAC_B
+        UserA["User A"] --> RBAC_A
+        UserB["User B"] --> RBAC_B
 
-```sh
-# See example RBAC configurations
-kubectl apply -f config/samples/namespace_scoped_openbaocluster-rbac.yaml
+        RBAC_A -.->|Block| Secret_A
+        RBAC_B -.->|Block| Secret_B
+    end
 ```
 
-**Key points:**
+## Security Layers
 
-- Use `RoleBinding` (not `ClusterRoleBinding`) to restrict users to their namespace
-- The `openbaocluster-editor-role` allows creating/managing clusters but NOT reading Secrets
-- The `openbaotenant-editor-role` allows users to self-onboard their namespace (via `OpenBaoTenant`)
-- Platform teams should have `openbaocluster-admin-role` cluster-wide
+Configure isolation across four key layers:
 
-## Secret Access Isolation
+=== ":material-security: 1. Identity (RBAC)"
 
-The operator creates sensitive Secrets for each cluster:
+    The most critical layer is Identity. You must prevent tenants from accessing the "Keys to the Kingdom" (Root Tokens and Unseal Keys).
 
-- `<cluster>-root-token` - Full admin access to OpenBao
-- `<cluster>-unseal-key` - Can decrypt all OpenBao data
-- `<cluster>-tls-ca` / `<cluster>-tls-server` - TLS credentials
+    ### Tenant Roles
+    Use the provided ClusterRoles to granularly grant permissions.
 
-**Critical:** Tenants should NOT have direct access to these Secrets. Configure RBAC to restrict Secret access:
+    | Role | Scope | Description |
+    | :--- | :--- | :--- |
+    | `openbaocluster-admin-role` | Cluster | Full control. Reserved for Platform Engineers. |
+    | `openbaocluster-editor-role` | Namespace | Manage Clusters, **CANNOT** read Secrets. |
+    | `openbaotenant-editor-role` | Namespace | Self-service onboarding via `OpenBaoTenant`. |
 
-```yaml
-# Example: Deny Secret access in tenant namespace
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: deny-openbao-secrets
-  namespace: team-a-prod
-rules:
-  # Explicitly grant access only to non-sensitive secrets
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list"]
-    resourceNames: []  # Empty = no access to any secrets by name
----
-# For production, consider using OPA/Gatekeeper or Kyverno to enforce
-# that tenants cannot read secrets matching *-root-token, *-unseal-key patterns
-```
+    ### Blocking Secret Access
+    !!! danger "Critical Restriction"
+        Tenants with `get secrets` permission can read the **Root Token** and **Unseal Key**, effectively becoming admins of their OpenBao cluster.
 
-**Recommendation:** Use a policy engine (OPA Gatekeeper, Kyverno) to enforce Secret access restrictions:
+    Use a **Policy Engine** (Kyverno/Gatekeeper) to enforce this restriction.
 
-```yaml
-# Example Kyverno policy to block access to sensitive OpenBao secrets
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
-metadata:
-  name: block-openbao-sensitive-secrets
-spec:
-  validationFailureAction: Enforce
-  background: false
-  rules:
-    - name: block-root-token-access
-      match:
-        any:
-          - resources:
-              kinds:
-                - Secret
-              names:
-                - "*-root-token"
-                - "*-unseal-key"
-      exclude:
-        any:
-          - subjects:
-              - kind: ServiceAccount
-                name: openbao-operator-controller
-                namespace: openbao-operator-system
-      validate:
-        message: "Access to OpenBao root token and unseal key secrets is restricted"
-        deny: {}
-```
+    ```yaml title="Kyverno Policy: Block Sensitive Secrets"
+    apiVersion: kyverno.io/v1
+    kind: ClusterPolicy
+    metadata:
+      name: block-openbao-sensitive-secrets
+    spec:
+      validationFailureAction: Enforce
+      rules:
+        - name: block-root-token-access
+          match:
+            any:
+              - resources:
+                  kinds:
+                    - Secret
+                  names:
+                    - "*-root-token"
+                    - "*-unseal-key"
+          exclude:
+            any:
+              - subjects:
+                  - kind: ServiceAccount
+                    name: openbao-operator-controller
+                    namespace: openbao-operator-system
+          validate:
+            message: "Access to OpenBao root token and unseal key is restricted."
+            deny: {}
+    ```
 
-### Network Policies
+=== ":material-server-network-outline: 2. Network"
 
-The operator automatically creates a NetworkPolicy for each OpenBaoCluster that enforces default-deny ingress and restricts egress. The operator auto-detects the Kubernetes API server CIDR by querying the `kubernetes` Service in the `default` namespace. If auto-detection fails (e.g., due to restricted permissions in multi-tenant environments), you can manually configure `spec.network.apiServerCIDR` as a fallback (see [Network Configuration](../openbaocluster/configuration/network.md#api-server-cidr-fallback)).
+    By default, the Operator creates a `NetworkPolicy` that implements a **Default Deny** posture for Ingress.
 
-**Backup job pods are excluded from this NetworkPolicy** (they have the label `openbao.org/component=backup`) to allow access to object storage services.
+    ### Default Behavior
+    - **Ingress**: Only allows traffic from within the cluster (OpenBao-to-OpenBao) and the generic Ingress Controller.
+    - **Egress**: Allows DNS, API Server, and cluster-internal traffic.
+    - **Backup Jobs**: Excluded from default policy to allow S3 access.
 
-If you need to restrict backup job network access, create a custom NetworkPolicy targeting backup jobs:
+    ### Custom Restrictions
+    If you need strict egress control for backup jobs, apply a dedicated policy.
 
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: backup-job-network-policy
-  namespace: team-a-prod
-spec:
-  podSelector:
-    matchLabels:
-      openbao.org/component: backup
-      openbao.org/cluster: team-a-cluster
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    # Allow ingress from operator (if needed for monitoring)
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              app.kubernetes.io/name: openbao-operator
-      ports:
-        - port: 8080  # metrics port
-  egress:
-    # Allow DNS
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-      ports:
-        - port: 53
-          protocol: UDP
-        - port: 53
-          protocol: TCP
-    # Allow access to object storage (adjust namespace/port as needed)
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: rustfs
-      ports:
-        - port: 9000
-          protocol: TCP
-    # Allow access to OpenBao cluster for snapshot API
-    - to:
-        - podSelector:
-            matchLabels:
-              openbao.org/cluster: team-a-cluster
-      ports:
-        - port: 8200
-          protocol: TCP
-```
+    ```yaml title="Backup Job Isolation"
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: backup-job-strict
+      namespace: tenant-a
+    spec:
+      podSelector:
+        matchLabels:
+          openbao.org/component: backup
+      policyTypes: [Egress]
+      egress:
+        - to: # Allow S3
+            - ipBlock: { cidr: 0.0.0.0/0 }
+          ports: [{ port: 443, protocol: TCP }]
+    ```
 
-For general cluster isolation, the operator-managed NetworkPolicy provides:
+=== ":material-harddisk: 3. Storage & Quota"
 
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: openbao-cluster-isolation
-  namespace: team-a-prod
-spec:
-  podSelector:
-    matchLabels:
-      openbao.org/cluster: team-a-cluster
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    # Allow traffic only from pods in the same cluster
-    - from:
-        - podSelector:
-            matchLabels:
-              openbao.org/cluster: team-a-cluster
-      ports:
-        - port: 8200
-        - port: 8201
-    # Allow traffic from ingress controller (if needed)
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - port: 8200
-  egress:
-    # Allow cluster-internal communication
-    - to:
-        - podSelector:
-            matchLabels:
-              openbao.org/cluster: team-a-cluster
-      ports:
-        - port: 8200
-        - port: 8201
-    # Allow DNS
-    - to:
-        - namespaceSelector: {}
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - port: 53
-          protocol: UDP
-    # Allow Kubernetes API (for auto-join discovery via discover-k8s provider)
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: default
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-      ports:
-        - port: 443
-          protocol: TCP
-```
+    Prevent "Noisy Neighbor" issues where one tenant consumes all cluster resources.
 
-### Resource Quotas
+    ### Resource Quotas
+    Limit the number of nodes and storage a tenant can provision.
 
-Prevent one tenant from exhausting cluster resources:
+    ```yaml
+    apiVersion: v1
+    kind: ResourceQuota
+    metadata:
+      name: openbao-quota
+      namespace: tenant-a
+    spec:
+      hard:
+        pods: "10"
+        requests.storage: "100Gi"
+        requests.cpu: "4"
+        requests.memory: "8Gi"
+    ```
 
-```yaml
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: openbao-quota
-  namespace: team-a-prod
-spec:
-  hard:
-    # Limit number of OpenBao pods
-    pods: "10"
-    # Limit total PVC storage
-    requests.storage: "100Gi"
-    persistentvolumeclaims: "5"
-    # Limit CPU/Memory
-    requests.cpu: "4"
-    requests.memory: "8Gi"
-    limits.cpu: "8"
-    limits.memory: "16Gi"
-```
+    ### S3 Bucket Isolation
+    When using shared object storage for backups, ensure each tenant uses a unique **Prefix** and has credentials scoped *only* to that prefix.
 
-### Backup Credential Isolation
-
-Each tenant should have **separate backup credentials** with access only to their backup prefix:
-
-```yaml
-# Tenant A backup credentials - access only to tenant-a/ prefix
-apiVersion: v1
-kind: Secret
-metadata:
-  name: backup-credentials-team-a
-  namespace: team-a-prod
-type: Opaque
-stringData:
-  accessKeyId: "TENANT_A_ACCESS_KEY"
-  secretAccessKey: "TENANT_A_SECRET_KEY"
-  # Region is optional
-```
-
-Configure the S3/object storage IAM policy to restrict access:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
+    ```json title="AWS IAM Policy Example"
     {
       "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:DeleteObject",
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::openbao-backups/team-a-prod/*",
-        "arn:aws:s3:::openbao-backups"
-      ],
-      "Condition": {
-        "StringLike": {
-          "s3:prefix": ["team-a-prod/*"]
-        }
-      }
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::my-backups/tenant-a/*"
     }
-  ]
-}
-```
+    ```
 
-Then reference in the OpenBaoCluster:
+=== ":material-account-file-text: 4. Compliance"
 
-```yaml
-spec:
-  backup:
-    schedule: "0 3 * * *"
-    target:
-      endpoint: "https://s3.amazonaws.com"
-      bucket: "openbao-backups"
-      pathPrefix: "team-a-prod/"  # Isolated prefix per tenant
-      credentialsSecretRef:
-        name: backup-credentials-team-a
-        namespace: team-a-prod
-```
+    Ensure all workloads meet your organization's security baseline.
 
-### Pod Security Standards
+    ### Pod Security Standards
+    The Operator is compatible with the **Restricted** profile.
 
-OpenBao pods created by the operator run with these security settings:
+    ```yaml
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: tenant-a
+      labels:
+        # Enforce restricted profile
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/audit: restricted
+    ```
 
-- Non-root user (UID 100, GID 1000)
-- Read-only root filesystem (secrets/config mounted read-only)
-- No privilege escalation
+    ### Audit Logging
+    Enable Kubernetes Audit Logging to track who accesses the `OpenBaoCluster` CRD and related Secrets.
 
-Ensure your cluster's Pod Security Admission is configured to allow these pods:
+---
 
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: team-a-prod
-  labels:
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/audit: restricted
-    pod-security.kubernetes.io/warn: restricted
-```
+## Production Checklist
 
-### Operator Audit Logging
+Verify these items for every tenant namespace.
 
-The Operator emits structured audit logs for critical operations, tagged with `audit=true` and `event_type` for easy filtering in log aggregation systems. Audit events are logged for:
+<div class="grid cards" markdown>
 
-- **Cluster Initialization:** `Init`, `InitCompleted`, `InitFailed`
-- **Leader Step-Down:** `StepDown`, `StepDownCompleted`, `StepDownFailed` (during upgrades)
+- :material-account-lock: **RBAC Isolation**
 
-These audit logs are distinct from regular debug/info logs and can be filtered using the `audit=true` label.
+    Ensure users are bound to `openbaocluster-editor-role` (or stricter) and cannot read `*-root-token`.
 
-### Kubernetes Audit Logging
+- :material-network-off: **Network Policy**
 
-Enable Kubernetes audit logging to monitor access to sensitive resources:
+    Verify that cross-tenant traffic is blocked (Test: try `curl` from Tenant A to Tenant B).
 
-```yaml
-# Example audit policy for OpenBao-related resources
-apiVersion: audit.k8s.io/v1
-kind: Policy
-rules:
-  # Log all access to OpenBao secrets
-  - level: RequestResponse
-    resources:
-      - group: ""
-        resources: ["secrets"]
-    namespaces: ["*"]
-    verbs: ["get", "list", "watch"]
-    omitStages:
-      - RequestReceived
-  # Log all OpenBaoCluster changes
-  - level: RequestResponse
-    resources:
-      - group: "openbao.org"
-        resources: ["openbaoclusters"]
-    verbs: ["create", "update", "patch", "delete"]
-```
+- :material-harddisk: **Storage Quota**
 
-### Etcd Encryption Warning
+    Confirm `ResourceQuota` is active to prevent storage exhaustion.
 
-The Operator sets an `EtcdEncryptionWarning` condition to remind users that security relies on underlying Kubernetes secret encryption at rest. The operator cannot verify etcd encryption status, so this condition is always set to `True` with a message reminding users to ensure etcd encryption is enabled.
+- :material-bucket: **S3 Isolation**
 
-Check the condition:
+    Verify backup credentials cannot list or read other tenants' prefixes.
 
-```sh
-kubectl -n security get openbaocluster dev-cluster -o jsonpath='{.status.conditions[?(@.type=="EtcdEncryptionWarning")]}'
-```
+- :material-clipboard-check: **Global Checklist**
 
-### Multi-Tenancy Checklist
+    See the [Production Readiness Checklist](../openbaocluster/operations/production-checklist.md) for cluster-level requirements.
 
-Before deploying OpenBao in a multi-tenant environment, verify:
+</div>
 
-- [ ] `OpenBaoTenant` CRDs are created for each tenant namespace (either via Self-Service by users or Centralized by admins)
-- [ ] Namespace-scoped RoleBindings configured for each tenant (automatically created by Provisioner)
-- [ ] Tenants cannot read `*-root-token` and `*-unseal-key` Secrets
-- [ ] NetworkPolicies isolate OpenBao clusters from each other (operator-managed NetworkPolicy excludes backup jobs; create custom NetworkPolicy for backup jobs if restrictions are needed)
-- [ ] ResourceQuotas limit tenant resource consumption
-- [ ] Each tenant has separate backup credentials with isolated bucket prefixes
-- [ ] Pod Security Admission configured appropriately (automatically applied by Provisioner)
-- [ ] Kubernetes audit logging enabled for Secret access and `OpenBaoTenant` CRD access
-- [ ] etcd encryption at rest enabled for Secrets (operator will show `EtcdEncryptionWarning` condition if status cannot be verified)
-- [ ] Consider using self-initialization to avoid root token Secrets entirely
-- [ ] Operator-managed NetworkPolicy is in place (automatically created by the Operator)
-- [ ] Container images are pinned to specific versions (not using `:latest` tags)
-- [ ] Operator audit logs are being collected and monitored (filter by `audit=true` label)
+*[PSS]: Pod Security Standards
+*[RBAC]: Role-Based Access Control
+*[CNI]: Container Network Interface

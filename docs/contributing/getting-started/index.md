@@ -1,40 +1,113 @@
 # Getting Started with Contributing
 
-Welcome! This guide helps you get started contributing to the OpenBao Operator.
+Welcome! We are excited that you are interested in contributing to the OpenBao Operator. This section will guide you through setting up your environment and making your first contribution.
 
 ## Quick Start
 
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally
-3. **Set up development environment** (see [Development Setup](development.md))
-4. **Create a feature branch** from `main`
-5. **Make your changes** following the [Coding Standards](../standards/index.md)
-6. **Run tests** to verify your changes
-7. **Submit a pull request**
+<div class="grid cards" markdown>
+
+- :material-source-fork: **1. Fork & Clone**
+
+    ---
+
+    Fork the repository on GitHub and clone it locally to start working.
+
+    ```bash
+    git clone https://github.com/YOUR-USERNAME/openbao-operator.git
+    cd openbao-operator
+    ```
+
+- :material-laptop: **2. Setup Environment**
+
+    ---
+
+    Install the necessary tools (Go, Docker, Kind) to run the operator locally.
+
+    [:material-arrow-right: Setup Guide](development.md)
+
+- :material-source-branch: **3. Create Branch**
+
+    ---
+
+    Create a new feature branch from `main` for your changes.
+
+    ```bash
+    git checkour -b feature/my-awesome-feature
+    ```
+
+- :material-test-tube: **4. Test & Submit**
+
+    ---
+
+    Run the test suite and open a Pull Request.
+
+    [:material-arrow-right: Testing Guide](../testing.md)
+
+</div>
 
 ## Prerequisites
 
-- Go 1.25+
-- Docker (for building images)
-- Kind (for E2E tests)
-- `kubectl` configured for local testing
+Ensure you have the following tools installed before starting:
 
-## Your First Contribution
+<div class="grid cards" markdown>
 
-Looking for a good first issue? Check the [GitHub Issues](https://github.com/dc-tec/openbao-operator/issues) with the `good first issue` label.
+- :simple-go: **Go 1.25+**
 
-### Types of Contributions
+    ---
+
+    The core language for the operator.
+
+- :simple-docker: **Docker**
+
+    ---
+
+    Required for building container images.
+
+- :simple-kubernetes: **Kind**
+
+    ---
+
+    (Kubernetes in Docker) for running local E2E tests.
+
+- :simple-kubernetes: **kubectl**
+
+    ---
+
+    CLI for interacting with the cluster.
+
+</div>
+
+## Ways to Contribute
+
+We welcome many types of contributions beyond just code:
 
 | Type | Description |
-|------|-------------|
-| Bug fixes | Fix issues in existing functionality |
-| Features | Add new capabilities |
-| Documentation | Improve or add documentation |
-| Tests | Add or improve test coverage |
-| Refactoring | Improve code quality without changing behavior |
+| :--- | :--- |
+| **Bug Fixes** | Fix issues found in existing functionality. Check for the `bug` label. |
+| **Features** | Add new capabilities to the operator. Discuss large changes in an Issue first. |
+| **Documentation** | Improve guides, fix typos, or add examples to help other users. |
+| **Tests** | Improve test coverage or add new E2E scenarios. |
+| **Refactoring** | Improve code quality and maintainability without changing behavior. |
+
+!!! tip "First Time?"
+    Look for issues labeled with `good first issue` on our [GitHub Issues](https://github.com/dc-tec/openbao-operator/issues) page.
 
 ## Next Steps
 
-- [Development Setup](development.md) — Set up your local environment
-- [Coding Standards](../standards/index.md) — Code style and patterns
-- [Testing](../testing.md) — How to write and run tests
+<div class="grid cards" markdown>
+
+- **Development Setup**
+
+    ---
+    Step-by-step guide to configuring your local dev environment.
+
+    [:material-arrow-right: Go to Setup](development.md)
+
+- **Coding Standards**
+
+    ---
+    Learn about our code style, linting rules, and conventions.
+
+    [:material-arrow-right: View Standards](../standards/index.md)
+
+</div>

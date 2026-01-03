@@ -1,29 +1,53 @@
 # Infrastructure Security
 
-Platform-level security controls for the OpenBao Operator.
-
-## Topics
-
-| Topic | Description |
-|-------|-------------|
-| [RBAC](rbac.md) | Role-based access control architecture |
-| [Admission Policies](admission-policies.md) | ValidatingAdmissionPolicy configuration |
-| [Network Security](network-security.md) | NetworkPolicies and egress controls |
+!!! abstract "Platform Controls"
+    Infrastructure security focuses on the Kubernetes platform layer: protecting the Operator's control plane, isolating tenant namespaces, and enforcing policy compliance before workloads even start.
 
 ## Overview
 
-Infrastructure security covers the Kubernetes platform controls that protect the operator and its managed workloads:
+The OpenBao Operator leverages native Kubernetes security primitives to create a **Zero Trust** environment:
 
-1. **RBAC** — Zero-trust permission model with Provisioner/Controller split
-2. **Admission Policies** — Kubernetes-native policy enforcement via ValidatingAdmissionPolicy
-3. **Network Security** — Default-deny ingress policies and controlled egress
+1. **RBAC:** A precise, split-controller model that grants permissions only where needed (Provisioning vs. Management).
+2. **Admission Policies:** Guardrails that prevent insecure configurations (like disabling TLS) from being applied.
+3. **Network Security:** Isolation layers that restrict traffic flow between tenants and the internet.
+
+## Topics
+
+<div class="grid cards" markdown>
+
+- :material-account-lock: **RBAC Architecture**
+
+    ---
+
+    Deep dive into the **Provisioner** and **Controller** role separation and the "Blind Write" pattern.
+
+    [:material-arrow-right: Explore RBAC](rbac.md)
+
+- :material-policy: **Admission Policies**
+
+    ---
+
+    Using `ValidatingAdmissionPolicy` (CEL) to enforce security standards without webhooks.
+
+    [:material-arrow-right: View Policies](admission-policies.md)
+
+- :material-lan-check: **Network Security**
+
+    ---
+
+    Default-deny `NetworkPolicies` and controlling Egress traffic for backups and upgrades.
+
+    [:material-arrow-right: Network Controls](network-security.md)
+
+</div>
 
 ## Prerequisites
 
-- Kubernetes v1.33+ (for ValidatingAdmissionPolicy GA)
-- Network plugin supporting NetworkPolicy (Calico, Cilium, etc.)
+!!! info "Cluster Requirements"
+    -   **Kubernetes v1.30+**: Required for `ValidatingAdmissionPolicy` (GA in 1.30).
+    -   **CNI Plugin**: A CNI that enforces `NetworkPolicy` (e.g., Cilium, Calico, Antrea) is required for isolation features to work.
 
 ## See Also
 
-- [Fundamentals](../fundamentals/index.md) — Threat model and security profiles
-- [Workload Security](../workload/index.md) — Pod-level security controls
+- [:material-shield-check: Security Fundamentals](../fundamentals/index.md)
+- [:material-docker: Workload Security](../workload/index.md)

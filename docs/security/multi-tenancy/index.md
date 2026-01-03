@@ -1,32 +1,53 @@
 # Multi-Tenancy Security
 
-Tenant isolation and security boundaries for multi-tenant deployments.
+!!! abstract "Shared Platform, Isolated Tenants"
+    OpenBao Operator is designed for **Hard Multi-Tenancy**. It allows multiple independent teams to share a single Kubernetes cluster and Operator installation while maintaining strict cryptographic, network, and identity isolation.
 
-## Topics
+## Security Pillars
 
-| Topic | Description |
-|-------|-------------|
-| [Tenant Isolation](tenant-isolation.md) | Namespace isolation, RBAC boundaries, resource quotas |
+<div class="grid cards" markdown>
 
-## Overview
+- :material-domain: **Tenant Isolation**
 
-The OpenBao Operator supports multi-tenant deployments where multiple teams share a single operator installation:
+    ---
 
-1. **Namespace Isolation** — Each tenant operates in dedicated namespaces
-2. **RBAC Boundaries** — Controller permissions are scoped per-tenant by the Provisioner
-3. **Network Isolation** — Default NetworkPolicies prevent cross-tenant traffic
+    How the "Provisioner" controller enforces strict namespace boundaries and prevents cross-tenant access.
 
-## Provisioner/Controller Split
+    [:material-arrow-right: Isolation Model](tenant-isolation.md)
 
-The multi-tenant security model relies on the separation of:
+- :material-account-key: **RBAC Boundaries**
 
-- **Provisioner** — Cluster-scoped, grants RBAC and applies namespace security labels (it does not create namespaces)
-- **Controller** — Namespace-scoped, operates only within granted permissions
+    ---
 
-This ensures no single component has both the ability to expand its own permissions AND access tenant secrets.
+    The "Zero Trust" split-controller architecture that ensures no single credential has total cluster control.
+
+    [:material-arrow-right: RBAC Architecture](../infrastructure/rbac.md)
+
+- :material-lan-check: **Network Isolation**
+
+    ---
+
+    Default Deny NetworkPolicies that prevent tenants from discovering or accessing each other's pods.
+
+    [:material-arrow-right: Network Security](../infrastructure/network-security.md)
+
+</div>
+
+## The Split-Controller Model
+
+To achieve secure multi-tenancy, the Operator splits responsibilities between two distinct controllers:
+
+1. **The Provisioner:**
+    - **Scope:** Cluster-wide.
+    - **Power:** Can create Roles/RoleBindings but **cannot** read Secrets or manage Workloads.
+    - **Role:** The "Landlord" who hands out keys but can't enter apartments.
+
+2. **The Controller:**
+    - **Scope:** Namespace-restricted (per tenant).
+    - **Power:** Can manage Workloads/Secrets but **only** in namespaces where the Provisioner issued a key.
+    - **Role:** The "Tenant" who manages their own apartment.
 
 ## See Also
 
-- [RBAC Architecture](../infrastructure/rbac.md) — Detailed permission model
-- [User Guide: Multi-Tenancy](../../user-guide/openbaotenant/multi-tenancy.md) — Configuration guide
-- [User Guide: Tenant Onboarding](../../user-guide/openbaotenant/onboarding.md) — Provisioner setup
+- [:material-account-multiple-plus: User Guide: Multi-Tenancy](../../user-guide/openbaotenant/multi-tenancy.md)
+- [:material-door-open: User Guide: Onboarding](../../user-guide/openbaotenant/onboarding.md)

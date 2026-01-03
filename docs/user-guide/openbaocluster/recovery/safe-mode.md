@@ -1,50 +1,84 @@
 # Break Glass / Safe Mode
 
-The operator can enter **Break Glass / Safe Mode** when it detects a quorum-risk failure where continuing automation could make the situation worse (for example, a failed blue/green rollback consensus repair).
+!!! failure "Critical State: Automation Halted"
+    The Operator has entered **Safe Mode** because it detected a high-risk failure (e.g., loss of quorum during an upgrade). **All automation is paused** to prevent data loss.
 
-When break glass is active:
+## Overview
 
-- The operator halts quorum-risk automation for the affected cluster (upgrade/rollback state machines).
-- The cluster reports recovery guidance in `status.breakGlass`.
-- You must explicitly acknowledge the situation to let the operator resume automation.
+Safe Mode (also known as "Break Glass") is a safety mechanism. When the Operator encounters a situation where continuing an automated workflow (like a rolling upgrade or rollback) could compromise data integrity or availability, it stops and waits for human operator intervention.
 
-## How to Detect Break Glass
+Common triggers:
 
-1. Check the cluster conditions:
+* Blue/Green rollback failure (risk of split-brain).
+* Quorum loss during critical reconfiguration.
 
-   ```sh
-   kubectl -n <ns> describe openbaocluster <name>
-   ```
+When active:
 
-2. Inspect the break glass status block:
+1. **Automation Stops**: The Operator stops reconciling the specific `OpenBaoCluster`.
+2. **Status Updates**: The `status.breakGlass` field is populated with diagnostic info.
+3. **Manual Ack Required**: You must explicitly "break the glass" to resume automation.
 
-   ```sh
-   kubectl -n <ns> get openbaocluster <name> -o jsonpath='{.status.breakGlass}'
-   ```
+---
 
-Key fields:
+## 1. Inspect the Situation
 
-- `status.breakGlass.active`: `true` when safe mode is active.
-- `status.breakGlass.reason`: typed reason for safe mode.
-- `status.breakGlass.message`: short summary.
-- `status.breakGlass.steps`: deterministic recovery steps and commands.
-- `status.breakGlass.nonce`: the token required for acknowledgement.
+Check if your cluster is in Safe Mode by inspecting its status.
 
-## How to Acknowledge and Resume
+```sh
+kubectl -n security get openbaocluster prod-cluster -o jsonpath='{.status.breakGlass}' | jq
+```
 
-1. Follow the recovery steps in `status.breakGlass.steps`.
-2. Patch `spec.breakGlassAck` to match `status.breakGlass.nonce`:
+**Example Output:**
 
-   ```sh
-   kubectl -n <ns> patch openbaocluster <name> --type merge \
-     -p '{"spec":{"breakGlassAck":"<nonce>"}}'
-   ```
+```json
+{
+  "active": true,
+  "reason": "QuorumRisk",
+  "message": "Detected split-brain potential during rollback. Manual intervention required.",
+  "nonce": "abc-123-def-456",
+  "steps": "1. Verify network connectivity. 2. Restore quorum manually. 3. Acknowledge."
+}
+```
 
-If the issue is still present, the operator may re-enter break glass (with a new nonce).
+## 2. Fix the Underlying Issue
+
+Follow the specific guidance provided in the `message` and `steps` fields.
+
+* **If Quorum is lost:** See [Recovering from No Leader](no-leader.md).
+* **If Sealed:** See [Recovering from Sealed Cluster](sealed-cluster.md).
+* **If Network Partitioned:** Verify CNI and network policies.
+
+## 3. Acknowledge and Resume
+
+Once you have performed the necessary manual repairs, you must tell the Operator it is safe to proceed. This is done by acknowledging the unique **nonce**.
+
+!!! warning "Action Required"
+    Copy the `nonce` from step 1 and use it in the command below.
+
+```sh
+# Replace 'abc-123-def-456' with your actual nonce
+kubectl -n security patch openbaocluster prod-cluster --type merge \
+  -p '{"spec":{"breakGlassAck":"abc-123-def-456"}}'
+```
+
+If the issue persists, the Operator may re-enter Safe Mode with a **new nonce**, requiring you to repeat the diagnosis.
+
+---
 
 ## Related Runbooks
 
-- [Recovering From No Leader / No Quorum](no-leader.md)
-- [Recovering From a Sealed Cluster](sealed-cluster.md)
-- [Recovering From a Failed Blue/Green Rollback](failed-rollback.md)
-- [Restore After a Partial Upgrade](../../openbaorestore/recovery-restore-after-upgrade.md)
+<div class="grid cards" markdown>
+
+* :material-alert-decagram: **[No Leader / No Quorum](no-leader.md)**
+
+    Recovery steps when the Raft cluster loses consensus.
+
+* :material-key-chain-variant: **[Sealed Cluster](sealed-cluster.md)**
+
+    How to unseal a cluster manually or diagnose auto-unseal failures.
+
+* :material-restore: **[Failed Rollback](failed-rollback.md)**
+
+    Specific steps for handling a failed Blue/Green rollback.
+
+</div>

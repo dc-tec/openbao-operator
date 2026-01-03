@@ -1,170 +1,143 @@
 # Kubernetes Operator Patterns
 
-Patterns and conventions specific to Kubernetes operator development.
+This guide outlines the core design patterns used in the OpenBao Operator. Understanding these is essential for writing robust, "Kubernetes-native" controllers.
 
-## Idempotency
+## 1. The Reconcile Loop
 
-The `Reconcile` function may be called multiple times for the same state.
+Kubernetes controllers are **Level-Triggered**, not Edge-Triggered. We reconcile the *current state* of the world with the *desired state* defined in the Custom Resource (CR).
 
-### Key Principles
+```mermaid
+graph TD
+    Trigger[Trigger: Event or Interval] --> Fetch[Fetch CR]
+    Fetch --> Check{Exists?}
+    Check -- No --> Stop([Stop: Deleted])
+    Check -- Yes --> Child[Fetch Child Resources]
+    Child --> Diff{Diff State}
+    Diff -- "Drift Detected" --> Act[Create / Update]
+    Diff -- "Synced" --> Status[Update Status]
+    Act --> Status
+    Status --> End([End: Requeue if needed])
 
-- **Do not** assume `Reconcile` is only called on changes
-- **Check before acting:** Before creating a resource, check if it already exists
-- **Update if needed:** If a resource exists, check if it needs updating
-- **Deterministic naming:** Resource names must be deterministic based on the parent CR
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    
+    class Act,Status write;
+    class Trigger,Fetch,Child,Diff read;
+```
 
-```go
-// Resource names are deterministic
-secretName := fmt.Sprintf("%s-tls", cluster.Name)
+## 2. Idempotency
 
-// Check before creating
-var existing corev1.Secret
-if err := r.Client.Get(ctx, types.NamespacedName{
-    Name:      secretName,
-    Namespace: cluster.Namespace,
-}, &existing); err != nil {
-    if apierrors.IsNotFound(err) {
-        // Create new resource
-        return r.createSecret(ctx, cluster)
+The `Reconcile` function may be called 10 times in a row for the same change. Your logic must be **idempotent**: it should produce the same result regardless of how many times it runs.
+
+### The "Fetch-Check-Act" Pattern
+
+Always check if a resource exists before creating it. Check if it matches spec before updating it.
+
+=== ":material-check: Good Pattern"
+    ```go
+    // 1. Define Expected Object
+    expected := &corev1.Secret{
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      cluster.Name + "-tls",
+            Namespace: cluster.Namespace,
+        },
+        Data: derivedData,
     }
-    return err
-}
-// Resource exists - check if update needed
-```
 
-## Context Usage
+    // 2. Fetch Existing
+    existing := &corev1.Secret{}
+    err := r.Client.Get(ctx, client.ObjectKeyFromObject(expected), existing)
 
-- **Always pass `ctx context.Context`** as the first argument to functions performing I/O
-- **Respect context cancellation** - do not use `time.Sleep()`
+    // 3. Act based on state
+    if apierrors.IsNotFound(err) {
+        // DOES NOT EXIST -> CREATE
+        return r.Client.Create(ctx, expected)
+    } else if err != nil {
+        return err
+    }
 
-```go
-// Bad
-time.Sleep(5 * time.Second)
+    // 4. Update if drifted (simplified)
+    if !reflect.DeepEqual(existing.Data, expected.Data) {
+        existing.Data = expected.Data
+        return r.Client.Update(ctx, existing)
+    }
+    ```
 
-// Good
-select {
-case <-ctx.Done():
-    return ctx.Err()
-case <-time.After(5 * time.Second):
-}
-```
+=== ":material-close: Bad Pattern"
+    ```go
+    // BLIND CREATE - Will fail on 2nd run
+    secret := &corev1.Secret{...}
+    if err := r.Client.Create(ctx, secret); err != nil {
+        return err
+    }
+    ```
 
-For blocking operations, use controller-runtime's rate limiting instead of manual sleeps.
-
-## Logging
-
-Use the structured logger provided by controller-runtime:
-
-```go
-log := log.FromContext(ctx)
-
-// Good - structured with key-value pairs
-log.Info("Reconciling OpenBaoCluster",
-    "namespace", req.Namespace,
-    "name", req.Name,
-    "phase", cluster.Status.Phase,
-)
-
-// Log at appropriate levels
-log.V(1).Info("Debug: checking TLS certificates")  // Debug level
-log.Error(err, "Failed to update status")          // Error level
-```
-
-### Standard Log Fields
-
-Use consistent field names:
-
-| Field | Description |
-|-------|-------------|
-| `cluster_namespace` | Namespace of the OpenBaoCluster |
-| `cluster_name` | Name of the OpenBaoCluster |
-| `controller` | Controller name |
-| `reconcile_id` | Unique reconciliation ID |
-
-### Never Log Sensitive Data
-
-**NEVER** log secrets, unseal keys, tokens, or other sensitive material:
-
-```go
-// NEVER DO THIS
-log.Info("Created secret", "data", secret.Data)
-
-// Instead, log metadata only
-log.Info("Created secret", "name", secret.Name, "type", secret.Type)
-```
-
-## Spec vs Status
-
-- **Spec:** The desired state (user input). Treat as **read-only** in reconcilers.
-- **Status:** The observed state. Update via `r.Status().Update()` or `Patch`.
-
-```go
-// Update Spec or Metadata (rare)
-if err := r.Update(ctx, cluster); err != nil {
-    return ctrl.Result{}, err
-}
-
-// Update Status (common)
-cluster.Status.Phase = v1alpha1.PhaseRunning
-if err := r.Status().Update(ctx, cluster); err != nil {
-    return ctrl.Result{}, err
-}
-```
-
-## RBAC (Zero Trust Model)
-
-**We do NOT use standard Kubebuilder RBAC annotations** for the OpenBaoCluster controller.
-
-### Why?
-
-The operator follows a Zero Trust model:
-
-- Controller does **not** have cluster-wide permissions
-- RBAC is dynamically granted per-namespace by the Provisioner
-- This prevents privilege escalation
-
-### What This Means
-
-- Do **not** add `// +kubebuilder:rbac` annotations to `internal/controller/openbaocluster/`
-- New permissions must be added to `internal/provisioner/rbac.go`
-- Update `internal/provisioner/rbac_test.go` to lock the expected permissions
-
-## Concurrency
+## 3. Concurrency & Context
 
 ### No Unmanaged Goroutines
 
-Do not spawn unmanaged goroutines in the Reconcile loop. The controller-runtime manager handles concurrency:
+The Controller Runtime manages concurrency for you. Do **not** spawn goroutines inside a Reconciler.
 
-```go
-// Bad - unmanaged goroutine
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-    go r.doSomething()  // DON'T DO THIS
-}
-
-// Good - let controller-runtime handle concurrency
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-    if err := r.doSomething(ctx); err != nil {
+=== ":material-check: Good Pattern"
+    ```go
+    if err := r.heavyOperation(ctx); err != nil {
         return ctrl.Result{}, err
     }
-    return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-}
-```
+    ```
 
-### No Shared Request State
+=== ":material-close: Bad Pattern"
+    ```go
+    go func() {
+        // Race conditions, lost errors, potential crash
+        r.heavyOperation(context.Background())
+    }()
+    ```
 
-The Reconciler struct is shared across requests. Do not store request-scoped state in struct fields:
+### No Blocking
 
-```go
-// Bad - stores state in reconciler
-type Reconciler struct {
-    CurrentPods []corev1.Pod  // DON'T DO THIS
-}
+Never block the reconcile thread with `time.Sleep`. This starves other resources from being reconciled.
 
-// Good - use local variables
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-    var pods corev1.PodList  // Local to this reconciliation
-    if err := r.Client.List(ctx, &pods, ...); err != nil {
-        return ctrl.Result{}, err
-    }
-}
-```
+=== ":material-check: Good Pattern"
+    ```go
+    // Re-run this loop in 10 seconds
+    return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+    ```
+
+=== ":material-close: Bad Pattern"
+    ```go
+    // Blocks the thread completely
+    time.Sleep(10 * time.Second)
+    ```
+
+## 4. Structured Logging
+
+Use the context-aware logger. It automatically attaches `reconcile_id` and other metadata.
+
+### Standard Fields
+
+| Field | Description |
+| :--- | :--- |
+| `cluster_namespace` | Namespace of the target CR |
+| `cluster_name` | Name of the target CR |
+| `phase` | Current status phase of the operation |
+
+### Usage
+
+=== ":material-check: Good Pattern"
+    ```go
+    log := log.FromContext(ctx)
+
+    log.Info("Reconciling connection", 
+        "cluster_name", req.Name,
+        "mode", "production",
+    )
+    ```
+
+=== ":material-close: Bad Pattern"
+    ```go
+    // Losing context
+    fmt.Printf("Reconciling %s\n", req.Name)
+    ```
+
+!!! danger "Security"
+    **NEVER** log secrets, passwords, token content, or private keys.

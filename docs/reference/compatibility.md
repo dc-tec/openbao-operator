@@ -1,47 +1,36 @@
-# Compatibility Matrix: OpenBao Operator
+# Compatibility Matrix
 
-This document defines the supported Kubernetes and OpenBao versions for this
-Operator. It is intended to be kept up to date for every tagged release and
-referenced by testing and upgrade documentation.
+This document defines the supported Kubernetes and OpenBao versions for the OpenBao Operator.
+
+!!! info "Support Policy"
+    We aim to support the **latest 3 minor versions** of Kubernetes and the **latest major** version of OpenBao.
 
 ## 1. Kubernetes Versions
 
-The table below lists the Kubernetes minor versions that are explicitly
-validated in CI for this operator. The Operator is intended to support
-**Kubernetes v1.33 and newer**; older versions are not supported.
+We run full E2E tests against these versions.
 
-| Kubernetes Version | Status     | Notes                                |
-|--------------------|------------|--------------------------------------|
-| v1.33              | Supported  | Primary CI coverage                  |
-| v1.34              | Supported  | Primary CI coverage                  |
-| v1.35              | Supported  | Primary CI coverage                  |
+| Version | Status | Notes |
+| :--- | :--- | :--- |
+| **v1.35** | <span style="color: #22c55e">**Supported**</span> | Primary CI target |
+| **v1.34** | <span style="color: #22c55e">**Supported**</span> | Verified in Nightly |
+| **v1.33** | <span style="color: #22c55e">**Supported**</span> | Minimum supported version |
+| **v1.32** | <span style="color: #ef4444">**End of Life**</span> | No longer tested |
 
 ## 2. OpenBao Versions
 
-The table below lists the OpenBao versions that have been tested with this
-operator release.
+| Version | Status | Notes |
+| :--- | :--- | :--- |
+| **2.4.x** | <span style="color: #22c55e">**Supported**</span> | Primary target |
+| **2.3.x** | <span style="color: #f59e0b">**Deprecated**</span> | Best effort support |
 
-| OpenBao Version | Status     | Notes                           |
-|-----------------|-----------|---------------------------------|
-| 2.4.x           | Supported | Primary target for this release |
+## 3. CI Validation Matrix
 
-CI expectations for this range:
+We treat our CI configuration as the source of truth for compatibility.
 
-- PR CI validates operator-generated HCL against upstream OpenBao config parsing for **min supported + latest supported** (currently `2.4.0` and `2.4.4`).
-- Nightly CI validates the same check across a broader 2.4.x patch set.
+| Workflow | Scope | Versions Tested |
+| :--- | :--- | :--- |
+| **PR Gate** | Logic & Config | K8s 1.35 + OpenBao 2.4.0 |
+| **Nightly** | Full Coverage | K8s 1.33, 1.34, 1.35 + OpenBao 2.4.x |
 
-> **Note:** Platform teams should validate new Kubernetes or OpenBao versions
-> in a non-production environment before rolling them out widely, even if they
-> fall within a “Supported” range.
-
-## 3. Testing Expectations
-
-- CI SHOULD run at least:
-  - Unit/integration tests on one Kubernetes version from the table above.
-  - E2E tests (kind + OpenBao) on at least the primary Kubernetes version and
-    OpenBao 2.4.x.
-- When adding support for a new Kubernetes minor:
-  - Add it to this matrix.
-  - Ensure E2E tests pass on that version.
-- When deprecating a Kubernetes minor:
-  - Move its status to “Deprecated” and update user-facing docs accordingly.
+!!! warning "Production Upgrade"
+    Always validate new Kubernetes or OpenBao versions in a staging environment before upgrading production, even if they are listed as "Supported".

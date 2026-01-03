@@ -1,48 +1,63 @@
 # Workload Security
 
-The operator ensures that OpenBao pods run with restricted privileges.
+!!! abstract "Core Concept"
+    The Operator ensures that OpenBao pods run with **Restricted Privileges** by default. This minimizes the blast radius of a container escape and enforces isolation at the runtime level.
 
 ## Pod Security Context
 
-The `StatefulSet` creates pods with a hardened security context:
+The `StatefulSet` creates pods with a hardened security context compliant with the **Restricted** Pod Security Standard.
 
 | Setting | Value | Purpose |
-| ------- | ----- | ------- |
-| Run As User/Group | 1000 | Non-root execution |
-| Read-Only Root FS | `true` | Prevents filesystem tampering |
-| Capabilities | `ALL` dropped | Minimizes privilege escalation risks |
-| Seccomp Profile | `RuntimeDefault` | Restricts syscalls |
-| Allow Privilege Escalation | `false` | Prevents privilege escalation |
+| :--- | :--- | :--- |
+| **Run As User/Group** | `1000` | Ensures non-root execution. |
+| **Read-Only Root FS** | `true` | Prevents filesystem tampering and immutable infrastructure violations. |
+| **Capabilities** | `ALL` dropped | Minimizes privilege escalation risks. |
+| **Seccomp Profile** | `RuntimeDefault` | Restricts available syscalls to the kernel. |
+| **Privilege Escalation** | `false` | Prevents setuid binaries from gaining root. |
 
-Configuration and data are written to specific mounted volumes, not the root filesystem.
+!!! info "Volume Mounts"
+    Since the root filesystem is read-only, all mutable data (logs, storage, tmp) is written to explicit, size-limited volume mounts.
+
+## Resource Guardrails
+
+The Operator places default resource limits on ephemeral jobs to protect the node from "noisy neighbor" resource exhaustion.
+
+!!! tip "Default Job Limits"
+    These defaults ensure that a stuck backup job or an aggressive snapshot process doesn't starve the actual OpenBao pods (or other tenants) on the same node.
+
+| Job Type | Resource | Request | Limit |
+| :--- | :--- | :--- | :--- |
+| **Backup / Restore** | CPU | `100m` | `500m` |
+| | Memory | `128Mi` | `512Mi` |
 
 ## ServiceAccount Token Handling
 
-The Operator disables Pod-level ServiceAccount token automounting and instead mounts a short-lived projected token only into the OpenBao container. This reduces token exposure while still enabling:
+The Operator minimizes the attack surface of the Kubernetes JWT token:
 
-- Kubernetes auto-join discovery (`retry_join` via `discover-k8s`).
-- Kubernetes service registration (OpenBao-managed Pod labels such as `openbao-active`, `openbao-initialized`, and `openbao-sealed`).
+1. **No Automounting:** `automountServiceAccountToken: false` is set on the Pod spec.
+2. **Projected Volume:** A short-lived, audience-bound token is projected *only* into the OpenBao container (not init containers).
+
+**Token Usage:**
+
+- **Peering:** Used by `discover-k8s` to find other Raft peers.
+- **Registration:** Used to update Pod labels (`openbao-active`, `openbao-sealed`) for service handling.
 
 ## Init Containers
 
 An init container (`bao-config-init`) is used to render the OpenBao configuration (`config.hcl`) at runtime.
 
-- **Purpose:** It injects dynamic environment variables (like Pod IP and Hostname) into the config template securely, without requiring the main container to run a shell or template engine.
-- **Security:** This container runs with the same non-root restrictions as the main container.
+- **Purpose:** Injects dynamic environment variables (Pod IP, Hostname) into the config template securely.
+- **Security:** Runs with the *exact same* non-root restrictions (`1000:1000`) as the main container. It has **no** network access.
 
-## Pod Security Standards
+## Pod Security Standards (PSS)
 
-The Provisioner automatically applies Pod Security Standards (PSS) labels to tenant namespaces:
+The Provisioner automatically applies PSS labels to any Tenant namespace it creates:
 
-| Label | Value |
-| ----- | ----- |
-| `pod-security.kubernetes.io/enforce` | `restricted` |
-| `pod-security.kubernetes.io/audit` | `restricted` |
-| `pod-security.kubernetes.io/warn` | `restricted` |
+| Label | Value | Enforcement |
+| :--- | :--- | :--- |
+| `pod-security.kubernetes.io/enforce` | `restricted` | **Hard Block** |
+| `pod-security.kubernetes.io/audit` | `restricted` | **Audit Log** |
+| `pod-security.kubernetes.io/warn` | `restricted` | **User Warning** |
 
-**Security Benefits:**
-
-- Enforces Restricted PSS compliance for all workloads in tenant namespaces.
-- Prevents deployment of workloads that do not meet security requirements.
-- Provides consistent security posture across all tenant namespaces.
-- Aligns with Kubernetes security best practices.
+**Impact:**
+Any workload deployed into a Tenant namespace (by the user or operator) MUST meet these strict standards or the API server will reject it. This prevents users from accidentally deploying insecure "sidecar" workloads alongside OpenBao.

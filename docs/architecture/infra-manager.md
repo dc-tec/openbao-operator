@@ -1,70 +1,37 @@
 # InfrastructureManager (Config & StatefulSet)
 
-**Responsibility:** Render configuration and maintain the StatefulSet.
+**Responsibility:** The "Heart" of the operator. It translates the high-level `OpenBaoCluster` spec into a running `StatefulSet` with a valid `config.hcl`.
 
-## Configuration Strategy
+## 1. Reconciliation Pipeline
 
-- We do not use a static ConfigMap. We generate it dynamically from `OpenBaoCluster.spec` and cluster topology (service name/namespace/ports).
-- **Injection:** We explicitly inject the `listener "tcp"` block:
-  - For `OperatorManaged` and `External` modes: Points to mounted TLS Secrets at `/etc/bao/tls`.
-  - For `ACME` mode: Includes ACME parameters (`tls_acme_ca_directory`, `tls_acme_domains`, etc.) and no file paths.
+The Manager follows a strict **Render-Then-Apply** pipeline to ensure configuration consistency.
 
-## Discovery Strategy
+```mermaid
+graph TD
+    Spec[OpenBaoCluster Spec] -->|Render| Config[config.hcl]
+    Spec -->|Render| Resources[StatefulSet / Services]
+    
+    Config -->|Hash| Checksum{Config Match?}
+    Resources -->|Hash| ResChecksum{Resource Match?}
+    
+    Checksum -- No --> UpdateCM[Update ConfigMap]
+    ResChecksum -- No --> UpdateSS[Update StatefulSet]
+    
+    UpdateCM --> Rollout[Rolling Update]
+    UpdateSS --> Rollout
+    
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    
+    class Spec read;
+    class Config,Resources process;
+    class UpdateCM,UpdateSS,Rollout write;
+```
 
-- The operator uses Kubernetes go-discover based `retry_join` with `auto_join = "provider=k8s namespace=<ns> label_selector=\"openbao.org/cluster=<cluster-name>\""` so pods can join dynamically based on labels rather than a static peer list.
-- For blue/green upgrades, the operator can narrow the `label_selector` to include the active revision label so that joining pods discover the correct peer set.
-- `leader_tls_servername` is set to a stable per-cluster name (`openbao-cluster-<cluster-name>.local`) to support mTLS verification.
+## 2. Configuration Generation
 
-## Auto-Unseal Integration
-
-### Static Seal (Default)
-
-If `spec.unseal` is omitted or `spec.unseal.type` is `"static"`:
-
-- On first reconcile, checks for the existence of `Secret/<cluster>-unseal-key` (per-cluster name).
-- If missing, generates 32 cryptographically secure random bytes and stores them as the unseal key in the Secret.
-- Mounts this Secret into the StatefulSet PodSpec at `/etc/bao/unseal/key`.
-- Injects a `seal "static"` stanza into `config.hcl`.
-
-### External KMS Seal
-
-If `spec.unseal.type` is set to `"awskms"`, `"gcpckms"`, `"azurekeyvault"`, `"transit"`, `"kmip"`, `"ocikms"`, or `"pkcs11"`:
-
-- Does NOT create the `<cluster>-unseal-key` Secret.
-- Renders a `seal "<type>"` block with structured configuration from the corresponding seal config (e.g., `spec.unseal.transit`, `spec.unseal.awskms`, etc.).
-- If `spec.unseal.credentialsSecretRef` is provided, mounts the credentials Secret at `/etc/bao/seal-creds`.
-- For GCP Cloud KMS (`gcpckms`), sets `GOOGLE_APPLICATION_CREDENTIALS` environment variable pointing to the mounted credentials file.
-
-## Image Verification (Supply Chain Security)
-
-If `spec.imageVerification.enabled` is `true`, the operator verifies the container image signature using Cosign before creating or updating the StatefulSet.
-
-- The verification uses the public key provided in `spec.imageVerification.publicKey`.
-- Verification results are cached in-memory to avoid redundant network calls for the same image digest.
-- When verification succeeds, the operator pins `spec.image` to the verified digest and (when configured) also pins `spec.initContainer.image` to the verified digest to prevent TOCTOU attacks.
-
-**Failure Policy:**
-
-| Policy | Behavior |
-| ------ | -------- |
-| `Block` (default) | Blocks reconciliation of the StatefulSet and records an image verification failure condition |
-| `Warn` | Logs an error and emits a Kubernetes Event but proceeds with StatefulSet updates |
-
-## Reconciliation Semantics
-
-- Watches `OpenBaoCluster` only (no child `Owns()` watches) due to the least-privilege RBAC model.
-- Ensures the rendered `config.hcl` and StatefulSet template are consistent with Spec (including multi-tenant naming conventions).
-- Performs image signature verification before StatefulSet creation/updates when `spec.imageVerification.enabled` is `true`.
-- Automatically creates NetworkPolicies to enforce cluster isolation.
-- Uses controller-runtime patch semantics to apply only necessary changes.
-- Surfaces readiness/errors via the workload status subtree; `status.conditions` is aggregated by the status controller.
-- **OwnerReferences:** All created resources have `OwnerReferences` pointing to the parent `OpenBaoCluster`, enabling automatic garbage collection when the cluster is deleted.
-
-## Configuration Generation
-
-### The `config.hcl` Template
-
-The Operator generates the OpenBao configuration file dynamically:
+We do not use a static ConfigMap. We generate it dynamically from the Spec.
 
 ```hcl
 ui = true
@@ -72,15 +39,10 @@ ui = true
 listener "tcp" {
   address = "0.0.0.0:8200"
   cluster_address = "0.0.0.0:8201"
-  # Operator injects paths to the Secret it manages
-  tls_cert_file = "/etc/bao/tls/tls.crt"
+  
+  # Injected: Points to Secret mounts
+  tls_cert_file = "/etc/bao/tls/tls.crt" # (1)!
   tls_key_file  = "/etc/bao/tls/tls.key"
-  tls_client_ca_file = "/etc/bao/tls/ca.crt"
-}
-
-seal "static" {
-  current_key    = "file:///etc/bao/unseal/key"
-  current_key_id = "operator-generated-v1"
 }
 
 storage "raft" {
@@ -88,21 +50,81 @@ storage "raft" {
   node_id = "${HOSTNAME}"
 
   retry_join {
-    auto_join               = "provider=k8s namespace=security label_selector=\"openbao.org/cluster=prod-cluster\""
-    leader_tls_servername   = "openbao-cluster-prod-cluster.local"
-    leader_ca_cert_file     = "/etc/bao/tls/ca.crt"
-    leader_client_cert_file = "/etc/bao/tls/tls.crt"
-    leader_client_key_file  = "/etc/bao/tls/tls.key"
+    # Injected: Discovery via Kubernetes Labels
+    auto_join = "provider=k8s label_selector=\"openbao.org/cluster=prod-cluster\"" # (2)!
+    leader_tls_servername = "openbao-cluster-prod-cluster.local"
   }
 }
 
-service_registration "kubernetes" {}
+service_registration "kubernetes" {} # (3)!
 ```
 
-### Configuration Ownership and Merging
+1. Paths are automatically adjusted based on `spec.tls.mode` (e.g., ACME mode removes these).
+2. Enables automatic peer discovery without manual `join` commands.
+3. Ensures Pods register themselves as endpoints.
 
-- The Operator owns the critical `listener "tcp"` and `storage "raft"` stanzas to guarantee mTLS and Raft stability.
-- User-tunable configuration is expressed via typed fields:
-  - `spec.configuration` (logging, cache flags, plugin behavior, etc.)
-  - `spec.audit`, `spec.plugins`, `spec.telemetry` (rendered into dedicated HCL stanzas)
-- Operator-owned fields are rendered deterministically and are not user-overridable (for example: listener address/cluster_address, raft path, retry_join, and seal when using static unseal).
+## 3. Auto-Unseal Integration
+
+The Manager automatically configures the `seal` stanza based on `spec.unseal`.
+
+=== "Static (Default)"
+
+    If `spec.unseal` is omitted, the operator manages the unseal keys.
+
+    1.  **Generate:** Creates 32 random bytes.
+    2.  **Store:** Saves to `Secret/<cluster>-unseal-key`.
+    3.  **Mount:** Mounts at `/etc/bao/unseal/key`.
+    4.  **Config:**
+        ```hcl
+        seal "static" {
+          current_key    = "file:///etc/bao/unseal/key"
+          current_key_id = "operator-generated-v1"
+        }
+        ```
+
+=== "External KMS"
+
+    If `spec.unseal.type` is set (e.g., `awskms`, `gcpckms`), the operator delegates to the provider.
+
+    1.  **No Secret:** Does NOT create an unseal key Secret.
+    2.  **Mount Creds:** Mounts `spec.unseal.credentialsSecretRef` to `/etc/bao/seal-creds`.
+    3.  **Config:** Renders the specific seal block:
+        ```hcl
+        seal "awskms" {
+          region     = "us-east-1"
+          kms_key_id = "alias/my-key"
+        }
+        ```
+
+## 4. Image Verification (Cosign)
+
+When `spec.imageVerification.enabled` is `true`, we enforce supply chain security.
+
+```mermaid
+sequenceDiagram
+    participant Op as Operator
+    participant Reg as Registry (OCI)
+    participant SS as StatefulSet
+    
+    Op->>Reg: Fetch Image Digest
+    Op->>Reg: Fetch Signature (Cosign)
+    Op->>Op: Verify Signature (Public Key)
+    
+    alt Verification Failed
+        Op--xSS: Block Update
+        Op->>Status: Set Condition False
+    else Verified
+        Op->>SS: Update with Digest (sha256:...)
+    end
+```
+
+| Policy | Behavior |
+| :--- | :--- |
+| `Block` (Default) | **Stops** reconciliation. No unsafe image runs. |
+| `Warn` | Logs error, emits Event, but **Allows** the update. |
+
+## 5. Reconciliation Semantics
+
+- **OwnerReferences**: All resources (ConfigMaps, Services, StatefulSets) are owned by the `OpenBaoCluster` CR. Deleting the CR deletes the cluster.
+- **Least Privilege**: The controller only watches `OpenBaoCluster`. It does not watch child resources (except via OwnerReference garbage collection) to reduce API load.
+- **Discovery**: Uses `leader_tls_servername` to support strict mTLS verification between peers.

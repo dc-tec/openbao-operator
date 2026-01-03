@@ -1,117 +1,102 @@
 # Error Handling
 
-Error handling is the most critical aspect of Go programming. The OpenBao Operator follows strict patterns to ensure errors are properly propagated and debuggable.
+Error handling is critical for the stability and debuggability of the OpenBao Operator. We follow strict patterns to ensure errors are propagated with context and handled gracefully.
 
-## Error Wrapping
+## 1. Wrapping Errors
 
-**Always wrap errors** when passing them up the stack to add context:
+**Always** wrap errors when passing them up the stack. This preserves the original error type (for checking) while adding valuable context (for debugging).
 
-```go
-// Bad - loses context
-return err
+=== ":material-check: Good Pattern"
+    ```go
+    // Adds context and preserves the chain
+    return fmt.Errorf("failed to create secret: %w", err)
+    ```
 
-// Good - adds context
-return fmt.Errorf("failed to generate CA certificate: %w", err)
-```
-
-Use `%w` for wrapping to preserve the error chain for `errors.Is()` and `errors.As()`.
-
-## Error Checking
-
-Check errors immediately. Use guard clauses instead of nested else blocks:
-
-```go
-// Bad - success logic nested in else
-if err == nil {
-    // do work
-} else {
+=== ":material-close: Bad Pattern"
+    ```go
+    // Loses the "where" and "why"
     return err
-}
+    ```
 
-// Good - guard clause
-if err != nil {
-    return fmt.Errorf("failed to fetch secret: %w", err)
-}
-// do work
-```
+## 2. Guard Clauses
 
-## Sentinel Errors
+Handle errors immediately. Check for failure first, return early, and keep the "happy path" unindented.
 
-For domain-specific errors that callers need to check, define exported sentinel errors:
+=== ":material-check: Good Pattern"
+    ```go
+    if err := r.Client.Get(ctx, key, obj); err != nil {
+        return fmt.Errorf("failed to fetch object: %w", err)
+    }
+
+    // Do work on obj...
+    ```
+
+=== ":material-close: Bad Pattern"
+    ```go
+    if err := r.Client.Get(ctx, key, obj); err == nil {
+        // Do work on obj...
+    } else {
+        return err
+    }
+    ```
+
+## 3. Kubernetes Errors
+
+When interacting with the Kubernetes API, check for specific error types using `apierrors`.
+
+=== ":material-check: Good Pattern"
+    ```go
+    import apierrors "k8s.io/apimachinery/pkg/api/errors"
+
+    if err := r.Client.Get(ctx, key, secret); err != nil {
+        if apierrors.IsNotFound(err) {
+            // Resource missing is expected here, create it
+            return r.createSecret(ctx, ...)
+        }
+        // Unexpected error, bubble it up
+        return fmt.Errorf("failed to get secret: %w", err)
+    }
+    ```
+
+## 4. Sentinel Errors
+
+Define exported sentinel errors for implementation-specific conditions that callers might need to handle.
 
 ```go
 var (
-    ErrPodNotFound     = errors.New("pod not found")
-    ErrClusterNotReady = errors.New("cluster not ready")
-    ErrQuorumLost      = errors.New("raft quorum lost")
+    // ErrClusterLocked indicates the cluster is in a frozen state.
+    ErrClusterLocked = errors.New("cluster is locked")
+    
+    // ErrNoLeader indicates the Raft cluster has lost quorum.
+    ErrNoLeader      = errors.New("no leader available")
 )
 ```
 
-Callers can then use:
+**Usage:**
 
 ```go
-if errors.Is(err, ErrPodNotFound) {
-    // handle missing pod
+if errors.Is(err, ErrClusterLocked) {
+    // Handle lock specifically
 }
 ```
 
-## Panics
+## 5. Panics
 
-**NEVER panic** in the Controller or Internal packages.
+!!! danger "No Panics Allowed"
+    **NEVER** panic in controllers or internal logic packages.
 
-Panics are only acceptable during:
+    A panic in a single reconciler thread can crash the entire operator process, taking down management for ALL clusters.
 
-- `init()` functions
-- `main()` startup
-- Programmer errors that should never occur
-
-If a reconciler panics, it crashes the entire manager, affecting all clusters.
-
-```go
-// Bad - panics in reconciler
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+=== ":material-check: Good Pattern"
+    ```go
     if config == nil {
-        panic("config cannot be nil") // DON'T DO THIS
+        return fmt.Errorf("internal error: config is nil")
     }
-}
+    ```
 
-// Good - return error
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+=== ":material-close: Bad Pattern"
+    ```go
     if config == nil {
-        return ctrl.Result{}, fmt.Errorf("internal error: config is nil")
+        panic("config is nil") // CRASHES THE OPERATOR
     }
-}
-```
-
-## Error Messages
-
-Write error messages that are:
-
-- **Lowercase** (errors can be wrapped and combined)
-- **Specific** (what operation failed)
-- **Actionable** (hint at the cause when possible)
-
-```go
-// Bad
-return errors.New("Error occurred")
-
-// Good
-return fmt.Errorf("failed to read TLS secret %s/%s: %w", namespace, name, err)
-```
-
-## Kubernetes Client Errors
-
-For Kubernetes client errors, check for common cases:
-
-```go
-import apierrors "k8s.io/apimachinery/pkg/api/errors"
-
-if err := r.Client.Get(ctx, key, &secret); err != nil {
-    if apierrors.IsNotFound(err) {
-        // Resource doesn't exist - may need to create it
-        return r.createSecret(ctx, ...)
-    }
-    // Other errors should be propagated
-    return fmt.Errorf("failed to get secret %s: %w", key, err)
-}
-```
+    ```

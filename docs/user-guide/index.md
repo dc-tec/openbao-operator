@@ -1,18 +1,49 @@
 # OpenBao Operator – User Guide
 
-This guide covers deploying the operator, provisioning tenant namespaces, and operating `OpenBaoCluster` resources.
+This guide covers everything you need to know to successfully operate OpenBao on Kubernetes, from installation to Day 2 operations.
 
-## Resource Index
+<div class="grid cards" markdown>
 
-Start with the CRD you are working with:
+- :material-download: **1. Install Operator**
 
-- [Operator installation](operator/installation.md)
-- [`OpenBaoTenant` (namespace onboarding)](openbaotenant/overview.md)
-- [`OpenBaoCluster` (the main CRD)](openbaocluster/overview.md)
-- [`OpenBaoRestore` (restore requests)](openbaorestore/overview.md)
+    ---
 
-## See Also
+    Deploy the operator to your Kubernetes cluster using Helm or manifests.
 
-- [Architecture](../architecture/index.md) - Deep dive into controller design
-- [Security](../security/index.md) - Security model and threat analysis
-- [Contributing](../contributing/index.md) - Development and testing
+    [:material-arrow-right: Installation](operator/installation.md)
+
+- :material-account-multiple-plus: **2. Onboard Tenants**
+
+    ---
+
+    Provision namespaces, RBAC, and quotas for teams using the `OpenBaoTenant` resource.
+
+    [:material-arrow-right: Tenant Onboarding](openbaotenant/overview.md)
+
+- :material-server-plus: **3. Deploy Cluster**
+
+    ---
+
+    Create and configure highly available OpenBao clusters with the `OpenBaoCluster` resource.
+
+    [:material-arrow-right: Create Cluster](openbaocluster/overview.md)
+
+- :material-backup-restore: **4. Operate & Restore**
+
+    ---
+
+    Manage backups, upgrades, resizing, and disaster recovery operations.
+
+    [:material-arrow-right: Upgrades](../user-guide/openbaocluster/operations/upgrades.md)
+
+    [:material-arrow-right: Backup Operations](../user-guide/openbaocluster/operations/backups.md)
+
+    [:material-arrow-right: Restore Operations](openbaorestore/overview.md)
+
+</div>
+
+## Advanced Topics
+
+- [**Architecture**](../architecture/index.md) – Understand the internal controller design.
+- [**Security Model**](../security/index.md) – Learn about the zero-trust security model.
+- [**Troubleshooting**](openbaocluster/operations/production-checklist.md) – Production readiness and common issues.

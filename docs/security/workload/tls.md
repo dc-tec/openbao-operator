@@ -1,42 +1,96 @@
 # TLS & Identity
 
-The Operator supports three modes for TLS certificate management.
+!!! abstract "Encryption in Transit"
+    The Operator ensures that all internal and external communication is encrypted via TLS. It supports three distinct modes of operation to fit different security architectures: **Operator Managed**, **External**, and **ACME**.
 
-## Operator-Managed TLS (Default)
+## Certificate Rotation Flow
 
-When `spec.tls.mode` is `OperatorManaged` (or omitted), the Operator acts as an internal Certificate Authority (CA) to enforce mTLS.
+In the default **Operator Managed** mode, the operator handles the full lifecycle of the certificates, including rotation and hot-reloading.
 
-- **Automated PKI:** The operator generates a self-signed Root CA and issues ephemeral leaf certificates for every cluster.
-- **Strict SANs:** Certificates include strict Subject Alternative Names (SANs) for the Service and Pod DNS names. Pod IPs are explicitly *excluded* to avoid identity fragility during pod churn.
-- **Rotation:** Server certificates are automatically rotated before expiry (configurable via `spec.tls.rotationPeriod`).
-- **Gateway Integration:** When Gateway API is used, the operator manages a CA ConfigMap to allow the Gateway (e.g., Traefik) to validate the backend OpenBao pods, ensuring full end-to-end TLS.
+```mermaid
+sequenceDiagram
+    participant Time as Timer
+    participant Operator
+    participant Secret as K8s Secret
+    participant Pod as OpenBao Pod
 
-## External TLS Provider
+    Note over Time,Pod: Rotation Period Reached (e.g. 24h)
+    
+    Time->>Operator: Trigger Rotation
+    Operator->>Operator: Generate New Cert + Key
+    Operator->>Secret: Update TLS Secret
+    
+    Note over Secret,Pod: Volume Watch Trigger
+    
+    Secret->>Pod: ConfigMap/Secret Update
+    Pod->>Pod: Hot Reload (SIGHUP or Watcher)
+    
+    Note right of Pod: New Cert Active (Zero Downtime)
+```
 
-When `spec.tls.mode` is `External`, the operator does not generate or rotate certificates. Instead, it expects Secrets to be managed by an external entity (e.g., cert-manager, corporate PKI, or CSI drivers).
+## TLS Modes
 
-- **BYO-PKI:** Users can integrate with their organization's PKI infrastructure or use cert-manager for certificate lifecycle management.
-- **Secret Names:** The operator expects Secrets named `<cluster-name>-tls-ca` and `<cluster-name>-tls-server` to exist in the cluster namespace.
-- **Hot Reload:** The operator still monitors certificate changes and triggers hot-reloads when external providers rotate certificates, ensuring seamless certificate updates without service interruption.
-- **No Rotation:** The operator does not check expiry or attempt to rotate certificates in External mode; this is the responsibility of the external provider.
+=== ":material-cog-refresh: Operator Managed (Default)"
 
-## ACME TLS (Native OpenBao ACME Client)
+    This is the "batteries included" mode. The Operator acts as an internal Certificate Authority (CA).
 
-When `spec.tls.mode` is `ACME`, OpenBao uses its native ACME client to automatically obtain and manage TLS certificates.
+    -   **Automated PKI:** Generates a self-signed Root CA and ephemeral leaf certificates.
+    -   **Strict Identity:** Certificates use strict **SANs** (Subject Alternative Names) matching the Service and Pod DNS.
+    -   **Rotation:** Automatically rotates certificates before expiry (configurable via `spec.tls.rotationPeriod`).
+    -   **Gateway Support:** Automatically manages a CA ConfigMap for ingress controllers.
 
-- **Native ACME:** OpenBao fetches certificates over the network using the ACME protocol (e.g., Let's Encrypt) and stores them in-memory (or cached per `tls_acme_cache_path`).
-- **No Secrets:** No Kubernetes Secrets are created or mounted for server certificates. Certificates are managed entirely by OpenBao.
-- **Automatic Rotation:** OpenBao handles certificate acquisition and rotation automatically via the ACME protocol, eliminating the need for external certificate management tools.
-- **No TLS Reload Sidecar Needed:** ACME certificates are managed by OpenBao, so no TLS reload sidecar is needed. `ShareProcessNamespace` remains disabled, providing better container isolation and security.
-- **Zero Trust:** The operator never possesses private keys, making this mode ideal for zero-trust architectures.
-- **Configuration:** ACME parameters (`directoryURL`, `domain`, `email`) are configured via `spec.tls.acme` and rendered directly in the OpenBao listener configuration.
+    ```yaml
+    spec:
+      tls:
+        mode: OperatorManaged
+        rotationPeriod: 24h
+    ```
 
-## Comparison
+=== ":material-cloud-key: External Provider"
 
-| Feature | Operator-Managed | External | ACME |
-| ------- | ---------------- | -------- | ---- |
-| Certificate Generation | Operator | External provider | OpenBao |
-| Rotation | Automatic | External provider | Automatic (ACME) |
-| Private Key Location | Kubernetes Secret | External Secret | In-memory (OpenBao) |
-| PKI Integration | Self-signed | Corporate PKI | Public CA (e.g., Let's Encrypt) |
-| Best For | Development/Testing | Production with existing PKI | Zero-trust architectures |
+    In this mode, the Operator delegates certificate management to an external system, such as **[cert-manager](https://cert-manager.io/){:target="_blank"}** or a corporate PKI.
+
+    -   **BYO-PKI:** Integrates with existing infrastructure.
+    -   **Expectation:** The Operator expects Secrets named `<cluster>-tls-ca` and `<cluster>-tls-server` to exist in the namespace.
+    -   **Hot Reload:** The Operator monitors these Secrets and triggers hot-reloads when the external provider updates them.
+
+    !!! tip "Cert-Manager Integration"
+        You can use `cert-manager` to issue certificates signed by Let's Encrypt or Vault, and the Operator will consume them seamlessly.
+
+    ```yaml
+    spec:
+      tls:
+        mode: External
+    ```
+
+=== ":material-lock-check: ACME (Native)"
+
+    OpenBao uses its built-in ACME client to fetch certificates directly from a provider like Let's Encrypt.
+
+    -   **Zero Trust:** The Operator **never** sees the private key. It is generated in-memory by the OpenBao process.
+    -   **No Secrets:** No Kubernetes Secrets are created for the server certificate.
+    -   **Automatic Rotation:** OpenBao handles its own rotation via the ACME protocol.
+
+    ```yaml
+    spec:
+      tls:
+        mode: ACME
+        acme:
+          email: "admin@example.com"
+          domain: "bao.example.com"
+          directoryURL: "https://acme-v02.api.letsencrypt.org/directory"
+    ```
+
+## Comparison Matrix
+
+| Feature | Operator Managed | External Provider | ACME (Native) |
+| :--- | :--- | :--- | :--- |
+| **Generator** | Operator (Internal CA) | External (e.g., cert-manager) | OpenBao (Built-in) |
+| **Rotation** | Automatic | External responsibility | Automatic |
+| **Private Key** | Kubernetes Secret | Kubernetes Secret | **In-Memory** (Secure) |
+| **Best For** | Development, Simple Prod | Enterprise PKI Integration | Zero Trust, Public Facing |
+
+## See Also
+
+- [:material-docker: Pod Security](workload-security.md)
+- [:material-signature: Supply Chain](supply-chain.md)

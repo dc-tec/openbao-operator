@@ -1,156 +1,103 @@
 # Threat Model
 
-This section provides a comprehensive threat analysis using the STRIDE framework.
+!!! abstract "Scope"
+    This document analyzes the security boundaries, assets, and potential threats to the OpenBao Operator using the **STRIDE** framework.
 
-## 1. Asset Identification
+## 1. Trust Boundaries
 
-- **Critical:** Root token stored in Kubernetes Secret (`<cluster>-root-token`) - grants full administrative access to OpenBao.
-- **High Value:** Root CA Private Key (stored in Secret).
-- **High Value:** Static auto-unseal key stored in Kubernetes Secret (`<cluster>-unseal-key`) per OpenBao cluster.
-- **High Value:** OpenBao Raft data on persistent volumes (PVCs).
-- **High Value:** Backup snapshots stored in external object storage.
-- **Medium Value:** The OpenBao Configuration (ConfigMap).
-- **Medium Value:** Operator service account tokens, backup ServiceAccount tokens, and any credentials/secrets used to access object storage.
-- **Medium Value:** `OpenBaoCluster` CRDs and their Status (can reveal topology and health).
+The system is divided into three major trust zones.
 
-## 2. Threat Analysis (STRIDE)
+```mermaid
+graph TD
+    subgraph Operator_Zone [Trust Zone: Operator]
+        Op[Operator Controller]
+        OpSA[ServiceAccount: Operator]
+    end
 
-### A. Spoofing
+    subgraph Tenant_Zone [Trust Zone: Tenant Namespace]
+        Bao[OpenBao Cluster]
+        Secret[Root Token / Unseal Key]
+        PVC[Raft Storage PVC]
+    end
 
-**Threat:** A rogue pod attempts to join the Raft cluster.
+    subgraph Cloud_Zone [Trust Zone: External]
+        S3[Object Storage]
+        K8sAPI[Kubernetes API]
+    end
 
-**Mitigation:** We use strict mTLS. The Operator acts as the CA. Only pods with a valid certificate mounted via the Secret can join the mesh.
+    Op -- Reconciles --> Bao
+    Op -- Minimal Access --> K8sAPI
+    Op -.->|Blind Write| Secret
+    Bao -- Streams Snapshots --> S3
+    
+    linkStyle 0 stroke:#22c55e,stroke-width:2px;
+    linkStyle 2 stroke:#ef4444,stroke-width:2px;
+```
 
-**Threat:** An attacker spoofs external endpoints (Ingress/LoadBalancer) to intercept OpenBao traffic.
+## 2. Asset Identification
 
-**Mitigation:** Require TLS with correct SANs for all external hostnames; the Operator automatically creates NetworkPolicies to enforce cluster isolation (default deny all ingress, allow same-cluster and kube-system traffic). Additionally, recommend service mesh mTLS for north-south traffic where applicable.
+| Asset | Risk Level | Location | Description |
+| :--- | :--- | :--- | :--- |
+| **Root Token** | :material-alert: **Critical** | `Secret` | Grants full administrative access to OpenBao. |
+| **Unseal Keys** | :material-alert: **High** | `Secret` | Static keys used to decrypt the vault master key. |
+| **Raft Data** | :material-alert: **High** | `PVC` | Encrypted persistent storage containing all vault data. |
+| **Snapshots** | :material-alert: **High** | `S3/GCS` | Encrypted backups of the Raft data. |
+| **CA Key** | :material-alert: **High** | `Secret` | Private key for the Cluster Root CA. |
+| **Configuration** | :material-information: Medium | `ConfigMap` | HCL configuration files. |
 
-### B. Tampering
+## 3. STRIDE Analysis
 
-**Threat:** User manually edits the StatefulSet (e.g., changes image tag).
+??? failure "Spoofing (Identity)"
+    **Threat:** A rogue pod attempts to join the Raft cluster.
 
-**Mitigation:** Direct mutation of operator-managed resources is rejected at admission time (`lock-managed-resource-mutations`) unless an explicit exception applies (for example kube-system controllers, cert-manager, OpenBao service-registration label updates, or break-glass maintenance). If a change does land, the operator reconciles it back to the desired state on the next reconcile:
+    !!! success "Mitigation: mTLS"
+        Only pods with a valid certificate signed by the Operator CA (mounted via Secret) can join the mesh.
 
-- immediately on `OpenBaoCluster` changes (and on Sentinel trigger events when enabled), and
-- via a periodic “safety net” requeue (roughly every 20–25 minutes).
+    **Threat:** An attacker spoofs external endpoints.
+    
+    !!! success "Mitigation: Network Policy"
+        Default-deny ingress policies enforce cluster isolation. TLS required for all external traffic.
 
-**Threat:** Malicious or misconfigured tenant modifies their `OpenBaoCluster` to point backups to an unauthorized object storage location.
+??? warning "Tampering (Data Integrity)"
+    **Threat:** User manually edits the StatefulSet (e.g., changes image).
 
-**Mitigation:** Backup target configuration can be constrained via admission control policies and/or namespace-scoped RBAC; operators should validate backup targets against an allowlist where required.
+    !!! success "Mitigation: Reconciliation"
+        The Operator watches for changes and immediately reverts drift to the desired state defined in the CRD.
 
-### C. Elevation of Privilege
+    **Threat:** Malicious tenant points backups to unauthorized storage.
+    
+    !!! success "Mitigation: Policy"
+        Use Admission Policies (ValidatingAdmissionPolicy) to restrict allowed backup targets.
 
-**Threat:** Attacker compromises the Operator Pod to gain control of the cluster.
+??? danger "Repudiation (Audit Logs)"
+    **Threat:** Lack of audit trail for critical actions (step-down, backup).
 
-**Mitigation:**
+    !!! success "Mitigation: Structured Auditing"
+        The Operator emits structured JSON logs with `audit=true` for all control plane actions.
 
-- Operator runs as non-root.
-- **Least-Privilege RBAC Model:** The Operator uses separate ServiceAccounts:
-  - **Provisioner ServiceAccount:** Has minimal cluster-wide permissions (namespace `get/update/patch`, `OpenBaoTenant` watch, RBAC cleanup). It does not list/watch namespaces, and it does not manage tenant workload resources directly.
-  - **Provisioner Delegate ServiceAccount:** Holds a “tenant template” ClusterRole purely for RBAC escalation checks; the Provisioner impersonates this delegate to create tenant-scoped Roles/RoleBindings.
-  - **OpenBaoCluster Controller ServiceAccount:** Has cluster-wide read access to `openbaoclusters` (`get;list;watch`) to support controller-runtime caching and cluster-wide `create` on `tokenreviews`/`subjectaccessreviews` for the protected metrics endpoint; all OpenBaoCluster writes and all child resources remain tenant-scoped via namespace Roles.
-- **Namespace Isolation:** The OpenBaoCluster controller cannot access resources outside tenant namespaces or non-OpenBao resources within tenant namespaces.
-- Operator does NOT have permission to read the *data* inside OpenBao (KV engine), only the API system endpoints.
-- **Blind Writes:** For sensitive assets like the Unseal Key Secret, the operator uses a "blind create" pattern. It attempts to create the Secret but does not require `GET` or `LIST` permissions on the generated secret data after creation, minimizing the attack surface if the operator is compromised.
+??? failure "Information Disclosure (Privacy)"
+    **Threat:** TLS keys or tokens exposed in logs.
 
-**Threat:** One tenant's `OpenBaoCluster` configuration impacts other clusters (cross-tenant impact).
+    !!! success "Mitigation: Redaction"
+        Strict policy against logging secrets. Use `crypto/rand` for generation. OpenBao telemetry is used instead of debug logs.
 
-**Mitigation:**
+??? danger "Denial of Service (Availability)"
+    **Threat:** Misconfigured CR causing hot reconcile loops.
 
-- All resources use deterministic naming: `<cluster-name>-<suffix>` pattern.
-- Resources are always created in the `OpenBaoCluster` namespace.
-- Resources are labeled with `openbao.org/cluster=<cluster-name>` for proper identification.
-- **Namespace-Scoped RBAC:** The OpenBaoCluster controller receives permissions only via namespace-scoped Roles, preventing cross-namespace access.
-- RBAC supports namespace-scoped user access via RoleBindings.
-- Controller rate limiting (MaxConcurrentReconciles: 3, exponential backoff) prevents one cluster from starving others.
+    !!! success "Mitigation: Rate Limiting"
+        The controller utilizes `MaxConcurrentReconciles` and exponential backoff to preventing API saturation.
 
-**Threat:** Compromised Provisioner controller accesses workload resources in tenant namespaces (e.g., reading other applications' Secrets).
+??? warning "Elevation of Privilege (Authorization)"
+    **Threat:** Attacker compromises the Operator Pod.
 
-**Mitigation:**
+    !!! success "Mitigation: Least Privilege"
+        - **Non-Root:** Operator runs as non-root.
+        - **Blind Writes:** Operator can create Secrets but cannot list/read them back.
+        - **Split RBAC:** Separated ServiceAccounts for Provisioning vs. Management.
 
-- The Provisioner uses a delegated “tenant template” ClusterRole via impersonation to satisfy Kubernetes RBAC escalation checks while creating tenant-scoped Roles; it does not use broad workload access for direct reads/writes.
-- The Provisioner only creates Roles/RoleBindings; it does not perform GET/LIST operations on StatefulSets, Secrets, Services, etc.
-- The OpenBaoCluster controller has minimal cluster-wide permissions (to watch `openbaoclusters` and authenticate access to the protected metrics endpoint), but it only receives workload write permissions via namespace-scoped tenant Roles.
-- This separation ensures that even if the Provisioner is compromised, it cannot read or modify workload resources.
+## 4. Secrets Management
 
-**Threat:** Compromised Provisioner enumerates namespaces to discover cluster topology and project names.
-
-**Mitigation:**
-
-- The Provisioner no longer has `list` or `watch` permissions on namespaces. It can only `get` namespaces that are explicitly declared in `OpenBaoTenant` CRDs.
-- The Provisioner watches `OpenBaoTenant` CRDs instead of namespaces, making it a "blind executor" that only acts on explicit governance instructions.
-- In **Centralized Admin** mode, creating an `OpenBaoTenant` in the operator namespace should be restricted (Cluster Admin only). In **Self-Service** mode, namespace admins can create an `OpenBaoTenant` only for their own namespace (target must match `metadata.namespace`).
-- This eliminates the ability for a compromised Provisioner to survey the cluster topology.
-
-### D. Information Disclosure
-
-**Threat:** TLS keys, backup credentials, or snapshot contents are exposed via logs or metrics.
-
-**Mitigation:** Never log secret material; use structured logging with careful redaction; encrypt Secrets at rest and enforce least-privilege RBAC; rely on OpenBao's telemetry parameters (not custom logging of sensitive fields).
-
-**Threat:** Unauthorized access to backups in object storage.
-
-**Mitigation:** Use storage-level encryption and strict access controls (per-tenant buckets/prefixes, scoped credentials); document best practices for platform teams.
-
-**Threat:** Backup credentials Secret (`spec.backup.target.credentialsSecretRef`) or backup ServiceAccount is compromised, allowing unauthorized access to backup storage.
-
-**Mitigation:**
-
-- Use least-privilege credentials that only allow write access to the specific bucket/prefix for the cluster.
-- Prefer workload identity over static credentials where possible:
-  - Configure `spec.backup.target.roleArn` and omit `credentialsSecretRef` to use Web Identity (OIDC federation).
-  - The backup Job mounts a projected ServiceAccount token and relies on the cloud SDK default credential chain.
-- Enable audit logging for access to credentials Secrets.
-- Rotate credentials periodically.
-
-**Threat:** Snapshot data contains sensitive OpenBao secrets and could be exfiltrated via backups.
-
-**Mitigation:**
-
-- Backups are encrypted at rest by the object storage provider (SSE-S3, GCS encryption, etc.).
-- Per-tenant bucket/prefix isolation prevents cross-tenant access.
-- Backup credentials should be scoped to prevent read access (write-only for backups, read for restore is a separate credential).
-- Document that restores should be performed in secure environments.
-
-**Threat (Critical):** Compromise of Kubernetes Secrets storing the static auto-unseal key allows decryption of all OpenBao data for that cluster.
-
-**Mitigation:** Require etcd encryption at rest; strictly limit Secret access via RBAC; apply network and node hardening; enable audit logging for Secret access in the Kubernetes control plane.
-
-**Threat (Critical):** Compromise of the root token Secret (`<cluster>-root-token`) grants full administrative access to the OpenBao cluster.
-
-**Mitigation:**
-
-- RBAC MUST strictly limit access to the root token Secret. Only cluster administrators and the Operator ServiceAccount should have read access.
-- Enable audit logging for all access to this Secret.
-- Organizations SHOULD revoke or rotate the root token after initial cluster setup and use more granular policies for ongoing administration.
-- The Operator intentionally does NOT log the root token or the initialization response.
-- Platform teams SHOULD periodically audit who has access to these Secrets.
-
-### E. Denial of Service
-
-**Threat:** Misconfigured `OpenBaoCluster` resources cause hot reconcile loops that overload the Operator or API server.
-
-**Mitigation:** Implement reconciliation backoff, limit concurrent reconciles per cluster, and surface misconfiguration via Status conditions so users can remediate.
-
-**Threat:** Excessive backup frequency or large snapshot sizes exhaust object storage quotas or saturate network bandwidth.
-
-**Mitigation:** Validate backup schedules and document recommended limits; make backup settings configurable and observable.
-
-### F. Repudiation
-
-**Threat:** Lack of audit trail for Operator-initiated actions (e.g., upgrades, step-downs, backups).
-
-**Mitigation:**
-
-- The Operator emits structured audit logs for critical operations (initialization, leader step-down) tagged with `audit=true` and `event_type` for easy filtering in log aggregation systems.
-- Use structured, timestamped logs including `OpenBaoCluster` namespace/name and correlation IDs.
-- Rely on Kubernetes/audit logs and OpenBao audit logs (configurable via `spec.audit`) where available.
-
-## 3. Secrets Management Requirements
-
-- **Requirement:** The CA Key generated by the Operator must never be logged to stdout/stderr.
-- **Requirement:** The root token and initialization response (containing unseal keys) must NEVER be logged.
-- **Requirement:** Credentials and tokens used for object storage access must be stored in Kubernetes Secrets or via workload identity, never embedded in ConfigMaps or images.
-- **Requirement:** Secret names must be unique per `OpenBaoCluster` to prevent accidental cross-tenant sharing.
-- **Requirement:** The root token Secret (`<cluster>-root-token`) must be protected with strict RBAC; access should be limited to cluster administrators and the Operator.
-- **Recommendation:** Organizations should revoke or rotate the root token after initial cluster setup, storing it securely offline for emergency recovery only.
+!!! danger "Critical Requirements"
+    1.  **Never Log Secrets:** Root tokens, unseal keys, and CA keys must NEVER appear in stdout/stderr.
+    2.  **Unique Names:** Secrets must include the cluster name to prevent collisions.
+    3.  **Strict RBAC:** Only Cluster Admins should have access to the Root Token Secret.

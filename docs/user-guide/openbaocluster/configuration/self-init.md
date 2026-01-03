@@ -1,272 +1,166 @@
 # Self-Initialization
 
-OpenBao supports [self-initialization](https://openbao.org/docs/configuration/self-init/), which allows you to declaratively configure your cluster during first startup. When enabled, OpenBao automatically:
+OpenBao supports [self-initialization](https://openbao.org/docs/configuration/self-init/), allowing declarative configuration of the cluster during first startup.
 
-- Initializes itself using auto-unseal
-- Executes configured API requests (audit devices, auth methods, secret engines, policies)
-- Revokes the root token after initialization completes
-
-**Important:** When self-initialization is enabled, no root token Secret is created. The root token is automatically revoked by OpenBao after the init requests complete.
-
-## Basic Self-Initialization Example
-
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
-metadata:
-  name: self-init-cluster
-  namespace: security
-spec:
-  version: "2.4.0"
-  image: "openbao/openbao:2.4.0"
-  replicas: 3
-  profile: Development
-  tls:
-    enabled: true
-    rotationPeriod: "720h"
-  storage:
-    size: "10Gi"
-  selfInit:
-    enabled: true
-    requests:
-      # Enable stdout audit logging first (recommended for debugging)
-      - name: enable-stdout-audit
-        operation: update
-        path: sys/audit/stdout
-        auditDevice:
-          type: file
-          fileOptions:
-            filePath: stdout
-      # Enable JWT auth (or use Hardened profile for automatic bootstrap)
-      - name: enable-jwt-auth
-        operation: update
-        path: sys/auth/jwt
-        authMethod:
-          type: jwt
-          description: "JWT authentication for Kubernetes"
-      # Configure JWT auth.
-      #
-      # NOTE: Some Kubernetes environments require authentication for OIDC discovery
-      # (/.well-known/openid-configuration). In those cases, prefer configuring JWT
-      # auth using the cluster's JWKS public keys (jwt_validation_pubkeys) rather
-      # than oidc_discovery_url.
-      # Note: auth/jwt/config is not a sys/auth/* path, so it uses raw data.
-      - name: configure-jwt-auth
-        operation: update
-        path: auth/jwt/config
-        data:
-          bound_issuer: "https://kubernetes.default.svc"
-          jwt_validation_pubkeys:
-            - "<K8S_JWT_PUBLIC_KEY_PEM>"
-  deletionPolicy: Retain
-```
-
-## Self-Init Request Structure
-
-Each request in `spec.selfInit.requests[]` maps to an OpenBao API call:
-
-| Field | Description | Required |
-| ----- | ----------- | -------- |
-| `name` | Unique identifier (must match `^[A-Za-z_][A-Za-z0-9_-]*$`) | Yes |
-| `operation` | API operation: `create`, `read`, `update`, `delete`, `list`, or `patch`. | Yes |
-| `path` | API path (e.g., `sys/audit/stdout`, `sys/auth/jwt`, `sys/mounts/secret`, `sys/policies/acl/app-policy`) | Yes |
-| `data` | Request payload for paths that don't have structured types (e.g., `auth/jwt/config`, `auth/kubernetes/config`). **Do not place sensitive values (tokens, passwords, unseal keys, long-lived credentials) here**, as this data is stored in the `OpenBaoCluster` resource and persisted in etcd. **For supported paths, structured fields are required** (`auditDevice`, `authMethod`, `secretEngine`, `policy`). | No |
-| `auditDevice` | Structured configuration for audit devices (only for `sys/audit/*` paths). See [audit device types](#audit-device-types) below. | No |
-| `authMethod` | Structured configuration for auth methods (only for `sys/auth/*` paths). See [auth method types](#auth-method-types) below. | No |
-| `secretEngine` | Structured configuration for secret engines (only for `sys/mounts/*` paths). See [secret engine types](#secret-engine-types) below. | No |
-| `policy` | Structured configuration for policies (only for `sys/policies/*` paths). See [policy types](#policy-types) below. | No |
-| `allowFailure` | If `true`, failures don't block initialization | No |
-
-## Common Self-Init Patterns
-
-**Enable KV Secrets Engine (Structured):**
-
-```yaml
-- name: enable-kv-secrets
-  operation: update
-  path: sys/mounts/secret
-  secretEngine:
-    type: kv
-    description: "Key-Value secrets engine"
-    options:
-      version: "2"
-```
-
-**Enable Auth Method (Structured):**
-
-```yaml
-- name: enable-jwt-auth
-  operation: update
-  path: sys/auth/jwt
-  authMethod:
-    type: jwt
-    description: "JWT authentication method"
-```
-
-**Create a Policy (Structured):**
-
-```yaml
-- name: create-app-policy
-  operation: update
-  path: sys/policies/acl/app-policy
-  policy:
-    policy: |
-      path "secret/data/app/*" {
-        capabilities = ["read", "list"]
-      }
-```
+!!! success "GitOps Ready"
+    Self-initialization eliminates the need for manual setup scripts or post-install hooks. The entire cluster state (Auth, Secrets, Policies) is defined in your CRD.
 
 ## Standard vs Self-Initialization
 
+| Feature | Standard Init | Self-Initialization |
+| :--- | :--- | :--- |
+| **Root Token** | Created & Stored in Secret | **Auto-Revoked** (Never Stored) |
+| **Configuration** | Manual Post-Install Steps | **Declarative** (in CRD) |
+| **Recovery** | Root Token | **Cloud KMS** / Other Auth Methods |
+| **Security** | :material-alert: Lower (Root Token Risk) | :material-check: **High** (Zero Trust) |
+
 ```mermaid
 flowchart LR
-    Start["OpenBaoCluster created"]
-    Profile["spec.profile"]
+    Start["OpenBaoCluster Created"]
+    Method{"selfInit.enabled?"}
 
-    subgraph StandardInit["Standard Initialization"]
-        Std["Init Manager calls /v1/sys/init\non pod-0"]
-        StdRoot["<cluster>-root-token Secret created\nRoot token stored in namespace"]
-        StdStatus["status.initialized=true\nstatus.selfInitialized=false"]
+    subgraph Standard [Standard Init]
+        STD_A[Ops calls /v1/sys/init]
+        STD_B[Root Token Generated]
+        STD_C[Root Token Stored in Secret]
     end
 
-    subgraph SelfInit["Self-Initialization"]
-        SI["OpenBao executes initialize stanzas\non first start"]
-        SIRoot["Root token auto-revoked\nNo root token Secret"]
-        SIStatus["status.initialized=true\nstatus.selfInitialized=true"]
+    subgraph Self [Self-Init]
+        SI_A[OpenBao Auto-Unseals]
+        SI_B[Executes Requests]
+        SI_C[Root Token Revoked]
     end
 
-    Start --> Profile
-    Profile -->|selfInit.enabled=false| StandardInit
-    Profile -->|selfInit.enabled=true| SelfInit
+    Start --> Method
+    Method -- No --> Standard
+    Method -- Yes --> Self
 
-    Std --> StdRoot --> StdStatus
-    SI --> SIRoot --> SIStatus
+    style Self fill:transparent,stroke:#00e676,stroke-width:2px
+    style Standard fill:transparent,stroke:#ff5252,stroke-width:2px
 ```
 
-| Aspect | Standard Init | Self-Init |
-| ------ | ------------- | --------- |
-| Root Token | Stored in `<cluster>-root-token` Secret | Auto-revoked, not available |
-| Initial Config | Manual post-init via CLI/API | Declarative in CR |
-| Recovery | Root token available for recovery | Must use other auth methods |
-| Use Case | Dev/test, manual management | Production, GitOps workflows |
+## Configuration
 
-## Audit Device Types
-
-For audit device requests (`sys/audit/*`), use the structured `auditDevice` field instead of raw `data`:
-
-**File Audit Device:**
+To enable self-initialization, set `spec.selfInit.enabled: true` and define your initial `requests`.
 
 ```yaml
-- name: enable-file-audit
-  operation: update
-  path: sys/audit/file
-  auditDevice:
-    type: file
-    description: "File audit device for production logging"
-    fileOptions:
-      filePath: /var/log/openbao/audit.log
-      mode: "0600"  # Optional, defaults to "0600"
+spec:
+  selfInit:
+    enabled: true
+    requests:
+      - name: enable-audit
+        operation: update
+        path: sys/audit/file
+        auditDevice:
+          type: file
+          fileOptions:
+            filePath: /tmp/audit.log
 ```
 
-**HTTP Audit Device:**
+### Request Structure
 
-```yaml
-- name: enable-http-audit
-  operation: update
-  path: sys/audit/http
-  auditDevice:
-    type: http
-    httpOptions:
-      uri: "https://audit.example.com/log"
-      headers:
-        X-Custom-Header: "value"
-```
+Each item in `requests[]` maps to an OpenBao API call.
 
-**Syslog Audit Device:**
+| Field | Description |
+| :--- | :--- |
+| `name` | Unique ID (e.g., `enable-jwt`). |
+| `operation` | `update` (most common), `create`, `delete`. |
+| `path` | API Path (e.g., `sys/auth/jwt`). |
+| `data` | Raw JSON payload (legacy/generic). |
+| `authMethod` | **Structured** config for `sys/auth/*`. |
+| `secretEngine` | **Structured** config for `sys/mounts/*`. |
+| `auditDevice` | **Structured** config for `sys/audit/*`. |
+| `policy` | **Structured** config for `sys/policies/*`. |
 
-```yaml
-- name: enable-syslog-audit
-  operation: update
-  path: sys/audit/syslog
-  auditDevice:
-    type: syslog
-    syslogOptions:
-      facility: "AUTH"
-      tag: "openbao"
-```
+!!! warning "Sensitive Data"
+    Do not place raw secrets (passwords, tokens) in `data`. Use Kubernetes Secrets and reference them if supported, or use a secure GitOps workflow with sealed secrets.
 
-**Socket Audit Device:**
+## Examples
 
-```yaml
-- name: enable-socket-audit
-  operation: update
-  path: sys/audit/socket
-  auditDevice:
-    type: socket
-    socketOptions:
-      address: "127.0.0.1:9000"
-      socketType: "tcp"
-      writeTimeout: "2s"
-```
+=== "Secret Engines"
 
-## Auth Method Types
+    Enable and configure Secret Engines (`sys/mounts/*`).
 
-For auth method requests (`sys/auth/*`), use the structured `authMethod` field:
+    ```yaml
+    - name: enable-kv-v2
+      operation: update
+      path: sys/mounts/secret
+      secretEngine:
+        type: kv
+        description: "General purpose KV store"
+        options:
+          version: "2"
+    ```
 
-```yaml
-- name: enable-jwt-auth
-  operation: update
-  path: sys/auth/jwt
-  authMethod:
-    type: jwt
-    description: "JWT authentication for Kubernetes"
-    config:
-      default_lease_ttl: "1h"
-      max_lease_ttl: "24h"
-```
+    ```yaml
+    - name: enable-transit
+      operation: update
+      path: sys/mounts/transit
+      secretEngine:
+        type: transit
+        description: "Encryption as a Service"
+    ```
 
-Common auth method types include: `jwt`, `kubernetes`, `userpass`, `ldap`, `oidc`, `cert`.
+=== "Auth Methods"
 
-## Secret Engine Types
+    Enable Authentication Methods (`sys/auth/*`).
 
-For secret engine requests (`sys/mounts/*`), use the structured `secretEngine` field:
+    ```yaml
+    - name: enable-jwt
+      operation: update
+      path: sys/auth/jwt
+      authMethod:
+        type: jwt
+        description: "Kubernetes JWT Auth"
+        config:
+            default_lease_ttl: "1h"
+            max_lease_ttl: "24h"
+    ```
 
-```yaml
-- name: enable-kv-secrets
-  operation: update
-  path: sys/mounts/secret
-  secretEngine:
-    type: kv
-    description: "Key-Value secrets engine"
-    options:
-      version: "2"
-```
+    ```yaml
+    - name: configure-jwt
+      operation: update
+      path: auth/jwt/config  # Note: Config path is distinct from mount path
+      data:
+        bound_issuer: "https://kubernetes.default.svc"
+        jwt_validation_pubkeys:
+          - "<PEM_KEYS>"
+    ```
 
-Common secret engine types include: `kv`, `pki`, `transit`, `database`, `aws`, `azure`, `gcp`.
+=== "Policies"
 
-## Policy Types
+    Create ACL Policies (`sys/policies/acl/*`).
 
-For policy requests (`sys/policies/*`), use the structured `policy` field:
+    ```yaml
+    - name: app-policy
+      operation: update
+      path: sys/policies/acl/app-policy
+      policy:
+        policy: |
+          path "secret/data/app/*" {
+            capabilities = ["read", "list"]
+          }
+    ```
 
-```yaml
-- name: create-app-policy
-  operation: update
-  path: sys/policies/acl/app-policy
-  policy:
-    policy: |
-      path "secret/data/app/*" {
-        capabilities = ["read", "list"]
-      }
-      path "secret/metadata/app/*" {
-        capabilities = ["list"]
-      }
-```
+=== "Audit Devices"
 
-The policy content can be written in HCL or JSON format.
+    Enable Audit Logging (`sys/audit/*`).
 
-Check the status to see if self-initialization completed:
+    ```yaml
+    - name: enable-file-audit
+      operation: update
+      path: sys/audit/file
+      auditDevice:
+        type: file
+        fileOptions:
+          filePath: /var/log/openbao/audit.log
+    ```
 
-```sh
-kubectl -n security get openbaocluster self-init-cluster -o jsonpath='{.status.selfInitialized}'
-# Returns: true
+## Verification
+
+Check the status field to confirm self-initialization succeeded.
+
+```bash
+kubectl get openbaocluster <name> -o jsonpath='{.status.selfInitialized}'
+# Output: true
 ```

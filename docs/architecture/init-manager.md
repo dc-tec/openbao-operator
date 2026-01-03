@@ -1,32 +1,82 @@
 # InitManager (Cluster Initialization)
 
-**Responsibility:** Automate initial cluster initialization and root token management.
+!!! abstract "Responsibility"
+    Automate the "Day 1" bootstrap of a new cluster.
 
-The InitManager handles the bootstrapping of a new OpenBao cluster, including initial Raft leader election and storing the root token securely.
+To avoid split-brain scenarios during initial formation, the Operator enforces a **Single-Pod Bootstrap** pattern.
 
-## Initialization Workflow
+## 1. Workflow
 
-1. **Single-Pod Bootstrap:** During initial cluster creation, the InfrastructureManager starts with 1 replica (regardless of `spec.replicas`) until initialization completes.
+The InitManager coordinates the first start of the cluster.
 
-2. **Wait for Container:** The InitManager waits for the pod-0 container to be running (not necessarily ready, since the readiness probe may fail until OpenBao is initialized).
+```mermaid
+sequenceDiagram
+    participant Op as Operator
+    participant SS as StatefulSet (Replicas=1)
+    participant Pod as Pod-0
+    participant Bao as OpenBao API
+    participant Secret as Root Token Secret
 
-3. **Check Status (Preferred):** Read OpenBao's Kubernetes service registration labels on pod-0 (`openbao-initialized`, `openbao-sealed`).
+    Note over Op, SS: Phase 1: Bootstrap
+    Op->>SS: Create having Replicas=1
+    Op->>Pod: Wait for Running state
+    
+    loop Health Check
+        Op->>Bao: GET /sys/health
+        Bao-->>Op: 501 Not Initialized
+    end
 
-4. **Check Status (Fallback):** If labels are not yet available, query OpenBao via the HTTP health endpoint (`GET /v1/sys/health`) using the per-cluster TLS CA.
+    Note over Op, Secret: Phase 2: Initialize
+    Op->>Bao: PUT /sys/init
+    Bao-->>Op: Returns {root_token, keys}
+    
+    Op->>Secret: Store Root Token
+    Op->>Secret: Store Unseal Key (if Static)
+    
+    Note over Op, SS: Phase 3: Scale
+    Op->>SS: Service now Initialized
+    Op->>SS: Scale to spec.replicas (e.g., 3)
+```
 
-5. **Initialize:** If not initialized, call the HTTP initialization endpoint (`PUT /v1/sys/init`) against pod-0 using the Operator's in-cluster OpenBao client (no `pods/exec` or CLI dependencies).
+## 2. Execution Phases
 
-6. **Store Root Token:** Parse the initialization response and store the root token in a per-cluster Secret (`<cluster>-root-token`).
+=== "Phase 1: Bootstrap"
 
-7. **Mark Initialized:** Set `Status.Initialized = true` to signal the InfrastructureManager to scale up to the desired replica count.
+    **Goal:** Start a single, stable node.
+    
+    Regardless of `spec.replicas`, a new cluster **always starts with 1 replica**.
 
-## Reconciliation Semantics
+    -   **Why?** Raft requires a stable leader to form a cluster. Starting 3 uninitialized nodes simultaneously can lead to race conditions on who becomes the first leader.
+    -   **Mechanism:** The InfrastructureManager caps `replicas: 1` as long as `status.initialized` is `false`.
 
-- The InitManager only runs when `Status.Initialized == false`.
-- Once `Status.Initialized` is true, the InitManager short-circuits and performs no operations.
-- Errors during initialization (e.g., network issues, pod not ready) cause requeues with backoff; the cluster remains at 1 replica until successful initialization.
+=== "Phase 2: Initialize"
 
-!!! warning "Security"
-    The initialization response (which contains sensitive unseal keys and root token) is NEVER logged.
+    **Goal:** Bootstrap the Raft cluster and generate root material.
 
-See also: [Secrets Management](../security/fundamentals/secrets-management.md)
+    Once `pod-0` is running, the InitManager takes over:
+
+    1.  **Detection:** Checks internal status. If it finds `openbao-initialized=true` label or receives `200 OK` from `/sys/health`, it assumes adoption of an existing cluster and skips to Phase 3.
+    2.  **Execution:** If uninitialized, it calls `sys/init`.
+    3.  **Security:**
+        -   The Root Token is **encrypted** and stored immediately in a Secret.
+        -   The Unseal Key (if using Static mode) is stored in a separate Secret.
+        -   !!! warning "Security"
+            The initialization response is held in memory only for the duration of the request and is **NEVER logged**.
+
+=== "Phase 3: Scale Up"
+
+    **Goal:** Expand to High Availability.
+
+    Once initialization is confirmed (and the root token is safely stored):
+
+    1.  The Operator sets `status.initialized = true`.
+    2.  The InfrastructureManager observes this and updates the StatefulSet to the full `spec.replicas`.
+    3.  New pods join the existing leader (Pod-0) via the `retry_join` configuration.
+
+---
+
+## 3. Reconciliation Semantics
+
+- **One-Time Operation:** The InitManager is designed to be **idempotent** but typically runs only once in the cluster's lifecycle.
+- **Failure Handling:** If `sys/init` fails (network, timeout), the operator retries. The cluster remains at `replicas: 1` until success.
+- **Adoption:** You can bring an existing OpenBao cluster under management. If the operator detects it is already initialized, it simply adopts it and moves to Scale Up.

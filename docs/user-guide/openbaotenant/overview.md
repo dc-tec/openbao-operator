@@ -1,11 +1,80 @@
 # OpenBaoTenant
 
-`OpenBaoTenant` is the governance/onboarding CRD that authorizes the operator to manage OpenBao resources in a namespace by provisioning tenant-scoped RBAC.
+`OpenBaoTenant` is the governance and onboarding CRD. It authorizes the Operator to manage OpenBao resources in a target namespace by provisioning tenant-scoped isolation.
 
-- Use this when you want to onboard a namespace for `OpenBaoCluster` resources.
-- In self-service mode, a tenant can only target its own namespace (`spec.targetNamespace == metadata.namespace`).
+It is the key to **Multi-Tenancy**, ensuring that different teams can safely share a Kubernetes cluster without accessing each other's secrets.
 
-Next:
+## Tenant Isolation Model
 
-- [Tenant Onboarding](onboarding.md)
-- [Multi-Tenancy](multi-tenancy.md)
+When you apply an `OpenBaoTenant`, the Operator creates a "Sandbox" around the target namespace.
+
+```mermaid
+graph TD
+    subgraph Namespace ["Tenant Namespace"]
+        direction TB
+        RBAC["fa:fa-id-badge RBAC RoleBinding"]
+        NetPol["fa:fa-shield-halved NetworkPolicy"]
+        Quota["fa:fa-chart-pie ResourceQuota"]
+        
+        App[["Tenant App"]]
+        
+        RBAC -->|Binds| App
+        NetPol -->|Isolates| App
+        Quota -->|Limits| App
+    end
+    
+    Op["fa:fa-gears Operator"] -->|Provisions| Namespace
+    
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#000;
+    class RBAC,NetPol,Quota security;
+```
+
+## Features
+
+<div class="grid cards" markdown>
+
+- :material-account-key: **Identity & Access**
+
+    Automatically provisions Kubernetes **RoleBindings** to efficienty manage permissions for the Tenant.
+
+- :material-network-off: **Network Isolation**
+
+    Enforces **NetworkPolicies** to block cross-tenant traffic, ensuring strict isolation between namespaces.
+
+- :material-chart-pie: **Resource Quotas**
+
+    Applies **ResourceQuotas** to prevent a single tenant from consuming all cluster storage or compute.
+
+</div>
+
+## Governance Models
+
+Choose the onboarding model that fits your organization.
+
+<div class="grid cards" markdown>
+
+- :material-account-check: **Self-Service**
+
+    ---
+
+     Developers create their own `OpenBaoTenant` in their own namespace.
+
+    *Best for: High-trash, low-friction environments.*
+
+    [:material-arrow-right: Self-Service Guide](onboarding.md#self-service-onboarding)
+
+- :material-police-badge: **Centralized Admin**
+
+    ---
+
+    Platform team creates `OpenBaoTenant` resources for teams.
+
+    *Best for: Strict compliance and audit trails.*
+
+    [:material-arrow-right: Admin Guide](onboarding.md#centralized-admin-onboarding)
+
+</div>
+
+## Next Steps
+
+- [Multi-Tenancy Security Guide](multi-tenancy.md)

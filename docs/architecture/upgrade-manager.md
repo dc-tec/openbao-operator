@@ -1,147 +1,127 @@
 # UpgradeManager (Rolling & Blue/Green)
 
-**Responsibility:** Safe rolling updates with Raft-aware leader handling.
+!!! tip "User Guide"
+    For operational instructions, see the [Upgrades User Guide](../user-guide/openbaocluster/operations/upgrades.md).
 
-## Rolling Update Strategy (Default)
+**Responsibility:** Orchestrate safe version updates while maintaining Raft consensus.
 
-The UpgradeManager uses **StatefulSet Partitioning** to control exactly which Pods are updated by Kubernetes, rather than letting Kubernetes update them all at once.
+## 1. Upgrade Strategies
 
-If image verification is enabled (`spec.imageVerification.enabled`), the operator verifies and pins upgrade executor Jobs to the verified digest for `spec.upgrade.executorImage`.
+The Manager supports two distinct strategies, controlled by `spec.updateStrategy`.
 
-### The Algorithm
+=== "Rolling Update (Default)"
 
-1. **Trigger:** User changes `Spec.Version` to `2.1.0`. `Status.CurrentVersion` is `2.0.0`.
-2. **Set Strategy:** Operator patches StatefulSet `updateStrategy` to `RollingUpdate` with `partition: <replicas>`. (This pauses K8s updates).
-3. **Identify Leader:** Operator prefers OpenBao's Kubernetes service registration label `openbao-active=true` to identify the leader pod (falls back to `GET /v1/sys/health` if labels are unavailable).
-   - *Result:* Pod-0 (Follower), Pod-1 (Leader), Pod-2 (Follower).
-4. **Update Followers (Reverse Ordinal):**
-   - Operator decrements partition to `2`. Pod-2 updates.
-   - Operator waits for Pod-2 `Ready` check + OpenBao Health check.
-   - **The Step-Down:** We cannot skip indices in a StatefulSet. Therefore, we must force a step-down BEFORE the update reaches the leader's index.
-   - Target: Pod-1. Is it Leader? **Yes.**
-   - **Action:** Send `PUT /v1/sys/step-down` to Pod-1. Wait for leadership to transfer to Pod-0 or Pod-2.
-   - Once Pod-1 is a follower, decrement partition to allow K8s to update Pod-1.
-   - Repeat for Pod-0.
+    **Goal:** Update pods one-by-one with minimal downtime.
 
-### Pod-by-Pod Update (Reverse Ordinal)
+    The Manager uses **StatefulSet Partitioning** to control the rollout.
 
-For each pod from highest ordinal to 0:
+    ```mermaid
+    graph TD
+        Trigger[Version Change] -->|Pause| Partition[Set Partition = Replicas]
+        Partition --> Loop{Partition > 0?}
+        
+        Loop -- Yes --> Ident[Identify Leader]
+        Ident -->|If Target is Leader| StepDown[Force Step-Down]
+        Ident -->|If Target is Follower| Update[Decrement Partition]
+        
+        StepDown --> WaitTransfer[Wait for Leadership Transfer]
+        WaitTransfer --> Update
+        
+        Update --> WaitReady[Wait for Pod Ready]
+        WaitReady --> WaitHealth[Wait for Vault Health]
+        WaitHealth --> Loop
+        
+        Loop -- No --> Done[Upgrade Complete]
 
-| Step | Description | Timeout |
-|------|-------------|---------|
-| Check Leadership | Prefer `openbao-active=true` label, fallback to health API | - |
-| Step-Down (if leader) | `PUT /v1/sys/step-down` and wait for transfer | 30s |
-| Allow Pod Update | Decrement partition | - |
-| Wait for Pod Ready | Pod reaches `Ready` state | 5 min |
-| Wait for Health | `initialized: true` AND `sealed: false` | 2 min |
-| Wait for Raft Sync | Pod within acceptable lag (100 entries) | 2 min |
-| Record Progress | Add to `Status.Upgrade.CompletedPods` | - |
+        classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+        classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+        classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+        
+        class Partition,StepDown,Update write;
+        class Trigger,Ident,WaitReady,WaitHealth read;
+        class Loop,WaitTransfer process;
+    ```
 
-### Upgrade State Machine
+    1.  **Partitioning:** We pause Kubernetes updates by setting `partition` equal to `replicas`.
+    2.  **Reverse Ordinal:** We update from highest index (e.g., 2) down to 0.
+    3.  **Leader Safety:** Before updating the node that is currently the **Leader**, we send `PUT /sys/step-down` to force a leadership transfer. This prevents the cluster from crashing during the leader's restart.
 
-1. **Detect Drift:** `Spec.Version` != `Status.CurrentVersion` AND `Status.Upgrade == nil`.
-2. **Pre-upgrade Snapshot:** If `spec.upgrade.preUpgradeSnapshot == true`, trigger a backup and wait for completion.
-3. **Initialize Upgrade State:** Create `Status.Upgrade`, set `Status.Phase = Upgrading`, set `Upgrading=True` condition.
-4. **Lock StatefulSet:** Patch `updateStrategy.rollingUpdate.partition` to `Replicas`.
-5. **Update Pods:** Execute pod-by-pod update.
-6. **Finalization:** Update `Status.CurrentVersion`, clear `Status.Upgrade`, set `Status.Phase = Running`.
+=== "Blue/Green"
+
+    **Goal:** Zero-downtime upgrades with instant rollback.
+
+    !!! warning "Resource Usage"
+        Requires **2x Storage** capacity during the transition (Blue volume + Green volume).
+
+    This strategy spawns a parallel "Green" cluster and migrates data via Raft.
+
+    ```mermaid
+    graph TD
+        Start((Start)) -->|v1 -> v2| Deploy[Deploy Green Cluster]
+        
+        subgraph Preparation
+            Deploy -->|Wait Ready| Join[Join Raft Mesh]
+            Join -.->|Non-Voters| Sync[Sync Data]
+            Sync -->|Wait Index| Promote[Promote Green to Voters]
+        end
+
+        subgraph Critical_Section [Traffic Switch]
+            Promote --> Switch[Update Service Selector]
+            Switch -->|Traffic -> Green| Stabilization{Stable?}
+            
+            Stabilization -- No --> Rollback[Rollback: Point Service to Blue]
+            Stabilization -- Yes --> Demote[Demote Blue to Non-Voters]
+        end
+
+        subgraph Cleanup
+            Demote --> Remove[Remove Blue from Raft]
+            Remove --> Delete[Delete Blue StatefulSet]
+            Rollback --> RemoveGreen[Remove Green from Raft]
+            RemoveGreen --> DeleteGreen[Delete Green StatefulSet]
+        end
+
+        Delete --> Done((Idle))
+        DeleteGreen --> Done
+
+        classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+        classDef critical fill:transparent,stroke:#dc2626,stroke-width:2px,stroke-dasharray: 5 5,color:#fff;
+        classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+        
+        class Deploy,Join,Sync,Promote,Demote,Remove,Delete,RemoveGreen,DeleteGreen process;
+        class Switch,Rollback critical;
+        class Start,Done,Stabilization write;
+    ```
+
+    **Key Phases:**
+
+    | Phase | Description |
+    | :--- | :--- |
+    | **Deploying** | Creates the new StatefulSet. |
+    | **Joining** | Adds new pods as **Non-Voters** (Read-Only). |
+    | **Promoting** | Promotes new pods to **Voters** (Write-Access). |
+    | **Switching** | Updates Service selector to point to Green. |
+    | **Cleanup** | Removes Blue pods from the Raft peer list. |
+
+## 2. Upgrade State Machine
 
 ### Resumability
 
-Upgrades are designed to survive Operator restarts:
+Upgrades are designed to survive Operator restarts. All state is stored in `Status`:
 
-- All upgrade state is stored in `Status.Upgrade`.
-- On Operator restart, if `Status.Upgrade != nil`:
-  1. Verify upgrade is still needed (`Spec.Version == Status.Upgrade.TargetVersion`).
-  2. If user changed `Spec.Version` mid-upgrade, clear `Status.Upgrade` and start fresh.
-  3. Otherwise, resume from `Status.Upgrade.CurrentPartition`.
-  4. Re-verify health of already-upgraded pods before continuing.
+- **Rolling:** Tracks `Status.Upgrade.CurrentPartition` and `CompletedPods`.
+- **Blue/Green:** Tracks `Status.BlueGreen.Phase` and `JobFailureCount`.
 
----
+If the Operator crashes, it reads the Status on startup and **resumes** exactly where it left off.
 
-## Blue/Green Upgrade Strategy
+### Image Verification
 
-When `spec.updateStrategy.type` is `BlueGreen`, the operator uses a parallel cluster upgrade approach instead of rolling updates.
+If `spec.imageVerification.enabled` is `true`:
 
-If image verification is enabled (`spec.imageVerification.enabled`), the operator verifies and pins the Green StatefulSet image (and its init container image, when configured) to verified digests.
+- **Rolling:** The main StatefulSet image is pinned to the verified digest.
+- **Blue/Green:** The Green StatefulSet and all executor Jobs are pinned to the verified digest.
 
-### Break-glass: Force Rollback
+## 3. Reconciliation Semantics
 
-If a blue/green upgrade becomes stuck, operators can force a rollback by setting the `openbao.org/force-rollback` annotation on the `OpenBaoCluster`. The operator evaluates this early and transitions into the rollback flow.
-
-### Architecture
-
-The Blue/Green strategy is implemented in the `internal/upgrade/bluegreen/` subpackage:
-
-- `manager.go` - Main upgrade orchestrator (`bluegreen.Manager`)
-- `actions.go` - Executor action constants (including rollback actions)
-- `job.go` - Upgrade executor Job creation
-
-### 10-Phase State Machine
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> Idle
-    Idle --> DeployingGreen: Version change detected
-    DeployingGreen --> JoiningMesh: Pods ready
-    JoiningMesh --> Syncing: Non-voters joined
-    Syncing --> Promoting: Data synced + hook passed
-    Promoting --> TrafficSwitching: Voters promoted
-    TrafficSwitching --> DemotingBlue: Stabilization passed
-    DemotingBlue --> Cleanup: Blue demoted
-    Cleanup --> Idle: Complete
-    
-    note right of Idle: Pre-upgrade snapshot (optional)
-    
-    TrafficSwitching --> RollingBack: Failure detected
-    Syncing --> RollingBack: Validation hook failed
-    JoiningMesh --> RollingBack: Job failures exceeded
-    RollingBack --> RollbackCleanup: Blue re-promoted
-    RollbackCleanup --> Idle: Green removed
-```
-
-| Phase | Description |
-|-------|-------------|
-| **Idle** | No upgrade in progress. Pre-upgrade snapshot created if configured. |
-| **DeployingGreen** | Creates Green StatefulSet with new version, waits for all pods to be running, ready, and unsealed |
-| **JoiningMesh** | Runs executor Job to join Green pods to Raft as non-voters |
-| **Syncing** | Runs executor Job to verify Green pods have replicated data, runs pre-promotion validation hook if configured |
-| **Promoting** | Runs executor Job to promote Green pods to voters |
-| **TrafficSwitching** | Service selectors point to Green, stabilization period monitors health |
-| **DemotingBlue** | Runs executor Job to demote Blue pods to non-voters, verifies Green leader election |
-| **Cleanup** | Runs executor Job to remove Blue peers from Raft, deletes Blue StatefulSet |
-| **RollingBack** | Triggered on failure. Re-promotes Blue voters, demotes Green non-voters |
-| **RollbackCleanup** | Removes Green peers from Raft, deletes Green StatefulSet |
-
-### Key Design Decisions
-
-1. **Revision-based naming**: StatefulSets are named `<cluster>-<revision>` where revision is a hash of version+image+replicas.
-2. **Shared headless service**: Blue and Green StatefulSets share the same headless service for Raft discovery.
-3. **Executor Jobs**: Long-running Raft operations run in isolated Jobs to avoid blocking the controller.
-4. **Automatic rollback**: Configurable via `autoRollback` with triggers for job failures, validation failures, and traffic failures.
-5. **Pre-upgrade snapshot**: Optional backup job created before the upgrade starts.
-
-### Upgrade Executor Jobs
-
-Each phase transition that requires Raft operations creates an upgrade executor Job:
-
-| Action | Description |
-|--------|-------------|
-| `ActionJoinGreenNonVoters` | Adds Green pods as Raft non-voters |
-| `ActionWaitGreenSynced` | Verifies replication is complete |
-| `ActionPromoteGreenVoters` | Promotes Green pods to Raft voters |
-| `ActionDemoteBlueNonVotersStepDown` | Demotes Blue pods, triggers leader step-down |
-| `ActionRemoveBluePeers` | Removes Blue pods from Raft peer list |
-| `ActionPromoteBlueVoters` | (Rollback) Re-promotes Blue pods to voters |
-| `ActionDemoteGreenNonVoters` | (Rollback) Demotes Green pods |
-| `ActionRemoveGreenPeers` | (Rollback) Removes Green pods from Raft |
-
-### Reconciliation Semantics
-
-- All state is stored in `Status.BlueGreen` for resumability, including `JobFailureCount`, `RollbackReason`, and snapshot job names.
-- Phase transitions are idempotent; re-running returns the same result.
-- The manager requeues (returns `true`) when waiting for external state changes.
-- Executor Jobs are owned by the OpenBaoCluster for automatic cleanup.
-
-See also: [Upgrades User Guide](../user-guide/openbaocluster/operations/upgrades.md)
+- **Idempotency:** Re-running a phase multiple times does not cause side effects (e.g., "Join" checks if already joined).
+- **Safety:** The Operator prioritizes **Availability** over Progress. If a health check fails, the upgrade pauses/retries indefinitely (Rolling) or triggers a rollback (Blue/Green).
+- **OwnerReferences:** Executor jobs in Blue/Green are owned by the Cluster CR, ensuring easy cleanup.

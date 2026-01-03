@@ -1,69 +1,89 @@
 # Admission Policies
 
-The Operator uses Kubernetes `ValidatingAdmissionPolicy` to enforce security invariants at admission time.
+!!! abstract "Concept"
+    The Operator uses Kubernetes `ValidatingAdmissionPolicy` (CEL) to enforce security invariants at the API level. This provides **Defense-in-Depth** by rejecting invalid or insecure configurations *before* they are persisted to etcd, supplementing the Operator's runtime reconciliation loops.
 
-## Policies Shipped With The Operator
+## Enforcement Flow
 
-The operator ships several admission policies under `config/policy/` to enforce “GitOps-safe” and “least privilege” boundaries:
+The following diagram illustrates how the Operator's policies intercept GitOps syncs:
 
-- **Managed Resource Lockdown (`lock-managed-resource-mutations`)**: Blocks direct CREATE/UPDATE/DELETE of operator-managed resources (labeled `app.kubernetes.io/managed-by=openbao-operator`). Users must change the parent `OpenBaoCluster` / `OpenBaoTenant` instead. A small set of exceptions exist for Kubernetes control-plane components, cert-manager, OpenBao service registration Pod label updates, and explicit break-glass maintenance.
-- **Controller Self-Lockdown (`lock-controller-statefulset-mutations`)**: Defense-in-depth guard that prevents the OpenBaoCluster controller itself from mutating high-risk `StatefulSet` fields (volumes, commands/args, security context, token mounting, and volume mounts).
-- **OpenBaoCluster Validation (`validate-openbaocluster`)**: Enforces baseline spec invariants (for example Hardened profile requirements, self-init request constraints, gateway requirements, backup configuration requirements, and backup endpoint SSRF protections).
-- **Sentinel Hardening (`restrict-sentinel-mutations`)**: Restricts Sentinel to status-only trigger writes.
-- **Provisioner Delegation Hardening (`restrict-provisioner-delegate`)**: Restricts what the impersonated delegate can create/bind when provisioning tenant RBAC.
+```mermaid
+graph LR
+    User["GitOps Pipeline"]
+    API["Kubernetes API"]
+    VAP["ValidatingAdmissionPolicy<br/>(lock-managed-resource-mutations)"]
+    Res["Managed Resource<br/>(StatefulSet)"]
 
-## ValidatingAdmissionPolicy for Sentinel
+    User --"Apply Change"--> API
+    API --"Validate"--> VAP
+    VAP --"Deny"--> API
+    API -.-x|"Reject"| User
+    
+    API --"Pass"--> Res
 
-A dedicated `ValidatingAdmissionPolicy` (`openbao-restrict-sentinel-mutations`) hardens the Sentinel drift detector:
+    %% Style Guide Compliant
+    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
 
-- **Subject Scoping:** The policy only applies when the caller is the Sentinel ServiceAccount (`system:serviceaccount:<tenant-namespace>:openbao-sentinel`).
-- **Status-Only Trigger:** The Sentinel is only allowed to update `status.sentinel` trigger fields (`triggerID`, `triggeredAt`, `triggerResource`).
-- **Spec & Metadata Protection:** For Sentinel requests, `object.spec` and key metadata fields (labels/annotations/finalizers) must match `oldObject`.
-- **All Other Status Blocked:** Any attempt by Sentinel to modify other status fields (conditions, phase, backup/upgrade state) is rejected.
+    class User git;
+    class API read;
+    class VAP security;
+    class Res write;
+```
 
-**Result:** Even if the Sentinel binary is compromised, it can only signal drift via `status.sentinel` and cannot escalate privileges or mutate configuration.
+## Policy Inventory
 
-!!! important "Required Dependency"
-    These admission policies are not optional. If the Operator cannot verify the Sentinel mutation policy is installed and correctly bound, it will treat Sentinel as unsafe and will not deploy Sentinel. The supported Kubernetes baseline for these controls is v1.33+.
+The Operator ships with a suite of policies to enforce "Least Privilege" and "GitOps Safety":
 
-!!! note "Kustomize Name Prefixes"
-    When deploying via `config/default`, `kustomize` applies a `namePrefix` (for example, `openbao-operator-`) to cluster-scoped admission resources. Ensure any referenced policy names/bindings match the rendered names.
+| Policy Name | Target | Enforcement | Description |
+| :--- | :--- | :--- | :--- |
+| `lock-managed-resource-mutations` | `StatefulSet`, `Service`, `Secret` | **Block** | Prevents users/GitOps from modifying resources managed by the Operator (labeled `app.kubernetes.io/managed-by=openbao-operator`). |
+| `lock-controller-statefulset-mutations` | `StatefulSet` (Controller) | **Block** | Self-protection: prevents the Controller from modifying its own sensitive fields (volumes, args). |
+| `validate-openbaocluster` | `OpenBaoCluster` | **Validate** | Enforces spec invariants (e.g., Hardened profile requirements, TLS configs). |
+| `restrict-sentinel-mutations` | `OpenBaoCluster` (Status) | **Restrict** | Ensures the Sentinel can *only* update specific status trigger fields. |
+| `restrict-provisioner-delegate` | `Role`, `RoleBinding` | **Restrict** | Limits the Provisioner Delegate to creating only specific, pre-approved RBAC roles. |
 
-## Configuration Ownership (Operator-Owned Stanzas)
+## Sentinel Hardening
 
-The operator’s `config.hcl` is generated from typed CRD fields and operator-owned stanzas:
+!!! success "Broken Object Prevention"
+    The `restrict-sentinel-mutations` policy acts as a firewall for the Sentinel sidecar. Since the Sentinel runs *alongside* the controller, a compromise of the Sentinel could theoretically affect the cluster status. This policy ensures the Sentinel works strictly as a "drift detector" and cannot mutate `spec` or other status conditions.
 
-- **Operator-Owned By Construction:** The operator always renders core stanzas like `listener "tcp"`, `storage "raft"`, and `seal` based on `spec.*` (and renders fixed identity attributes like `api_addr`/`cluster_addr`).
-- **User-Tunable Fields Are Typed:** User configuration under `spec.configuration` is a typed object (CRD schema). This is not a generic “accept arbitrary OpenBao HCL keys” escape hatch.
+**Allowed Mutations:**
 
-## Immutability
+- `status.sentinel.triggerID`
+- `status.sentinel.triggeredAt`
 
-Certain security-critical fields are enforced at admission time via `validate-openbaocluster`, for example:
+**Blocked Mutations:**
 
-- Hardened profile requirements (TLS mode, external unseal, self-init enabled, disallowing `tlsSkipVerify=true` in supported seal configs)
-- Init container required and enabled (and must specify an image)
-- Self-init request constraints (non-empty, bounded list with unique names)
-- Gateway and backup configuration invariants
+- `spec.*` (All fields)
+- `metadata.labels`, `metadata.annotations`
+- `status.conditions` (Phase transitions)
 
-## RBAC Delegation Hardening
+## Configuration Ownership
 
-The Provisioner uses a dedicated delegate ServiceAccount and impersonation to create tenant-scoped Roles and RoleBindings. This delegation is hardened at two layers:
+The Operator ensures that user intent (`spec.configuration`) is respected while enforcing mandatory platform settings.
 
-- **Kubernetes RBAC Escalation Prevention:** The delegate ClusterRole (`openbao-operator-tenant-template`) defines the maximum permissions that can ever be granted to tenants. The API server enforces that the delegate cannot create Roles with permissions it does not already possess.
-- **ValidatingAdmissionPolicy Guard:** A cluster-scoped `ValidatingAdmissionPolicy` (`openbao-restrict-provisioner-delegate`) restricts the Provisioner Delegate to:
-  - Only creating specific Roles/RoleBindings by name.
-  - Only binding those Roles to operator- and Sentinel-owned ServiceAccounts.
-  - Rejecting any delegated Role whose `rules.verbs` include `impersonate`, `bind`, `escalate`, or `*`.
+=== ":material-robot: Operator Owned"
 
-Together, these controls provide defense-in-depth: even if the delegate's ClusterRole is accidentally broadened, the policy still prevents impersonation or wildcard privilege grants through delegated Roles.
+    These stanzas are **Always Overwritten** by the Operator to ensure correctness and security:
 
-## Backup Endpoint SSRF Protection
+    -   `listener "tcp"`: TLS settings are mandatory based on `spec.tls`.
+    -   `storage "raft"`: Peer discovery is managed by the Operator.
+    -   `seal`: Auto-unseal configuration is derived from `spec.unseal`.
+    -   `api_addr`, `cluster_addr`: Networking identity is fixed.
 
-To prevent Server-Side Request Forgery (SSRF) attacks, backup endpoint URLs are validated via `validate-openbaocluster`:
+=== ":material-account-cog: User Tunable"
 
-- **Blocked Endpoints:**
-  - `localhost`, `127.0.0.1`, `::1` (loopback)
-  - `169.254.x.x` (link-local addresses, including cloud metadata services like `169.254.169.254`)
-- **Hardened Profile:** Requires HTTPS or S3 scheme for backup endpoints.
+    These areas are safe for user customization via `spec.configuration`:
 
-**Note:** Runtime checks still exist for other backup safety properties (for example cross-namespace SecretRef protections), but SSRF endpoint validation is enforced at admission.
+    -   `telemetry`: Metrics and tracing.
+    -   `log_level`: Observability tuning.
+    -   `plugin_directory`: Custom plugin paths.
+    -   `ui`: Dashboard enablement.
+
+## See Also
+
+- [:material-account-lock: RBAC Architecture](rbac.md)
+- [:material-shield-check: Security Profiles](../fundamentals/profiles.md)

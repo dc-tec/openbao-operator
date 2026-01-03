@@ -1,29 +1,81 @@
 # OpenBaoRestore Controller (Restore Lifecycle)
 
-**Responsibility:** Reconcile `OpenBaoRestore` resources and orchestrate snapshot restores via a Kubernetes Job.
+!!! abstract "Responsibility"
+    Reconcile `OpenBaoRestore` resources and orchestrate snapshot restores via a Kubernetes Job.
 
-## Design Summary
+!!! tip "User Guide"
+    For operational instructions, see the [Restore User Guide](../user-guide/openbaorestore/restore.md).
 
-- Restores are modeled as a separate CRD (`OpenBaoRestore`) rather than an `OpenBaoCluster` “mode”, to keep GitOps intent (`OpenBaoCluster.spec`) stable and make restores auditable and repeatable.
-- The controller delegates most logic to `internal/restore.Manager`.
-- The restore controller does not use `Owns()` watches for Jobs. It polls Job state via `GET` + `RequeueAfter` to stay compatible with the tenant-scoped RBAC model.
+## 1. Design Philosophy
 
-## Restore Workflow (High Level)
+- **CRD-Based**: Restores are modeled as `OpenBaoRestore` objects, not as a mode of `OpenBaoCluster`. This ensures GitOps stability and provides an audit log of restore operations.
+- **Stateless Controller**: The controller polls the restore Job rather than watching it, minimizing RBAC requirements.
+- **Safety First**: Restores use a distinct **Operation Lock** to prevent conflicts with Backups or Upgrades.
 
-1. **Create `OpenBaoRestore`:** User creates an `OpenBaoRestore` in the same namespace as the target `OpenBaoCluster`.
-2. **Phase machine:** The controller advances `status.phase` through `Pending` → `Validating` → `Running` → (`Completed` | `Failed`).
-3. **Validation:** Ensures the target cluster exists, checks preconditions (unless `spec.force`), and prepares ServiceAccount/RBAC for the restore Job.
-4. **Operation lock:** Acquires `OpenBaoCluster.status.operationLock` for `Restore` to avoid concurrent backups/upgrades; `spec.overrideOperationLock` provides a break-glass override (requires `spec.force`).
-5. **Run restore Job:** Creates a Kubernetes Job that pulls the snapshot from object storage and restores it to the cluster.
-6. **Observe completion:** Polls the Job to update `OpenBaoRestore.status` and move to a terminal phase.
+## 2. Restore Lifecycle
 
-## Interactions With Backups/Upgrades
+The controller drives the `OpenBaoRestore` through a defined phase machine.
 
-- While a restore is in progress, the backup manager detects the in-progress restore and skips starting new backups to avoid lock contention.
-- Restores are intended to be run while `OpenBaoCluster.spec.paused=true` to prevent workload reconciliation from fighting the restore process.
+```mermaid
+graph TD
+    Start[User Creates OpenBaoRestore] --> Pending
+    
+    Pending --> Validating{Validate}
+    Validating -- Invalid --> Failed[Phase: Failed]
+    Validating -- Valid --> Lock{Acquire Lock}
+    
+    Lock -- Locked --> Pending
+    Lock -- Acquired --> Running[Phase: Running]
+    
+    subgraph Execution [Restore Job]
+        Running --> Job[Launch Job]
+        Job --> Pull[Pull Snapshot]
+        Pull --> Restore[Restore to Vault]
+    end
+    
+    Restore -- Success --> Completed[Phase: Completed]
+    Restore -- Error --> Retrying{Retry?}
+    
+    Retrying -- Yes --> Job
+    Retrying -- No --> Failed
 
-See also:
+    classDef phase fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef terminal fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef error fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    
+    class Pending,Validating,Running,Execution phase;
+    class Completed terminal;
+    class Failed error;
+```
+
+## 3. Workflow Steps
+
+1. **Validation:**
+    - Target Cluster exists.
+    - Snapshot source is accessible.
+    - No conflicting operations (unless `spec.force` is used).
+2. **Operation Lock:**
+    - The controller sets `OpenBaoCluster.status.operationLock = "Restore"`.
+    - This **blocks** the BackupManager and UpgradeManager from starting new operations.
+3. **Execution:**
+    - A Kubernetes Job is spawned with the `bao-restore` binary.
+    - It downloads the snapshot from object storage (S3/GCS/Azure).
+    - It uses a temporary token (or valid credentials) to authenticate and hit the `sys/storage/raft/snapshot-force` endpoint.
+4. **Completion:**
+    - On success, the lock is released.
+    - The cluster may need to be unsealed manually or via auto-unseal.
+
+## 4. Interaction with Other Managers
+
+!!! info "Conflict Prevention"
+    The **Operation Lock** is the primary mechanism for safety.
+
+    -   **Backups:** Will skip scheduled runs if a Restore is locked.
+    -   **Upgrades:** Will pause reconciliation if a Restore is locked.
+
+To override this check during emergencies (e.g., restoring a broken cluster where the lock is stuck), use `spec.overrideOperationLock`.
+
+## 5. See Also
 
 - [Backup Manager](backup-manager.md)
-- [Lifecycle Flows](lifecycle.md)
-- [Restore User Guide](../user-guide/openbaorestore/restore.md)
+- [Lifecycle Flows](lifecycle/index.md)

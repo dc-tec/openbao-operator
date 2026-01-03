@@ -1,24 +1,47 @@
 # Security Fundamentals
 
-Core security concepts and models for the OpenBao Operator.
+!!! abstract "Core Concepts"
+    This section defines the foundational security models and mechanisms of the OpenBao Operator, establishing the baseline for secure operations.
+
+## Security Model
+
+The Operator implements a **Defense-in-Depth** strategy, ensuring security at multiple layers:
+
+1. **Threat Modeling:** Proactive identification of attack vectors and mitigations.
+2. **Profiles:** Pre-configured security postures (Development vs. Hardened).
+3. **Secrets:** Secure lifecycle management for root tokens and auto-unseal keys.
 
 ## Topics
 
-| Topic | Description |
-|-------|-------------|
-| [Threat Model](threat-model.md) | Threat analysis, attack vectors, and mitigations |
-| [Security Profiles](profiles.md) | Hardened vs Development profile comparison |
-| [Secrets Management](secrets-management.md) | Auto-unseal, root tokens, and authentication |
+<div class="grid cards" markdown>
 
-## Overview
+- :material-shield-alert: **Threat Model**
 
-The OpenBao Operator implements a defense-in-depth security model:
+    ---
 
-1. **Threat Modeling** — Identifies attack vectors and implements corresponding mitigations
-2. **Security Profiles** — Provides preconfigured security postures for different environments
-3. **Secrets Management** — Controls how sensitive material is generated, stored, and rotated
+    Detailed analysis of trust boundaries, potential threats, and architectural mitigations.
+
+    [:material-arrow-right: Read Analysis](threat-model.md)
+
+- :material-server-security: **Security Profiles**
+
+    ---
+
+    Comparison of `development` versus `hardened` profiles and their impact on cluster configuration.
+
+    [:material-arrow-right: Compare Profiles](profiles.md)
+
+- :material-key: **Secrets Management**
+
+    ---
+
+    How the Operator generates, encrypts, and rotates sensitive credentials like Root Tokens and Recovery Keys.
+
+    [:material-arrow-right: Manage Secrets](secrets-management.md)
+
+</div>
 
 ## See Also
 
-- [Infrastructure Security](../infrastructure/index.md) — RBAC, admission policies, network controls
-- [Workload Security](../workload/index.md) — Pod security, TLS, supply chain
+- [:material-server-network: Infrastructure Security](../infrastructure/index.md) — RBAC and Network Policies.
+- [:material-docker: Workload Security](../workload/index.md) — Pod Security and TLS.

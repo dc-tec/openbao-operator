@@ -1,62 +1,91 @@
-# SDLC Overview
+# Software Development Lifecycle (SDLC)
 
-This page maps the OpenBao Operator SDLC (software development lifecycle) to concrete repository artifacts.
+The OpenBao Operator follows a secure-by-default SDLC, integrating security checks, automated verification, and provenance at every stage.
 
-## Plan
+## 1. Lifecycle Overview
 
-- Compatibility policy: `docs/reference/compatibility.md`
+```mermaid
+graph TD
+    Plan --> Design
+    Design --> Code
+    Code --> Secure
+    Secure --> Verify
+    Verify --> Release
+    Release --> Deploy
+    Deploy --> Operate
+    Operate --> Plan
 
-## Design
+    classDef phase fill:transparent,stroke:#9333ea,stroke-width:2px;
+    class Plan,Design,Code,Secure,Verify,Release,Deploy,Operate phase;
+```
 
-- Architecture overview: `docs/architecture/index.md`
-- Component docs: `docs/architecture/components.md`
+## 2. Phase Detail
 
-## Implement
+The lifecycle maps directly to our documentation and toolchain.
 
-- Coding standards: `AGENTS.md`
-- Development setup: `docs/contributing/getting-started/development.md`
+<div class="grid cards" markdown>
 
-## Review
+- :material-clipboard-list: **Plan & Design**
 
-- Pull requests are expected for all changes (see `.github/pull_request_template.md`).
-- Issues use structured templates for triage (`.github/ISSUE_TEMPLATE/`).
+    ---
 
-## Verify
+    Define requirements and architecture.
 
-- Unit + envtest: `make test-ci`
-- E2E smoke on PRs: `.github/workflows/ci.yml`
-- Full E2E nightly: `.github/workflows/nightly.yml`
-- Helm validation in CI: `.github/workflows/ci.yml`
+      - :material-scale-balance: [Compatibility Policy](../reference/compatibility.md)
+      - :material-lan: [Architecture Overview](../architecture/index.md)
+      - :material-toy-brick: [Components](../architecture/components.md)
 
-## Secure
+- :material-code-braces: **Code & Implement**
 
-- Static analysis and linting: `make lint-config lint`
-- Dependency updates: `.github/dependabot.yml`
-- Dependency regression gate: `.github/workflows/dependency-review.yml`
-- Go vuln scanning: `govulncheck` (CI and release gates)
-- Filesystem + config scanning: Trivy (CI and nightly)
-- Keyless signing for release artifacts: `.github/workflows/release.yml`
-- Build provenance attestations: `.github/workflows/release.yml`
-- Sigstore trusted root maintenance: `.github/workflows/trusted-root-refresh.yml`
+    ---
 
-## Release
+    Write code adhering to strict standards.
 
-- Release process: `docs/contributing/release-management.md`
-- Release workflow: `.github/workflows/release.yml`
-- Release assets:
-  - digest-pinned `dist/install.yaml`
-  - per-image SBOMs (`dist/sbom-*.spdx.json`)
+      - :material-file-code: [Coding Standards](standards/index.md)
+      - :material-laptop: [Dev Setup](getting-started/development.md)
+      - :material-check: [Project Conventions](standards/project-conventions.md)
 
-## Deploy
+- :material-shield-check: **Secure & Verify**
 
-- Installer YAML: GitHub Release assets (`dist/install.yaml`)
-- Helm chart (OCI): `charts/openbao-operator/`
+    ---
 
-## Operate
+    Automated gates ensure quality and safety.
 
-- Runbooks and recovery docs: `docs/user-guide/`
-- Security posture and multi-tenancy: `docs/security/`
+      - :material-shield-check: [Security Practices](standards/security-practices.md)
+      - :material-test-tube: [CI Pipeline](ci.md)
+      - :material-list-status: [Threat Model](../security/fundamentals/threat-model.md)
 
-## Improve
+- :material-rocket-launch: **Release & Deploy**
 
-- CI and local workflows: `docs/contributing/ci.md`
+    ---
+
+    Build once, sign, and promote.
+
+      - :material-rocket-launch: [Release Process](release-management.md)
+      - :material-signature-freehand: [Artifact Verification](release-management.md#3-verifying-artifacts)
+      - :material-package-variant: [Helm Charts](https://github.com/dc-tec/openbao-operator/tree/main/charts/openbao-operator)
+
+- :material-server-network: **Operate & Monitor**
+
+    ---
+
+    Run reliably in production.
+
+      - :material-book-open-page-variant: [User Guides](../user-guide/index.md)
+      - :material-security: [Security Posture](../security/index.md)
+      - :material-stethoscope: [Troubleshooting](../user-guide/openbaocluster/recovery/no-leader.md)
+
+</div>
+
+## 3. Secure by Design
+
+Security is not a separate phase; it is injected into every step of the process.
+
+| Phase | Tooling | Check |
+| :--- | :--- | :--- |
+| **Code** | `golangci-lint` | Static analysis for bugs and style |
+| **Deps** | `dependabot` | Automated dependency updates |
+| **Verify** | `govulncheck` | Known vulnerability scanning |
+| **Build** | `trivy` | Container filesystem scanning |
+| **Release** | `cosign` | Keyless signing of images and charts |
+| **Publish** | `gh attestation` | Build provenance trails |

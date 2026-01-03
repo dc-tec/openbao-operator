@@ -1,40 +1,47 @@
 # Operator Deployment
 <!-- id: installation-guide -->
 
-## Prerequisites
+## Installation
 
-- **Kubernetes Cluster**: v1.33+ (see `docs/reference/compatibility.md`)
-- **kubectl**: Installed and configured
-- **Permissions**: Cluster-admin permissions to install CRDs and RBAC
+!!! tip "Prerequisites"
+    - **Kubernetes Cluster**: v1.33+ (see `docs/reference/compatibility.md`)
+    - **kubectl**: Installed and configured
+    - **Permissions**: Cluster-admin permissions to install CRDs and RBAC
 
-Default namespace: `openbao-operator-system`.
+    Default namespace: `openbao-operator-system`.
 
-## Install via Helm (recommended)
+=== ":material-package: Helm (Recommended)"
 
-```sh
-kubectl create namespace openbao-operator-system
+    Install via the official Helm chart:
 
-helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --version <chart-version> \
-  --namespace openbao-operator-system
-```
+    ```sh
+    kubectl create namespace openbao-operator-system
 
-## Install via release `install.yaml`
+    helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
+      --version <chart-version> \
+      --namespace openbao-operator-system
+    ```
 
-Download `install.yaml` from the GitHub Release and apply it:
+    [:material-arrow-right: View on Artifact Hub](https://artifacthub.io/packages/helm/openbao-operator/openbao-operator)
 
-```sh
-kubectl apply -f install.yaml
-```
+=== ":material-file-document-multiple-outline: YAML Manifests"
 
-## Developer install (Kustomize)
+    Download `install.yaml` from the GitHub Release and apply it directly:
 
-For local development only:
+    ```sh
+    # Download from Release assets
+    kubectl apply -f install.yaml
+    ```
 
-```sh
-make install
-make deploy IMG=ghcr.io/dc-tec/openbao-operator:dev
-```
+=== ":material-code-brackets: Developer (Source)"
+
+    For local development and contribution:
+
+    ```sh
+    # Requires Kustomize
+    make install
+    make deploy IMG=ghcr.io/dc-tec/openbao-operator:dev
+    ```
 
 ## Upgrading the operator
 

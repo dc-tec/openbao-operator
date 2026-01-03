@@ -1,102 +1,74 @@
+<div align="center">
+
 # OpenBao Operator
 
-**This is an experimental Operator**
-
+**Enterprise-grade management for OpenBao on Kubernetes.**
 
 [![CI](https://github.com/dc-tec/openbao-operator/actions/workflows/ci.yml/badge.svg)](https://github.com/dc-tec/openbao-operator/actions/workflows/ci.yml)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/dc-tec/openbao-operator)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/Docs-Live-green)](https://dc-tec.github.io/openbao-operator/)
 
-The OpenBao Operator manages the lifecycle of [OpenBao](https://openbao.org) clusters on Kubernetes.
-It follows a Supervisor Pattern: OpenBao owns data consistency (Raft), the operator owns orchestration (PKI, backups, upgrades, multi-tenancy, and hardening).
+[Features](#features) • [Installation](#installation) • [Documentation](#documentation) • [Contributing](#contributing)
+
+</div>
+
+> [!WARNING]
+> **Experimental Status**: This operator is currently in an experimental phase and is actively seeking feedback. It is **not** recommended for production environments at this time.
+
+---
+
+The OpenBao Operator manages the lifecycle of [OpenBao](https://openbao.org) clusters on Kubernetes using a **Supervisor Pattern**. It handles the orchestration complexity—PKI, backups, upgrades, and secure multi-tenancy—so you can focus on consuming secrets.
 
 ## Documentation
 
-Docs site: https://dc-tec.github.io/openbao-operator/
+Full documentation is available at **[dc-tec.github.io/openbao-operator](https://dc-tec.github.io/openbao-operator/)**.
 
-| Guide | Description |
-|-------|-------------|
-| [User Guide](docs/user-guide/index.md) | Installation, configuration, operations, and day-2 tasks |
-| [Architecture](docs/architecture/index.md) | Component design, boundaries, lifecycle flows |
-| [Security](docs/security/index.md) | Threat model, RBAC, admission policies, hardening |
-| [Compatibility](docs/reference/compatibility.md) | Supported Kubernetes and OpenBao versions |
-| [Contributing](docs/contributing/index.md) | Development setup, CI, release management |
+| | |
+| :---: | :---: |
+| [![User Guide](https://img.shields.io/badge/User_Guide-007EC6?style=for-the-badge&logo=readthedocs&logoColor=white)](docs/user-guide/index.md) | [![Architecture](https://img.shields.io/badge/Architecture-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)](docs/architecture/index.md) |
+| **Installation, Operations, Day-2 Tasks** | **Component Design, Boundaries, Flows** |
+| [![Security](https://img.shields.io/badge/Security-000000?style=for-the-badge&logo=imou&logoColor=white)](docs/security/index.md) | [![Contributing](https://img.shields.io/badge/Contributing-181717?style=for-the-badge&logo=github&logoColor=white)](docs/contributing/index.md) |
+| **Threat Model, Hardening, RBAC** | **Dev Setup, Coding Standards, Release** |
 
 ## Features
 
-- Zero trust architecture: split provisioner/controller with explicit, least-privilege permissions
-- Automated PKI: operator-managed CA, cert rotation, safe reloads
-- Raft-aware upgrades: rolling and blue/green flows with safety checks
-- Backups and restore: streaming Raft snapshots to object storage
-- Multi-tenancy: namespace-scoped isolation with RBAC + admission controls
-- Supply chain security: signature verification and digest-pinning for operator-managed images
+- **Zero Trust Architecture**: Dedicated strict RBAC for the Provisioner (cluster-scoped) vs Controller (namespace-scoped).
+- **Automated PKI**: Built-in Certificate Authority that handles rotation and hot reloads for all TLS traffic.
+- **Raft Streaming**: Native backups that stream Raft snapshots directly to S3/GCS/Azure without local disk staging.
+- **Safe Upgrades**: Automated Rolling and Blue/Green upgrade strategies with Raft health checks.
+- **Multi-Tenancy**: Securely share a cluster with namespace isolation and policy enforcement.
 
 ## Installation
 
-Prerequisites: Kubernetes v1.33+ (see `docs/reference/compatibility.md`), `kubectl`, and (recommended) `helm`.
+### Option 1: Helm (Recommended)
 
-Default namespace: `openbao-operator-system`.
+Install the operator from our OCI registry.
 
-### Install via Helm (recommended)
-
-```sh
+```bash
+# 1. Create namespace
 kubectl create namespace openbao-operator-system
 
+# 2. Install Chart
 helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --version <chart-version> \
+  --version 0.1.0 \
   --namespace openbao-operator-system
 ```
 
-To pin the operator image by digest:
+### Option 2: Plain YAML
 
-```sh
-helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --version <chart-version> \
-  --namespace openbao-operator-system \
-  --set image.repository=ghcr.io/dc-tec/openbao-operator \
-  --set image.digest=sha256:<digest>
+Apply the latest release manifest directly.
+
+```bash
+kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/latest/download/install.yaml
 ```
 
-CRD upgrades: when upgrading with Helm, apply updated CRDs first, then `helm upgrade`. See `docs/user-guide/operator/installation.md`.
+## Quick Start: Launch a Cluster
 
-### Install via release `install.yaml`
-
-Download `install.yaml` from the GitHub Release and apply it:
-
-```sh
-kubectl apply -f install.yaml
-```
-
-### Developer install (Kustomize)
-
-For local development only:
-
-```sh
-make install
-make deploy IMG=ghcr.io/dc-tec/openbao-operator:dev
-```
-
-## Quick start (multi-tenant mode)
-
-### 1) Onboard a tenant namespace
-
-Create a tenant that maps to a target namespace. The Provisioner will create the namespace (if needed) and install tenant-scoped RBAC.
-
-```sh
-kubectl apply -f - <<'YAML'
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoTenant
-metadata:
-  name: my-tenant
-  namespace: openbao-operator-system
-spec:
-  targetNamespace: my-namespace
-YAML
-```
-
-### 2) Create an OpenBao cluster
+Once the operator is running, you can launch a production-ready OpenBao cluster in seconds.
 
 ```yaml
+# cluster.yaml
 apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
@@ -106,7 +78,7 @@ spec:
   version: "2.4.4"
   image: "openbao/openbao:2.4.4"
   replicas: 3
-  profile: Development # use Hardened for production
+  profile: Development 
   tls:
     enabled: true
     mode: OperatorManaged
@@ -114,67 +86,19 @@ spec:
     size: "10Gi"
 ```
 
-```sh
+```bash
 kubectl apply -f cluster.yaml
-kubectl -n my-namespace get pods -l openbao.org/cluster=my-cluster -w
 ```
 
-Production note: the example above uses `Development`. For production, use `profile: Hardened` and follow `docs/user-guide/openbaocluster/operations/production-checklist.md`.
-
-## Helm chart maintenance
-
-The chart includes CRDs and a templated installer manifest. CI enforces that these stay in sync:
-
-- Sync chart inputs: `make helm-sync`
-- Verify (PR-equivalent): `make verify-helm`
-
-See `docs/contributing/ci.md`.
-
-## Architecture
-
-The operator is split into two components to enforce security boundaries:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Kubernetes API Server                      │
-└─────────────────────────────────────────────────────────────────┘
-         ▲                                    ▲
-         │ watch Tenants                      │ watch Clusters
-         │                                    │
-┌────────┴────────┐                ┌──────────┴──────────┐
-│   Provisioner   │                │    Controller       │
-│ (Cluster-scoped)│                │ (Namespace-scoped)  │
-│                 │                │                     │
-│ • Creates NS    │                │ • StatefulSet       │
-│ • Grants RBAC   │                │ • ConfigMaps        │
-│ • Tenant CRs    │                │ • Secrets (TLS)     │
-└─────────────────┘                │ • Backups           │
-                                   │ • Upgrades          │
-                                   └─────────────────────┘
-```
-
-For detailed architecture diagrams and component interactions, see [Architecture Documentation](docs/architecture/index.md).
+> **Note**: For production, verify prerequisites in the [Production Checklist](docs/user-guide/openbaocluster/operations/production-checklist.md).
 
 ## Contributing
 
-We welcome contributions! Before submitting:
+We welcome contributions! Please see the [Contributing Guide](docs/contributing/index.md) for details on:
 
-1. Follow the coding standards in [Contributing Guide](docs/contributing/index.md)
-2. Ensure `make test` and `make lint` pass locally (or run `make verify-fmt verify-tidy verify-generated verify-helm test-ci`)
-3. Keep documentation in sync with behavior changes
-
-### AI-Assisted Contributions
-
-We welcome contributions that leverage AI tools. However, all contributions, AI-assisted or not must meet our quality standards:
-
-- **Understand what you're submitting.** You are responsible for the code you contribute.
-- **Follow the coding standards** in our [Contributing Guide](docs/contributing/index.md).
-- **Test your changes.** PRs must pass CI and include appropriate test coverage.
-- **Write meaningful commit messages** that explain the "why," not just the "what."
-
-PRs that appear to be low-effort AI-generated content without proper review, testing, or understanding will be closed without merge.
-
-> **Tip for AI users**: Configure your AI tool to use `.agent/rules/` as workspace rules for project-specific standards.
+- Setting up your development environment.
+- Running tests (`make test-ci`).
+- Our AI-Assisted Contribution Policy.
 
 ## License
 

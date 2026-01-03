@@ -1,117 +1,102 @@
-# Development Environment
+# Setting Up Your Environment
 
-## 1. Prerequisites
+This guide covers everything you need to build, run, and test the OpenBao Operator locally.
 
-- **Go:** version v1.25.5+ (check with `go version`)
-- **Docker:** version 28.3.3+ (check with `docker version`)
-- **kubectl:** version v1.33+ (check with `kubectl version --client`)
-- **Access to a Kubernetes cluster:** v1.33+ (for testing; see `docs/reference/compatibility.md`)
-- **Kind:** For local E2E testing (optional but recommended)
-- **Make:** For running build targets
+## Prerequisites
 
-You should also have:
+Ensure you have the following installed before starting:
 
-- Permissions to install CRDs and cluster-scoped RBAC
-- A default `StorageClass` for StatefulSet PVCs
+!!! check "Required Tools"
+    - [x] **Go** v1.25.5+ (`go version`)
+    - [x] **Docker** v28.3.3+ (`docker version`)
+    - [x] **kubectl** v1.33+ (`kubectl version --client`)
+    - [x] **Kubernetes Cluster** v1.33+ (Kind, Minikube, or Cloud)
 
-## 2. Clone the Repository
+!!! tip "Optional but Recommended"
+    - [x] **Kind** for running local E2E tests (`kind version`)
+    - [x] **k9s** for inspecting the cluster state
+    - [x] **golangci-lint** for local linting
 
-```sh
-git clone https://github.com/dc-tec/openbao-operator.git
-cd openbao-operator
-```
+## Development Workflow
 
-## 3. Build & Run
+We support two main development workflows. Choose the one that fits your current task.
 
-### 3.1 Local Development
+=== ":material-laptop: Local Development (Fast Loop)"
 
-**Build the operator binary:**
+    Best for rapid iteration on logic. The operator runs as a generic Go binary on your laptop and connects to the cluster via your kubeconfig.
 
-```sh
-make build
-```
+    1.  **Clone the Repo:**
+        ```sh
+        git clone https://github.com/dc-tec/openbao-operator.git
+        cd openbao-operator
+        ```
 
-This compiles the operator binary to `bin/manager`.
+    2.  **Install CRDs:**
+        Apply the Custom Resource Definitions to your target cluster.
+        ```sh
+        make install
+        ```
 
-**Run the operator locally:**
+    3.  **Run Operator:**
+        Start the controller locally. It will use your `~/.kube/config`.
+        ```sh
+        make run
+        ```
 
-```sh
-make run
-```
+    !!! warning "Limitations"
+        - Webhooks may not work locally without tunneling (ngrok).
+        - NetworkPolicies cannot be tested this way.
 
-This runs the operator locally using `kubectl` to connect to your configured Kubernetes cluster. The operator will use your local kubeconfig (typically `~/.kube/config`).
+=== ":simple-kubernetes: Cluster Deployment (Integration Loop)"
 
-**Note:** Running locally requires:
+    Best for testing full lifecycle, webhooks, and RBAC permissions. The operator runs as a Pod inside the cluster.
 
-- A Kubernetes cluster accessible via your kubeconfig
-- CRDs installed (see below)
-- Proper RBAC permissions
+    1.  **Start Kind Cluster:**
+        ```sh
+        kind create cluster --name openbao-dev
+        ```
 
-### 3.2 Install CRDs
+    2.  **Build & Load Image:**
+        Build the docker image and load it directly into Kind (no registry needed).
+        ```sh
+        make docker-build IMG=openbao-operator:dev
+        kind load docker-image openbao-operator:dev --name openbao-dev
+        ```
 
-Before running the operator, install the Custom Resource Definitions:
+    3.  **Deploy:**
+        Install CRDs and deploy the operator manifests.
+        ```sh
+        make deploy IMG=openbao-operator:dev
+        ```
 
-```sh
-make install
-```
+    4.  **Verify:**
+        ```sh
+        kubectl get pods -n openbao-operator-system
+        ```
 
-This installs the `OpenBaoCluster` CRD into your cluster.
+## Common Make Targets
 
-### 3.3 Deploy the Operator
+Use `make help` to see all available commands, or refer to this cheatsheet:
 
-**Build and push a container image:**
+| Category | Target | Description |
+| :--- | :--- | :--- |
+| **Build** | `make build` | Compile the binary to `bin/manager`. |
+| | `make docker-build` | Build the container image. |
+| **Deploy** | `make install` / `uninstall` | Install/Remove CRDs. |
+| | `make deploy` / `undeploy` | Deploy/Remove Operator & RBAC. |
+| **Verify** | `make lint` | Run code linters. |
+| | `make test` | Run unit tests. |
+| | `make test-integration` | Run integration tests (envtest). |
+| **Generate**| `make manifests` | Regenerate CRD YAMLs and RBAC. |
+| | `make generate` | Regenerate `deepcopy` code. |
 
-```sh
-make docker-build docker-push IMG=<your-registry>/openbao-operator:tag
-```
+## Troubleshooting
 
-**Deploy to the cluster:**
+??? question "RBAC Errors during `make deploy`?"
+    Ensure your current kubeconfig user has `cluster-admin` privileges.
+    ```sh
+    kubectl create clusterrolebinding my-admin --clusterrole=cluster-admin --user=$(gcloud config get-value account)
+    ```
 
-```sh
-make deploy IMG=<your-registry>/openbao-operator:tag
-```
-
-**NOTE:** If you encounter RBAC errors, you may need to grant yourself cluster-admin privileges or be logged in as admin.
-
-### 3.4 Uninstall
-
-**Delete the instances (CRs) from the cluster:**
-
-```sh
-kubectl delete -k config/samples/
-```
-
-**Delete the APIs (CRDs) from the cluster:**
-
-```sh
-make uninstall
-```
-
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
-```
-
-### 3.5 Build Targets
-
-Run `make help` to see all available make targets:
-
-```sh
-make help
-```
-
-Common targets include:
-
-- `make build` - Build the operator binary
-- `make run` - Run the operator locally
-- `make install` - Install CRDs
-- `make uninstall` - Uninstall CRDs
-- `make deploy` - Deploy the operator to the cluster
-- `make docker-build` - Build the container image
-- `make docker-push` - Push the container image
-- `make manifests` - Generate manifests (CRDs, RBAC, etc.)
-- `make generate` - Generate code (deepcopy, clientset, etc.)
-- `make test` - Run unit tests
-- `make test-integration` - Run integration tests
-- `make lint` - Run linters
+??? question "Webhooks failing locally?"
+    Validating Webhooks require the K8s API server to reach the operator. When running `make run`, this is difficult. Use the **Cluster Deployment** method to test webhooks.

@@ -1,62 +1,91 @@
 # Component Design
 
-The Operator runs a controller manager process hosting multiple controller-runtime controllers. The primary API (`OpenBaoCluster`) is reconciled by three dedicated controllers to keep responsibilities clear and avoid status write contention.
+The OpenBao Operator uses a **Split-Controller Architecture**. Instead of a single monolithic reconciliation loop, we divide responsibilities across three specialized controllers per `OpenBaoCluster`.
 
-## Controller Overview
+## 1. Controller Hierarchy
 
-| Controller | Responsibility |
-|------------|----------------|
-| `openbaocluster-workload` | Workload reconciliation (certs, infra, init) + Sentinel fast-path drift correction |
-| `openbaocluster-adminops` | Admin operations (upgrades, backups) + periodic/forced full reconciles after Sentinel fast-path |
-| `openbaocluster-status` | Single-writer for `status.conditions` + finalizers + status/phase aggregation |
-| [`openbaorestore`](restore-manager.md) | Reconcile `OpenBaoRestore` jobs and restore lifecycle |
-| `openbao-provisioner` | Reconcile `OpenBaoTenant` and provision tenant-scoped RBAC |
+We separate **Workload** (Pod churn), **Operations** (Upgrades/Backups), and **Status** (Updates) to prevent head-of-line blocking and status write contention.
 
-## Manager Overview (OpenBaoCluster)
+```mermaid
+graph TD
+    Manager[Manager Process] -->|Starts| Workload[("fa:fa-server Workload Controller")]
+    Manager -->|Starts| Admin[("fa:fa-tools AdminOps Controller")]
+    Manager -->|Starts| Status[("fa:fa-pen-to-square Status Controller")]
 
-| Manager | Responsibility |
-|---------|----------------|
-| [Cert Manager](cert-manager.md) | Bootstrap PKI and rotate certificates |
-| [Infrastructure Manager](infra-manager.md) | Render configuration and maintain StatefulSet |
-| [Init Manager](init-manager.md) | Automate initial cluster initialization |
-| [Upgrade Manager](upgrade-manager.md) | Safe rolling and blue/green updates |
-| [Backup Manager](backup-manager.md) | Schedule and execute Raft snapshots |
+    subgraph Roles ["Responsibilities"]
+        Workload -->|Delegates to| Infra[Infra Manager]
+        Workload -->|Delegates to| Cert[Cert Manager]
+        
+        Admin -->|Delegates to| Upgrade[Upgrade Manager]
+        Admin -->|Delegates to| Backup[Backup Manager]
+        
+        Status -->|Aggregates| Conditions[Status Conditions]
+    end
+    
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    
+    class Manager process;
+    class Workload,Admin,Status write;
+    class Infra,Cert,Upgrade,Backup,Conditions read;
+```
 
-## Pausing Reconciliation
+---
 
-All `OpenBaoCluster` controllers MUST honor `spec.paused`:
+## 2. Controllers
 
-- When `OpenBaoCluster.Spec.Paused == true`, reconcilers SHOULD short-circuit early and avoid mutating cluster resources, allowing safe manual maintenance (e.g., manual restore).
-- Finalizers and deletion handling MAY still proceed to ensure cleanup when the CR is deleted.
+| Controller | Role | Why Separate? |
+| :--- | :--- | :--- |
+| **Workload** | Reconciles StatefulSet, Services, ConfigMaps, and Secrets. | High churn. Needs to react fast to Pod failures. |
+| **AdminOps** | Handles Upgrades, Backups, and Restores. | Long-running operations. Should not block Pod recovery. |
+| **Status** | Aggregates status from other controllers and writes to API. | Prevents `ResourceVersion` conflicts by serializing status updates. |
 
-## Manager Details
+---
 
-### Cert Manager (TLS Lifecycle)
+## 3. Internal Managers
 
-Supports three TLS modes: `OperatorManaged`, `External`, and `ACME`. Handles certificate generation, rotation, and hot-reload signaling.
+Controllers delegate complex business logic to specialized **Internal Managers**.
 
-[Read more →](cert-manager.md)
+```mermaid
+classDiagram
+    class OpenBaoClusterReconciler {
+        +Reconcile()
+    }
 
-### Infrastructure Manager (Config & StatefulSet)
+    class InfraManager {
+        +SyncStatefulSet()
+        +SyncService()
+    }
+    
+    class CertManager {
+        +SyncPKI()
+        +RotateCerts()
+    }
+    
+    class UpgradeManager {
+        +ReconcileUpdate()
+    }
 
-Generates `config.hcl` dynamically, manages the StatefulSet, handles auto-unseal configuration, and performs image verification.
+    OpenBaoClusterReconciler --> InfraManager : Uses
+    OpenBaoClusterReconciler --> CertManager : Uses
+    OpenBaoClusterReconciler --> UpgradeManager : Uses
 
-[Read more →](infra-manager.md)
+    style OpenBaoClusterReconciler fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff
+    style InfraManager fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff
+    style CertManager fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff
+    style UpgradeManager fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff
+```
 
-### Init Manager (Cluster Initialization)
+### Domain Managers
 
-Handles single-pod bootstrap, cluster initialization via HTTP API, and root token storage.
+- **[Infrastructure Manager](infra-manager.md)**: The "heart" of the operator. Generates `config.hcl` and manages the `StatefulSet`.
+- **[Cert Manager](cert-manager.md)**: Handles TLS interactions. Supports `OperatorManaged` (internal CA), `ACME` (LetsEncrypt), and `External` (Bring your own).
+- **[Init Manager](init-manager.md)**: Auto-initializes new clusters, handling the `sys/init` call and root token encryption.
+- **[Upgrade Manager](upgrade-manager.md)**: Powering both **Rolling** and **Blue/Green** upgrades. Manages the state machine for complex transitions.
+- **[Backup Manager](backup-manager.md)**: Runs snapshot jobs on a Cron schedule.
 
-[Read more →](init-manager.md)
+### Shared Libraries
 
-### Upgrade Manager (Rolling & Blue/Green)
-
-Implements StatefulSet partitioning for rolling updates and a 10-phase state machine for blue/green upgrades with automatic rollback.
-
-[Read more →](upgrade-manager.md)
-
-### Backup Manager (Snapshots)
-
-Creates backup Jobs that stream Raft snapshots directly to object storage with cron scheduling and retention management.
-
-[Read more →](backup-manager.md)
+- **`internal/provisioner`**: Handles RBAC and Namespace creation for Tenants.
+- **`internal/config`**: A pure-functional HCL generator that renders OpenBao configuration.
