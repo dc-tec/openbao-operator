@@ -72,6 +72,23 @@ type Manager struct {
 	sentinelAdmissionReady bool
 }
 
+// EnsureGatewayTrafficResources reconciles the Gateway API traffic-shaping resources
+// (HTTPRoute backends and any weighted backend Services) for the given cluster.
+//
+// This is intended to be called by the blue/green upgrade state machine when it
+// advances traffic steps. The workload controller does not reconcile on every
+// blue/green status update, so relying on the main infra reconcile loop can
+// leave HTTPRoute backends stale during GatewayWeights traffic shifting.
+func (m *Manager) EnsureGatewayTrafficResources(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster == nil {
+		return fmt.Errorf("cluster is required")
+	}
+	if err := m.ensureExternalService(ctx, logger, cluster); err != nil {
+		return err
+	}
+	return m.ensureHTTPRoute(ctx, logger, cluster)
+}
+
 // NewManager constructs a Manager that uses the provided Kubernetes client.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
 // operatorNamespace is the namespace where the operator is deployed, used for NetworkPolicy rules.
@@ -213,6 +230,13 @@ func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logge
 	// in a protected state. This prevents a race condition where pods could
 	// be running without network restrictions.
 	if err := m.ensureNetworkPolicy(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	// Backup/restore/upgrade-snapshot Jobs are excluded from the primary pod
+	// NetworkPolicy (they often need different egress). Ensure they still run
+	// under an explicit policy.
+	if err := m.ensureJobNetworkPolicy(ctx, logger, cluster); err != nil {
 		return err
 	}
 

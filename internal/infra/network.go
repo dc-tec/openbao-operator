@@ -589,8 +589,8 @@ func httpRouteName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 // from the referenced Gateway to the OpenBao public Service without terminating TLS.
 //
 // This function gracefully handles the case where Gateway API CRDs are not installed
-// in the cluster. If the TLSRoute CRD is not found, the function logs a warning
-// and returns nil to allow other reconciliation to continue.
+// in the cluster. If the TLSRoute CRD is not found, it returns ErrGatewayAPIMissing
+// so the caller can surface a degraded condition.
 func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	gatewayCfg := cluster.Spec.Gateway
 	enabled := gatewayCfg != nil && gatewayCfg.Enabled && gatewayCfg.TLSPassthrough
@@ -655,8 +655,8 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 	// Use SSA to create or update, handling CRD missing errors gracefully
 	if err := m.applyResource(ctx, desired, cluster); err != nil {
 		if operatorerrors.IsCRDMissingError(err) {
-			logger.V(1).Info("Gateway API TLSRoute CRD not installed; skipping TLSRoute reconciliation", "tlsroute", name)
-			return nil
+			logger.Info("Gateway API CRDs not installed; TLSRoute reconciliation will be marked as degraded", "tlsroute", name)
+			return ErrGatewayAPIMissing
 		}
 		return fmt.Errorf("failed to ensure TLSRoute %s/%s: %w", cluster.Namespace, name, err)
 	}
@@ -754,7 +754,26 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 
 	// BackendTLSPolicy is not needed when TLS passthrough is enabled
 	if gatewayCfg != nil && gatewayCfg.TLSPassthrough {
-		logger.V(1).Info("BackendTLSPolicy not needed with TLS passthrough; skipping", "tls_passthrough", true)
+		name := backendTLSPolicyName(cluster)
+		backendTLSPolicy := &gatewayv1.BackendTLSPolicy{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      name,
+		}, backendTLSPolicy)
+		if err != nil {
+			if operatorerrors.IsCRDMissingError(err) {
+				return nil // CRD not installed, nothing to do
+			}
+			if apierrors.IsNotFound(err) {
+				return nil // Already deleted, nothing to do
+			}
+			return fmt.Errorf("failed to get BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
+		}
+
+		logger.V(1).Info("BackendTLSPolicy not needed with TLS passthrough; deleting", "backendtlspolicy", name)
+		if err := m.client.Delete(ctx, backendTLSPolicy); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
+		}
 		return nil
 	}
 
@@ -831,8 +850,8 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 	// Use SSA to create or update, handling CRD missing errors gracefully
 	if err := m.applyResource(ctx, desired, cluster); err != nil {
 		if operatorerrors.IsCRDMissingError(err) {
-			logger.V(1).Info("Gateway API BackendTLSPolicy CRD not installed; skipping BackendTLSPolicy reconciliation", "backendtlspolicy", name)
-			return nil
+			logger.Info("Gateway API CRDs not installed; BackendTLSPolicy reconciliation will be marked as degraded", "backendtlspolicy", name)
+			return ErrGatewayAPIMissing
 		}
 		return fmt.Errorf("failed to ensure BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
 	}
@@ -916,7 +935,6 @@ func backendTLSPolicyName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 // ensureNetworkPolicy creates or updates a NetworkPolicy to enforce cluster isolation.
 // The NetworkPolicy implements a default-deny-all-ingress policy, only allowing:
 // - Traffic from pods within the same cluster (via pod selector labels)
-// - Traffic from kube-system namespace (for system components like DNS)
 // - Traffic from OpenBao operator pods on port 8200 (for health checks, initialization, upgrades)
 // - DNS traffic (for service discovery)
 //
@@ -963,6 +981,39 @@ func (m *Manager) ensureNetworkPolicy(ctx context.Context, logger logr.Logger, c
 
 	if err := m.applyResource(ctx, desired, cluster); err != nil {
 		return fmt.Errorf("failed to ensure NetworkPolicy %s/%s: %w", cluster.Namespace, name, err)
+	}
+
+	return nil
+}
+
+// ensureJobNetworkPolicy creates or updates a NetworkPolicy that applies to
+// backup/restore/upgrade-snapshot Jobs. These pods are excluded from the main
+// OpenBao pod NetworkPolicy because they often need different egress (e.g. object
+// storage), but they should still run under explicit network constraints.
+func (m *Manager) ensureJobNetworkPolicy(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	name := jobNetworkPolicyName(cluster)
+
+	apiServerInfo, err := m.detectAPIServerInfo(ctx, logger, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to detect API server information for Job NetworkPolicy: %w. "+
+			"API server detection is required to enforce least-privilege egress rules. "+
+			"Consider explicitly configuring spec.network.apiServerCIDR if auto-detection fails", err)
+	}
+	if apiServerInfo == nil || (apiServerInfo.ServiceNetworkCIDR == "" && len(apiServerInfo.EndpointIPs) == 0) {
+		return fmt.Errorf("API server information is incomplete (no service CIDR or endpoint IPs detected). " +
+			"This is required to enforce least-privilege NetworkPolicy egress rules. " +
+			"Consider explicitly configuring spec.network.apiServerCIDR")
+	}
+
+	desired := buildJobNetworkPolicy(cluster, apiServerInfo)
+
+	desired.TypeMeta = metav1.TypeMeta{
+		Kind:       "NetworkPolicy",
+		APIVersion: "networking.k8s.io/v1",
+	}
+
+	if err := m.applyResource(ctx, desired, cluster); err != nil {
+		return fmt.Errorf("failed to ensure Job NetworkPolicy %s/%s: %w", cluster.Namespace, name, err)
 	}
 
 	return nil
@@ -1093,7 +1144,7 @@ func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger, c
 // It dynamically includes rules for Gateway controllers based on the cluster configuration.
 func buildNetworkPolicyIngressRules(
 	cluster *openbaov1alpha1.OpenBaoCluster,
-	clusterPeer, kubeSystemPeer, operatorPeer networkingv1.NetworkPolicyPeer,
+	clusterPeer, operatorPeer networkingv1.NetworkPolicyPeer,
 	apiPort, clusterPort intstr.IntOrString,
 ) []networkingv1.NetworkPolicyIngressRule {
 	rules := []networkingv1.NetworkPolicyIngressRule{
@@ -1110,10 +1161,6 @@ func buildNetworkPolicyIngressRules(
 					Port:     &clusterPort,
 				},
 			},
-		},
-		{
-			// Allow ingress from kube-system for DNS and system components
-			From: []networkingv1.NetworkPolicyPeer{kubeSystemPeer},
 		},
 	}
 
@@ -1215,7 +1262,6 @@ func buildNetworkPolicyIngressRules(
 // The policy enforces:
 // - Default deny all ingress traffic
 // - Allow ingress from pods within the same cluster (same pod selector labels)
-// - Allow ingress from kube-system namespace (for system components like DNS)
 // - Allow ingress from Gateway namespace (if Gateway is enabled and in different namespace)
 // - Allow ingress from OpenBao operator pods on port 8200 (for health checks, initialization, upgrades)
 // - Allow egress to DNS (port 53 UDP/TCP) for service discovery
@@ -1233,15 +1279,6 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	clusterPeer := networkingv1.NetworkPolicyPeer{
 		PodSelector: &metav1.LabelSelector{
 			MatchLabels: podSelector,
-		},
-	}
-
-	// Allow ingress from kube-system namespace (for DNS and system components)
-	kubeSystemPeer := networkingv1.NetworkPolicyPeer{
-		NamespaceSelector: &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				"kubernetes.io/metadata.name": "kube-system",
-			},
 		},
 	}
 
@@ -1392,7 +1429,7 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	}
 
 	// Build operator-managed ingress rules
-	ingressRules := buildNetworkPolicyIngressRules(cluster, clusterPeer, kubeSystemPeer, operatorPeer, apiPort, clusterPort)
+	ingressRules := buildNetworkPolicyIngressRules(cluster, clusterPeer, operatorPeer, apiPort, clusterPort)
 
 	// Merge user-provided ingress rules (append after operator-managed rules)
 	if cluster.Spec.Network != nil && len(cluster.Spec.Network.IngressRules) > 0 {
@@ -1431,9 +1468,160 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	return networkPolicy, nil
 }
 
+func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *apiServerInfo) *networkingv1.NetworkPolicy {
+	labels := infraLabels(cluster)
+
+	dnsPort := intstr.FromInt(53)
+	dnsProtocolUDP := corev1.ProtocolUDP
+	dnsProtocolTCP := corev1.ProtocolTCP
+	kubernetesAPIPort443 := intstr.FromInt(443)
+	kubernetesAPIPort6443 := intstr.FromInt(6443)
+	openBaoAPIPort := intstr.FromInt(constants.PortAPI)
+
+	openBaoPeer := networkingv1.NetworkPolicyPeer{
+		PodSelector: &metav1.LabelSelector{
+			MatchLabels: infraLabels(cluster),
+		},
+	}
+
+	egressRules := []networkingv1.NetworkPolicyEgressRule{
+		{
+			// Allow DNS egress for name resolution.
+			To: []networkingv1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"kubernetes.io/metadata.name": "kube-system",
+						},
+					},
+				},
+			},
+			Ports: []networkingv1.NetworkPolicyPort{
+				{
+					Protocol: &dnsProtocolUDP,
+					Port:     &dnsPort,
+				},
+				{
+					Protocol: &dnsProtocolTCP,
+					Port:     &dnsPort,
+				},
+			},
+		},
+		{
+			// Allow egress to OpenBao API (to fetch/restore snapshots, etc.).
+			To: []networkingv1.NetworkPolicyPeer{openBaoPeer},
+			Ports: []networkingv1.NetworkPolicyPort{
+				{
+					Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
+					Port:     &openBaoAPIPort,
+				},
+			},
+		},
+	}
+
+	// Add service network CIDR rule if detected.
+	if apiServerInfo != nil && apiServerInfo.ServiceNetworkCIDR != "" {
+		egressRules = append(egressRules, networkingv1.NetworkPolicyEgressRule{
+			To: []networkingv1.NetworkPolicyPeer{
+				{
+					IPBlock: &networkingv1.IPBlock{
+						CIDR: apiServerInfo.ServiceNetworkCIDR,
+					},
+				},
+			},
+			Ports: []networkingv1.NetworkPolicyPort{
+				{
+					Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
+					Port:     &kubernetesAPIPort443,
+				},
+			},
+		})
+	}
+
+	// Add endpoint IP rules if detected (self-managed clusters).
+	if apiServerInfo != nil && len(apiServerInfo.EndpointIPs) > 0 {
+		for _, endpointIP := range apiServerInfo.EndpointIPs {
+			endpointCIDR := endpointIP + "/32"
+			egressRules = append(egressRules, networkingv1.NetworkPolicyEgressRule{
+				To: []networkingv1.NetworkPolicyPeer{
+					{
+						IPBlock: &networkingv1.IPBlock{
+							CIDR: endpointCIDR,
+						},
+					},
+				},
+				Ports: []networkingv1.NetworkPolicyPort{
+					{
+						Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
+						Port:     &kubernetesAPIPort6443,
+					},
+				},
+			})
+		}
+	}
+
+	// Development profile convenience: if the user didn't provide explicit egress rules,
+	// allow common HTTPS egress for backup/restore targets.
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileDevelopment &&
+		(cluster.Spec.Network == nil || len(cluster.Spec.Network.EgressRules) == 0) {
+		httpsPort := intstr.FromInt(443)
+		egressRules = append(egressRules, networkingv1.NetworkPolicyEgressRule{
+			To: []networkingv1.NetworkPolicyPeer{
+				{
+					IPBlock: &networkingv1.IPBlock{CIDR: "0.0.0.0/0"},
+				},
+			},
+			Ports: []networkingv1.NetworkPolicyPort{
+				{
+					Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
+					Port:     &httpsPort,
+				},
+			},
+		})
+	}
+
+	// Respect user-provided egress rules as additional allowances.
+	if cluster.Spec.Network != nil && len(cluster.Spec.Network.EgressRules) > 0 {
+		egressRules = append(egressRules, cluster.Spec.Network.EgressRules...)
+	}
+
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobNetworkPolicyName(cluster),
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					constants.LabelOpenBaoCluster: cluster.Name,
+				},
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{
+						Key:      constants.LabelOpenBaoComponent,
+						Operator: metav1.LabelSelectorOpIn,
+						Values:   []string{"backup", "restore", "upgrade-snapshot"},
+					},
+				},
+			},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeIngress,
+				networkingv1.PolicyTypeEgress,
+			},
+			// Default deny all ingress to job pods.
+			Ingress: []networkingv1.NetworkPolicyIngressRule{},
+			Egress:  egressRules,
+		},
+	}
+}
+
 // networkPolicyName returns the name for the NetworkPolicy resource.
 func networkPolicyName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + "-network-policy"
+}
+
+func jobNetworkPolicyName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return cluster.Name + "-jobs-network-policy"
 }
 
 // ensureGatewayCAConfigMap creates or updates a ConfigMap containing the OpenBaoCluster CA certificate.
@@ -1646,20 +1834,22 @@ func (m *Manager) deleteHTTPRoute(ctx context.Context, cluster *openbaov1alpha1.
 
 // deleteNetworkPolicy removes the NetworkPolicy resource for the OpenBaoCluster.
 func (m *Manager) deleteNetworkPolicy(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	networkPolicy := &networkingv1.NetworkPolicy{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      networkPolicyName(cluster),
-	}, networkPolicy)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil
+	for _, name := range []string{networkPolicyName(cluster), jobNetworkPolicyName(cluster)} {
+		networkPolicy := &networkingv1.NetworkPolicy{}
+		err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      name,
+		}, networkPolicy)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return err
 		}
-		return err
-	}
 
-	if err := m.client.Delete(ctx, networkPolicy); err != nil && !apierrors.IsNotFound(err) {
-		return err
+		if err := m.client.Delete(ctx, networkPolicy); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
 	}
 
 	return nil

@@ -272,25 +272,44 @@ func (m *Manager) deleteConfigMap(ctx context.Context, cluster *openbaov1alpha1.
 
 // deleteSecrets removes all Secrets associated with the OpenBaoCluster.
 func (m *Manager) deleteSecrets(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	secretNames := []string{
-		unsealSecretName(cluster),
-		tlsServerSecretName(cluster),
-		tlsCASecretName(cluster),
+	if cluster == nil {
+		return nil
 	}
 
-	for _, name := range secretNames {
-		secret := &corev1.Secret{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		}, secret)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				continue
-			}
-			return err
+	secretNames := []string{}
+
+	// Only delete operator-owned Secrets. For External/ACME TLS, Secrets are user-managed (or not used),
+	// and must not be deleted by the operator.
+	{
+		mode := cluster.Spec.TLS.Mode
+		if mode == "" {
+			mode = openbaov1alpha1.TLSModeOperatorManaged
 		}
 
+		if cluster.Spec.TLS.Enabled && mode == openbaov1alpha1.TLSModeOperatorManaged {
+			secretNames = append(secretNames, tlsServerSecretName(cluster), tlsCASecretName(cluster))
+		}
+	}
+
+	// Only delete the unseal key Secret when using static unseal (operator-owned).
+	{
+		staticUnseal := cluster.Spec.Unseal == nil || cluster.Spec.Unseal.Type == "" || cluster.Spec.Unseal.Type == "static"
+		if staticUnseal {
+			secretNames = append(secretNames, unsealSecretName(cluster))
+		}
+	}
+
+	// Delete by name without reading Secret contents (avoids requiring Secret "get" permission).
+	for _, name := range secretNames {
+		if name == "" {
+			continue
+		}
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: cluster.Namespace,
+			},
+		}
 		if err := m.client.Delete(ctx, secret); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
