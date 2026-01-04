@@ -1,6 +1,6 @@
 module github.com/dc-tec/openbao-operator
 
-go 1.25.0
+go 1.25.5
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.40.1
