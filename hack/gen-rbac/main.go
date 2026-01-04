@@ -44,6 +44,7 @@ func main() {
 	}
 
 	content := renderClusterRoleYAML(rules)
+	// #nosec G306 -- writes non-sensitive YAML intended to be committed to the repo.
 	if err := os.WriteFile(filepath.Clean(outputPath), []byte(content), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "error: write %s: %v\n", outputPath, err)
 		os.Exit(1)

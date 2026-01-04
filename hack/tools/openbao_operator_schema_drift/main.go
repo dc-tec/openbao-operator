@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -29,6 +30,31 @@ type rootSpec struct {
 	Type   string
 }
 
+func isHexSHA40(s string) bool {
+	if len(s) != 40 {
+		return false
+	}
+	_, err := hex.DecodeString(s)
+	return err == nil
+}
+
+func isSafeDockerTag(s string) bool {
+	if s == "" || len(s) > 128 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if (ch >= 'a' && ch <= 'z') ||
+			(ch >= 'A' && ch <= 'Z') ||
+			(ch >= '0' && ch <= '9') ||
+			ch == '.' || ch == '_' || ch == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func main() {
 	var openbaoImageTag string
 	var openbaoGitSHA string
@@ -53,12 +79,20 @@ func main() {
 
 	upstreamSHA := strings.TrimSpace(openbaoGitSHA)
 	if upstreamSHA == "" {
+		if !isSafeDockerTag(openbaoImageTag) {
+			fmt.Fprintf(os.Stderr, "error: invalid -openbao-image-tag %q\n", openbaoImageTag)
+			os.Exit(2)
+		}
 		sha, err := resolveOpenBaoSHAFromDocker(openbaoImageTag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: resolve upstream SHA from docker image %q: %v\n", openbaoImageTag, err)
 			os.Exit(1)
 		}
 		upstreamSHA = sha
+	}
+	if !isHexSHA40(upstreamSHA) {
+		fmt.Fprintf(os.Stderr, "error: invalid -openbao-git-sha %q (expected 40 hex)\n", upstreamSHA)
+		os.Exit(2)
 	}
 
 	upstreamModDir, err := materializeUpstreamModuleDir(upstreamSHA)
@@ -446,6 +480,7 @@ func resolveOpenBaoSHAFromDocker(imageTag string) (string, error) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		return "", fmt.Errorf("docker not found in PATH")
 	}
+	// #nosec G204 -- imageTag is validated by isSafeDockerTag; this is a developer tool.
 	out, err := exec.Command("docker", "run", "--rm", "openbao/openbao:"+imageTag, "version").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("docker run: %v: %s", err, strings.TrimSpace(string(out)))
@@ -457,7 +492,7 @@ func resolveOpenBaoSHAFromDocker(imageTag string) (string, error) {
 		return "", fmt.Errorf("unexpected version output: %q", line)
 	}
 	sha := line[open+1 : close]
-	if len(sha) != 40 {
+	if !isHexSHA40(sha) {
 		return "", fmt.Errorf("unexpected git sha %q from output %q", sha, line)
 	}
 	return sha, nil
@@ -475,7 +510,7 @@ func materializeUpstreamModuleDir(sha string) (string, error) {
 	}()
 
 	mainModule := filepath.Join(tmpdir, "mod")
-	if err := os.MkdirAll(mainModule, 0o755); err != nil {
+	if err := os.MkdirAll(mainModule, 0o750); err != nil {
 		return "", err
 	}
 
@@ -485,6 +520,7 @@ func materializeUpstreamModuleDir(sha string) (string, error) {
 		return "", fmt.Errorf("go mod init: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 
+	// #nosec G204 -- sha is validated (40 hex); this is a developer tool.
 	cmd = exec.Command("go", "get", "github.com/openbao/openbao@"+sha)
 	cmd.Dir = mainModule
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -518,6 +554,7 @@ func writeGitHubSummary(
 	if path == "" {
 		return
 	}
+	path = filepath.Clean(path)
 
 	var buf bytes.Buffer
 	buf.WriteString("### OpenBao operator schema drift\n\n")
@@ -549,7 +586,8 @@ func writeGitHubSummary(
 	writeList("Missing (default generation)", missingDefault)
 	writeList("Extra (operator vs upstream)", extras)
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	// #nosec G304 -- path is provided by GitHub Actions via env var; this is CI tooling.
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}
