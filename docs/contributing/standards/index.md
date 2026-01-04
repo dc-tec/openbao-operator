@@ -56,6 +56,14 @@ These coding standards ensure consistency and quality across the OpenBao Operato
 
     [:material-arrow-right: Read Guide](project-conventions.md)
 
+- :material-git: **Conventional Commits**
+
+    ---
+
+    Standardized commit messages for automated changelogs.
+
+    [:material-arrow-right: Read Guide](conventional-commits.md)
+
 </div>
 
 ## Quick Reference

@@ -173,6 +173,7 @@ nav:
           - Generated Artifacts: contributing/standards/generated-artifacts.md
           - Kubernetes Patterns: contributing/standards/kubernetes-patterns.md
           - Security Practices: contributing/standards/security-practices.md
+          - Conventional Commits: contributing/standards/conventional-commits.md
           - Project Conventions: contributing/standards/project-conventions.md
       - Testing:
           - Overview: contributing/testing.md
