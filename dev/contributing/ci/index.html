@@ -4105,6 +4105,19 @@
 <p>Scans the operator image for OS vulnerabilities.</p>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>security-scan<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/dc-tec/openbao-operator:latest
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Expected RBAC findings (skipped in Trivy FS)</p>
+<p>Trivy's Kubernetes misconfiguration rules flag several <strong>intentionally privileged</strong> RBAC manifests/templates
+(e.g. tenant template roles, single-tenant mode, and provisioner cleanup permissions).
+We skip these specific files in CI and in <code>make security-scan</code> using Trivy's <code>--skip-files</code> flags.</p>
+<p>If you modify RBAC under <code>config/rbac/</code>, <code>dist/install.yaml</code>, or the chart RBAC templates, and Trivy starts failing,
+update the skip list in:</p>
+<ul>
+<li><code>.github/workflows/ci.yml</code> (Trivy FS step)</li>
+<li><code>.github/workflows/nightly.yml</code> (Trivy FS step)</li>
+<li><code>Makefile</code> (<code>security-scan</code> target)</li>
+</ul>
+</div>
 </div>
 </div>
 </div>
