@@ -43,7 +43,11 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
     - [ ] **Network Policy**: Verify `egressRules` allow access to necessary external services (Cloud KMS, S3, OIDC providers).
         - [Learn more](../../../security/infrastructure/network-security.md)
     - [ ] **Monitoring**: Ensure Prometheus is scraping `openbao_*` metrics and alerts are configured for high error rates or leader loss.
+        - [Learn more](../configuration/observability.md)
     - [ ] **Logs**: Verify structured logs (`cluster_name`, `cluster_namespace`) are reaching your log aggregator.
+        - [Learn more](../configuration/observability.md#logging)
+    - [ ] **Alerts**: Configure alerts for backup staleness, cluster degradation, and reconciliation errors.
+        - [Learn more](../configuration/observability.md#recommended-alerts)
 
 ## Final Verification
 
@@ -56,5 +60,5 @@ kubectl describe openbaocluster <name> -n <namespace>
 **Success Criteria:**
 
 - [ ] Condition `ProductionReady` is **True**.
-- [ ] Condition `Healthy` is **True**.
+- [ ] Condition `Available` is **True**.
 - [ ] `Status.Phase` is **Running**.

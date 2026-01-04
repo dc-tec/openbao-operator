@@ -52,7 +52,9 @@ For Release Managers.
 
 ### Pre-Flight Checks
 
-- [ ] **Changelog**: Ensure `CHANGELOG.md` is up to date on `main`.
+- [ ] **Changelog**: Regenerate `CHANGELOG.md` locally from git history:
+  - `make changelog` (Unreleased since last tag)
+  - `make changelog-all` (all tags + Unreleased)
 - [ ] **Docs**: Ensure documentation is consistent with new features.
 - [ ] **Compatibility**: Verify `docs/reference/compatibility.md` covers the supported versions.
 - [ ] **Clean CI**: Ensure the latest commit on main is green.
