@@ -85,12 +85,16 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests generate fmt vet setup-envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+test: manifests generate fmt vet ## Run unit tests (fast, no envtest).
+	go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 .PHONY: test-ci
-test-ci: manifests generate vet setup-envtest ## Run tests in CI mode (does not modify files).
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+test-ci: manifests generate vet setup-envtest ## Run unit + integration tests in CI mode (does not modify tracked files).
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -tags=integration -coverprofile cover.out
+
+.PHONY: test-integration
+test-integration: manifests generate vet setup-envtest ## Run envtest-based integration tests (envtest; requires -tags=integration).
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -tags=integration -count=1 -v
 
 .PHONY: verify-tidy
 verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
@@ -103,8 +107,23 @@ verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
 		exit 1; \
 	}
 
+.PHONY: rbac-sync
+rbac-sync: ## Sync the provisioner delegate RBAC template from Go sources.
+	@go run ./hack/gen-rbac
+
+.PHONY: verify-rbac-sync
+verify-rbac-sync: ## Verify provisioner delegate RBAC template is in sync (does not modify tracked files).
+	@go run ./hack/gen-rbac
+	@{ \
+		git diff --exit-code -- config/rbac/provisioner_delegate_clusterrole.yaml; \
+	} || { \
+		echo "RBAC delegate template is out of date. Run 'make rbac-sync' and commit the result."; \
+		git --no-pager diff -- config/rbac/provisioner_delegate_clusterrole.yaml; \
+		exit 1; \
+	}
+
 .PHONY: verify-generated
-verify-generated: manifests generate ## Verify generated artifacts are up-to-date (does not modify tracked files).
+verify-generated: manifests generate verify-rbac-sync ## Verify generated artifacts are up-to-date (does not modify tracked files).
 	@{ \
 		git diff --exit-code -- api/v1alpha1 config/crd/bases; \
 	} || { \
@@ -160,6 +179,25 @@ verify-trusted-root: ## Verify that trusted_root.json exists and is valid JSON.
 		exit 1; \
 	}
 	@echo "trusted_root.json is valid"
+
+DOCS_VENV ?= .venv-docs
+DOCS_PYTHON ?= python3
+DOCS_PIP ?= $(DOCS_VENV)/bin/pip
+DOCS_MKDOCS ?= $(DOCS_VENV)/bin/mkdocs
+
+.PHONY: docs-deps
+docs-deps: ## Install MkDocs tooling in a local venv (CI-equivalent).
+	@$(DOCS_PYTHON) -m venv "$(DOCS_VENV)"
+	@$(DOCS_PIP) install --upgrade pip
+	@$(DOCS_PIP) install mkdocs-material mike
+
+.PHONY: docs-build
+docs-build: docs-deps ## Build docs locally (CI-equivalent; strict). Writes ./site/.
+	@$(DOCS_MKDOCS) build --strict
+
+.PHONY: docs-serve
+docs-serve: docs-deps ## Serve docs locally. http://localhost:8000
+	@$(DOCS_MKDOCS) serve -a 0.0.0.0:8000
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
