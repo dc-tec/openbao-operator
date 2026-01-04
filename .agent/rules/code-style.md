@@ -22,9 +22,11 @@ Follow the project coding standards in `docs/contributing/standards/`.
 2. Pass `golangci-lint` with project config
 3. Wrap errors with context: `fmt.Errorf("context: %w", err)`
 4. Use structured logging with fields: `cluster_namespace`, `cluster_name`
-5. Do NOT add `+kubebuilder:rbac` to OpenBaoCluster controller
-6. Do NOT shell out to kubectl, helm, or cloud CLIs
-7. Do NOT use `interface{}` or `any` without justification
-8. Do NOT log secrets, tokens, or keys
-9. Do NOT spawn goroutines in reconcilers
-10. Do NOT use `time.Sleep()` — use controller-runtime rate limiting
+5. Keep functions small (lint enforces cyclomatic complexity)
+6. Keep Go lines under 120 chars when practical (lint enforces this in some dirs)
+7. Do NOT add `+kubebuilder:rbac` to OpenBaoCluster controller
+8. Do NOT shell out to kubectl, helm, or cloud CLIs
+9. Do NOT use `interface{}` or `any` without justification
+10. Do NOT log secrets, tokens, or keys
+11. Do NOT spawn goroutines in reconcilers
+12. Do NOT use `time.Sleep()` — use controller-runtime rate limiting

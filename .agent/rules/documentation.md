@@ -36,6 +36,10 @@ Non-trivial changes should update:
 ## Building Docs
 
 ```sh
-mkdocs serve    # Local preview
-mkdocs build --strict  # Validate (fails on warnings)
+make docs-serve         # Local preview (CI-equivalent)
+make docs-build         # Validate (CI-equivalent; strict)
+
+# If you have a local MkDocs toolchain installed:
+mkdocs serve
+mkdocs build --strict
 ```

@@ -21,15 +21,17 @@ See [Testing Guide](docs/contributing/testing.md) for full documentation.
 
 1. **Table-Driven Tests**: Use for unit tests in `internal/`
 2. **Golden Files**: For HCL output verification (`internal/config/testdata/`)
-3. **EnvTest**: For controller integration tests
+3. **EnvTest**: For integration tests behind `-tags=integration` (prefer `test/integration/`)
 4. **Ginkgo/Gomega**: For E2E tests with Kind
 
 ## Commands
 
 ```sh
-make test              # Unit tests
+make test               # Unit tests (fast, no envtest)
+make test-integration   # Envtest-based integration tests (-tags=integration)
+make test-ci            # Unit + integration tests (CI-equivalent)
 make test-update-golden # Update HCL golden files
-make test-e2e          # E2E tests (requires Kind)
+make test-e2e           # E2E tests (requires Kind)
 ```
 
 ## Rules
