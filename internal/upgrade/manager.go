@@ -26,9 +26,11 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
@@ -86,7 +88,7 @@ func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factor
 // Returns (shouldRequeue, error) where shouldRequeue indicates if reconciliation should be requeued immediately.
 //
 //nolint:gocyclo // Upgrade reconciliation is an orchestrator with guard clauses and phase transitions.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	// Capture original state for status patching to avoid optimistic locking conflicts
 	original := cluster.DeepCopy()
 
@@ -100,14 +102,14 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Check if cluster is initialized; upgrades can only proceed after initialization
 	if !cluster.Status.Initialized {
 		logger.V(1).Info("Cluster not initialized; skipping upgrade reconciliation")
-		return false, nil
+		return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
 	}
 
 	if cluster.Status.BreakGlass != nil && cluster.Status.BreakGlass.Active && cluster.Spec.BreakGlassAck != cluster.Status.BreakGlass.Nonce {
 		logger.Info("Cluster is in break glass mode; halting upgrade reconciliation",
 			"breakGlassReason", cluster.Status.BreakGlass.Reason,
 			"breakGlassNonce", cluster.Status.BreakGlass.Nonce)
-		return false, nil
+		return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
 	}
 
 	// Phase 1: Detection - determine if upgrade is needed
@@ -125,7 +127,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		// No upgrade needed, ensure metrics reflect idle state
 		metrics.SetInProgress(false)
 		metrics.SetStatus(UpgradeStatusNone)
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	lockMessage := fmt.Sprintf("upgrade to %s", cluster.Spec.Version)
@@ -141,12 +143,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			if cluster.Status.Upgrade != nil {
 				SetUpgradeFailed(&cluster.Status, ReasonUpgradeFailed, "upgrade halted due to concurrent operation lock", cluster.Generation)
 				metrics.SetStatus(UpgradeStatusFailed)
-				return false, fmt.Errorf("upgrade in progress but operation lock is held by another operation: %w", err)
+				return recon.Result{}, fmt.Errorf("upgrade in progress but operation lock is held by another operation: %w", err)
 			}
 			logger.Info("Upgrade blocked by operation lock", "error", err.Error())
-			return false, nil
+			return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
 		}
-		return false, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 	}
 
 	// Handle resume scenario where spec.version changed mid-upgrade
@@ -165,12 +167,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	// Ensure upgrade ServiceAccount exists (for JWT Auth)
 	if err := m.ensureUpgradeServiceAccount(ctx, logger, cluster); err != nil {
-		return false, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
 	}
 
 	// Phase 2: Pre-upgrade Validation
 	if err := m.validateUpgrade(ctx, logger, cluster); err != nil {
-		return false, err
+		return recon.Result{}, err
 	}
 
 	// Phase 3: Pre-upgrade Snapshot (if enabled)
@@ -182,13 +184,13 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		// Check if pre-upgrade snapshot is required and complete
 		snapshotComplete, err := m.handlePreUpgradeSnapshot(ctx, logger, cluster)
 		if err != nil {
-			return false, err
+			return recon.Result{}, err
 		}
 		if !snapshotComplete {
 			logger.Info("Pre-upgrade snapshot in progress, waiting...")
 			// If upgrade was already initialized, we should not proceed with pod updates
 			// Return early to wait for snapshot completion
-			return false, nil
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 	}
 
@@ -196,7 +198,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Only reached if pre-upgrade snapshot is complete or not enabled
 	if cluster.Status.Upgrade == nil {
 		if err := m.initializeUpgrade(ctx, logger, cluster); err != nil {
-			return false, err
+			return recon.Result{}, err
 		}
 	}
 
@@ -217,23 +219,23 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
 			logger.Error(statusErr, "Failed to update status after upgrade failure")
 		}
-		return false, err
+		return recon.Result{}, err
 	}
 
 	if !completed {
 		// Upgrade is still in progress; save state and requeue
 		if err := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
-			return false, fmt.Errorf("failed to update upgrade progress: %w", err)
+			return recon.Result{}, fmt.Errorf("failed to update upgrade progress: %w", err)
 		}
-		return false, nil
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	// Phase 6: Finalization
 	if err := m.finalizeUpgrade(ctx, logger, cluster, metrics); err != nil {
-		return false, err
+		return recon.Result{}, err
 	}
 
-	return false, nil
+	return recon.Result{}, nil
 }
 
 // detectUpgradeState determines whether an upgrade is needed or if we're resuming one.
@@ -384,8 +386,9 @@ func (m *Manager) checkPodHealth(ctx context.Context, logger logr.Logger, cluste
 
 		podURL := m.getPodURL(cluster, pod.Name)
 		apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
-			BaseURL: podURL,
-			CACert:  caCert,
+			ClusterKey: fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
+			BaseURL:    podURL,
+			CACert:     caCert,
 		})
 		if err != nil {
 			logger.V(1).Info("Failed to create client for pod", "pod", pod.Name, "error", err)
@@ -435,6 +438,16 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 		return true, nil
 	}
 
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened &&
+		(cluster.Spec.Network == nil || len(cluster.Spec.Network.EgressRules) == 0) {
+		return false, operatorerrors.WithReason(
+			constants.ReasonNetworkEgressRulesRequired,
+			operatorerrors.WrapPermanentConfig(fmt.Errorf(
+				"hardened profile with pre-upgrade snapshots enabled requires explicit spec.network.egressRules so backup Jobs can reach the object storage endpoint",
+			)),
+		)
+	}
+
 	// Verify backup configuration is valid
 	if err := m.validateBackupConfig(ctx, cluster); err != nil {
 		return false, operatorerrors.WithReason(ReasonPreUpgradeBackupFailed, fmt.Errorf("pre-upgrade backup configuration invalid: %w", err))
@@ -471,6 +484,13 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 	// No job exists - create new job
 	jobName = m.backupJobName(cluster)
 	logger.Info("Creating pre-upgrade backup job", "job", jobName)
+
+	if err := backup.EnsureBackupServiceAccount(ctx, m.client, m.scheme, cluster); err != nil {
+		return false, operatorerrors.WithReason(ReasonPreUpgradeBackupFailed, fmt.Errorf("failed to ensure backup ServiceAccount: %w", err))
+	}
+	if err := backup.EnsureBackupRBAC(ctx, m.client, m.scheme, cluster); err != nil {
+		return false, operatorerrors.WithReason(ReasonPreUpgradeBackupFailed, fmt.Errorf("failed to ensure backup RBAC: %w", err))
+	}
 
 	verifiedExecutorDigest := ""
 	executorImage := strings.TrimSpace(cluster.Spec.Backup.ExecutorImage)
@@ -585,15 +605,15 @@ func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *
 	var runningJob, failedJob, succeededJob *batchv1.Job
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
-		if job.Status.Succeeded > 0 {
+		if kube.JobSucceeded(job) {
 			if succeededJob == nil {
 				succeededJob = job
 			}
-		} else if job.Status.Failed > 0 {
+		} else if kube.JobFailed(job) {
 			if failedJob == nil {
 				failedJob = job
 			}
-		} else if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
+		} else {
 			// Job is still running or pending
 			if runningJob == nil {
 				runningJob = job
@@ -1169,8 +1189,9 @@ func (m *Manager) waitForPodHealthy(ctx context.Context, logger logr.Logger, clu
 
 	podURL := m.getPodURL(cluster, podName)
 	apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
-		BaseURL: podURL,
-		CACert:  caCert,
+		ClusterKey: fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
+		BaseURL:    podURL,
+		CACert:     caCert,
 	})
 	if err != nil {
 		// Wrap connection errors as transient

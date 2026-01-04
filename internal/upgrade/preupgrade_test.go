@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +39,7 @@ func TestHandlePreUpgradeSnapshot_NotEnabled(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = batchv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
 	k8sClient := fake.NewClientBuilder().
@@ -70,6 +72,7 @@ func TestHandlePreUpgradeSnapshot_NoBackupConfig(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = batchv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
 	k8sClient := fake.NewClientBuilder().
@@ -92,6 +95,7 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 			Namespace: "test-ns",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileDevelopment,
 			Version:  "2.4.4",
 			Replicas: 3,
 			Upgrade: &openbaov1alpha1.UpgradeConfig{
@@ -115,6 +119,7 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = batchv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
 	// Create secret for backup token (if needed)
@@ -145,6 +150,53 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, jobList.Items, 1, "should have created one backup job")
 	assert.Contains(t, jobList.Items[0].Name, "pre-upgrade-backup", "job name should contain pre-upgrade-backup")
+}
+
+func TestHandlePreUpgradeSnapshot_HardenedRequiresEgressRules(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-ns",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+			Version: "2.4.4",
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				PreUpgradeSnapshot: true,
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				ExecutorImage: "test-image:latest",
+				JWTAuthRole:   "backup",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "https://example.com",
+					Bucket:   "test-bucket",
+					RoleARN:  "arn:aws:iam::123456789012:role/test",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.3",
+			Initialized:    true,
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	_ = batchv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		Build()
+	manager := NewManager(k8sClient, scheme)
+
+	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
+	assert.Error(t, err)
+	assert.False(t, complete)
+	assert.Contains(t, err.Error(), "spec.network.egressRules")
 }
 
 func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
@@ -197,6 +249,7 @@ func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = batchv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
 	k8sClient := fake.NewClientBuilder().
@@ -261,6 +314,7 @@ func TestHandlePreUpgradeSnapshot_JobCompleted(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = batchv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
 	k8sClient := fake.NewClientBuilder().
@@ -325,6 +379,7 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = batchv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
 	k8sClient := fake.NewClientBuilder().
@@ -393,6 +448,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 	_ = batchv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
 	// Create StatefulSet

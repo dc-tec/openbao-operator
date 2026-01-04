@@ -20,6 +20,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
@@ -108,14 +109,14 @@ func ensureUpgradeExecutorJob(
 		}, nil
 	}
 
-	if job.Status.Succeeded > 0 {
+	if kube.JobSucceeded(job) {
 		return &executorJobResult{
 			Name:      jobName,
 			Succeeded: true,
 		}, nil
 	}
 
-	if job.Status.Failed > 0 {
+	if kube.JobFailed(job) {
 		return &executorJobResult{
 			Name:   jobName,
 			Failed: true,

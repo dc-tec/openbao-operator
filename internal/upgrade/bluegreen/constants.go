@@ -22,6 +22,9 @@ const (
 	// This allows operators to break glass if the state machine becomes stuck.
 	AnnotationForceRollback = "openbao.org/force-rollback"
 
+	// AnnotationSnapshotPhase labels snapshot Jobs with their role (e.g. pre-upgrade).
+	AnnotationSnapshotPhase = "openbao.org/snapshot-phase"
+
 	// DeploymentNameSuffix is the suffix for the Green StatefulSet name.
 	DeploymentNameSuffix = "green"
 

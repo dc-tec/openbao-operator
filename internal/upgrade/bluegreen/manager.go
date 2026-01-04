@@ -21,12 +21,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/backup"
 	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/infra"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
@@ -40,10 +42,15 @@ var (
 
 // Manager manages blue/green upgrade operations for OpenBaoCluster.
 type Manager struct {
-	client       client.Client
-	scheme       *runtime.Scheme
-	infraManager *infra.Manager
+	client        client.Client
+	scheme        *runtime.Scheme
+	infraManager  *infra.Manager
+	clientFactory OpenBaoClientFactory
 }
+
+// OpenBaoClientFactory creates OpenBao API clients for connecting to cluster pods.
+// This is primarily used for testing to inject mock clients.
+type OpenBaoClientFactory func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error)
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	if cluster.Spec.ImageVerification == nil {
@@ -95,17 +102,43 @@ func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Man
 		client:       c,
 		scheme:       scheme,
 		infraManager: infraManager,
+		clientFactory: func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+			return openbaoapi.NewClient(config)
+		},
 	}
+}
+
+func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory OpenBaoClientFactory) *Manager {
+	mgr := NewManager(c, scheme, infraManager)
+	if clientFactory != nil {
+		mgr.clientFactory = clientFactory
+	}
+	return mgr
+}
+
+func requeueShort() recon.Result {
+	return recon.Result{RequeueAfter: constants.RequeueShort}
+}
+
+func requeueStandard() recon.Result {
+	return recon.Result{RequeueAfter: constants.RequeueStandard}
+}
+
+func requeueAfter(duration time.Duration) recon.Result {
+	if duration <= 0 {
+		return recon.Result{}
+	}
+	return recon.Result{RequeueAfter: duration}
 }
 
 // Reconcile manages the blue/green upgrade state machine.
 // This implements the SubReconciler interface.
-// Returns (shouldRequeue, error) where shouldRequeue indicates if reconciliation should be requeued immediately.
+// Returns (result, error) where result indicates whether (and when) reconciliation should be requeued.
 //
 // Note: Image verification for the Blue StatefulSet is handled by the infra reconciler which runs before this.
 // For Green resources (StatefulSet and snapshot Jobs), we verify and pin digests here to ensure the
 // target images are validated when ImageVerification is enabled.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	logger.Info("Manager reconciling",
 		"updateStrategy", cluster.Spec.UpdateStrategy.Type,
 		"currentVersion", cluster.Status.CurrentVersion,
@@ -139,9 +172,9 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 					// If there is no Green revision yet, abort behaves more safely than rollback.
 					if cluster.Status.BlueGreen.GreenRevision == "" {
 						if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
-							return false, fmt.Errorf("failed to abort upgrade via force-rollback annotation: %w", err)
+							return recon.Result{}, fmt.Errorf("failed to abort upgrade via force-rollback annotation: %w", err)
 						}
-						return false, nil
+						return recon.Result{}, nil
 					}
 
 					return m.triggerRollback(logger, cluster, "manual force-rollback annotation")
@@ -153,40 +186,59 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Use spec image (infra reconciler handles verification)
 	verifiedImageDigest := cluster.Spec.Image
 
-	handled, shouldRequeue := m.handleBreakGlassAck(logger, cluster)
+	handled, result := m.handleBreakGlassAck(logger, cluster)
 	if handled {
-		return shouldRequeue, nil
+		return result, nil
 	}
 
 	return m.reconcileBlueGreen(ctx, logger, cluster, verifiedImageDigest)
 }
 
 // reconcileBlueGreen is the internal reconcile method that handles blue/green upgrades.
-func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (bool, error) {
+func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (recon.Result, error) {
 	// Check if blue/green strategy is enabled
 	if cluster.Spec.UpdateStrategy.Type != openbaov1alpha1.UpdateStrategyBlueGreen {
 		logger.V(1).Info("UpdateStrategy is not BlueGreen; skipping blue/green upgrade reconciliation",
 			"updateStrategy", cluster.Spec.UpdateStrategy.Type)
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	// Check if cluster is initialized; upgrades can only proceed after initialization
 	if !cluster.Status.Initialized {
 		logger.Info("Cluster not initialized; skipping blue/green upgrade reconciliation")
-		return false, nil
+		return requeueStandard(), nil
 	}
 
 	// Ensure upgrade ServiceAccount exists (for JWT Auth)
 	// This is required before any OpenBao API calls that need authentication
 	if err := m.ensureUpgradeServiceAccount(ctx, cluster); err != nil {
-		return false, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
 	}
 
 	// Initialize BlueGreen status if needed
 	if cluster.Status.BlueGreen == nil {
+		inferred, err := infra.InferActiveRevisionFromPods(ctx, m.client, cluster)
+		if err != nil {
+			logger.Error(err, "Failed to infer active revision from pods; falling back to spec-derived revision")
+		}
+		blueRevision := inferred
+		if blueRevision == "" {
+			blueRevision = m.calculateRevision(cluster)
+		}
 		cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
 			Phase:        openbaov1alpha1.PhaseIdle,
-			BlueRevision: m.calculateRevision(cluster),
+			BlueRevision: blueRevision,
+		}
+	} else if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
+		(cluster.Status.BlueGreen.BlueRevision == "" || cluster.Status.CurrentVersion != cluster.Spec.Version) {
+		// If the operator restarted and BlueRevision was derived from spec (target) rather than the
+		// currently running ("Blue") pods, correct it before starting a new upgrade or snapshot.
+		inferred, err := infra.InferActiveRevisionFromPods(ctx, m.client, cluster)
+		if err != nil {
+			logger.Error(err, "Failed to infer active revision from pods; keeping existing BlueRevision", "blueRevision", cluster.Status.BlueGreen.BlueRevision)
+		} else if inferred != "" && inferred != cluster.Status.BlueGreen.BlueRevision {
+			logger.Info("Correcting BlueRevision from active pods", "from", cluster.Status.BlueGreen.BlueRevision, "to", inferred)
+			cluster.Status.BlueGreen.BlueRevision = inferred
 		}
 	}
 
@@ -194,7 +246,7 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 		logger.Info("Cluster is in break glass mode; halting blue/green reconciliation",
 			"breakGlassReason", cluster.Status.BreakGlass.Reason,
 			"breakGlassNonce", cluster.Status.BreakGlass.Nonce)
-		return false, nil
+		return requeueStandard(), nil
 	}
 
 	upgradeActive := cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle
@@ -207,12 +259,12 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 		}); err != nil {
 			if errors.Is(err, operationlock.ErrLockHeld) {
 				if upgradeActive {
-					return false, fmt.Errorf("blue/green upgrade in progress but operation lock is held by another operation: %w", err)
+					return recon.Result{}, fmt.Errorf("blue/green upgrade in progress but operation lock is held by another operation: %w", err)
 				}
 				logger.Info("Blue/green upgrade blocked by operation lock", "error", err.Error())
-				return true, nil
+				return requeueStandard(), nil
 			}
-			return false, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
+			return recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 		}
 	}
 
@@ -227,13 +279,13 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
 			// Cleanup any lingering Green StatefulSet
 			if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
-				return false, fmt.Errorf("failed to cleanup Green StatefulSet: %w", err)
+				return recon.Result{}, fmt.Errorf("failed to cleanup Green StatefulSet: %w", err)
 			}
 			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
 			cluster.Status.BlueGreen.GreenRevision = ""
 			cluster.Status.BlueGreen.StartTime = nil
 		}
-		return false, nil
+		return requeueStandard(), nil
 	}
 
 	if cluster.Status.CurrentVersion == cluster.Spec.Version {
@@ -244,13 +296,13 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
 			// Cleanup any lingering Green StatefulSet
 			if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
-				return false, fmt.Errorf("failed to cleanup Green StatefulSet: %w", err)
+				return recon.Result{}, fmt.Errorf("failed to cleanup Green StatefulSet: %w", err)
 			}
 			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
 			cluster.Status.BlueGreen.GreenRevision = ""
 			cluster.Status.BlueGreen.StartTime = nil
 		}
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	logger.Info("Upgrade detected; CurrentVersion differs from Spec.Version",
@@ -259,12 +311,12 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 
 	// Check for abort conditions (Green cluster failures)
 	if shouldAbort, err := m.checkAbortConditions(ctx, logger, cluster); err != nil {
-		return false, fmt.Errorf("failed to check abort conditions: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to check abort conditions: %w", err)
 	} else if shouldAbort {
 		if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
-			return false, fmt.Errorf("failed to abort upgrade: %w", err)
+			return recon.Result{}, fmt.Errorf("failed to abort upgrade: %w", err)
 		}
-		return false, nil
+		return requeueShort(), nil
 	}
 
 	// Upgrade is needed - execute state machine
@@ -281,47 +333,86 @@ func (m *Manager) calculateRevision(cluster *openbaov1alpha1.OpenBaoCluster) str
 // It also resets the job failure count when transitioning phases.
 func (m *Manager) transitionToPhase(cluster *openbaov1alpha1.OpenBaoCluster, phase openbaov1alpha1.BlueGreenPhase) {
 	cluster.Status.BlueGreen.Phase = phase
-	now := metav1.Now()
-	cluster.Status.BlueGreen.StartTime = &now
+	if phase == openbaov1alpha1.PhaseIdle {
+		cluster.Status.BlueGreen.StartTime = nil
+	} else {
+		now := metav1.Now()
+		cluster.Status.BlueGreen.StartTime = &now
+	}
 	// Reset job failure count on phase transition
 	cluster.Status.BlueGreen.JobFailureCount = 0
 	cluster.Status.BlueGreen.LastJobFailure = ""
 }
 
 // executeStateMachine runs the blue/green upgrade state machine.
-func (m *Manager) executeStateMachine(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (bool, error) {
+func (m *Manager) executeStateMachine(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (recon.Result, error) {
 	phase := cluster.Status.BlueGreen.Phase
 
 	logger = logger.WithValues("phase", phase)
 
-	switch phase {
-	case openbaov1alpha1.PhaseIdle:
-		return m.handlePhaseIdle(ctx, logger, cluster, verifiedImageDigest)
-	case openbaov1alpha1.PhaseDeployingGreen:
-		return m.handlePhaseDeployingGreen(ctx, logger, cluster, verifiedImageDigest)
-	case openbaov1alpha1.PhaseJoiningMesh:
-		return m.handlePhaseJoiningMesh(ctx, logger, cluster)
-	case openbaov1alpha1.PhaseSyncing:
-		return m.handlePhaseSyncing(ctx, logger, cluster)
-	case openbaov1alpha1.PhasePromoting:
-		return m.handlePhasePromoting(ctx, logger, cluster)
-	case openbaov1alpha1.PhaseTrafficSwitching:
-		return m.handlePhaseTrafficSwitching(ctx, logger, cluster)
-	case openbaov1alpha1.PhaseDemotingBlue:
-		return m.handlePhaseDemotingBlue(ctx, logger, cluster)
-	case openbaov1alpha1.PhaseCleanup:
-		return m.handlePhaseCleanup(ctx, logger, cluster)
-	case openbaov1alpha1.PhaseRollingBack:
-		return m.handlePhaseRollingBack(ctx, logger, cluster)
-	case openbaov1alpha1.PhaseRollbackCleanup:
-		return m.handlePhaseRollbackCleanup(ctx, logger, cluster)
+	type phaseHandler func(context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error)
+
+	handlers := map[openbaov1alpha1.BlueGreenPhase]phaseHandler{
+		openbaov1alpha1.PhaseIdle: func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
+			return m.handlePhaseIdle(ctx, logger, cluster, verifiedImageDigest)
+		},
+		openbaov1alpha1.PhaseDeployingGreen: func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
+			return m.handlePhaseDeployingGreen(ctx, logger, cluster, verifiedImageDigest)
+		},
+		openbaov1alpha1.PhaseJoiningMesh:      m.handlePhaseJoiningMesh,
+		openbaov1alpha1.PhaseSyncing:          m.handlePhaseSyncing,
+		openbaov1alpha1.PhasePromoting:        m.handlePhasePromoting,
+		openbaov1alpha1.PhaseTrafficSwitching: m.handlePhaseTrafficSwitching,
+		openbaov1alpha1.PhaseDemotingBlue:     m.handlePhaseDemotingBlue,
+		openbaov1alpha1.PhaseCleanup:          m.handlePhaseCleanup,
+		openbaov1alpha1.PhaseRollingBack:      m.handlePhaseRollingBack,
+		openbaov1alpha1.PhaseRollbackCleanup:  m.handlePhaseRollbackCleanup,
+	}
+
+	handler, ok := handlers[phase]
+	if !ok {
+		return recon.Result{}, fmt.Errorf("unknown blue/green phase: %s", phase)
+	}
+
+	outcome, err := handler(ctx, logger, cluster)
+	if err != nil {
+		return recon.Result{}, err
+	}
+	return m.applyOutcome(ctx, logger, cluster, outcome)
+}
+
+func (m *Manager) applyOutcome(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, outcome phaseOutcome) (recon.Result, error) {
+	if err := outcome.validate(); err != nil {
+		return recon.Result{}, err
+	}
+
+	switch outcome.kind {
+	case phaseOutcomeAdvance:
+		m.transitionToPhase(cluster, outcome.nextPhase)
+		if outcome.nextPhase == openbaov1alpha1.PhaseIdle {
+			return recon.Result{}, nil
+		}
+		return requeueShort(), nil
+	case phaseOutcomeRequeueAfter:
+		return requeueAfter(outcome.after), nil
+	case phaseOutcomeHold:
+		return recon.Result{}, nil
+	case phaseOutcomeRollback:
+		return m.triggerRollbackOrAbort(ctx, logger, cluster, outcome.reason)
+	case phaseOutcomeAbort:
+		if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
+			return recon.Result{}, err
+		}
+		return recon.Result{}, nil
+	case phaseOutcomeDone:
+		return recon.Result{}, nil
 	default:
-		return false, fmt.Errorf("unknown blue/green phase: %s", phase)
+		return recon.Result{}, fmt.Errorf("unknown outcome kind: %q", outcome.kind)
 	}
 }
 
 // handlePhaseIdle transitions from Idle to DeployingGreen when an upgrade is detected.
-func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, _ string) (bool, error) {
+func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, _ string) (phaseOutcome, error) {
 	logger.Info("Starting blue/green upgrade",
 		"fromVersion", cluster.Status.CurrentVersion,
 		"targetVersion", cluster.Spec.Version)
@@ -329,55 +420,40 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 	// Pre-upgrade snapshot (if enabled)
 	if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
 		cluster.Spec.UpdateStrategy.BlueGreen.PreUpgradeSnapshot {
-		// Check if snapshot job is already tracked
-		if cluster.Status.BlueGreen.PreUpgradeSnapshotJobName == "" {
-			// Create the pre-upgrade snapshot job
-			jobName, err := m.createPreUpgradeSnapshotJob(ctx, logger, cluster)
+		jobName := preUpgradeSnapshotJobName(cluster)
+		if cluster.Status.BlueGreen.PreUpgradeSnapshotJobName != jobName {
+			_, err := m.ensurePreUpgradeSnapshotJob(ctx, logger, cluster, jobName)
 			if err != nil {
-				logger.Error(err, "Failed to create pre-upgrade snapshot job")
-				return false, err // Block upgrade on snapshot failure
-			} else {
-				cluster.Status.BlueGreen.PreUpgradeSnapshotJobName = jobName
-				logger.Info("Pre-upgrade snapshot job created", "job", jobName)
-				return true, nil // Requeue to wait for snapshot
+				logger.Error(err, "Failed to ensure pre-upgrade snapshot job")
+				return phaseOutcome{}, err // Block upgrade on snapshot failure
 			}
+			cluster.Status.BlueGreen.PreUpgradeSnapshotJobName = jobName
+			logger.Info("Pre-upgrade snapshot job created", "job", jobName)
+			return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait for snapshot
 		} else {
-			// Check if snapshot job completed
-			job := &batchv1.Job{}
-			err := m.client.Get(ctx, types.NamespacedName{
-				Namespace: cluster.Namespace,
-				Name:      cluster.Status.BlueGreen.PreUpgradeSnapshotJobName,
-			}, job)
+			jobStatus, err := getJobStatus(ctx, m.client, cluster, jobName)
 			if err != nil {
-				if !apierrors.IsNotFound(err) {
-					logger.Error(err, "Failed to check pre-upgrade snapshot job status")
-				}
-				// Job gone or error - continue with upgrade
-			} else if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
-				// Job still running
-				logger.Info("Waiting for pre-upgrade snapshot to complete",
-					"job", cluster.Status.BlueGreen.PreUpgradeSnapshotJobName)
-				return true, nil // Requeue to wait
+				logger.Error(err, "Failed to check pre-upgrade snapshot job status")
+				// Job error - continue with upgrade
+			} else if jobStatus.Exists && jobStatus.Running {
+				logger.Info("Waiting for pre-upgrade snapshot to complete", "job", jobName)
+				return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait
 			}
 			logger.Info("Pre-upgrade snapshot completed",
-				"job", cluster.Status.BlueGreen.PreUpgradeSnapshotJobName)
+				"job", jobName)
 		}
 	}
-
-	now := metav1.Now()
 
 	// Calculate Green revision
 	greenRevision := m.calculateRevision(cluster)
 	cluster.Status.BlueGreen.GreenRevision = greenRevision
-	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseDeployingGreen
-	cluster.Status.BlueGreen.StartTime = &now
 
-	return true, nil // Requeue to proceed to next phase
+	return advance(openbaov1alpha1.PhaseDeployingGreen), nil
 }
 
 // handlePhaseDeployingGreen creates the Green StatefulSet.
 // IMPORTANT: Green pods must join the existing Blue cluster as non-voters, not initialize a new cluster.
-func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, _ string) (bool, error) {
+func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, _ string) (phaseOutcome, error) {
 	greenRevision := cluster.Status.BlueGreen.GreenRevision
 	blueRevision := cluster.Status.BlueGreen.BlueRevision
 	logger = logger.WithValues("greenRevision", greenRevision, "blueRevision", blueRevision)
@@ -386,16 +462,15 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 	// Green pods must join an existing initialized cluster, not form a new one.
 	bluePods, err := m.getBluePods(ctx, cluster, blueRevision)
 	if err != nil {
-		return false, fmt.Errorf("failed to get Blue pods: %w", err)
+		return phaseOutcome{}, fmt.Errorf("failed to get Blue pods: %w", err)
 	}
 
 	if len(bluePods) == 0 {
 		logger.Info("No Blue pods found yet, waiting...")
-		return true, nil // Requeue to wait for Blue pods
+		return requeueAfterOutcome(constants.RequeueShort), nil
 	}
 
-	// Verify Blue pods have the revision label (required for retry_join to work)
-	// If Blue pods don't have the revision label, the InfraManager needs to update them first
+	// Verify Blue pods have the revision label (required for retry_join to work).
 	bluePodsHaveRevisionLabel := true
 	for _, pod := range bluePods {
 		rev, present := pod.Labels[constants.LabelOpenBaoRevision]
@@ -410,13 +485,11 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 	}
 
 	if !bluePodsHaveRevisionLabel {
-		// Trigger InfraManager reconciliation to update Blue StatefulSet with revision label
-		// This will happen automatically on next reconcile, but we can requeue to speed it up
 		logger.Info("Blue pods missing revision label; waiting for InfraManager to update StatefulSet")
-		return true, nil // Requeue to wait for Blue StatefulSet to be updated with revision label
+		return requeueAfterOutcome(constants.RequeueShort), nil
 	}
 
-	// Verify at least one Blue pod is ready and unsealed
+	// Verify at least one Blue pod is ready and unsealed.
 	blueReady := false
 	for _, pod := range bluePods {
 		if isPodReady(&pod) {
@@ -430,10 +503,9 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 
 	if !blueReady {
 		logger.Info("Blue pods not ready/unsealed yet, waiting before creating Green StatefulSet")
-		return true, nil // Requeue to wait for Blue pods to be ready
+		return requeueAfterOutcome(constants.RequeueShort), nil
 	}
 
-	// Check if Green StatefulSet already exists
 	greenStatefulSetName := fmt.Sprintf("%s-%s", cluster.Name, greenRevision)
 	greenStatefulSet := &appsv1.StatefulSet{}
 	if err := m.client.Get(ctx, types.NamespacedName{
@@ -441,42 +513,33 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 		Name:      greenStatefulSetName,
 	}, greenStatefulSet); err != nil {
 		if !apierrors.IsNotFound(err) {
-			return false, fmt.Errorf("failed to get Green StatefulSet: %w", err)
+			return phaseOutcome{}, fmt.Errorf("failed to get Green StatefulSet: %w", err)
 		}
 
-		// StatefulSet doesn't exist, create it
-		// Render config for Green cluster (same as Blue, but different revision)
-		// Use the same headless service name as Blue (they share the same service)
-		// CRITICAL: Set TargetRevisionForJoin to Blue revision so Green pods only
-		// discover Blue pods via retry_join, preventing them from forming their own cluster.
-		// Green pods will use retry_join to discover Blue pods and join as non-voters.
 		infraDetails := configbuilder.InfrastructureDetails{
-			HeadlessServiceName:   cluster.Name, // Headless service name is cluster name
+			HeadlessServiceName:   cluster.Name,
 			Namespace:             cluster.Namespace,
 			APIPort:               constants.PortAPI,
 			ClusterPort:           constants.PortCluster,
-			TargetRevisionForJoin: blueRevision, // Green pods should only discover Blue pods
+			TargetRevisionForJoin: blueRevision,
 		}
 
 		renderedConfig, err := configbuilder.RenderHCL(cluster, infraDetails)
 		if err != nil {
-			return false, fmt.Errorf("failed to render config for Green cluster: %w", err)
+			return phaseOutcome{}, fmt.Errorf("failed to render config for Green cluster: %w", err)
 		}
-
 		configContent := string(renderedConfig)
 
-		// Create Green StatefulSet with revision
-		// Note: Green StatefulSet should start with all replicas immediately (no rolling)
 		greenImage := cluster.Spec.Image
 		verifiedGreenDigest, err := m.verifyImageDigest(ctx, logger, cluster, greenImage, constants.ReasonBlueGreenImageVerificationFailed, "Green image verification failed")
 		if err != nil {
-			return false, err
+			return phaseOutcome{}, err
 		}
 
 		initImage := initContainerImage(cluster)
 		verifiedInitContainerDigest, err := m.verifyImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Green init container image verification failed")
 		if err != nil {
-			return false, err
+			return phaseOutcome{}, err
 		}
 
 		imageForGreen := greenImage
@@ -485,14 +548,13 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 		}
 
 		if err := m.infraManager.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, imageForGreen, verifiedInitContainerDigest, greenRevision, true); err != nil {
-			return false, fmt.Errorf("failed to create Green StatefulSet: %w", err)
+			return phaseOutcome{}, fmt.Errorf("failed to create Green StatefulSet: %w", err)
 		}
 
 		logger.Info("Created Green StatefulSet", "greenRevision", greenRevision)
-		return true, nil // Requeue to wait for StatefulSet to be created
+		return requeueAfterOutcome(constants.RequeueShort), nil
 	}
 
-	// StatefulSet exists, check if all replicas are ready
 	desiredReplicas := cluster.Spec.Replicas
 	if greenStatefulSet.Spec.Replicas != nil {
 		desiredReplicas = *greenStatefulSet.Spec.Replicas
@@ -502,70 +564,57 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 		logger.Info("Waiting for Green pods to be ready",
 			"readyReplicas", greenStatefulSet.Status.ReadyReplicas,
 			"desiredReplicas", desiredReplicas)
-		return true, nil // Requeue to wait for pods
+		return requeueAfterOutcome(constants.RequeueShort), nil
 	}
 
-	// Check if pods are actually running (not just ready in StatefulSet status)
 	greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
 	if err != nil {
-		return false, fmt.Errorf("failed to get Green pods: %w", err)
+		return phaseOutcome{}, fmt.Errorf("failed to get Green pods: %w", err)
 	}
 
-	allRunning := true
 	for _, pod := range greenPods {
 		if pod.Status.Phase != corev1.PodRunning {
 			logger.Info("Green pod not yet running", "pod", pod.Name, "phase", pod.Status.Phase)
-			allRunning = false
-			break
+			return requeueAfterOutcome(constants.RequeueShort), nil
 		}
 	}
 
-	if !allRunning {
-		return true, nil // Requeue to wait
-	}
-
-	// Check if all Green pods are unsealed (merged from former UnsealingGreen phase)
 	for _, pod := range greenPods {
 		sealed, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelSealed)
 		if err != nil {
-			return false, fmt.Errorf("failed to parse sealed label on pod %s: %w", pod.Name, err)
+			return phaseOutcome{}, fmt.Errorf("failed to parse sealed label on pod %s: %w", pod.Name, err)
 		}
 		if !present || sealed {
 			logger.Info("Waiting for Green pod to be unsealed", "pod", pod.Name)
-			return true, nil // Requeue to wait for unseal
+			return requeueAfterOutcome(constants.RequeueShort), nil
 		}
 	}
 
-	// All pods are ready, running, and unsealed - transition to JoiningMesh
-	m.transitionToPhase(cluster, openbaov1alpha1.PhaseJoiningMesh)
-
-	return true, nil
+	return advance(openbaov1alpha1.PhaseJoiningMesh), nil
 }
 
 // handlePhaseJoiningMesh joins Green pods to the Raft cluster as non-voters.
-func (m *Manager) handlePhaseJoiningMesh(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) handlePhaseJoiningMesh(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
-		return false, fmt.Errorf("blue/green status is nil")
+		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
-	shouldRequeue, err := m.runExecutorJob(ctx, logger, cluster, ActionJoinGreenNonVoters, "job failure threshold exceeded")
+	step, err := m.runExecutorJobStep(ctx, logger, cluster, ActionJoinGreenNonVoters, "job failure threshold exceeded")
 	if err != nil {
-		return false, err
+		return phaseOutcome{}, err
 	}
-	if shouldRequeue {
-		return true, nil
+	if !step.Completed {
+		return step.Outcome, nil
 	}
 
 	// All pods joined, transition to Syncing
-	m.transitionToPhase(cluster, openbaov1alpha1.PhaseSyncing)
-
-	return true, nil
+	return advance(openbaov1alpha1.PhaseSyncing), nil
 }
 
 // handlePhaseSyncing waits for Green nodes to catch up with Blue nodes.
-func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
-		return false, fmt.Errorf("blue/green status is nil")
+		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
 	// Check MinSyncDuration if configured
@@ -573,12 +622,12 @@ func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cl
 		cluster.Spec.UpdateStrategy.BlueGreen.Verification != nil &&
 		cluster.Spec.UpdateStrategy.BlueGreen.Verification.MinSyncDuration != "" {
 		if cluster.Status.BlueGreen.StartTime == nil {
-			return false, fmt.Errorf("StartTime is nil in Syncing phase")
+			return phaseOutcome{}, fmt.Errorf("StartTime is nil in Syncing phase")
 		}
 
 		minDuration, err := time.ParseDuration(cluster.Spec.UpdateStrategy.BlueGreen.Verification.MinSyncDuration)
 		if err != nil {
-			return false, fmt.Errorf("invalid MinSyncDuration: %w", err)
+			return phaseOutcome{}, fmt.Errorf("invalid MinSyncDuration: %w", err)
 		}
 
 		elapsed := time.Since(cluster.Status.BlueGreen.StartTime.Time)
@@ -586,16 +635,16 @@ func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cl
 			logger.Info("Waiting for MinSyncDuration",
 				"elapsed", elapsed,
 				"minDuration", minDuration)
-			return true, nil // Requeue to wait
+			return requeueAfterOutcome(minDuration - elapsed), nil
 		}
 	}
 
-	shouldRequeue, err := m.runExecutorJob(ctx, logger, cluster, ActionWaitGreenSynced, "job failure threshold exceeded")
+	step, err := m.runExecutorJobStep(ctx, logger, cluster, ActionWaitGreenSynced, "job failure threshold exceeded")
 	if err != nil {
-		return false, err
+		return phaseOutcome{}, err
 	}
-	if shouldRequeue {
-		return true, nil
+	if !step.Completed {
+		return step.Outcome, nil
 	}
 
 	// Check for pre-promotion hook
@@ -606,21 +655,20 @@ func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cl
 		hook := cluster.Spec.UpdateStrategy.BlueGreen.Verification.PrePromotionHook
 		hookResult, err := m.ensurePrePromotionHookJob(ctx, logger, cluster, hook)
 		if err != nil {
-			return false, fmt.Errorf("failed to ensure pre-promotion hook job: %w", err)
+			return phaseOutcome{}, fmt.Errorf("failed to ensure pre-promotion hook job: %w", err)
 		}
-		if hookResult.Running {
-			logger.Info("Pre-promotion hook job is in progress", "job", hookResult.Name)
-			return true, nil
+		hookDecision, err := prePromotionHookDecision(autoRollbackSettings(cluster), hookResult, "pre-promotion hook failed")
+		if err != nil {
+			return phaseOutcome{}, err
 		}
-		if hookResult.Failed {
-			logger.Info("Pre-promotion hook job failed", "job", hookResult.Name)
-			// Check if auto-rollback on validation failure is enabled
-			if cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback != nil &&
-				cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback.OnValidationFailure {
-				return m.triggerRollbackOrAbort(ctx, logger, cluster, "pre-promotion hook failed")
+		if hookDecision.Handled {
+			if hookResult.Running {
+				logger.Info("Pre-promotion hook job is in progress", "job", hookResult.Name)
 			}
-			// Otherwise, stay in Syncing phase and wait for manual intervention
-			return false, nil
+			if hookResult.Failed {
+				logger.Info("Pre-promotion hook job failed", "job", hookResult.Name)
+			}
+			return hookDecision.Outcome, nil
 		}
 		logger.Info("Pre-promotion hook completed successfully", "job", hookResult.Name)
 	}
@@ -629,162 +677,154 @@ func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cl
 	if cluster.Spec.UpdateStrategy.BlueGreen != nil && !cluster.Spec.UpdateStrategy.BlueGreen.AutoPromote {
 		logger.Info("AutoPromote is disabled; waiting for manual approval")
 		// Stay in Syncing phase until manual approval (annotation or field update)
-		return false, nil
+		return hold(), nil
 	}
 
 	// All nodes synced, transition to Promoting
-	m.transitionToPhase(cluster, openbaov1alpha1.PhasePromoting)
-
-	return true, nil
+	return advance(openbaov1alpha1.PhasePromoting), nil
 }
 
 // handlePhasePromoting promotes Green nodes to voters.
 // In OpenBao's Raft, non-voters automatically become voters when they catch up,
 // but we verify this and ensure all Green nodes are voters before proceeding.
-func (m *Manager) handlePhasePromoting(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) handlePhasePromoting(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
-		return false, fmt.Errorf("blue/green status is nil")
+		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
-	shouldRequeue, err := m.runExecutorJob(ctx, logger, cluster, ActionPromoteGreenVoters, "promotion job failure threshold exceeded")
+	step, err := m.runExecutorJobStep(ctx, logger, cluster, ActionPromoteGreenVoters, "promotion job failure threshold exceeded")
 	if err != nil {
-		return false, err
+		return phaseOutcome{}, err
 	}
-	if shouldRequeue {
-		return true, nil
+	if !step.Completed {
+		return step.Outcome, nil
 	}
 
 	// Transition to TrafficSwitching (instead of DemotingBlue)
 	// This decouples traffic switching from Blue demotion for safer rollbacks
-	m.transitionToPhase(cluster, openbaov1alpha1.PhaseTrafficSwitching)
-
-	return true, nil
+	return advance(openbaov1alpha1.PhaseTrafficSwitching), nil
 }
 
 // handlePhaseDemotingBlue demotes Blue nodes to non-voters and verifies Green becomes leader.
 // After demotion, Blue nodes are no longer voters, so Green nodes (the only voters) will win any election.
 // This phase includes the former "Cutover" logic - verifying Green is leader before proceeding.
-func (m *Manager) handlePhaseDemotingBlue(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) handlePhaseDemotingBlue(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
-		return false, fmt.Errorf("blue/green status is nil")
+		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
 	greenRevision := cluster.Status.BlueGreen.GreenRevision
-	blueRevision := cluster.Status.BlueGreen.BlueRevision
 
 	// Safety gate: ensure Green cluster is healthy enough to take over before
 	// attempting to demote Blue voters. This prevents entering a Raft
 	// configuration where Green cannot form quorum after demotion.
 	if greenRevision == "" {
-		return false, fmt.Errorf("green revision is empty in DemotingBlue phase")
+		return phaseOutcome{}, fmt.Errorf("green revision is empty in DemotingBlue phase")
 	}
 
 	greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
 	if err != nil {
-		return false, fmt.Errorf("failed to get Green pods: %w", err)
+		return phaseOutcome{}, fmt.Errorf("failed to get Green pods: %w", err)
 	}
 
-	readyGreenPods := 0
-	for i := range greenPods {
-		pod := &greenPods[i]
+	greenSnapshots, err := podSnapshotsFromPods(greenPods)
+	if err != nil {
+		return phaseOutcome{}, err
+	}
 
-		if isPodReady(pod) && pod.DeletionTimestamp == nil {
-			readyGreenPods++
+	// If using GatewayWeights strategy, only proceed once we have reached the final
+	// traffic step (0% Blue / 100% Green).
+	strategy := openbaov1alpha1.BlueGreenTrafficStrategyServiceSelectors
+	if cluster.Spec.UpdateStrategy.BlueGreen != nil {
+		if cluster.Spec.UpdateStrategy.BlueGreen.TrafficStrategy != "" {
+			strategy = cluster.Spec.UpdateStrategy.BlueGreen.TrafficStrategy
+		} else if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {
+			strategy = openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights
 		}
 	}
 
-	// Require at least one Ready Green pod before demotion. This is a
-	// conservative safety check to ensure the Green cluster can form a healthy
-	// quorum once Blue voters are removed, while still allowing rollout in
-	// environments where leadership will be transferred as part of the demotion
-	// job itself.
-	if readyGreenPods == 0 {
-		logger.Info("Blocking demotion: no ready Green pods")
-		return true, nil
+	ok, message := demotionPreconditionsSatisfied(
+		greenSnapshots,
+		int(cluster.Spec.Replicas),
+		strategy,
+		cluster.Status.BlueGreen.TrafficStep,
+	)
+	if !ok {
+		logger.Info(message)
+		return requeueAfterOutcome(constants.RequeueShort), nil
 	}
 
-	result, err := EnsureExecutorJob(
-		ctx,
-		m.client,
-		m.scheme,
-		logger,
-		cluster,
-		ActionDemoteBlueNonVotersStepDown,
-		"",
-		blueRevision,
-		greenRevision,
-	)
+	step, err := m.runExecutorJobStep(ctx, logger, cluster, ActionDemoteBlueNonVotersStepDown, "demotion job failure threshold exceeded")
 	if err != nil {
-		return false, err
+		return phaseOutcome{}, err
 	}
-	if result.Failed {
-		return false, fmt.Errorf("upgrade executor Job %s failed for action %q", result.Name, ActionDemoteBlueNonVotersStepDown)
-	}
-	if result.Running {
-		logger.Info("Upgrade executor Job is in progress", "job", result.Name, "action", ActionDemoteBlueNonVotersStepDown)
-		return true, nil
+	if !step.Completed {
+		return step.Outcome, nil
 	}
 
 	// After demotion, verify Green is now the leader (merged from former Cutover phase)
-	var greenLeader *corev1.Pod
-	for i := range greenPods {
-		pod := &greenPods[i]
-		active, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
-		if err != nil {
-			continue
-		}
-		if present && active {
-			greenLeader = pod
-			break
-		}
-	}
-
-	if greenLeader == nil {
+	leaderPod, source, ok := m.findLeaderPod(ctx, logger, cluster, greenPods)
+	if !ok {
 		logger.Info("Green leader not yet elected after demotion, waiting...")
-		return true, nil // Requeue to wait for leader election
+		return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait for leader election
 	}
 
-	logger.Info("Green leader confirmed after demotion", "pod", greenLeader.Name)
+	logger.Info("Green leader confirmed after demotion", "pod", leaderPod, "source", source)
 
 	// Transition to Cleanup
-	m.transitionToPhase(cluster, openbaov1alpha1.PhaseCleanup)
-
-	return true, nil
+	return advance(openbaov1alpha1.PhaseCleanup), nil
 }
 
 // handlePhaseCleanup ejects Blue nodes from Raft and deletes the Blue StatefulSet.
 // This is the "point of no return" - after this, rollback is not possible.
-func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
-		return false, fmt.Errorf("blue/green status is nil")
+		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
 	blueRevision := cluster.Status.BlueGreen.BlueRevision
 	greenRevision := cluster.Status.BlueGreen.GreenRevision
 
+	// Raft safety gate: the Cleanup phase is the point of no return. Before we
+	// remove Blue peers and delete Blue pods, ensure Green is stable and can
+	// sustain quorum (all pods Ready+Unsealed, and a leader is observed).
+	if greenRevision == "" {
+		return phaseOutcome{}, fmt.Errorf("green revision is empty in Cleanup phase")
+	}
+
+	greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
+	if err != nil {
+		return phaseOutcome{}, fmt.Errorf("failed to get Green pods: %w", err)
+	}
+
+	greenSnapshots, err := podSnapshotsFromPods(greenPods)
+	if err != nil {
+		return phaseOutcome{}, err
+	}
+
+	leaderOK := leaderObserved(greenSnapshots)
+	if !leaderOK {
+		if _, source, ok := m.findLeaderPod(ctx, logger, cluster, greenPods); ok {
+			leaderOK = true
+			logger.V(1).Info("Green leader observed via API fallback", "source", source)
+		}
+	}
+
+	ok, message := cleanupPreconditionsSatisfied(greenSnapshots, int(cluster.Spec.Replicas), leaderOK)
+	if !ok {
+		logger.Info(message)
+		return requeueAfterOutcome(constants.RequeueShort), nil
+	}
+
 	// Step 1: Eject Blue nodes from Raft peer list.
 	// Note: Do not gate this on the service registration leader label; the executor
 	// determines leadership via the health endpoint and can proceed even if labels lag.
-	result, err := EnsureExecutorJob(
-		ctx,
-		m.client,
-		m.scheme,
-		logger,
-		cluster,
-		ActionRemoveBluePeers,
-		"",
-		blueRevision,
-		greenRevision,
-	)
+	step, err := m.runExecutorJobStep(ctx, logger, cluster, ActionRemoveBluePeers, "cleanup peer removal job failure threshold exceeded")
 	if err != nil {
-		return false, err
+		return phaseOutcome{}, err
 	}
-	if result.Failed {
-		return false, fmt.Errorf("upgrade executor Job %s failed for action %q", result.Name, ActionRemoveBluePeers)
-	}
-	if result.Running {
-		logger.Info("Upgrade executor Job is in progress", "job", result.Name, "action", ActionRemoveBluePeers)
-		return true, nil
+	if !step.Completed {
+		return step.Outcome, nil
 	}
 
 	// Step 2: Delete Blue StatefulSet
@@ -795,23 +835,23 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 		Name:      blueStatefulSetName,
 	}, blueStatefulSet); err != nil {
 		if !apierrors.IsNotFound(err) {
-			return false, fmt.Errorf("failed to get Blue StatefulSet: %w", err)
+			return phaseOutcome{}, fmt.Errorf("failed to get Blue StatefulSet: %w", err)
 		}
 		// Already deleted
 		logger.Info("Blue StatefulSet already deleted", "blueRevision", blueRevision)
 	} else {
 		// Delete the StatefulSet - this will cascade-delete its pods
 		if err := m.client.Delete(ctx, blueStatefulSet); err != nil {
-			return false, fmt.Errorf("failed to delete Blue StatefulSet: %w", err)
+			return phaseOutcome{}, fmt.Errorf("failed to delete Blue StatefulSet: %w", err)
 		}
 		logger.Info("Deleted Blue StatefulSet", "blueRevision", blueRevision)
-		return true, nil // Requeue to verify deletion and wait for pods to terminate
+		return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to verify deletion and wait for pods to terminate
 	}
 
 	// Verify Blue pods are gone (excluding Terminating pods)
 	bluePods, err := m.getBluePods(ctx, cluster, blueRevision)
 	if err != nil {
-		return false, fmt.Errorf("failed to check Blue pods: %w", err)
+		return phaseOutcome{}, fmt.Errorf("failed to check Blue pods: %w", err)
 	}
 
 	// Filter out pods that are terminating (DeletionTimestamp is set)
@@ -824,15 +864,13 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 
 	if activeBluePods > 0 {
 		logger.Info("Blue pods still exist, waiting for termination", "count", activeBluePods)
-		return true, nil // Requeue to wait
+		return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait
 	}
 
 	// Finalize upgrade
 	cluster.Status.CurrentVersion = cluster.Spec.Version
 	cluster.Status.BlueGreen.BlueRevision = cluster.Status.BlueGreen.GreenRevision
 	cluster.Status.BlueGreen.GreenRevision = ""
-	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
-	cluster.Status.BlueGreen.StartTime = nil
 
 	if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/upgrade", openbaov1alpha1.ClusterOperationUpgrade); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
 		logger.Error(err, "Failed to release upgrade operation lock after blue/green completion")
@@ -840,16 +878,16 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 
 	logger.Info("Blue/green upgrade completed", "newVersion", cluster.Spec.Version)
 
-	return false, nil
+	return advance(openbaov1alpha1.PhaseIdle), nil
 }
 
-func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (handled bool, shouldRequeue bool) {
+func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (handled bool, result recon.Result) {
 	if cluster.Status.BreakGlass == nil || !cluster.Status.BreakGlass.Active {
-		return false, false
+		return false, recon.Result{}
 	}
 
 	if cluster.Status.BreakGlass.Nonce == "" || cluster.Spec.BreakGlassAck != cluster.Status.BreakGlass.Nonce {
-		return true, false
+		return true, recon.Result{}
 	}
 
 	now := metav1.Now()
@@ -864,10 +902,10 @@ func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alph
 		cluster.Status.BlueGreen.RollbackAttempt++
 		cluster.Status.BlueGreen.JobFailureCount = 0
 		cluster.Status.BlueGreen.LastJobFailure = ""
-		return true, true
+		return true, requeueShort()
 	}
 
-	return true, true
+	return true, requeueShort()
 }
 
 const breakGlassNonceBytes = 16
@@ -914,6 +952,103 @@ func newBreakGlassNonce() string {
 		return hex.EncodeToString(buf)
 	}
 	return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+}
+
+func (m *Manager) getPodURL(cluster *openbaov1alpha1.OpenBaoCluster, podName string) string {
+	return fmt.Sprintf("https://%s.%s.%s.svc:%d", podName, cluster.Name, cluster.Namespace, constants.PortAPI)
+}
+
+func (m *Manager) getClusterCACert(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) ([]byte, error) {
+	for _, suffix := range []string{constants.SuffixTLSCA, constants.SuffixTLSServer} {
+		secretName := cluster.Name + suffix
+		secret := &corev1.Secret{}
+		if err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      secretName,
+		}, secret); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return nil, fmt.Errorf("failed to get CA secret %s/%s: %w", cluster.Namespace, secretName, err)
+		}
+
+		caCert, ok := secret.Data["ca.crt"]
+		if !ok {
+			return nil, fmt.Errorf("CA certificate not found in secret %s/%s", cluster.Namespace, secretName)
+		}
+		return caCert, nil
+	}
+
+	return nil, fmt.Errorf("no CA secret found for cluster %s/%s (tried %q and %q)", cluster.Namespace, cluster.Name, cluster.Name+constants.SuffixTLSCA, cluster.Name+constants.SuffixTLSServer)
+}
+
+func (m *Manager) findLeaderPod(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, pods []corev1.Pod) (podName string, source string, ok bool) {
+	// Fast path: trust leader label if it is set.
+	for i := range pods {
+		pod := &pods[i]
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+
+		active, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+		if err != nil {
+			logger.V(1).Info("Invalid OpenBao leader label value", "pod", pod.Name, "error", err)
+			continue
+		}
+		if present && active {
+			return pod.Name, "label", true
+		}
+	}
+
+	// Fallback: query /v1/sys/health to determine leadership (labels can lag).
+	caCert, err := m.getClusterCACert(ctx, cluster)
+	if err != nil {
+		logger.V(1).Info("Failed to load cluster CA certificate; cannot use API leader fallback", "error", err)
+		return "", "", false
+	}
+
+	clusterKey := fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)
+	for i := range pods {
+		pod := &pods[i]
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		if pod.Status.Phase != corev1.PodRunning {
+			continue
+		}
+		if !isPodReady(pod) {
+			continue
+		}
+
+		sealed, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelSealed)
+		if err == nil && present && sealed {
+			continue
+		}
+
+		apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
+			ClusterKey:          clusterKey,
+			BaseURL:             m.getPodURL(cluster, pod.Name),
+			CACert:              caCert,
+			ConnectionTimeout:   2 * time.Second,
+			RequestTimeout:      2 * time.Second,
+			SmartClientDisabled: true,
+		})
+		if err != nil {
+			logger.V(1).Info("Failed to create OpenBao client for pod", "pod", pod.Name, "error", err)
+			continue
+		}
+
+		isLeader, err := apiClient.IsLeader(ctx)
+		if err != nil {
+			logger.V(1).Info("Leader check failed for pod", "pod", pod.Name, "error", err)
+			continue
+		}
+		if isLeader {
+			return pod.Name, "api", true
+		}
+	}
+
+	return "", "", false
 }
 
 // getPodsByRevision returns all pods belonging to the specified revision.
@@ -1074,6 +1209,10 @@ func (m *Manager) abortUpgrade(ctx context.Context, logger logr.Logger, cluster 
 	cluster.Status.BlueGreen.GreenRevision = ""
 	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
 	cluster.Status.BlueGreen.StartTime = nil
+	cluster.Status.BlueGreen.TrafficSwitchedTime = nil
+	cluster.Status.BlueGreen.TrafficStep = 0
+	cluster.Status.BlueGreen.JobFailureCount = 0
+	cluster.Status.BlueGreen.LastJobFailure = ""
 
 	logger.Info("Blue/green upgrade aborted successfully")
 
@@ -1089,20 +1228,6 @@ func (m *Manager) getMaxJobFailures(cluster *openbaov1alpha1.OpenBaoCluster) int
 	return 5 // Default
 }
 
-// handleJobFailure increments the job failure count and returns true if threshold exceeded.
-func (m *Manager) handleJobFailure(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) bool {
-	cluster.Status.BlueGreen.JobFailureCount++
-	cluster.Status.BlueGreen.LastJobFailure = jobName
-
-	maxFailures := m.getMaxJobFailures(cluster)
-	logger.Info("Job failure recorded",
-		"job", jobName,
-		"failureCount", cluster.Status.BlueGreen.JobFailureCount,
-		"maxFailures", maxFailures)
-
-	return cluster.Status.BlueGreen.JobFailureCount >= maxFailures
-}
-
 // isEarlyPhase returns true if the upgrade is in an early phase where abort (vs rollback) is appropriate.
 func isEarlyPhase(phase openbaov1alpha1.BlueGreenPhase) bool {
 	switch phase {
@@ -1114,16 +1239,16 @@ func isEarlyPhase(phase openbaov1alpha1.BlueGreenPhase) bool {
 }
 
 // triggerRollbackOrAbort decides whether to abort (early phases) or trigger full rollback (late phases).
-func (m *Manager) triggerRollbackOrAbort(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, reason string) (bool, error) {
+func (m *Manager) triggerRollbackOrAbort(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, reason string) (recon.Result, error) {
 	phase := cluster.Status.BlueGreen.Phase
 
 	if isEarlyPhase(phase) {
 		// Early phase: simple abort (delete Green, reset to Idle)
 		logger.Info("Aborting upgrade due to failures in early phase", "phase", phase, "reason", reason)
 		if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
-			return false, fmt.Errorf("failed to abort upgrade: %w", err)
+			return recon.Result{}, fmt.Errorf("failed to abort upgrade: %w", err)
 		}
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	// Late phase: full rollback required
@@ -1132,7 +1257,7 @@ func (m *Manager) triggerRollbackOrAbort(ctx context.Context, logger logr.Logger
 }
 
 // triggerRollback initiates rollback from any phase.
-func (m *Manager) triggerRollback(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, reason string) (bool, error) {
+func (m *Manager) triggerRollback(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, reason string) (recon.Result, error) {
 	now := metav1.Now()
 	cluster.Status.BlueGreen.RollbackReason = reason
 	cluster.Status.BlueGreen.RollbackStartTime = &now
@@ -1140,14 +1265,14 @@ func (m *Manager) triggerRollback(logger logr.Logger, cluster *openbaov1alpha1.O
 
 	logger.Info("Rollback initiated", "reason", reason)
 
-	return true, nil // Requeue to process rollback
+	return requeueShort(), nil // Requeue to process rollback
 }
 
 // handlePhaseTrafficSwitching handles the TrafficSwitching phase.
 // This phase switches traffic to Green and optionally waits for stabilization.
-func (m *Manager) handlePhaseTrafficSwitching(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) handlePhaseTrafficSwitching(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
-		return false, fmt.Errorf("blue/green status is nil")
+		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
 	greenRevision := cluster.Status.BlueGreen.GreenRevision
@@ -1172,214 +1297,191 @@ func (m *Manager) handlePhaseTrafficSwitching(ctx context.Context, logger logr.L
 
 // handlePhaseTrafficSwitchingServiceSelectors implements the original traffic switching
 // behavior using the external Service selector.
-func (m *Manager) handlePhaseTrafficSwitchingServiceSelectors(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, greenRevision string) (bool, error) {
-	// Check if traffic has already been switched (by checking if TrafficSwitchedTime is set)
-	if cluster.Status.BlueGreen.TrafficSwitchedTime == nil {
-		// Traffic not yet switched - switch now
-		// The actual Service selector update is handled by infra.Manager based on the phase
-		now := metav1.Now()
-		cluster.Status.BlueGreen.TrafficSwitchedTime = &now
+func (m *Manager) handlePhaseTrafficSwitchingServiceSelectors(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, greenRevision string) (phaseOutcome, error) {
+	autoRollback := autoRollbackSettings(cluster)
+	stabilizationSeconds := autoRollback.StabilizationSeconds
+
+	now := time.Now()
+
+	var trafficSwitchedAt *time.Time
+	var hookResult *JobResult
+	greenHealthy := true
+
+	if cluster.Status.BlueGreen.TrafficSwitchedTime != nil {
+		switchedAt := cluster.Status.BlueGreen.TrafficSwitchedTime.Time
+		trafficSwitchedAt = &switchedAt
+
+		requiredDuration := time.Duration(stabilizationSeconds) * time.Second
+		elapsed := now.Sub(switchedAt)
+
+		if elapsed < requiredDuration {
+			if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
+				cluster.Spec.UpdateStrategy.BlueGreen.Verification != nil &&
+				cluster.Spec.UpdateStrategy.BlueGreen.Verification.PostSwitchHook != nil {
+				hook := cluster.Spec.UpdateStrategy.BlueGreen.Verification.PostSwitchHook
+				result, err := m.ensurePostSwitchHookJob(ctx, logger, cluster, hook)
+				if err != nil {
+					return phaseOutcome{}, fmt.Errorf("failed to ensure post-switch hook job: %w", err)
+				}
+				hookResult = result
+				if hookResult.Running {
+					logger.Info("Post-switch hook job is in progress", "job", hookResult.Name)
+				}
+				if hookResult.Failed {
+					logger.Info("Post-switch hook job failed", "job", hookResult.Name)
+				}
+				if hookResult.Succeeded {
+					logger.Info("Post-switch hook completed successfully", "job", hookResult.Name)
+				}
+			}
+
+			if autoRollback.Enabled && autoRollback.OnTrafficFailure {
+				greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
+				if err != nil {
+					return phaseOutcome{}, fmt.Errorf("failed to get Green pods: %w", err)
+				}
+				for i := range greenPods {
+					if !isPodReady(&greenPods[i]) {
+						greenHealthy = false
+						break
+					}
+				}
+			}
+		}
+	}
+
+	decision, err := trafficSwitchServiceSelectorsDecision(now, trafficSwitchedAt, stabilizationSeconds, autoRollback, hookResult, greenHealthy)
+	if err != nil {
+		return phaseOutcome{}, err
+	}
+	if decision.SetTrafficSwitchedAt {
+		at := metav1.NewTime(decision.TrafficSwitchedAt)
+		cluster.Status.BlueGreen.TrafficSwitchedTime = &at
 		logger.Info("Traffic switched to Green", "greenRevision", greenRevision)
-		return true, nil // Requeue to start stabilization
 	}
 
-	// Check stabilization period
-	stabilizationSeconds := int32(60) // Default
-	if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
-		cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback != nil &&
-		cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback.StabilizationSeconds != nil {
-		stabilizationSeconds = *cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback.StabilizationSeconds
+	if decision.Outcome.kind == phaseOutcomeAdvance && decision.Outcome.nextPhase == openbaov1alpha1.PhaseDemotingBlue {
+		logger.Info("Stabilization period complete, proceeding to demote Blue")
 	}
 
-	elapsed := time.Since(cluster.Status.BlueGreen.TrafficSwitchedTime.Time)
-	requiredDuration := time.Duration(stabilizationSeconds) * time.Second
-
-	if elapsed < requiredDuration {
-		logger.Info("Waiting for stabilization period",
-			"elapsed", elapsed,
-			"required", requiredDuration)
-
-		// Run post-switch validation hook, if configured, to actively verify
-		// that traffic through the Service (or Gateway) is correctly reaching
-		// the Green cluster.
-		if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
-			cluster.Spec.UpdateStrategy.BlueGreen.Verification != nil &&
-			cluster.Spec.UpdateStrategy.BlueGreen.Verification.PostSwitchHook != nil {
-			hook := cluster.Spec.UpdateStrategy.BlueGreen.Verification.PostSwitchHook
-
-			hookResult, err := m.ensurePostSwitchHookJob(ctx, logger, cluster, hook)
-			if err != nil {
-				return false, fmt.Errorf("failed to ensure post-switch hook job: %w", err)
-			}
-			if hookResult.Running {
-				logger.Info("Post-switch hook job is in progress", "job", hookResult.Name)
-				return true, nil
-			}
-			if hookResult.Failed {
-				logger.Info("Post-switch hook job failed", "job", hookResult.Name)
-
-				// Use AutoRollback.OnTrafficFailure to decide whether to roll back
-				// or pause for manual intervention.
-				if cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback != nil &&
-					cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback.OnTrafficFailure {
-					return m.triggerRollbackOrAbort(ctx, logger, cluster, "post-switch hook failed")
-				}
-
-				// Stay in TrafficSwitching phase and wait for manual intervention.
-				return false, nil
-			}
-			logger.Info("Post-switch hook completed successfully", "job", hookResult.Name)
-		}
-
-		// Check Green health during stabilization if OnTrafficFailure is enabled
-		if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
-			cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback != nil &&
-			cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback.OnTrafficFailure {
-			greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
-			if err != nil {
-				return false, fmt.Errorf("failed to get Green pods: %w", err)
-			}
-
-			// Check for unhealthy pods
-			for _, pod := range greenPods {
-				if !isPodReady(&pod) {
-					logger.Info("Green pod unhealthy during stabilization, triggering rollback", "pod", pod.Name)
-					return m.triggerRollback(logger, cluster, "Green pod became unhealthy during stabilization")
-				}
-			}
-		}
-
-		return true, nil // Requeue to wait
-	}
-
-	// Stabilization complete, proceed to DemotingBlue
-	logger.Info("Stabilization period complete, proceeding to demote Blue")
-	m.transitionToPhase(cluster, openbaov1alpha1.PhaseDemotingBlue)
-
-	return true, nil
+	return decision.Outcome, nil
 }
 
 // handlePhaseTrafficSwitchingGatewayWeights implements weighted traffic shifting using
 // Gateway API when the GatewayWeights traffic strategy is active. It advances through
 // multiple traffic steps (e.g., 90/10 -> 50/50 -> 0/100), applying a stabilization
 // period and validation at each step before proceeding to demote Blue.
-func (m *Manager) handlePhaseTrafficSwitchingGatewayWeights(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, greenRevision string) (bool, error) {
+func (m *Manager) handlePhaseTrafficSwitchingGatewayWeights(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, greenRevision string) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
-		return false, fmt.Errorf("blue/green status is nil")
-	}
-
-	// Step 0: initial state (100% Blue, 0% Green). Move to step 1 (canary 90/10)
-	// and record the time when we updated weights.
-	if cluster.Status.BlueGreen.TrafficStep == 0 {
-		cluster.Status.BlueGreen.TrafficStep = 1
-		now := metav1.Now()
-		cluster.Status.BlueGreen.TrafficSwitchedTime = &now
-		logger.Info("Gateway weighted traffic: starting canary step", "trafficStep", cluster.Status.BlueGreen.TrafficStep)
-		return true, nil
-	}
-
-	// Ensure TrafficSwitchedTime is set for stabilization calculations.
-	if cluster.Status.BlueGreen.TrafficSwitchedTime == nil {
-		now := metav1.Now()
-		cluster.Status.BlueGreen.TrafficSwitchedTime = &now
+		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
 	// Stabilization period settings
-	stabilizationSeconds := int32(60) // Default
-	if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
-		cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback != nil &&
-		cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback.StabilizationSeconds != nil {
-		stabilizationSeconds = *cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback.StabilizationSeconds
-	}
+	autoRollback := autoRollbackSettings(cluster)
+	stabilizationSeconds := autoRollback.StabilizationSeconds
 
-	elapsed := time.Since(cluster.Status.BlueGreen.TrafficSwitchedTime.Time)
-	requiredDuration := time.Duration(stabilizationSeconds) * time.Second
+	now := time.Now()
 
-	if elapsed < requiredDuration {
-		logger.Info("Gateway weighted traffic: waiting for stabilization period",
-			"trafficStep", cluster.Status.BlueGreen.TrafficStep,
-			"elapsed", elapsed,
-			"required", requiredDuration)
+	var trafficSwitchedAt *time.Time
+	var hookResult *JobResult
+	greenHealthy := true
 
-		// Run post-switch validation hook, if configured, to actively verify
-		// that traffic through the Gateway is correctly reaching the Green cluster.
-		if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
-			cluster.Spec.UpdateStrategy.BlueGreen.Verification != nil &&
-			cluster.Spec.UpdateStrategy.BlueGreen.Verification.PostSwitchHook != nil {
-			hook := cluster.Spec.UpdateStrategy.BlueGreen.Verification.PostSwitchHook
+	if cluster.Status.BlueGreen.TrafficSwitchedTime != nil {
+		switchedAt := cluster.Status.BlueGreen.TrafficSwitchedTime.Time
+		trafficSwitchedAt = &switchedAt
 
-			hookResult, err := m.ensurePostSwitchHookJob(ctx, logger, cluster, hook)
-			if err != nil {
-				return false, fmt.Errorf("failed to ensure post-switch hook job: %w", err)
-			}
-			if hookResult.Running {
-				logger.Info("Post-switch hook job is in progress", "job", hookResult.Name)
-				return true, nil
-			}
-			if hookResult.Failed {
-				logger.Info("Post-switch hook job failed", "job", hookResult.Name)
+		requiredDuration := time.Duration(stabilizationSeconds) * time.Second
+		elapsed := now.Sub(switchedAt)
 
-				if cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback != nil &&
-					cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback.OnTrafficFailure {
-					return m.triggerRollbackOrAbort(ctx, logger, cluster, "post-switch hook failed")
+		if elapsed < requiredDuration {
+			if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
+				cluster.Spec.UpdateStrategy.BlueGreen.Verification != nil &&
+				cluster.Spec.UpdateStrategy.BlueGreen.Verification.PostSwitchHook != nil {
+				hook := cluster.Spec.UpdateStrategy.BlueGreen.Verification.PostSwitchHook
+				result, err := m.ensurePostSwitchHookJob(ctx, logger, cluster, hook)
+				if err != nil {
+					return phaseOutcome{}, fmt.Errorf("failed to ensure post-switch hook job: %w", err)
 				}
-
-				// Stay in TrafficSwitching phase and wait for manual intervention.
-				return false, nil
-			}
-			logger.Info("Post-switch hook completed successfully", "job", hookResult.Name)
-		}
-
-		// Check Green health during stabilization if OnTrafficFailure is enabled
-		if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
-			cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback != nil &&
-			cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback.OnTrafficFailure {
-			greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
-			if err != nil {
-				return false, fmt.Errorf("failed to get Green pods: %w", err)
+				hookResult = result
+				if hookResult.Running {
+					logger.Info("Post-switch hook job is in progress", "job", hookResult.Name)
+				}
+				if hookResult.Failed {
+					logger.Info("Post-switch hook job failed", "job", hookResult.Name)
+				}
+				if hookResult.Succeeded {
+					logger.Info("Post-switch hook completed successfully", "job", hookResult.Name)
+				}
 			}
 
-			for _, pod := range greenPods {
-				if !isPodReady(&pod) {
-					logger.Info("Green pod unhealthy during weighted stabilization, triggering rollback", "pod", pod.Name)
-					return m.triggerRollback(logger, cluster, "Green pod became unhealthy during weighted stabilization")
+			if autoRollback.Enabled && autoRollback.OnTrafficFailure {
+				greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
+				if err != nil {
+					return phaseOutcome{}, fmt.Errorf("failed to get Green pods: %w", err)
+				}
+				for i := range greenPods {
+					if !isPodReady(&greenPods[i]) {
+						greenHealthy = false
+						break
+					}
 				}
 			}
 		}
-
-		return true, nil // Requeue to continue stabilization
 	}
 
-	// Stabilization for current step complete; advance to the next weight step
-	// or proceed to DemotingBlue once final step is reached.
-	switch cluster.Status.BlueGreen.TrafficStep {
-	case 1:
-		// Move to mid-step (e.g., ~50/50).
-		cluster.Status.BlueGreen.TrafficStep = 2
-		now := metav1.Now()
-		cluster.Status.BlueGreen.TrafficSwitchedTime = &now
-		logger.Info("Gateway weighted traffic: advancing to mid-step", "trafficStep", cluster.Status.BlueGreen.TrafficStep)
-		return true, nil
-	case 2:
-		// Move to final step (e.g., 0/100).
-		cluster.Status.BlueGreen.TrafficStep = 3
-		now := metav1.Now()
-		cluster.Status.BlueGreen.TrafficSwitchedTime = &now
-		logger.Info("Gateway weighted traffic: advancing to final step", "trafficStep", cluster.Status.BlueGreen.TrafficStep)
-		return true, nil
-	default:
-		// Final step reached; proceed to demote Blue.
+	decision, err := trafficSwitchGatewayWeightsDecision(
+		now,
+		cluster.Status.BlueGreen.TrafficStep,
+		trafficSwitchedAt,
+		stabilizationSeconds,
+		autoRollback,
+		hookResult,
+		greenHealthy,
+	)
+	if err != nil {
+		return phaseOutcome{}, err
+	}
+
+	if decision.SetTrafficStep {
+		cluster.Status.BlueGreen.TrafficStep = decision.TrafficStep
+	}
+	if decision.SetTrafficSwitchedAt {
+		at := metav1.NewTime(decision.TrafficSwitchedAt)
+		cluster.Status.BlueGreen.TrafficSwitchedTime = &at
+	}
+
+	// Keep Gateway API HTTPRoute backends and weighted backend Services in sync
+	// with the current traffic step. The workload controller does not reconcile
+	// on every blue/green status update, so we apply these updates here.
+	if m.infraManager != nil {
+		if err := m.infraManager.EnsureGatewayTrafficResources(ctx, logger, cluster); err != nil {
+			return phaseOutcome{}, fmt.Errorf("failed to reconcile Gateway traffic resources: %w", err)
+		}
+	}
+
+	if decision.SetTrafficStep {
+		switch decision.TrafficStep {
+		case 1:
+			logger.Info("Gateway weighted traffic: starting canary step", "trafficStep", cluster.Status.BlueGreen.TrafficStep)
+		case 2:
+			logger.Info("Gateway weighted traffic: advancing to mid-step", "trafficStep", cluster.Status.BlueGreen.TrafficStep)
+		case 3:
+			logger.Info("Gateway weighted traffic: advancing to final step", "trafficStep", cluster.Status.BlueGreen.TrafficStep)
+		}
+	}
+
+	if decision.Outcome.kind == phaseOutcomeAdvance && decision.Outcome.nextPhase == openbaov1alpha1.PhaseDemotingBlue {
 		logger.Info("Gateway weighted traffic stabilization complete, proceeding to demote Blue",
 			"trafficStep", cluster.Status.BlueGreen.TrafficStep)
-		m.transitionToPhase(cluster, openbaov1alpha1.PhaseDemotingBlue)
-		return true, nil
 	}
+
+	return decision.Outcome, nil
 }
 
 // handlePhaseRollingBack orchestrates the rollback sequence.
-func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
-		return false, fmt.Errorf("blue/green status is nil")
+		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
 	blueRevision := cluster.Status.BlueGreen.BlueRevision
@@ -1400,58 +1502,42 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 		greenRevision,
 	)
 	if err != nil {
-		return false, err
+		return phaseOutcome{}, err
 	}
 	if result.Running {
 		logger.Info("Rollback job in progress: repairing consensus", "job", result.Name)
-		return true, nil
+		return requeueAfterOutcome(constants.RequeueShort), nil
 	}
 	if result.Failed {
 		// This is an expected failure path that intentionally halts automation. Avoid Error-level
 		// logging here to prevent confusing stack traces in controller logs.
 		logger.Info("Rollback consensus repair job failed; entering break glass mode", "job", result.Name)
 		m.enterBreakGlassRollbackConsensusRepairFailed(cluster, result.Name)
-		return false, nil
+		return hold(), nil
 	}
 
 	// Step 3: Verify Blue leader is elected
 	bluePods, err := m.getBluePods(ctx, cluster, blueRevision)
 	if err != nil {
-		return false, fmt.Errorf("failed to get Blue pods: %w", err)
+		return phaseOutcome{}, fmt.Errorf("failed to get Blue pods: %w", err)
 	}
 
-	var blueLeader *corev1.Pod
-	for i := range bluePods {
-		pod := &bluePods[i]
-		active, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
-		if err != nil {
-			continue
-		}
-		if present && active {
-			blueLeader = pod
-			break
-		}
-	}
-
-	if blueLeader == nil {
+	leaderPod, source, ok := m.findLeaderPod(ctx, logger, cluster, bluePods)
+	if !ok {
 		logger.Info("Blue leader not yet elected during rollback, waiting...")
-		return true, nil // Requeue to wait for leader election
+		return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait for leader election
 	}
 
-	logger.Info("Blue leader confirmed during rollback", "pod", blueLeader.Name)
+	logger.Info("Blue leader confirmed during rollback", "pod", leaderPod, "source", source)
 
 	// Transition to RollbackCleanup
-	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseRollbackCleanup
-	now := metav1.Now()
-	cluster.Status.BlueGreen.StartTime = &now
-
-	return true, nil
+	return advance(openbaov1alpha1.PhaseRollbackCleanup), nil
 }
 
 // handlePhaseRollbackCleanup removes Green StatefulSet after rollback.
-func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
-		return false, fmt.Errorf("blue/green status is nil")
+		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
 	greenRevision := cluster.Status.BlueGreen.GreenRevision
@@ -1470,23 +1556,23 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 		greenRevision,
 	)
 	if err != nil {
-		return false, err
+		return phaseOutcome{}, err
 	}
 	if result.Running {
 		logger.Info("Rollback job in progress: removing Green peers", "job", result.Name)
-		return true, nil
+		return requeueAfterOutcome(constants.RequeueShort), nil
 	}
 	// Continue even if job failed - we still want to delete the StatefulSet
 
 	// Step 2: Delete Green StatefulSet
 	if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
-		return false, fmt.Errorf("failed to cleanup Green StatefulSet during rollback: %w", err)
+		return phaseOutcome{}, fmt.Errorf("failed to cleanup Green StatefulSet during rollback: %w", err)
 	}
 
 	// Step 3: Verify Green pods are gone
 	greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
 	if err != nil {
-		return false, fmt.Errorf("failed to check Green pods: %w", err)
+		return phaseOutcome{}, fmt.Errorf("failed to check Green pods: %w", err)
 	}
 
 	activeGreenPods := 0
@@ -1498,7 +1584,7 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 
 	if activeGreenPods > 0 {
 		logger.Info("Green pods still exist during rollback cleanup, waiting", "count", activeGreenPods)
-		return true, nil // Requeue to wait
+		return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait
 	}
 
 	// Finalize rollback
@@ -1513,7 +1599,7 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 
 	logger.Info("Blue/green rollback completed", "reason", rollbackReason)
 
-	return false, nil
+	return advance(openbaov1alpha1.PhaseIdle), nil
 }
 
 // isPodReady checks if a pod is in Ready condition.
@@ -1526,12 +1612,6 @@ func isPodReady(pod *corev1.Pod) bool {
 	return false
 }
 
-type ValidationHookJobResult struct {
-	Name    string
-	Running bool
-	Failed  bool
-}
-
 func (m *Manager) ensureValidationHookJob(
 	ctx context.Context,
 	logger logr.Logger,
@@ -1539,25 +1619,12 @@ func (m *Manager) ensureValidationHookJob(
 	jobName string,
 	component string,
 	hook *openbaov1alpha1.ValidationHookConfig,
-) (*ValidationHookJobResult, error) {
-	existingJob := &batchv1.Job{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      jobName,
-	}, existingJob)
-
-	if err == nil {
-		if existingJob.Status.Succeeded > 0 {
-			return &ValidationHookJobResult{Name: jobName, Running: false, Failed: false}, nil
-		}
-		if existingJob.Status.Failed > 0 {
-			return &ValidationHookJobResult{Name: jobName, Running: false, Failed: true}, nil
-		}
-		return &ValidationHookJobResult{Name: jobName, Running: true, Failed: false}, nil
+) (*JobResult, error) {
+	if hook == nil {
+		return nil, fmt.Errorf("hook is required")
 	}
-
-	if !apierrors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get job %s: %w", jobName, err)
+	if hook.Image == "" {
+		return nil, fmt.Errorf("hook.image is required")
 	}
 
 	timeout := int32(300)
@@ -1565,46 +1632,41 @@ func (m *Manager) ensureValidationHookJob(
 		timeout = *hook.TimeoutSeconds
 	}
 	backoffLimit := int32(0)
-	ttlSeconds := int32(3600)
+	ttlSeconds := ptr.To(int32(jobTTLSeconds))
 
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:      cluster.Name,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: component,
+	return ensureJob(ctx, m.client, m.scheme, logger, cluster, jobName, func(jobName string) (*batchv1.Job, error) {
+		return &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      jobName,
+				Namespace: cluster.Namespace,
+				Labels: map[string]string{
+					constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+					constants.LabelAppInstance:      cluster.Name,
+					constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+					constants.LabelOpenBaoCluster:   cluster.Name,
+					constants.LabelOpenBaoComponent: component,
+				},
 			},
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoffLimit,
-			ActiveDeadlineSeconds:   ptr.To(int64(timeout)),
-			TTLSecondsAfterFinished: &ttlSeconds,
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers: []corev1.Container{
-						{
-							Name:    "validation",
-							Image:   hook.Image,
-							Command: hook.Command,
-							Args:    hook.Args,
+			Spec: batchv1.JobSpec{
+				BackoffLimit:            &backoffLimit,
+				ActiveDeadlineSeconds:   ptr.To(int64(timeout)),
+				TTLSecondsAfterFinished: ttlSeconds,
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						RestartPolicy: corev1.RestartPolicyNever,
+						Containers: []corev1.Container{
+							{
+								Name:    "validation",
+								Image:   hook.Image,
+								Command: hook.Command,
+								Args:    hook.Args,
+							},
 						},
 					},
 				},
 			},
-		},
-	}
-
-	if err := m.client.Create(ctx, job); err != nil {
-		return nil, fmt.Errorf("failed to create validation hook job %s: %w", jobName, err)
-	}
-
-	logger.Info("Created validation hook job", "job", jobName, "component", component)
-	return &ValidationHookJobResult{Name: jobName, Running: true, Failed: false}, nil
+		}, nil
+	}, "component", component)
 }
 
 func (m *Manager) ensurePrePromotionHookJob(
@@ -1612,7 +1674,7 @@ func (m *Manager) ensurePrePromotionHookJob(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	hook *openbaov1alpha1.ValidationHookConfig,
-) (*ValidationHookJobResult, error) {
+) (*JobResult, error) {
 	return m.ensureValidationHookJob(ctx, logger, cluster, fmt.Sprintf("%s-validation-hook", cluster.Name), ComponentValidationHook, hook)
 }
 
@@ -1621,64 +1683,56 @@ func (m *Manager) ensurePostSwitchHookJob(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	hook *openbaov1alpha1.ValidationHookConfig,
-) (*ValidationHookJobResult, error) {
+) (*JobResult, error) {
 	return m.ensureValidationHookJob(ctx, logger, cluster, fmt.Sprintf("%s-post-switch-validation-hook", cluster.Name), ComponentPostSwitchValidationHook, hook)
 }
 
-// createPreUpgradeSnapshotJob creates a backup job at the start of an upgrade.
-// This is called when the upgrade starts to ensure we have a recovery point.
-func (m *Manager) createPreUpgradeSnapshotJob(
+// ensurePreUpgradeSnapshotJob creates or checks the status of the pre-upgrade snapshot Job.
+func (m *Manager) ensurePreUpgradeSnapshotJob(
 	ctx context.Context,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
-) (string, error) {
+	jobName string,
+) (*JobResult, error) {
 	if cluster.Spec.Backup == nil || cluster.Spec.Backup.Target.Endpoint == "" {
-		return "", fmt.Errorf("backup configuration required for pre-upgrade snapshot")
+		return nil, fmt.Errorf("backup configuration required for pre-upgrade snapshot")
+	}
+
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened &&
+		(cluster.Spec.Network == nil || len(cluster.Spec.Network.EgressRules) == 0) {
+		return nil, operatorerrors.WithReason(
+			constants.ReasonNetworkEgressRulesRequired,
+			operatorerrors.WrapPermanentConfig(fmt.Errorf(
+				"hardened profile with pre-upgrade snapshots enabled requires explicit spec.network.egressRules so snapshot Jobs can reach the object storage endpoint",
+			)),
+		)
 	}
 
 	if cluster.Spec.Backup.ExecutorImage == "" {
-		return "", fmt.Errorf("backup executor image is required for snapshots")
+		return nil, fmt.Errorf("backup executor image is required for snapshots")
 	}
 
-	// Generate a unique job name
-	jobName := fmt.Sprintf("%s-preupgrade-snapshot-%d", cluster.Name, time.Now().Unix())
+	if err := backup.EnsureBackupServiceAccount(ctx, m.client, m.scheme, cluster); err != nil {
+		return nil, fmt.Errorf("failed to ensure backup ServiceAccount for snapshot job: %w", err)
+	}
+	if err := backup.EnsureBackupRBAC(ctx, m.client, m.scheme, cluster); err != nil {
+		return nil, fmt.Errorf("failed to ensure backup RBAC for snapshot job: %w", err)
+	}
 
-	// Build the snapshot job
-	verifiedExecutorDigest := ""
-	executorImage := cluster.Spec.Backup.ExecutorImage
-	if executorImage != "" && cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
-		verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
-		defer cancel()
-
-		digest, err := security.VerifyImageForCluster(verifyCtx, logger, m.client, cluster, executorImage)
+	return ensureJob(ctx, m.client, m.scheme, logger, cluster, jobName, func(jobName string) (*batchv1.Job, error) {
+		verifiedExecutorDigest, err := m.verifyImageDigest(
+			ctx,
+			logger,
+			cluster,
+			cluster.Spec.Backup.ExecutorImage,
+			constants.ReasonBlueGreenSnapshotImageVerificationFailed,
+			"Pre-upgrade snapshot executor image verification failed",
+		)
 		if err != nil {
-			failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
-			if failurePolicy == "" {
-				failurePolicy = constants.ImageVerificationFailurePolicyBlock
-			}
-			if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-				return "", operatorerrors.WithReason(constants.ReasonBlueGreenSnapshotImageVerificationFailed, fmt.Errorf("pre-upgrade snapshot executor image verification failed (policy=Block): %w", err))
-			}
-			logger.Error(err, "Pre-upgrade snapshot executor image verification failed but proceeding due to Warn policy", "image", executorImage)
-		} else {
-			verifiedExecutorDigest = digest
-			logger.Info("Pre-upgrade snapshot executor image verified successfully", "digest", digest)
+			return nil, err
 		}
-	}
-
-	job := m.buildSnapshotJob(cluster, jobName, "pre-upgrade", verifiedExecutorDigest)
-
-	// Create the job
-	if err := m.client.Create(ctx, job); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			logger.Info("Snapshot job already exists", "job", jobName)
-			return jobName, nil
-		}
-		return "", fmt.Errorf("failed to create snapshot job: %w", err)
-	}
-
-	logger.Info("Created pre-upgrade snapshot job", "job", jobName)
-	return jobName, nil
+		return m.buildSnapshotJob(cluster, jobName, "pre-upgrade", verifiedExecutorDigest), nil
+	}, "component", ComponentUpgradeSnapshot, "phase", "pre-upgrade")
 }
 
 // buildSnapshotJob creates a backup Job spec for upgrade snapshots.
@@ -1828,7 +1882,7 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 				constants.LabelOpenBaoComponent: ComponentUpgradeSnapshot,
 			},
 			Annotations: map[string]string{
-				"openbao.org/snapshot-phase": phase, // TODO: Add constant
+				AnnotationSnapshotPhase: phase,
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(cluster, openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster")),
