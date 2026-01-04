@@ -69,6 +69,7 @@ spec:
 #   namespace: openbaocluster-gcp
 # type: Opaque
 # stringData:
+#   # trivy:ignore:gcp-service-account -- Example placeholder service-account JSON (commented), not a real secret.
 #   GOOGLE_CREDENTIALS: |
 #     {
 #       "type": "service_account",

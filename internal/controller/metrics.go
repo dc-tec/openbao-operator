@@ -72,6 +72,44 @@ var (
 		},
 		[]string{"namespace", "name"},
 	)
+
+	// Restore metrics
+	restoreTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openbao",
+			Name:      "restore_total",
+			Help:      "Total number of restore operations attempted",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	restoreSuccessTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openbao",
+			Name:      "restore_success_total",
+			Help:      "Total number of successful restore operations",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	restoreFailureTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openbao",
+			Name:      "restore_failure_total",
+			Help:      "Total number of failed restore operations",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	restoreDurationHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "openbao",
+			Name:      "restore_duration_seconds",
+			Help:      "Duration of restore operations in seconds",
+			Buckets:   []float64{10, 30, 60, 120, 300, 600, 1200},
+		},
+		[]string{"namespace", "name"},
+	)
 )
 
 func init() {
@@ -83,6 +121,11 @@ func init() {
 		driftDetectedTotal,
 		driftCorrectedTotal,
 		driftLastDetectedTimestamp,
+		// Restore metrics
+		restoreTotal,
+		restoreSuccessTotal,
+		restoreFailureTotal,
+		restoreDurationHistogram,
 	)
 }
 
@@ -190,4 +233,42 @@ func (m *ClusterMetrics) Clear() {
 	// Clear drift metrics
 	driftLastDetectedTimestamp.
 		DeleteLabelValues(m.namespace, m.name)
+}
+
+// RestoreMetrics provides helpers to record restore operation metrics.
+type RestoreMetrics struct {
+	namespace string
+	name      string
+}
+
+// NewRestoreMetrics creates a new RestoreMetrics instance.
+func NewRestoreMetrics(namespace, name string) *RestoreMetrics {
+	return &RestoreMetrics{
+		namespace: namespace,
+		name:      name,
+	}
+}
+
+// RecordStarted increments the restore total counter.
+func (m *RestoreMetrics) RecordStarted() {
+	restoreTotal.
+		WithLabelValues(m.namespace, m.name).
+		Inc()
+}
+
+// RecordSuccess increments the restore success counter and records duration.
+func (m *RestoreMetrics) RecordSuccess(durationSeconds float64) {
+	restoreSuccessTotal.
+		WithLabelValues(m.namespace, m.name).
+		Inc()
+	restoreDurationHistogram.
+		WithLabelValues(m.namespace, m.name).
+		Observe(durationSeconds)
+}
+
+// RecordFailure increments the restore failure counter.
+func (m *RestoreMetrics) RecordFailure() {
+	restoreFailureTotal.
+		WithLabelValues(m.namespace, m.name).
+		Inc()
 }
