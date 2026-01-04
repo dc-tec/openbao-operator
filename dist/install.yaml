@@ -344,11 +344,6 @@ spec:
                       DisableCache disables the cache entirely.
                       When true, all caching is disabled.
                     type: boolean
-                  disableStandbyReads:
-                    description: |-
-                      DisableStandbyReads disables reads from standby nodes.
-                      When true, all reads must go to the active node.
-                    type: boolean
                   enableResponseHeaderHostname:
                     description: |-
                       EnableResponseHeaderHostname enables the hostname in response headers.
@@ -2128,8 +2123,8 @@ spec:
                         default: true
                         description: |-
                           AutoPromote controls whether the operator automatically switches traffic
-                          and deletes the old cluster after sync. If false, it pauses at PhaseSynced
-                          waiting for manual approval (annotation or field update).
+                          and deletes the old cluster after sync. If false, it stays in the Syncing
+                          phase waiting for the user to enable it (set autoPromote=true).
                         type: boolean
                       autoRollback:
                         description: AutoRollback configures automatic rollback behavior.
@@ -3466,6 +3461,14 @@ rules:
   - update
   - patch
 - apiGroups:
+  - openbao.org
+  resources:
+  - openbaoclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - rbac.authorization.k8s.io
   resources:
   - roles
@@ -3491,8 +3494,8 @@ rules:
   - roles
   - rolebindings
   verbs:
-  - delete
   - create
+  - delete
   - get
   - list
   - patch
@@ -3530,6 +3533,17 @@ rules:
   - apps
   resources:
   - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
   - deployments
   verbs:
   - create
@@ -3545,7 +3559,6 @@ rules:
   - services
   - configmaps
   - serviceaccounts
-  - events
   verbs:
   - create
   - delete
@@ -3557,14 +3570,10 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - secrets
+  - events
   verbs:
   - create
-  - delete
-  - get
   - patch
-  - update
-  - watch
 - apiGroups:
   - ""
   resources:
@@ -3572,9 +3581,9 @@ rules:
   verbs:
   - get
   - list
-  - patch
-  - update
   - watch
+  - update
+  - patch
   - delete
 - apiGroups:
   - ""
@@ -3655,6 +3664,22 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -4107,132 +4132,6 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: openbao-operator-openbao-restrict-provisioner-delegate
-  namespace: openbao-operator-system
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    resourceRules:
-    - apiGroups:
-      - rbac.authorization.k8s.io
-      apiVersions:
-      - v1
-      operations:
-      - CREATE
-      - UPDATE
-      resources:
-      - roles
-      - rolebindings
-  validations:
-  - expression: '!variables.is_delegate || object.kind != ''Role'' || object.metadata.name
-      in [''openbao-operator-tenant-role'', ''openbao-sentinel-role'']'
-    message: The Provisioner Delegate can only create Roles named 'openbao-operator-tenant-role'
-      or 'openbao-sentinel-role'.
-  - expression: '!variables.is_delegate || object.kind != ''RoleBinding'' || object.metadata.name
-      in [''openbao-operator-tenant-rolebinding'', ''openbao-sentinel-rolebinding'']'
-    message: The Provisioner Delegate can only create RoleBindings named 'openbao-operator-tenant-rolebinding'
-      or 'openbao-sentinel-rolebinding'.
-  - expression: '!variables.is_delegate || object.kind != ''RoleBinding'' || object.roleRef.name
-      in [''openbao-operator-tenant-role'', ''openbao-sentinel-role'']'
-    message: The Provisioner Delegate is restricted to binding only 'openbao-operator-tenant-role'
-      or 'openbao-sentinel-role'.
-  - expression: '!variables.is_delegate || object.kind != ''RoleBinding'' || object.subjects.all(s,
-      s.kind == ''ServiceAccount'')'
-    message: The Provisioner Delegate can only grant permissions to ServiceAccounts.
-  - expression: |-
-      !variables.is_delegate || object.kind != 'RoleBinding' || object.subjects.all(s,
-
-        s.name.startsWith('openbao-operator') ||
-        s.name == 'openbao-sentinel')
-    message: The Provisioner Delegate can only grant permissions to operator or sentinel
-      ServiceAccounts.
-  - expression: |-
-      !variables.is_delegate || object.kind != 'Role' || !object.rules.exists(rule,
-
-        rule.verbs.exists(v,
-          v == 'impersonate' ||
-          v == 'bind' ||
-          v == 'escalate' ||
-          v == '*'
-        )
-      )
-    message: The Provisioner Delegate cannot create Roles granting 'impersonate',
-      'bind', 'escalate', or wildcard permissions.
-  variables:
-  - expression: request.userInfo.username == "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner-delegate"
-    name: is_delegate
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: openbao-operator-openbao-restrict-sentinel-mutations
-  namespace: openbao-operator-system
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    resourceRules:
-    - apiGroups:
-      - openbao.org
-      apiVersions:
-      - v1alpha1
-      operations:
-      - UPDATE
-      resources:
-      - openbaoclusters/status
-  validations:
-  - expression: |-
-      !variables.is_sentinel || (
-
-        # Spec must not change.
-        object.spec == oldObject.spec &&
-        # Metadata must not change.
-        ((!has(object.metadata.labels) && !has(oldObject.metadata.labels)) ||
-         (has(object.metadata.labels) && has(oldObject.metadata.labels) && object.metadata.labels == oldObject.metadata.labels)) &&
-        ((!has(object.metadata.annotations) && !has(oldObject.metadata.annotations)) ||
-         (has(object.metadata.annotations) && has(oldObject.metadata.annotations) && object.metadata.annotations == oldObject.metadata.annotations)) &&
-        ((!has(object.metadata.finalizers) && !has(oldObject.metadata.finalizers)) ||
-         (has(object.metadata.finalizers) && has(oldObject.metadata.finalizers) && object.metadata.finalizers == oldObject.metadata.finalizers)) &&
-
-        # All non-sentinel status fields must remain unchanged.
-        object.status.phase == oldObject.status.phase &&
-        object.status.activeLeader == oldObject.status.activeLeader &&
-        object.status.readyReplicas == oldObject.status.readyReplicas &&
-        object.status.currentVersion == oldObject.status.currentVersion &&
-        object.status.initialized == oldObject.status.initialized &&
-        object.status.selfInitialized == oldObject.status.selfInitialized &&
-        object.status.lastBackupTime == oldObject.status.lastBackupTime &&
-        object.status.upgrade == oldObject.status.upgrade &&
-        object.status.backup == oldObject.status.backup &&
-        object.status.drift == oldObject.status.drift &&
-        object.status.blueGreen == oldObject.status.blueGreen &&
-        object.status.operationLock == oldObject.status.operationLock &&
-        object.status.breakGlass == oldObject.status.breakGlass &&
-        object.status.conditions == oldObject.status.conditions &&
-
-        # Sentinel status: allow only trigger fields to change.
-        has(object.status.sentinel) &&
-        (
-          # Operator-owned fields must not be changed by Sentinel.
-          (!has(oldObject.status.sentinel) &&
-            !has(object.status.sentinel.lastHandledTriggerID) &&
-            !has(object.status.sentinel.lastHandledAt)
-          ) ||
-          (has(oldObject.status.sentinel) &&
-            object.status.sentinel.lastHandledTriggerID == oldObject.status.sentinel.lastHandledTriggerID &&
-            object.status.sentinel.lastHandledAt == oldObject.status.sentinel.lastHandledAt
-          )
-        )
-      )
-    message: The Sentinel may only update status.sentinel trigger fields (triggerID/triggeredAt/triggerResource).
-      Spec, metadata, and all other status fields are forbidden.
-  variables:
-  - expression: request.userInfo.username.startsWith("system:serviceaccount:") &&
-      request.userInfo.username.endsWith(":openbao-sentinel")
-    name: is_sentinel
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
   name: openbao-operator-lock-controller-statefulset-mutations
 spec:
   failurePolicy: Fail
@@ -4364,7 +4263,9 @@ spec:
       resources:
       - tlsroutes
   validations:
-  - expression: '!variables.is_managed || variables.is_operator_controller || variables.is_kube_system_controller
+  - expression: '!variables.is_managed || variables.is_operator_controller || (variables.is_kube_controller_manager
+      && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
+      (variables.is_kube_system_controller && variables.is_endpoints_controller_request)
       || variables.is_cert_manager || (variables.is_pod_request && variables.is_kubelet_node
       && request.operation == "DELETE") || variables.is_service_registration_label_update
       || (variables.maintenance_enabled && variables.is_break_glass_admin)'
@@ -4392,9 +4293,14 @@ spec:
     name: is_managed
   - expression: request.userInfo.username == "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
     name: is_operator_controller
+  - expression: request.userInfo.username == "system:kube-controller-manager" || request.userInfo.username
+      == "system:serviceaccount:kube-system:kube-controller-manager"
+    name: is_kube_controller_manager
   - expression: request.userInfo.groups.exists(g, g == "system:serviceaccounts:kube-system")
       || request.userInfo.username.startsWith("system:serviceaccount:kube-system:")
     name: is_kube_system_controller
+  - expression: request.resource.resource in ["endpoints", "endpointslices"]
+    name: is_endpoints_controller_request
   - expression: request.userInfo.username.startsWith("system:serviceaccount:cert-manager:")
     name: is_cert_manager
   - expression: request.kind.group == "" && request.kind.kind == "Pod"
@@ -4470,6 +4376,226 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  name: openbao-operator-openbao-restrict-provisioner-delegate
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - rbac.authorization.k8s.io
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - roles
+      - rolebindings
+  validations:
+  - expression: |-
+      !variables.is_delegate || request.resource.resource != 'roles' || object.metadata.name in [
+
+        'openbao-operator-tenant-role',
+        'openbao-sentinel-role',
+        'openbao-operator-tenant-secrets-reader',
+        'openbao-operator-tenant-secrets-writer'
+      ]
+    message: The Provisioner Delegate can only create Roles for the operator tenant
+      template (tenant/sentinel/secrets allowlists).
+  - expression: |-
+      !variables.is_delegate || request.resource.resource != 'rolebindings' || object.metadata.name in [
+
+        'openbao-operator-tenant-rolebinding',
+        'openbao-sentinel-rolebinding',
+        'openbao-operator-tenant-secrets-reader-rolebinding',
+        'openbao-operator-tenant-secrets-writer-rolebinding'
+      ]
+    message: The Provisioner Delegate can only create RoleBindings for the operator
+      tenant template (tenant/sentinel/secrets allowlists).
+  - expression: |-
+      !variables.is_delegate || request.resource.resource != 'rolebindings' || object.roleRef.name in [
+
+        'openbao-operator-tenant-role',
+        'openbao-sentinel-role',
+        'openbao-operator-tenant-secrets-reader',
+        'openbao-operator-tenant-secrets-writer'
+      ]
+    message: The Provisioner Delegate is restricted to binding only the operator tenant
+      template Roles (tenant/sentinel/secrets allowlists).
+  - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings''
+      || object.subjects.all(s, s.kind == ''ServiceAccount'')'
+    message: The Provisioner Delegate can only grant permissions to ServiceAccounts.
+  - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings''
+      || object.subjects.all(s, !has(s.apiGroup) || s.apiGroup == '''')'
+    message: The Provisioner Delegate can only bind to core ServiceAccount subjects
+      (apiGroup must be empty).
+  - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings''
+      || (object.roleRef.kind == ''Role'' && object.roleRef.apiGroup == ''rbac.authorization.k8s.io'')'
+    message: The Provisioner Delegate can only create RoleBindings that reference
+      a Role (not ClusterRole).
+  - expression: |-
+      !variables.is_delegate || request.resource.resource != 'rolebindings' || (
+
+        (
+          object.metadata.name == 'openbao-operator-tenant-rolebinding' &&
+          object.roleRef.name == 'openbao-operator-tenant-role' &&
+          object.subjects.size() == 1 &&
+          object.subjects[0].kind == 'ServiceAccount' &&
+          object.subjects[0].name == 'openbao-operator-controller' &&
+          object.subjects[0].namespace == 'openbao-operator-system'
+        ) ||
+        (
+          object.metadata.name == 'openbao-sentinel-rolebinding' &&
+          object.roleRef.name == 'openbao-sentinel-role' &&
+          object.subjects.size() == 1 &&
+          object.subjects[0].kind == 'ServiceAccount' &&
+          object.subjects[0].name == 'openbao-sentinel' &&
+          object.subjects[0].namespace == object.metadata.namespace
+        ) ||
+        (
+          object.metadata.name == 'openbao-operator-tenant-secrets-reader-rolebinding' &&
+          object.roleRef.name == 'openbao-operator-tenant-secrets-reader' &&
+          object.subjects.size() == 1 &&
+          object.subjects[0].kind == 'ServiceAccount' &&
+          object.subjects[0].name == 'openbao-operator-controller' &&
+          object.subjects[0].namespace == 'openbao-operator-system'
+        ) ||
+        (
+          object.metadata.name == 'openbao-operator-tenant-secrets-writer-rolebinding' &&
+          object.roleRef.name == 'openbao-operator-tenant-secrets-writer' &&
+          object.subjects.size() == 1 &&
+          object.subjects[0].kind == 'ServiceAccount' &&
+          object.subjects[0].name == 'openbao-operator-controller' &&
+          object.subjects[0].namespace == 'openbao-operator-system'
+        )
+      )
+    message: The Provisioner Delegate can only bind tenant RBAC to the operator controller
+      ServiceAccount, or sentinel RBAC to the tenant-local openbao-sentinel ServiceAccount.
+  - expression: |-
+      !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+
+        has(rule.verbs) &&
+        rule.verbs != null &&
+        rule.verbs.exists(v,
+          v == 'impersonate' ||
+          v == 'bind' ||
+          v == 'escalate' ||
+          v == '*'
+        )
+      )
+    message: The Provisioner Delegate cannot create Roles granting 'impersonate',
+      'bind', 'escalate', or wildcard permissions.
+  - expression: |-
+      !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+
+        (
+          has(rule.apiGroups) &&
+          rule.apiGroups != null &&
+          rule.apiGroups.exists(g, g == '*')
+        ) ||
+        (
+          has(rule.resources) &&
+          rule.resources != null &&
+          rule.resources.exists(r, r == '*')
+        )
+      )
+    message: The Provisioner Delegate cannot create Roles with wildcard apiGroups
+      or resources.
+  - expression: |-
+      !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+
+        has(rule.nonResourceURLs) &&
+        rule.nonResourceURLs != null &&
+        rule.nonResourceURLs.size() > 0
+      )
+    message: The Provisioner Delegate cannot create Roles granting nonResourceURLs.
+  - expression: |-
+      !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+
+        has(rule.resources) &&
+        rule.resources != null &&
+        rule.resources.exists(r, r == 'secrets') &&
+        (
+          object.metadata.name == 'openbao-sentinel-role' ||
+          (
+            has(rule.verbs) &&
+            rule.verbs != null &&
+            rule.verbs.exists(v, v == 'list' || v == 'watch' || v == '*')
+          )
+        )
+      )
+    message: The Provisioner Delegate cannot grant Secrets list/watch, and Sentinel
+      RBAC must not include Secrets permissions.
+  variables:
+  - expression: request.userInfo.username == "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner-delegate"
+    name: is_delegate
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-operator-openbao-restrict-sentinel-mutations
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - openbao.org
+      apiVersions:
+      - v1alpha1
+      operations:
+      - UPDATE
+      resources:
+      - openbaoclusters/status
+  validations:
+  - expression: |-
+      !variables.is_sentinel || (
+        (has(variables.new_status.phase) ? variables.new_status.phase : "") == (has(variables.old_status.phase) ? variables.old_status.phase : "") &&
+        (has(variables.new_status.activeLeader) ? variables.new_status.activeLeader : "") == (has(variables.old_status.activeLeader) ? variables.old_status.activeLeader : "") &&
+        (has(variables.new_status.readyReplicas) ? variables.new_status.readyReplicas : 0) == (has(variables.old_status.readyReplicas) ? variables.old_status.readyReplicas : 0) &&
+        (has(variables.new_status.currentVersion) ? variables.new_status.currentVersion : "") == (has(variables.old_status.currentVersion) ? variables.old_status.currentVersion : "") &&
+        (has(variables.new_status.initialized) ? variables.new_status.initialized : false) == (has(variables.old_status.initialized) ? variables.old_status.initialized : false) &&
+        (has(variables.new_status.selfInitialized) ? variables.new_status.selfInitialized : false) == (has(variables.old_status.selfInitialized) ? variables.old_status.selfInitialized : false) &&
+        (has(variables.new_status.lastBackupTime) ? variables.new_status.lastBackupTime : null) == (has(variables.old_status.lastBackupTime) ? variables.old_status.lastBackupTime : null) &&
+        (has(variables.new_status.upgrade) ? variables.new_status.upgrade : null) == (has(variables.old_status.upgrade) ? variables.old_status.upgrade : null) &&
+        (has(variables.new_status.backup) ? variables.new_status.backup : null) == (has(variables.old_status.backup) ? variables.old_status.backup : null) &&
+        (has(variables.new_status.drift) ? variables.new_status.drift : null) == (has(variables.old_status.drift) ? variables.old_status.drift : null) &&
+        (has(variables.new_status.blueGreen) ? variables.new_status.blueGreen : null) == (has(variables.old_status.blueGreen) ? variables.old_status.blueGreen : null) &&
+        (has(variables.new_status.operationLock) ? variables.new_status.operationLock : null) == (has(variables.old_status.operationLock) ? variables.old_status.operationLock : null) &&
+        (has(variables.new_status.breakGlass) ? variables.new_status.breakGlass : null) == (has(variables.old_status.breakGlass) ? variables.old_status.breakGlass : null) &&
+        (has(variables.new_status.workload) ? variables.new_status.workload : null) == (has(variables.old_status.workload) ? variables.old_status.workload : null) &&
+        (has(variables.new_status.adminOps) ? variables.new_status.adminOps : null) == (has(variables.old_status.adminOps) ? variables.old_status.adminOps : null) &&
+        (has(variables.new_status.conditions) ? variables.new_status.conditions : []) == (has(variables.old_status.conditions) ? variables.old_status.conditions : []) &&
+
+        has(variables.new_status.sentinel) &&
+        (
+          (!has(variables.old_status.sentinel) &&
+            !has(variables.new_status.sentinel.lastHandledTriggerID) &&
+            !has(variables.new_status.sentinel.lastHandledAt)
+          ) ||
+          (has(variables.old_status.sentinel) &&
+            ((!has(variables.new_status.sentinel.lastHandledTriggerID) && !has(variables.old_status.sentinel.lastHandledTriggerID)) ||
+              (has(variables.new_status.sentinel.lastHandledTriggerID) && has(variables.old_status.sentinel.lastHandledTriggerID) &&
+                variables.new_status.sentinel.lastHandledTriggerID == variables.old_status.sentinel.lastHandledTriggerID)) &&
+            ((!has(variables.new_status.sentinel.lastHandledAt) && !has(variables.old_status.sentinel.lastHandledAt)) ||
+              (has(variables.new_status.sentinel.lastHandledAt) && has(variables.old_status.sentinel.lastHandledAt) &&
+                variables.new_status.sentinel.lastHandledAt == variables.old_status.sentinel.lastHandledAt))
+          )
+        )
+      )
+    message: The Sentinel may only update status.sentinel trigger fields (triggerID/triggeredAt/triggerResource).
+      Spec, metadata, and all other status fields are forbidden.
+  variables:
+  - expression: request.userInfo.username.startsWith("system:serviceaccount:") &&
+      request.userInfo.username.endsWith(":openbao-sentinel")
+    name: is_sentinel
+  - expression: 'has(object.status) ? object.status : object'
+    name: new_status
+  - expression: 'has(oldObject.status) ? oldObject.status : oldObject'
+    name: old_status
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
   name: openbao-operator-validate-openbaocluster
 spec:
   failurePolicy: Fail
@@ -4486,7 +4612,7 @@ spec:
       - openbaoclusters
   validations:
   - expression: |-
-      object.spec.profile != "Hardened" || (object.spec.tls.mode in ["External", "ACME"] &&
+      !has(object.spec.profile) || object.spec.profile != "Hardened" || (object.spec.tls.mode in ["External", "ACME"] &&
 
         has(object.spec.unseal) &&
         object.spec.unseal.type != "static" &&
@@ -4530,6 +4656,13 @@ spec:
       or tokenSecretRef), storage auth (target.roleArn or target.credentialsSecretRef),
       and a 5-field cron expression.
   - expression: |-
+      !has(object.spec.profile) || object.spec.profile != "Hardened" || !(variables.has_backup || variables.has_pre_upgrade_snapshot || variables.has_bluegreen_pre_upgrade_snapshot) || (has(object.spec.network) &&
+
+        has(object.spec.network.egressRules) &&
+        size(object.spec.network.egressRules) > 0)
+    message: Hardened profile requires non-empty spec.network.egressRules when backups
+      or pre-upgrade snapshots are enabled.
+  - expression: |-
       !variables.has_backup || !has(object.spec.backup.target.endpoint) || object.spec.backup.target.endpoint == "" || !(
 
         object.spec.backup.target.endpoint.contains("localhost") ||
@@ -4541,19 +4674,42 @@ spec:
       || object.spec.backup.target.endpoint == "" || !object.spec.backup.target.endpoint.matches("^https?://169\\.254\\..*")'
     message: Backup endpoint cannot point to link-local addresses (SSRF protection
       against cloud metadata services).
-  - expression: object.spec.profile != "Hardened" || !variables.has_backup || !has(object.spec.backup.target.endpoint)
-      || object.spec.backup.target.endpoint == "" || object.spec.backup.target.endpoint.startsWith("https://")
-      || object.spec.backup.target.endpoint.startsWith("s3://")
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !variables.has_backup || !has(object.spec.backup.target.endpoint) || object.spec.backup.target.endpoint
+      == "" || object.spec.backup.target.endpoint.startsWith("https://") || object.spec.backup.target.endpoint.startsWith("s3://")'
     message: Backup endpoint must use HTTPS or S3 scheme in Hardened profile.
   variables:
   - expression: has(object.spec.backup)
     name: has_backup
+  - expression: has(object.spec.upgrade) && object.spec.upgrade.preUpgradeSnapshot
+      == true
+    name: has_pre_upgrade_snapshot
+  - expression: has(object.spec.upgrade) && has(object.spec.upgrade.blueGreen) &&
+      object.spec.upgrade.blueGreen.preUpgradeSnapshot == true
+    name: has_bluegreen_pre_upgrade_snapshot
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-lock-controller-statefulset-mutations
+spec:
+  policyName: openbao-operator-lock-controller-statefulset-mutations
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-lock-managed-resource-mutations
+spec:
+  policyName: openbao-operator-lock-managed-resource-mutations
+  validationActions:
+  - Deny
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: openbao-operator-openbao-restrict-provisioner-delegate-binding
-  namespace: openbao-operator-system
 spec:
   matchResources:
     resourceRules:
@@ -4575,27 +4731,8 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: openbao-operator-openbao-restrict-sentinel-mutations
-  namespace: openbao-operator-system
 spec:
   policyName: openbao-operator-openbao-restrict-sentinel-mutations
-  validationActions:
-  - Deny
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicyBinding
-metadata:
-  name: openbao-operator-lock-controller-statefulset-mutations
-spec:
-  policyName: openbao-operator-lock-controller-statefulset-mutations
-  validationActions:
-  - Deny
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicyBinding
-metadata:
-  name: openbao-operator-lock-managed-resource-mutations
-spec:
-  policyName: openbao-operator-lock-managed-resource-mutations
   validationActions:
   - Deny
 ---
