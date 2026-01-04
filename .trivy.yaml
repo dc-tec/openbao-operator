@@ -1,0 +1,11 @@
+# Trivy configuration file
+# This file configures Trivy behavior for filesystem scans
+# See: https://aquasecurity.github.io/trivy/latest/docs/configuration/
+
+# Helm chart scanning configuration
+helm:
+  kube-version: "1.34.0"
+
+# Skip version check warnings
+quiet: true
+
