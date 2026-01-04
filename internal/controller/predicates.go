@@ -88,119 +88,110 @@ func OpenBaoClusterPredicateWithOptions(opts OpenBaoClusterPredicateOptions) pre
 			if !ok {
 				return true // If type assertion fails, allow reconciliation to be safe
 			}
-
-			if opts.ReconcileOnSentinelTrigger {
-				// Reconcile if Sentinel emitted a new drift trigger via status.
-				oldTriggerID := ""
-				if oldCluster.Status.Sentinel != nil {
-					oldTriggerID = oldCluster.Status.Sentinel.TriggerID
-				}
-				newTriggerID := ""
-				if newCluster.Status.Sentinel != nil {
-					newTriggerID = newCluster.Status.Sentinel.TriggerID
-				}
-				if newTriggerID != "" && newTriggerID != oldTriggerID {
-					return true
-				}
-			}
-
-			if opts.ReconcileOnSentinelHandled {
-				oldHandled := ""
-				if oldCluster.Status.Sentinel != nil {
-					oldHandled = oldCluster.Status.Sentinel.LastHandledTriggerID
-				}
-				newHandled := ""
-				if newCluster.Status.Sentinel != nil {
-					newHandled = newCluster.Status.Sentinel.LastHandledTriggerID
-				}
-				if newHandled != "" && newHandled != oldHandled {
-					return true
-				}
-			}
-
-			if opts.ReconcileOnUpgradeStatus {
-				if !equality.Semantic.DeepEqual(oldCluster.Status.Upgrade, newCluster.Status.Upgrade) {
-					return true
-				}
-			}
-
-			if opts.ReconcileOnBackupStatus {
-				if !equality.Semantic.DeepEqual(oldCluster.Status.Backup, newCluster.Status.Backup) {
-					return true
-				}
-			}
-
-			if opts.ReconcileOnBlueGreenStatus {
-				if !equality.Semantic.DeepEqual(oldCluster.Status.BlueGreen, newCluster.Status.BlueGreen) {
-					return true
-				}
-			}
-
-			if opts.ReconcileOnBreakGlass {
-				if !equality.Semantic.DeepEqual(oldCluster.Status.BreakGlass, newCluster.Status.BreakGlass) {
-					return true
-				}
-			}
-
-			if opts.ReconcileOnWorkloadError {
-				var oldErr, newErr *openbaov1alpha1.ControllerErrorStatus
-				if oldCluster.Status.Workload != nil {
-					oldErr = oldCluster.Status.Workload.LastError
-				}
-				if newCluster.Status.Workload != nil {
-					newErr = newCluster.Status.Workload.LastError
-				}
-				if !equality.Semantic.DeepEqual(oldErr, newErr) {
-					return true
-				}
-			}
-
-			if opts.ReconcileOnAdminOpsError {
-				var oldErr, newErr *openbaov1alpha1.ControllerErrorStatus
-				if oldCluster.Status.AdminOps != nil {
-					oldErr = oldCluster.Status.AdminOps.LastError
-				}
-				if newCluster.Status.AdminOps != nil {
-					newErr = newCluster.Status.AdminOps.LastError
-				}
-				if !equality.Semantic.DeepEqual(oldErr, newErr) {
-					return true
-				}
-			}
-
-			// Reconcile if Generation changed (indicates Spec change)
-			if oldCluster.Generation != newCluster.Generation {
-				return true
-			}
-
-			// Reconcile if DeletionTimestamp changed
-			if !oldCluster.DeletionTimestamp.Equal(newCluster.DeletionTimestamp) {
-				return true
-			}
-
-			// Reconcile if finalizers changed
-			if !equality.Semantic.DeepEqual(oldCluster.Finalizers, newCluster.Finalizers) {
-				return true
-			}
-
-			// Reconcile if labels changed (may affect resource selection or behavior)
-			if !equality.Semantic.DeepEqual(oldCluster.Labels, newCluster.Labels) {
-				return true
-			}
-
-			// Reconcile if annotations changed (may affect behavior)
-			if !equality.Semantic.DeepEqual(oldCluster.Annotations, newCluster.Annotations) {
-				return true
-			}
-
-			// Filter out status-only updates
-			return false
+			return shouldReconcileOpenBaoClusterUpdate(opts, oldCluster, newCluster)
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
 			// Always reconcile on generic events (rare, but be safe)
 			return true
 		},
 	}
+}
+
+func shouldReconcileOpenBaoClusterUpdate(
+	opts OpenBaoClusterPredicateOptions,
+	oldCluster, newCluster *openbaov1alpha1.OpenBaoCluster,
+) bool {
+	if opts.ReconcileOnSentinelTrigger && sentinelTriggerChanged(oldCluster, newCluster) {
+		return true
+	}
+	if opts.ReconcileOnSentinelHandled && sentinelHandledChanged(oldCluster, newCluster) {
+		return true
+	}
+	if opts.ReconcileOnUpgradeStatus && !equality.Semantic.DeepEqual(oldCluster.Status.Upgrade, newCluster.Status.Upgrade) {
+		return true
+	}
+	if opts.ReconcileOnBackupStatus && !equality.Semantic.DeepEqual(oldCluster.Status.Backup, newCluster.Status.Backup) {
+		return true
+	}
+	if opts.ReconcileOnBlueGreenStatus && !equality.Semantic.DeepEqual(oldCluster.Status.BlueGreen, newCluster.Status.BlueGreen) {
+		return true
+	}
+	if opts.ReconcileOnBreakGlass && !equality.Semantic.DeepEqual(oldCluster.Status.BreakGlass, newCluster.Status.BreakGlass) {
+		return true
+	}
+	if opts.ReconcileOnWorkloadError && !equality.Semantic.DeepEqual(workloadLastError(oldCluster), workloadLastError(newCluster)) {
+		return true
+	}
+	if opts.ReconcileOnAdminOpsError && !equality.Semantic.DeepEqual(adminOpsLastError(oldCluster), adminOpsLastError(newCluster)) {
+		return true
+	}
+
+	// Reconcile if Generation changed (indicates Spec change)
+	if oldCluster.Generation != newCluster.Generation {
+		return true
+	}
+
+	// Reconcile if DeletionTimestamp changed
+	if !oldCluster.DeletionTimestamp.Equal(newCluster.DeletionTimestamp) {
+		return true
+	}
+
+	// Reconcile if finalizers changed
+	if !equality.Semantic.DeepEqual(oldCluster.Finalizers, newCluster.Finalizers) {
+		return true
+	}
+
+	// Reconcile if labels changed (may affect resource selection or behavior)
+	if !equality.Semantic.DeepEqual(oldCluster.Labels, newCluster.Labels) {
+		return true
+	}
+
+	// Reconcile if annotations changed (may affect behavior)
+	if !equality.Semantic.DeepEqual(oldCluster.Annotations, newCluster.Annotations) {
+		return true
+	}
+
+	// Filter out status-only updates
+	return false
+}
+
+func sentinelTriggerChanged(oldCluster, newCluster *openbaov1alpha1.OpenBaoCluster) bool {
+	// Reconcile if Sentinel emitted a new drift trigger via status.
+	oldTriggerID := ""
+	if oldCluster.Status.Sentinel != nil {
+		oldTriggerID = oldCluster.Status.Sentinel.TriggerID
+	}
+	newTriggerID := ""
+	if newCluster.Status.Sentinel != nil {
+		newTriggerID = newCluster.Status.Sentinel.TriggerID
+	}
+	return newTriggerID != "" && newTriggerID != oldTriggerID
+}
+
+func sentinelHandledChanged(oldCluster, newCluster *openbaov1alpha1.OpenBaoCluster) bool {
+	oldHandled := ""
+	if oldCluster.Status.Sentinel != nil {
+		oldHandled = oldCluster.Status.Sentinel.LastHandledTriggerID
+	}
+	newHandled := ""
+	if newCluster.Status.Sentinel != nil {
+		newHandled = newCluster.Status.Sentinel.LastHandledTriggerID
+	}
+	return newHandled != "" && newHandled != oldHandled
+}
+
+func workloadLastError(cluster *openbaov1alpha1.OpenBaoCluster) *openbaov1alpha1.ControllerErrorStatus {
+	if cluster.Status.Workload == nil {
+		return nil
+	}
+	return cluster.Status.Workload.LastError
+}
+
+func adminOpsLastError(cluster *openbaov1alpha1.OpenBaoCluster) *openbaov1alpha1.ControllerErrorStatus {
+	if cluster.Status.AdminOps == nil {
+		return nil
+	}
+	return cluster.Status.AdminOps.LastError
 }
 
 // StatefulSetReadyReplicasPredicate filters StatefulSet update events to only

@@ -17,6 +17,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/revision"
 	security "github.com/dc-tec/openbao-operator/internal/security"
 )
 
@@ -138,36 +140,65 @@ func (r *infraReconciler) reconcileSentinelAdmissionStatus(cluster *openbaov1alp
 }
 
 // Reconcile implements SubReconciler for infrastructure reconciliation.
-func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	logger.Info("Reconciling infrastructure for OpenBaoCluster")
 
 	verifiedImageDigest, err := r.verifyMainImageDigest(ctx, logger, cluster)
 	if err != nil {
-		return false, err
+		return recon.Result{}, err
 	}
 
 	verifiedSentinelDigest, err := r.verifySentinelImageDigest(ctx, logger, cluster)
 	if err != nil {
-		return false, err
+		return recon.Result{}, err
 	}
 
 	verifiedInitContainerDigest, err := r.verifyInitContainerImageDigest(ctx, logger, cluster)
 	if err != nil {
-		return false, err
+		return recon.Result{}, err
 	}
 
 	sentinelAdmissionReady := r.reconcileSentinelAdmissionStatus(cluster)
 
+	// Bootstrap/correct BlueGreen status before infra reconciliation so the infra manager can
+	// keep reconciling the active ("Blue") revision even when spec.version/spec.image has been
+	// updated to start an upgrade.
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+		if cluster.Status.BlueGreen == nil {
+			inferred, inferErr := inframanager.InferActiveRevisionFromPods(ctx, r.client, cluster)
+			if inferErr != nil {
+				logger.Error(inferErr, "Failed to infer active revision from pods; falling back to spec-derived revision")
+			}
+			blueRevision := inferred
+			if blueRevision == "" {
+				blueRevision = revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+			}
+			cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+				Phase:        openbaov1alpha1.PhaseIdle,
+				BlueRevision: blueRevision,
+			}
+		} else if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
+			(cluster.Status.BlueGreen.BlueRevision == "" || cluster.Status.CurrentVersion != cluster.Spec.Version) {
+			inferred, inferErr := inframanager.InferActiveRevisionFromPods(ctx, r.client, cluster)
+			if inferErr != nil {
+				logger.Error(inferErr, "Failed to infer active revision from pods; keeping existing BlueRevision", "blueRevision", cluster.Status.BlueGreen.BlueRevision)
+			} else if inferred != "" && inferred != cluster.Status.BlueGreen.BlueRevision {
+				logger.Info("Correcting BlueRevision from active pods", "from", cluster.Status.BlueGreen.BlueRevision, "to", inferred)
+				cluster.Status.BlueGreen.BlueRevision = inferred
+			}
+		}
+	}
+
 	manager := inframanager.NewManagerWithSentinelAdmission(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, sentinelAdmissionReady)
 	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest, verifiedSentinelDigest, verifiedInitContainerDigest); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
-			return false, operatorerrors.WithReason(ReasonGatewayAPIMissing, err)
+			return recon.Result{}, operatorerrors.WithReason(ReasonGatewayAPIMissing, err)
 		}
 		if errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing) {
-			return false, operatorerrors.WithReason(ReasonPrerequisitesMissing, err)
+			return recon.Result{}, operatorerrors.WithReason(ReasonPrerequisitesMissing, err)
 		}
-		return false, err
+		return recon.Result{}, err
 	}
 
-	return false, nil
+	return recon.Result{}, nil
 }

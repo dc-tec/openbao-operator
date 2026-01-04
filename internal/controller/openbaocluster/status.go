@@ -156,10 +156,9 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		upgradeFailed = true
 	}
 
-	blueGreenInProgress := false
-	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.Phase != "" && cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
-		blueGreenInProgress = true
-	}
+	blueGreenInProgress := cluster.Status.BlueGreen != nil &&
+		cluster.Status.BlueGreen.Phase != "" &&
+		cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle
 
 	upgradeInProgress := (rollingUpgradeInProgress && !upgradeFailed) || blueGreenInProgress
 
@@ -407,7 +406,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 				upgradeCondMessage = cluster.Status.Upgrade.LastErrorMessage
 			} else if upgradeInProgress {
 				upgradeCondStatus = metav1.ConditionTrue
-				upgradeCondReason = "InProgress"
+				upgradeCondReason = ReasonInProgress
 				if rollingUpgradeInProgress && cluster.Status.Upgrade != nil {
 					upgradeCondMessage = fmt.Sprintf("Rolling upgrade from %s to %s (partition=%d)", cluster.Status.Upgrade.FromVersion, cluster.Status.Upgrade.TargetVersion, cluster.Status.Upgrade.CurrentPartition)
 				} else if blueGreenInProgress && cluster.Status.BlueGreen != nil {
@@ -430,7 +429,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			backupCondMessage := "No backup is currently in progress"
 			if backupInProgress {
 				backupCondStatus = metav1.ConditionTrue
-				backupCondReason = "InProgress"
+				backupCondReason = ReasonInProgress
 				if backupJobName != "" {
 					backupCondMessage = fmt.Sprintf("Backup Job %s is running", backupJobName)
 				} else {
@@ -696,7 +695,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		upgradeCondMessage = cluster.Status.Upgrade.LastErrorMessage
 	} else if upgradeInProgress {
 		upgradeCondStatus = metav1.ConditionTrue
-		upgradeCondReason = "InProgress"
+		upgradeCondReason = ReasonInProgress
 		if rollingUpgradeInProgress && cluster.Status.Upgrade != nil {
 			upgradeCondMessage = fmt.Sprintf("Rolling upgrade from %s to %s (partition=%d)", cluster.Status.Upgrade.FromVersion, cluster.Status.Upgrade.TargetVersion, cluster.Status.Upgrade.CurrentPartition)
 		} else if blueGreenInProgress && cluster.Status.BlueGreen != nil {
@@ -719,7 +718,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	backupCondMessage := "No backup is currently in progress"
 	if backupInProgress {
 		backupCondStatus = metav1.ConditionTrue
-		backupCondReason = "InProgress"
+		backupCondReason = ReasonInProgress
 		if backupJobName != "" {
 			backupCondMessage = fmt.Sprintf("Backup Job %s is running", backupJobName)
 		} else {
@@ -763,7 +762,12 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	}
 
 	// Set ProductionReady condition based on security posture and bootstrap configuration.
-	productionReadyStatus, productionReadyReason, productionReadyMessage := evaluateProductionReady(cluster)
+	admissionReady := r.AdmissionStatus == nil || r.AdmissionStatus.OverallReady
+	admissionSummary := ""
+	if r.AdmissionStatus != nil {
+		admissionSummary = r.AdmissionStatus.SummaryMessage()
+	}
+	productionReadyStatus, productionReadyReason, productionReadyMessage := evaluateProductionReady(cluster, admissionReady, admissionSummary)
 	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:               string(openbaov1alpha1.ConditionProductionReady),
 		Status:             productionReadyStatus,

@@ -8,6 +8,8 @@ const (
 	ReasonAdmissionPoliciesNotReady = "AdmissionPoliciesNotReady"
 	ReasonAdmissionPoliciesReady    = "AdmissionPoliciesReady"
 
+	ReasonInProgress = "InProgress"
+
 	ReasonLeaderFound           = "LeaderFound"
 	ReasonLeaderUnknown         = "LeaderUnknown"
 	ReasonMultipleLeaders       = "MultipleLeaders"

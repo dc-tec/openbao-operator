@@ -90,37 +90,35 @@ func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoCluster %s/%s: %w", req.Namespace, req.Name, err)
 	}
 
-	if !cluster.DeletionTimestamp.IsZero() || cluster.Spec.Paused || cluster.Spec.Profile == "" {
+	if shouldSkipWorkloadReconcile(cluster) {
 		return ctrl.Result{}, nil
 	}
 
+	return r.reconcileCluster(ctx, logger, cluster)
+}
+
+type workloadSentinelTrigger struct {
+	fastPathAllowed bool
+	isNewTrigger    bool
+	resourceInfo    string
+}
+
+func shouldSkipWorkloadReconcile(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return cluster == nil ||
+		!cluster.DeletionTimestamp.IsZero() ||
+		cluster.Spec.Paused ||
+		cluster.Spec.Profile == ""
+}
+
+func (r *openBaoClusterWorkloadReconciler) reconcileCluster(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
 	original := cluster.DeepCopy()
 	if cluster.Status.Workload == nil {
 		cluster.Status.Workload = &openbaov1alpha1.WorkloadControllerStatus{}
 	}
 
-	sentinelFastPathAllowed := r.parent.AdmissionStatus == nil || r.parent.AdmissionStatus.SentinelReady
-	isNewSentinelTrigger := false
-	sentinelResourceInfo := unknownResource
-	if cluster.Status.Sentinel != nil && cluster.Status.Sentinel.TriggerID != "" {
-		isNewSentinelTrigger = cluster.Status.Sentinel.TriggerID != cluster.Status.Sentinel.LastHandledTriggerID
-		if cluster.Status.Sentinel.TriggerResource != "" {
-			sentinelResourceInfo = cluster.Status.Sentinel.TriggerResource
-		}
-	}
-
-	// Record metrics when a new trigger is observed. The actual drift status update is recorded after reconciliation.
-	if isNewSentinelTrigger && sentinelFastPathAllowed {
-		resourceKind := unknownResource
-		if sentinelResourceInfo != "" && sentinelResourceInfo != unknownResource {
-			parts := strings.Split(sentinelResourceInfo, "/")
-			if len(parts) > 0 {
-				resourceKind = parts[0]
-			}
-		}
-		clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
-		clusterMetrics.RecordDriftDetected(resourceKind)
-		clusterMetrics.SetDriftLastDetectedTimestamp(float64(time.Now().Unix()))
+	sentinel := r.sentinelTrigger(cluster)
+	if sentinel.isNewTrigger && sentinel.fastPathAllowed {
+		recordSentinelTriggerMetrics(cluster, sentinel.resourceInfo)
 	}
 
 	reconcilers := []SubReconciler{
@@ -140,75 +138,12 @@ func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ct
 		reconcilers = append(reconcilers, r.parent.InitManager)
 	}
 
-	for _, rec := range reconcilers {
-		shouldRequeue, err := rec.Reconcile(ctx, logger, cluster)
-		if err != nil {
-			cluster.Status.Workload.LastError = controllerErrorStatus(err)
-
-			// Persist status changes before returning to avoid losing in-memory updates.
-			if statusErr := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "workload-error"); statusErr != nil {
-				return ctrl.Result{}, statusErr
-			}
-
-			if cluster.Status.Workload.LastError != nil {
-				switch cluster.Status.Workload.LastError.Reason {
-				case ReasonPrerequisitesMissing:
-					return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
-				case ReasonGatewayAPIMissing:
-					jitterNanos := time.Now().UnixNano() % int64(constants.RequeueSafetyNetJitter)
-					requeueAfter := constants.RequeueSafetyNetBase + time.Duration(jitterNanos)
-					return ctrl.Result{RequeueAfter: requeueAfter}, nil
-				}
-			}
-
-			if operatorerrors.IsTransient(err) {
-				shouldRequeue, requeueAfter := operatorerrors.ShouldRequeue(err)
-				if shouldRequeue {
-					if requeueAfter > 0 {
-						return ctrl.Result{RequeueAfter: requeueAfter}, nil
-					}
-					return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
-				}
-			}
-			if operatorerrors.IsPermanent(err) {
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, err
-		}
-
-		if shouldRequeue {
-			if statusErr := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "workload-requeue"); statusErr != nil {
-				return ctrl.Result{}, statusErr
-			}
-			return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
-		}
+	if result, err := r.runWorkloadReconcilers(ctx, logger, original, cluster, reconcilers); err != nil || result.RequeueAfter > 0 {
+		return result, err
 	}
 
-	if isNewSentinelTrigger && sentinelFastPathAllowed {
-		now := metav1.Now()
-		if cluster.Status.Drift == nil {
-			cluster.Status.Drift = &openbaov1alpha1.DriftStatus{}
-		}
-		cluster.Status.Drift.LastDriftDetected = &now
-		cluster.Status.Drift.DriftCorrectionCount++
-		cluster.Status.Drift.LastDriftResource = sentinelResourceInfo
-		cluster.Status.Drift.LastCorrectionTime = &now
-		cluster.Status.Drift.ConsecutiveFastPaths++
-
-		if cluster.Status.Sentinel != nil {
-			cluster.Status.Sentinel.LastHandledTriggerID = cluster.Status.Sentinel.TriggerID
-			cluster.Status.Sentinel.LastHandledAt = &now
-		}
-
-		clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
-		clusterMetrics.RecordDriftCorrected()
-
-		if err := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "sentinel-fast-path"); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// Prompt a quick follow-up. AdminOps will observe lastHandledTriggerID and run a full path reconcile.
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+	if sentinel.isNewTrigger && sentinel.fastPathAllowed {
+		return r.applySentinelFastPath(ctx, logger, original, cluster, sentinel.resourceInfo)
 	}
 
 	// Clear previous workload error after a successful reconcile.
@@ -219,6 +154,129 @@ func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *openBaoClusterWorkloadReconciler) sentinelTrigger(cluster *openbaov1alpha1.OpenBaoCluster) workloadSentinelTrigger {
+	sentinelFastPathAllowed := r.parent.AdmissionStatus == nil || r.parent.AdmissionStatus.SentinelReady
+	trigger := workloadSentinelTrigger{
+		fastPathAllowed: sentinelFastPathAllowed,
+		resourceInfo:    unknownResource,
+	}
+
+	if cluster == nil || cluster.Status.Sentinel == nil || cluster.Status.Sentinel.TriggerID == "" {
+		return trigger
+	}
+
+	trigger.isNewTrigger = cluster.Status.Sentinel.TriggerID != cluster.Status.Sentinel.LastHandledTriggerID
+	if cluster.Status.Sentinel.TriggerResource != "" {
+		trigger.resourceInfo = cluster.Status.Sentinel.TriggerResource
+	}
+	return trigger
+}
+
+func recordSentinelTriggerMetrics(cluster *openbaov1alpha1.OpenBaoCluster, sentinelResourceInfo string) {
+	resourceKind := unknownResource
+	if sentinelResourceInfo != "" && sentinelResourceInfo != unknownResource {
+		parts := strings.Split(sentinelResourceInfo, "/")
+		if len(parts) > 0 {
+			resourceKind = parts[0]
+		}
+	}
+
+	clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
+	clusterMetrics.RecordDriftDetected(resourceKind)
+	clusterMetrics.SetDriftLastDetectedTimestamp(float64(time.Now().Unix()))
+}
+
+func (r *openBaoClusterWorkloadReconciler) runWorkloadReconcilers(
+	ctx context.Context,
+	logger logr.Logger,
+	original, cluster *openbaov1alpha1.OpenBaoCluster,
+	reconcilers []SubReconciler,
+) (ctrl.Result, error) {
+	for _, rec := range reconcilers {
+		result, err := rec.Reconcile(ctx, logger, cluster)
+		if err != nil {
+			cluster.Status.Workload.LastError = controllerErrorStatus(err)
+
+			// Persist status changes before returning to avoid losing in-memory updates.
+			if statusErr := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "workload-error"); statusErr != nil {
+				return ctrl.Result{}, statusErr
+			}
+
+			if handled, ok := workloadResultForError(err, cluster.Status.Workload.LastError); ok {
+				return handled, nil
+			}
+
+			return ctrl.Result{}, err
+		}
+
+		if result.RequeueAfter > 0 {
+			if statusErr := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "workload-requeue"); statusErr != nil {
+				return ctrl.Result{}, statusErr
+			}
+			return ctrl.Result{RequeueAfter: result.RequeueAfter}, nil
+		}
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func workloadResultForError(err error, lastError *openbaov1alpha1.ControllerErrorStatus) (ctrl.Result, bool) {
+	if lastError != nil {
+		switch lastError.Reason {
+		case ReasonPrerequisitesMissing:
+			return ctrl.Result{RequeueAfter: constants.RequeueShort}, true
+		case ReasonGatewayAPIMissing:
+			jitterNanos := time.Now().UnixNano() % int64(constants.RequeueSafetyNetJitter)
+			requeueAfter := constants.RequeueSafetyNetBase + time.Duration(jitterNanos)
+			return ctrl.Result{RequeueAfter: requeueAfter}, true
+		}
+	}
+
+	if operatorerrors.IsTransient(err) {
+		shouldRequeue, requeueAfter := operatorerrors.ShouldRequeue(err)
+		if shouldRequeue {
+			if requeueAfter > 0 {
+				return ctrl.Result{RequeueAfter: requeueAfter}, true
+			}
+			return ctrl.Result{RequeueAfter: constants.RequeueShort}, true
+		}
+	}
+
+	return ctrl.Result{}, false
+}
+
+func (r *openBaoClusterWorkloadReconciler) applySentinelFastPath(
+	ctx context.Context,
+	logger logr.Logger,
+	original, cluster *openbaov1alpha1.OpenBaoCluster,
+	sentinelResourceInfo string,
+) (ctrl.Result, error) {
+	now := metav1.Now()
+	if cluster.Status.Drift == nil {
+		cluster.Status.Drift = &openbaov1alpha1.DriftStatus{}
+	}
+	cluster.Status.Drift.LastDriftDetected = &now
+	cluster.Status.Drift.DriftCorrectionCount++
+	cluster.Status.Drift.LastDriftResource = sentinelResourceInfo
+	cluster.Status.Drift.LastCorrectionTime = &now
+	cluster.Status.Drift.ConsecutiveFastPaths++
+
+	if cluster.Status.Sentinel != nil {
+		cluster.Status.Sentinel.LastHandledTriggerID = cluster.Status.Sentinel.TriggerID
+		cluster.Status.Sentinel.LastHandledAt = &now
+	}
+
+	clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
+	clusterMetrics.RecordDriftCorrected()
+
+	if err := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "sentinel-fast-path"); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Prompt a quick follow-up. AdminOps will observe lastHandledTriggerID and run a full path reconcile.
+	return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 }
 
 func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -284,7 +342,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	reconcilers = append(reconcilers, backupmanager.NewManager(r.parent.Client, r.parent.Scheme))
 
 	for _, rec := range reconcilers {
-		shouldRequeue, err := rec.Reconcile(ctx, logger, cluster)
+		result, err := rec.Reconcile(ctx, logger, cluster)
 		if err != nil {
 			cluster.Status.AdminOps.LastError = controllerErrorStatus(err)
 
@@ -307,11 +365,11 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 			return ctrl.Result{}, err
 		}
 
-		if shouldRequeue {
+		if result.RequeueAfter > 0 {
 			if statusErr := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "adminops-requeue"); statusErr != nil {
 				return ctrl.Result{}, statusErr
 			}
-			return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+			return ctrl.Result{RequeueAfter: result.RequeueAfter}, nil
 		}
 	}
 
@@ -391,7 +449,7 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if statusUpdateResult.RequeueAfter > 0 || statusUpdateResult.Requeue {
+	if statusUpdateResult.RequeueAfter > 0 {
 		return statusUpdateResult, nil
 	}
 

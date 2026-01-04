@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 /*
 Copyright 2025.
 
@@ -18,7 +21,6 @@ package openbaocluster
 
 import (
 	"context"
-	"errors"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -397,6 +399,18 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			// Status is stored via the status subresource; persist it explicitly for
+			// later reconciliation logic that depends on blue/green state.
+			cluster.Status = openbaov1alpha1.OpenBaoClusterStatus{
+				Initialized: true,
+				BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+					Phase:         openbaov1alpha1.PhaseTrafficSwitching,
+					BlueRevision:  "blue123",
+					GreenRevision: "green456",
+					TrafficStep:   1,
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
 
 			// Create TLS secret required by infra Manager for StatefulSet prerequisites.
 			serverSecret := &corev1.Secret{
@@ -416,9 +430,6 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 
 			// Use the infra manager directly to reconcile networking resources for this cluster.
 			err := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "", "")
-			if errors.Is(err, infra.ErrGatewayAPIMissing) {
-				Skip("Skipping test: Gateway API CRDs not installed in envtest environment")
-			}
 			Expect(err).NotTo(HaveOccurred())
 
 			// Helper to assert weights for a given TrafficStep.
@@ -426,9 +437,6 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 				cluster.Status.BlueGreen.TrafficStep = step
 				// Reconcile again to apply new backend weights.
 				reconcileErr := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "", "")
-				if errors.Is(reconcileErr, infra.ErrGatewayAPIMissing) {
-					Skip("Skipping test: Gateway API CRDs not installed in envtest environment")
-				}
 				Expect(reconcileErr).NotTo(HaveOccurred())
 
 				route := &gatewayv1.HTTPRoute{}

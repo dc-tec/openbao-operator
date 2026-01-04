@@ -6,34 +6,20 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
-func breakGlassStatusChanged(before, after *openbaov1alpha1.BreakGlassStatus) bool {
-	if before == nil && after == nil {
-		return false
-	}
-	if (before == nil) != (after == nil) {
-		return true
-	}
-
-	if before.Active != after.Active {
-		return true
-	}
-	if before.Reason != after.Reason {
-		return true
-	}
-	if before.Nonce != after.Nonce {
-		return true
-	}
-
-	return false
-}
-
-func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster) (metav1.ConditionStatus, string, string) {
+func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionReady bool, admissionSummary string) (metav1.ConditionStatus, string, string) {
 	if cluster.Spec.Profile == "" {
 		return metav1.ConditionFalse, ReasonProfileNotSet, "spec.profile must be explicitly set to Hardened or Development"
 	}
 
 	if cluster.Spec.Profile == openbaov1alpha1.ProfileDevelopment {
 		return metav1.ConditionFalse, ReasonDevelopmentProfile, "Development profile is not suitable for production"
+	}
+
+	if !admissionReady {
+		if admissionSummary != "" {
+			return metav1.ConditionFalse, ReasonAdmissionPoliciesNotReady, "Required admission policies are not ready: " + admissionSummary
+		}
+		return metav1.ConditionFalse, ReasonAdmissionPoliciesNotReady, "Required admission policies are not ready"
 	}
 
 	if cluster.Spec.TLS.Mode == "" || cluster.Spec.TLS.Mode == openbaov1alpha1.TLSModeOperatorManaged {
