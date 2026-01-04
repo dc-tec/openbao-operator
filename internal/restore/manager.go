@@ -120,6 +120,12 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 		return ctrl.Result{}, fmt.Errorf("failed to get target cluster: %w", err)
 	}
 
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened &&
+		(cluster.Spec.Network == nil || len(cluster.Spec.Network.EgressRules) == 0) {
+		return m.failRestore(ctx, logger, restore,
+			"Hardened profile requires explicit spec.network.egressRules so restore Jobs can reach the object storage endpoint")
+	}
+
 	lockHolder := fmt.Sprintf("%s/%s", constants.ControllerNameOpenBaoRestore, restore.Name)
 	lockMessage := fmt.Sprintf("restore %s/%s", restore.Namespace, restore.Name)
 	forceAcquire := false
