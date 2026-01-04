@@ -328,7 +328,10 @@ func (r *SentinelReconciler) triggerReconciliation(ctx context.Context, resource
 		return nil
 	}
 	if verifyCluster.Status.Sentinel == nil || verifyCluster.Status.Sentinel.TriggerID == "" {
-		r.logger.V(1).Info("Status patch verification: trigger not present yet (eventual consistency)", "triggerID", triggerID)
+		r.logger.V(1).Info(
+			"Status patch verification: trigger not present yet (eventual consistency)",
+			"triggerID", triggerID,
+		)
 		return nil
 	}
 	if verifyCluster.Status.Sentinel.TriggerID != triggerID {
