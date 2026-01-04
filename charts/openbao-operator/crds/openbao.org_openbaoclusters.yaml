@@ -346,11 +346,6 @@ spec:
                       DisableCache disables the cache entirely.
                       When true, all caching is disabled.
                     type: boolean
-                  disableStandbyReads:
-                    description: |-
-                      DisableStandbyReads disables reads from standby nodes.
-                      When true, all reads must go to the active node.
-                    type: boolean
                   enableResponseHeaderHostname:
                     description: |-
                       EnableResponseHeaderHostname enables the hostname in response headers.
@@ -2130,8 +2125,8 @@ spec:
                         default: true
                         description: |-
                           AutoPromote controls whether the operator automatically switches traffic
-                          and deletes the old cluster after sync. If false, it pauses at PhaseSynced
-                          waiting for manual approval (annotation or field update).
+                          and deletes the old cluster after sync. If false, it stays in the Syncing
+                          phase waiting for the user to enable it (set autoPromote=true).
                         type: boolean
                       autoRollback:
                         description: AutoRollback configures automatic rollback behavior.
