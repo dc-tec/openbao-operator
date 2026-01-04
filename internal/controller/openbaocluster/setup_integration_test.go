@@ -152,7 +152,16 @@ func TestOwnerReferencesSetCorrectly(t *testing.T) {
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile:  openbaov1alpha1.ProfileDevelopment,
 			Version:  "2.4.4",
+			Image:    "openbao/openbao:2.4.4",
 			Replicas: 1,
+			Storage: openbaov1alpha1.StorageConfig{
+				Size: "10Gi",
+			},
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled:        true,
+				Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+				RotationPeriod: "720h",
+			},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, cluster))
