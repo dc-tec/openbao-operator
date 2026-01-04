@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -170,6 +171,9 @@ func (f *Framework) Cleanup(ctx context.Context) error {
 		return fmt.Errorf("context is required")
 	}
 	if f.Client == nil {
+		return nil
+	}
+	if os.Getenv("E2E_SKIP_CLEANUP") == "true" {
 		return nil
 	}
 

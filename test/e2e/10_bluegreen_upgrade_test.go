@@ -185,11 +185,9 @@ var _ = Describe("Blue/Green Upgrade", Label("upgrade", "cluster", "slow"), Orde
 				Skip(fmt.Sprintf("Blue/Green upgrade test skipped: from version (%s) equals to version (%s). Set E2E_UPGRADE_TO_VERSION to a different version to test upgrades.", initialVersion, targetVersion))
 			}
 
-			// Create SelfInit requests with JWT validation pubkeys (same pattern as operator bootstrap)
-			// The test client fetches JWKS keys using authenticated REST config and provides them
-			// directly to OpenBao, since OpenBao pods cannot access OIDC discovery endpoint
-			selfInitRequests, err := createBlueGreenUpgradeSelfInitRequests(ctx, tenantNamespace, "bluegreen-cluster", cfg)
-			Expect(err).NotTo(HaveOccurred(), "failed to create SelfInit requests")
+			// Use the operator-supported bootstrap flow for JWT auth. This configures JWT auth,
+			// operator identity, and upgrade role/policy (since spec.upgrade.jwtAuthRole is set)
+			// via the self-init bootstrap initialize stanza rendered by the operator.
 
 			// Create cluster with initial version and Blue/Green update strategy
 			upgradeCluster = &openbaov1alpha1.OpenBaoCluster{
@@ -216,8 +214,8 @@ var _ = Describe("Blue/Green Upgrade", Label("upgrade", "cluster", "slow"), Orde
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:  true,
-						Requests: selfInitRequests,
+						Enabled:          true,
+						BootstrapJWTAuth: true,
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -732,4 +730,3 @@ var _ = Describe("Blue/Green Upgrade", Label("upgrade", "cluster", "slow"), Orde
 		})
 	})
 })
-

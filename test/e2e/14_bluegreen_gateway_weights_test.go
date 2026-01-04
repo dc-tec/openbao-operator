@@ -96,8 +96,8 @@ var _ = Describe("Blue/Green Upgrade with GatewayWeights", Label("upgrade", "gat
 		Expect(admin.Create(ctx, gw)).To(Succeed())
 
 		By("creating SelfInit requests for Blue/Green upgrade")
-		selfInitRequests, err := createBlueGreenUpgradeSelfInitRequests(ctx, tenantNamespace, "bluegreen-gateway-cluster", cfg)
-		Expect(err).NotTo(HaveOccurred(), "failed to create SelfInit requests")
+		// Use the operator-supported bootstrap flow for JWT auth (OIDC discovery + JWKS keys
+		// are done by the operator at startup; OpenBao is configured via self-init bootstrap).
 
 		By("creating OpenBaoCluster with Blue/Green GatewayWeights strategy")
 		upgradeCluster = &openbaov1alpha1.OpenBaoCluster{
@@ -132,8 +132,8 @@ var _ = Describe("Blue/Green Upgrade with GatewayWeights", Label("upgrade", "gat
 					Image:   configInitImage,
 				},
 				SelfInit: &openbaov1alpha1.SelfInitConfig{
-					Enabled:  true,
-					Requests: selfInitRequests,
+					Enabled:          true,
+					BootstrapJWTAuth: true,
 				},
 				TLS: openbaov1alpha1.TLSConfig{
 					Enabled:        true,
@@ -220,28 +220,23 @@ var _ = Describe("Blue/Green Upgrade with GatewayWeights", Label("upgrade", "gat
 			g.Expect(err).NotTo(HaveOccurred())
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-		By("waiting for upgrade to enter TrafficSwitching phase")
+		By("waiting for upgrade to start TrafficSwitching with a Green revision")
 		Eventually(func(g Gomega) {
 			updated := &openbaov1alpha1.OpenBaoCluster{}
 			err := admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)
 			g.Expect(err).NotTo(HaveOccurred())
-
 			g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
 
 			phase := updated.Status.BlueGreen.Phase
-			fmt.Fprintf(GinkgoWriter, "GatewayWeights upgrade phase: %s\n", phase)
+			step := updated.Status.BlueGreen.TrafficStep
+			fmt.Fprintf(GinkgoWriter, "GatewayWeights upgrade phase=%s step=%d\n", phase, step)
 
-			if phase == openbaov1alpha1.PhaseTrafficSwitching {
-				g.Expect(updated.Status.BlueGreen.BlueRevision).NotTo(BeEmpty())
-				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty())
-			}
+			g.Expect(phase).To(Equal(openbaov1alpha1.PhaseTrafficSwitching))
+			g.Expect(updated.Status.BlueGreen.BlueRevision).NotTo(BeEmpty())
+			g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty())
 		}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
-		By("observing HTTPRoute backend weights as TrafficStep advances")
-		seenStep1 := false
-		seenStep2 := false
-
-		Eventually(func(g Gomega) {
+		getRouteWeights := func(g Gomega) (int32, int32, int32, openbaov1alpha1.BlueGreenPhase) {
 			updated := &openbaov1alpha1.OpenBaoCluster{}
 			err := admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)
 			g.Expect(err).NotTo(HaveOccurred())
@@ -259,7 +254,7 @@ var _ = Describe("Blue/Green Upgrade with GatewayWeights", Label("upgrade", "gat
 			g.Expect(route.Spec.Rules).NotTo(BeEmpty())
 
 			backends := route.Spec.Rules[0].BackendRefs
-			g.Expect(len(backends)).To(Equal(2))
+			g.Expect(backends).To(HaveLen(2))
 
 			var blueBackend, greenBackend *gatewayv1.HTTPBackendRef
 			for i := range backends {
@@ -279,25 +274,35 @@ var _ = Describe("Blue/Green Upgrade with GatewayWeights", Label("upgrade", "gat
 			fmt.Fprintf(GinkgoWriter, "GatewayWeights TrafficStep=%d blueWeight=%d greenWeight=%d phase=%s\n",
 				step, *blueBackend.Weight, *greenBackend.Weight, phase)
 
-			switch {
-			case step == 1:
-				g.Expect(*blueBackend.Weight).To(Equal(int32(90)))
-				g.Expect(*greenBackend.Weight).To(Equal(int32(10)))
-				seenStep1 = true
-			case step == 2:
-				g.Expect(*blueBackend.Weight).To(Equal(int32(50)))
-				g.Expect(*greenBackend.Weight).To(Equal(int32(50)))
-				seenStep2 = true
-			case step >= 3 && phase == openbaov1alpha1.PhaseDemotingBlue:
-				// Final step: 0/100, demoting Blue. Break out once seen, but ensure we saw previous steps.
-				g.Expect(*blueBackend.Weight).To(Equal(int32(0)))
-				g.Expect(*greenBackend.Weight).To(Equal(int32(100)))
-				g.Expect(seenStep1).To(BeTrue(), "should observe 90/10 step before final")
-				g.Expect(seenStep2).To(BeTrue(), "should observe 50/50 step before final")
-			default:
-				// Other phases/steps are acceptable while waiting.
-			}
-		}, 30*time.Minute, 15*time.Second).Should(Succeed())
+			return step, *blueBackend.Weight, *greenBackend.Weight, phase
+		}
+
+		By("observing step 1 weights (90/10)")
+		Eventually(func(g Gomega) {
+			step, blueWeight, greenWeight, phase := getRouteWeights(g)
+			g.Expect(phase).To(Equal(openbaov1alpha1.PhaseTrafficSwitching))
+			g.Expect(step).To(Equal(int32(1)))
+			g.Expect(blueWeight).To(Equal(int32(90)))
+			g.Expect(greenWeight).To(Equal(int32(10)))
+		}, 10*time.Minute, 2*time.Second).Should(Succeed())
+
+		By("observing step 2 weights (50/50)")
+		Eventually(func(g Gomega) {
+			step, blueWeight, greenWeight, phase := getRouteWeights(g)
+			g.Expect(phase).To(Equal(openbaov1alpha1.PhaseTrafficSwitching))
+			g.Expect(step).To(Equal(int32(2)))
+			g.Expect(blueWeight).To(Equal(int32(50)))
+			g.Expect(greenWeight).To(Equal(int32(50)))
+		}, 10*time.Minute, 2*time.Second).Should(Succeed())
+
+		By("observing final weights (0/100) during DemotingBlue")
+		Eventually(func(g Gomega) {
+			step, blueWeight, greenWeight, phase := getRouteWeights(g)
+			g.Expect(step).To(BeNumerically(">=", 3))
+			g.Expect(phase).To(Equal(openbaov1alpha1.PhaseDemotingBlue))
+			g.Expect(blueWeight).To(Equal(int32(0)))
+			g.Expect(greenWeight).To(Equal(int32(100)))
+		}, 10*time.Minute, 2*time.Second).Should(Succeed())
 
 		By("waiting for Blue/Green upgrade with GatewayWeights to complete")
 		Eventually(func(g Gomega) {

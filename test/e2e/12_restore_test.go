@@ -398,7 +398,7 @@ var _ = Describe("Restore", Label("backup", "cluster", "requires-rustfs", "slow"
 
 				// Find a successful job
 				for _, job := range jobs.Items {
-					if job.Status.Succeeded > 0 {
+					if jobSucceeded(&job) {
 						_, _ = fmt.Fprintf(GinkgoWriter, "Backup job %s completed successfully\n", job.Name)
 						return
 					}

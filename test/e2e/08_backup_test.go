@@ -632,7 +632,7 @@ var _ = Describe("Backup", Label("backup", "requires-rustfs", "slow"), Ordered, 
 				foundSuccess := false
 				for i := range jobs.Items {
 					job := jobs.Items[i]
-					if job.Status.Succeeded > 0 {
+					if jobSucceeded(&job) {
 						foundSuccess = true
 						_, _ = fmt.Fprintf(GinkgoWriter, "Found successful backup job: %s\n", job.Name)
 						break

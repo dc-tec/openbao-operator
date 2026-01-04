@@ -23,58 +23,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
-	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
-
-// createUpgradeSelfInitRequests creates SelfInit requests for enabling JWT auth
-// and creating upgrade policy and role for upgrade operations.
-func createUpgradeSelfInitRequests(clusterNamespace, clusterName string) []openbaov1alpha1.SelfInitRequest {
-	return []openbaov1alpha1.SelfInitRequest{
-		{
-			Name:      "enable-jwt-auth",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "sys/auth/jwt",
-			AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
-				Type: "jwt",
-			},
-		},
-		{
-			Name:      "create-upgrade-policy",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "sys/policies/acl/upgrade",
-			Policy: &openbaov1alpha1.SelfInitPolicy{
-				Policy: `path "sys/health" {
-  capabilities = ["read"]
-}
-path "sys/step-down" {
-  capabilities = ["sudo", "update"]
-}
-path "sys/storage/raft/snapshot" {
-  capabilities = ["read"]
-}
-path "sys/storage/raft/autopilot/state" {
-  capabilities = ["read"]
-}`,
-			},
-		},
-		{
-			Name:      "create-upgrade-jwt-role",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "auth/jwt/role/upgrade",
-			Data: e2ehelpers.MustJSON(map[string]interface{}{
-				"role_type":       "jwt",
-				"bound_audiences": []string{"openbao-internal"},
-				"bound_claims": map[string]interface{}{
-					"kubernetes.io/namespace":           clusterNamespace,
-					"kubernetes.io/serviceaccount/name": fmt.Sprintf("%s-upgrade-serviceaccount", clusterName),
-				},
-				"token_policies": []string{"upgrade"},
-				"policies":       []string{"upgrade"},
-				"ttl":            "1h",
-			}),
-		},
-	}
-}
 
 var _ = Describe("Upgrade", Label("upgrade", "cluster", "slow"), Ordered, func() {
 	ctx := context.Background()
@@ -141,8 +90,16 @@ var _ = Describe("Upgrade", Label("upgrade", "cluster", "slow"), Ordered, func()
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:  true,
-						Requests: createUpgradeSelfInitRequests(tenantNamespace, "upgrade-cluster"),
+						Enabled: true,
+						// "Manual" JWT Auth configuration path (no bootstrap): explicitly configure JWT auth
+						// and the upgrade role/policy via self-init requests.
+						//
+						// This keeps coverage for users that do not enable spec.selfInit.bootstrapJWTAuth.
+						Requests: func() []openbaov1alpha1.SelfInitRequest {
+							requests, err := createBlueGreenUpgradeSelfInitRequests(ctx, tenantNamespace, "upgrade-cluster", cfg)
+							Expect(err).NotTo(HaveOccurred())
+							return requests
+						}(),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,

@@ -12,10 +12,12 @@ import (
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -546,7 +548,7 @@ var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "clust
 				job := &batchv1.Job{}
 				err := admin.Get(ctx, types.NamespacedName{Name: rollbackRepairJobName, Namespace: tenantNamespace}, job)
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(job.Status.Failed).To(BeNumerically(">", 0), "rollback repair job should fail")
+				g.Expect(jobFailed(job)).To(BeTrue(), "rollback repair job should fail")
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			By("Asserting safe mode is set on the cluster")
@@ -780,6 +782,111 @@ var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "clust
 				},
 			}
 			Expect(admin.Create(ctx, snapshotCluster)).To(Succeed())
+
+			// Mirror the approach used by backup/restore E2E tests: add an explicit NetworkPolicy
+			// for the upgrade-snapshot Job pods to allow egress to RustFS (port 9000).
+			snapshotNetworkPolicy := &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("%s-upgrade-snapshot-network-policy", snapshotCluster.Name),
+					Namespace: tenantNamespace,
+				},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"openbao.org/component": "upgrade-snapshot",
+							"openbao.org/cluster":   snapshotCluster.Name,
+						},
+					},
+					PolicyTypes: []networkingv1.PolicyType{
+						networkingv1.PolicyTypeEgress,
+					},
+					Egress: []networkingv1.NetworkPolicyEgressRule{
+						// Allow DNS
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"kubernetes.io/metadata.name": "kube-system",
+										},
+									},
+								},
+							},
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: func() *corev1.Protocol {
+										p := corev1.ProtocolUDP
+										return &p
+									}(),
+									Port: func() *intstr.IntOrString {
+										p := intstr.FromInt(53)
+										return &p
+									}(),
+								},
+								{
+									Protocol: func() *corev1.Protocol {
+										p := corev1.ProtocolTCP
+										return &p
+									}(),
+									Port: func() *intstr.IntOrString {
+										p := intstr.FromInt(53)
+										return &p
+									}(),
+								},
+							},
+						},
+						// Allow access to RustFS in the rustfs namespace (S3 API port)
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"kubernetes.io/metadata.name": "rustfs",
+										},
+									},
+								},
+							},
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: func() *corev1.Protocol {
+										p := corev1.ProtocolTCP
+										return &p
+									}(),
+									Port: func() *intstr.IntOrString {
+										p := intstr.FromInt(9000)
+										return &p
+									}(),
+								},
+							},
+						},
+						// Allow access to OpenBao cluster for snapshot API (leader discovery + snapshot)
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"openbao.org/cluster": snapshotCluster.Name,
+										},
+									},
+								},
+							},
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: func() *corev1.Protocol {
+										p := corev1.ProtocolTCP
+										return &p
+									}(),
+									Port: func() *intstr.IntOrString {
+										p := intstr.FromInt(8200)
+										return &p
+									}(),
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(admin.Create(ctx, snapshotNetworkPolicy)).To(Succeed())
 
 			By("Waiting for Cluster to be ready")
 			Eventually(func() bool {
