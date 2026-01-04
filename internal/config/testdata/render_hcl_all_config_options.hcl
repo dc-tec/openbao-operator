@@ -37,7 +37,6 @@ disable_cache                       = false
 detect_deadlocks                    = "true"
 raw_storage_endpoint                = false
 introspection_endpoint              = true
-disable_standby_reads               = false
 imprecise_lease_role_tracking       = true
 unsafe_allow_api_audit_creation     = false
 allow_audit_log_prefixing           = true

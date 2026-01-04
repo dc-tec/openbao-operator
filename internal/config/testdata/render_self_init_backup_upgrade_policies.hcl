@@ -29,13 +29,10 @@ initialize "operator-bootstrap" {
       role_type       = "jwt"
       user_claim      = "sub"
       bound_audiences = ["openbao-internal"]
-      bound_claims = {
-        "kubernetes.io/namespace"           = "openbao-operator-system"
-        "kubernetes.io/serviceaccount/name" = "openbao-operator-controller"
-      }
-      token_policies = ["openbao-operator"]
-      policies       = ["openbao-operator"]
-      ttl            = "1h"
+      bound_subject   = "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
+      token_policies  = ["openbao-operator"]
+      policies        = ["openbao-operator"]
+      ttl             = "1h"
     }
   }
   request "create-backup-policy" {
@@ -52,13 +49,10 @@ initialize "operator-bootstrap" {
       role_type       = "jwt"
       user_claim      = "sub"
       bound_audiences = ["openbao-internal"]
-      bound_claims = {
-        "kubernetes.io/namespace"           = "default"
-        "kubernetes.io/serviceaccount/name" = "hardened-cluster-backup-serviceaccount"
-      }
-      token_policies = ["backup"]
-      policies       = ["backup"]
-      ttl            = "1h"
+      bound_subject   = "system:serviceaccount:default:hardened-cluster-backup-serviceaccount"
+      token_policies  = ["backup"]
+      policies        = ["backup"]
+      ttl             = "1h"
     }
   }
   request "create-upgrade-policy" {
@@ -75,13 +69,10 @@ initialize "operator-bootstrap" {
       role_type       = "jwt"
       user_claim      = "sub"
       bound_audiences = ["openbao-internal"]
-      bound_claims = {
-        "kubernetes.io/namespace"           = "default"
-        "kubernetes.io/serviceaccount/name" = "hardened-cluster-upgrade-serviceaccount"
-      }
-      token_policies = ["upgrade"]
-      policies       = ["upgrade"]
-      ttl            = "1h"
+      bound_subject   = "system:serviceaccount:default:hardened-cluster-upgrade-serviceaccount"
+      token_policies  = ["upgrade"]
+      policies        = ["upgrade"]
+      ttl             = "1h"
     }
   }
 }

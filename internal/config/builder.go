@@ -82,6 +82,10 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 		return nil, err
 	}
 
+	if err := validateConfigVersionCompatibility(cluster); err != nil {
+		return nil, err
+	}
+
 	// General configuration. UI defaults to true, but can be overridden by user configuration.
 	uiEnabled := true
 	if cluster.Spec.Configuration != nil && cluster.Spec.Configuration.UI != nil {
@@ -142,6 +146,84 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	// and stored in a separate ConfigMap that is only mounted for pod-0.
 
 	return file.Bytes(), nil
+}
+
+func validateConfigVersionCompatibility(cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster == nil {
+		return fmt.Errorf("cluster is required")
+	}
+	if cluster.Spec.Configuration == nil || cluster.Spec.Configuration.Plugin == nil {
+		return nil
+	}
+
+	plugin := cluster.Spec.Configuration.Plugin
+	if plugin.AutoDownload == nil && plugin.AutoRegister == nil && strings.TrimSpace(plugin.DownloadBehavior) == "" {
+		return nil
+	}
+
+	ok, err := openBaoVersionAtLeast(cluster.Spec.Version, 2, 5, 0)
+	if err != nil {
+		return fmt.Errorf("failed to validate config version compatibility: %w", err)
+	}
+	if ok {
+		return nil
+	}
+
+	return fmt.Errorf("spec.configuration.plugin.{autoDownload,autoRegister,downloadBehavior} requires OpenBao >= 2.5.0 (spec.version=%q)", cluster.Spec.Version)
+}
+
+func openBaoVersionAtLeast(version string, wantMajor, wantMinor, wantPatch int) (bool, error) {
+	parsed, err := parseSemVer(version)
+	if err != nil {
+		return false, err
+	}
+
+	if parsed.major != wantMajor {
+		return parsed.major > wantMajor, nil
+	}
+	if parsed.minor != wantMinor {
+		return parsed.minor > wantMinor, nil
+	}
+	return parsed.patch >= wantPatch, nil
+}
+
+type semVer struct {
+	major int
+	minor int
+	patch int
+}
+
+func parseSemVer(version string) (semVer, error) {
+	if strings.TrimSpace(version) == "" {
+		return semVer{}, fmt.Errorf("version string is empty")
+	}
+
+	trimmed := strings.TrimPrefix(strings.TrimSpace(version), "v")
+
+	// Strip build metadata and prerelease suffixes.
+	if idx := strings.IndexAny(trimmed, "+-"); idx != -1 {
+		trimmed = trimmed[:idx]
+	}
+
+	parts := strings.Split(trimmed, ".")
+	if len(parts) != 3 {
+		return semVer{}, fmt.Errorf("invalid version format %q: expected MAJOR.MINOR.PATCH", version)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return semVer{}, fmt.Errorf("invalid major version %q: %w", parts[0], err)
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return semVer{}, fmt.Errorf("invalid minor version %q: %w", parts[1], err)
+	}
+	patch, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return semVer{}, fmt.Errorf("invalid patch version %q: %w", parts[2], err)
+	}
+
+	return semVer{major: major, minor: minor, patch: patch}, nil
 }
 
 func upgradePolicyForCluster(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -509,11 +591,19 @@ func jsonToCty(v interface{}) (cty.Value, error) {
 
 		obj := make(map[string]cty.Value, len(val))
 		for _, k := range keys {
+			if val[k] == nil {
+				// OpenBao's HCL parsing does not accept the HCL "null" literal.
+				// Treat JSON null values as "unset" and omit them from the rendered output.
+				continue
+			}
+
 			child, err := jsonToCty(val[k])
 			if err != nil {
 				return cty.NilVal, err
 			}
-			obj[k] = child
+			if child != cty.NilVal {
+				obj[k] = child
+			}
 		}
 
 		return cty.ObjectVal(obj), nil
@@ -522,15 +612,24 @@ func jsonToCty(v interface{}) (cty.Value, error) {
 			return cty.EmptyTupleVal, nil
 		}
 
-		elems := make([]cty.Value, len(val))
-		for i, elem := range val {
+		elems := make([]cty.Value, 0, len(val))
+		for _, elem := range val {
+			if elem == nil {
+				// See map case above: omit JSON null elements.
+				continue
+			}
 			child, err := jsonToCty(elem)
 			if err != nil {
 				return cty.NilVal, err
 			}
-			elems[i] = child
+			if child != cty.NilVal {
+				elems = append(elems, child)
+			}
 		}
 
+		if len(elems) == 0 {
+			return cty.EmptyTupleVal, nil
+		}
 		return cty.TupleVal(elems), nil
 	case string:
 		return cty.StringVal(val), nil
@@ -548,9 +647,9 @@ func jsonToCty(v interface{}) (cty.Value, error) {
 		// Use -1 precision to use the smallest number of digits necessary
 		return cty.StringVal(strconv.FormatFloat(val, 'f', -1, 64)), nil
 	case nil:
-		// Represent null as an explicit null value; HCL will render this as
-		// "null".
-		return cty.NullVal(cty.DynamicPseudoType), nil
+		// OpenBao's HCL parsing does not accept the HCL "null" literal.
+		// Treat JSON null values as "unset" and omit them from the rendered output.
+		return cty.NilVal, nil
 	default:
 		return cty.NilVal, fmt.Errorf("unsupported JSON value type %T in self-init data", v)
 	}

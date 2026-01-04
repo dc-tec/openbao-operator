@@ -56,6 +56,6 @@ telemetry {
   maximum_gauge_cardinality = 2000
   disable_hostname          = true
   enable_hostname_label     = true
-  dogstatsd_address         = "127.0.0.1:8125"
+  dogstatsd_addr            = "127.0.0.1:8125"
   dogstatsd_tags            = ["env:test", "cluster:gitops-contract"]
 }

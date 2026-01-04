@@ -59,10 +59,6 @@ type hclRetryJoin struct {
 	LeaderClientKeyFile  *string `hcl:"leader_client_key_file"`
 }
 
-type hclServiceRegistrationKubernetes struct {
-	Type string `hcl:"type,label"`
-}
-
 type hclAuditDevice struct {
 	Type string `hcl:"type,label"`
 	Path string `hcl:"path,label"`
@@ -98,10 +94,10 @@ type hclTelemetry struct {
 	StatsiteAddress *string `hcl:"statsite_address"`
 	StatsdAddress   *string `hcl:"statsd_address"`
 
-	DogStatsdAddress *string   `hcl:"dogstatsd_address"`
+	DogStatsdAddress *string   `hcl:"dogstatsd_addr"`
 	DogStatsdTags    *[]string `hcl:"dogstatsd_tags"`
 
-	CirconusAPIKey                     *string `hcl:"circonus_api_key"`
+	CirconusAPIKey                     *string `hcl:"circonus_api_token"`
 	CirconusAPIApp                     *string `hcl:"circonus_api_app"`
 	CirconusAPIURL                     *string `hcl:"circonus_api_url"`
 	CirconusSubmissionInterval         *string `hcl:"circonus_submission_interval"`
@@ -141,7 +137,6 @@ type hclUserConfigurationAttributes struct {
 	DetectDeadlocks                *string `hcl:"detect_deadlocks"`
 	RawStorageEndpoint             *bool   `hcl:"raw_storage_endpoint"`
 	Introspection                  *bool   `hcl:"introspection_endpoint"`
-	DisableStandbyReads            *bool   `hcl:"disable_standby_reads"`
 	ImpreciseLeaseRoleTracking     *bool   `hcl:"imprecise_lease_role_tracking"`
 	UnsafeAllowAPIAuditCreation    *bool   `hcl:"unsafe_allow_api_audit_creation"`
 	AllowAuditLogPrefixing         *bool   `hcl:"allow_audit_log_prefixing"`
@@ -735,7 +730,6 @@ func buildUserConfigTokens(config *openbaov1alpha1.OpenBaoConfiguration) hclwrit
 	attrs.DetectDeadlocks = boolPtrString(config.DetectDeadlocks)
 	attrs.RawStorageEndpoint = config.RawStorageEndpoint
 	attrs.Introspection = config.IntrospectionEndpoint
-	attrs.DisableStandbyReads = config.DisableStandbyReads
 	attrs.ImpreciseLeaseRoleTracking = config.ImpreciseLeaseRoleTracking
 	attrs.UnsafeAllowAPIAuditCreation = config.UnsafeAllowAPIAuditCreation
 	attrs.AllowAuditLogPrefixing = config.AllowAuditLogPrefixing

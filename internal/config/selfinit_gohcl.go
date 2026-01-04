@@ -37,13 +37,14 @@ type hclPolicyData struct {
 }
 
 type hclJWTRoleData struct {
-	RoleType       string            `hcl:"role_type"`
-	UserClaim      string            `hcl:"user_claim"`
-	BoundAudiences []string          `hcl:"bound_audiences"`
-	BoundClaims    map[string]string `hcl:"bound_claims"`
-	TokenPolicies  []string          `hcl:"token_policies"`
-	Policies       *[]string         `hcl:"policies"`
-	TTL            string            `hcl:"ttl"`
+	RoleType       string             `hcl:"role_type"`
+	UserClaim      string             `hcl:"user_claim"`
+	BoundAudiences []string           `hcl:"bound_audiences"`
+	BoundClaims    *map[string]string `hcl:"bound_claims,optional"`
+	BoundSubject   *string            `hcl:"bound_subject,optional"`
+	TokenPolicies  []string           `hcl:"token_policies"`
+	Policies       *[]string          `hcl:"policies"`
+	TTL            string             `hcl:"ttl"`
 }
 
 func buildInitializeBlock(label string) *hclwrite.Block {
@@ -95,17 +96,15 @@ func buildOperatorBootstrapInitializeBlock(config OperatorBootstrapConfig) *hclw
 
 	// 4. Bind Role
 	{
+		subject := fmt.Sprintf("system:serviceaccount:%s:%s", config.OperatorNS, config.OperatorSA)
 		req := buildInitializeRequestBlock("create-operator-role", "update", "auth/jwt/role/openbao-operator", false)
 		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTRoleData{
 			RoleType:       "jwt",
 			UserClaim:      "sub",
 			BoundAudiences: []string{"openbao-internal"},
-			BoundClaims: map[string]string{
-				"kubernetes.io/namespace":           config.OperatorNS,
-				"kubernetes.io/serviceaccount/name": config.OperatorSA,
-			},
-			TokenPolicies: []string{"openbao-operator"},
-			TTL:           "1h",
+			BoundSubject:   &subject,
+			TokenPolicies:  []string{"openbao-operator"},
+			TTL:            "1h",
 		}, "data"))
 		initBody.AppendBlock(req)
 	}
@@ -146,19 +145,17 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 
 	// 4. Bind Role (+ policies mirror to match existing golden)
 	{
+		subject := fmt.Sprintf("system:serviceaccount:%s:%s", config.OperatorNS, config.OperatorSA)
 		policies := []string{"openbao-operator"}
 		req := buildInitializeRequestBlock("create-operator-role", "update", "auth/jwt/role/openbao-operator", false)
 		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTRoleData{
 			RoleType:       "jwt",
 			UserClaim:      "sub",
 			BoundAudiences: []string{"openbao-internal"},
-			BoundClaims: map[string]string{
-				"kubernetes.io/namespace":           config.OperatorNS,
-				"kubernetes.io/serviceaccount/name": config.OperatorSA,
-			},
-			TokenPolicies: []string{"openbao-operator"},
-			Policies:      &policies,
-			TTL:           "1h",
+			BoundSubject:   &subject,
+			TokenPolicies:  []string{"openbao-operator"},
+			Policies:       &policies,
+			TTL:            "1h",
 		}, "data"))
 		initBody.AppendBlock(req)
 	}
@@ -171,19 +168,17 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 			initBody.AppendBlock(req)
 		}
 		{
+			subject := fmt.Sprintf("system:serviceaccount:%s:%s-backup-serviceaccount", cluster.Namespace, cluster.Name)
 			policies := []string{"backup"}
 			req := buildInitializeRequestBlock("create-backup-jwt-role", "update", "auth/jwt/role/backup", false)
 			req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTRoleData{
 				RoleType:       "jwt",
 				UserClaim:      "sub",
 				BoundAudiences: []string{"openbao-internal"},
-				BoundClaims: map[string]string{
-					"kubernetes.io/namespace":           cluster.Namespace,
-					"kubernetes.io/serviceaccount/name": fmt.Sprintf("%s-backup-serviceaccount", cluster.Name),
-				},
-				TokenPolicies: []string{"backup"},
-				Policies:      &policies,
-				TTL:           "1h",
+				BoundSubject:   &subject,
+				TokenPolicies:  []string{"backup"},
+				Policies:       &policies,
+				TTL:            "1h",
 			}, "data"))
 			initBody.AppendBlock(req)
 		}
@@ -197,19 +192,17 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 			initBody.AppendBlock(req)
 		}
 		{
+			subject := fmt.Sprintf("system:serviceaccount:%s:%s-upgrade-serviceaccount", cluster.Namespace, cluster.Name)
 			policies := []string{"upgrade"}
 			req := buildInitializeRequestBlock("create-upgrade-jwt-role", "update", "auth/jwt/role/upgrade", false)
 			req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTRoleData{
 				RoleType:       "jwt",
 				UserClaim:      "sub",
 				BoundAudiences: []string{"openbao-internal"},
-				BoundClaims: map[string]string{
-					"kubernetes.io/namespace":           cluster.Namespace,
-					"kubernetes.io/serviceaccount/name": fmt.Sprintf("%s-upgrade-serviceaccount", cluster.Name),
-				},
-				TokenPolicies: []string{"upgrade"},
-				Policies:      &policies,
-				TTL:           "1h",
+				BoundSubject:   &subject,
+				TokenPolicies:  []string{"upgrade"},
+				Policies:       &policies,
+				TTL:            "1h",
 			}, "data"))
 			initBody.AppendBlock(req)
 		}

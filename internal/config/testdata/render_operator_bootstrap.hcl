@@ -29,12 +29,9 @@ initialize "operator-bootstrap" {
       role_type       = "jwt"
       user_claim      = "sub"
       bound_audiences = ["openbao-internal"]
-      bound_claims = {
-        "kubernetes.io/namespace"           = "openbao-operator-system"
-        "kubernetes.io/serviceaccount/name" = "openbao-operator-controller"
-      }
-      token_policies = ["openbao-operator"]
-      ttl            = "1h"
+      bound_subject   = "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
+      token_policies  = ["openbao-operator"]
+      ttl             = "1h"
     }
   }
 }

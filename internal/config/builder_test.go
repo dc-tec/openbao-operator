@@ -60,6 +60,8 @@ func TestRenderHCLIncludesCoreStanzas(t *testing.T) {
 
 func TestRenderHCLWithStructuredConfiguration(t *testing.T) {
 	cluster := newMinimalCluster("structured-config", "default")
+	cluster.Spec.Version = "2.5.0"
+	cluster.Spec.Image = "openbao/openbao:2.5.0"
 	uiEnabled := true
 	autoDownload := true
 	autoRegister := false
@@ -104,6 +106,31 @@ func TestRenderHCLWithStructuredConfiguration(t *testing.T) {
 	compareGolden(t, "render_hcl_structured_config", got)
 }
 
+func TestRenderHCLRejectsPluginAutoConfigForUnsupportedVersions(t *testing.T) {
+	cluster := newMinimalCluster("structured-config", "default")
+	autoDownload := true
+	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
+		Plugin: &openbaov1alpha1.PluginConfig{
+			AutoDownload: &autoDownload,
+		},
+	}
+
+	infraDetails := InfrastructureDetails{
+		HeadlessServiceName: cluster.Name,
+		Namespace:           cluster.Namespace,
+		APIPort:             8200,
+		ClusterPort:         8201,
+	}
+
+	_, err := RenderHCL(cluster, infraDetails)
+	if err == nil {
+		t.Fatalf("RenderHCL() expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "requires OpenBao >= 2.5.0") {
+		t.Fatalf("RenderHCL() error = %v, want version gate error", err)
+	}
+}
+
 func TestRenderHCLWithAllConfigurationOptions(t *testing.T) {
 	cluster := newMinimalCluster("full-config", "default")
 	uiEnabled := true
@@ -112,7 +139,6 @@ func TestRenderHCLWithAllConfigurationOptions(t *testing.T) {
 	detectDeadlocks := true
 	rawStorageEndpoint := false
 	introspectionEndpoint := true
-	disableStandbyReads := false
 	impreciseLeaseRoleTracking := true
 	unsafeAllowAPIAuditCreation := false
 	allowAuditLogPrefixing := true
@@ -127,7 +153,6 @@ func TestRenderHCLWithAllConfigurationOptions(t *testing.T) {
 		DetectDeadlocks:                &detectDeadlocks,
 		RawStorageEndpoint:             &rawStorageEndpoint,
 		IntrospectionEndpoint:          &introspectionEndpoint,
-		DisableStandbyReads:            &disableStandbyReads,
 		ImpreciseLeaseRoleTracking:     &impreciseLeaseRoleTracking,
 		UnsafeAllowAPIAuditCreation:    &unsafeAllowAPIAuditCreation,
 		AllowAuditLogPrefixing:         &allowAuditLogPrefixing,
