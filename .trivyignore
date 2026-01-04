@@ -10,3 +10,7 @@
 # config/rbac/provisioner_delegate_clusterrole.yaml for details.
 config/rbac/provisioner_delegate_clusterrole.yaml
 
+# Trivy secret scanner false positive: the GCP sample contains a commented example
+# service-account JSON snippet that matches the detector.
+gcp-service-account
+
