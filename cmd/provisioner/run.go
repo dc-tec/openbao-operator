@@ -151,6 +151,18 @@ func Run(args []string) {
 		os.Exit(1)
 	}
 
+	// Register tenant secrets RBAC sync controller.
+	// This reconciler maintains per-namespace Secret allowlists for the controller ServiceAccount
+	// to reduce Secret blast radius in tenant namespaces.
+	if err := (&provisionercontroller.TenantSecretsRBACReconciler{
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		Provisioner: provisionerMgr,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TenantSecretsRBAC")
+		os.Exit(1)
+	}
+
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
