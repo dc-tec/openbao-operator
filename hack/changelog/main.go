@@ -39,7 +39,8 @@ func main() {
 	var repoURL string
 
 	flag.StringVar(&outPath, "out", "CHANGELOG.md", "Output path for generated changelog")
-	flag.BoolVar(&includeAllTags, "all-tags", false, "Generate changelog for all tags (default: only Unreleased since last tag)")
+	flag.BoolVar(&includeAllTags, "all-tags", false,
+		"Generate changelog for all tags (default: only Unreleased since last tag)")
 	flag.StringVar(&tagPrefix, "tag-prefix", "v", "Tag prefix for releases (default: v)")
 	flag.StringVar(&repoURL, "repo", "https://github.com/dc-tec/openbao-operator", "Repository base URL for commit links")
 	flag.Parse()
@@ -131,7 +132,7 @@ func listTags(prefix string) ([]string, error) {
 func writeUnreleased(buf *bytes.Buffer, sinceTag string, repoURL string) error {
 	buf.WriteString("## Unreleased\n\n")
 	if sinceTag != "" {
-		buf.WriteString(fmt.Sprintf("_Changes since `%s`._\n\n", sinceTag))
+		fmt.Fprintf(buf, "_Changes since `%s`._\n\n", sinceTag)
 	}
 	commits, err := commitsInRange(sinceTag, "HEAD")
 	if err != nil {
@@ -149,7 +150,7 @@ func writeReleaseRange(buf *bytes.Buffer, fromTag, toTag string, repoURL string)
 	if date == "" {
 		date = time.Now().Format("2006-01-02")
 	}
-	buf.WriteString(fmt.Sprintf("## %s (%s)\n\n", toTag, date))
+	fmt.Fprintf(buf, "## %s (%s)\n\n", toTag, date)
 	commits, err := commitsInRange(fromTag, toTag)
 	if err != nil {
 		return err
@@ -313,7 +314,7 @@ func writeSectionsByScope(buf *bytes.Buffer, commits []commit, repoURL string) e
 					shortHash = shortHash[:7]
 				}
 				link := commitURL(repoURL, c.hash)
-				buf.WriteString(fmt.Sprintf("- %s ([`%s`](%s))\n", c.description, shortHash, link))
+				fmt.Fprintf(buf, "- %s ([`%s`](%s))\n", c.description, shortHash, link)
 			}
 			buf.WriteString("\n")
 		}
@@ -324,5 +325,3 @@ func writeSectionsByScope(buf *bytes.Buffer, commits []commit, repoURL string) e
 
 	return nil
 }
-
-
