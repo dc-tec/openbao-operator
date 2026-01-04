@@ -35,8 +35,13 @@ func main() {
 	var maxList int
 	var verbose bool
 
-	flag.StringVar(&openbaoImageTag, "openbao-image-tag", "2.4.4", "OpenBao Docker image tag used to resolve an upstream git SHA (e.g. 2.4.4)")
-	flag.StringVar(&openbaoGitSHA, "openbao-git-sha", "", "OpenBao git SHA (40 hex) to use instead of resolving from Docker image")
+	const openbaoImageTagUsage = "OpenBao Docker image tag used to resolve an upstream git SHA " +
+		"(e.g. 2.4.4)"
+	const openbaoGitSHAUsage = "OpenBao git SHA (40 hex) to use instead of resolving " +
+		"from Docker image"
+
+	flag.StringVar(&openbaoImageTag, "openbao-image-tag", "2.4.4", openbaoImageTagUsage)
+	flag.StringVar(&openbaoGitSHA, "openbao-git-sha", "", openbaoGitSHAUsage)
 	flag.IntVar(&maxList, "max-list", 60, "Max number of keys to print per section (0 = unlimited)")
 	flag.BoolVar(&verbose, "v", false, "Verbose output (prints extra keys and sets)")
 	flag.Parse()
@@ -159,7 +164,17 @@ func main() {
 		printKeyList("Operator default keys", defaultGeneratedKeys, 0)
 	}
 
-	writeGitHubSummary(openbaoImageTag, upstreamSHA, upstreamKeys, operatorSchemaKeys, defaultGeneratedKeys, missingTyped, missingDefault, operatorExtras, maxList)
+	writeGitHubSummary(
+		openbaoImageTag,
+		upstreamSHA,
+		upstreamKeys,
+		operatorSchemaKeys,
+		defaultGeneratedKeys,
+		missingTyped,
+		missingDefault,
+		operatorExtras,
+		maxList,
+	)
 }
 
 func extractDefaultGeneratedKeySet() (map[string]struct{}, error) {
@@ -247,17 +262,20 @@ func indexPackageDir(dir string) (*pkgIndex, error) {
 		return nil, fmt.Errorf("no go packages found in %s", dir)
 	}
 
-	var first *ast.Package
+	var firstFiles map[string]*ast.File
 	for _, p := range pkgs {
-		first = p
+		firstFiles = p.Files
 		break
+	}
+	if len(firstFiles) == 0 {
+		return nil, fmt.Errorf("no go files found in %s", dir)
 	}
 
 	idx := &pkgIndex{
 		structs: map[string]*ast.StructType{},
 		aliases: map[string]ast.Expr{},
 	}
-	for _, f := range first.Files {
+	for _, f := range firstFiles {
 		for _, decl := range f.Decls {
 			gen, ok := decl.(*ast.GenDecl)
 			if !ok || gen.Tok != token.TYPE {
@@ -280,7 +298,13 @@ func indexPackageDir(dir string) (*pkgIndex, error) {
 	return idx, nil
 }
 
-func collectKeysFromStruct(out map[string]struct{}, idx *pkgIndex, prefix string, st *ast.StructType, visiting map[string]bool) {
+func collectKeysFromStruct(
+	out map[string]struct{},
+	idx *pkgIndex,
+	prefix string,
+	st *ast.StructType,
+	visiting map[string]bool,
+) {
 	if st == nil || st.Fields == nil {
 		return
 	}
@@ -444,7 +468,11 @@ func materializeUpstreamModuleDir(sha string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer os.RemoveAll(tmpdir)
+	defer func() {
+		if err := os.RemoveAll(tmpdir); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to remove temp dir %s: %v\n", tmpdir, err)
+		}
+	}()
 
 	mainModule := filepath.Join(tmpdir, "mod")
 	if err := os.MkdirAll(mainModule, 0o755); err != nil {
@@ -481,7 +509,11 @@ func materializeUpstreamModuleDir(sha string) (string, error) {
 	return mod.Dir, nil
 }
 
-func writeGitHubSummary(openbaoImageTag, upstreamSHA string, upstreamKeys, operatorSchemaKeys, defaultKeys, missingTyped, missingDefault, extras map[string]struct{}, maxList int) {
+func writeGitHubSummary(
+	openbaoImageTag, upstreamSHA string,
+	upstreamKeys, operatorSchemaKeys, defaultKeys, missingTyped, missingDefault, extras map[string]struct{},
+	maxList int,
+) {
 	path := strings.TrimSpace(os.Getenv("GITHUB_STEP_SUMMARY"))
 	if path == "" {
 		return
@@ -521,8 +553,14 @@ func writeGitHubSummary(openbaoImageTag, upstreamSHA string, upstreamKeys, opera
 	if err != nil {
 		return
 	}
-	defer f.Close()
-	_, _ = f.Write(buf.Bytes())
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to close %s: %v\n", path, err)
+		}
+	}()
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", path, err)
+	}
 }
 
 // reflectStructTag is a tiny subset of reflect.StructTag to avoid importing reflect
