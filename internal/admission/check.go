@@ -51,6 +51,16 @@ func DefaultDependencies() []Dependency {
 			BindingName: "openbao-restrict-sentinel-mutations",
 		},
 		{
+			Name:        "validate-openbaocluster",
+			PolicyName:  "validate-openbaocluster",
+			BindingName: "validate-openbaocluster",
+		},
+		{
+			Name:        "lock-controller-statefulset-mutations",
+			PolicyName:  "lock-controller-statefulset-mutations",
+			BindingName: "lock-controller-statefulset-mutations",
+		},
+		{
 			Name:        dependencyProvisionerDelegate,
 			PolicyName:  "openbao-restrict-provisioner-delegate",
 			BindingName: "openbao-restrict-provisioner-delegate-binding",
