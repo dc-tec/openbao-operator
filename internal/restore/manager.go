@@ -167,10 +167,10 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 				"OverrideOperationLock used; cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder)
 		}
 		meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
-			Type:               "OperationLockOverride", // TODO: Add constant
+			Type:               constants.ConditionTypeOperationLockOverride,
 			Status:             metav1.ConditionTrue,
 			LastTransitionTime: metav1.Now(),
-			Reason:             "OperationLockOverridden", // TODO: Add constant
+			Reason:             constants.ReasonOperationLockOverridden,
 			Message:            fmt.Sprintf("Cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder),
 		})
 	}

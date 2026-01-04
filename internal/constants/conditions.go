@@ -29,4 +29,12 @@ const (
 
 	// ConditionTypeProvisioned is the condition type for tenant provisioning.
 	ConditionTypeProvisioned = "Provisioned"
+
+	// ConditionTypeOperationLockOverride is the condition type used when an operation
+	// lock is forcefully overridden (e.g., during disaster recovery restore).
+	ConditionTypeOperationLockOverride = "OperationLockOverride"
+
+	// ReasonOperationLockOverridden indicates that an existing operation lock was
+	// cleared to allow a higher-priority operation to proceed.
+	ReasonOperationLockOverridden = "OperationLockOverridden"
 )

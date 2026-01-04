@@ -587,11 +587,11 @@ func (m *Manager) validateBackupConfig(ctx context.Context, cluster *openbaov1al
 func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, string, error) {
 	jobList := &batchv1.JobList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
-		constants.LabelAppInstance:    cluster.Name,
-		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster: cluster.Name,
-		"openbao.org/component":       backup.ComponentBackup,
-		"openbao.org/backup-type":     "pre-upgrade", // TODO: Add constant
+		constants.LabelAppInstance:       cluster.Name,
+		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:    cluster.Name,
+		constants.LabelOpenBaoComponent:  backup.ComponentBackup,
+		constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
 	})
 
 	if err := m.client.List(ctx, jobList,
@@ -658,7 +658,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 		{Name: constants.EnvBackupEndpoint, Value: backupCfg.Target.Endpoint},
 		{Name: constants.EnvBackupBucket, Value: backupCfg.Target.Bucket},
 		{Name: constants.EnvBackupPathPrefix, Value: backupCfg.Target.PathPrefix},
-		{Name: constants.EnvBackupFilenamePrefix, Value: "pre-upgrade"}, // TODO: Add constant
+		{Name: constants.EnvBackupFilenamePrefix, Value: constants.BackupTypePreUpgrade},
 		{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", backupCfg.Target.UsePathStyle)},
 	}
 
@@ -797,7 +797,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 						constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
 						constants.LabelOpenBaoCluster:    cluster.Name,
 						constants.LabelOpenBaoComponent:  backup.ComponentBackup,
-						constants.LabelOpenBaoBackupType: "pre-upgrade", // TODO: Add constant
+						constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
 					},
 				},
 				Spec: corev1.PodSpec{

@@ -196,26 +196,57 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 // reconcileBlueGreen is the internal reconcile method that handles blue/green upgrades.
 func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (recon.Result, error) {
-	// Check if blue/green strategy is enabled
-	if cluster.Spec.UpdateStrategy.Type != openbaov1alpha1.UpdateStrategyBlueGreen {
-		logger.V(1).Info("UpdateStrategy is not BlueGreen; skipping blue/green upgrade reconciliation",
-			"updateStrategy", cluster.Spec.UpdateStrategy.Type)
+	if !m.shouldReconcileBlueGreen(logger, cluster) {
 		return recon.Result{}, nil
 	}
 
-	// Check if cluster is initialized; upgrades can only proceed after initialization
 	if !cluster.Status.Initialized {
 		logger.Info("Cluster not initialized; skipping blue/green upgrade reconciliation")
 		return requeueStandard(), nil
 	}
 
-	// Ensure upgrade ServiceAccount exists (for JWT Auth)
-	// This is required before any OpenBao API calls that need authentication
 	if err := m.ensureUpgradeServiceAccount(ctx, cluster); err != nil {
 		return recon.Result{}, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
 	}
 
-	// Initialize BlueGreen status if needed
+	m.ensureBlueGreenStatus(ctx, logger, cluster)
+
+	if m.shouldHaltForBreakGlass(logger, cluster) {
+		return requeueStandard(), nil
+	}
+
+	upgradeActive := cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle
+	upgradeNeeded := cluster.Status.CurrentVersion != "" && cluster.Spec.Version != cluster.Status.CurrentVersion
+
+	if handled, res, err := m.maybeAcquireUpgradeLock(ctx, logger, cluster, upgradeActive, upgradeNeeded); handled || err != nil {
+		return res, err
+	}
+
+	if handled, res, err := m.handleNoUpgradeNeeded(ctx, logger, cluster); handled || err != nil {
+		return res, err
+	}
+
+	logger.Info("Upgrade detected; CurrentVersion differs from Spec.Version",
+		"currentVersion", cluster.Status.CurrentVersion,
+		"specVersion", cluster.Spec.Version)
+
+	if handled, res, err := m.maybeAbortUpgrade(ctx, logger, cluster); handled || err != nil {
+		return res, err
+	}
+
+	return m.executeStateMachine(ctx, logger, cluster, verifiedImageDigest)
+}
+
+func (m *Manager) shouldReconcileBlueGreen(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster.Spec.UpdateStrategy.Type != openbaov1alpha1.UpdateStrategyBlueGreen {
+		logger.V(1).Info("UpdateStrategy is not BlueGreen; skipping blue/green upgrade reconciliation",
+			"updateStrategy", cluster.Spec.UpdateStrategy.Type)
+		return false
+	}
+	return true
+}
+
+func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
 	if cluster.Status.BlueGreen == nil {
 		inferred, err := infra.InferActiveRevisionFromPods(ctx, m.client, cluster)
 		if err != nil {
@@ -229,98 +260,109 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 			Phase:        openbaov1alpha1.PhaseIdle,
 			BlueRevision: blueRevision,
 		}
-	} else if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
+		return
+	}
+
+	// If the operator restarted and BlueRevision was derived from spec (target) rather than the
+	// currently running ("Blue") pods, correct it before starting a new upgrade or snapshot.
+	if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
 		(cluster.Status.BlueGreen.BlueRevision == "" || cluster.Status.CurrentVersion != cluster.Spec.Version) {
-		// If the operator restarted and BlueRevision was derived from spec (target) rather than the
-		// currently running ("Blue") pods, correct it before starting a new upgrade or snapshot.
 		inferred, err := infra.InferActiveRevisionFromPods(ctx, m.client, cluster)
 		if err != nil {
 			logger.Error(err, "Failed to infer active revision from pods; keeping existing BlueRevision", "blueRevision", cluster.Status.BlueGreen.BlueRevision)
-		} else if inferred != "" && inferred != cluster.Status.BlueGreen.BlueRevision {
+			return
+		}
+		if inferred != "" && inferred != cluster.Status.BlueGreen.BlueRevision {
 			logger.Info("Correcting BlueRevision from active pods", "from", cluster.Status.BlueGreen.BlueRevision, "to", inferred)
 			cluster.Status.BlueGreen.BlueRevision = inferred
 		}
 	}
+}
 
-	if cluster.Status.BreakGlass != nil && cluster.Status.BreakGlass.Active && cluster.Spec.BreakGlassAck != cluster.Status.BreakGlass.Nonce {
-		logger.Info("Cluster is in break glass mode; halting blue/green reconciliation",
-			"breakGlassReason", cluster.Status.BreakGlass.Reason,
-			"breakGlassNonce", cluster.Status.BreakGlass.Nonce)
-		return requeueStandard(), nil
+func (m *Manager) shouldHaltForBreakGlass(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster.Status.BreakGlass == nil || !cluster.Status.BreakGlass.Active {
+		return false
 	}
+	if cluster.Spec.BreakGlassAck == cluster.Status.BreakGlass.Nonce {
+		return false
+	}
+	logger.Info("Cluster is in break glass mode; halting blue/green reconciliation",
+		"breakGlassReason", cluster.Status.BreakGlass.Reason,
+		"breakGlassNonce", cluster.Status.BreakGlass.Nonce)
+	return true
+}
 
-	upgradeActive := cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle
-	upgradeNeeded := cluster.Status.CurrentVersion != "" && cluster.Spec.Version != cluster.Status.CurrentVersion
-	if upgradeActive || upgradeNeeded {
-		if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
-			Holder:    constants.ControllerNameOpenBaoCluster + "/upgrade",
-			Operation: openbaov1alpha1.ClusterOperationUpgrade,
-			Message:   fmt.Sprintf("blue/green upgrade phase %s", cluster.Status.BlueGreen.Phase),
-		}); err != nil {
-			if errors.Is(err, operationlock.ErrLockHeld) {
-				if upgradeActive {
-					return recon.Result{}, fmt.Errorf("blue/green upgrade in progress but operation lock is held by another operation: %w", err)
-				}
-				logger.Info("Blue/green upgrade blocked by operation lock", "error", err.Error())
-				return requeueStandard(), nil
+func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, upgradeActive, upgradeNeeded bool) (bool, recon.Result, error) {
+	if !upgradeActive && !upgradeNeeded {
+		return false, recon.Result{}, nil
+	}
+	if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
+		Holder:    constants.ControllerNameOpenBaoCluster + "/upgrade",
+		Operation: openbaov1alpha1.ClusterOperationUpgrade,
+		Message:   fmt.Sprintf("blue/green upgrade phase %s", cluster.Status.BlueGreen.Phase),
+	}); err != nil {
+		if errors.Is(err, operationlock.ErrLockHeld) {
+			if upgradeActive {
+				return true, recon.Result{}, fmt.Errorf("blue/green upgrade in progress but operation lock is held by another operation: %w", err)
 			}
-			return recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
+			logger.Info("Blue/green upgrade blocked by operation lock", "error", err.Error())
+			return true, requeueStandard(), nil
 		}
+		return true, recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 	}
+	return false, recon.Result{}, nil
+}
 
-	// Check if upgrade is needed
+func (m *Manager) handleNoUpgradeNeeded(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, recon.Result, error) {
 	// CRITICAL: If CurrentVersion is empty, the cluster is in initial state (not yet set by controller).
 	// We should NOT trigger an upgrade until CurrentVersion is set. An upgrade is only needed when
 	// CurrentVersion is set AND different from Spec.Version.
 	if cluster.Status.CurrentVersion == "" {
-		// Cluster is in initial state, CurrentVersion not yet set. No upgrade needed.
 		logger.Info("CurrentVersion not yet set; waiting for initial version to be established")
-		// Ensure we're in Idle phase
-		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
-			// Cleanup any lingering Green StatefulSet
-			if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
-				return recon.Result{}, fmt.Errorf("failed to cleanup Green StatefulSet: %w", err)
-			}
-			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
-			cluster.Status.BlueGreen.GreenRevision = ""
-			cluster.Status.BlueGreen.StartTime = nil
+		if err := m.ensureIdleAndCleanupGreen(ctx, logger, cluster); err != nil {
+			return true, recon.Result{}, err
 		}
-		return requeueStandard(), nil
+		return true, requeueStandard(), nil
 	}
 
 	if cluster.Status.CurrentVersion == cluster.Spec.Version {
-		// No upgrade needed, ensure we're in Idle phase
 		logger.V(1).Info("No upgrade needed; CurrentVersion matches Spec.Version",
 			"currentVersion", cluster.Status.CurrentVersion,
 			"specVersion", cluster.Spec.Version)
-		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
-			// Cleanup any lingering Green StatefulSet
-			if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
-				return recon.Result{}, fmt.Errorf("failed to cleanup Green StatefulSet: %w", err)
-			}
-			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
-			cluster.Status.BlueGreen.GreenRevision = ""
-			cluster.Status.BlueGreen.StartTime = nil
+		if err := m.ensureIdleAndCleanupGreen(ctx, logger, cluster); err != nil {
+			return true, recon.Result{}, err
 		}
-		return recon.Result{}, nil
+		return true, recon.Result{}, nil
 	}
 
-	logger.Info("Upgrade detected; CurrentVersion differs from Spec.Version",
-		"currentVersion", cluster.Status.CurrentVersion,
-		"specVersion", cluster.Spec.Version)
+	return false, recon.Result{}, nil
+}
 
-	// Check for abort conditions (Green cluster failures)
-	if shouldAbort, err := m.checkAbortConditions(ctx, logger, cluster); err != nil {
-		return recon.Result{}, fmt.Errorf("failed to check abort conditions: %w", err)
-	} else if shouldAbort {
-		if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
-			return recon.Result{}, fmt.Errorf("failed to abort upgrade: %w", err)
-		}
-		return requeueShort(), nil
+func (m *Manager) ensureIdleAndCleanupGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle {
+		return nil
 	}
+	if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
+		return fmt.Errorf("failed to cleanup Green StatefulSet: %w", err)
+	}
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
+	cluster.Status.BlueGreen.GreenRevision = ""
+	cluster.Status.BlueGreen.StartTime = nil
+	return nil
+}
 
-	// Upgrade is needed - execute state machine
-	return m.executeStateMachine(ctx, logger, cluster, verifiedImageDigest)
+func (m *Manager) maybeAbortUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, recon.Result, error) {
+	shouldAbort, err := m.checkAbortConditions(ctx, logger, cluster)
+	if err != nil {
+		return true, recon.Result{}, fmt.Errorf("failed to check abort conditions: %w", err)
+	}
+	if !shouldAbort {
+		return false, recon.Result{}, nil
+	}
+	if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
+		return true, recon.Result{}, fmt.Errorf("failed to abort upgrade: %w", err)
+	}
+	return true, requeueShort(), nil
 }
 
 // calculateRevision computes a deterministic revision hash from relevant spec fields.

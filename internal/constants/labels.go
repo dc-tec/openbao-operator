@@ -21,4 +21,18 @@ const (
 	LabelValueAppManagedByOpenBaoOperator = "openbao-operator"
 
 	LabelValueOpenBaoTenant = "true"
+
+	// Component label values for operator pods.
+	LabelValueAppComponentController  = "controller"
+	LabelValueAppComponentProvisioner = "provisioner"
+)
+
+// Backup type values for the openbao.org/backup-type label.
+const (
+	// BackupTypePreUpgrade indicates a backup taken before an upgrade operation.
+	BackupTypePreUpgrade = "pre-upgrade"
+	// BackupTypeScheduled indicates a backup taken on a scheduled basis.
+	BackupTypeScheduled = "scheduled"
+	// BackupTypeManual indicates a manually triggered backup.
+	BackupTypeManual = "manual"
 )

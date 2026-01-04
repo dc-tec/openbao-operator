@@ -19,10 +19,13 @@ const (
 
 // Component names used for labeling and observability.
 const (
-	ComponentOpenBaoCluster = "openbaocluster"
-	ComponentBackup         = "backup"
-	ComponentRestore        = "restore"
-	ComponentSentinel       = "sentinel"
+	ComponentOpenBaoCluster  = "openbaocluster"
+	ComponentBackup          = "backup"
+	ComponentRestore         = "restore"
+	ComponentSentinel        = "sentinel"
+	ComponentUpgradeSnapshot = "upgrade-snapshot"
+	ComponentProvisioner     = "provisioner"
+	ComponentController      = "controller"
 )
 
 // Well-known container and binary names used across the operator and helper binaries.
