@@ -18,4 +18,4 @@ runs:
           -v "${PWD}:/docs" \
           -w /docs \
           "${{ inputs.image }}" \
-          build -s
+          sh -c "pip install --no-cache-dir mike && mkdocs build -s"
