@@ -12,6 +12,14 @@ body:
       required: true
 
   - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who will benefit from this feature? How valuable is it?
+    validations:
+      required: false
+
+  - type: textarea
     id: proposal
     attributes:
       label: Proposed solution

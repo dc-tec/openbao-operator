@@ -21,8 +21,8 @@ body:
     id: kubernetes
     attributes:
       label: Kubernetes version
-      description: "`kubectl version --short` (server version)`"
-      placeholder: v1.34.x
+      description: Output of `kubectl version --short`
+      placeholder: Server Version: v1.30.x
     validations:
       required: true
 

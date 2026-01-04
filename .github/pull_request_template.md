@@ -1,17 +1,32 @@
-## Summary
+## Description
 
-Describe the change and why it is needed.
+<!-- Describe your changes in detail. Why is this change required? What problem does it solve? -->
+
+## Related Issues
+
+<!-- Closes #123 -->
+
+## Type of Change
+
+<!-- Please delete options that are not relevant. -->
+
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Documentation update
+- [ ] Refactor (code improvement/cleanup)
 
 ## Checklist
 
-- [ ] CI is green (`CI` workflow).
-- [ ] `make lint-config lint` passes locally (or equivalent).
-- [ ] `make verify-fmt verify-tidy verify-generated` passes locally (or equivalent).
-- [ ] Tests added/updated where appropriate (unit/envtest/e2e).
-- [ ] Docs updated where user-facing behavior changed.
-- [ ] No secrets, tokens, or credentials are included in code/logs.
+- [ ] My code follows the [project style guide](https://dc-tec.github.io/openbao-operator/contributing/standards/index.html).
+- [ ] I have performed a self-review of my own code.
+- [ ] I have commented my code, particularly in hard-to-understand areas.
+- [ ] I have made corresponding changes to the documentation.
+- [ ] I have added tests that prove my fix is effective or that my feature works.
+- [ ] New and existing unit tests pass locally with `make test`.
+- [ ] Any dependent changes have been merged and published in downstream modules.
 
-## Risk
+## Verification Process
 
-- Impacted components:
-- Rollback plan:
+<!-- How can the reviewer verify this change? -->
+<!-- Example: Run `make test-e2e` or `kubectl apply -f examples/my-feature.yaml` -->
