@@ -1262,11 +1262,6 @@ type OpenBaoConfiguration struct {
 	// +optional
 	IntrospectionEndpoint *bool `json:"introspectionEndpoint,omitempty"`
 
-	// DisableStandbyReads disables reads from standby nodes.
-	// When true, all reads must go to the active node.
-	// +optional
-	DisableStandbyReads *bool `json:"disableStandbyReads,omitempty"`
-
 	// ImpreciseLeaseRoleTracking enables imprecise lease role tracking.
 	// This is an experimental feature that may improve performance in some scenarios.
 	// +optional

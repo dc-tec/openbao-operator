@@ -950,11 +950,6 @@ func (in *OpenBaoConfiguration) DeepCopyInto(out *OpenBaoConfiguration) {
 		*out = new(bool)
 		**out = **in
 	}
-	if in.DisableStandbyReads != nil {
-		in, out := &in.DisableStandbyReads, &out.DisableStandbyReads
-		*out = new(bool)
-		**out = **in
-	}
 	if in.ImpreciseLeaseRoleTracking != nil {
 		in, out := &in.ImpreciseLeaseRoleTracking, &out.ImpreciseLeaseRoleTracking
 		*out = new(bool)
