@@ -583,17 +583,6 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 	return nil
 }
 
-// applyResource uses Server-Side Apply to create or update a Kubernetes resource.
-// This eliminates the need for Get-then-Create-or-Update logic and manual diffing.
-//
-// The resource must have TypeMeta, ObjectMeta (with Name and Namespace), and the desired Spec set.
-// Owner references are set automatically if the resource supports them.
-//
-// fieldOwner identifies the operator as the manager of this resource (used for conflict resolution).
-func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster, fieldOwner string) error {
-	return applyResource(ctx, m.client, m.scheme, obj, cluster, fieldOwner)
-}
-
 // ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs using Server-Side Apply.
 // This ServiceAccount is used for JWT Auth authentication to OpenBao.
 // ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs using Server-Side Apply.
