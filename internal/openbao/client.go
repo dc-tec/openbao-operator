@@ -10,10 +10,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 )
 
 const (
@@ -62,26 +62,19 @@ type Client struct {
 	baseURL    string
 	token      string
 	httpClient *http.Client
-}
 
-var (
-	systemCertPool     *x509.CertPool
-	systemCertPoolOnce sync.Once
-)
-
-func getSystemCertPool() *x509.CertPool {
-	systemCertPoolOnce.Do(func() {
-		pool, err := x509.SystemCertPool()
-		if err != nil || pool == nil {
-			pool = x509.NewCertPool()
-		}
-		systemCertPool = pool
-	})
-	return systemCertPool
+	smart *smartClientState
 }
 
 // ClientConfig holds configuration for creating a new Client.
 type ClientConfig struct {
+	// ClusterKey is an optional per-cluster identifier used to share smart-client state
+	// (rate limiting and circuit breakers) across multiple Client instances.
+	//
+	// Recommended format: "<namespace>/<name>".
+	// If empty, BaseURL hostname is used as a fallback (best-effort).
+	ClusterKey string
+
 	// BaseURL is the OpenBao API URL (e.g., "https://pod-0.cluster.ns.svc:8200").
 	BaseURL string
 	// Token is the authentication token for OpenBao API calls.
@@ -95,6 +88,22 @@ type ClientConfig struct {
 	// RequestTimeout is the timeout for individual requests.
 	// Defaults to DefaultRequestTimeout if zero.
 	RequestTimeout time.Duration
+
+	// SmartClientDisabled disables rate limiting and circuit breaker behavior.
+	// By default, smart client features are enabled with conservative defaults.
+	SmartClientDisabled bool
+	// RateLimitQPS is the per-cluster rate limit applied to OpenBao API calls.
+	// Defaults to 2.0 if zero or negative.
+	RateLimitQPS float64
+	// RateLimitBurst is the per-cluster burst size for the rate limiter.
+	// Defaults to 4 if zero or negative.
+	RateLimitBurst int
+	// CircuitBreakerFailureThreshold is the number of consecutive failures before opening the circuit.
+	// Defaults to 50 if zero or negative.
+	CircuitBreakerFailureThreshold int
+	// CircuitBreakerOpenDuration is the amount of time the circuit stays open before probing again.
+	// Defaults to 30s if zero.
+	CircuitBreakerOpenDuration time.Duration
 }
 
 // NewClient creates a new OpenBao API client with the given configuration.
@@ -135,16 +144,15 @@ func NewClient(config ClientConfig) (*Client, error) {
 		tlsConfig.ServerName = parsedURL.Hostname()
 	}
 
-	// Start from the system cert pool when available so that custom CAs are
-	// additive instead of replacing the system roots.
-	systemPool := getSystemCertPool()
+	// If a per-cluster CA bundle is provided, trust only that bundle.
+	// If empty, use system roots (default behavior when RootCAs is nil).
 	if len(config.CACert) > 0 {
-		if !systemPool.AppendCertsFromPEM(config.CACert) {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(config.CACert) {
 			return nil, fmt.Errorf("failed to parse CA certificate")
 		}
+		tlsConfig.RootCAs = pool
 	}
-
-	tlsConfig.RootCAs = systemPool
 
 	transport := &http.Transport{
 		TLSClientConfig:     tlsConfig,
@@ -159,10 +167,23 @@ func NewClient(config ClientConfig) (*Client, error) {
 		Timeout:   requestTimeout,
 	}
 
+	if config.ClusterKey == "" && parsedURL.Host != "" {
+		// Best-effort fallback for callers that don't provide a cluster identifier.
+		// Include the port to avoid sharing smart-client state across unrelated endpoints
+		// (e.g., multiple httptest servers in unit tests).
+		config.ClusterKey = parsedURL.Host
+	}
+
+	var smart *smartClientState
+	if !config.SmartClientDisabled {
+		smart = getOrCreateSmartState(config)
+	}
+
 	return &Client{
 		baseURL:    config.BaseURL,
 		token:      config.Token,
 		httpClient: httpClient,
+		smart:      smart,
 	}, nil
 }
 
@@ -338,14 +359,32 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 	// Check for non-success status codes
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if c.smart != nil {
+			if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+				c.smart.after(req, false)
+				return operatorerrors.WrapTransientRemoteOverloaded(
+					fmt.Errorf("snapshot request failed due to remote overload (status %d): %s", resp.StatusCode, string(body)),
+				)
+			}
+			c.smart.after(req, true)
+		}
 		return fmt.Errorf("snapshot request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Stream the snapshot data directly to the writer
 	if _, err := io.Copy(writer, resp.Body); err != nil {
+		if c.smart != nil {
+			c.smart.after(req, false)
+		}
+		if operatorerrors.IsTransientConnection(err) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to write snapshot data: %w", err))
+		}
 		return fmt.Errorf("failed to write snapshot data: %w", err)
 	}
 
+	if c.smart != nil {
+		c.smart.after(req, true)
+	}
 	return nil
 }
 

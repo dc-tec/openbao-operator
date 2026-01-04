@@ -61,6 +61,11 @@ func Reason(err error) (string, bool) {
 // This includes timeouts, connection refused, DNS resolution failures, and network unreachable errors.
 var ErrTransientConnection = errors.New("transient connection error")
 
+// ErrTransientRemoteOverloaded indicates the remote service is overloaded and requests should be retried later.
+// This is used for non-Kubernetes, non-connection transient failures such as HTTP 429 and 5xx responses from
+// OpenBao (excluding endpoints like /sys/health where status codes represent state rather than failure).
+var ErrTransientRemoteOverloaded = errors.New("transient remote overloaded")
+
 // ErrTransientKubernetesAPI indicates a transient Kubernetes API error that should be retried.
 // This includes rate limiting, temporary server errors, and network issues.
 var ErrTransientKubernetesAPI = errors.New("transient Kubernetes API error")
@@ -160,6 +165,15 @@ func IsTransientKubernetesAPI(err error) bool {
 	return false
 }
 
+// IsTransientRemoteOverloaded checks if an error indicates a remote service overload condition.
+func IsTransientRemoteOverloaded(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return errors.Is(err, ErrTransientRemoteOverloaded)
+}
+
 // WrapTransientConnection wraps an error as a transient connection error.
 // If the error is already a transient connection error, it is returned as-is.
 func WrapTransientConnection(err error) error {
@@ -172,6 +186,20 @@ func WrapTransientConnection(err error) error {
 	}
 
 	return fmt.Errorf("%w: %w", ErrTransientConnection, err)
+}
+
+// WrapTransientRemoteOverloaded wraps an error as a transient remote overloaded error.
+// If the error is already a transient remote overloaded error, it is returned as-is.
+func WrapTransientRemoteOverloaded(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if IsTransientRemoteOverloaded(err) {
+		return err
+	}
+
+	return fmt.Errorf("%w: %w", ErrTransientRemoteOverloaded, err)
 }
 
 // WrapTransientKubernetesAPI wraps an error as a transient Kubernetes API error.
@@ -208,7 +236,7 @@ func WrapPermanentPrerequisitesMissing(err error) error {
 // IsTransient checks if an error is transient (should be retried).
 // Returns true for transient connection or Kubernetes API errors.
 func IsTransient(err error) bool {
-	return IsTransientConnection(err) || IsTransientKubernetesAPI(err)
+	return IsTransientConnection(err) || IsTransientRemoteOverloaded(err) || IsTransientKubernetesAPI(err)
 }
 
 // IsPermanent checks if an error is permanent (requires user intervention).
@@ -233,6 +261,10 @@ func ShouldRequeue(err error) (bool, time.Duration) {
 		// For transient connection errors, requeue with a short delay
 		if IsTransientConnection(err) {
 			return true, 5 * time.Second
+		}
+		// For remote overloaded errors, requeue with a longer delay to reduce pressure
+		if IsTransientRemoteOverloaded(err) {
+			return true, 15 * time.Second
 		}
 		// For transient Kubernetes API errors, requeue with a short delay
 		if IsTransientKubernetesAPI(err) {

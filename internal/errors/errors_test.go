@@ -185,6 +185,44 @@ func TestIsTransientKubernetesAPI(t *testing.T) {
 	}
 }
 
+func TestIsTransientRemoteOverloaded(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "sentinel error",
+			err:  ErrTransientRemoteOverloaded,
+			want: true,
+		},
+		{
+			name: "wrapped sentinel error",
+			err:  fmt.Errorf("context: %w", ErrTransientRemoteOverloaded),
+			want: true,
+		},
+		{
+			name: "non-transient error",
+			err:  errors.New("invalid configuration"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsTransientRemoteOverloaded(tt.err)
+			if got != tt.want {
+				t.Errorf("IsTransientRemoteOverloaded() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsCRDMissingError(t *testing.T) {
 	tests := []struct {
 		name string
@@ -293,6 +331,55 @@ func TestWrapTransientConnection(t *testing.T) {
 				if !errors.Is(got, ErrTransientConnection) {
 					t.Errorf("WrapTransientConnection() should wrap error with ErrTransientConnection")
 				}
+			}
+		})
+	}
+}
+
+func TestWrapTransientRemoteOverloaded(t *testing.T) {
+	tests := []struct {
+		name            string
+		err             error
+		wantWrapped     bool
+		wantIsTransient bool
+	}{
+		{
+			name:            "nil error",
+			err:             nil,
+			wantWrapped:     false,
+			wantIsTransient: false,
+		},
+		{
+			name:            "already transient remote overloaded error",
+			err:             ErrTransientRemoteOverloaded,
+			wantWrapped:     false,
+			wantIsTransient: true,
+		},
+		{
+			name:            "regular error gets wrapped",
+			err:             errors.New("some error"),
+			wantWrapped:     true,
+			wantIsTransient: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := WrapTransientRemoteOverloaded(tt.err)
+			if tt.err == nil {
+				if got != nil {
+					t.Errorf("WrapTransientRemoteOverloaded() = %v, want nil", got)
+				}
+				return
+			}
+
+			if IsTransientRemoteOverloaded(got) != tt.wantIsTransient {
+				t.Errorf("expected transient=%v, got %v", tt.wantIsTransient, IsTransientRemoteOverloaded(got))
+			}
+
+			isWrapped := errors.Is(got, ErrTransientRemoteOverloaded) && got != ErrTransientRemoteOverloaded
+			if isWrapped != tt.wantWrapped && tt.err != ErrTransientRemoteOverloaded {
+				t.Errorf("expected wrapped=%v, got %v (err=%v)", tt.wantWrapped, isWrapped, got)
 			}
 		})
 	}
