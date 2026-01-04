@@ -21,4 +21,8 @@ type OpenBaoClusterReconciler struct {
 	OIDCJWTKeys       []string
 	AdmissionStatus   *admission.Status
 	Recorder          record.EventRecorder
+	// SingleTenantMode indicates the controller is running in single-tenant mode.
+	// When true, the controller uses Owns() watches for event-driven reconciliation
+	// and caching is enabled for the watched namespace.
+	SingleTenantMode bool
 }

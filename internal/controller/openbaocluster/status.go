@@ -331,7 +331,6 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			clusterMetrics.SetPhase(cluster.Status.Phase)
 
 			// Set basic conditions before requeuing to ensure they're persisted
-			// TODO: Add constants for these reasons
 			now := metav1.Now()
 			availableStatus := metav1.ConditionFalse
 			availableReason := ReasonNotReady

@@ -18,7 +18,7 @@ This document provides a comprehensive overview of the OpenBao Operator's archit
 
     Controller manager, interacting controllers, and state.
 
-    [:material-arrow-down: Jump to Components](#11-system-components)
+    [:material-arrow-down: Jump to Components](#12-system-components)
 
 - :material-shield-key: **Security**
 
@@ -42,7 +42,14 @@ This document provides a comprehensive overview of the OpenBao Operator's archit
 
 The OpenBao Operator adopts a **Supervisor Pattern**. It delegates data consistency to the OpenBao binary while managing the external ecosystem: PKI lifecycle, Infrastructure state, and Safe Version Upgrades.
 
-### 1.1 System Components
+### 1.1 Tenancy Models
+
+The operator supports two architectural modes:
+
+1. **Multi-Tenant (Default)**: Uses a **Provisioner** controller to manage RBAC and namespaces dynamically. Adopts a Zero-Trust model where the Controller has limited permissions.
+2. **Single-Tenant**: Designed for direct embedding. The **Provisioner** is disabled, and the Controller manages the target namespace directly with full permissions.
+
+### 1.2 System Components
 
 ```mermaid
 graph TD
@@ -68,7 +75,7 @@ graph TD
     Sentinel[Sentinel Deployment] -.->|Drift Detect| API
 ```
 
-### 1.2 Component Interaction
+### 1.3 Component Interaction
 
 ```mermaid
 sequenceDiagram
@@ -94,7 +101,7 @@ sequenceDiagram
     end
 ```
 
-### 1.3 Assumptions
+### 1.4 Assumptions
 
 !!! note "Core Assumptions"
     - **Storage**: Default StorageClass available.

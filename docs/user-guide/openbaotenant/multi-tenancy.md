@@ -2,6 +2,9 @@
 
 Running multiple `OpenBaoCluster` resources in a shared Kubernetes cluster requires strict isolation layers. This guide outlines how to secure tenants using RBAC, Network Policies, and Resource Quotas.
 
+!!! note "Architecture Compatibility"
+    This guide applies to the default **Multi-Tenant** architecture. For Single-Tenant deployments, the controller manages the namespace directly without these isolation layers. See [Single-Tenant Mode](../operator/single-tenant-mode.md).
+
 ## Isolation Model
 
 The Operator facilitates a **Zero Trust** model where each tenant is isolated by default.

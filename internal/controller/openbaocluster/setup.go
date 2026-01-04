@@ -5,6 +5,9 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -21,15 +24,96 @@ import (
 // SetupWithManager sets up the OpenBaoCluster controllers with the Manager.
 // It registers three controller-runtime controllers that watch OpenBaoCluster:
 // workload (certs/infra/init), adminops (upgrade/backup), and status (finalizers/conditions).
+//
+// In single-tenant mode, the controller uses Owns() watches for event-driven reconciliation.
+// In multi-tenant mode, the controller uses polling-based reconciliation to avoid requiring
+// cluster-wide list/watch permissions.
 func (r *OpenBaoClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// SECURITY: To preserve the zero-trust model, the controller does not
-	// register ownership watches (Owns) for child resources like StatefulSets,
-	// Services, ConfigMaps, Jobs, Secrets, ServiceAccounts, or Ingresses. Ownership
-	// watches require cluster-wide list/watch permissions for those resource
-	// types, which conflicts with the design where the controller only has
-	// namespace-scoped permissions via tenant Roles. Instead, the controller
-	// reconciles child resources when the OpenBaoCluster itself changes or via
-	// explicit requeues in the reconciliation logic.
+	if r.SingleTenantMode {
+		return r.setupSingleTenantMode(mgr)
+	}
+	return r.setupMultiTenantMode(mgr)
+}
+
+// setupSingleTenantMode configures the controller for single-tenant mode.
+// This mode uses Owns() watches for event-driven reconciliation, providing
+// immediate reaction to child resource changes (StatefulSet, Service, etc.).
+// This requires list/watch permissions in the watched namespace.
+func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error {
+	sharedOptions := controller.Options{
+		RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
+			&workqueue.TypedBucketRateLimiter[ctrl.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		),
+	}
+
+	// Workload controller with Owns() watches for event-driven reconciliation
+	if err := ctrl.NewControllerManagedBy(mgr).
+		For(&openbaov1alpha1.OpenBaoCluster{}).
+		Owns(&appsv1.StatefulSet{}).
+		Owns(&corev1.Service{}).
+		Owns(&corev1.ConfigMap{}).
+		Owns(&corev1.Secret{}).
+		Owns(&batchv1.Job{}).
+		Owns(&corev1.ServiceAccount{}).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 2,
+			RateLimiter:             sharedOptions.RateLimiter,
+		}).
+		Named(constants.ControllerNameOpenBaoClusterWorkload).
+		Complete(&openBaoClusterWorkloadReconciler{parent: r}); err != nil {
+		return err
+	}
+
+	// AdminOps controller for upgrades/backups
+	if err := ctrl.NewControllerManagedBy(mgr).
+		For(&openbaov1alpha1.OpenBaoCluster{}).
+		WithEventFilter(controllerutil.OpenBaoClusterPredicateWithOptions(controllerutil.OpenBaoClusterPredicateOptions{
+			ReconcileOnUpgradeStatus: true,
+			ReconcileOnBackupStatus:  true,
+		})).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 1,
+			RateLimiter:             sharedOptions.RateLimiter,
+		}).
+		Named(constants.ControllerNameOpenBaoClusterAdminOps).
+		Complete(&openBaoClusterAdminOpsReconciler{parent: r}); err != nil {
+		return err
+	}
+
+	// Status controller for finalizer and condition aggregation
+	if err := ctrl.NewControllerManagedBy(mgr).
+		For(&openbaov1alpha1.OpenBaoCluster{}).
+		WithEventFilter(controllerutil.OpenBaoClusterPredicateWithOptions(controllerutil.OpenBaoClusterPredicateOptions{
+			ReconcileOnUpgradeStatus:   true,
+			ReconcileOnBackupStatus:    true,
+			ReconcileOnBlueGreenStatus: true,
+			ReconcileOnBreakGlass:      true,
+			ReconcileOnWorkloadError:   true,
+			ReconcileOnAdminOpsError:   true,
+		})).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 1,
+			RateLimiter:             sharedOptions.RateLimiter,
+		}).
+		Named(constants.ControllerNameOpenBaoClusterStatus).
+		Complete(&openBaoClusterStatusReconciler{parent: r}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setupMultiTenantMode configures the controller for multi-tenant mode.
+// SECURITY: To preserve the zero-trust model, the controller does not
+// register ownership watches (Owns) for child resources like StatefulSets,
+// Services, ConfigMaps, Jobs, Secrets, ServiceAccounts, or Ingresses. Ownership
+// watches require cluster-wide list/watch permissions for those resource
+// types, which conflicts with the design where the controller only has
+// namespace-scoped permissions via tenant Roles. Instead, the controller
+// reconciles child resources when the OpenBaoCluster itself changes or via
+// explicit requeues in the reconciliation logic.
+func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error {
 	sentinelAwareHandler := handler.TypedFuncs[client.Object, ctrl.Request]{
 		CreateFunc: func(ctx context.Context, evt event.TypedCreateEvent[client.Object], q workqueue.TypedRateLimitingInterface[ctrl.Request]) {
 			if evt.Object == nil {

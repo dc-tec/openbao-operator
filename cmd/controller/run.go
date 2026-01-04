@@ -38,6 +38,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -145,73 +146,95 @@ func Run(args []string) {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
-	// SECURITY: Disable cache for resources that the controller watches but only has
-	// namespace-scoped permissions for. The controller uses namespace-scoped permissions
-	// via tenant Roles, so it does not have cluster-wide list/watch permissions required
-	// for cache sync. Disabling cache prevents errors during manager startup and ensures
-	// the controller uses direct API calls (GET) for these resources instead of requiring
-	// cluster-wide list/watch permissions.
-	//
-	// Resources disabled:
-	// - Secrets: Prevents secret enumeration attacks (only 'get' permission granted)
-	// - Jobs: Controller manages Jobs but only has namespace-scoped permissions
-	// - StatefulSets: Controller manages StatefulSets but only has namespace-scoped permissions
-	// - Services: Controller manages Services but only has namespace-scoped permissions
-	// - ConfigMaps: Controller manages ConfigMaps but only has namespace-scoped permissions
-	// - Ingress: Controller manages Ingress but only has namespace-scoped permissions
-	// - NetworkPolicy: Controller manages NetworkPolicy but only has namespace-scoped permissions
-	// - Roles/RoleBindings: Controller manages Roles/RoleBindings for OpenBao pod discovery but only
-	//   has namespace-scoped permissions via tenant Roles
-	// - ServiceAccounts: Controller manages ServiceAccounts for OpenBao clusters but only has
-	//   namespace-scoped permissions via tenant Roles
-	// - Pods: Controller reads Pods for health checks and leader detection but only has
-	//   namespace-scoped permissions via tenant Roles
-	// - PersistentVolumeClaims: Controller manages PVCs via StatefulSet volume claim templates but
-	//   only has namespace-scoped permissions via tenant Roles
-	// - Endpoints/EndpointSlices: Controller reads Endpoints/EndpointSlices for service discovery
-	//   but only has namespace-scoped permissions via tenant Roles
-	// - Gateway HTTPRoute/TLSRoute/BackendTLSPolicy: Controller manages Gateway routes but only
-	//   has namespace-scoped permissions via tenant Roles. Using the uncached client avoids
-	//   requiring cluster-wide list/watch on Gateway API resources.
-	disableForCache := []client.Object{
-		&corev1.Secret{},
-		&batchv1.Job{},
-		&appsv1.StatefulSet{},
-		&corev1.Service{},
-		&corev1.ConfigMap{},
-		// The controller must not list/watch namespaces. It only operates within
-		// namespaces where tenant Roles grant scoped permissions.
-		&corev1.Namespace{},
-		&networkingv1.Ingress{},
-		&networkingv1.NetworkPolicy{},
-		&rbacv1.Role{},
-		&rbacv1.RoleBinding{},
-		&corev1.ServiceAccount{},
-		&corev1.Pod{},
-		&corev1.PersistentVolumeClaim{},
-		&discoveryv1.EndpointSlice{},
-		&gatewayv1.HTTPRoute{},
-		&gatewayv1alpha2.TLSRoute{},
-		&gatewayv1.BackendTLSPolicy{},
+	// Detect single-tenant mode via WATCH_NAMESPACE environment variable.
+	// When set, the controller operates in single-tenant mode with:
+	// - Namespace-scoped caching (higher performance)
+	// - Event-driven reconciliation via Owns() watches
+	// - Simplified RBAC (no Provisioner required)
+	watchNamespace := os.Getenv("WATCH_NAMESPACE")
+	singleTenantMode := watchNamespace != ""
+
+	if singleTenantMode {
+		setupLog.Info("Running in single-tenant mode",
+			"watch_namespace", watchNamespace,
+			"caching", "enabled",
+			"reconciliation", "event-driven",
+		)
+	} else {
+		setupLog.Info("Running in multi-tenant mode",
+			"caching", "disabled",
+			"reconciliation", "polling-based",
+		)
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                metricsServerOptions,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "openbao-controller-leader.openbao.org",
-		// Disable cache for resources that the controller watches but only has namespace-scoped
-		// permissions for. This prevents secret enumeration attacks and eliminates cache sync
-		// errors when cluster-wide permissions aren't available. The operator will make direct
-		// API calls (GET) for these resources instead of using the cached client, which requires
-		// cluster-wide list/watch permissions.
-		Client: client.Options{
+	// Configure manager options based on tenancy mode
+	var mgrOpts ctrl.Options
+	mgrOpts.Scheme = scheme
+	mgrOpts.Metrics = metricsServerOptions
+	mgrOpts.HealthProbeBindAddress = probeAddr
+	mgrOpts.LeaderElection = enableLeaderElection
+	mgrOpts.LeaderElectionID = "openbao-controller-leader.openbao.org"
+
+	if singleTenantMode {
+		// SINGLE-TENANT MODE: Enable namespace-scoped caching
+		// The controller has full RBAC permissions in the watched namespace,
+		// so we can use informers/cache for high-performance reconciliation.
+		mgrOpts.Cache = cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				watchNamespace: {},
+			},
+		}
+		// No need to disable cache for any resources - we have full access
+	} else {
+		// MULTI-TENANT MODE: Disable cache for namespace-scoped resources
+		// SECURITY: The controller uses namespace-scoped permissions via tenant Roles,
+		// so it does not have cluster-wide list/watch permissions required for cache sync.
+		// Disabling cache prevents errors during manager startup and ensures the controller
+		// uses direct API calls (GET) for these resources instead.
+		//
+		// Resources disabled:
+		// - Secrets: Prevents secret enumeration attacks (only 'get' permission granted)
+		// - Jobs: Controller manages Jobs but only has namespace-scoped permissions
+		// - StatefulSets: Controller manages StatefulSets but only has namespace-scoped permissions
+		// - Services: Controller manages Services but only has namespace-scoped permissions
+		// - ConfigMaps: Controller manages ConfigMaps but only has namespace-scoped permissions
+		// - Ingress: Controller manages Ingress but only has namespace-scoped permissions
+		// - NetworkPolicy: Controller manages NetworkPolicy but only has namespace-scoped permissions
+		// - Roles/RoleBindings: Controller manages Roles/RoleBindings for OpenBao pod discovery
+		// - ServiceAccounts: Controller manages ServiceAccounts for OpenBao clusters
+		// - Pods: Controller reads Pods for health checks and leader detection
+		// - PersistentVolumeClaims: Controller manages PVCs via StatefulSet volume claim templates
+		// - Endpoints/EndpointSlices: Controller reads for service discovery
+		// - Gateway HTTPRoute/TLSRoute/BackendTLSPolicy: Controller manages Gateway routes
+		disableForCache := []client.Object{
+			&corev1.Secret{},
+			&batchv1.Job{},
+			&appsv1.StatefulSet{},
+			&corev1.Service{},
+			&corev1.ConfigMap{},
+			// The controller must not list/watch namespaces. It only operates within
+			// namespaces where tenant Roles grant scoped permissions.
+			&corev1.Namespace{},
+			&networkingv1.Ingress{},
+			&networkingv1.NetworkPolicy{},
+			&rbacv1.Role{},
+			&rbacv1.RoleBinding{},
+			&corev1.ServiceAccount{},
+			&corev1.Pod{},
+			&corev1.PersistentVolumeClaim{},
+			&discoveryv1.EndpointSlice{},
+			&gatewayv1.HTTPRoute{},
+			&gatewayv1alpha2.TLSRoute{},
+			&gatewayv1.BackendTLSPolicy{},
+		}
+		mgrOpts.Client = client.Options{
 			Cache: &client.CacheOptions{
 				DisableFor: disableForCache,
 			},
-		},
-	})
+		}
+	}
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
@@ -303,6 +326,7 @@ func Run(args []string) {
 		OIDCJWTKeys:       oidcConfig.JWKSKeys,
 		AdmissionStatus:   &admissionStatus,
 		Recorder:          mgr.GetEventRecorderFor(constants.ControllerNameOpenBaoCluster),
+		SingleTenantMode:  singleTenantMode,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
 		os.Exit(1)

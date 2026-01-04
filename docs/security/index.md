@@ -16,6 +16,11 @@ The Operator enforces a "Secure by Default" posture:
 - **Least-Privilege RBAC:** Split-controller design with minimal permissions
 - **Supply Chain Security:** Optional Cosign image verification
 
+### Tenancy Security Models
+
+- **Multi-Tenant (Zero Trust):** The Controller is untrusted. It cannot read Secrets and must request permissions via the Provisioner. This creates a hard security boundary between tenants.
+- **Single-Tenant (Direct Admin):** The Controller is fully trusted within its namespace. It has `ClusterRole` permissions bound to that specific namespace, simplifying operations but removing the Zero Trust isolation.
+
 ## Security Topics
 
 <div class="grid cards" markdown>

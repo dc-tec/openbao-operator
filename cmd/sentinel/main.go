@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"hash/fnv"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -404,7 +405,13 @@ func computeDeterministicDebounceJitter(clusterName string, jitterRangeSeconds i
 	_, _ = h.Write([]byte(clusterName))
 
 	sum := h.Sum64()
-	return time.Duration(sum%uint64(jitterRangeSeconds)) * time.Second
+	jitterSeconds := sum % uint64(jitterRangeSeconds)
+	// time.Duration is int64 underneath; clamp to avoid overflow on conversion.
+	if jitterSeconds > uint64(math.MaxInt64) {
+		jitterSeconds = uint64(math.MaxInt64)
+	}
+	// #nosec G115 -- jitterSeconds is clamped to MaxInt64, so the conversion is safe.
+	return time.Duration(int64(jitterSeconds)) * time.Second
 }
 
 // loadSentinelConfig loads configuration from environment variables.
