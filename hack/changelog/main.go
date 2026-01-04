@@ -86,6 +86,7 @@ func main() {
 		}
 	}
 
+	// #nosec G306 -- CHANGELOG.md is a documentation file that should be readable by others
 	if err := os.WriteFile(outPath, buf.Bytes(), 0o644); err != nil {
 		fatalf("write %s: %v", outPath, err)
 	}
