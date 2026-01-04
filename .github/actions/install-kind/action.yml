@@ -21,6 +21,8 @@ runs:
 
         version="${{ inputs.kind-version }}"
         install_dir="${{ inputs.install-dir }}"
+        # Expand ~ to home directory
+        install_dir="${install_dir/#\~/$HOME}"
 
         arch="$(go env GOARCH)"
         bin="kind-linux-${arch}"
@@ -32,5 +34,10 @@ runs:
         install -d "${install_dir}"
         install -m 0755 "${bin}" "${install_dir}/kind"
         echo "${install_dir}" >> "${GITHUB_PATH}"
+
+        # Set KIND environment variable to absolute path to avoid exec.ErrDot issues
+        # when PATH contains "." entries
+        kind_path="$(realpath "${install_dir}/kind")"
+        echo "KIND=${kind_path}" >> "${GITHUB_ENV}"
 
         "${install_dir}/kind" version

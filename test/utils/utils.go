@@ -19,9 +19,11 @@ package utils
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2" // nolint:revive,staticcheck
@@ -39,6 +41,91 @@ func warnError(err error) {
 	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
 }
 
+// lookPathNoDot behaves like exec.LookPath, but ignores empty/ "." PATH entries.
+//
+// This avoids Go's security behavior (exec.ErrDot) where running binaries found via the
+// current directory is refused when PATH contains "."/empty segments.
+func lookPathNoDot(file string) (string, error) {
+	if strings.ContainsRune(file, os.PathSeparator) {
+		return file, nil
+	}
+
+	pathEnv := os.Getenv("PATH")
+	for _, dir := range filepath.SplitList(pathEnv) {
+		if dir == "" || dir == "." {
+			continue
+		}
+		// Expand ~ to home directory if present
+		if strings.HasPrefix(dir, "~/") {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				continue
+			}
+			dir = filepath.Join(home, dir[2:])
+		}
+		candidate := filepath.Join(dir, file)
+		st, err := os.Stat(candidate)
+		if err != nil || st.IsDir() {
+			continue
+		}
+		// Any executable bit.
+		if st.Mode()&0o111 != 0 {
+			// Return absolute path to avoid any relative path issues
+			abs, err := filepath.Abs(candidate)
+			if err == nil {
+				return abs, nil
+			}
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("executable %q not found in PATH (ignoring '.'/empty entries)", file)
+}
+
+func resolveCmdPath(cmd *exec.Cmd) error {
+	// If the caller already provided a path (e.g. ./tool or /abs/tool), keep it.
+	if cmd.Path == "" || strings.ContainsRune(cmd.Path, os.PathSeparator) {
+		return nil
+	}
+
+	p, err := lookPathNoDot(cmd.Path)
+	if err == nil {
+		cmd.Path = p
+		return nil
+	}
+
+	// Best-effort fallback to exec.LookPath (for odd environments).
+	// If LookPath finds the binary via "." in PATH, we get exec.ErrDot.
+	// In that case, try to find it in PATH without "." entries by manually searching.
+	lp, lpErr := exec.LookPath(cmd.Path)
+	if lpErr == nil {
+		// If LookPath returned a relative path, make it explicit/absolute.
+		abs, absErr := filepath.Abs(lp)
+		if absErr == nil {
+			cmd.Path = abs
+		} else {
+			cmd.Path = lp
+		}
+		return nil
+	}
+	if errors.Is(lpErr, exec.ErrDot) {
+		// exec.LookPath found the binary in "." but Go refuses to run it.
+		// Try harder to find it in PATH without "." entries.
+		// This can happen in CI if PATH contains "." and there's a file with the same name.
+		if p, retryErr := lookPathNoDot(cmd.Path); retryErr == nil {
+			cmd.Path = p
+			return nil
+		}
+		return fmt.Errorf(
+			"refusing to run %q found via current directory; "+
+				"fix PATH (remove '.'/empty entries) or set an explicit tool path (e.g. KIND=/abs/path/to/kind): %w",
+			cmd.Path, lpErr)
+	}
+
+	// Preserve original error message context.
+	return err
+}
+
 // Run executes the provided command within this context
 func Run(cmd *exec.Cmd) (string, error) {
 	dir, _ := GetProjectDir()
@@ -49,6 +136,9 @@ func Run(cmd *exec.Cmd) (string, error) {
 	}
 
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
+	if err := resolveCmdPath(cmd); err != nil {
+		return "", err
+	}
 	command := strings.Join(cmd.Args, " ")
 	_, _ = fmt.Fprintf(GinkgoWriter, "running: %q\n", command)
 	output, err := cmd.CombinedOutput()
