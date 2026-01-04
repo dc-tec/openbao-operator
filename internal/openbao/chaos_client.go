@@ -39,7 +39,9 @@ func NewChaosClient(inner ClusterActions, cfg ChaosConfig) *ChaosClient {
 	return &ChaosClient{
 		inner: inner,
 		cfg:   cfg,
-		rng:   rand.New(rand.NewSource(seed)),
+		// #nosec G404 -- This RNG is for deterministic chaos injection in unit/integration tests,
+		// not for security-sensitive randomness.
+		rng: rand.New(rand.NewSource(seed)),
 	}
 }
 
