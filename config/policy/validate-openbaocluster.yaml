@@ -13,8 +13,13 @@ spec:
   variables:
     - name: has_backup
       expression: has(object.spec.backup)
+    - name: has_pre_upgrade_snapshot
+      expression: has(object.spec.upgrade) && object.spec.upgrade.preUpgradeSnapshot == true
+    - name: has_bluegreen_pre_upgrade_snapshot
+      expression: has(object.spec.upgrade) && has(object.spec.upgrade.blueGreen) && object.spec.upgrade.blueGreen.preUpgradeSnapshot == true
   validations:
     - expression: >-
+        !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||
         (object.spec.tls.mode in ["External", "ACME"] &&
           has(object.spec.unseal) &&
@@ -32,8 +37,9 @@ spec:
     - expression: >-
         !has(object.spec.selfInit) ||
         object.spec.selfInit.enabled == false ||
+        (has(object.spec.selfInit.bootstrapJWTAuth) && object.spec.selfInit.bootstrapJWTAuth == true) ||
         (has(object.spec.selfInit.requests) && size(object.spec.selfInit.requests) > 0)
-      message: spec.selfInit.requests is required and must not be empty when spec.selfInit.enabled is true.
+      message: spec.selfInit.requests is required and must not be empty when spec.selfInit.enabled is true unless spec.selfInit.bootstrapJWTAuth is true.
     - expression: >-
         !has(object.spec.selfInit) ||
         object.spec.selfInit.enabled == false ||
@@ -56,6 +62,14 @@ spec:
           (object.spec.backup.target.roleArn != "" || has(object.spec.backup.target.credentialsSecretRef)) &&
           object.spec.backup.schedule.matches("^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$"))
       message: spec.backup requires schedule, executorImage, OpenBao auth (jwtAuthRole or tokenSecretRef), storage auth (target.roleArn or target.credentialsSecretRef), and a 5-field cron expression.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !(variables.has_backup || variables.has_pre_upgrade_snapshot || variables.has_bluegreen_pre_upgrade_snapshot) ||
+        (has(object.spec.network) &&
+          has(object.spec.network.egressRules) &&
+          size(object.spec.network.egressRules) > 0)
+      message: Hardened profile requires non-empty spec.network.egressRules when backups or pre-upgrade snapshots are enabled.
     # SSRF Protection: Block localhost endpoints (all profiles - localhost is never a valid backup target)
     - expression: >-
         !variables.has_backup ||
@@ -76,6 +90,7 @@ spec:
       message: "Backup endpoint cannot point to link-local addresses (SSRF protection against cloud metadata services)."
     # SSRF Protection: Require HTTPS for Hardened profile
     - expression: >-
+        !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||
         !variables.has_backup ||
         !has(object.spec.backup.target.endpoint) ||
@@ -83,4 +98,3 @@ spec:
         object.spec.backup.target.endpoint.startsWith("https://") ||
         object.spec.backup.target.endpoint.startsWith("s3://")
       message: "Backup endpoint must use HTTPS or S3 scheme in Hardened profile."
-

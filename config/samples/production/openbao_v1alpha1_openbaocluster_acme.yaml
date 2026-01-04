@@ -46,6 +46,16 @@ spec:
   storage:
     size: "10Gi"
   deletionPolicy: Retain
+  # Hardened profile note: external dependencies (ACME directory, KMS, object storage, etc.)
+  # require explicit egress rules. Replace 0.0.0.0/0 with CIDR(s) for your endpoints.
+  network:
+    egressRules:
+      - to:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+        ports:
+          - protocol: TCP
+            port: 443
   # Structured configuration
   configuration:
     # Log level

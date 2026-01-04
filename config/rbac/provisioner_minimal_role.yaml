@@ -68,6 +68,17 @@ rules:
       - update
       - patch
 
+  # 4b. OpenBaoCluster read-only access
+  # Required for the tenant secrets RBAC sync controller to build per-namespace Secret allowlists.
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    verbs:
+      - get
+      - list
+      - watch
+
   # 5. RBAC Management
   # The Provisioner needs delete permission to clean up tenant Roles and RoleBindings
   # when OpenBaoTenant resources are deleted. Create/update operations use impersonation

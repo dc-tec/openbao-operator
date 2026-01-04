@@ -29,21 +29,19 @@ metadata:
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
 rules:
-  # Permission to create Roles and RoleBindings (required to grant permissions)
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
       - roles
       - rolebindings
     verbs:
-      - delete
       - create
+      - delete
       - get
       - list
       - patch
       - update
       - watch
-  # Tenant permissions that can be granted (matches GenerateTenantRole)
   - apiGroups:
       - openbao.org
     resources:
@@ -76,6 +74,17 @@ rules:
       - apps
     resources:
       - statefulsets
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - apps
+    resources:
       - deployments
     verbs:
       - create
@@ -91,7 +100,6 @@ rules:
       - services
       - configmaps
       - serviceaccounts
-      - events
     verbs:
       - create
       - delete
@@ -103,14 +111,10 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - secrets
+      - events
     verbs:
       - create
-      - delete
-      - get
       - patch
-      - update
-      - watch
   - apiGroups:
       - ""
     resources:
@@ -118,9 +122,9 @@ rules:
     verbs:
       - get
       - list
-      - patch
-      - update
       - watch
+      - update
+      - patch
       - delete
   - apiGroups:
       - ""
@@ -146,7 +150,6 @@ rules:
       - patch
       - update
       - watch
-  # PodDisruptionBudgets for StatefulSet protection during disruptions
   - apiGroups:
       - policy
     resources:
@@ -202,3 +205,19 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - delete
+      - get
+      - patch
+      - update

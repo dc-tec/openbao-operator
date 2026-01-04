@@ -8,5 +8,3 @@ spec:
   policyName: openbao-operator-openbao-restrict-sentinel-mutations
   validationActions:
     - Deny
-
-

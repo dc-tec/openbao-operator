@@ -40,6 +40,16 @@ spec:
   storage:
     size: "10Gi"
   deletionPolicy: Retain
+  # Hardened profile note: external dependencies (KMS, object storage, etc.) require explicit
+  # egress rules. Replace 0.0.0.0/0 with CIDR(s) for your endpoints, or use in-cluster selectors.
+  network:
+    egressRules:
+      - to:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+        ports:
+          - protocol: TCP
+            port: 443
   # Structured configuration for production use
   configuration:
     # Log level for production (warn is less verbose than debug)

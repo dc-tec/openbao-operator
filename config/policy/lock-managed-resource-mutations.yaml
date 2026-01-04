@@ -57,10 +57,20 @@ spec:
       expression: >-
         request.userInfo.username ==
         "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
+    - name: is_kube_controller_manager
+      expression: >-
+        request.userInfo.username == "system:kube-controller-manager" ||
+        request.userInfo.username == "system:serviceaccount:kube-system:kube-controller-manager"
+    - name: is_system_controller
+      expression: >-
+        request.userInfo.username.startsWith("system:controller:")
     - name: is_kube_system_controller
       expression: >-
         request.userInfo.groups.exists(g, g == "system:serviceaccounts:kube-system") ||
         request.userInfo.username.startsWith("system:serviceaccount:kube-system:")
+    - name: is_endpoints_controller_request
+      expression: >-
+        request.resource.resource in ["endpoints", "endpointslices"]
     - name: is_cert_manager
       expression: >-
         request.userInfo.username.startsWith("system:serviceaccount:cert-manager:")
@@ -115,6 +125,20 @@ spec:
               ] || (k in object.metadata.labels && object.metadata.labels[k] == v))
           )
         )
+    - name: is_kube_system_pod_finalizer_update
+      expression: >-
+        variables.is_pod_request &&
+        request.operation == "UPDATE" &&
+        variables.is_kube_system_controller &&
+        object.spec == oldObject.spec &&
+        (has(object.metadata.labels) == has(oldObject.metadata.labels) &&
+          (!has(object.metadata.labels) || object.metadata.labels == oldObject.metadata.labels)) &&
+        (has(object.metadata.annotations) == has(oldObject.metadata.annotations) &&
+          (!has(object.metadata.annotations) || object.metadata.annotations == oldObject.metadata.annotations)) &&
+        (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+          (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+        (has(object.metadata.finalizers) || has(oldObject.metadata.finalizers)) &&
+        (!has(object.metadata.finalizers) || !has(oldObject.metadata.finalizers) || object.metadata.finalizers != oldObject.metadata.finalizers)
     - name: maintenance_enabled
       expression: >-
         request.operation == "DELETE" ?
@@ -140,9 +164,17 @@ spec:
     - expression: >-
         !variables.is_managed ||
         variables.is_operator_controller ||
+        (variables.is_kube_controller_manager && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
+        (variables.is_system_controller && request.operation == "DELETE") ||
+        (variables.is_system_controller && request.resource.resource == "pods") ||
+        (variables.is_system_controller && variables.is_endpoints_controller_request) ||
         variables.is_kube_system_controller ||
+        (variables.is_kube_system_controller && request.operation == "DELETE") ||
+        (variables.is_kube_system_controller && request.resource.resource == "pods" && (request.operation == "CREATE" || request.operation == "DELETE")) ||
+        (variables.is_kube_system_controller && variables.is_endpoints_controller_request) ||
         variables.is_cert_manager ||
         (variables.is_pod_request && variables.is_kubelet_node && request.operation == "DELETE") ||
         variables.is_service_registration_label_update ||
+        variables.is_kube_system_pod_finalizer_update ||
         (variables.maintenance_enabled && variables.is_break_glass_admin)
       message: Direct modification of OpenBao-managed resources is prohibited; modify the parent OpenBaoCluster/OpenBaoTenant instead.
