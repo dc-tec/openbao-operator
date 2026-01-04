@@ -93,6 +93,24 @@ func desiredRules() ([]rbacv1.PolicyRule, error) {
 		rules = append(rules, rule)
 	}
 
+	// For the delegate template, we need to include maximum secrets permissions
+	// even when no specific secret names are provided. This allows the delegate
+	// to grant any secrets permissions that tenants might need.
+	// Note: GenerateTenantSecretsWriterRole returns empty rules when secretNames is nil,
+	// so we need to explicitly add the maximum permissions here.
+	if len(tenantSecretsWriterRole.Rules) == 0 {
+		// Add maximum secrets write permissions (create, delete, get, patch, update)
+		// without resourceNames restrictions for the delegate template.
+		maxSecretsWriteRule := rbacv1.PolicyRule{
+			APIGroups: []string{""},
+			Resources: []string{"secrets"},
+			Verbs:     []string{"create", "delete", "get", "patch", "update"},
+		}
+		if !anyRuleCovers(rules, maxSecretsWriteRule) {
+			rules = append(rules, maxSecretsWriteRule)
+		}
+	}
+
 	for _, rule := range sentinelRole.Rules {
 		if anyRuleCovers(rules, rule) {
 			continue
