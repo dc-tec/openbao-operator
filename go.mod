@@ -16,7 +16,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sigstore/cosign/v3 v3.0.3
-	github.com/sigstore/sigstore-go v1.1.4-0.20251201121426-2cdedea80894
+	github.com/sigstore/sigstore-go v1.1.4
 	github.com/stretchr/testify v1.11.1
 	github.com/zclconf/go-cty v1.17.0
 	golang.org/x/time v0.14.0
