@@ -19,6 +19,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 )
 
 const (
@@ -122,12 +123,12 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 	}
 
 	// Job exists - check its status
-	if job.Status.Succeeded > 0 {
+	if kube.JobSucceeded(job) {
 		logger.Info("Backup Job completed successfully", "job", jobName)
 		return false, nil // Job completed, backup manager will process result
 	}
 
-	if job.Status.Failed > 0 {
+	if kube.JobFailed(job) {
 		// Check if we should retry (e.g., if it's a transient error)
 		// For now, we'll let the Job be cleaned up and a new one created on next reconcile
 		logger.Info("Backup Job failed", "job", jobName, "failed", job.Status.Failed)
@@ -163,7 +164,7 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 	}
 
 	// Check Job status
-	if job.Status.Succeeded > 0 {
+	if kube.JobSucceeded(job) {
 		// Job succeeded - extract result from Job annotations
 		// The backup key is stored in the Job annotation by the manager when creating the job
 		backupKey := job.Annotations["openbao.org/backup-key"]
@@ -180,7 +181,7 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		return true, nil // Status was updated - request requeue to persist
 	}
 
-	if job.Status.Failed > 0 {
+	if kube.JobFailed(job) {
 		// Job failed
 		cluster.Status.Backup.ConsecutiveFailures++
 		cluster.Status.Backup.LastFailureReason = fmt.Sprintf("Backup Job %s failed", jobName)

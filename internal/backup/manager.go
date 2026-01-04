@@ -14,18 +14,19 @@ import (
 	"github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/storage"
 )
 
@@ -51,11 +52,14 @@ func NewManager(c client.Client, scheme *runtime.Scheme) *Manager {
 
 // Reconcile ensures backup configuration and status are aligned with the desired state for the given OpenBaoCluster.
 // It checks if a backup is due, executes it if needed, and applies retention policies.
-// Returns (shouldRequeue, error) where shouldRequeue indicates if reconciliation should be requeued immediately.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	// Skip if backup is not configured
 	if cluster.Spec.Backup == nil {
-		return false, nil
+		return recon.Result{}, nil
+	}
+
+	if err := validateBackupEgressConfiguration(cluster); err != nil {
+		return recon.Result{}, err
 	}
 
 	logger = logger.WithValues("component", constants.ComponentBackup)
@@ -67,7 +71,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// and starving the restore controller.
 	restoreInProgress, err := m.hasInProgressRestore(ctx, logger, cluster)
 	if err != nil {
-		return false, err
+		return recon.Result{}, err
 	}
 	if restoreInProgress {
 		if cluster.Status.OperationLock != nil &&
@@ -75,7 +79,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			cluster.Status.OperationLock.Holder == constants.ControllerNameOpenBaoCluster+"/backup" {
 			hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
 			if err != nil {
-				return false, fmt.Errorf("failed to check for active backup job while restore is in progress: %w", err)
+				return recon.Result{}, fmt.Errorf("failed to check for active backup job while restore is in progress: %w", err)
 			}
 			if !hasActiveJob {
 				if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
@@ -84,17 +88,17 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			}
 		}
 		logger.Info("Restore in progress; skipping backup reconciliation")
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	// Ensure backup ServiceAccount exists (for JWT Auth)
 	if err := m.ensureBackupServiceAccount(ctx, logger, cluster); err != nil {
-		return false, fmt.Errorf("failed to ensure backup ServiceAccount: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to ensure backup ServiceAccount: %w", err)
 	}
 
 	// Ensure backup RBAC exists (for pod listing/leader discovery)
 	if err := m.ensureBackupRBAC(ctx, logger, cluster); err != nil {
-		return false, fmt.Errorf("failed to ensure backup RBAC: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to ensure backup RBAC: %w", err)
 	}
 
 	// Initialize backup status if needed
@@ -105,7 +109,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Parse schedule and set NextScheduledBackup
 	schedule, err := ParseSchedule(cluster.Spec.Backup.Schedule)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse backup schedule: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to parse backup schedule: %w", err)
 	}
 	if cluster.Status.Backup.NextScheduledBackup == nil {
 		next := schedule.Next(now)
@@ -114,9 +118,9 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	// Check for manual backup trigger
-	manualTrigger, scheduledTime, shouldReturn, result, err := m.handleManualTrigger(ctx, logger, cluster, now)
-	if shouldReturn {
-		return result, err
+	manualTrigger, scheduledTime, err := m.handleManualTrigger(ctx, logger, cluster, now)
+	if err != nil {
+		return recon.Result{}, err
 	}
 	if !manualTrigger {
 		scheduledTime = cluster.Status.Backup.NextScheduledBackup.Time
@@ -125,11 +129,21 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Pre-flight checks
 	if err := m.checkPreconditions(ctx, logger, cluster); err != nil {
 		logger.Info("Backup preconditions not met", "reason", err.Error())
-		return false, nil
+		return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
+	}
+
+	// If a Job is already running/pending, poll it to observe completion and release locks promptly.
+	hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
+	if err != nil {
+		return recon.Result{}, fmt.Errorf("failed to check for active backup job: %w", err)
+	}
+	if hasActiveJob {
+		logger.V(1).Info("Backup Job in progress; requeueing to observe completion")
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	// Check if backup is due
-	shouldReturn, result, err = m.checkBackupDue(ctx, logger, cluster, schedule, now, scheduledTime, manualTrigger)
+	shouldReturn, result, err := m.checkBackupDue(ctx, logger, cluster, schedule, now, scheduledTime, manualTrigger)
 	if shouldReturn {
 		return result, err
 	}
@@ -138,20 +152,39 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	return m.executeAndProcessBackup(ctx, logger, cluster, schedule, metrics, now, scheduledTime, manualTrigger)
 }
 
+func validateBackupEgressConfiguration(cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster == nil || cluster.Spec.Backup == nil {
+		return nil
+	}
+
+	if cluster.Spec.Profile != openbaov1alpha1.ProfileHardened {
+		return nil
+	}
+
+	if cluster.Spec.Network != nil && len(cluster.Spec.Network.EgressRules) > 0 {
+		return nil
+	}
+
+	return operatorerrors.WithReason(
+		constants.ReasonNetworkEgressRulesRequired,
+		operatorerrors.WrapPermanentConfig(fmt.Errorf(
+			"hardened profile with backups enabled requires explicit spec.network.egressRules so backup Jobs can reach the object storage endpoint",
+		)),
+	)
+}
+
 // handleManualTrigger checks for and handles manual backup trigger annotation.
-// Returns (manualTrigger, scheduledTime, shouldReturn, result, error).
-//
-//nolint:unparam // result (4th return) is always false but matches interface pattern
+// Returns (manualTrigger, scheduledTime, error).
 func (m *Manager) handleManualTrigger(
 	ctx context.Context,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	now time.Time,
-) (bool, time.Time, bool, bool, error) {
+) (bool, time.Time, error) {
 	triggerAnnotation := constants.AnnotationTriggerBackup
 	val, ok := cluster.Annotations[triggerAnnotation]
 	if !ok || val == "" {
-		return false, time.Time{}, false, false, nil
+		return false, time.Time{}, nil
 	}
 
 	logger.Info("Manual backup trigger detected", "annotation", val)
@@ -159,15 +192,15 @@ func (m *Manager) handleManualTrigger(
 	// Check if there's already a backup job in progress
 	hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
 	if err != nil {
-		return false, time.Time{}, true, false, fmt.Errorf("failed to check for active backup job: %w", err)
+		return false, time.Time{}, fmt.Errorf("failed to check for active backup job: %w", err)
 	}
 	if hasActiveJob {
 		logger.Info("Manual backup triggered but job already in progress, skipping duplicate")
 		m.clearTriggerAnnotation(ctx, logger, cluster, triggerAnnotation)
-		return false, time.Time{}, true, false, nil
+		return false, time.Time{}, nil
 	}
 
-	return true, now, false, false, nil
+	return true, now, nil
 }
 
 // clearTriggerAnnotation removes the manual trigger annotation from the cluster.
@@ -196,9 +229,9 @@ func (m *Manager) checkBackupDue(
 	now time.Time,
 	scheduledTime time.Time,
 	manualTrigger bool,
-) (bool, bool, error) {
+) (bool, recon.Result, error) {
 	if manualTrigger || !now.Before(scheduledTime) {
-		return false, false, nil // Backup is due
+		return false, recon.Result{}, nil // Backup is due
 	}
 
 	timeUntilDue := scheduledTime.Sub(now)
@@ -207,25 +240,21 @@ func (m *Manager) checkBackupDue(
 	// Check for completed jobs
 	statusUpdated, err := m.checkForCompletedJobs(ctx, logger, cluster)
 	if err != nil {
-		return true, false, fmt.Errorf("failed to check for completed backup jobs: %w", err)
+		return true, recon.Result{}, fmt.Errorf("failed to check for completed backup jobs: %w", err)
 	}
 	if statusUpdated {
 		logger.Info("Found completed backup job, requesting requeue to persist status")
-		return true, true, nil
+		if cluster.Status.OperationLock != nil &&
+			cluster.Status.OperationLock.Operation == openbaov1alpha1.ClusterOperationBackup &&
+			cluster.Status.OperationLock.Holder == constants.ControllerNameOpenBaoCluster+"/backup" {
+			if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
+				logger.Error(err, "Failed to release backup operation lock after completed Job processing")
+			}
+		}
+		return true, recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
-	// Determine if requeue is needed based on schedule
-	scheduleInterval, err := GetScheduleInterval(cluster.Spec.Backup.Schedule)
-	if err == nil && timeUntilDue <= scheduleInterval {
-		logger.V(1).Info("Backup due soon, requesting requeue", "timeUntilDue", timeUntilDue)
-		return true, true, nil
-	}
-	if err != nil && timeUntilDue <= 5*time.Minute {
-		logger.V(1).Info("Backup due soon, requesting requeue (fallback)", "timeUntilDue", timeUntilDue)
-		return true, true, nil
-	}
-
-	return true, false, nil
+	return true, recon.Result{RequeueAfter: timeUntilDue}, nil
 }
 
 // executeAndProcessBackup creates/checks the backup job and processes results.
@@ -238,7 +267,7 @@ func (m *Manager) executeAndProcessBackup(
 	now time.Time,
 	scheduledTime time.Time,
 	manualTrigger bool,
-) (bool, error) {
+) (recon.Result, error) {
 	nextScheduled := schedule.Next(scheduledTime)
 	if !nextScheduled.After(now) {
 		nextScheduled = schedule.Next(now)
@@ -259,9 +288,9 @@ func (m *Manager) executeAndProcessBackup(
 	}); err != nil {
 		if errors.Is(err, operationlock.ErrLockHeld) {
 			logger.Info("Backup blocked by operation lock", "error", err.Error())
-			return false, nil
+			return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
 		}
-		return false, fmt.Errorf("failed to acquire backup operation lock: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to acquire backup operation lock: %w", err)
 	}
 
 	// Create or check backup Job
@@ -270,7 +299,7 @@ func (m *Manager) executeAndProcessBackup(
 		if releaseErr := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); releaseErr != nil && !errors.Is(releaseErr, operationlock.ErrLockHeld) {
 			logger.Error(releaseErr, "Failed to release backup operation lock after job ensure failure")
 		}
-		return false, fmt.Errorf("failed to ensure backup Job: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to ensure backup Job: %w", err)
 	}
 
 	// Clear manual trigger annotation after job creation
@@ -283,18 +312,18 @@ func (m *Manager) executeAndProcessBackup(
 	if jobInProgress {
 		_, err := m.processBackupJobResult(ctx, logger, cluster, jobName)
 		if err != nil {
-			return false, fmt.Errorf("failed to process backup Job result: %w", err)
+			return recon.Result{}, fmt.Errorf("failed to process backup Job result: %w", err)
 		}
 		// The OpenBaoCluster controller does not watch Job resources (zero-trust model),
 		// so we must request requeues while a backup Job is running to observe completion
 		// and release the operation lock promptly.
-		return true, nil
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	// Process completed job
 	statusUpdated, err := m.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
-		return false, fmt.Errorf("failed to process backup Job result: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to process backup Job result: %w", err)
 	}
 
 	// Apply retention if backup completed
@@ -312,7 +341,10 @@ func (m *Manager) executeAndProcessBackup(
 		logger.Error(err, "Failed to release backup operation lock after completion")
 	}
 
-	return statusUpdated, nil
+	if statusUpdated {
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+	}
+	return recon.Result{RequeueAfter: time.Until(nextScheduled)}, nil
 }
 
 func (m *Manager) recordBackupAttempt(cluster *openbaov1alpha1.OpenBaoCluster, now time.Time, scheduledTime time.Time, nextScheduled time.Time) {
@@ -559,22 +591,7 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 //
 // fieldOwner identifies the operator as the manager of this resource (used for conflict resolution).
 func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster, fieldOwner string) error {
-	// Set owner reference for garbage collection
-	if err := controllerutil.SetControllerReference(cluster, obj, m.scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference: %w", err)
-	}
-
-	// Use Server-Side Apply with ForceOwnership to ensure the operator manages this resource
-	patchOpts := []client.PatchOption{
-		client.ForceOwnership,
-		client.FieldOwner(fieldOwner),
-	}
-
-	if err := m.client.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
-		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
-	}
-
-	return nil
+	return applyResource(ctx, m.client, m.scheme, obj, cluster, fieldOwner)
 }
 
 // ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs using Server-Side Apply.
@@ -582,89 +599,13 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 // ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs using Server-Side Apply.
 // This ServiceAccount is used for JWT Auth authentication to OpenBao.
 func (m *Manager) ensureBackupServiceAccount(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	saName := backupServiceAccountName(cluster)
-
-	sa := &corev1.ServiceAccount{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ServiceAccount",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      saName,
-			Namespace: cluster.Namespace,
-			Labels:    backupLabels(cluster),
-		},
-	}
-
-	if err := m.applyResource(ctx, sa, cluster, "openbao-operator"); err != nil {
-		return fmt.Errorf("failed to ensure backup ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-	}
-
-	return nil
+	return EnsureBackupServiceAccount(ctx, m.client, m.scheme, cluster)
 }
 
 // ensureBackupRBAC creates a Role and RoleBinding that grants the backup service account
 // permission to list pods in its namespace. This is required for finding the active OpenBao pod.
 func (m *Manager) ensureBackupRBAC(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	saName := backupServiceAccountName(cluster)
-	roleName := saName + "-role"
-	roleBindingName := saName + "-rolebinding"
-	resourceLabels := backupLabels(cluster)
-
-	// Ensure Role exists using SSA
-	role := &rbacv1.Role{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Role",
-			APIVersion: "rbac.authorization.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      roleName,
-			Namespace: cluster.Namespace,
-			Labels:    resourceLabels,
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"get", "list", "watch"},
-			},
-		},
-	}
-
-	if err := m.applyResource(ctx, role, cluster, "openbao-operator"); err != nil {
-		return fmt.Errorf("failed to ensure Role %s/%s: %w", cluster.Namespace, roleName, err)
-	}
-
-	// Ensure RoleBinding exists using SSA
-	roleBinding := &rbacv1.RoleBinding{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "RoleBinding",
-			APIVersion: "rbac.authorization.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      roleBindingName,
-			Namespace: cluster.Namespace,
-			Labels:    resourceLabels,
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "Role",
-			Name:     roleName,
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      saName,
-				Namespace: cluster.Namespace,
-			},
-		},
-	}
-
-	if err := m.applyResource(ctx, roleBinding, cluster, "openbao-operator"); err != nil {
-		return fmt.Errorf("failed to ensure RoleBinding %s/%s: %w", cluster.Namespace, roleBindingName, err)
-	}
-
-	return nil
+	return EnsureBackupRBAC(ctx, m.client, m.scheme, cluster)
 }
 
 // backupLabels returns the labels for backup resources
@@ -706,7 +647,7 @@ func (m *Manager) hasPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
 		// If job hasn't succeeded or failed, it's still running or pending
-		if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
+		if !kube.JobSucceeded(job) && !kube.JobFailed(job) {
 			return true, nil
 		}
 	}
@@ -739,7 +680,7 @@ func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger,
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
 		// Only process jobs that have completed (succeeded or failed)
-		if job.Status.Succeeded > 0 || job.Status.Failed > 0 {
+		if kube.JobSucceeded(job) || kube.JobFailed(job) {
 			logger.Info("Processing completed backup job", "job", job.Name, "succeeded", job.Status.Succeeded, "failed", job.Status.Failed)
 			statusUpdated, err := m.processBackupJobResult(ctx, logger, cluster, job.Name)
 			if err != nil {
@@ -781,7 +722,7 @@ func (m *Manager) hasActiveBackupJob(ctx context.Context, cluster *openbaov1alph
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
 		// If job hasn't succeeded or failed, it's still running or pending
-		if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
+		if !kube.JobSucceeded(job) && !kube.JobFailed(job) {
 			return true, nil
 		}
 	}
