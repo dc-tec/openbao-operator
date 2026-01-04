@@ -17,6 +17,10 @@ const (
 	ReasonUnknown = "Unknown"
 	// ReasonBreakGlassRequired indicates the operator has halted automation and requires manual intervention.
 	ReasonBreakGlassRequired = "BreakGlassRequired"
+
+	// ReasonNetworkEgressRulesRequired indicates the cluster requires explicit NetworkPolicy egress rules
+	// to proceed with an operation (e.g. backup/restore jobs in Hardened profile).
+	ReasonNetworkEgressRulesRequired = "NetworkEgressRulesRequired"
 )
 
 const (
