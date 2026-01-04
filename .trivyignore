@@ -3,12 +3,12 @@
 # This file documents security findings that are intentional and required
 # for the OpenBao Operator architecture.
 
-# Skip misconfig checks for the provisioner delegate template
-# This ClusterRole is a template that defines maximum permissions that can
-# be delegated to tenants. The broad permissions are architecturally required
-# due to Kubernetes RBAC escalation checks. See the security notice in
-# config/rbac/provisioner_delegate_clusterrole.yaml for details.
-config/rbac/provisioner_delegate_clusterrole.yaml
+# NOTE:
+# Trivy ignorefiles are for ignoring rules/IDs (e.g. CVEs, AVD-*, secret detectors).
+# They do NOT reliably support "ignore this file path" across all scanner types.
+#
+# For intentionally-privileged RBAC manifests/templates we use Trivy's
+# --skip-files flags in CI and in `make security-scan` instead.
 
 # Trivy secret scanner false positive: the GCP sample contains a commented example
 # service-account JSON snippet that matches the detector.

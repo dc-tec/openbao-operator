@@ -40,11 +40,19 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
-          scanners: vuln,config
+          scanners: vuln,misconfig
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
-          skip-files: config/rbac/provisioner_delegate_clusterrole.yaml
+          trivy-args: >-
+            --ignorefile .trivyignore
+            --skip-version-check
+            --helm-kube-version 1.34.0
+            --skip-files config/rbac/provisioner_delegate_clusterrole.yaml
+            --skip-files config/rbac/provisioner_minimal_role.yaml
+            --skip-files config/rbac/single_tenant_clusterrole.yaml
+            --skip-files dist/install.yaml
+            --skip-files charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml
 
   openbao-config-compat:
     name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.5.0)

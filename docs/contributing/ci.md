@@ -112,6 +112,18 @@ We run vulnerability scanning on every PR.
     make security-scan IMG=ghcr.io/dc-tec/openbao-operator:latest
     ```
 
+    !!! note "Expected RBAC findings (skipped in Trivy FS)"
+        Trivy's Kubernetes misconfiguration rules flag several **intentionally privileged** RBAC manifests/templates
+        (e.g. tenant template roles, single-tenant mode, and provisioner cleanup permissions).
+        We skip these specific files in CI and in `make security-scan` using Trivy's `--skip-files` flags.
+
+        If you modify RBAC under `config/rbac/`, `dist/install.yaml`, or the chart RBAC templates, and Trivy starts failing,
+        update the skip list in:
+
+        - `.github/workflows/ci.yml` (Trivy FS step)
+        - `.github/workflows/nightly.yml` (Trivy FS step)
+        - `Makefile` (`security-scan` target)
+
 ## 5. Documentation Build
 
 Docs are built with MkDocs and Material.

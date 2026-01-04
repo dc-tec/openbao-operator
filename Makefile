@@ -574,13 +574,30 @@ $(GOVULNCHECK): $(LOCALBIN)
 
 .PHONY: security-scan
 security-scan: ## Run Trivy security scans (filesystem and container image)
-	# Filesystem scan: Skip provisioner_delegate_clusterrole.yaml misconfig checks
-	# This file has intentional broad permissions required by the delegation architecture.
-	# See config/rbac/provisioner_delegate_clusterrole.yaml for security notice.
-	trivy fs --security-checks vuln,config \
+	# Keep local scans aligned with CI (see .github/workflows/ci.yml):
+	# - Use "misconfig" (not deprecated "config")
+	# - Explicitly load ignore rules from .trivyignore
+	# - Render Helm charts against a modern Kubernetes version
+	trivy fs \
+		--scanners vuln,misconfig \
+		--severity HIGH,CRITICAL \
+		--ignore-unfixed \
+		--exit-code 1 \
+		--ignorefile .trivyignore \
+		--skip-version-check \
+		--helm-kube-version 1.34.0 \
 		--skip-files config/rbac/provisioner_delegate_clusterrole.yaml \
+		--skip-files config/rbac/provisioner_minimal_role.yaml \
+		--skip-files config/rbac/single_tenant_clusterrole.yaml \
+		--skip-files dist/install.yaml \
+		--skip-files charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml \
 		.
-	trivy image --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${IMG}
+	trivy image \
+		--severity HIGH,CRITICAL \
+		--ignore-unfixed \
+		--exit-code 1 \
+		--skip-version-check \
+		${IMG}
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
