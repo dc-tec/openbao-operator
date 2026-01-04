@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -20,6 +21,7 @@ import (
 var testScheme = func() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
 	return scheme
 }()
 
@@ -174,8 +176,8 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 	}
 
 	// Verify rules were updated
-	if len(role.Rules) != 16 {
-		t.Errorf("Role rules count = %v, want 16", len(role.Rules))
+	if len(role.Rules) != 15 {
+		t.Errorf("Role rules count = %v, want 15", len(role.Rules))
 	}
 
 	// Verify at least one rule has the expected OpenBaoCluster permissions
