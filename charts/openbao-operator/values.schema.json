@@ -1,31 +1,379 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenBao Operator Helm Chart Values",
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "nameOverride": {
+      "type": "string",
+      "description": "Override the chart name"
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "description": "Override the full name of resources"
+    },
     "image": {
       "type": "object",
+      "description": "Operator image configuration",
       "additionalProperties": false,
       "properties": {
-        "repository": { "type": "string", "minLength": 1 },
-        "tag": { "type": "string" },
-        "digest": { "type": "string" },
+        "repository": {
+          "type": "string",
+          "description": "Image repository for the operator manager",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "description": "Image tag. Defaults to Chart.appVersion if not set"
+        },
+        "digest": {
+          "type": "string",
+          "description": "Image digest. If set, takes precedence over tag"
+        },
         "pullPolicy": {
           "type": "string",
+          "description": "Image pull policy",
           "enum": ["Always", "IfNotPresent", "Never"]
         }
       },
       "required": ["repository", "pullPolicy"]
     },
-    "operatorVersion": { "type": "string" },
+    "imagePullSecrets": {
+      "type": "array",
+      "description": "Image pull secrets for operator images",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["name"]
+      }
+    },
+    "operatorVersion": {
+      "type": "string",
+      "description": "Override operator version reported in status"
+    },
     "sentinel": {
       "type": "object",
+      "description": "Sentinel sidecar configuration",
       "additionalProperties": false,
       "properties": {
-        "imageRepository": { "type": "string", "minLength": 1 }
+        "imageRepository": {
+          "type": "string",
+          "description": "Image repository for the sentinel sidecar",
+          "minLength": 1
+        }
       },
       "required": ["imageRepository"]
+    },
+    "tenancy": {
+      "type": "object",
+      "description": "Tenancy mode configuration",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "Tenancy mode: multi (deploys controller + provisioner) or single (controller only)",
+          "enum": ["multi", "single"],
+          "default": "multi"
+        },
+        "targetNamespace": {
+          "type": "string",
+          "description": "Target namespace for single-tenant mode"
+        }
+      },
+      "required": ["mode"]
+    },
+    "controller": {
+      "type": "object",
+      "description": "Controller deployment configuration",
+      "additionalProperties": false,
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "description": "Number of controller replicas",
+          "minimum": 1,
+          "default": 1
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "extraEnv": {
+          "$ref": "#/$defs/envVars"
+        },
+        "nodeSelector": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "tolerations": {
+          "$ref": "#/$defs/tolerations"
+        },
+        "affinity": {
+          "$ref": "#/$defs/affinity"
+        },
+        "podAnnotations": {
+          "$ref": "#/$defs/annotations"
+        },
+        "podLabels": {
+          "$ref": "#/$defs/labels"
+        },
+        "securityContext": {
+          "$ref": "#/$defs/containerSecurityContext"
+        },
+        "podSecurityContext": {
+          "$ref": "#/$defs/podSecurityContext"
+        },
+        "serviceAccount": {
+          "$ref": "#/$defs/serviceAccount"
+        }
+      }
+    },
+    "provisioner": {
+      "type": "object",
+      "description": "Provisioner deployment configuration (only used when tenancy.mode=multi)",
+      "additionalProperties": false,
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "description": "Number of provisioner replicas",
+          "minimum": 1,
+          "default": 1
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "extraEnv": {
+          "$ref": "#/$defs/envVars"
+        },
+        "nodeSelector": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "tolerations": {
+          "$ref": "#/$defs/tolerations"
+        },
+        "affinity": {
+          "$ref": "#/$defs/affinity"
+        },
+        "podAnnotations": {
+          "$ref": "#/$defs/annotations"
+        },
+        "podLabels": {
+          "$ref": "#/$defs/labels"
+        },
+        "securityContext": {
+          "$ref": "#/$defs/containerSecurityContext"
+        },
+        "podSecurityContext": {
+          "$ref": "#/$defs/podSecurityContext"
+        },
+        "serviceAccount": {
+          "$ref": "#/$defs/serviceAccount"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Metrics configuration",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable metrics endpoints",
+          "default": true
+        },
+        "port": {
+          "type": "integer",
+          "description": "Metrics port",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 8443
+        }
+      }
+    },
+    "leaderElection": {
+      "type": "object",
+      "description": "Leader election configuration",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable leader election for HA deployments",
+          "default": true
+        }
+      }
+    },
+    "healthProbes": {
+      "type": "object",
+      "description": "Health probe configuration",
+      "additionalProperties": false,
+      "properties": {
+        "port": {
+          "type": "integer",
+          "description": "Port for health probes",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 8081
+        },
+        "livenessInitialDelaySeconds": {
+          "type": "integer",
+          "description": "Liveness probe initial delay",
+          "minimum": 0,
+          "default": 15
+        },
+        "livenessPeriodSeconds": {
+          "type": "integer",
+          "description": "Liveness probe period",
+          "minimum": 1,
+          "default": 20
+        },
+        "readinessInitialDelaySeconds": {
+          "type": "integer",
+          "description": "Readiness probe initial delay",
+          "minimum": 0,
+          "default": 5
+        },
+        "readinessPeriodSeconds": {
+          "type": "integer",
+          "description": "Readiness probe period",
+          "minimum": 1,
+          "default": 10
+        }
+      }
+    },
+    "admissionPolicies": {
+      "type": "object",
+      "description": "ValidatingAdmissionPolicy configuration",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable ValidatingAdmissionPolicies for resource protection",
+          "default": true
+        }
+      }
     }
   },
-  "required": ["image", "sentinel"]
+  "required": ["image", "sentinel", "tenancy"],
+  "$defs": {
+    "resources": {
+      "type": "object",
+      "description": "Resource requests and limits",
+      "additionalProperties": false,
+      "properties": {
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        },
+        "requests": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        }
+      }
+    },
+    "envVars": {
+      "type": "array",
+      "description": "Additional environment variables",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "string" },
+          "valueFrom": { "type": "object" }
+        },
+        "required": ["name"]
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "description": "Node selector for pod scheduling",
+      "additionalProperties": { "type": "string" }
+    },
+    "tolerations": {
+      "type": "array",
+      "description": "Tolerations for pod scheduling",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string" },
+          "operator": { "type": "string", "enum": ["Exists", "Equal"] },
+          "value": { "type": "string" },
+          "effect": { "type": "string", "enum": ["NoSchedule", "PreferNoSchedule", "NoExecute"] },
+          "tolerationSeconds": { "type": "integer" }
+        }
+      }
+    },
+    "affinity": {
+      "type": "object",
+      "description": "Affinity rules for pod scheduling",
+      "properties": {
+        "nodeAffinity": { "type": "object" },
+        "podAffinity": { "type": "object" },
+        "podAntiAffinity": { "type": "object" }
+      }
+    },
+    "annotations": {
+      "type": "object",
+      "description": "Annotations to add",
+      "additionalProperties": { "type": "string" }
+    },
+    "labels": {
+      "type": "object",
+      "description": "Labels to add",
+      "additionalProperties": { "type": "string" }
+    },
+    "containerSecurityContext": {
+      "type": "object",
+      "description": "Container security context",
+      "properties": {
+        "allowPrivilegeEscalation": { "type": "boolean" },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "add": { "type": "array", "items": { "type": "string" } },
+            "drop": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "readOnlyRootFilesystem": { "type": "boolean" },
+        "runAsGroup": { "type": "integer" },
+        "runAsUser": { "type": "integer" },
+        "runAsNonRoot": { "type": "boolean" }
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "description": "Pod security context",
+      "properties": {
+        "runAsNonRoot": { "type": "boolean" },
+        "runAsUser": { "type": "integer" },
+        "runAsGroup": { "type": "integer" },
+        "fsGroup": { "type": "integer" },
+        "seccompProfile": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["RuntimeDefault", "Localhost", "Unconfined"] },
+            "localhostProfile": { "type": "string" }
+          }
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "description": "Service account configuration",
+      "properties": {
+        "annotations": {
+          "$ref": "#/$defs/annotations"
+        }
+      }
+    }
+  }
 }

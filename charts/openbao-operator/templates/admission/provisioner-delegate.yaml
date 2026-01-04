@@ -1,0 +1,167 @@
+{{- if and .Values.admissionPolicies.enabled (eq .Values.tenancy.mode "multi") }}
+{{/*
+ValidatingAdmissionPolicy to restrict what the Provisioner Delegate can create
+*/}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-restrict-provisioner-delegate
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups:
+          - rbac.authorization.k8s.io
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - roles
+          - rolebindings
+  validations:
+    - expression: |-
+        !variables.is_delegate || request.resource.resource != 'roles' || object.metadata.name in [
+          'openbao-operator-tenant-role',
+          'openbao-sentinel-role',
+          'openbao-operator-tenant-secrets-reader',
+          'openbao-operator-tenant-secrets-writer'
+        ]
+      message: The Provisioner Delegate can only create Roles for the operator tenant template (tenant/sentinel/secrets allowlists).
+    - expression: |-
+        !variables.is_delegate || request.resource.resource != 'rolebindings' || object.metadata.name in [
+          'openbao-operator-tenant-rolebinding',
+          'openbao-sentinel-rolebinding',
+          'openbao-operator-tenant-secrets-reader-rolebinding',
+          'openbao-operator-tenant-secrets-writer-rolebinding'
+        ]
+      message: The Provisioner Delegate can only create RoleBindings for the operator tenant template (tenant/sentinel/secrets allowlists).
+    - expression: |-
+        !variables.is_delegate || request.resource.resource != 'rolebindings' || object.roleRef.name in [
+          'openbao-operator-tenant-role',
+          'openbao-sentinel-role',
+          'openbao-operator-tenant-secrets-reader',
+          'openbao-operator-tenant-secrets-writer'
+        ]
+      message: The Provisioner Delegate is restricted to binding only the operator tenant template Roles (tenant/sentinel/secrets allowlists).
+    - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings'' || object.subjects.all(s, s.kind == ''ServiceAccount'')'
+      message: The Provisioner Delegate can only grant permissions to ServiceAccounts.
+    - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings'' || object.subjects.all(s, !has(s.apiGroup) || s.apiGroup == '''')'
+      message: The Provisioner Delegate can only bind to core ServiceAccount subjects (apiGroup must be empty).
+    - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings'' || (object.roleRef.kind == ''Role'' && object.roleRef.apiGroup == ''rbac.authorization.k8s.io'')'
+      message: The Provisioner Delegate can only create RoleBindings that reference a Role (not ClusterRole).
+    - expression: |-
+        !variables.is_delegate || request.resource.resource != 'rolebindings' || (
+          (
+            object.metadata.name == 'openbao-operator-tenant-rolebinding' &&
+            object.roleRef.name == 'openbao-operator-tenant-role' &&
+            object.subjects.size() == 1 &&
+            object.subjects[0].kind == 'ServiceAccount' &&
+            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
+            object.subjects[0].namespace == '{{ .Release.Namespace }}'
+          ) ||
+          (
+            object.metadata.name == 'openbao-sentinel-rolebinding' &&
+            object.roleRef.name == 'openbao-sentinel-role' &&
+            object.subjects.size() == 1 &&
+            object.subjects[0].kind == 'ServiceAccount' &&
+            object.subjects[0].name == 'openbao-sentinel' &&
+            object.subjects[0].namespace == object.metadata.namespace
+          ) ||
+          (
+            object.metadata.name == 'openbao-operator-tenant-secrets-reader-rolebinding' &&
+            object.roleRef.name == 'openbao-operator-tenant-secrets-reader' &&
+            object.subjects.size() == 1 &&
+            object.subjects[0].kind == 'ServiceAccount' &&
+            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
+            object.subjects[0].namespace == '{{ .Release.Namespace }}'
+          ) ||
+          (
+            object.metadata.name == 'openbao-operator-tenant-secrets-writer-rolebinding' &&
+            object.roleRef.name == 'openbao-operator-tenant-secrets-writer' &&
+            object.subjects.size() == 1 &&
+            object.subjects[0].kind == 'ServiceAccount' &&
+            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
+            object.subjects[0].namespace == '{{ .Release.Namespace }}'
+          )
+        )
+      message: The Provisioner Delegate can only bind tenant RBAC to the operator controller ServiceAccount, or sentinel RBAC to the tenant-local openbao-sentinel ServiceAccount.
+    - expression: |-
+        !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+          has(rule.verbs) &&
+          rule.verbs != null &&
+          rule.verbs.exists(v,
+            v == 'impersonate' ||
+            v == 'bind' ||
+            v == 'escalate' ||
+            v == '*'
+          )
+        )
+      message: The Provisioner Delegate cannot create Roles granting 'impersonate', 'bind', 'escalate', or wildcard permissions.
+    - expression: |-
+        !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+          (
+            has(rule.apiGroups) &&
+            rule.apiGroups != null &&
+            rule.apiGroups.exists(g, g == '*')
+          ) ||
+          (
+            has(rule.resources) &&
+            rule.resources != null &&
+            rule.resources.exists(r, r == '*')
+          )
+        )
+      message: The Provisioner Delegate cannot create Roles with wildcard apiGroups or resources.
+    - expression: |-
+        !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+          has(rule.nonResourceURLs) &&
+          rule.nonResourceURLs != null &&
+          rule.nonResourceURLs.size() > 0
+        )
+      message: The Provisioner Delegate cannot create Roles granting nonResourceURLs.
+    - expression: |-
+        !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+          has(rule.resources) &&
+          rule.resources != null &&
+          rule.resources.exists(r, r == 'secrets') &&
+          (
+            object.metadata.name == 'openbao-sentinel-role' ||
+            (
+              has(rule.verbs) &&
+              rule.verbs != null &&
+              rule.verbs.exists(v, v == 'list' || v == 'watch' || v == '*')
+            )
+          )
+        )
+      message: The Provisioner Delegate cannot grant Secrets list/watch, and Sentinel RBAC must not include Secrets permissions.
+  variables:
+    - expression: request.userInfo.username == "system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.provisionerDelegateServiceAccountName" . }}"
+      name: is_delegate
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-restrict-provisioner-delegate
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  matchResources:
+    resourceRules:
+      - apiGroups:
+          - rbac.authorization.k8s.io
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - roles
+          - rolebindings
+  policyName: {{ include "openbao-operator.fullname" . }}-restrict-provisioner-delegate
+  validationActions:
+    - Deny
+{{- end }}
+

@@ -1,0 +1,100 @@
+{{/*
+Aggregated ClusterRoles for OpenBaoCluster and OpenBaoTenant resources.
+These allow users with admin/edit/view roles to manage the CRDs.
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbaocluster-admin
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    verbs:
+      - "*"
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters/status
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbaocluster-editor
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters/status
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbaocluster-viewer
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters/status
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbaotenant-editor
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaotenants
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaotenants/status
+    verbs:
+      - get
+

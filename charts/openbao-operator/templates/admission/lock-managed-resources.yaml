@@ -1,0 +1,199 @@
+{{- if .Values.admissionPolicies.enabled }}
+{{/*
+ValidatingAdmissionPolicy to prevent direct modification of OpenBao-managed resources
+*/}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-lock-managed-resource-mutations
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups:
+          - ""
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - secrets
+          - configmaps
+          - services
+          - pods
+          - endpoints
+      - apiGroups:
+          - discovery.k8s.io
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - endpointslices
+      - apiGroups:
+          - apps
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - statefulsets
+      - apiGroups:
+          - batch
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - jobs
+      - apiGroups:
+          - networking.k8s.io
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - ingresses
+          - networkpolicies
+      - apiGroups:
+          - gateway.networking.k8s.io
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - httproutes
+          - backendtlspolicies
+      - apiGroups:
+          - gateway.networking.k8s.io
+        apiVersions:
+          - v1alpha2
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - tlsroutes
+  validations:
+    - expression: '!variables.is_managed || variables.is_operator_controller || (variables.is_kube_controller_manager && (request.operation == "DELETE" || request.resource.resource == "pods")) || (variables.is_system_controller && request.operation == "DELETE") || (variables.is_system_controller && request.resource.resource == "pods") || (variables.is_system_controller && variables.is_endpoints_controller_request) || (variables.is_kube_system_controller && request.resource.resource == "pods" && (request.operation == "CREATE" || request.operation == "DELETE")) || (variables.is_kube_system_controller && variables.is_endpoints_controller_request) || variables.is_cert_manager || (variables.is_pod_request && variables.is_kubelet_node && request.operation == "DELETE") || variables.is_service_registration_label_update || (variables.maintenance_enabled && variables.is_break_glass_admin)'
+      message: Direct modification of OpenBao-managed resources is prohibited; modify the parent OpenBaoCluster/OpenBaoTenant instead.
+  variables:
+    - expression: |-
+        request.operation == "DELETE" ?
+          (oldObject != null &&
+            has(oldObject.metadata) &&
+            has(oldObject.metadata.labels) &&
+            ("app.kubernetes.io/managed-by" in oldObject.metadata.labels) &&
+            oldObject.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator") :
+          ((object != null &&
+              has(object.metadata) &&
+              has(object.metadata.labels) &&
+              ("app.kubernetes.io/managed-by" in object.metadata.labels) &&
+              object.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator") ||
+            (oldObject != null &&
+              has(oldObject.metadata) &&
+              has(oldObject.metadata.labels) &&
+              ("app.kubernetes.io/managed-by" in oldObject.metadata.labels) &&
+              oldObject.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator"))
+      name: is_managed
+    - expression: request.userInfo.username == "system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.controllerServiceAccountName" . }}"
+      name: is_operator_controller
+    - expression: request.userInfo.username == "system:kube-controller-manager" || request.userInfo.username == "system:serviceaccount:kube-system:kube-controller-manager"
+      name: is_kube_controller_manager
+    - expression: request.userInfo.username.startsWith("system:controller:")
+      name: is_system_controller
+    - expression: request.userInfo.groups.exists(g, g == "system:serviceaccounts:kube-system") || request.userInfo.username.startsWith("system:serviceaccount:kube-system:")
+      name: is_kube_system_controller
+    - expression: request.resource.resource in ["endpoints", "endpointslices"]
+      name: is_endpoints_controller_request
+    - expression: request.userInfo.username.startsWith("system:serviceaccount:cert-manager:")
+      name: is_cert_manager
+    - expression: request.kind.group == "" && request.kind.kind == "Pod"
+      name: is_pod_request
+    - expression: request.userInfo.username.startsWith("system:node:")
+      name: is_kubelet_node
+    - expression: |-
+        object != null && has(object.metadata) && has(object.metadata.labels) && ("openbao.org/cluster" in object.metadata.labels) ?
+          object.metadata.labels["openbao.org/cluster"] :
+          (object != null && has(object.metadata) && has(object.metadata.labels) && ("app.kubernetes.io/instance" in object.metadata.labels) ?
+            object.metadata.labels["app.kubernetes.io/instance"] : "")
+      name: pod_cluster_name
+    - expression: |-
+        variables.pod_cluster_name != "" && request.userInfo.username ==
+          ("system:serviceaccount:" + request.namespace + ":" + variables.pod_cluster_name + "-serviceaccount")
+      name: is_cluster_serviceaccount
+    - expression: |-
+        variables.is_pod_request && request.operation == "UPDATE" && variables.is_cluster_serviceaccount && object.spec == oldObject.spec && (has(object.metadata.annotations) == has(oldObject.metadata.annotations) &&
+          (!has(object.metadata.annotations) || object.metadata.annotations == oldObject.metadata.annotations)) &&
+        (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+          (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+        (has(object.metadata.finalizers) == has(oldObject.metadata.finalizers) &&
+          (!has(object.metadata.finalizers) || object.metadata.finalizers == oldObject.metadata.finalizers)) &&
+        has(object.metadata.labels) && has(oldObject.metadata.labels) && (
+          (
+            object.metadata.labels.all(k, v,
+              k in [
+                "openbao-active",
+                "openbao-initialized",
+                "openbao-sealed",
+                "openbao-perf-standby",
+                "openbao-version"
+              ] || (k in oldObject.metadata.labels && oldObject.metadata.labels[k] == v)) &&
+            oldObject.metadata.labels.all(k, v,
+              k in [
+                "openbao-active",
+                "openbao-initialized",
+                "openbao-sealed",
+                "openbao-perf-standby",
+                "openbao-version"
+              ] || (k in object.metadata.labels && object.metadata.labels[k] == v))
+          )
+        )
+      name: is_service_registration_label_update
+    - expression: |-
+        request.operation == "DELETE" ?
+          (oldObject != null &&
+            has(oldObject.metadata) &&
+            has(oldObject.metadata.annotations) &&
+            ("openbao.org/maintenance" in oldObject.metadata.annotations) &&
+            oldObject.metadata.annotations["openbao.org/maintenance"] == "true") :
+          ((object != null &&
+              has(object.metadata) &&
+              has(object.metadata.annotations) &&
+              ("openbao.org/maintenance" in object.metadata.annotations) &&
+              object.metadata.annotations["openbao.org/maintenance"] == "true") ||
+            (oldObject != null &&
+              has(oldObject.metadata) &&
+              has(oldObject.metadata.annotations) &&
+              ("openbao.org/maintenance" in oldObject.metadata.annotations) &&
+              oldObject.metadata.annotations["openbao.org/maintenance"] == "true"))
+      name: maintenance_enabled
+    - expression: request.userInfo.groups.exists(g, g == "system:masters")
+      name: is_break_glass_admin
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-lock-managed-resource-mutations
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  policyName: {{ include "openbao-operator.fullname" . }}-lock-managed-resource-mutations
+  validationActions:
+    - Deny
+{{- end }}
+

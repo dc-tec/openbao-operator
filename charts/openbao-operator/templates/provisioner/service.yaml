@@ -1,0 +1,19 @@
+{{- if and (eq .Values.tenancy.mode "multi") .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-provisioner-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: provisioner
+spec:
+  ports:
+    - name: https
+      port: {{ .Values.metrics.port }}
+      protocol: TCP
+      targetPort: {{ .Values.metrics.port }}
+  selector:
+    {{- include "openbao-operator.provisionerSelectorLabels" . | nindent 4 }}
+{{- end }}
+

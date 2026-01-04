@@ -1,0 +1,94 @@
+{{- if eq .Values.tenancy.mode "multi" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-provisioner
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: provisioner
+spec:
+  replicas: {{ .Values.provisioner.replicas }}
+  selector:
+    matchLabels:
+      {{- include "openbao-operator.provisionerSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+        {{- with .Values.provisioner.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "openbao-operator.provisionerSelectorLabels" . | nindent 8 }}
+        {{- with .Values.provisioner.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "openbao-operator.provisionerServiceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.provisioner.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: manager
+          image: {{ include "openbao-operator.managerImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /manager
+            - provisioner
+          args:
+            {{- if .Values.leaderElection.enabled }}
+            - --leader-elect
+            {{- end }}
+            - --health-probe-bind-address=:{{ .Values.healthProbes.port }}
+            {{- if .Values.metrics.enabled }}
+            - --metrics-bind-address=:{{ .Values.metrics.port }}
+            {{- end }}
+          env:
+            - name: OPERATOR_VERSION
+              value: {{ include "openbao-operator.operatorVersion" . | quote }}
+            - name: OPERATOR_SENTINEL_IMAGE_REPOSITORY
+              value: {{ include "openbao-operator.sentinelImageRepository" . | quote }}
+            {{- with .Values.provisioner.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            {{- if .Values.metrics.enabled }}
+            - name: https
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.healthProbes.port }}
+            initialDelaySeconds: {{ .Values.healthProbes.livenessInitialDelaySeconds }}
+            periodSeconds: {{ .Values.healthProbes.livenessPeriodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.healthProbes.port }}
+            initialDelaySeconds: {{ .Values.healthProbes.readinessInitialDelaySeconds }}
+            periodSeconds: {{ .Values.healthProbes.readinessPeriodSeconds }}
+          resources:
+            {{- toYaml .Values.provisioner.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.provisioner.securityContext | nindent 12 }}
+      {{- with .Values.provisioner.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.provisioner.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.provisioner.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+

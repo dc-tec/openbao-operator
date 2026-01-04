@@ -1,0 +1,61 @@
+OpenBao Operator has been installed.
+
+{{- if eq .Values.tenancy.mode "multi" }}
+
+Tenancy Mode: Multi-Tenant
+  - Controller: Manages OpenBaoCluster and OpenBaoRestore resources
+  - Provisioner: Handles OpenBaoTenant onboarding with zero-trust RBAC
+
+To onboard a namespace, create an OpenBaoTenant:
+
+  apiVersion: openbao.org/v1alpha1
+  kind: OpenBaoTenant
+  metadata:
+    name: example-tenant
+  spec:
+    namespaces:
+      - my-namespace
+{{- else }}
+
+Tenancy Mode: Single-Tenant
+  - Controller only (no Provisioner)
+  - Namespace-scoped caching for high performance
+  {{- if .Values.tenancy.targetNamespace }}
+  - Target namespace: {{ .Values.tenancy.targetNamespace }}
+  {{- else }}
+  - Target namespace: {{ .Release.Namespace }}
+  {{- end }}
+{{- end }}
+
+Get started by creating an OpenBaoCluster:
+
+  apiVersion: openbao.org/v1alpha1
+  kind: OpenBaoCluster
+  metadata:
+    name: my-cluster
+  {{- if eq .Values.tenancy.mode "single" }}
+    {{- if .Values.tenancy.targetNamespace }}
+    namespace: {{ .Values.tenancy.targetNamespace }}
+    {{- else }}
+    namespace: {{ .Release.Namespace }}
+    {{- end }}
+  {{- end }}
+  spec:
+    replicas: 3
+    version: "2.1.1"
+    profile: Standard
+    initContainer:
+      enabled: true
+      image: ghcr.io/dc-tec/openbao-operator-init:v0.1.0
+    tls:
+      mode: SelfSigned
+    storage:
+      raft:
+        volumeClaimTemplate:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi
+
+For more information, visit: https://github.com/dc-tec/openbao-operator
+

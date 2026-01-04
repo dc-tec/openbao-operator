@@ -4,3 +4,17 @@ description: OpenBao Operator installs the OpenBao Kubernetes operator and its r
 type: application
 version: 0.0.0
 appVersion: v0.0.0
+icon: https://openbao.org/img/logo.svg
+home: https://github.com/dc-tec/openbao-operator
+sources:
+  - https://github.com/dc-tec/openbao-operator
+keywords:
+  - openbao
+  - vault
+  - secrets
+  - operator
+  - kubernetes
+maintainers:
+  - name: dc-tec
+    url: https://github.com/dc-tec
+kubeVersion: ">=1.29.0-0"

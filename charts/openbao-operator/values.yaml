@@ -1,10 +1,192 @@
+# -- Default values for openbao-operator.
+# -- Declare variables to be passed into your templates.
+
+# -- Override the chart name
+nameOverride: ""
+
+# -- Override the full name of resources
+fullnameOverride: ""
+
+# -- Operator image configuration
 image:
+  # -- Image repository for the operator manager
   repository: ghcr.io/dc-tec/openbao-operator
+  # -- Image tag. Defaults to Chart.appVersion if not set
   tag: ""
+  # -- Image digest. If set, takes precedence over tag
   digest: ""
+  # -- Image pull policy
   pullPolicy: IfNotPresent
 
+# -- Image pull secrets for operator images
+imagePullSecrets: []
+# - name: my-registry-secret
+
+# -- Override operator version reported in status. Defaults to Chart.appVersion
 operatorVersion: ""
 
+# -- Sentinel sidecar configuration
 sentinel:
+  # -- Image repository for the sentinel sidecar
   imageRepository: ghcr.io/dc-tec/openbao-operator-sentinel
+
+# -- Tenancy mode configuration.
+# -- Controls how the operator manages permissions and namespace access.
+tenancy:
+  # -- Tenancy mode: "multi" or "single"
+  #
+  # multi (Multi-Tenant Mode):
+  #   - Deploys both Provisioner and Controller
+  #   - Uses OpenBaoTenant CRD for namespace onboarding
+  #   - Zero-trust RBAC model with namespace-scoped permissions
+  #   - Recommended for platform teams providing OpenBao-as-a-Service
+  #
+  # single (Single-Tenant Mode):
+  #   - Deploys only the Controller (no Provisioner)
+  #   - Uses namespace-scoped caching for high performance
+  #   - Event-driven reconciliation via Owns() watches
+  #   - Recommended for individual teams deploying OpenBao for their app
+  mode: multi
+
+  # -- Target namespace for single-tenant mode.
+  # -- Only used when mode=single.
+  # -- If empty, defaults to the release namespace.
+  targetNamespace: ""
+
+# -- Controller deployment configuration
+controller:
+  # -- Number of controller replicas
+  replicas: 1
+
+  # -- Resource requests and limits for the controller
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+  # -- Additional environment variables for the controller
+  extraEnv: []
+  # - name: LOG_LEVEL
+  #   value: debug
+
+  # -- Node selector for controller pods
+  nodeSelector: {}
+
+  # -- Tolerations for controller pods
+  tolerations: []
+
+  # -- Affinity rules for controller pods
+  affinity: {}
+
+  # -- Annotations to add to controller pods
+  podAnnotations: {}
+
+  # -- Labels to add to controller pods
+  podLabels: {}
+
+  # -- Security context for the controller container
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsGroup: 65532
+    runAsUser: 65532
+
+  # -- Pod-level security context for the controller
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  # -- Service account configuration for the controller
+  serviceAccount:
+    # -- Annotations to add to the controller service account
+    annotations: {}
+
+# -- Provisioner deployment configuration (only used when tenancy.mode=multi)
+provisioner:
+  # -- Number of provisioner replicas
+  replicas: 1
+
+  # -- Resource requests and limits for the provisioner
+  resources:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 10m
+      memory: 32Mi
+
+  # -- Additional environment variables for the provisioner
+  extraEnv: []
+
+  # -- Node selector for provisioner pods
+  nodeSelector: {}
+
+  # -- Tolerations for provisioner pods
+  tolerations: []
+
+  # -- Affinity rules for provisioner pods
+  affinity: {}
+
+  # -- Annotations to add to provisioner pods
+  podAnnotations: {}
+
+  # -- Labels to add to provisioner pods
+  podLabels: {}
+
+  # -- Security context for the provisioner container
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsGroup: 65532
+    runAsUser: 65532
+
+  # -- Pod-level security context for the provisioner
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  # -- Service account configuration for the provisioner
+  serviceAccount:
+    # -- Annotations to add to the provisioner service account
+    annotations: {}
+
+# -- Metrics configuration
+metrics:
+  # -- Enable metrics endpoints
+  enabled: true
+  # -- Metrics port
+  port: 8443
+
+# -- Leader election configuration
+leaderElection:
+  # -- Enable leader election for HA deployments
+  enabled: true
+
+# -- Health probe configuration
+healthProbes:
+  # -- Port for health probes
+  port: 8081
+  # -- Liveness probe initial delay
+  livenessInitialDelaySeconds: 15
+  # -- Liveness probe period
+  livenessPeriodSeconds: 20
+  # -- Readiness probe initial delay
+  readinessInitialDelaySeconds: 5
+  # -- Readiness probe period
+  readinessPeriodSeconds: 10
+
+# -- ValidatingAdmissionPolicy configuration
+admissionPolicies:
+  # -- Enable ValidatingAdmissionPolicies for resource protection
+  enabled: true
