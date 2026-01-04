@@ -17,5 +17,6 @@ runs:
         docker run --rm \
           -v "${PWD}:/docs" \
           -w /docs \
+          --entrypoint sh \
           "${{ inputs.image }}" \
-          sh -c "pip install --no-cache-dir mike && mkdocs build -s"
+          -c "pip install --no-cache-dir mike && mkdocs build -s"
