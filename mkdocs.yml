@@ -91,6 +91,7 @@ nav:
       - Introduction: user-guide/index.md
       - Operator:
           - Installation: user-guide/operator/installation.md
+          - Single-Tenant Mode: user-guide/operator/single-tenant-mode.md
       - OpenBaoTenant:
           - Overview: user-guide/openbaotenant/overview.md
           - Onboarding: user-guide/openbaotenant/onboarding.md
@@ -108,9 +109,11 @@ nav:
               - Network: user-guide/openbaocluster/configuration/network.md
               - Resources & Storage: user-guide/openbaocluster/configuration/resources-storage.md
               - Gateway API: user-guide/openbaocluster/configuration/gateway-api.md
+              - Observability: user-guide/openbaocluster/configuration/observability.md
           - Operations:
               - Upgrades: user-guide/openbaocluster/operations/upgrades.md
               - Backups: user-guide/openbaocluster/operations/backups.md
+              - Maintenance: user-guide/openbaocluster/operations/maintenance.md
               - Pausing: user-guide/openbaocluster/operations/pausing.md
               - Deletion: user-guide/openbaocluster/operations/deletion.md
               - Production Checklist: user-guide/openbaocluster/operations/production-checklist.md

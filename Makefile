@@ -144,25 +144,31 @@ report-openbao-config-schema-drift: ## Report upstream OpenBao config schema dri
 report-openbao-operator-schema-drift: ## Report operator-vs-upstream OpenBao config schema drift (non-failing).
 	@go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
 
+.PHONY: changelog
+changelog: ## Generate CHANGELOG.md from git history (local, non-CI).
+	@go run ./hack/changelog --out CHANGELOG.md
+
+.PHONY: changelog-all
+changelog-all: ## Generate CHANGELOG.md including all git tags (local, non-CI).
+	@go run ./hack/changelog --out CHANGELOG.md --all-tags
+
 .PHONY: helm-sync
-helm-sync: ## Sync Helm chart generated inputs (CRDs and installer template).
-	@$(MAKE) build-installer \
-		IMG=controller:latest \
-		OPERATOR_VERSION=v0.0.0 \
-		OPERATOR_SENTINEL_IMAGE_REPOSITORY=ghcr.io/dc-tec/openbao-operator-sentinel
-	@go run ./hack/helmchart \
-		-in dist/install.yaml \
-		-out charts/openbao-operator/files/install.yaml.tpl
+helm-sync: manifests ## Sync Helm chart CRDs from config/crd/bases.
+	@go run ./hack/helmchart
 
 .PHONY: verify-helm
-verify-helm: helm-sync ## Verify Helm chart generated inputs are up-to-date (does not modify tracked files).
+verify-helm: helm-sync ## Verify Helm chart CRDs are up-to-date (does not modify tracked files).
 	@{ \
-		git diff --exit-code -- charts/openbao-operator/crds charts/openbao-operator/files/install.yaml.tpl; \
+		git diff --exit-code -- charts/openbao-operator/crds; \
 	} || { \
-		echo "Helm chart generated inputs are out of date. Run 'make helm-sync' and commit the result."; \
-		git --no-pager diff -- charts/openbao-operator/crds charts/openbao-operator/files/install.yaml.tpl; \
+		echo "Helm chart CRDs are out of date. Run 'make helm-sync' and commit the result."; \
+		git --no-pager diff -- charts/openbao-operator/crds; \
 		exit 1; \
 	}
+
+.PHONY: helm-lint
+helm-lint: ## Lint the Helm chart.
+	@helm lint charts/openbao-operator
 
 .PHONY: test-update-golden
 test-update-golden: ## Update golden files for HCL generation tests. Run this when modifying internal/config/builder.go or related config generation logic.
