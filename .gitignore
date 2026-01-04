@@ -36,3 +36,6 @@ go.work
 
 # Documentation build output
 site/*
+
+# MkDocs virtualenv (created by `make docs-*`)
+.venv-docs/
