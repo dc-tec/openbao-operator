@@ -20,6 +20,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
 const (
@@ -62,11 +63,11 @@ func NewManager(config *rest.Config, clientset kubernetes.Interface) *Manager {
 //
 // This should only be called during initial cluster creation. Once initialized, subsequent
 // reconciles will skip this step.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	// If already initialized, nothing to do
 	if cluster.Status.Initialized {
 		logger.V(1).Info("OpenBao cluster is already initialized; skipping initialization")
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
@@ -78,12 +79,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Find the first pod (should be pod-0 during initial creation)
 	pod, err := m.findFirstPod(ctx, cluster)
 	if err != nil {
-		return false, fmt.Errorf("failed to find pod for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		return recon.Result{}, fmt.Errorf("failed to find pod for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
 	if pod == nil {
 		logger.Info("No pods found; waiting for pod to be created")
-		return false, nil
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	logger.Info("Found pod for initialization", "pod", pod.Name, "phase", pod.Status.Phase)
@@ -109,7 +110,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			logger.V(1).Info("Container status not yet populated; waiting for Kubernetes to update pod status", "pod", pod.Name, "phase", pod.Status.Phase)
 		}
 		logger.Info("Container not ready for initialization yet; waiting", "pod", pod.Name, "phase", pod.Status.Phase)
-		return false, nil
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	initializedLabel, hasInitializedLabel, err := openbao.ParseBoolLabel(pod.Labels, openbao.LabelInitialized)
@@ -131,7 +132,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			cluster.Status.Initialized = true
 			cluster.Status.SelfInitialized = true
 			// Request requeue so InfraReconciler can run again to scale up StatefulSet
-			return true, nil
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 	}
 
@@ -146,11 +147,11 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			cluster.Status.Initialized = true
 			cluster.Status.SelfInitialized = true
 			// Request requeue so InfraReconciler can run again to scale up StatefulSet
-			return true, nil
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 
 		logger.Info("Self-initialization is enabled; waiting for pod to become Ready", "pod", pod.Name)
-		return false, nil
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	// Before attempting to connect, verify that TLS server secret exists.
@@ -160,10 +161,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("TLS server Secret not found yet; waiting for TLS reconciliation", "pod", pod.Name, "secret", tlsServerSecretName)
-			return false, nil // Don't fail, will retry on next reconcile once TLS secret is ready
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 		logger.Info("Failed to check TLS server Secret (will retry)", "pod", pod.Name, "secret", tlsServerSecretName, "error", err)
-		return false, nil // Don't fail, will retry on next reconcile
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	// Always attempt to initialize via the operator to ensure we capture the root token.
@@ -184,7 +185,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		// to allow the reconciliation loop to requeue without marking as failed.
 		if operatorerrors.IsTransientConnection(err) || errors.Is(err, errRetryLater) {
 			logger.Info("Initialization will be retried on next reconcile", "cluster", cluster.Name)
-			return false, nil
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 
 		logger.Error(err, "Failed to initialize OpenBao cluster")
@@ -193,7 +194,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			"cluster_name":      cluster.Name,
 			"error":             err.Error(),
 		})
-		return false, fmt.Errorf("failed to initialize OpenBao cluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		return recon.Result{}, fmt.Errorf("failed to initialize OpenBao cluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
 	// Mark cluster as initialized only if initialization actually succeeded
@@ -209,7 +210,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	})
 
 	// Request requeue so InfraReconciler can run again to scale up StatefulSet
-	return true, nil
+	return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 }
 
 func isPodReady(pod *corev1.Pod) bool {
@@ -379,8 +380,9 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1
 	// and initialization. Default timeouts are sufficient now that NetworkPolicy is correctly
 	// configured to allow operator access.
 	client, err := openbao.NewClient(openbao.ClientConfig{
-		BaseURL: baseURL,
-		CACert:  caCert,
+		ClusterKey: fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
+		BaseURL:    baseURL,
+		CACert:     caCert,
 		// Use default timeouts (5s connection, 10s request) which are sufficient for
 		// normal operation. The health check context timeout (10s) matches the default
 		// RequestTimeout, ensuring the client won't timeout before the context.
@@ -428,6 +430,7 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 	}
 
 	if apierrors.IsNotFound(err) {
+		immutable := true
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            secretName,
@@ -436,6 +439,8 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 				OwnerReferences: []metav1.OwnerReference{ownerRef},
 			},
 			Type: corev1.SecretTypeOpaque,
+			// Root tokens are high-value credentials. Treat the Secret as immutable once written.
+			Immutable: &immutable,
 			Data: map[string][]byte{
 				rootTokenSecretKey: []byte(rootToken),
 			},
@@ -448,11 +453,9 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 		return nil
 	}
 
-	if existing.Data == nil {
-		existing.Data = make(map[string][]byte)
-	}
-
-	existing.Data[rootTokenSecretKey] = []byte(rootToken)
+	// Never overwrite an existing root token Secret. If it exists, treat it as a
+	// persisted credential and only reconcile metadata best-effort.
+	// This avoids accidental token rotation/replacement and enables setting Immutable=true.
 
 	// Ensure labels and owner reference are set on existing secret
 	if existing.Labels == nil {
@@ -472,6 +475,11 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 	}
 	if !hasOwnerRef {
 		existing.OwnerReferences = append(existing.OwnerReferences, ownerRef)
+	}
+
+	immutable := true
+	if existing.Immutable == nil || *existing.Immutable != immutable {
+		existing.Immutable = &immutable
 	}
 
 	if _, updateErr := secretsClient.Update(ctx, existing, metav1.UpdateOptions{}); updateErr != nil {

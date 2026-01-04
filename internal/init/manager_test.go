@@ -170,19 +170,18 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 
 func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 	tests := []struct {
-		name           string
-		existingSecret *corev1.Secret
-		rootToken      string
-		wantCreated    bool
-		wantUpdated    bool
+		name              string
+		existingSecret    *corev1.Secret
+		rootToken         string
+		wantTokenInSecret string
 	}{
 		{
-			name:        "creates new Secret when none exists",
-			rootToken:   "s.roottoken",
-			wantCreated: true,
+			name:              "creates new Secret when none exists",
+			rootToken:         "s.roottoken",
+			wantTokenInSecret: "s.roottoken",
 		},
 		{
-			name: "updates existing Secret with new token",
+			name: "does not overwrite existing Secret token",
 			existingSecret: &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-root-token",
@@ -193,8 +192,8 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 					rootTokenSecretKey: []byte("old-token"),
 				},
 			},
-			rootToken:   "s.newtoken",
-			wantUpdated: true,
+			rootToken:         "s.newtoken",
+			wantTokenInSecret: "old-token",
 		},
 	}
 
@@ -234,8 +233,12 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 			}
 
 			got := string(secret.Data[rootTokenSecretKey])
-			if got != tt.rootToken {
-				t.Fatalf("root token in Secret = %q, want %q", got, tt.rootToken)
+			if got != tt.wantTokenInSecret {
+				t.Fatalf("root token in Secret = %q, want %q", got, tt.wantTokenInSecret)
+			}
+
+			if secret.Immutable == nil || *secret.Immutable != true {
+				t.Fatalf("expected root token Secret to be immutable")
 			}
 
 			// Verify OwnerReference is set
