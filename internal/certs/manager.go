@@ -27,6 +27,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
 const (
@@ -91,10 +92,10 @@ func NewManagerWithReloader(c client.Client, scheme *runtime.Scheme, r ReloadSig
 // When Mode is ACME, OpenBao manages certificates internally via its native ACME client.
 //
 //nolint:gocyclo // Reconcile handles multiple TLS modes and k8s object flows; kept linear for readability.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	if !cluster.Spec.TLS.Enabled {
 		logger.Info("TLS is disabled for OpenBaoCluster; skipping certificate reconciliation")
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	metrics := newTLSMetrics(cluster.Namespace, cluster.Name)
@@ -108,13 +109,19 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Handle ACME mode: OpenBao manages certificates internally, no operator action needed
 	if mode == openbaov1alpha1.TLSModeACME {
 		logger.Info("TLS mode is ACME; OpenBao manages certificates internally, skipping operator reconciliation")
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	// Handle External mode: wait for secrets and trigger reload on changes
 	if mode == openbaov1alpha1.TLSModeExternal {
 		shouldRequeue, err := m.reconcileExternalTLS(ctx, logger, cluster, metrics)
-		return shouldRequeue, err
+		if err != nil {
+			return recon.Result{}, err
+		}
+		if shouldRequeue {
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+		}
+		return recon.Result{}, nil
 	}
 
 	// OperatorManaged mode: generate and rotate certificates
@@ -128,35 +135,35 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}, caSecret)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return false, fmt.Errorf("failed to get CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
+			return recon.Result{}, fmt.Errorf("failed to get CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 		}
 
 		logger.Info("CA Secret not found; generating new CA", "secret", caSecretName)
 
 		caCertPEM, caKeyPEM, genErr := generateCA(cluster, now)
 		if genErr != nil {
-			return false, fmt.Errorf("failed to generate CA for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, genErr)
+			return recon.Result{}, fmt.Errorf("failed to generate CA for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, genErr)
 		}
 
 		caSecret = buildCASecret(cluster, caSecretName, caCertPEM, caKeyPEM)
 
 		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
 		if err := controllerutil.SetControllerReference(cluster, caSecret, m.scheme); err != nil {
-			return false, fmt.Errorf("failed to set owner reference on CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
+			return recon.Result{}, fmt.Errorf("failed to set owner reference on CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 		}
 
 		if err := m.client.Create(ctx, caSecret); err != nil {
 			// Wrap transient Kubernetes API errors
 			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return false, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err))
+				return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err))
 			}
-			return false, fmt.Errorf("failed to create CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
+			return recon.Result{}, fmt.Errorf("failed to create CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 		}
 	}
 
 	caCert, caKey, caCertPEM, parseErr := parseCAFromSecret(caSecret)
 	if parseErr != nil {
-		return false, fmt.Errorf("failed to parse CA secret %s/%s: %w", cluster.Namespace, caSecretName, parseErr)
+		return recon.Result{}, fmt.Errorf("failed to parse CA secret %s/%s: %w", cluster.Namespace, caSecretName, parseErr)
 	}
 
 	serverSecretName := serverSecretName(cluster)
@@ -168,7 +175,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	var serverCertPEM []byte
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return false, fmt.Errorf("failed to get server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+			return recon.Result{}, fmt.Errorf("failed to get server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 
 		logger.Info("Server TLS Secret not found; generating new server certificate", "secret", serverSecretName)
@@ -181,32 +188,32 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 		serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now)
 		if issueErr != nil {
-			return false, fmt.Errorf("failed to issue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
+			return recon.Result{}, fmt.Errorf("failed to issue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 		}
 
 		serverSecret = buildServerSecret(cluster, serverSecretName, serverCertPEM, serverKeyPEM, caCertPEM)
 
 		// Set OwnerReference for garbage collection when the OpenBaoCluster is deleted.
 		if err := controllerutil.SetControllerReference(cluster, serverSecret, m.scheme); err != nil {
-			return false, fmt.Errorf("failed to set owner reference on server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+			return recon.Result{}, fmt.Errorf("failed to set owner reference on server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 
 		if err := m.client.Create(ctx, serverSecret); err != nil {
 			// Wrap transient Kubernetes API errors
 			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return false, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
+				return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
 			}
-			return false, fmt.Errorf("failed to create server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+			return recon.Result{}, fmt.Errorf("failed to create server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 		if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
-			return false, err
+			return recon.Result{}, err
 		}
 
 		// Record expiry and initial rotation.
 		metrics.setServerCertExpiry(now.AddDate(0, 0, serverCertValidityDays), "OperatorManaged")
 		metrics.incrementRotation()
 
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	serverCert, certErr := parseServerCertificateFromSecret(serverSecret)
@@ -221,7 +228,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 		serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now)
 		if issueErr != nil {
-			return false, fmt.Errorf("failed to reissue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
+			return recon.Result{}, fmt.Errorf("failed to reissue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 		}
 
 		serverSecret.Data[tlsCertKey] = serverCertPEM
@@ -231,20 +238,20 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		if err := m.client.Update(ctx, serverSecret); err != nil {
 			// Wrap transient Kubernetes API errors
 			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return false, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
+				return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
 			}
-			return false, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+			return recon.Result{}, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 
 		if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
-			return false, err
+			return recon.Result{}, err
 		}
 
 		// Record expiry and rotation after issuing a replacement certificate.
 		metrics.setServerCertExpiry(now.AddDate(0, 0, serverCertValidityDays), "OperatorManaged")
 		metrics.incrementRotation()
 
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	// Note: We do not include Pod IPs in certificate SANs because Pod IPs are ephemeral
@@ -256,7 +263,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Check if certificate SANs match expected SANs; regenerate if they don't
 	expectedDNS, expectedIPs, sansErr := buildServerSANs(cluster)
 	if sansErr != nil {
-		return false, fmt.Errorf("failed to compute expected server certificate SANs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, sansErr)
+		return recon.Result{}, fmt.Errorf("failed to compute expected server certificate SANs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, sansErr)
 	}
 	if !certSANsMatch(serverCert, expectedDNS, expectedIPs) {
 		// Log detailed information about the mismatch for debugging
@@ -279,7 +286,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 		serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now)
 		if issueErr != nil {
-			return false, fmt.Errorf("failed to reissue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
+			return recon.Result{}, fmt.Errorf("failed to reissue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 		}
 
 		serverSecret.Data[tlsCertKey] = serverCertPEM
@@ -289,27 +296,27 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		if err := m.client.Update(ctx, serverSecret); err != nil {
 			// Wrap transient Kubernetes API errors
 			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return false, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
+				return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
 			}
-			return false, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+			return recon.Result{}, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 
 		if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
-			return false, err
+			return recon.Result{}, err
 		}
 
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	rotate, rotateErr := shouldRotateServerCert(serverCert, now, cluster.Spec.TLS.RotationPeriod)
 	if rotateErr != nil {
-		return false, fmt.Errorf("failed to evaluate rotation for server certificate %s/%s: %w", cluster.Namespace, serverSecretName, rotateErr)
+		return recon.Result{}, fmt.Errorf("failed to evaluate rotation for server certificate %s/%s: %w", cluster.Namespace, serverSecretName, rotateErr)
 	}
 
 	if !rotate {
 		// No rotation required; record current expiry from the existing certificate.
 		metrics.setServerCertExpiry(serverCert.NotAfter, "OperatorManaged")
-		return false, nil
+		return recon.Result{}, nil
 	}
 
 	logger.Info("Server certificate is within rotation window; reissuing", "secret", serverSecretName)
@@ -322,7 +329,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now)
 	if issueErr != nil {
-		return false, fmt.Errorf("failed to rotate server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
+		return recon.Result{}, fmt.Errorf("failed to rotate server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 	}
 
 	serverSecret.Data[tlsCertKey] = serverCertPEM
@@ -330,18 +337,18 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	serverSecret.Data[caCertKey] = caCertPEM
 
 	if err := m.client.Update(ctx, serverSecret); err != nil {
-		return false, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+		return recon.Result{}, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 	}
 
 	if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
-		return false, err
+		return recon.Result{}, err
 	}
 
 	// Record expiry and rotation for the newly issued certificate.
 	metrics.setServerCertExpiry(now.AddDate(0, 0, serverCertValidityDays), "OperatorManaged")
 	metrics.incrementRotation()
 
-	return false, nil
+	return recon.Result{}, nil
 }
 
 // reconcileExternalTLS handles TLS reconciliation when Mode is External.
