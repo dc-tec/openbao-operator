@@ -215,6 +215,6 @@ jobs:
         env:
           GOFLAGS: -mod=readonly
           E2E_LABEL_FILTER: smoke
-          E2E_PARALLEL_NODES: "1"
+          E2E_PARALLEL_NODES: "2"
           E2E_TIMEOUT: 40m
         run: make test-e2e-ci
