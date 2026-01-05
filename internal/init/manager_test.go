@@ -87,7 +87,7 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 				},
 			}
 
-			clientset := kubernetesfake.NewSimpleClientset(pod)
+			clientset := kubernetesfake.NewClientset(pod)
 			manager := &Manager{
 				config:    &rest.Config{},
 				clientset: clientset,
@@ -149,7 +149,7 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 		},
 	}
 
-	clientset := kubernetesfake.NewSimpleClientset(pod)
+	clientset := kubernetesfake.NewClientset(pod)
 	manager := &Manager{
 		config:    &rest.Config{},
 		clientset: clientset,
@@ -199,7 +199,7 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			clientset := kubernetesfake.NewSimpleClientset()
+			clientset := kubernetesfake.NewClientset()
 			manager := &Manager{
 				config:    &rest.Config{},
 				clientset: clientset,

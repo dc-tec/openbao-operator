@@ -22,7 +22,7 @@ func newTestClientset(pods ...*corev1.Pod) kubernetes.Interface {
 	for _, pod := range pods {
 		objects = append(objects, pod)
 	}
-	return fake.NewSimpleClientset(objects...)
+	return fake.NewClientset(objects...)
 }
 
 //nolint:unparam // Keeping parameters makes tests easier to expand later.
