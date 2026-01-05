@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -1413,7 +1414,8 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 				if updatedCluster.Status.Sentinel == nil {
 					updatedCluster.Status.Sentinel = &openbaov1alpha1.SentinelStatus{}
 				}
-				updatedCluster.Status.Sentinel.TriggerID = "2025-01-15T10:30:45.123456789Z"
+				// Use UUID instead of timestamp to avoid timing-related issues
+				updatedCluster.Status.Sentinel.TriggerID = string(uuid.NewUUID())
 				now := metav1.Now()
 				updatedCluster.Status.Sentinel.TriggeredAt = &now
 				updatedCluster.Status.Sentinel.TriggerResource = "StatefulSet/test-sentinel-cluster"
