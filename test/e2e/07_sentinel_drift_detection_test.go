@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -318,7 +319,8 @@ var _ = Describe("Sentinel: Drift Detection and Fast-Path Reconciliation", Label
 		By("verifying the operator responds to a Sentinel trigger via status")
 		// Simulate Sentinel emitting a drift trigger by patching status.sentinel.*.
 		// This avoids relying on non-deterministic timing of real drift detection.
-		triggerID := time.Now().UTC().Format(time.RFC3339Nano)
+		// Use UUID instead of timestamp to avoid flakiness from timing differences.
+		triggerID := string(uuid.NewUUID())
 		cluster := &openbaov1alpha1.OpenBaoCluster{}
 		Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
 		original := cluster.DeepCopy()

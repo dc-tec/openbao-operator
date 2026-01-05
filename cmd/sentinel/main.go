@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -298,7 +299,9 @@ func (r *SentinelReconciler) triggerReconciliation(ctx context.Context, resource
 		return fmt.Errorf("failed to get OpenBaoCluster: %w", err)
 	}
 
-	triggerID := time.Now().UTC().Format(time.RFC3339Nano)
+	// Use UUID instead of timestamp to avoid timing-related race conditions
+	// when the operator processes triggers.
+	triggerID := string(uuid.NewUUID())
 	original := cluster.DeepCopy()
 
 	if cluster.Status.Sentinel == nil {
