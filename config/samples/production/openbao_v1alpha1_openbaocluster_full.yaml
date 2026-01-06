@@ -150,7 +150,8 @@ spec:
     # ignoreTlog: false  # Set to true to disable Rekor transparency log verification (not recommended)
     # imagePullSecrets:  # Optional: List of ImagePullSecrets for private registry authentication
     #   - name: registry-credentials  # Secret type: kubernetes.io/dockerconfigjson
-  # Separate verification for operator images (optional - falls back to imageVerification)
+  # Separate verification for operator images (independent - no fallback to imageVerification)
+  # If not configured, helper images are NOT verified even if imageVerification is set.
   # operatorImageVerification:
   #   enabled: true
   #   issuer: "https://token.actions.githubusercontent.com"
