@@ -1,26 +1,36 @@
 {{- if .Values.admissionPolicies.enabled }}
-{{/*
-ValidatingAdmissionPolicy to restrict what Sentinel can modify on OpenBaoCluster status
-*/}}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: {{ include "openbao-operator.fullname" . }}-restrict-sentinel-mutations
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-sentinel-mutations
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
 spec:
   failurePolicy: Fail
   matchConstraints:
     resourceRules:
-      - apiGroups:
-          - openbao.org
-        apiVersions:
-          - v1alpha1
-        operations:
-          - UPDATE
-        resources:
-          - openbaoclusters/status
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["openbaoclusters/status"]
+  variables:
+    - name: is_sentinel
+      # Matches the ServiceAccount created in the tenant namespace
+      # Kubernetes ServiceAccount usernames follow format: system:serviceaccount:<namespace>:<name>
+      expression: >-
+        request.userInfo.username.startsWith("system:serviceaccount:") &&
+        request.userInfo.username.endsWith(":openbao-sentinel")
+    - name: new_status
+      # For status subresource updates, the admission `object` can be either the full
+      # OpenBaoCluster (with `.status`) or a status-only object (fields at the root).
+      expression: >-
+        has(object.status) ? object.status : object
+    - name: old_status
+      expression: >-
+        has(oldObject.status) ? oldObject.status : oldObject
   validations:
+    # Sentinel may only update status.sentinel trigger fields (GitOps-friendly).
+    # Everything else (spec, metadata, other status) must remain unchanged.
     - expression: |-
         !variables.is_sentinel || (
           (has(variables.new_status.phase) ? variables.new_status.phase : "") == (has(variables.old_status.phase) ? variables.old_status.phase : "") &&
@@ -39,6 +49,7 @@ spec:
           (has(variables.new_status.workload) ? variables.new_status.workload : null) == (has(variables.old_status.workload) ? variables.old_status.workload : null) &&
           (has(variables.new_status.adminOps) ? variables.new_status.adminOps : null) == (has(variables.old_status.adminOps) ? variables.old_status.adminOps : null) &&
           (has(variables.new_status.conditions) ? variables.new_status.conditions : []) == (has(variables.old_status.conditions) ? variables.old_status.conditions : []) &&
+
           has(variables.new_status.sentinel) &&
           (
             (!has(variables.old_status.sentinel) &&
@@ -55,24 +66,18 @@ spec:
             )
           )
         )
-      message: The Sentinel may only update status.sentinel trigger fields (triggerID/triggeredAt/triggerResource). Spec, metadata, and all other status fields are forbidden.
-  variables:
-    - expression: request.userInfo.username.startsWith("system:serviceaccount:") && request.userInfo.username.endsWith(":openbao-sentinel")
-      name: is_sentinel
-    - expression: 'has(object.status) ? object.status : object'
-      name: new_status
-    - expression: 'has(oldObject.status) ? oldObject.status : oldObject'
-      name: old_status
+      message: "The Sentinel may only update status.sentinel trigger fields (triggerID/triggeredAt/triggerResource). Spec, metadata, and all other status fields are forbidden."
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: {{ include "openbao-operator.fullname" . }}-restrict-sentinel-mutations
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-sentinel-mutations
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
 spec:
-  policyName: {{ include "openbao-operator.fullname" . }}-restrict-sentinel-mutations
+  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
+  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
+  policyName: openbao-operator-openbao-restrict-sentinel-mutations
   validationActions:
     - Deny
 {{- end }}
-

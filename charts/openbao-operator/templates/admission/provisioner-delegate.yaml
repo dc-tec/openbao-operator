@@ -1,66 +1,102 @@
-{{- if and .Values.admissionPolicies.enabled (eq .Values.tenancy.mode "multi") }}
-{{/*
-ValidatingAdmissionPolicy to restrict what the Provisioner Delegate can create
-*/}}
+{{- if .Values.admissionPolicies.enabled }}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: {{ include "openbao-operator.fullname" . }}-restrict-provisioner-delegate
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-delegate
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
 spec:
   failurePolicy: Fail
   matchConstraints:
     resourceRules:
-      - apiGroups:
-          - rbac.authorization.k8s.io
-        apiVersions:
-          - v1
-        operations:
-          - CREATE
-          - UPDATE
-        resources:
-          - roles
-          - rolebindings
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["roles", "rolebindings"]
+  variables:
+    - name: is_delegate
+      # Matches the exact ServiceAccount of the Provisioner Delegate
+      expression: >-
+        request.userInfo.username == "system:serviceaccount:{{ .Release.Namespace }}:openbao-operator-provisioner-delegate"
   validations:
-    - expression: |-
-        !variables.is_delegate || request.resource.resource != 'roles' || object.metadata.name in [
+    # Rule 1: Role Name Restriction
+    # The Delegate can ONLY create Roles with specific names.
+    # This prevents creation of arbitrary privileged roles.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'roles' ||
+        object.metadata.name in [
           'openbao-operator-tenant-role',
           'openbao-sentinel-role',
           'openbao-operator-tenant-secrets-reader',
           'openbao-operator-tenant-secrets-writer'
         ]
-      message: The Provisioner Delegate can only create Roles for the operator tenant template (tenant/sentinel/secrets allowlists).
-    - expression: |-
-        !variables.is_delegate || request.resource.resource != 'rolebindings' || object.metadata.name in [
+      message: "The Provisioner Delegate can only create Roles for the operator tenant template (tenant/sentinel/secrets allowlists)."
+
+    # Rule 2: RoleBinding Name Restriction
+    # The Delegate can ONLY create RoleBindings with specific names.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'rolebindings' ||
+        object.metadata.name in [
           'openbao-operator-tenant-rolebinding',
           'openbao-sentinel-rolebinding',
           'openbao-operator-tenant-secrets-reader-rolebinding',
           'openbao-operator-tenant-secrets-writer-rolebinding'
         ]
-      message: The Provisioner Delegate can only create RoleBindings for the operator tenant template (tenant/sentinel/secrets allowlists).
-    - expression: |-
-        !variables.is_delegate || request.resource.resource != 'rolebindings' || object.roleRef.name in [
+      message: "The Provisioner Delegate can only create RoleBindings for the operator tenant template (tenant/sentinel/secrets allowlists)."
+
+    # Rule 3: Role Reference Restriction (Prevent Admin Grant)
+    # The Delegate can ONLY bind to the specific operator-defined roles.
+    # It cannot bind 'cluster-admin' or any other privileged role.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'rolebindings' ||
+        object.roleRef.name in [
           'openbao-operator-tenant-role',
           'openbao-sentinel-role',
           'openbao-operator-tenant-secrets-reader',
           'openbao-operator-tenant-secrets-writer'
         ]
-      message: The Provisioner Delegate is restricted to binding only the operator tenant template Roles (tenant/sentinel/secrets allowlists).
-    - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings'' || object.subjects.all(s, s.kind == ''ServiceAccount'')'
-      message: The Provisioner Delegate can only grant permissions to ServiceAccounts.
-    - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings'' || object.subjects.all(s, !has(s.apiGroup) || s.apiGroup == '''')'
-      message: The Provisioner Delegate can only bind to core ServiceAccount subjects (apiGroup must be empty).
-    - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings'' || (object.roleRef.kind == ''Role'' && object.roleRef.apiGroup == ''rbac.authorization.k8s.io'')'
-      message: The Provisioner Delegate can only create RoleBindings that reference a Role (not ClusterRole).
-    - expression: |-
-        !variables.is_delegate || request.resource.resource != 'rolebindings' || (
+      message: "The Provisioner Delegate is restricted to binding only the operator tenant template Roles (tenant/sentinel/secrets allowlists)."
+
+    # Rule 4: Subject Type Restriction
+    # The Delegate can ONLY bind roles to ServiceAccounts (not users or groups).
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'rolebindings' ||
+        object.subjects.all(s, s.kind == 'ServiceAccount')
+      message: "The Provisioner Delegate can only grant permissions to ServiceAccounts."
+
+    # Rule 4b: Subject API Group Restriction
+    # For ServiceAccount subjects, apiGroup must be empty/omitted.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'rolebindings' ||
+        object.subjects.all(s, !has(s.apiGroup) || s.apiGroup == '')
+      message: "The Provisioner Delegate can only bind to core ServiceAccount subjects (apiGroup must be empty)."
+
+    # Rule 4c: RoleRef Kind/API Group Restriction
+    # RoleBindings must point to a namespaced Role (not ClusterRole).
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'rolebindings' ||
+        (object.roleRef.kind == 'Role' && object.roleRef.apiGroup == 'rbac.authorization.k8s.io')
+      message: "The Provisioner Delegate can only create RoleBindings that reference a Role (not ClusterRole)."
+
+    # Rule 5: Subject Restriction (Prevent Backdoor Creation)
+    # Tenant RoleBinding must bind ONLY the controller ServiceAccount in the operator namespace.
+    # Sentinel RoleBinding must bind ONLY the openbao-sentinel ServiceAccount in the tenant namespace.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'rolebindings' ||
+        (
           (
             object.metadata.name == 'openbao-operator-tenant-rolebinding' &&
             object.roleRef.name == 'openbao-operator-tenant-role' &&
             object.subjects.size() == 1 &&
             object.subjects[0].kind == 'ServiceAccount' &&
-            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
+            object.subjects[0].name == 'openbao-operator-controller' &&
             object.subjects[0].namespace == '{{ .Release.Namespace }}'
           ) ||
           (
@@ -76,7 +112,7 @@ spec:
             object.roleRef.name == 'openbao-operator-tenant-secrets-reader' &&
             object.subjects.size() == 1 &&
             object.subjects[0].kind == 'ServiceAccount' &&
-            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
+            object.subjects[0].name == 'openbao-operator-controller' &&
             object.subjects[0].namespace == '{{ .Release.Namespace }}'
           ) ||
           (
@@ -84,13 +120,22 @@ spec:
             object.roleRef.name == 'openbao-operator-tenant-secrets-writer' &&
             object.subjects.size() == 1 &&
             object.subjects[0].kind == 'ServiceAccount' &&
-            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
+            object.subjects[0].name == 'openbao-operator-controller' &&
             object.subjects[0].namespace == '{{ .Release.Namespace }}'
           )
         )
-      message: The Provisioner Delegate can only bind tenant RBAC to the operator controller ServiceAccount, or sentinel RBAC to the tenant-local openbao-sentinel ServiceAccount.
-    - expression: |-
-        !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+      message: "The Provisioner Delegate can only bind tenant RBAC to the operator controller ServiceAccount, or sentinel RBAC to the tenant-local openbao-sentinel ServiceAccount."
+
+    # Rule 6: Content Restriction (Prevent Dangerous Verbs)
+    # The Delegate cannot create or update Roles that grant impersonation,
+    # bind/escalate, or wildcard permissions. This provides defense-in-depth
+    # even if the delegate ClusterRole is accidentally broadened in the future.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'roles' ||
+        !has(object.rules) ||
+        object.rules == null ||
+        !object.rules.exists(rule,
           has(rule.verbs) &&
           rule.verbs != null &&
           rule.verbs.exists(v,
@@ -100,9 +145,16 @@ spec:
             v == '*'
           )
         )
-      message: The Provisioner Delegate cannot create Roles granting 'impersonate', 'bind', 'escalate', or wildcard permissions.
-    - expression: |-
-        !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+      message: "The Provisioner Delegate cannot create Roles granting 'impersonate', 'bind', 'escalate', or wildcard permissions."
+
+    # Rule 7: Content Restriction (Prevent Wildcard Resources)
+    # Defense-in-depth: prevent creating Roles with wildcard apiGroups or resources.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'roles' ||
+        !has(object.rules) ||
+        object.rules == null ||
+        !object.rules.exists(rule,
           (
             has(rule.apiGroups) &&
             rule.apiGroups != null &&
@@ -114,16 +166,31 @@ spec:
             rule.resources.exists(r, r == '*')
           )
         )
-      message: The Provisioner Delegate cannot create Roles with wildcard apiGroups or resources.
-    - expression: |-
-        !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+      message: "The Provisioner Delegate cannot create Roles with wildcard apiGroups or resources."
+
+    # Rule 7b: Content Restriction (Prevent Non-Resource URLs)
+    # Defense-in-depth: prevent granting access to non-resource URLs.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'roles' ||
+        !has(object.rules) ||
+        object.rules == null ||
+        !object.rules.exists(rule,
           has(rule.nonResourceURLs) &&
           rule.nonResourceURLs != null &&
           rule.nonResourceURLs.size() > 0
         )
-      message: The Provisioner Delegate cannot create Roles granting nonResourceURLs.
-    - expression: |-
-        !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+      message: "The Provisioner Delegate cannot create Roles granting nonResourceURLs."
+
+    # Rule 8: Content Restriction (Secrets)
+    # Defense-in-depth: prevent accidental broadening of tenant roles to include
+    # Secrets enumeration, and ensure the Sentinel role never touches Secrets.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'roles' ||
+        !has(object.rules) ||
+        object.rules == null ||
+        !object.rules.exists(rule,
           has(rule.resources) &&
           rule.resources != null &&
           rule.resources.exists(r, r == 'secrets') &&
@@ -136,32 +203,25 @@ spec:
             )
           )
         )
-      message: The Provisioner Delegate cannot grant Secrets list/watch, and Sentinel RBAC must not include Secrets permissions.
-  variables:
-    - expression: request.userInfo.username == "system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.provisionerDelegateServiceAccountName" . }}"
-      name: is_delegate
+      message: "The Provisioner Delegate cannot grant Secrets list/watch, and Sentinel RBAC must not include Secrets permissions."
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: {{ include "openbao-operator.fullname" . }}-restrict-provisioner-delegate
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-delegate-binding
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
 spec:
+  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
+  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
+  policyName: openbao-operator-openbao-restrict-provisioner-delegate
+  validationActions: [Deny]
   matchResources:
+    # This binding applies the policy to ALL Role/RoleBinding requests.
+    # The policy itself filters for the specific user (is_delegate variable).
     resourceRules:
-      - apiGroups:
-          - rbac.authorization.k8s.io
-        apiVersions:
-          - v1
-        operations:
-          - CREATE
-          - UPDATE
-        resources:
-          - roles
-          - rolebindings
-  policyName: {{ include "openbao-operator.fullname" . }}-restrict-provisioner-delegate
-  validationActions:
-    - Deny
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["roles", "rolebindings"]
 {{- end }}
-
