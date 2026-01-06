@@ -127,11 +127,18 @@ spec:
   # By default, signatures are verified against the Rekor transparency log for non-repudiation.
   # The operator resolves image tags to digests during verification and uses the verified
   # digest in operator-managed workloads (StatefulSets/Deployments/Jobs) to prevent TOCTOU
-  # (Time-of-Check to Time-of-Use) attacks. Ensure all helper images used by this spec are signed
-  # (init container, Sentinel, backup executor, upgrade executor, etc.).
+  # (Time-of-Check to Time-of-Use) attacks.
+  #
+  # imageVerification: Verifies the main OpenBao server image (openbao/openbao).
+  # operatorImageVerification: Verifies operator-provided helper images (init container,
+  #   Sentinel, backup executor, upgrade executor, etc.). If not specified, falls back
+  #   to imageVerification.
   imageVerification:
     enabled: true
     issuer: "https://token.actions.githubusercontent.com"
+    # For official OpenBao images, use the OpenBao project's workflow:
+    # subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4"
+    # For development/testing with operator-signed images:
     subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v2.4.4"
     # PEM-encoded Cosign public key for signature verification.
     # Download the official OpenBao public key from: https://openbao.org/docs/install/#cosign-and-rekor
@@ -143,6 +150,12 @@ spec:
     # ignoreTlog: false  # Set to true to disable Rekor transparency log verification (not recommended)
     # imagePullSecrets:  # Optional: List of ImagePullSecrets for private registry authentication
     #   - name: registry-credentials  # Secret type: kubernetes.io/dockerconfigjson
+  # Separate verification for operator images (optional - falls back to imageVerification)
+  # operatorImageVerification:
+  #   enabled: true
+  #   issuer: "https://token.actions.githubusercontent.com"
+  #   subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v1.2.4"
+  #   failurePolicy: Block
   initContainer:
     enabled: true
     # For k3d clusters, use the k3d registry path: k3d-registry.localhost:5000/openbao-config-init:dev
