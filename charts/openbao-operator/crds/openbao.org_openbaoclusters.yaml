@@ -1139,6 +1139,78 @@ spec:
                       type: object
                     type: array
                 type: object
+              operatorImageVerification:
+                description: |-
+                  OperatorImageVerification configures supply chain security checks for operator-managed helper images
+                  (init container, sentinel, backup/upgrade/restore executors). These images are typically signed
+                  by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.
+                  If not specified, falls back to the main ImageVerification config.
+                properties:
+                  enabled:
+                    description: Enabled controls whether image verification is enforced.
+                    type: boolean
+                  failurePolicy:
+                    default: Block
+                    description: |-
+                      FailurePolicy defines behavior on verification failure.
+                      "Block" blocks reconciliation of the affected workload when verification fails.
+                      "Warn" logs an error and emits a Kubernetes Event but proceeds.
+                    enum:
+                    - Warn
+                    - Block
+                    type: string
+                  ignoreTlog:
+                    default: false
+                    description: |-
+                      IgnoreTlog controls whether to verify against the Rekor transparency log.
+                      When false (default), signatures are verified against Rekor for non-repudiation.
+                      When true, only signature verification is performed without transparency log checks.
+                    type: boolean
+                  imagePullSecrets:
+                    description: |-
+                      ImagePullSecrets is a list of references to secrets in the same namespace
+                      to use for pulling images from private registries during verification.
+                      These secrets must be of type kubernetes.io/dockerconfigjson or kubernetes.io/dockercfg.
+                    items:
+                      description: |-
+                        LocalObjectReference contains enough information to let you locate the
+                        referenced object inside the same namespace.
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                  issuer:
+                    description: |-
+                      Issuer is the OIDC issuer for keyless verification (e.g., https://token.actions.githubusercontent.com).
+                      Required for keyless verification when PublicKey is not provided.
+                      For GitHub Actions keyless verification, use: https://token.actions.githubusercontent.com
+                    type: string
+                  publicKey:
+                    description: |-
+                      PublicKey is the Cosign public key content used to verify the signature.
+                      Required for static key verification. If empty, keyless verification will be used
+                      (requires Issuer and Subject to be set).
+                    type: string
+                  subject:
+                    description: |-
+                      Subject is the OIDC subject for keyless verification.
+                      Required for keyless verification when PublicKey is not provided.
+                      Example (GitHub Actions): https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v<VERSION>
+                      The version in the subject MUST match the image tag version.
+                    type: string
+                required:
+                - enabled
+                - failurePolicy
+                type: object
               paused:
                 description: Paused, when true, pauses reconciliation for this OpenBaoCluster
                   (except delete and finalizers).
