@@ -89,8 +89,42 @@ By default, the Operator verifies signatures against the [Sigstore Rekor](https:
 
 Verification applies to all images managed by the Operator:
 
-- [x] **OpenBao Server** (`spec.image`)
-- [x] **Init Container** (`spec.initContainer.image`)
-- [x] **Sentinel Sidecar** (`spec.sentinel.image`)
-- [x] **Backup Jobs** (`spec.backup.executorImage`)
-- [x] **Upgrade/Restore Jobs**
+| Image | Config Field | Description |
+| :--- | :--- | :--- |
+| **OpenBao Server** | `spec.imageVerification` | The main OpenBao binary |
+| **Init Container** | `spec.operatorImageVerification` | Helper for config rendering |
+| **Sentinel Sidecar** | `spec.operatorImageVerification` | Drift detection sidecar |
+| **Backup/Restore Jobs** | `spec.operatorImageVerification` | Snapshot executors |
+| **Upgrade Jobs** | `spec.operatorImageVerification` | Raft membership jobs |
+
+## Separate Signers for OpenBao and Operator Images
+
+The OpenBao main image (`openbao/openbao`) is signed by the **OpenBao project**, while helper images (init container, sentinel, backup/restore executors) are signed by the **operator project**. Use `operatorImageVerification` to specify different signing credentials:
+
+```yaml
+spec:
+  # Main OpenBao image (signed by openbao/openbao)
+  image: "openbao/openbao:2.4.4"
+  imageVerification:
+    enabled: true
+    issuer: "https://token.actions.githubusercontent.com"
+    subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4"
+    failurePolicy: Block
+
+  # Operator images (signed by dc-tec/openbao-operator)
+  operatorImageVerification:
+    enabled: true
+    issuer: "https://token.actions.githubusercontent.com"
+    subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v1.2.4"
+    failurePolicy: Block
+
+  initContainer:
+    image: "ghcr.io/dc-tec/openbao-config-init:1.2.4"
+  backup:
+    executorImage: "ghcr.io/dc-tec/openbao-backup:1.1.0"
+```
+
+!!! important "No Fallback Behavior"
+    `operatorImageVerification` and `imageVerification` are completely independent configurations.
+    If `operatorImageVerification` is not configured, helper images are **not verified** (even if `imageVerification` is set).
+    This prevents confusing failures when the main image and helper images have different signers.

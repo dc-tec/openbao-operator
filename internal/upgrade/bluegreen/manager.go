@@ -63,6 +63,19 @@ func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) str
 	return failurePolicy
 }
 
+func operatorImageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	// Use OperatorImageVerification only - no fallback
+	config := cluster.Spec.OperatorImageVerification
+	if config == nil {
+		return constants.ImageVerificationFailurePolicyBlock
+	}
+	failurePolicy := config.FailurePolicy
+	if failurePolicy == "" {
+		return constants.ImageVerificationFailurePolicyBlock
+	}
+	return failurePolicy
+}
+
 func initContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	if cluster.Spec.InitContainer == nil {
 		return ""
@@ -88,6 +101,34 @@ func (m *Manager) verifyImageDigest(ctx context.Context, logger logr.Logger, clu
 	}
 
 	failurePolicy := imageVerificationFailurePolicy(cluster)
+	if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+		return "", operatorerrors.WithReason(failureReason, fmt.Errorf("%s (policy=Block): %w", failureMessagePrefix, err))
+	}
+
+	logger.Error(err, failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
+	return "", nil
+}
+
+func (m *Manager) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
+	// Use OperatorImageVerification only - no fallback to ImageVerification
+	verificationConfig := cluster.Spec.OperatorImageVerification
+	if verificationConfig == nil || !verificationConfig.Enabled {
+		return "", nil
+	}
+	if imageRef == "" {
+		return "", nil
+	}
+
+	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+	defer cancel()
+
+	digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.client, cluster, imageRef)
+	if err == nil {
+		logger.Info("Operator image verified successfully", "digest", digest)
+		return digest, nil
+	}
+
+	failurePolicy := operatorImageVerificationFailurePolicy(cluster)
 	if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
 		return "", operatorerrors.WithReason(failureReason, fmt.Errorf("%s (policy=Block): %w", failureMessagePrefix, err))
 	}
@@ -579,7 +620,7 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 		}
 
 		initImage := initContainerImage(cluster)
-		verifiedInitContainerDigest, err := m.verifyImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Green init container image verification failed")
+		verifiedInitContainerDigest, err := m.verifyOperatorImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Green init container image verification failed")
 		if err != nil {
 			return phaseOutcome{}, err
 		}

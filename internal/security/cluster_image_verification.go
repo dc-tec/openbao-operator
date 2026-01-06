@@ -47,3 +47,46 @@ func VerifyImageForCluster(ctx context.Context, logger logr.Logger, k8sClient cl
 
 	return digest, nil
 }
+
+// VerifyOperatorImageForCluster verifies an operator-managed helper image (init container, sentinel,
+// backup/upgrade/restore executors) using the cluster's OperatorImageVerification config.
+// Unlike VerifyImageForCluster, this function does NOT fall back to ImageVerification.
+// If OperatorImageVerification is not configured, verification is skipped for helper images.
+func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, k8sClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
+	if cluster == nil {
+		return "", fmt.Errorf("cluster is required")
+	}
+	if imageRef == "" {
+		return "", fmt.Errorf("image reference is required")
+	}
+
+	// Use OperatorImageVerification only - no fallback to ImageVerification
+	// This prevents confusing failures when the main image and helper images have different signers
+	verificationConfig := cluster.Spec.OperatorImageVerification
+	if verificationConfig == nil || !verificationConfig.Enabled {
+		return "", nil
+	}
+
+	// Validate that either PublicKey OR (Issuer and Subject) are provided.
+	if verificationConfig.PublicKey == "" &&
+		(verificationConfig.Issuer == "" || verificationConfig.Subject == "") {
+		return "", fmt.Errorf("operator image verification is enabled but neither public key nor keyless configuration (issuer and subject) is provided")
+	}
+
+	verifier := NewImageVerifier(logger, k8sClient, nil)
+	config := VerifyConfig{
+		PublicKey:        verificationConfig.PublicKey,
+		Issuer:           verificationConfig.Issuer,
+		Subject:          verificationConfig.Subject,
+		IgnoreTlog:       verificationConfig.IgnoreTlog,
+		ImagePullSecrets: verificationConfig.ImagePullSecrets,
+		Namespace:        cluster.Namespace,
+	}
+
+	digest, err := verifier.Verify(ctx, imageRef, config)
+	if err != nil {
+		return "", err
+	}
+
+	return digest, nil
+}

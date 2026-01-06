@@ -77,13 +77,15 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 
 		verifiedExecutorDigest := ""
 		executorImage := getBackupExecutorImage(cluster)
-		if executorImage != "" && cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
+		// Use OperatorImageVerification only - no fallback to ImageVerification
+		verificationConfig := cluster.Spec.OperatorImageVerification
+		if executorImage != "" && verificationConfig != nil && verificationConfig.Enabled {
 			verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 			defer cancel()
 
-			digest, err := security.VerifyImageForCluster(verifyCtx, logger, m.client, cluster, executorImage)
+			digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.client, cluster, executorImage)
 			if err != nil {
-				failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+				failurePolicy := verificationConfig.FailurePolicy
 				if failurePolicy == "" {
 					failurePolicy = constants.ImageVerificationFailurePolicyBlock
 				}

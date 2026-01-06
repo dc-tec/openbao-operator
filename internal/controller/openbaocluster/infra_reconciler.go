@@ -46,6 +46,19 @@ func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) str
 	return failurePolicy
 }
 
+func operatorImageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	// Use OperatorImageVerification only - no fallback
+	config := cluster.Spec.OperatorImageVerification
+	if config == nil {
+		return constants.ImageVerificationFailurePolicyBlock
+	}
+	failurePolicy := config.FailurePolicy
+	if failurePolicy == "" {
+		return constants.ImageVerificationFailurePolicyBlock
+	}
+	return failurePolicy
+}
+
 func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
 	if cluster.Spec.ImageVerification == nil || !cluster.Spec.ImageVerification.Enabled {
 		return "", nil
@@ -72,8 +85,10 @@ func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr
 	return "", nil
 }
 
-func (r *infraReconciler) verifyImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
-	if cluster.Spec.ImageVerification == nil || !cluster.Spec.ImageVerification.Enabled {
+func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
+	// Use OperatorImageVerification only - no fallback to ImageVerification
+	verificationConfig := cluster.Spec.OperatorImageVerification
+	if verificationConfig == nil || !verificationConfig.Enabled {
 		return "", nil
 	}
 	if strings.TrimSpace(imageRef) == "" {
@@ -83,13 +98,13 @@ func (r *infraReconciler) verifyImageDigest(ctx context.Context, logger logr.Log
 	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 	defer cancel()
 
-	digest, err := security.VerifyImageForCluster(verifyCtx, logger, r.client, cluster, imageRef)
+	digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, r.client, cluster, imageRef)
 	if err == nil {
-		logger.Info("Image verified successfully", "digest", digest)
+		logger.Info("Operator image verified successfully", "digest", digest)
 		return digest, nil
 	}
 
-	failurePolicy := imageVerificationFailurePolicy(cluster)
+	failurePolicy := operatorImageVerificationFailurePolicy(cluster)
 	if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
 		return "", operatorerrors.WithReason(failureReason, fmt.Errorf("%s (policy=Block): %w", failureMessagePrefix, err))
 	}
@@ -108,7 +123,7 @@ func (r *infraReconciler) verifySentinelImageDigest(ctx context.Context, logger 
 		sentinelImage = inframanager.SentinelImage(cluster, logger)
 	}
 
-	return r.verifyImageDigest(ctx, logger, cluster, sentinelImage, constants.ReasonSentinelImageVerificationFailed, "Sentinel image verification failed")
+	return r.verifyOperatorImageDigest(ctx, logger, cluster, sentinelImage, constants.ReasonSentinelImageVerificationFailed, "Sentinel image verification failed")
 }
 
 func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
@@ -121,7 +136,7 @@ func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, lo
 		return "", nil
 	}
 
-	return r.verifyImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Init container image verification failed")
+	return r.verifyOperatorImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Init container image verification failed")
 }
 
 func (r *infraReconciler) reconcileSentinelAdmissionStatus(cluster *openbaov1alpha1.OpenBaoCluster) bool {

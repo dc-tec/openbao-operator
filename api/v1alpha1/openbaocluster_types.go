@@ -1462,6 +1462,12 @@ type OpenBaoClusterSpec struct {
 	// ImageVerification configures supply chain security checks.
 	// +optional
 	ImageVerification *ImageVerificationConfig `json:"imageVerification,omitempty"`
+	// OperatorImageVerification configures supply chain security checks for operator-managed helper images
+	// (init container, sentinel, backup/upgrade/restore executors). These images are typically signed
+	// by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.
+	// If not specified, falls back to the main ImageVerification config.
+	// +optional
+	OperatorImageVerification *ImageVerificationConfig `json:"operatorImageVerification,omitempty"`
 	// WorkloadHardening configures opt-in workload hardening features.
 	// +optional
 	WorkloadHardening *WorkloadHardeningConfig `json:"workloadHardening,omitempty"`
