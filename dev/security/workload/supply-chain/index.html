@@ -2903,6 +2903,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#separate-signers-for-openbao-and-operator-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Separate Signers for OpenBao and Operator Images
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3898,6 +3909,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#separate-signers-for-openbao-and-operator-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Separate Signers for OpenBao and Operator Images
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4019,13 +4041,71 @@
 </table>
 <h2 id="verified-workloads">Verified Workloads<a class="headerlink" href="#verified-workloads" title="Permanent link">&para;</a></h2>
 <p>Verification applies to all images managed by the Operator:</p>
-<ul class="task-list">
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>OpenBao Server</strong> (<code>spec.image</code>)</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Init Container</strong> (<code>spec.initContainer.image</code>)</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Sentinel Sidecar</strong> (<code>spec.sentinel.image</code>)</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Backup Jobs</strong> (<code>spec.backup.executorImage</code>)</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Upgrade/Restore Jobs</strong></li>
-</ul>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Image</th>
+<th style="text-align: left;">Config Field</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>OpenBao Server</strong></td>
+<td style="text-align: left;"><code>spec.imageVerification</code></td>
+<td style="text-align: left;">The main OpenBao binary</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Init Container</strong></td>
+<td style="text-align: left;"><code>spec.operatorImageVerification</code></td>
+<td style="text-align: left;">Helper for config rendering</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Sentinel Sidecar</strong></td>
+<td style="text-align: left;"><code>spec.operatorImageVerification</code></td>
+<td style="text-align: left;">Drift detection sidecar</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Backup/Restore Jobs</strong></td>
+<td style="text-align: left;"><code>spec.operatorImageVerification</code></td>
+<td style="text-align: left;">Snapshot executors</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Upgrade Jobs</strong></td>
+<td style="text-align: left;"><code>spec.operatorImageVerification</code></td>
+<td style="text-align: left;">Raft membership jobs</td>
+</tr>
+</tbody>
+</table>
+<h2 id="separate-signers-for-openbao-and-operator-images">Separate Signers for OpenBao and Operator Images<a class="headerlink" href="#separate-signers-for-openbao-and-operator-images" title="Permanent link">&para;</a></h2>
+<p>The OpenBao main image (<code>openbao/openbao</code>) is signed by the <strong>OpenBao project</strong>, while helper images (init container, sentinel, backup/restore executors) are signed by the <strong>operator project</strong>. Use <code>operatorImageVerification</code> to specify different signing credentials:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="c1"># Main OpenBao image (signed by openbao/openbao)</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;openbao/openbao:2.4.4&quot;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">imageVerification</span><span class="p">:</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="nt">issuer</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://token.actions.githubusercontent.com&quot;</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nt">subject</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4&quot;</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">failurePolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Block</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="c1"># Operator images (signed by dc-tec/openbao-operator)</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="nt">operatorImageVerification</span><span class="p">:</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="nt">issuer</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://token.actions.githubusercontent.com&quot;</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="nt">subject</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v1.2.4&quot;</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="nt">failurePolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Block</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">  </span><span class="nt">initContainer</span><span class="p">:</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ghcr.io/dc-tec/openbao-config-init:1.2.4&quot;</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">  </span><span class="nt">backup</span><span class="p">:</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="nt">executorImage</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ghcr.io/dc-tec/openbao-backup:1.1.0&quot;</span>
+</span></code></pre></div>
+<div class="admonition important">
+<p class="admonition-title">No Fallback Behavior</p>
+<p><code>operatorImageVerification</code> and <code>imageVerification</code> are completely independent configurations.
+If <code>operatorImageVerification</code> is not configured, helper images are <strong>not verified</strong> (even if <code>imageVerification</code> is set).
+This prevents confusing failures when the main image and helper images have different signers.</p>
+</div>
 
 
 
