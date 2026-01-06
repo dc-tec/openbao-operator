@@ -153,22 +153,118 @@ changelog-all: ## Generate CHANGELOG.md including all git tags (local, non-CI).
 	@go run ./hack/changelog --out CHANGELOG.md --all-tags
 
 .PHONY: helm-sync
-helm-sync: manifests ## Sync Helm chart CRDs from config/crd/bases.
+helm-sync: manifests ## Sync Helm chart from config/ (CRDs, admission policies).
 	@go run ./hack/helmchart
 
 .PHONY: verify-helm
-verify-helm: helm-sync ## Verify Helm chart CRDs are up-to-date (does not modify tracked files).
+verify-helm: helm-sync ## Verify Helm chart is up-to-date (does not modify tracked files).
 	@{ \
-		git diff --exit-code -- charts/openbao-operator/crds; \
+		git diff --exit-code -- charts/openbao-operator/crds charts/openbao-operator/templates/admission; \
 	} || { \
-		echo "Helm chart CRDs are out of date. Run 'make helm-sync' and commit the result."; \
-		git --no-pager diff -- charts/openbao-operator/crds; \
+		echo "Helm chart is out of date. Run 'make helm-sync' and commit the result."; \
+		git --no-pager diff -- charts/openbao-operator/crds charts/openbao-operator/templates/admission; \
 		exit 1; \
 	}
+
 
 .PHONY: helm-lint
 helm-lint: ## Lint the Helm chart.
 	@helm lint charts/openbao-operator
+
+.PHONY: helm-test
+helm-test: helm-sync helm-lint ## Test the Helm chart (lint, template, and dry-run install).
+	@echo "Testing Helm chart: templating with default values..."
+	@helm template openbao-operator charts/openbao-operator \
+		--namespace openbao-operator-system \
+		--include-crds > /dev/null
+	@echo "Testing Helm chart: templating with multi-tenant mode..."
+	@helm template openbao-operator charts/openbao-operator \
+		--namespace openbao-operator-system \
+		--include-crds \
+		--set tenancy.mode=multi > /dev/null
+	@echo "Testing Helm chart: templating with single-tenant mode..."
+	@helm template openbao-operator charts/openbao-operator \
+		--namespace openbao-operator-system \
+		--include-crds \
+		--set tenancy.mode=single \
+		--set tenancy.targetNamespace=openbao-system > /dev/null
+	@echo "Testing Helm chart: dry-run install with default values..."
+	@helm install openbao-operator charts/openbao-operator \
+		--namespace openbao-operator-system \
+		--create-namespace \
+		--dry-run > /dev/null
+	@echo "Helm chart tests passed successfully!"
+
+.PHONY: helm-template
+helm-template: helm-sync ## Template the Helm chart with default values (useful for debugging).
+	@helm template openbao-operator charts/openbao-operator \
+		--namespace openbao-operator-system \
+		--include-crds
+
+.PHONY: helm-package
+helm-package: helm-sync ## Package the Helm chart to verify it's valid.
+	@mkdir -p dist
+	@helm package charts/openbao-operator -d dist
+	@echo "Helm chart packaged successfully in dist/"
+
+.PHONY: helm-install
+helm-install: helm-sync ## Install the Helm chart from local charts directory. Use IMG=image:tag or IMG=image@digest to override the operator image.
+	@if [ -z "$(IMG)" ]; then \
+		echo "Warning: IMG not set. Using default image from values.yaml"; \
+		helm install openbao-operator charts/openbao-operator \
+			--namespace openbao-operator-system \
+			--create-namespace; \
+	else \
+		if echo "$(IMG)" | grep -q '@'; then \
+			image_repo=$$(echo "$(IMG)" | cut -d@ -f1); \
+			image_digest=$$(echo "$(IMG)" | cut -d@ -f2); \
+			echo "Installing with image: $(IMG) (using digest)"; \
+			helm install openbao-operator charts/openbao-operator \
+				--namespace openbao-operator-system \
+				--create-namespace \
+				--set image.repository=$$image_repo \
+				--set image.digest=$$image_digest; \
+		else \
+			image_repo=$$(echo "$(IMG)" | sed 's/:[^:]*$$//'); \
+			image_tag=$$(echo "$(IMG)" | sed 's/.*://'); \
+			echo "Installing with image: $(IMG) (using tag)"; \
+			helm install openbao-operator charts/openbao-operator \
+				--namespace openbao-operator-system \
+				--create-namespace \
+				--set image.repository=$$image_repo \
+				--set image.tag=$$image_tag; \
+		fi; \
+	fi
+
+.PHONY: helm-upgrade
+helm-upgrade: helm-sync ## Upgrade the Helm chart from local charts directory. Use IMG=image:tag or IMG=image@digest to override the operator image.
+	@if [ -z "$(IMG)" ]; then \
+		echo "Warning: IMG not set. Using default image from values.yaml"; \
+		helm upgrade openbao-operator charts/openbao-operator \
+			--namespace openbao-operator-system; \
+	else \
+		if echo "$(IMG)" | grep -q '@'; then \
+			image_repo=$$(echo "$(IMG)" | cut -d@ -f1); \
+			image_digest=$$(echo "$(IMG)" | cut -d@ -f2); \
+			echo "Upgrading with image: $(IMG) (using digest)"; \
+			helm upgrade openbao-operator charts/openbao-operator \
+				--namespace openbao-operator-system \
+				--set image.repository=$$image_repo \
+				--set image.digest=$$image_digest; \
+		else \
+			image_repo=$$(echo "$(IMG)" | sed 's/:[^:]*$$//'); \
+			image_tag=$$(echo "$(IMG)" | sed 's/.*://'); \
+			echo "Upgrading with image: $(IMG) (using tag)"; \
+			helm upgrade openbao-operator charts/openbao-operator \
+				--namespace openbao-operator-system \
+				--set image.repository=$$image_repo \
+				--set image.tag=$$image_tag; \
+		fi; \
+	fi
+
+.PHONY: helm-uninstall
+helm-uninstall: ## Uninstall the Helm chart from the cluster.
+	@helm uninstall openbao-operator --namespace openbao-operator-system || true
 
 .PHONY: test-update-golden
 test-update-golden: ## Update golden files for HCL generation tests. Run this when modifying internal/config/builder.go or related config generation logic.
