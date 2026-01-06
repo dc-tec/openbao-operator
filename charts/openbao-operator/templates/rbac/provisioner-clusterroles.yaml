@@ -250,8 +250,14 @@ rules:
       - secrets
     verbs:
       - get
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
       - create
       - delete
+      - get
       - patch
       - update
 ---

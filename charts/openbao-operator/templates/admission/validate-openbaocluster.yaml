@@ -1,7 +1,4 @@
 {{- if .Values.admissionPolicies.enabled }}
-{{/*
-ValidatingAdmissionPolicy to validate OpenBaoCluster spec
-*/}}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -12,18 +9,22 @@ spec:
   failurePolicy: Fail
   matchConstraints:
     resourceRules:
-      - apiGroups:
-          - openbao.org
-        apiVersions:
-          - v1alpha1
-        operations:
-          - CREATE
-          - UPDATE
-        resources:
-          - openbaoclusters
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["openbaoclusters"]
+  variables:
+    - name: has_backup
+      expression: has(object.spec.backup)
+    - name: has_pre_upgrade_snapshot
+      expression: has(object.spec.upgrade) && object.spec.upgrade.preUpgradeSnapshot == true
+    - name: has_bluegreen_pre_upgrade_snapshot
+      expression: has(object.spec.upgrade) && has(object.spec.upgrade.blueGreen) && object.spec.upgrade.blueGreen.preUpgradeSnapshot == true
   validations:
-    - expression: |-
-        !has(object.spec.profile) || object.spec.profile != "Hardened" || (object.spec.tls.mode in ["External", "ACME"] &&
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        (object.spec.tls.mode in ["External", "ACME"] &&
           has(object.spec.unseal) &&
           object.spec.unseal.type != "static" &&
           has(object.spec.selfInit) &&
@@ -31,49 +32,75 @@ spec:
           !(has(object.spec.unseal.transit) && has(object.spec.unseal.transit.tlsSkipVerify) && object.spec.unseal.transit.tlsSkipVerify == true) &&
           !(has(object.spec.unseal.kmip) && has(object.spec.unseal.kmip.tlsSkipVerify) && object.spec.unseal.kmip.tlsSkipVerify == true))
       message: Hardened profile requires TLS mode External or ACME, an external unseal (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
-    - expression: has(object.spec.initContainer) && object.spec.initContainer.enabled == true && object.spec.initContainer.image != ""
+    - expression: >-
+        has(object.spec.initContainer) &&
+        object.spec.initContainer.enabled == true &&
+        object.spec.initContainer.image != ""
       message: spec.initContainer is required, must be enabled, and must specify a non-empty image.
-    - expression: '!has(object.spec.selfInit) || object.spec.selfInit.enabled == false || (has(object.spec.selfInit.bootstrapJWTAuth) && object.spec.selfInit.bootstrapJWTAuth == true) || (has(object.spec.selfInit.requests) && size(object.spec.selfInit.requests) > 0)'
+    - expression: >-
+        !has(object.spec.selfInit) ||
+        object.spec.selfInit.enabled == false ||
+        (has(object.spec.selfInit.bootstrapJWTAuth) && object.spec.selfInit.bootstrapJWTAuth == true) ||
+        (has(object.spec.selfInit.requests) && size(object.spec.selfInit.requests) > 0)
       message: spec.selfInit.requests is required and must not be empty when spec.selfInit.enabled is true unless spec.selfInit.bootstrapJWTAuth is true.
-    - expression: |-
-        !has(object.spec.selfInit) || object.spec.selfInit.enabled == false || (!has(object.spec.selfInit.requests) ||
+    - expression: >-
+        !has(object.spec.selfInit) ||
+        object.spec.selfInit.enabled == false ||
+        (!has(object.spec.selfInit.requests) ||
           (size(object.spec.selfInit.requests) <= 64 &&
             object.spec.selfInit.requests.all(r,
               object.spec.selfInit.requests.filter(x, x.name == r.name).size() == 1) &&
             object.spec.selfInit.requests.all(r, size(r.path) <= 256)))
       message: spec.selfInit.requests must have unique names (max 64) and request paths must be <= 256 characters.
-    - expression: '!has(object.spec.gateway) || object.spec.gateway.enabled == false || (object.spec.gateway.hostname != "" && object.spec.gateway.gatewayRef.name != "")'
+    - expression: >-
+        !has(object.spec.gateway) ||
+        object.spec.gateway.enabled == false ||
+        (object.spec.gateway.hostname != "" && object.spec.gateway.gatewayRef.name != "")
       message: spec.gateway.hostname and spec.gateway.gatewayRef.name are required when Gateway is enabled.
-    - expression: |-
-        !variables.has_backup || (object.spec.backup.schedule != "" &&
+    - expression: >-
+        !variables.has_backup ||
+        (object.spec.backup.schedule != "" &&
           object.spec.backup.executorImage != "" &&
           (object.spec.backup.jwtAuthRole != "" || has(object.spec.backup.tokenSecretRef)) &&
           (object.spec.backup.target.roleArn != "" || has(object.spec.backup.target.credentialsSecretRef)) &&
           object.spec.backup.schedule.matches("^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$"))
       message: spec.backup requires schedule, executorImage, OpenBao auth (jwtAuthRole or tokenSecretRef), storage auth (target.roleArn or target.credentialsSecretRef), and a 5-field cron expression.
-    - expression: |-
-        !has(object.spec.profile) || object.spec.profile != "Hardened" || !(variables.has_backup || variables.has_pre_upgrade_snapshot || variables.has_bluegreen_pre_upgrade_snapshot) || (has(object.spec.network) &&
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !(variables.has_backup || variables.has_pre_upgrade_snapshot || variables.has_bluegreen_pre_upgrade_snapshot) ||
+        (has(object.spec.network) &&
           has(object.spec.network.egressRules) &&
           size(object.spec.network.egressRules) > 0)
       message: Hardened profile requires non-empty spec.network.egressRules when backups or pre-upgrade snapshots are enabled.
-    - expression: |-
-        !variables.has_backup || !has(object.spec.backup.target.endpoint) || object.spec.backup.target.endpoint == "" || !(
+    # SSRF Protection: Block localhost endpoints (all profiles - localhost is never a valid backup target)
+    - expression: >-
+        !variables.has_backup ||
+        !has(object.spec.backup.target.endpoint) ||
+        object.spec.backup.target.endpoint == "" ||
+        !(
           object.spec.backup.target.endpoint.contains("localhost") ||
           object.spec.backup.target.endpoint.contains("127.0.0.1") ||
           object.spec.backup.target.endpoint.contains("::1")
         )
-      message: Backup endpoint cannot point to localhost (SSRF protection).
-    - expression: '!variables.has_backup || !has(object.spec.backup.target.endpoint) || object.spec.backup.target.endpoint == "" || !object.spec.backup.target.endpoint.matches("^https?://169\\.254\\..*")'
-      message: Backup endpoint cannot point to link-local addresses (SSRF protection against cloud metadata services).
-    - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" || !variables.has_backup || !has(object.spec.backup.target.endpoint) || object.spec.backup.target.endpoint == "" || object.spec.backup.target.endpoint.startsWith("https://") || object.spec.backup.target.endpoint.startsWith("s3://")'
-      message: Backup endpoint must use HTTPS or S3 scheme in Hardened profile.
-  variables:
-    - expression: has(object.spec.backup)
-      name: has_backup
-    - expression: has(object.spec.upgrade) && object.spec.upgrade.preUpgradeSnapshot == true
-      name: has_pre_upgrade_snapshot
-    - expression: has(object.spec.upgrade) && has(object.spec.upgrade.blueGreen) && object.spec.upgrade.blueGreen.preUpgradeSnapshot == true
-      name: has_bluegreen_pre_upgrade_snapshot
+      message: "Backup endpoint cannot point to localhost (SSRF protection)."
+    # SSRF Protection: Block link-local addresses (all profiles - cloud metadata is always dangerous)
+    - expression: >-
+        !variables.has_backup ||
+        !has(object.spec.backup.target.endpoint) ||
+        object.spec.backup.target.endpoint == "" ||
+        !object.spec.backup.target.endpoint.matches("^https?://169\\.254\\..*")
+      message: "Backup endpoint cannot point to link-local addresses (SSRF protection against cloud metadata services)."
+    # SSRF Protection: Require HTTPS for Hardened profile
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !variables.has_backup ||
+        !has(object.spec.backup.target.endpoint) ||
+        object.spec.backup.target.endpoint == "" ||
+        object.spec.backup.target.endpoint.startsWith("https://") ||
+        object.spec.backup.target.endpoint.startsWith("s3://")
+      message: "Backup endpoint must use HTTPS or S3 scheme in Hardened profile."
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -86,4 +113,3 @@ spec:
   validationActions:
     - Deny
 {{- end }}
-

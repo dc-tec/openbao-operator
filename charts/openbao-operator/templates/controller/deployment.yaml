@@ -63,7 +63,7 @@ spec:
             {{- end }}
           ports:
             {{- if .Values.metrics.enabled }}
-            - name: https
+            - name: metrics
               containerPort: {{ .Values.metrics.port }}
               protocol: TCP
             {{- end }}
