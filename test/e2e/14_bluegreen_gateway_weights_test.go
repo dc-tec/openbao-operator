@@ -311,26 +311,67 @@ var _ = Describe("Blue/Green Upgrade with GatewayWeights", Label("upgrade", "gat
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
 
-			if updated.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle {
-				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
-				g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
+			// Explicitly require PhaseIdle - this will retry until phase is Idle
+			g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle), "upgrade should complete and return to Idle")
+			g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
+			g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
 
-				// Verify pods with the final Blue revision are healthy.
-				labelSelector := labels.SelectorFromSet(map[string]string{
-					constants.LabelAppInstance:     upgradeCluster.Name,
-					constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
-					constants.LabelOpenBaoRevision: updated.Status.BlueGreen.BlueRevision,
-				})
-				podList := &corev1.PodList{}
-				err = admin.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabelsSelector{Selector: labelSelector})
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(len(podList.Items)).To(Equal(3))
+			// Verify pods with the final Blue revision are healthy.
+			labelSelector := labels.SelectorFromSet(map[string]string{
+				constants.LabelAppInstance:     upgradeCluster.Name,
+				constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
+				constants.LabelOpenBaoRevision: updated.Status.BlueGreen.BlueRevision,
+			})
+			podList := &corev1.PodList{}
+			err = admin.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabelsSelector{Selector: labelSelector})
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(len(podList.Items)).To(Equal(3))
 
-				for _, pod := range podList.Items {
-					g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning))
-				}
+			for _, pod := range podList.Items {
+				g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning))
 			}
 		}, 30*time.Minute, 30*time.Second).Should(Succeed())
+
+		By("verifying temporary blue/green Services are cleaned up after upgrade")
+		Eventually(func(g Gomega) {
+			// Blue service should be deleted
+			blueSvc := &corev1.Service{}
+			err := admin.Get(ctx, types.NamespacedName{
+				Namespace: tenantNamespace,
+				Name:      fmt.Sprintf("%s-public-blue", upgradeCluster.Name),
+			}, blueSvc)
+			g.Expect(err).To(HaveOccurred())
+			g.Expect(client.IgnoreNotFound(err)).To(Succeed(), "blue service should be deleted")
+
+			// Green service should be deleted
+			greenSvc := &corev1.Service{}
+			err = admin.Get(ctx, types.NamespacedName{
+				Namespace: tenantNamespace,
+				Name:      fmt.Sprintf("%s-public-green", upgradeCluster.Name),
+			}, greenSvc)
+			g.Expect(err).To(HaveOccurred())
+			g.Expect(client.IgnoreNotFound(err)).To(Succeed(), "green service should be deleted")
+
+			// Main public service should still exist
+			mainSvc := &corev1.Service{}
+			err = admin.Get(ctx, types.NamespacedName{
+				Namespace: tenantNamespace,
+				Name:      fmt.Sprintf("%s-public", upgradeCluster.Name),
+			}, mainSvc)
+			g.Expect(err).NotTo(HaveOccurred(), "main public service should still exist")
+		}, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+		By("verifying BackendTLSPolicy only targets main service after cleanup")
+		Eventually(func(g Gomega) {
+			policy := &gatewayv1.BackendTLSPolicy{}
+			err := admin.Get(ctx, types.NamespacedName{
+				Namespace: tenantNamespace,
+				Name:      fmt.Sprintf("%s-backend-tls-policy", upgradeCluster.Name),
+			}, policy)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(policy.Spec.TargetRefs).To(HaveLen(1), "BackendTLSPolicy should only target main service after upgrade")
+			g.Expect(string(policy.Spec.TargetRefs[0].Name)).To(Equal(fmt.Sprintf("%s-public", upgradeCluster.Name)))
+		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 	})
 })
 
