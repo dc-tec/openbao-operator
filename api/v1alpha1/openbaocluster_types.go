@@ -228,9 +228,9 @@ type BackupSchedule struct {
 	// +optional
 	Retention *BackupRetention `json:"retention,omitempty"`
 	// ExecutorImage is the container image to use for backup operations.
-	// Defaults to "openbao/backup-executor:v0.1.0" if not specified.
+	// If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_BACKUP_IMAGE_REPOSITORY
+	// (default: "ghcr.io/dc-tec/openbao-backup") and the tag matches OPERATOR_VERSION.
 	// This allows users to override the image for air-gapped environments or custom registries.
-	// +kubebuilder:validation:MinLength=1
 	// +optional
 	ExecutorImage string `json:"executorImage,omitempty"`
 }
@@ -380,6 +380,9 @@ type UpgradeConfig struct {
 	// This image is used by Kubernetes Jobs created during upgrades (for example, blue/green
 	// cluster orchestration actions). The executor runs inside the tenant namespace and
 	// authenticates to OpenBao using a projected ServiceAccount token (JWT auth).
+	//
+	// If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_UPGRADE_IMAGE_REPOSITORY
+	// (default: "ghcr.io/dc-tec/openbao-upgrade") and the tag matches OPERATOR_VERSION.
 	// +optional
 	ExecutorImage string `json:"executorImage,omitempty"`
 
@@ -795,9 +798,8 @@ type InitContainerConfig struct {
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
 	// Image is the container image to use for the init container.
-	// This value is required; the operator does not apply a default image.
-	// When omitted or empty, validation will reject the OpenBaoCluster.
-	// +kubebuilder:validation:MinLength=1
+	// If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_INIT_IMAGE_REPOSITORY
+	// (default: "ghcr.io/dc-tec/openbao-config-init") and the tag matches OPERATOR_VERSION.
 	// +optional
 	Image string `json:"image,omitempty"`
 }

@@ -82,11 +82,14 @@ func TestBackupJobName(t *testing.T) {
 }
 
 func TestGetBackupExecutorImage(t *testing.T) {
+	// Set OPERATOR_VERSION env var for tests (otherwise default is ":latest")
+	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
+
 	tests := []struct {
-		name      string
-		cluster   *openbaov1alpha1.OpenBaoCluster
-		want      string
-		wantEmpty bool
+		name        string
+		cluster     *openbaov1alpha1.OpenBaoCluster
+		want        string
+		wantDefault bool // true if we expect the default image
 	}{
 		{
 			name: "with executor image",
@@ -102,11 +105,11 @@ func TestGetBackupExecutorImage(t *testing.T) {
 					},
 				},
 			},
-			want:      "openbao/backup-executor:v0.1.0",
-			wantEmpty: false,
+			want:        "openbao/backup-executor:v0.1.0",
+			wantDefault: false,
 		},
 		{
-			name: "with empty executor image",
+			name: "with empty executor image returns default",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Backup: &openbaov1alpha1.BackupSchedule{
@@ -119,11 +122,11 @@ func TestGetBackupExecutorImage(t *testing.T) {
 					},
 				},
 			},
-			want:      "",
-			wantEmpty: true,
+			want:        constants.DefaultBackupImageRepository + ":v1.0.0",
+			wantDefault: true,
 		},
 		{
-			name: "with whitespace executor image",
+			name: "with whitespace executor image returns default",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Backup: &openbaov1alpha1.BackupSchedule{
@@ -136,26 +139,23 @@ func TestGetBackupExecutorImage(t *testing.T) {
 					},
 				},
 			},
-			want:      "",
-			wantEmpty: true,
+			want:        constants.DefaultBackupImageRepository + ":v1.0.0",
+			wantDefault: true,
 		},
 		{
-			name: "without backup config",
+			name: "without backup config returns default",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{},
 			},
-			want:      "",
-			wantEmpty: true,
+			want:        constants.DefaultBackupImageRepository + ":v1.0.0",
+			wantDefault: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getBackupExecutorImage(tt.cluster)
-			if (got == "") != tt.wantEmpty {
-				t.Errorf("getBackupExecutorImage() empty = %v, wantEmpty %v", got == "", tt.wantEmpty)
-			}
-			if !tt.wantEmpty && got != tt.want {
+			if got != tt.want {
 				t.Errorf("getBackupExecutorImage() = %v, want %v", got, tt.want)
 			}
 		})
@@ -513,23 +513,28 @@ func TestBuildBackupJob_WithTokenSecret(t *testing.T) {
 	}
 }
 
-func TestBuildBackupJob_MissingExecutorImage(t *testing.T) {
+func TestBuildBackupJob_UsesDefaultExecutorImage(t *testing.T) {
+	// Set OPERATOR_VERSION env var for tests
+	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
+
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	cluster.Spec.Backup.ExecutorImage = ""
+	cluster.Spec.Backup.ExecutorImage = "" // Empty - should use default
 
 	jobName := testBackupJobName
 	job, err := buildBackupJob(cluster, jobName, "test", "")
 
-	if err == nil {
-		t.Error("buildBackupJob() with missing executor image should return error")
+	if err != nil {
+		t.Fatalf("buildBackupJob() unexpected error = %v", err)
 	}
 
-	if job != nil {
-		t.Error("buildBackupJob() with missing executor image should return nil job")
+	if job == nil {
+		t.Fatal("buildBackupJob() returned nil job")
 	}
 
-	if !strings.Contains(err.Error(), "backup executor image is required") {
-		t.Errorf("buildBackupJob() error = %v, want error about missing executor image", err)
+	container := job.Spec.Template.Spec.Containers[0]
+	expectedImage := constants.DefaultBackupImageRepository + ":v1.0.0"
+	if container.Image != expectedImage {
+		t.Errorf("buildBackupJob() container.Image = %v, want %v", container.Image, expectedImage)
 	}
 }
 

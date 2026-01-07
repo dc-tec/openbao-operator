@@ -60,6 +60,11 @@ const (
 	EnvSentinelDebounceJitterSeconds = "SENTINEL_DEBOUNCE_JITTER_SECONDS"
 	EnvOperatorVersion               = "OPERATOR_VERSION"
 	EnvOperatorSentinelImageRepo     = "OPERATOR_SENTINEL_IMAGE_REPOSITORY"
+
+	// Operator-managed image repositories
+	EnvOperatorBackupImageRepo  = "OPERATOR_BACKUP_IMAGE_REPOSITORY"
+	EnvOperatorUpgradeImageRepo = "OPERATOR_UPGRADE_IMAGE_REPOSITORY"
+	EnvOperatorInitImageRepo    = "OPERATOR_INIT_IMAGE_REPOSITORY"
 )
 
 // Default image repositories.
@@ -69,6 +74,15 @@ const (
 	//
 	// This can be overridden by setting OPERATOR_SENTINEL_IMAGE_REPOSITORY in the operator Deployment.
 	DefaultSentinelImageRepository = "ghcr.io/dc-tec/openbao-operator-sentinel"
+
+	// DefaultBackupImageRepository is the default image repository used for backup executor.
+	DefaultBackupImageRepository = "ghcr.io/dc-tec/openbao-backup"
+
+	// DefaultUpgradeImageRepository is the default image repository used for upgrade executor.
+	DefaultUpgradeImageRepository = "ghcr.io/dc-tec/openbao-upgrade"
+
+	// DefaultInitImageRepository is the default image repository used for the config-init container.
+	DefaultInitImageRepository = "ghcr.io/dc-tec/openbao-config-init"
 )
 
 // Backup authentication method values.

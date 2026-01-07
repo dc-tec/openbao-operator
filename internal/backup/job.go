@@ -203,6 +203,10 @@ func backupJobName(cluster *openbaov1alpha1.OpenBaoCluster, scheduledTime time.T
 }
 
 func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, backupKey, verifiedExecutorDigest string) (*batchv1.Job, error) {
+	if cluster.Spec.Backup == nil {
+		return nil, fmt.Errorf("spec.backup is required for backup Jobs")
+	}
+
 	region := cluster.Spec.Backup.Target.Region
 	if region == "" {
 		region = constants.DefaultS3Region
@@ -301,9 +305,6 @@ func buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, backupKey,
 	image := verifiedExecutorDigest
 	if image == "" {
 		image = getBackupExecutorImage(cluster)
-	}
-	if image == "" {
-		return nil, fmt.Errorf("backup executor image is required (spec.backup.executorImage)")
 	}
 
 	job := &batchv1.Job{
@@ -536,10 +537,11 @@ func buildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 }
 
 // getBackupExecutorImage returns the backup executor image to use.
-// Defaults to "openbao/backup-executor:v0.1.0" if not specified in the cluster spec.
+// If not specified in the cluster spec, returns the default image derived from
+// OPERATOR_BACKUP_IMAGE_REPOSITORY and OPERATOR_VERSION environment variables.
 func getBackupExecutorImage(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	if cluster.Spec.Backup == nil || strings.TrimSpace(cluster.Spec.Backup.ExecutorImage) == "" {
-		return ""
+	if cluster.Spec.Backup != nil && strings.TrimSpace(cluster.Spec.Backup.ExecutorImage) != "" {
+		return cluster.Spec.Backup.ExecutorImage
 	}
-	return cluster.Spec.Backup.ExecutorImage
+	return constants.DefaultBackupImage()
 }
