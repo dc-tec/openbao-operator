@@ -144,6 +144,34 @@ spec:
         onTrafficFailure: true 
 ```
 
+### Gateway-Weighted Traffic Shifting
+
+When using **Gateway API** with Blue/Green upgrades, the Operator can leverage the Gateway's native traffic weighting capabilities for gradual traffic shifting.
+
+```yaml
+spec:
+  gateway:
+    enabled: true
+    hostname: bao.example.com
+    gatewayRef:
+      name: main-gateway
+  updateStrategy:
+    type: BlueGreen
+    blueGreen:
+      autoPromote: true
+      trafficStrategy: GatewayWeights  # Uses Gateway HTTPRoute weights
+```
+
+**How it works:**
+
+1. The Operator creates separate `-blue` and `-green` Services during the upgrade.
+2. The HTTPRoute is configured with weighted backends: `90/10 → 50/50 → 0/100`.
+3. The `BackendTLSPolicy` automatically includes all three services for proper HTTPS backend connections.
+4. After upgrade completes, the temporary services are cleaned up.
+
+!!! tip "Default Behavior"
+    When Gateway is enabled, `GatewayWeights` is the default traffic strategy. You can explicitly set `trafficStrategy: ServiceSelectors` to use Service selector-based switching instead.
+
 ### Monitoring Progress
 
 Track the upgrade status directly on the CR:

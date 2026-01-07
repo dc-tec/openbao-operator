@@ -106,3 +106,16 @@ Choose your deployment mode.
 | `gateway.backendTLS.enabled` | Auto-create `BackendTLSPolicy` for secure internal hop. | `true` |
 | `gateway.backendTLS.hostname` | Override hostname for internal validation. | Service DNS |
 | `gateway.annotations` | Custom annotations for the generated Route. | None |
+
+## Blue/Green Upgrade Integration
+
+When combining Gateway API with [Blue/Green upgrades](../operations/upgrades.md), the Operator supports **weighted traffic shifting** via HTTPRoute backends.
+
+With `trafficStrategy: GatewayWeights` (default when Gateway is enabled):
+
+- Temporary `-blue` and `-green` Services are created during the upgrade
+- HTTPRoute weights shift gradually: `100/0 → 90/10 → 50/50 → 0/100`
+- `BackendTLSPolicy` automatically covers all backend services
+- Resources are cleaned up after upgrade completes
+
+See the [Upgrades documentation](../operations/upgrades.md#gateway-weighted-traffic-shifting) for configuration details.
