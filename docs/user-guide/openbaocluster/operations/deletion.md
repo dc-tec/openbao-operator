@@ -9,7 +9,7 @@ Control what happens to critical data (Persistent Volumes) and external backups 
 === "Retain (Default)"
     **Best for:** Production settings where data safety is paramount.
 
-    The Operator cleans up compute resources (StatefulSet, Services, ConfigMaps) but **LEAVES** the storage intact.
+    The Operator cleans up compute resources (StatefulSet, Services, ConfigMaps) but **PRESERVES** critical secrets and storage.
 
     ```yaml
     spec:
@@ -18,8 +18,11 @@ Control what happens to critical data (Persistent Volumes) and external backups 
 
     **Cleanup Scope:**
     
-    - **Deleted:** Pods, StatefulSets, Services, ConfigMaps, Secrets
-    - **Retained:** PVCs (Data), S3 Backups
+    - **Deleted:** Pods, StatefulSets, Services, ConfigMaps, TLS Secrets
+    - **Retained:** PVCs (Data), Unseal Key Secret, Root Token Secret, S3 Backups
+
+    !!! note "Why Unseal Key is Retained"
+        The unseal key secret is essential to decrypt your PVC data. Without it, your encrypted data becomes unrecoverable. The Operator automatically orphans these secrets (removes owner references) so Kubernetes garbage collection won't delete them.
 
 === "DeletePVCs"
     **Best for:** CI/CD pipelines, ephemeral dev environments.
