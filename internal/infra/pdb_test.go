@@ -105,9 +105,12 @@ func TestEnsurePodDisruptionBudgetExcludesJobPods(t *testing.T) {
 
 			// Verify all Job components are excluded
 			expectedValues := map[string]bool{
-				"backup":           false,
-				"restore":          false,
-				"upgrade-snapshot": false,
+				"backup":                      false,
+				"restore":                     false,
+				"upgrade":                     false,
+				"upgrade-snapshot":            false,
+				"validation-hook":             false,
+				"post-switch-validation-hook": false,
 			}
 			for _, v := range expr.Values {
 				if _, ok := expectedValues[v]; ok {

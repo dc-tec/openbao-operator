@@ -57,7 +57,7 @@ func (m *Manager) ensurePodDisruptionBudget(ctx context.Context, logger logr.Log
 					{
 						Key:      constants.LabelOpenBaoComponent,
 						Operator: metav1.LabelSelectorOpNotIn,
-						Values:   []string{"backup", "restore", "upgrade-snapshot"},
+						Values:   []string{"backup", "restore", "upgrade", "upgrade-snapshot", "validation-hook", "post-switch-validation-hook"},
 					},
 				},
 			},
