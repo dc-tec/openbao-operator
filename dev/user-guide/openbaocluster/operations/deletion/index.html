@@ -3882,15 +3882,19 @@
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p><strong>Best for:</strong> Production settings where data safety is paramount.</p>
-<p>The Operator cleans up compute resources (StatefulSet, Services, ConfigMaps) but <strong>LEAVES</strong> the storage intact.</p>
+<p>The Operator cleans up compute resources (StatefulSet, Services, ConfigMaps) but <strong>PRESERVES</strong> critical secrets and storage.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">deletionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Retain</span><span class="w">  </span><span class="c1"># Default behavior</span>
 </span></code></pre></div>
 <p><strong>Cleanup Scope:</strong></p>
 <ul>
-<li><strong>Deleted:</strong> Pods, StatefulSets, Services, ConfigMaps, Secrets</li>
-<li><strong>Retained:</strong> PVCs (Data), S3 Backups</li>
+<li><strong>Deleted:</strong> Pods, StatefulSets, Services, ConfigMaps, TLS Secrets</li>
+<li><strong>Retained:</strong> PVCs (Data), Unseal Key Secret, Root Token Secret, S3 Backups</li>
 </ul>
+<div class="admonition note">
+<p class="admonition-title">Why Unseal Key is Retained</p>
+<p>The unseal key secret is essential to decrypt your PVC data. Without it, your encrypted data becomes unrecoverable. The Operator automatically orphans these secrets (removes owner references) so Kubernetes garbage collection won't delete them.</p>
+</div>
 </div>
 <div class="tabbed-block">
 <p><strong>Best for:</strong> CI/CD pipelines, ephemeral dev environments.</p>
