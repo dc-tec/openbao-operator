@@ -954,6 +954,7 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 	cluster.Status.CurrentVersion = cluster.Spec.Version
 	cluster.Status.BlueGreen.BlueRevision = cluster.Status.BlueGreen.GreenRevision
 	cluster.Status.BlueGreen.GreenRevision = ""
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
 
 	if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/upgrade", openbaov1alpha1.ClusterOperationUpgrade); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
 		logger.Error(err, "Failed to release upgrade operation lock after blue/green completion")
@@ -961,7 +962,9 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 
 	logger.Info("Blue/green upgrade completed", "newVersion", cluster.Spec.Version)
 
-	return advance(openbaov1alpha1.PhaseIdle), nil
+	// Return a requeue to trigger another reconcile cycle so the InfraManager
+	// can clean up the temporary -blue and -green Services used during GatewayWeights upgrades.
+	return requeueAfterOutcome(constants.RequeueShort), nil
 }
 
 func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (handled bool, result recon.Result) {
