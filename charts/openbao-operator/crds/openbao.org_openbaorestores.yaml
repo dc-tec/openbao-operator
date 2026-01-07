@@ -129,16 +129,19 @@ spec:
                         minimum: 1
                         type: integer
                       credentialsSecretRef:
-                        description: CredentialsSecretRef optionally references a
-                          Secret containing credentials for the object store.
+                        description: |-
+                          CredentialsSecretRef optionally references a Secret containing credentials for the object store.
+                          The Secret must exist in the same namespace as the OpenBaoCluster.
+                          Cross-namespace references are not allowed for security reasons.
                         properties:
                           name:
-                            description: name is unique within a namespace to reference
-                              a secret resource.
-                            type: string
-                          namespace:
-                            description: namespace defines the space within which
-                              the secret name must be unique.
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
@@ -194,17 +197,21 @@ spec:
                   TokenSecretRef optionally references a Secret containing an OpenBao API
                   token to use for restore operations (fallback method).
 
+                  The Secret must exist in the same namespace as the OpenBaoRestore.
+                  Cross-namespace references are not allowed for security reasons.
+
                   The token must have permission to update sys/storage/raft/snapshot-force.
 
                   If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
                 properties:
                   name:
-                    description: name is unique within a namespace to reference a
-                      secret resource.
-                    type: string
-                  namespace:
-                    description: namespace defines the space within which the secret
-                      name must be unique.
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
