@@ -596,10 +596,7 @@ func (m *Manager) validateBackupConfig(ctx context.Context, cluster *openbaov1al
 		}
 	}
 
-	// Verify executor image is configured
-	if strings.TrimSpace(backupCfg.ExecutorImage) == "" {
-		return fmt.Errorf("backup executor image is required (spec.backup.executorImage)")
-	}
+	// ExecutorImage defaults to constants.DefaultBackupImage() when not specified
 
 	return nil
 }
@@ -731,7 +728,7 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 		image = strings.TrimSpace(backupCfg.ExecutorImage)
 	}
 	if image == "" {
-		return nil, fmt.Errorf("backup executor image is required")
+		image = constants.DefaultBackupImage()
 	}
 
 	// Build volumes and volume mounts

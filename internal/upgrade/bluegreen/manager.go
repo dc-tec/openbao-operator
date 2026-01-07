@@ -1794,9 +1794,7 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 		)
 	}
 
-	if cluster.Spec.Backup.ExecutorImage == "" {
-		return nil, fmt.Errorf("backup executor image is required for snapshots")
-	}
+	// ExecutorImage defaults to constants.DefaultBackupImage() when not specified
 
 	if err := backup.EnsureBackupServiceAccount(ctx, m.client, m.scheme, cluster); err != nil {
 		return nil, fmt.Errorf("failed to ensure backup ServiceAccount for snapshot job: %w", err)
@@ -1954,6 +1952,9 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 	image := verifiedExecutorDigest
 	if image == "" {
 		image = cluster.Spec.Backup.ExecutorImage
+	}
+	if image == "" {
+		image = constants.DefaultBackupImage()
 	}
 
 	job := &batchv1.Job{
