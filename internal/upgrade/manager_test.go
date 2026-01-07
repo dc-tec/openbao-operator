@@ -8,6 +8,8 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
@@ -824,4 +826,145 @@ func TestPerformPodByPodUpgrade_ReturnsCorrectly(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestValidateBackupConfig tests the backup configuration validation.
+func TestValidateBackupConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		cluster     *openbaov1alpha1.OpenBaoCluster
+		secretName  string // Secret to create in fake client
+		expectError bool
+		errorSubstr string
+	}{
+		{
+			name: "no backup config returns error",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+				Spec:       openbaov1alpha1.OpenBaoClusterSpec{Backup: nil},
+			},
+			expectError: true,
+			errorSubstr: "backup configuration is required",
+		},
+		{
+			name: "JWT auth configured - valid",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Backup: &openbaov1alpha1.BackupSchedule{
+						JWTAuthRole: "backup-role",
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "token secret configured and exists - valid",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Backup: &openbaov1alpha1.BackupSchedule{
+						TokenSecretRef: &corev1.LocalObjectReference{Name: "backup-token"},
+					},
+				},
+			},
+			secretName:  "backup-token",
+			expectError: false,
+		},
+		{
+			name: "token secret configured but not found - error",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Backup: &openbaov1alpha1.BackupSchedule{
+						TokenSecretRef: &corev1.LocalObjectReference{Name: "missing-secret"},
+					},
+				},
+			},
+			expectError: true,
+			errorSubstr: "not found",
+		},
+		{
+			name: "no auth method configured - error",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Backup: &openbaov1alpha1.BackupSchedule{},
+				},
+			},
+			expectError: true,
+			errorSubstr: "authentication is required",
+		},
+		{
+			name: "empty JWT auth role treated as unset",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Backup: &openbaov1alpha1.BackupSchedule{
+						JWTAuthRole: "   ", // whitespace only
+					},
+				},
+			},
+			expectError: true,
+			errorSubstr: "authentication is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := newScheme()
+			builder := fake.NewClientBuilder().WithScheme(scheme)
+
+			// Add secret if specified
+			if tt.secretName != "" {
+				secret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tt.secretName,
+						Namespace: "default",
+					},
+					Data: map[string][]byte{"token": []byte("test-token")},
+				}
+				builder = builder.WithObjects(secret)
+			}
+
+			k8sClient := builder.Build()
+			m := &Manager{client: k8sClient}
+
+			err := m.validateBackupConfig(context.Background(), tt.cluster)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error but got nil")
+				} else if tt.errorSubstr != "" && !containsSubstring(err.Error(), tt.errorSubstr) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errorSubstr)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// Helper to check for substring in error message
+func containsSubstring(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && contains(s, substr))
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+// newScheme creates a scheme with all required types for testing
+func newScheme() *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	_ = openbaov1alpha1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	return scheme
 }
