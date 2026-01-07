@@ -156,3 +156,145 @@ func TestBuildJobNetworkPolicy_DevelopmentDefaultEgressIncludesHTTPS(t *testing.
 		t.Fatalf("expected development job NetworkPolicy to include an allow-all (0.0.0.0/0) egress rule")
 	}
 }
+
+func TestBuildBackendTLSPolicy_DefaultOnlyMainService(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tls-policy-default",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+			},
+			Gateway: &openbaov1alpha1.GatewayConfig{
+				Enabled: true,
+				GatewayRef: openbaov1alpha1.GatewayReference{
+					Name: "gateway",
+				},
+				Hostname: "bao.example.com",
+			},
+		},
+	}
+
+	policy := buildBackendTLSPolicy(cluster)
+	if policy == nil {
+		t.Fatalf("expected non-nil BackendTLSPolicy")
+	}
+
+	if len(policy.Spec.TargetRefs) != 1 {
+		t.Fatalf("expected 1 target ref, got %d", len(policy.Spec.TargetRefs))
+	}
+
+	if string(policy.Spec.TargetRefs[0].Name) != externalServiceName(cluster) {
+		t.Fatalf("expected target ref name %q, got %q", externalServiceName(cluster), policy.Spec.TargetRefs[0].Name)
+	}
+}
+
+func TestBuildBackendTLSPolicy_GatewayWeightsIncludesBlueGreenServices(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tls-policy-bluegreen",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+			},
+			Gateway: &openbaov1alpha1.GatewayConfig{
+				Enabled: true,
+				GatewayRef: openbaov1alpha1.GatewayReference{
+					Name: "gateway",
+				},
+				Hostname: "bao.example.com",
+			},
+			UpdateStrategy: openbaov1alpha1.UpdateStrategy{
+				Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+					TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+				BlueRevision:  "blue123",
+				GreenRevision: "green456",
+			},
+		},
+	}
+
+	policy := buildBackendTLSPolicy(cluster)
+	if policy == nil {
+		t.Fatalf("expected non-nil BackendTLSPolicy")
+	}
+
+	if len(policy.Spec.TargetRefs) != 3 {
+		t.Fatalf("expected 3 target refs (main, blue, green), got %d", len(policy.Spec.TargetRefs))
+	}
+
+	// Verify all three services are included
+	names := make(map[string]bool)
+	for _, ref := range policy.Spec.TargetRefs {
+		names[string(ref.Name)] = true
+	}
+
+	expectedNames := []string{
+		externalServiceName(cluster),
+		externalServiceNameBlue(cluster),
+		externalServiceNameGreen(cluster),
+	}
+
+	for _, expected := range expectedNames {
+		if !names[expected] {
+			t.Fatalf("expected target ref %q to be present", expected)
+		}
+	}
+}
+
+func TestBuildBackendTLSPolicy_AfterUpgradeCompleteOnlyMainService(t *testing.T) {
+	// After upgrade completes, GreenRevision is cleared, so only main service should be targeted
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tls-policy-post-upgrade",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+			},
+			Gateway: &openbaov1alpha1.GatewayConfig{
+				Enabled: true,
+				GatewayRef: openbaov1alpha1.GatewayReference{
+					Name: "gateway",
+				},
+				Hostname: "bao.example.com",
+			},
+			UpdateStrategy: openbaov1alpha1.UpdateStrategy{
+				Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+					TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+				BlueRevision:  "green456", // After upgrade, BlueRevision = former GreenRevision
+				GreenRevision: "",         // GreenRevision is cleared
+				Phase:         openbaov1alpha1.PhaseIdle,
+			},
+		},
+	}
+
+	policy := buildBackendTLSPolicy(cluster)
+	if policy == nil {
+		t.Fatalf("expected non-nil BackendTLSPolicy")
+	}
+
+	if len(policy.Spec.TargetRefs) != 1 {
+		t.Fatalf("expected 1 target ref after upgrade complete (GreenRevision empty), got %d", len(policy.Spec.TargetRefs))
+	}
+
+	if string(policy.Spec.TargetRefs[0].Name) != externalServiceName(cluster) {
+		t.Fatalf("expected target ref name %q, got %q", externalServiceName(cluster), policy.Spec.TargetRefs[0].Name)
+	}
+}

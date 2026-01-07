@@ -47,7 +47,8 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 		),
 	}
 
-	// Workload controller with Owns() watches for event-driven reconciliation
+	// Workload controller with Owns() watches for event-driven reconciliation.
+	// Also reacts to BlueGreen status changes to clean up temporary services after upgrades.
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoCluster{}).
 		Owns(&appsv1.StatefulSet{}).
@@ -56,6 +57,9 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 		Owns(&corev1.Secret{}).
 		Owns(&batchv1.Job{}).
 		Owns(&corev1.ServiceAccount{}).
+		WithEventFilter(controllerutil.OpenBaoClusterPredicateWithOptions(controllerutil.OpenBaoClusterPredicateOptions{
+			ReconcileOnBlueGreenStatus: true,
+		})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 2,
 			RateLimiter:             sharedOptions.RateLimiter,
@@ -190,9 +194,11 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 	}
 
 	// Workload controller: reacts to Sentinel triggerID changes and performs drift correction.
+	// Also reacts to BlueGreen status changes to clean up temporary services after upgrades.
 	if err := ctrl.NewControllerManagedBy(mgr).
 		WithEventFilter(controllerutil.OpenBaoClusterPredicateWithOptions(controllerutil.OpenBaoClusterPredicateOptions{
 			ReconcileOnSentinelTrigger: true,
+			ReconcileOnBlueGreenStatus: true,
 		})).
 		Watches(&openbaov1alpha1.OpenBaoCluster{}, sentinelAwareHandler).
 		WithOptions(controller.Options{

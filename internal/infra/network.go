@@ -164,11 +164,13 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 	// Green Services exist for use as HTTPRoute backends. These services have
 	// fixed selectors on the Blue/Green revisions and are not used directly by
 	// clients; they are only referenced by Gateway backends.
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen &&
+	blueGreenServicesNeeded := cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen &&
 		effectiveBlueGreenTrafficStrategy(cluster) == openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights &&
 		cluster.Status.BlueGreen != nil &&
 		cluster.Status.BlueGreen.BlueRevision != "" &&
-		cluster.Status.BlueGreen.GreenRevision != "" {
+		cluster.Status.BlueGreen.GreenRevision != ""
+
+	if blueGreenServicesNeeded {
 		// Blue backend service
 		blueSelector := podSelectorLabels(cluster)
 		blueSelector[constants.LabelOpenBaoRevision] = cluster.Status.BlueGreen.BlueRevision
@@ -180,6 +182,14 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 		greenSelector[constants.LabelOpenBaoRevision] = cluster.Status.BlueGreen.GreenRevision
 		if err := m.ensureExternalBackendService(ctx, cluster, externalServiceNameGreen(cluster), svcType, annotations, greenSelector); err != nil {
 			return fmt.Errorf("failed to ensure green external Service: %w", err)
+		}
+	} else {
+		// Blue/Green services not needed (upgrade not active or completed) - clean up stale services
+		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, externalServiceNameBlue(cluster)); err != nil {
+			return fmt.Errorf("failed to delete stale blue external Service: %w", err)
+		}
+		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, externalServiceNameGreen(cluster)); err != nil {
+			return fmt.Errorf("failed to delete stale green external Service: %w", err)
 		}
 	}
 
@@ -895,6 +905,42 @@ func buildBackendTLSPolicy(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.B
 		hostname = fmt.Sprintf("%s.%s.svc", backendServiceName, cluster.Namespace)
 	}
 
+	// Build target refs - always include the main public service
+	targetRefs := []gatewayv1.LocalPolicyTargetReferenceWithSectionName{
+		{
+			LocalPolicyTargetReference: gatewayv1.LocalPolicyTargetReference{
+				Group: gatewayv1.Group(""),
+				Kind:  gatewayv1.Kind("Service"),
+				Name:  gatewayv1.ObjectName(backendServiceName),
+			},
+		},
+	}
+
+	// When Blue/Green with GatewayWeights is active, the HTTPRoute references -blue and -green
+	// services. We must include them in the BackendTLSPolicy so the Gateway uses HTTPS.
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen &&
+		effectiveBlueGreenTrafficStrategy(cluster) == openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights &&
+		cluster.Status.BlueGreen != nil &&
+		cluster.Status.BlueGreen.BlueRevision != "" &&
+		cluster.Status.BlueGreen.GreenRevision != "" {
+		// Add Blue service
+		targetRefs = append(targetRefs, gatewayv1.LocalPolicyTargetReferenceWithSectionName{
+			LocalPolicyTargetReference: gatewayv1.LocalPolicyTargetReference{
+				Group: gatewayv1.Group(""),
+				Kind:  gatewayv1.Kind("Service"),
+				Name:  gatewayv1.ObjectName(externalServiceNameBlue(cluster)),
+			},
+		})
+		// Add Green service
+		targetRefs = append(targetRefs, gatewayv1.LocalPolicyTargetReferenceWithSectionName{
+			LocalPolicyTargetReference: gatewayv1.LocalPolicyTargetReference{
+				Group: gatewayv1.Group(""),
+				Kind:  gatewayv1.Kind("Service"),
+				Name:  gatewayv1.ObjectName(externalServiceNameGreen(cluster)),
+			},
+		})
+	}
+
 	backendTLSPolicy := &gatewayv1.BackendTLSPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      backendTLSPolicyName(cluster),
@@ -902,15 +948,7 @@ func buildBackendTLSPolicy(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.B
 			Labels:    infraLabels(cluster),
 		},
 		Spec: gatewayv1.BackendTLSPolicySpec{
-			TargetRefs: []gatewayv1.LocalPolicyTargetReferenceWithSectionName{
-				{
-					LocalPolicyTargetReference: gatewayv1.LocalPolicyTargetReference{
-						Group: gatewayv1.Group(""),
-						Kind:  gatewayv1.Kind("Service"),
-						Name:  gatewayv1.ObjectName(backendServiceName),
-					},
-				},
-			},
+			TargetRefs: targetRefs,
 			Validation: gatewayv1.BackendTLSPolicyValidation{
 				CACertificateRefs: []gatewayv1.LocalObjectReference{
 					{
