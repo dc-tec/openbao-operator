@@ -4216,10 +4216,13 @@
 </div>
 <div class="tabbed-block">
 <p>Uses a long-lived OpenBao token stored in a Kubernetes Secret.</p>
+<div class="admonition note">
+<p class="admonition-title">Same-Namespace Requirement</p>
+<p>The token Secret must exist in the <strong>same namespace</strong> as the <code>OpenBaoRestore</code> resource. Cross-namespace references are not allowed for security reasons.</p>
+</div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">tokenSecretRef</span><span class="p">:</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restore-token</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao-operator-system</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restore-token</span><span class="w">  </span><span class="c1"># Must be in the same namespace as the OpenBaoRestore</span>
 </span></code></pre></div>
 </div>
 </div>
