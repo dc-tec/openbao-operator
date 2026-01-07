@@ -157,7 +157,7 @@ var _ = Describe("GitOps contract (Argo-like apply)", Label("gitops", "contract"
 							Token:     "",
 							TLSCACert: "/etc/bao/seal-creds/ca.crt",
 						},
-						CredentialsSecretRef: &corev1.SecretReference{
+						CredentialsSecretRef: &corev1.LocalObjectReference{
 							Name: infraBaoTokenSecretName,
 						},
 					},

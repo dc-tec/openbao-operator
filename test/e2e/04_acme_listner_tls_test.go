@@ -344,7 +344,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 						// 1. Hardened profile validation policy disallows tls_skip_verify=true
 						// 2. When using HTTP (not HTTPS), TLS verification is not applicable
 					},
-					CredentialsSecretRef: &corev1.SecretReference{
+					CredentialsSecretRef: &corev1.LocalObjectReference{
 						Name: infraBaoTokenSecretName,
 					},
 				},

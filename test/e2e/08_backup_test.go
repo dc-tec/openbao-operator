@@ -268,7 +268,7 @@ var _ = Describe("Backup", Label("backup", "requires-rustfs", "slow"), Ordered, 
 							// Reference to the Secret containing S3 credentials
 							// Secret must be in the same namespace as the OpenBaoCluster
 							// Match production sample: no namespace specified (same namespace)
-							CredentialsSecretRef: &corev1.SecretReference{
+							CredentialsSecretRef: &corev1.LocalObjectReference{
 								Name: credentialsSecret.Name,
 								// Namespace not specified - defaults to same namespace as cluster
 							},

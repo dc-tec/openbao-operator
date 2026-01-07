@@ -249,7 +249,7 @@ var _ = Describe("Restore", Label("backup", "cluster", "requires-rustfs", "slow"
 							Bucket:       rustfsBucket,
 							PathPrefix:   "clusters",
 							UsePathStyle: true,
-							CredentialsSecretRef: &corev1.SecretReference{
+							CredentialsSecretRef: &corev1.LocalObjectReference{
 								Name: credentialsSecret.Name,
 							},
 						},
@@ -441,7 +441,7 @@ var _ = Describe("Restore", Label("backup", "cluster", "requires-rustfs", "slow"
 							Endpoint:     fmt.Sprintf("http://%s-svc.%s.svc.cluster.local:9000", rustfsName, "rustfs"),
 							Bucket:       rustfsBucket,
 							UsePathStyle: true,
-							CredentialsSecretRef: &corev1.SecretReference{
+							CredentialsSecretRef: &corev1.LocalObjectReference{
 								Name: credentialsSecret.Name,
 							},
 						},

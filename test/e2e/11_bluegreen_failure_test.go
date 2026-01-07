@@ -772,7 +772,7 @@ var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "clust
 							Bucket:       rustfsBucket,
 							Region:       "us-east-1",
 							UsePathStyle: true,
-							CredentialsSecretRef: &corev1.SecretReference{
+							CredentialsSecretRef: &corev1.LocalObjectReference{
 								Name: credentialsSecret.Name,
 							},
 						},

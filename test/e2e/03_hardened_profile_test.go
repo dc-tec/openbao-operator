@@ -363,7 +363,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 						// (set by the operator from CredentialsSecretRef) to avoid issues
 						// with trailing newlines in mounted Secret files.
 					},
-					CredentialsSecretRef: &corev1.SecretReference{
+					CredentialsSecretRef: &corev1.LocalObjectReference{
 						Name: infraBaoTokenSecretName,
 					},
 				},
