@@ -89,8 +89,6 @@ func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factor
 //
 //nolint:gocyclo // Upgrade reconciliation is an orchestrator with guard clauses and phase transitions.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
-	// Capture original state for status patching to avoid optimistic locking conflicts
-	original := cluster.DeepCopy()
 
 	logger = logger.WithValues(
 		"specVersion", cluster.Spec.Version,
@@ -216,7 +214,20 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if err != nil {
 		SetUpgradeFailed(&cluster.Status, ReasonUpgradeFailed, err.Error(), cluster.Generation)
 		metrics.SetStatus(UpgradeStatusFailed)
-		if statusErr := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); statusErr != nil {
+
+		// Refresh cluster to get latest version before patching to avoid resource version conflicts
+		freshCluster := &openbaov1alpha1.OpenBaoCluster{}
+		if refreshErr := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      cluster.Name,
+		}, freshCluster); refreshErr != nil {
+			logger.Error(refreshErr, "Failed to refresh cluster before status patch")
+			return recon.Result{}, fmt.Errorf("failed to refresh cluster: %w", refreshErr)
+		}
+		// Use fresh cluster as base and apply our status changes
+		freshBase := freshCluster.DeepCopy()
+		freshCluster.Status.Upgrade = cluster.Status.Upgrade
+		if statusErr := m.client.Status().Patch(ctx, freshCluster, client.MergeFrom(freshBase)); statusErr != nil {
 			logger.Error(statusErr, "Failed to update status after upgrade failure")
 		}
 		return recon.Result{}, err
@@ -224,7 +235,18 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	if !completed {
 		// Upgrade is still in progress; save state and requeue
-		if err := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+		// Refresh cluster to get latest version before patching to avoid resource version conflicts
+		freshCluster := &openbaov1alpha1.OpenBaoCluster{}
+		if err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      cluster.Name,
+		}, freshCluster); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to refresh cluster: %w", err)
+		}
+		// Use fresh cluster as base and apply our status changes
+		freshBase := freshCluster.DeepCopy()
+		freshCluster.Status.Upgrade = cluster.Status.Upgrade
+		if err := m.client.Status().Patch(ctx, freshCluster, client.MergeFrom(freshBase)); err != nil {
 			return recon.Result{}, fmt.Errorf("failed to update upgrade progress: %w", err)
 		}
 		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
@@ -863,6 +885,7 @@ func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, clu
 
 // performPodByPodUpgrade executes the rolling update, one pod at a time.
 // Returns true when all pods have been upgraded.
+// Returns false with nil error when waiting for a condition (caller should requeue).
 func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *Metrics) (bool, error) {
 	if cluster.Status.Upgrade == nil {
 		return false, fmt.Errorf("upgrade state is nil")
@@ -892,10 +915,16 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 		logger.Info("Unable to determine current leader from pod labels; attempting safe step-down", "error", err)
 	}
 
+	// Step-down leader if needed (level-triggered)
 	if leaderPodName == "" || leaderPodName == podName {
 		logger.Info("Initiating leader step-down before updating pod", "pod", podName, "currentLeader", leaderPodName)
-		if err := m.stepDownLeader(ctx, logger, cluster, podName, metrics); err != nil {
+		stepDownComplete, err := m.stepDownLeader(ctx, logger, cluster, podName, metrics)
+		if err != nil {
 			return false, err
+		}
+		if !stepDownComplete {
+			// Step-down in progress, requeue
+			return false, nil
 		}
 	}
 
@@ -905,14 +934,24 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 		return false, fmt.Errorf("failed to update partition: %w", err)
 	}
 
-	// Wait for the pod to become ready with new version
-	if err := m.waitForPodReady(ctx, logger, cluster, podName); err != nil {
+	// Check pod readiness (level-triggered)
+	podReady, err := m.waitForPodReady(ctx, logger, cluster, podName)
+	if err != nil {
 		return false, err
 	}
+	if !podReady {
+		// Pod not ready yet, requeue
+		return false, nil
+	}
 
-	// Wait for OpenBao to be healthy on this pod
-	if err := m.waitForPodHealthy(ctx, logger, cluster, podName); err != nil {
+	// Check pod health (level-triggered)
+	podHealthy, err := m.waitForPodHealthy(ctx, logger, cluster, podName)
+	if err != nil {
 		return false, err
+	}
+	if !podHealthy {
+		// Pod not healthy yet, requeue
+		return false, nil
 	}
 
 	// Update progress
@@ -973,136 +1012,131 @@ func (m *Manager) currentLeaderPodByLabel(ctx context.Context, cluster *openbaov
 	}
 }
 
-// stepDownLeader performs a leader step-down and waits for leadership transfer.
-func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string, metrics *Metrics) error {
-	// Record step-down attempt
-	metrics.IncrementStepDownTotal()
+// stepDownLeader performs a leader step-down check using level-triggered semantics.
+// Instead of blocking with a ticker loop, it checks the condition once and returns
+// a result indicating whether to requeue.
+//
+// Returns:
+//   - (true, nil) if step-down is complete
+//   - (false, nil) if step-down is in progress (caller should requeue)
+//   - (false, error) if step-down failed fatally
+func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string, metrics *Metrics) (bool, error) {
+	// Record step-down attempt (only on first call, tracked by LastStepDownTime)
+	if cluster.Status.Upgrade == nil || cluster.Status.Upgrade.LastStepDownTime == nil {
+		metrics.IncrementStepDownTotal()
 
-	// Audit log: Leader step-down operation
-	logging.LogAuditEvent(logger, "StepDown", map[string]string{
-		"cluster_namespace": cluster.Namespace,
-		"cluster_name":      cluster.Name,
-		"pod":               podName,
-		"target_version":    cluster.Status.Upgrade.TargetVersion,
-		"from_version":      cluster.Status.Upgrade.FromVersion,
-	})
+		// Audit log: Leader step-down operation
+		logging.LogAuditEvent(logger, "StepDown", map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"pod":               podName,
+			"target_version":    cluster.Status.Upgrade.TargetVersion,
+			"from_version":      cluster.Status.Upgrade.FromVersion,
+		})
+	}
 
-	stepDownCtx, cancel := context.WithTimeout(ctx, DefaultStepDownTimeout)
-	defer cancel()
-
-	ticker := time.NewTicker(DefaultLeaderCheckInterval)
-	defer ticker.Stop()
-
-	for {
-		result, err := ensureUpgradeExecutorJob(
-			stepDownCtx,
-			m.client,
-			m.scheme,
-			logger,
-			cluster,
-			ExecutorActionRollingStepDownLeader,
-			podName,
-			"",
-			"",
-		)
-		if err != nil {
-			return fmt.Errorf("failed to ensure step-down Job: %w", err)
-		}
-		if result.Failed {
-			metrics.IncrementStepDownFailures()
-			return fmt.Errorf("step-down Job %s failed", result.Name)
-		}
-		if result.Succeeded {
-			break
-		}
-
-		select {
-		case <-stepDownCtx.Done():
+	// Check if we've exceeded the timeout based on upgrade start time
+	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.StartedAt != nil {
+		elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
+		if elapsed > DefaultStepDownTimeout {
 			metrics.IncrementStepDownFailures()
 			SetUpgradeFailed(&cluster.Status, ReasonStepDownTimeout,
 				fmt.Sprintf(MessageStepDownTimeout, DefaultStepDownTimeout),
 				cluster.Generation)
-			return fmt.Errorf("step-down timeout: step-down Job did not complete within %v", DefaultStepDownTimeout)
-		case <-ticker.C:
+			return false, fmt.Errorf("step-down timeout: exceeded %v", DefaultStepDownTimeout)
 		}
 	}
 
-	// Wait for leadership to transfer
-	for {
-		select {
-		case <-stepDownCtx.Done():
-			metrics.IncrementStepDownFailures()
-			SetUpgradeFailed(&cluster.Status, ReasonStepDownTimeout,
-				fmt.Sprintf(MessageStepDownTimeout, DefaultStepDownTimeout),
-				cluster.Generation)
-			return fmt.Errorf("step-down timeout: leadership did not transfer within %v", DefaultStepDownTimeout)
-		case <-ticker.C:
-			pod := &corev1.Pod{}
-			if err := m.client.Get(ctx, types.NamespacedName{
-				Namespace: cluster.Namespace,
-				Name:      podName,
-			}, pod); err != nil {
-				logger.V(1).Info("Error getting pod after step-down", "error", err)
+	// Ensure step-down Job exists/is running
+	result, err := ensureUpgradeExecutorJob(
+		ctx,
+		m.client,
+		m.scheme,
+		logger,
+		cluster,
+		ExecutorActionRollingStepDownLeader,
+		podName,
+		"",
+		"",
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to ensure step-down Job: %w", err)
+	}
+	if result.Failed {
+		metrics.IncrementStepDownFailures()
+		return false, fmt.Errorf("step-down Job %s failed", result.Name)
+	}
+	if result.Running {
+		logger.V(1).Info("Step-down job still running", "pod", podName)
+		return false, nil // Requeue
+	}
+
+	// Job succeeded - check if leadership has transferred
+	pod := &corev1.Pod{}
+	if err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      podName,
+	}, pod); err != nil {
+		logger.V(1).Info("Error getting pod after step-down", "error", err)
+		return false, nil // Requeue
+	}
+
+	stillLeader, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+	if err != nil {
+		logger.V(1).Info("Invalid OpenBao leader label value after step-down", "error", err)
+		return false, nil // Requeue
+	}
+
+	if present && !stillLeader {
+		logger.Info("Leadership transferred successfully", "previousLeader", podName)
+		SetStepDownPerformed(&cluster.Status)
+		logging.LogAuditEvent(logger, "StepDownCompleted", map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"pod":               podName,
+		})
+		return true, nil
+	}
+
+	// If the previous leader label is missing, treat transfer as complete if we
+	// can observe a different pod labeled as leader.
+	if !present {
+		podList := &corev1.PodList{}
+		if err := m.client.List(ctx, podList,
+			client.InNamespace(cluster.Namespace),
+			client.MatchingLabels(map[string]string{
+				constants.LabelAppInstance: cluster.Name,
+				constants.LabelAppName:     constants.LabelValueAppNameOpenBao,
+			}),
+		); err != nil {
+			logger.V(1).Info("Error listing pods while waiting for leader transfer", "error", err)
+			return false, nil // Requeue
+		}
+
+		for i := range podList.Items {
+			candidate := &podList.Items[i]
+			if candidate.Name == podName {
 				continue
 			}
-
-			stillLeader, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
-			if err != nil {
-				logger.V(1).Info("Invalid OpenBao leader label value after step-down", "error", err)
+			leader, leaderPresent, err := openbaoapi.ParseBoolLabel(candidate.Labels, openbaoapi.LabelActive)
+			if err != nil || !leaderPresent {
 				continue
 			}
-
-			if present && !stillLeader {
-				logger.Info("Leadership transferred successfully", "previousLeader", podName)
+			if leader {
+				logger.Info("Leadership transferred successfully", "previousLeader", podName, "newLeader", candidate.Name)
 				SetStepDownPerformed(&cluster.Status)
 				logging.LogAuditEvent(logger, "StepDownCompleted", map[string]string{
 					"cluster_namespace": cluster.Namespace,
 					"cluster_name":      cluster.Name,
 					"pod":               podName,
 				})
-				return nil
+				return true, nil
 			}
-
-			// If the previous leader label is missing, treat transfer as complete if we
-			// can observe a different pod labeled as leader.
-			if !present {
-				podList := &corev1.PodList{}
-				if err := m.client.List(ctx, podList,
-					client.InNamespace(cluster.Namespace),
-					client.MatchingLabels(map[string]string{
-						constants.LabelAppInstance: cluster.Name,
-						constants.LabelAppName:     constants.LabelValueAppNameOpenBao,
-					}),
-				); err != nil {
-					logger.V(1).Info("Error listing pods while waiting for leader transfer", "error", err)
-					continue
-				}
-
-				for i := range podList.Items {
-					candidate := &podList.Items[i]
-					if candidate.Name == podName {
-						continue
-					}
-					leader, leaderPresent, err := openbaoapi.ParseBoolLabel(candidate.Labels, openbaoapi.LabelActive)
-					if err != nil || !leaderPresent {
-						continue
-					}
-					if leader {
-						logger.Info("Leadership transferred successfully", "previousLeader", podName, "newLeader", candidate.Name)
-						SetStepDownPerformed(&cluster.Status)
-						logging.LogAuditEvent(logger, "StepDownCompleted", map[string]string{
-							"cluster_namespace": cluster.Namespace,
-							"cluster_name":      cluster.Name,
-							"pod":               podName,
-						})
-						return nil
-					}
-				}
-			}
-
-			logger.V(1).Info("Waiting for leadership transfer", "pod", podName)
 		}
 	}
+
+	logger.V(1).Info("Waiting for leadership transfer", "pod", podName)
+	return false, nil // Requeue
 }
 
 // setStatefulSetPartition updates the StatefulSet's partition value using Server-Side Apply
@@ -1139,52 +1173,72 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 	return nil
 }
 
-// waitForPodReady waits for a pod to become Ready after being updated.
-func (m *Manager) waitForPodReady(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) error {
-	readyCtx, cancel := context.WithTimeout(ctx, DefaultPodReadyTimeout)
-	defer cancel()
-
-	ticker := time.NewTicker(DefaultPodReadyCheckInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-readyCtx.Done():
+// waitForPodReady checks if a pod is Ready using level-triggered semantics.
+// Instead of blocking, it checks the condition once and returns the result.
+//
+// Returns:
+//   - (true, nil) if pod is ready
+//   - (false, nil) if pod is not ready yet (caller should requeue)
+//   - (false, error) if timeout exceeded or fatal error
+func (m *Manager) waitForPodReady(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
+	// Check timeout based on when the upgrade started
+	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.StartedAt != nil {
+		elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
+		if elapsed > DefaultPodReadyTimeout {
 			SetUpgradeFailed(&cluster.Status, ReasonPodNotReady,
 				fmt.Sprintf(MessagePodNotReady, podName, DefaultPodReadyTimeout),
 				cluster.Generation)
-			return fmt.Errorf("pod %s did not become ready within %v", podName, DefaultPodReadyTimeout)
-		case <-ticker.C:
-			pod := &corev1.Pod{}
-			if err := m.client.Get(ctx, types.NamespacedName{
-				Namespace: cluster.Namespace,
-				Name:      podName,
-			}, pod); err != nil {
-				if apierrors.IsNotFound(err) {
-					logger.V(1).Info("Pod not found yet; waiting", "pod", podName)
-					continue
-				}
-				return fmt.Errorf("failed to get pod %s: %w", podName, err)
-			}
-
-			if isPodReady(pod) {
-				logger.Info("Pod is ready", "pod", podName)
-				return nil
-			}
-
-			logger.V(1).Info("Waiting for pod to become ready", "pod", podName, "phase", pod.Status.Phase)
+			return false, fmt.Errorf("pod %s did not become ready within %v", podName, DefaultPodReadyTimeout)
 		}
 	}
+
+	pod := &corev1.Pod{}
+	if err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      podName,
+	}, pod); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.V(1).Info("Pod not found yet; waiting", "pod", podName)
+			return false, nil // Requeue
+		}
+		return false, fmt.Errorf("failed to get pod %s: %w", podName, err)
+	}
+
+	if isPodReady(pod) {
+		logger.Info("Pod is ready", "pod", podName)
+		return true, nil
+	}
+
+	logger.V(1).Info("Waiting for pod to become ready", "pod", podName, "phase", pod.Status.Phase)
+	return false, nil // Requeue
 }
 
-// waitForPodHealthy waits for OpenBao to become healthy on a pod.
-func (m *Manager) waitForPodHealthy(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) error {
-	healthCtx, cancel := context.WithTimeout(ctx, DefaultHealthCheckTimeout)
-	defer cancel()
+// waitForPodHealthy checks if OpenBao is healthy on a pod using level-triggered semantics.
+// Instead of blocking, it checks the condition once and returns the result.
+//
+// Returns:
+//   - (true, nil) if pod is healthy
+//   - (false, nil) if pod is not healthy yet (caller should requeue)
+//   - (false, error) if timeout exceeded or fatal error
+func (m *Manager) waitForPodHealthy(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
+	// Check timeout based on when the upgrade started - health check should complete
+	// within a reasonable window after the pod becomes ready
+	// We use DefaultPodReadyTimeout + DefaultHealthCheckTimeout as total budget
+	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.StartedAt != nil {
+		elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
+		if elapsed > DefaultPodReadyTimeout+DefaultHealthCheckTimeout {
+			SetUpgradeFailed(&cluster.Status, ReasonHealthCheckFailed,
+				fmt.Sprintf(MessageHealthCheckFailed, podName, "timeout"),
+				cluster.Generation)
+			return false, fmt.Errorf("OpenBao health check timeout for pod %s", podName)
+		}
+	}
 
 	caCert, err := m.getClusterCACert(ctx, cluster)
 	if err != nil {
-		return fmt.Errorf("failed to get CA certificate: %w", err)
+		// CA cert not available yet, requeue
+		logger.V(1).Info("CA certificate not available yet", "error", err)
+		return false, nil // Requeue
 	}
 
 	podURL := m.getPodURL(cluster, podName)
@@ -1194,36 +1248,26 @@ func (m *Manager) waitForPodHealthy(ctx context.Context, logger logr.Logger, clu
 		CACert:     caCert,
 	})
 	if err != nil {
-		// Wrap connection errors as transient
+		// Wrap connection errors as transient and requeue
 		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client: %w", err))
+			logger.V(1).Info("Transient connection error creating client", "error", err)
+			return false, nil // Requeue
 		}
-		return fmt.Errorf("failed to create OpenBao client: %w", err)
+		return false, fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
 
-	ticker := time.NewTicker(DefaultHealthCheckInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-healthCtx.Done():
-			SetUpgradeFailed(&cluster.Status, ReasonHealthCheckFailed,
-				fmt.Sprintf(MessageHealthCheckFailed, podName, "timeout"),
-				cluster.Generation)
-			return fmt.Errorf("OpenBao health check timeout for pod %s", podName)
-		case <-ticker.C:
-			healthy, err := apiClient.IsHealthy(ctx)
-			if err != nil {
-				logger.V(1).Info("Health check error; retrying", "pod", podName, "error", err)
-				continue
-			}
-			if healthy {
-				logger.Info("OpenBao is healthy on pod", "pod", podName)
-				return nil
-			}
-			logger.V(1).Info("Waiting for OpenBao to become healthy", "pod", podName)
-		}
+	healthy, err := apiClient.IsHealthy(ctx)
+	if err != nil {
+		logger.V(1).Info("Health check error; will retry", "pod", podName, "error", err)
+		return false, nil // Requeue
 	}
+	if healthy {
+		logger.Info("OpenBao is healthy on pod", "pod", podName)
+		return true, nil
+	}
+
+	logger.V(1).Info("Waiting for OpenBao to become healthy", "pod", podName)
+	return false, nil // Requeue
 }
 
 // finalizeUpgrade completes the upgrade process.
