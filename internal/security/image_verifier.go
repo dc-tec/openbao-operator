@@ -79,37 +79,90 @@ func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config Veri
 		return "", fmt.Errorf("either PublicKey OR (Issuer and Subject) must be provided for image verification")
 	}
 
-	// Perform verification and get digest
-	mode := "static-key"
-	if config.PublicKey == "" {
-		mode = "keyless"
-	}
-	v.logger.Info("Verifying image signature", "image", imageRef, "mode", mode, "ignoreTlog", config.IgnoreTlog)
-	digest, err := v.verifyImage(ctx, imageRef, config)
+	// Step 1: Resolve tag to digest (cheap HEAD request)
+	// This must happen BEFORE cache lookup to get the digest for the cache key
+	digest, err := v.resolveDigest(ctx, imageRef, config)
 	if err != nil {
-		return "", fmt.Errorf("image verification failed for %q: %w", imageRef, err)
+		return "", err
 	}
 
-	// Check cache using digest (not tag) to prevent TOCTOU issues
+	// Step 2: Check cache BEFORE expensive cryptographic verification
 	cacheKey := v.cacheKey(digest, config)
 	if v.cache.isVerifiedByKey(cacheKey) {
 		v.logger.V(1).Info("Image verification cache hit", "digest", digest)
 		return digest, nil
 	}
 
-	// Cache successful verification using digest
+	// Step 3: Cache miss - perform expensive Cosign signature verification
+	mode := "static-key"
+	if config.PublicKey == "" {
+		mode = "keyless"
+	}
+	v.logger.Info("Verifying image signature", "image", imageRef, "digest", digest, "mode", mode, "ignoreTlog", config.IgnoreTlog)
+	if err := v.verifyImageSignature(ctx, digest, config); err != nil {
+		return "", fmt.Errorf("image verification failed for %q: %w", imageRef, err)
+	}
+
+	// Step 4: Cache successful verification using digest
 	v.cache.markVerifiedByKey(cacheKey)
 	v.logger.Info("Image verification succeeded", "image", imageRef, "digest", digest)
 
 	return digest, nil
 }
 
-// verifyImage performs the actual Cosign verification and returns the resolved digest.
-func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef string, config VerifyConfig) (string, error) {
+// resolveDigest resolves an image reference (tag or digest) to a digest reference.
+// For digest references, it returns them directly.
+// For tag references, it performs a HEAD request to resolve the tag to a digest.
+// This is a cheap operation that only fetches manifest metadata, not the full image.
+func (v *ImageVerifier) resolveDigest(ctx context.Context, imageRef string, config VerifyConfig) (string, error) {
 	// Parse the image reference
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse image reference: %w", err)
+	}
+
+	// If already a digest reference, return it directly
+	if d, ok := ref.(name.Digest); ok {
+		return d.String(), nil
+	}
+
+	// Build registry options with Kubernetes keychain for private registry authentication
+	var ggcrOpts []ggcrremote.Option
+	if len(config.ImagePullSecrets) > 0 && v.client != nil {
+		keychain, err := v.buildKeychain(ctx, config.ImagePullSecrets, config.Namespace)
+		if err != nil {
+			return "", fmt.Errorf("failed to build keychain for image pull secrets: %w", err)
+		}
+		if keychain != nil {
+			ggcrOpts = append(ggcrOpts, ggcrremote.WithAuthFromKeychain(keychain))
+		}
+	}
+
+	// Resolve tag to digest via HEAD request
+	desc, err := ggcrremote.Head(ref, ggcrOpts...)
+	if err != nil {
+		// Wrap connection/network errors as transient
+		if operatorerrors.IsTransientConnection(err) {
+			return "", operatorerrors.WrapTransientConnection(fmt.Errorf("failed to resolve image digest: %w", err))
+		}
+		return "", fmt.Errorf("failed to resolve image digest: %w", err)
+	}
+
+	digestRef, err := name.NewDigest(fmt.Sprintf("%s@%s", ref.Context().Name(), desc.Digest.String()))
+	if err != nil {
+		return "", fmt.Errorf("failed to create digest reference: %w", err)
+	}
+
+	return digestRef.String(), nil
+}
+
+// verifyImageSignature performs the actual Cosign signature verification on an already-resolved digest.
+// The digest resolution is handled separately by resolveDigest() to enable cache-first checking.
+func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef string, config VerifyConfig) error {
+	// Parse the digest reference
+	ref, err := name.ParseReference(digestRef)
+	if err != nil {
+		return fmt.Errorf("failed to parse digest reference: %w", err)
 	}
 
 	// Build registry options with Kubernetes keychain for private registry authentication
@@ -117,7 +170,7 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef string, config
 	if len(config.ImagePullSecrets) > 0 && v.client != nil {
 		keychain, err := v.buildKeychain(ctx, config.ImagePullSecrets, config.Namespace)
 		if err != nil {
-			return "", fmt.Errorf("failed to build keychain for image pull secrets: %w", err)
+			return fmt.Errorf("failed to build keychain for image pull secrets: %w", err)
 		}
 		if keychain != nil {
 			// Convert authn.Keychain to ociremote.Option
@@ -134,7 +187,7 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef string, config
 	if config.PublicKey != "" {
 		verifier, err := signature.LoadPublicKeyRaw([]byte(config.PublicKey), crypto.SHA256)
 		if err != nil {
-			return "", fmt.Errorf("failed to load public key: %w", err)
+			return fmt.Errorf("failed to load public key: %w", err)
 		}
 		co.SigVerifier = verifier
 		co.IgnoreTlog = config.IgnoreTlog
@@ -145,7 +198,7 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef string, config
 		// trusted_root.json which is compiled into the binary at build time.
 		trustedRoot, err := v.loadTrustedRoot(ctx)
 		if err != nil {
-			return "", fmt.Errorf("failed to load trusted root material for keyless verification: %w", err)
+			return fmt.Errorf("failed to load trusted root material for keyless verification: %w", err)
 		}
 		co.TrustedMaterial = trustedRoot
 		co.Identities = []cosign.Identity{
@@ -159,58 +212,27 @@ func (v *ImageVerifier) verifyImage(ctx context.Context, imageRef string, config
 		co.IgnoreTlog = false
 	}
 
-	// Verify image signatures and get the resolved digest
+	// Verify image signatures
 	sigs, bundleVerified, err := cosign.VerifyImageSignatures(ctx, ref, co)
 	if err != nil {
 		// Wrap connection/network errors as transient (registry connection issues)
 		if operatorerrors.IsTransientConnection(err) {
-			return "", operatorerrors.WrapTransientConnection(fmt.Errorf("image signature verification failed: %w", err))
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("image signature verification failed: %w", err))
 		}
-		return "", fmt.Errorf("image signature verification failed: %w", err)
+		return fmt.Errorf("image signature verification failed: %w", err)
 	}
 
 	if len(sigs) == 0 {
-		return "", fmt.Errorf("no signatures found for image %q", imageRef)
+		return fmt.Errorf("no signatures found for image %q", digestRef)
 	}
 
-	// Resolve the digest from the reference
-	// If the reference is already a digest, use it directly
-	// Otherwise, resolve the tag to a digest
-	var digestRef name.Digest
-	if d, ok := ref.(name.Digest); ok {
-		digestRef = d
-	} else {
-		// Resolve tag to digest
-		// Convert ociremote.Options to ggcrremote.Options for Head call
-		var ggcrOpts []ggcrremote.Option
-		if len(config.ImagePullSecrets) > 0 && v.client != nil {
-			keychain, err := v.buildKeychain(ctx, config.ImagePullSecrets, config.Namespace)
-			if err == nil && keychain != nil {
-				ggcrOpts = append(ggcrOpts, ggcrremote.WithAuthFromKeychain(keychain))
-			}
-		}
-		desc, err := ggcrremote.Head(ref, ggcrOpts...)
-		if err != nil {
-			// Wrap connection/network errors as transient
-			if operatorerrors.IsTransientConnection(err) {
-				return "", operatorerrors.WrapTransientConnection(fmt.Errorf("failed to resolve image digest: %w", err))
-			}
-			return "", fmt.Errorf("failed to resolve image digest: %w", err)
-		}
-		digestRef, err = name.NewDigest(fmt.Sprintf("%s@%s", ref.Context().Name(), desc.Digest.String()))
-		if err != nil {
-			return "", fmt.Errorf("failed to create digest reference: %w", err)
-		}
-	}
-
-	v.logger.V(1).Info("Image verification completed",
-		"image", imageRef,
-		"digest", digestRef.String(),
+	v.logger.V(1).Info("Image signature verification completed",
+		"digest", digestRef,
 		"signatures", len(sigs),
 		"bundleVerified", bundleVerified,
 		"rekorVerified", !co.IgnoreTlog)
 
-	return digestRef.String(), nil
+	return nil
 }
 
 // loadTrustedRoot loads the trusted root material for keyless verification.

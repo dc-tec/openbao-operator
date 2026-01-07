@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	testImageDigest = "test-image@sha256:abc123"
+	// Use a valid digest format: SHA256 requires 64 hex characters
+	testImageDigest = "docker.io/test/image@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	testOIDCIssuer  = "https://token.actions.githubusercontent.com"
 	testOIDCSubject = "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v2.0.0"
 )
@@ -92,28 +93,33 @@ func TestImageVerifier_Verify_CacheHit(t *testing.T) {
 	client := fake.NewClientBuilder().Build()
 	verifier := NewImageVerifier(logger, client, nil)
 
-	// Use a digest for cache key (as the new implementation uses digest)
+	// Use a digest for cache key (cache lookup happens before verification now)
 	digest := testImageDigest
 	config := VerifyConfig{
 		PublicKey: "test-public-key",
 	}
 
-	// Mark as verified in cache using the new cache key method
+	// Mark as verified in cache using the cache key method
+	// With the new cache-first implementation, if we pre-populate the cache
+	// with the digest, the Verify method should return early without calling verifyImageSignature
 	cacheKey := verifier.cacheKey(digest, config)
 	verifier.cache.markVerifiedByKey(cacheKey)
 
 	ctx := context.Background()
-	// This should return immediately from cache without calling verifyImage
-	// Since verifyImage would fail with invalid key, if it's called, we'd get an error
-	// Note: In real usage, the cache would be checked after verification, but for this test
-	// we're testing the cache lookup path. The actual verification will fail, but we're
-	// testing that the cache is checked first. However, the new implementation checks cache
-	// after verification, so this test needs to be updated.
-	// For now, we'll test that cache lookup works correctly.
-	_, err := verifier.Verify(ctx, "test-image:latest", config)
+	// When calling Verify with a tag, it will first call resolveDigest which makes a HEAD request.
+	// Since we can't mock the registry here, we test with the digest directly which
+	// will match the cached entry and return immediately.
+	// For a full integration test with registry mocking, see E2E tests.
+	result, err := verifier.Verify(ctx, testImageDigest, config)
 
-	// The verification will fail, but we can test the cache separately
-	_ = err
+	// With a digest reference, resolveDigest returns it directly, then cache is checked
+	// Since the cache key matches, we should get a cache hit and return the digest
+	if err != nil {
+		t.Errorf("Verify() with cached digest should succeed, got error: %v", err)
+	}
+	if result != digest {
+		t.Errorf("Verify() returned %v, want %v", result, digest)
+	}
 }
 
 func TestImageVerifier_Verify_CacheMiss(t *testing.T) {
