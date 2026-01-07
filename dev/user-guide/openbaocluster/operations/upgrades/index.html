@@ -1242,6 +1242,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#gateway-weighted-traffic-shifting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gateway-Weighted Traffic Shifting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#monitoring-progress" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3917,6 +3928,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#gateway-weighted-traffic-shifting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gateway-Weighted Traffic Shifting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#monitoring-progress" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4071,9 +4093,34 @@
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">        </span><span class="nt">onValidationFailure</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">        </span><span class="nt">onTrafficFailure</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span>
 </span></code></pre></div>
+<h3 id="gateway-weighted-traffic-shifting">Gateway-Weighted Traffic Shifting<a class="headerlink" href="#gateway-weighted-traffic-shifting" title="Permanent link">&para;</a></h3>
+<p>When using <strong>Gateway API</strong> with Blue/Green upgrades, the Operator can leverage the Gateway's native traffic weighting capabilities for gradual traffic shifting.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">gateway</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">hostname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bao.example.com</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">gatewayRef</span><span class="p">:</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main-gateway</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="nt">updateStrategy</span><span class="p">:</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">BlueGreen</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="nt">blueGreen</span><span class="p">:</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">      </span><span class="nt">autoPromote</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">      </span><span class="nt">trafficStrategy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GatewayWeights</span><span class="w">  </span><span class="c1"># Uses Gateway HTTPRoute weights</span>
+</span></code></pre></div>
+<p><strong>How it works:</strong></p>
+<ol>
+<li>The Operator creates separate <code>-blue</code> and <code>-green</code> Services during the upgrade.</li>
+<li>The HTTPRoute is configured with weighted backends: <code>90/10 → 50/50 → 0/100</code>.</li>
+<li>The <code>BackendTLSPolicy</code> automatically includes all three services for proper HTTPS backend connections.</li>
+<li>After upgrade completes, the temporary services are cleaned up.</li>
+</ol>
+<div class="admonition tip">
+<p class="admonition-title">Default Behavior</p>
+<p>When Gateway is enabled, <code>GatewayWeights</code> is the default traffic strategy. You can explicitly set <code>trafficStrategy: ServiceSelectors</code> to use Service selector-based switching instead.</p>
+</div>
 <h3 id="monitoring-progress">Monitoring Progress<a class="headerlink" href="#monitoring-progress" title="Permanent link">&para;</a></h3>
 <p>Track the upgrade status directly on the CR:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>my-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.blueGreen}&#39;</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>my-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.blueGreen}&#39;</span>
 </span></code></pre></div>
 
 
