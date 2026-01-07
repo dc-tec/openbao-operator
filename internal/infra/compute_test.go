@@ -340,7 +340,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 			KeyName:   "transit-key",
 			MountPath: "transit/",
 		},
-		CredentialsSecretRef: &corev1.SecretReference{
+		CredentialsSecretRef: &corev1.LocalObjectReference{
 			Name: "infra-bao-token",
 		},
 	}

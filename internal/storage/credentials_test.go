@@ -56,9 +56,8 @@ func TestLoadCredentials_ValidCredentials(t *testing.T) {
 
 	ctx := context.Background()
 	k8sClient := newTestClient(t, secret)
-	secretRef := &corev1.SecretReference{
-		Name:      "test-credentials",
-		Namespace: "default",
+	secretRef := &corev1.LocalObjectReference{
+		Name: "test-credentials",
 	}
 
 	creds, err := LoadCredentials(ctx, k8sClient, secretRef, "default")
@@ -96,9 +95,8 @@ func TestLoadCredentials_WithOptionalFields(t *testing.T) {
 
 	ctx := context.Background()
 	k8sClient := newTestClient(t, secret)
-	secretRef := &corev1.SecretReference{
-		Name:      "test-credentials",
-		Namespace: "default",
+	secretRef := &corev1.LocalObjectReference{
+		Name: "test-credentials",
 	}
 
 	creds, err := LoadCredentials(ctx, k8sClient, secretRef, "default")
@@ -119,11 +117,13 @@ func TestLoadCredentials_WithOptionalFields(t *testing.T) {
 	}
 }
 
-func TestLoadCredentials_DefaultNamespace(t *testing.T) {
+func TestLoadCredentials_NamespaceRequired(t *testing.T) {
+	// This test verifies that the namespace parameter is required and used correctly.
+	// The Secret must be in the specified namespace - cross-namespace access is not allowed.
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-credentials",
-			Namespace: "default",
+			Namespace: "other-ns",
 		},
 		Data: map[string][]byte{
 			SecretKeyAccessKeyID:     []byte("test-access-key"),
@@ -133,16 +133,21 @@ func TestLoadCredentials_DefaultNamespace(t *testing.T) {
 
 	ctx := context.Background()
 	k8sClient := newTestClient(t, secret)
-	secretRef := &corev1.SecretReference{
-		Name:      "test-credentials",
-		Namespace: "", // Empty namespace should use default
+	secretRef := &corev1.LocalObjectReference{
+		Name: "test-credentials",
 	}
 
-	creds, err := LoadCredentials(ctx, k8sClient, secretRef, "default")
+	// Looking in "default" namespace should fail because secret is in "other-ns"
+	_, err := LoadCredentials(ctx, k8sClient, secretRef, "default")
+	if err == nil {
+		t.Fatal("LoadCredentials() should fail when secret is in different namespace")
+	}
+
+	// Looking in "other-ns" namespace should succeed
+	creds, err := LoadCredentials(ctx, k8sClient, secretRef, "other-ns")
 	if err != nil {
 		t.Fatalf("LoadCredentials() error = %v", err)
 	}
-
 	if creds == nil {
 		t.Fatal("LoadCredentials() should return credentials")
 	}
@@ -151,9 +156,8 @@ func TestLoadCredentials_DefaultNamespace(t *testing.T) {
 func TestLoadCredentials_MissingSecret(t *testing.T) {
 	ctx := context.Background()
 	k8sClient := newTestClient(t)
-	secretRef := &corev1.SecretReference{
-		Name:      "missing-secret",
-		Namespace: "default",
+	secretRef := &corev1.LocalObjectReference{
+		Name: "missing-secret",
 	}
 
 	creds, err := LoadCredentials(ctx, k8sClient, secretRef, "default")
@@ -180,9 +184,8 @@ func TestLoadCredentials_MissingAccessKeyID(t *testing.T) {
 
 	ctx := context.Background()
 	k8sClient := newTestClient(t, secret)
-	secretRef := &corev1.SecretReference{
-		Name:      "test-credentials",
-		Namespace: "default",
+	secretRef := &corev1.LocalObjectReference{
+		Name: "test-credentials",
 	}
 
 	// When only one key is present, LoadCredentials should return an error
@@ -266,9 +269,8 @@ func TestLoadCredentials_PartialCredentialsError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			client := newTestClient(t, tt.secret)
-			secretRef := &corev1.SecretReference{
-				Name:      "test-credentials",
-				Namespace: "default",
+			secretRef := &corev1.LocalObjectReference{
+				Name: "test-credentials",
 			}
 
 			creds, err := LoadCredentials(ctx, client, secretRef, "default")

@@ -474,16 +474,14 @@ func TestRenderSelfInitHCL_DoesNotCreatePoliciesWhenUsingTokenSecretRef(t *testi
 			Endpoint: "https://s3.amazonaws.com",
 			Bucket:   "backups",
 		},
-		TokenSecretRef: &corev1.SecretReference{
-			Name:      "backup-token",
-			Namespace: "default",
+		TokenSecretRef: &corev1.LocalObjectReference{
+			Name: "backup-token",
 		},
 		// JWTAuthRole is not set - using TokenSecretRef instead
 	}
 	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
-		TokenSecretRef: &corev1.SecretReference{
-			Name:      "upgrade-token",
-			Namespace: "default",
+		TokenSecretRef: &corev1.LocalObjectReference{
+			Name: "upgrade-token",
 		},
 		// JWTAuthRole is not set - using TokenSecretRef instead
 	}

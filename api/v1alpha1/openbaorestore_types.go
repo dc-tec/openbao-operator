@@ -78,11 +78,14 @@ type OpenBaoRestoreSpec struct {
 	// TokenSecretRef optionally references a Secret containing an OpenBao API
 	// token to use for restore operations (fallback method).
 	//
+	// The Secret must exist in the same namespace as the OpenBaoRestore.
+	// Cross-namespace references are not allowed for security reasons.
+	//
 	// The token must have permission to update sys/storage/raft/snapshot-force.
 	//
 	// If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
 	// +optional
-	TokenSecretRef *corev1.SecretReference `json:"tokenSecretRef,omitempty"`
+	TokenSecretRef *corev1.LocalObjectReference `json:"tokenSecretRef,omitempty"`
 
 	// ExecutorImage is the container image to use for restore operations.
 	// Defaults to the same image used for backup operations if not specified.

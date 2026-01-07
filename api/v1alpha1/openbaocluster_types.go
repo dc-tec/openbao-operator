@@ -213,6 +213,9 @@ type BackupSchedule struct {
 	// TokenSecretRef optionally references a Secret containing an OpenBao API
 	// token to use for backup operations (fallback method).
 	//
+	// The Secret must exist in the same namespace as the OpenBaoCluster.
+	// Cross-namespace references are not allowed for security reasons.
+	//
 	// For standard clusters (non self-init), this is typically omitted and the
 	// operator uses the root token from <cluster>-root-token. For self-init
 	// clusters (no root token Secret), this field must reference a token with
@@ -220,7 +223,7 @@ type BackupSchedule struct {
 	//
 	// If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
 	// +optional
-	TokenSecretRef *corev1.SecretReference `json:"tokenSecretRef,omitempty"`
+	TokenSecretRef *corev1.LocalObjectReference `json:"tokenSecretRef,omitempty"`
 	// Retention defines optional backup retention policy.
 	// +optional
 	Retention *BackupRetention `json:"retention,omitempty"`
@@ -410,6 +413,9 @@ type UpgradeConfig struct {
 	// TokenSecretRef optionally references a Secret containing an OpenBao API
 	// token to use for upgrade operations.
 	//
+	// The Secret must exist in the same namespace as the OpenBaoCluster.
+	// Cross-namespace references are not allowed for security reasons.
+	//
 	// The token must have permission to:
 	// - read sys/health
 	// - update sys/step-down
@@ -418,7 +424,7 @@ type UpgradeConfig struct {
 	// Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
 	// If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
 	// +optional
-	TokenSecretRef *corev1.SecretReference `json:"tokenSecretRef,omitempty"`
+	TokenSecretRef *corev1.LocalObjectReference `json:"tokenSecretRef,omitempty"`
 }
 
 // BackupRetention defines retention policy for backups.
@@ -517,8 +523,10 @@ type BackupTarget struct {
 	// +optional
 	RoleARN string `json:"roleArn,omitempty"`
 	// CredentialsSecretRef optionally references a Secret containing credentials for the object store.
+	// The Secret must exist in the same namespace as the OpenBaoCluster.
+	// Cross-namespace references are not allowed for security reasons.
 	// +optional
-	CredentialsSecretRef *corev1.SecretReference `json:"credentialsSecretRef,omitempty"`
+	CredentialsSecretRef *corev1.LocalObjectReference `json:"credentialsSecretRef,omitempty"`
 	// UsePathStyle controls whether to use path-style addressing (bucket.s3.amazonaws.com/object)
 	// or virtual-hosted-style addressing (bucket.s3.amazonaws.com/object).
 	// Set to true for MinIO and S3-compatible stores that require path-style.
@@ -1104,8 +1112,10 @@ type UnsealConfig struct {
 	// CredentialsSecretRef references a Secret containing provider credentials
 	// (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON, Azure client secret, etc.).
 	// If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
+	// The Secret must exist in the same namespace as the OpenBaoCluster.
+	// Cross-namespace references are not allowed for security reasons.
 	// +optional
-	CredentialsSecretRef *corev1.SecretReference `json:"credentialsSecretRef,omitempty"`
+	CredentialsSecretRef *corev1.LocalObjectReference `json:"credentialsSecretRef,omitempty"`
 }
 
 // ImageVerificationConfig configures supply chain security checks for container images.

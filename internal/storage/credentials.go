@@ -40,14 +40,11 @@ type Credentials struct {
 // LoadCredentials loads storage credentials from a Kubernetes Secret.
 // If secretRef is nil, returns nil (indicating default credential chain should be used).
 // If the Secret does not contain the required keys, returns an error.
-func LoadCredentials(ctx context.Context, c client.Client, secretRef *corev1.SecretReference, defaultNamespace string) (*Credentials, error) {
+// The namespace parameter specifies the namespace where the Secret must exist.
+// Cross-namespace references are not allowed for security reasons.
+func LoadCredentials(ctx context.Context, c client.Client, secretRef *corev1.LocalObjectReference, namespace string) (*Credentials, error) {
 	if secretRef == nil {
 		return nil, nil
-	}
-
-	namespace := secretRef.Namespace
-	if namespace == "" {
-		namespace = defaultNamespace
 	}
 
 	secret := &corev1.Secret{}

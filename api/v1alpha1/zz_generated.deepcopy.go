@@ -194,7 +194,7 @@ func (in *BackupSchedule) DeepCopyInto(out *BackupSchedule) {
 	in.Target.DeepCopyInto(&out.Target)
 	if in.TokenSecretRef != nil {
 		in, out := &in.TokenSecretRef, &out.TokenSecretRef
-		*out = new(v1.SecretReference)
+		*out = new(v1.LocalObjectReference)
 		**out = **in
 	}
 	if in.Retention != nil {
@@ -250,7 +250,7 @@ func (in *BackupTarget) DeepCopyInto(out *BackupTarget) {
 	*out = *in
 	if in.CredentialsSecretRef != nil {
 		in, out := &in.CredentialsSecretRef, &out.CredentialsSecretRef
-		*out = new(v1.SecretReference)
+		*out = new(v1.LocalObjectReference)
 		**out = **in
 	}
 }
@@ -1057,7 +1057,7 @@ func (in *OpenBaoRestoreSpec) DeepCopyInto(out *OpenBaoRestoreSpec) {
 	in.Source.DeepCopyInto(&out.Source)
 	if in.TokenSecretRef != nil {
 		in, out := &in.TokenSecretRef, &out.TokenSecretRef
-		*out = new(v1.SecretReference)
+		*out = new(v1.LocalObjectReference)
 		**out = **in
 	}
 }
@@ -1748,7 +1748,7 @@ func (in *UnsealConfig) DeepCopyInto(out *UnsealConfig) {
 	}
 	if in.CredentialsSecretRef != nil {
 		in, out := &in.CredentialsSecretRef, &out.CredentialsSecretRef
-		*out = new(v1.SecretReference)
+		*out = new(v1.LocalObjectReference)
 		**out = **in
 	}
 }
@@ -1788,7 +1788,7 @@ func (in *UpgradeConfig) DeepCopyInto(out *UpgradeConfig) {
 	*out = *in
 	if in.TokenSecretRef != nil {
 		in, out := &in.TokenSecretRef, &out.TokenSecretRef
-		*out = new(v1.SecretReference)
+		*out = new(v1.LocalObjectReference)
 		**out = **in
 	}
 }

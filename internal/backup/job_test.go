@@ -290,9 +290,8 @@ func TestBuildBackupJob_UsesVerifiedExecutorDigest(t *testing.T) {
 
 func TestBuildBackupJob_WithCredentialsSecret(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	cluster.Spec.Backup.Target.CredentialsSecretRef = &corev1.SecretReference{
-		Name:      backupCredentialsVolumeName,
-		Namespace: "default",
+	cluster.Spec.Backup.Target.CredentialsSecretRef = &corev1.LocalObjectReference{
+		Name: backupCredentialsVolumeName,
 	}
 
 	jobName := testBackupJobName
@@ -478,9 +477,8 @@ func TestBuildBackupJob_WithRoleARN(t *testing.T) {
 
 func TestBuildBackupJob_WithTokenSecret(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	cluster.Spec.Backup.TokenSecretRef = &corev1.SecretReference{
-		Name:      "backup-token",
-		Namespace: "default",
+	cluster.Spec.Backup.TokenSecretRef = &corev1.LocalObjectReference{
+		Name: "backup-token",
 	}
 
 	jobName := testBackupJobName
