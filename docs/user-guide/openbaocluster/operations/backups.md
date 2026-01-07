@@ -101,6 +101,9 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
 
     This method uses a static OpenBao token stored in a Kubernetes Secret.
 
+    !!! note "Same-Namespace Requirement"
+        All secret references must exist in the **same namespace** as the `OpenBaoCluster`. Cross-namespace references are not allowed for security reasons.
+
     ??? abstract "Prerequisite: Create Token Secret"
         1. Generate a generic token in OpenBao with snapshot read permissions.
         2. Store it in a Secret:
@@ -121,8 +124,7 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
         schedule: "0 3 * * *"
         executorImage: "openbao/backup-executor:v0.1.0"
         tokenSecretRef:
-          name: backup-token
-          key: token
+          name: backup-token  # Must be in the same namespace as the OpenBaoCluster
         
         target:
           endpoint: "https://s3.amazonaws.com"

@@ -124,11 +124,13 @@ How the Restore Job authenticates to the OpenBao cluster leader.
 
     Uses a long-lived OpenBao token stored in a Kubernetes Secret.
 
+    !!! note "Same-Namespace Requirement"
+        The token Secret must exist in the **same namespace** as the `OpenBaoRestore` resource. Cross-namespace references are not allowed for security reasons.
+
     ```yaml
     spec:
       tokenSecretRef:
-        name: restore-token
-        namespace: openbao-operator-system
+        name: restore-token  # Must be in the same namespace as the OpenBaoRestore
     ```
 
 ---
