@@ -137,7 +137,7 @@ func createRestoreSelfInitRequests(ctx context.Context, clusterNamespace, cluste
 	}, nil
 }
 
-var _ = Describe("Restore", Label("backup", "cluster", "requires-rustfs", "slow"), Ordered, func() {
+var _ = Describe("Restore", Label("backup", "restore", "cluster", "requires-rustfs", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (
