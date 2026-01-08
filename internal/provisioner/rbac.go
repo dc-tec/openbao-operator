@@ -106,6 +106,10 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 		Rules()
 
 	return &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantRoleName,
 			Namespace: namespace,
@@ -123,6 +127,10 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 // the operator's ServiceAccount to the tenant Role.
 func GenerateTenantRoleBinding(namespace string, operatorSA OperatorServiceAccount) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantRoleBindingName,
 			Namespace: namespace,
@@ -160,6 +168,10 @@ func GenerateTenantSecretsReaderRole(namespace string, secretNames []string) *rb
 	}
 
 	return &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantSecretsReaderRoleName,
 			Namespace: namespace,
@@ -177,6 +189,10 @@ func GenerateTenantSecretsReaderRole(namespace string, secretNames []string) *rb
 // operator's controller ServiceAccount to the secrets reader Role.
 func GenerateTenantSecretsReaderRoleBinding(namespace string, operatorSA OperatorServiceAccount) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantSecretsReaderRoleBindingName,
 			Namespace: namespace,
@@ -224,6 +240,10 @@ func GenerateTenantSecretsWriterRole(namespace string, secretNames []string) *rb
 	}
 
 	return &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantSecretsWriterRoleName,
 			Namespace: namespace,
@@ -241,6 +261,10 @@ func GenerateTenantSecretsWriterRole(namespace string, secretNames []string) *rb
 // operator's controller ServiceAccount to the secrets writer Role.
 func GenerateTenantSecretsWriterRoleBinding(namespace string, operatorSA OperatorServiceAccount) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantSecretsWriterRoleBindingName,
 			Namespace: namespace,
@@ -289,6 +313,10 @@ func GenerateSentinelRole(namespace string) *rbacv1.Role {
 		Rules()
 
 	return &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      constants.SentinelRoleName,
 			Namespace: namespace,
@@ -305,6 +333,10 @@ func GenerateSentinelRole(namespace string) *rbacv1.Role {
 // GenerateSentinelRoleBinding generates a RoleBinding for the Sentinel ServiceAccount.
 func GenerateSentinelRoleBinding(namespace string) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      constants.SentinelRoleBindingName,
 			Namespace: namespace,
