@@ -142,137 +142,47 @@ func createImpersonatedClient(baseConfig *rest.Config, scheme *runtime.Scheme, n
 	return impersonatedClient, nil
 }
 
-// EnsureTenantRBAC ensures that a Role and RoleBinding exist in the given namespace
-// for the operator to manage OpenBaoCluster resources.
-//
-//nolint:gocyclo // Explicit validation and update paths improve auditability for security-sensitive RBAC.
-func (m *Manager) EnsureTenantRBAC(ctx context.Context, namespace string) error {
-	// Ensure Role exists
-	role := GenerateTenantRole(namespace)
-	existingRole := &rbacv1.Role{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      TenantRoleName,
-	}, existingRole)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get Role %s/%s: %w", namespace, TenantRoleName, err)
-		}
-
-		m.logger.Info("Creating tenant Role", "namespace", namespace, "role", TenantRoleName,
-			"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
-		// SECURITY: Use impersonated client to enforce least privilege
-		// The API server will check if the delegate has permission to create this Role
-		if err := m.impersonatedClient.Create(ctx, role); err != nil {
-			// Wrap transient Kubernetes API errors
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create Role %s/%s (via impersonation): %w", namespace, TenantRoleName, err))
-			}
-			return fmt.Errorf("failed to create Role %s/%s (via impersonation): %w", namespace, TenantRoleName, err)
-		}
-	} else {
-		// Update Role if rules have changed
-		if !rolesEqual(existingRole.Rules, role.Rules) {
-			m.logger.Info("Updating tenant Role", "namespace", namespace, "role", TenantRoleName,
-				"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
-			existingRole.Rules = role.Rules
-			// Preserve existing labels and merge with new ones
-			if existingRole.Labels == nil {
-				existingRole.Labels = make(map[string]string)
-			}
-			for k, v := range role.Labels {
-				existingRole.Labels[k] = v
-			}
-			// SECURITY: Use impersonated client to enforce least privilege
-			if err := m.impersonatedClient.Update(ctx, existingRole); err != nil {
-				// Wrap transient Kubernetes API errors
-				if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-					return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update Role %s/%s (via impersonation): %w", namespace, TenantRoleName, err))
-				}
-				return fmt.Errorf("failed to update Role %s/%s (via impersonation): %w", namespace, TenantRoleName, err)
-			}
-		}
+// applyResource uses Server-Side Apply with the impersonated client.
+// Unlike infra.applyResource, this does NOT set owner references since
+// tenant RBAC resources should not be garbage-collected with any single cluster.
+func (m *Manager) applyResource(ctx context.Context, obj client.Object) error {
+	patchOpts := []client.PatchOption{
+		client.ForceOwnership,
+		client.FieldOwner("openbao-provisioner"),
 	}
 
-	// Ensure RoleBinding exists
+	if err := m.impersonatedClient.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
+		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+			return operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
+		}
+		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
+	}
+	return nil
+}
+
+// EnsureTenantRBAC ensures that a Role and RoleBinding exist in the given namespace
+// for the operator to manage OpenBaoCluster resources.
+func (m *Manager) EnsureTenantRBAC(ctx context.Context, namespace string) error {
+	// Apply Role using Server-Side Apply
+	role := GenerateTenantRole(namespace)
+	m.logger.Info("Applying tenant Role", "namespace", namespace, "role", TenantRoleName,
+		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
+	if err := m.applyResource(ctx, role); err != nil {
+		return fmt.Errorf("failed to apply tenant Role %s/%s: %w", namespace, TenantRoleName, err)
+	}
+
+	// Apply RoleBinding using Server-Side Apply
 	roleBinding := GenerateTenantRoleBinding(namespace, m.operatorSA)
-	existingRoleBinding := &rbacv1.RoleBinding{}
-	err = m.client.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      TenantRoleBindingName,
-	}, existingRoleBinding)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get RoleBinding %s/%s: %w", namespace, TenantRoleBindingName, err)
-		}
-
-		m.logger.Info("Creating tenant RoleBinding", "namespace", namespace, "rolebinding", TenantRoleBindingName,
-			"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
-		// SECURITY: Use impersonated client to enforce least privilege
-		if err := m.impersonatedClient.Create(ctx, roleBinding); err != nil {
-			// Wrap transient Kubernetes API errors
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create RoleBinding %s/%s (via impersonation): %w", namespace, TenantRoleBindingName, err))
-			}
-			return fmt.Errorf("failed to create RoleBinding %s/%s (via impersonation): %w", namespace, TenantRoleBindingName, err)
-		}
-	} else {
-		// Update RoleBinding if it has changed
-		needsUpdate := false
-		if existingRoleBinding.RoleRef.Name != roleBinding.RoleRef.Name ||
-			existingRoleBinding.RoleRef.Kind != roleBinding.RoleRef.Kind ||
-			existingRoleBinding.RoleRef.APIGroup != roleBinding.RoleRef.APIGroup {
-			existingRoleBinding.RoleRef = roleBinding.RoleRef
-			needsUpdate = true
-		}
-
-		// Check if subjects match
-		if len(existingRoleBinding.Subjects) != len(roleBinding.Subjects) {
-			existingRoleBinding.Subjects = roleBinding.Subjects
-			needsUpdate = true
-		} else if len(roleBinding.Subjects) > 0 {
-			existingSubject := existingRoleBinding.Subjects[0]
-			desiredSubject := roleBinding.Subjects[0]
-			if existingSubject.Kind != desiredSubject.Kind ||
-				existingSubject.Name != desiredSubject.Name ||
-				existingSubject.Namespace != desiredSubject.Namespace {
-				existingRoleBinding.Subjects = roleBinding.Subjects
-				needsUpdate = true
-			}
-		}
-
-		// Update labels
-		if existingRoleBinding.Labels == nil {
-			existingRoleBinding.Labels = make(map[string]string)
-		}
-		for k, v := range roleBinding.Labels {
-			if existingRoleBinding.Labels[k] != v {
-				existingRoleBinding.Labels[k] = v
-				needsUpdate = true
-			}
-		}
-
-		if needsUpdate {
-			m.logger.Info("Updating tenant RoleBinding", "namespace", namespace, "rolebinding", TenantRoleBindingName,
-				"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
-			// SECURITY: Use impersonated client to enforce least privilege
-			if err := m.impersonatedClient.Update(ctx, existingRoleBinding); err != nil {
-				// Wrap transient Kubernetes API errors
-				if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-					return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update RoleBinding %s/%s (via impersonation): %w", namespace, TenantRoleBindingName, err))
-				}
-				if apierrors.IsForbidden(err) {
-					return fmt.Errorf("failed to update RoleBinding %s/%s (via impersonation): %w. "+
-						"Ensure the delegate ServiceAccount %s/%s exists and is bound to the tenant-template ClusterRole "+
-						"via config/rbac/provisioner_delegate_clusterrolebinding.yaml", namespace, TenantRoleBindingName, err,
-						m.delegateSA.Namespace, m.delegateSA.Name)
-				}
-				return fmt.Errorf("failed to update RoleBinding %s/%s (via impersonation): %w", namespace, TenantRoleBindingName, err)
-			}
-		}
+	m.logger.Info("Applying tenant RoleBinding", "namespace", namespace, "rolebinding", TenantRoleBindingName,
+		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
+	if err := m.applyResource(ctx, roleBinding); err != nil {
+		return fmt.Errorf("failed to apply tenant RoleBinding %s/%s: %w", namespace, TenantRoleBindingName, err)
 	}
 
 	// Apply Pod Security Standards labels to namespace
+	// Note: Using Get-Update for namespace labels as SSA for namespace labels
+	// could potentially conflict with other controllers managing the same namespace.
 	ns := &corev1.Namespace{}
 	if err := m.client.Get(ctx, types.NamespacedName{Name: namespace}, ns); err != nil {
 		return fmt.Errorf("failed to get namespace %s: %w", namespace, err)
@@ -451,6 +361,7 @@ func (m *Manager) ensureSecretsRole(ctx context.Context, namespace string, roleN
 		return fmt.Errorf("role name is required")
 	}
 
+	// Handle deletion case: if no secrets, delete the role if it exists
 	if len(secretNames) == 0 {
 		existing := &rbacv1.Role{}
 		if err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleName}, existing); err != nil {
@@ -466,44 +377,12 @@ func (m *Manager) ensureSecretsRole(ctx context.Context, namespace string, roleN
 		return nil
 	}
 
+	// Apply Role using Server-Side Apply
 	role := factory(namespace, secretNames)
-	existing := &rbacv1.Role{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      roleName,
-	}, existing)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get Role %s/%s: %w", namespace, roleName, err)
-		}
-
-		m.logger.Info("Creating tenant secrets Role", "namespace", namespace, "role", roleName,
-			"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
-		if err := m.impersonatedClient.Create(ctx, role); err != nil {
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create Role %s/%s (via impersonation): %w", namespace, roleName, err))
-			}
-			return fmt.Errorf("failed to create Role %s/%s (via impersonation): %w", namespace, roleName, err)
-		}
-		return nil
-	}
-
-	if !rolesEqual(existing.Rules, role.Rules) {
-		existing.Rules = role.Rules
-		if existing.Labels == nil {
-			existing.Labels = make(map[string]string)
-		}
-		for k, v := range role.Labels {
-			existing.Labels[k] = v
-		}
-		m.logger.Info("Updating tenant secrets Role", "namespace", namespace, "role", roleName,
-			"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
-		if err := m.impersonatedClient.Update(ctx, existing); err != nil {
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update Role %s/%s (via impersonation): %w", namespace, roleName, err))
-			}
-			return fmt.Errorf("failed to update Role %s/%s (via impersonation): %w", namespace, roleName, err)
-		}
+	m.logger.Info("Applying tenant secrets Role", "namespace", namespace, "role", roleName,
+		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
+	if err := m.applyResource(ctx, role); err != nil {
+		return fmt.Errorf("failed to apply secrets Role %s/%s: %w", namespace, roleName, err)
 	}
 
 	return nil
@@ -516,6 +395,7 @@ func (m *Manager) ensureSecretsRoleBinding(ctx context.Context, namespace string
 		return fmt.Errorf("role binding name and role name are required")
 	}
 
+	// Handle deletion case: if shouldExist is false, delete the role binding if it exists
 	if !shouldExist {
 		existing := &rbacv1.RoleBinding{}
 		if err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleBindingName}, existing); err != nil {
@@ -531,69 +411,12 @@ func (m *Manager) ensureSecretsRoleBinding(ctx context.Context, namespace string
 		return nil
 	}
 
+	// Apply RoleBinding using Server-Side Apply
 	roleBinding := factory(namespace, m.operatorSA)
-	existing := &rbacv1.RoleBinding{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      roleBindingName,
-	}, existing)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get RoleBinding %s/%s: %w", namespace, roleBindingName, err)
-		}
-
-		m.logger.Info("Creating tenant secrets RoleBinding", "namespace", namespace, "rolebinding", roleBindingName,
-			"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
-		if err := m.impersonatedClient.Create(ctx, roleBinding); err != nil {
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create RoleBinding %s/%s (via impersonation): %w", namespace, roleBindingName, err))
-			}
-			return fmt.Errorf("failed to create RoleBinding %s/%s (via impersonation): %w", namespace, roleBindingName, err)
-		}
-		return nil
-	}
-
-	needsUpdate := false
-	if existing.RoleRef.Name != roleBinding.RoleRef.Name ||
-		existing.RoleRef.Kind != roleBinding.RoleRef.Kind ||
-		existing.RoleRef.APIGroup != roleBinding.RoleRef.APIGroup {
-		existing.RoleRef = roleBinding.RoleRef
-		needsUpdate = true
-	}
-
-	if len(existing.Subjects) != len(roleBinding.Subjects) {
-		existing.Subjects = roleBinding.Subjects
-		needsUpdate = true
-	} else if len(roleBinding.Subjects) > 0 {
-		existingSubject := existing.Subjects[0]
-		desiredSubject := roleBinding.Subjects[0]
-		if existingSubject.Kind != desiredSubject.Kind ||
-			existingSubject.Name != desiredSubject.Name ||
-			existingSubject.Namespace != desiredSubject.Namespace {
-			existing.Subjects = roleBinding.Subjects
-			needsUpdate = true
-		}
-	}
-
-	if existing.Labels == nil {
-		existing.Labels = make(map[string]string)
-	}
-	for k, v := range roleBinding.Labels {
-		if existing.Labels[k] != v {
-			existing.Labels[k] = v
-			needsUpdate = true
-		}
-	}
-
-	if needsUpdate {
-		m.logger.Info("Updating tenant secrets RoleBinding", "namespace", namespace, "rolebinding", roleBindingName,
-			"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
-		if err := m.impersonatedClient.Update(ctx, existing); err != nil {
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update RoleBinding %s/%s (via impersonation): %w", namespace, roleBindingName, err))
-			}
-			return fmt.Errorf("failed to update RoleBinding %s/%s (via impersonation): %w", namespace, roleBindingName, err)
-		}
+	m.logger.Info("Applying tenant secrets RoleBinding", "namespace", namespace, "rolebinding", roleBindingName,
+		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
+	if err := m.applyResource(ctx, roleBinding); err != nil {
+		return fmt.Errorf("failed to apply secrets RoleBinding %s/%s: %w", namespace, roleBindingName, err)
 	}
 
 	return nil
@@ -674,69 +497,4 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 	}
 
 	return nil
-}
-
-// rolesEqual compares two PolicyRule slices for equality.
-func rolesEqual(a, b []rbacv1.PolicyRule) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for i := range a {
-		if !policyRuleEqual(a[i], b[i]) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// policyRuleEqual compares two PolicyRules for equality.
-func policyRuleEqual(a, b rbacv1.PolicyRule) bool {
-	if len(a.APIGroups) != len(b.APIGroups) {
-		return false
-	}
-	for i := range a.APIGroups {
-		if a.APIGroups[i] != b.APIGroups[i] {
-			return false
-		}
-	}
-
-	if len(a.Resources) != len(b.Resources) {
-		return false
-	}
-	for i := range a.Resources {
-		if a.Resources[i] != b.Resources[i] {
-			return false
-		}
-	}
-
-	if len(a.Verbs) != len(b.Verbs) {
-		return false
-	}
-	for i := range a.Verbs {
-		if a.Verbs[i] != b.Verbs[i] {
-			return false
-		}
-	}
-
-	if len(a.ResourceNames) != len(b.ResourceNames) {
-		return false
-	}
-	for i := range a.ResourceNames {
-		if a.ResourceNames[i] != b.ResourceNames[i] {
-			return false
-		}
-	}
-
-	if len(a.NonResourceURLs) != len(b.NonResourceURLs) {
-		return false
-	}
-	for i := range a.NonResourceURLs {
-		if a.NonResourceURLs[i] != b.NonResourceURLs[i] {
-			return false
-		}
-	}
-
-	return true
 }
