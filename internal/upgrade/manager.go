@@ -215,19 +215,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		SetUpgradeFailed(&cluster.Status, ReasonUpgradeFailed, err.Error(), cluster.Generation)
 		metrics.SetStatus(UpgradeStatusFailed)
 
-		// Refresh cluster to get latest version before patching to avoid resource version conflicts
-		freshCluster := &openbaov1alpha1.OpenBaoCluster{}
-		if refreshErr := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      cluster.Name,
-		}, freshCluster); refreshErr != nil {
-			logger.Error(refreshErr, "Failed to refresh cluster before status patch")
-			return recon.Result{}, fmt.Errorf("failed to refresh cluster: %w", refreshErr)
-		}
-		// Use fresh cluster as base and apply our status changes
-		freshBase := freshCluster.DeepCopy()
-		freshCluster.Status.Upgrade = cluster.Status.Upgrade
-		if statusErr := m.client.Status().Patch(ctx, freshCluster, client.MergeFrom(freshBase)); statusErr != nil {
+		// Update status using SSA (eliminates race conditions)
+		if statusErr := m.patchStatusSSA(ctx, cluster); statusErr != nil {
 			logger.Error(statusErr, "Failed to update status after upgrade failure")
 		}
 		return recon.Result{}, err
@@ -235,18 +224,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	if !completed {
 		// Upgrade is still in progress; save state and requeue
-		// Refresh cluster to get latest version before patching to avoid resource version conflicts
-		freshCluster := &openbaov1alpha1.OpenBaoCluster{}
-		if err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      cluster.Name,
-		}, freshCluster); err != nil {
-			return recon.Result{}, fmt.Errorf("failed to refresh cluster: %w", err)
-		}
-		// Use fresh cluster as base and apply our status changes
-		freshBase := freshCluster.DeepCopy()
-		freshCluster.Status.Upgrade = cluster.Status.Upgrade
-		if err := m.client.Status().Patch(ctx, freshCluster, client.MergeFrom(freshBase)); err != nil {
+		// Update status using SSA (eliminates race conditions)
+		if err := m.patchStatusSSA(ctx, cluster); err != nil {
 			return recon.Result{}, fmt.Errorf("failed to update upgrade progress: %w", err)
 		}
 		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
@@ -655,10 +634,10 @@ func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *
 	return "", "", nil
 }
 
-// backupJobName generates a unique name for a backup job.
+// backupJobName generates a deterministic name for a pre-upgrade backup job.
+// The name is based on cluster generation to ensure idempotency per upgrade operation.
 func (m *Manager) backupJobName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	// Use a fixed prefix for pre-upgrade backups so we can detect existing jobs
-	return fmt.Sprintf("pre-upgrade-backup-%s-%s", cluster.Name, time.Now().Format("20060102-150405"))
+	return fmt.Sprintf("pre-upgrade-backup-%s-%d", cluster.Name, cluster.Generation)
 }
 
 // buildBackupJob builds a Kubernetes Job for executing a backup.
@@ -850,9 +829,6 @@ func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobNam
 
 // initializeUpgrade sets up the upgrade state and locks the StatefulSet partition.
 func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	// Capture original state for status patching to avoid optimistic locking conflicts
-	original := cluster.DeepCopy()
-
 	fromVersion := cluster.Status.CurrentVersion
 	toVersion := cluster.Spec.Version
 
@@ -869,8 +845,8 @@ func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, clu
 		return fmt.Errorf("failed to lock StatefulSet partition: %w", err)
 	}
 
-	// Update status
-	if err := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+	// Update status using SSA
+	if err := m.patchStatusSSA(ctx, cluster); err != nil {
 		return fmt.Errorf("failed to update status after initializing upgrade: %w", err)
 	}
 
@@ -1269,9 +1245,6 @@ func (m *Manager) waitForPodHealthy(ctx context.Context, logger logr.Logger, clu
 
 // finalizeUpgrade completes the upgrade process.
 func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *Metrics) error {
-	// Capture original state for status patching to avoid optimistic locking conflicts
-	original := cluster.DeepCopy()
-
 	var upgradeDuration float64
 	var fromVersion string
 
@@ -1283,8 +1256,8 @@ func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, clust
 	// Mark upgrade complete
 	SetUpgradeComplete(&cluster.Status, cluster.Spec.Version, cluster.Generation)
 
-	// Update status
-	if err := m.client.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+	// Update status using SSA
+	if err := m.patchStatusSSA(ctx, cluster); err != nil {
 		return fmt.Errorf("failed to update status after completing upgrade: %w", err)
 	}
 
@@ -1467,4 +1440,29 @@ func extractOrdinal(podName string) int {
 		return 0
 	}
 	return ordinal
+}
+
+const ssaFieldOwner = "openbao-upgrade-manager"
+
+// patchStatusSSA updates the cluster status using Server-Side Apply.
+// SSA eliminates race conditions by having the API server merge changes,
+// rather than requiring the client to refresh and merge manually.
+func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	// Create a minimal apply configuration with just the status fields we own
+	applyCluster := &openbaov1alpha1.OpenBaoCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: openbaov1alpha1.GroupVersion.String(),
+			Kind:       "OpenBaoCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		Status: cluster.Status,
+	}
+
+	return m.client.Status().Patch(ctx, applyCluster, client.Apply,
+		client.FieldOwner(ssaFieldOwner),
+		client.ForceOwnership,
+	)
 }
