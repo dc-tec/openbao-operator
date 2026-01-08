@@ -39,6 +39,7 @@ type Manager struct {
 	scheme        *runtime.Scheme
 	infraManager  *infra.Manager
 	clientFactory OpenBaoClientFactory
+	clusterOps    ClusterOps
 }
 
 // OpenBaoClientFactory creates OpenBao API clients for connecting to cluster pods.
@@ -47,7 +48,7 @@ type OpenBaoClientFactory func(config openbaoapi.ClientConfig) (openbaoapi.Clust
 
 // NewManager constructs a Manager.
 func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager) *Manager {
-	return &Manager{
+	mgr := &Manager{
 		client:       c,
 		scheme:       scheme,
 		infraManager: infraManager,
@@ -55,6 +56,8 @@ func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Man
 			return openbaoapi.NewClient(config)
 		},
 	}
+	mgr.clusterOps = newOpenBaoClusterOps(c, mgr.clientFactory)
+	return mgr
 }
 
 func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory OpenBaoClientFactory) *Manager {
@@ -62,6 +65,7 @@ func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraM
 	if clientFactory != nil {
 		mgr.clientFactory = clientFactory
 	}
+	mgr.clusterOps = newOpenBaoClusterOps(c, mgr.clientFactory)
 	return mgr
 }
 
@@ -741,7 +745,7 @@ func (m *Manager) handlePhaseDemotingBlue(ctx context.Context, logger logr.Logge
 	}
 
 	// After demotion, verify Green is now the leader (merged from former Cutover phase)
-	leaderPod, source, ok := m.findLeaderPod(ctx, logger, cluster, greenPods)
+	leaderPod, source, ok := m.clusterOps.FindLeaderPod(ctx, logger, cluster, greenPods)
 	if !ok {
 		logger.Info("Green leader not yet elected after demotion, waiting...")
 		return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait for leader election
@@ -782,7 +786,7 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 
 	leaderOK := leaderObserved(greenSnapshots)
 	if !leaderOK {
-		if _, source, ok := m.findLeaderPod(ctx, logger, cluster, greenPods); ok {
+		if _, source, ok := m.clusterOps.FindLeaderPod(ctx, logger, cluster, greenPods); ok {
 			leaderOK = true
 			logger.V(1).Info("Green leader observed via API fallback", "source", source)
 		}
@@ -1242,7 +1246,7 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 		return phaseOutcome{}, fmt.Errorf("failed to get Blue pods: %w", err)
 	}
 
-	leaderPod, source, ok := m.findLeaderPod(ctx, logger, cluster, bluePods)
+	leaderPod, source, ok := m.clusterOps.FindLeaderPod(ctx, logger, cluster, bluePods)
 	if !ok {
 		logger.Info("Blue leader not yet elected during rollback, waiting...")
 		return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait for leader election
