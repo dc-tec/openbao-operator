@@ -546,21 +546,22 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 	}
 
 	// Create storage client
-	usePathStyle := cluster.Spec.Backup.Target.UsePathStyle
-	partSize := cluster.Spec.Backup.Target.PartSize
-	concurrency := cluster.Spec.Backup.Target.Concurrency
-	storageClient, err := storage.NewS3ClientFromCredentials(
-		ctx,
-		cluster.Spec.Backup.Target.Endpoint,
-		cluster.Spec.Backup.Target.Bucket,
-		creds,
-		usePathStyle,
-		partSize,
-		concurrency,
-	)
+	storageClient, err := storage.OpenS3Bucket(ctx, storage.S3ClientConfig{
+		Endpoint:        cluster.Spec.Backup.Target.Endpoint,
+		Bucket:          cluster.Spec.Backup.Target.Bucket,
+		Region:          creds.Region,
+		AccessKeyID:     creds.AccessKeyID,
+		SecretAccessKey: creds.SecretAccessKey,
+		SessionToken:    creds.SessionToken,
+		CACert:          creds.CACert,
+		UsePathStyle:    cluster.Spec.Backup.Target.UsePathStyle,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create storage client for retention: %w", err)
 	}
+	defer func() {
+		_ = storageClient.Close()
+	}()
 
 	// Get backup list prefix
 	prefix := GetBackupListPrefix(

@@ -43,7 +43,7 @@ type RetentionResult struct {
 func ApplyRetention(
 	ctx context.Context,
 	logger logr.Logger,
-	storageClient *storage.S3Client,
+	storageClient *storage.Bucket,
 	prefix string,
 	policy RetentionPolicy,
 ) (*RetentionResult, error) {
