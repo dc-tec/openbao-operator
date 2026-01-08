@@ -45,6 +45,7 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 				},
 			},
 			ExecutorImage: "openbao/backup-executor:dev",
+			JWTAuthRole:   "restore-role", // Required for auth validation
 		},
 	}
 	if err := k8sClient.Create(ctx, restoreObj); err != nil {
