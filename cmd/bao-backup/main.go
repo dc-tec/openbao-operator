@@ -182,18 +182,22 @@ func run(ctx context.Context) error {
 	}
 
 	// Create storage client
-	storageClient, err := storage.NewS3ClientFromCredentials(
-		ctx,
-		cfg.BackupEndpoint,
-		cfg.BackupBucket,
-		cfg.StorageCredentials,
-		cfg.BackupUsePathStyle,
-		cfg.PartSize,
-		cfg.Concurrency,
-	)
+	storageClient, err := storage.OpenS3Bucket(ctx, storage.S3ClientConfig{
+		Endpoint:        cfg.BackupEndpoint,
+		Bucket:          cfg.BackupBucket,
+		Region:          cfg.StorageCredentials.Region,
+		AccessKeyID:     cfg.StorageCredentials.AccessKeyID,
+		SecretAccessKey: cfg.StorageCredentials.SecretAccessKey,
+		SessionToken:    cfg.StorageCredentials.SessionToken,
+		CACert:          cfg.StorageCredentials.CACert,
+		UsePathStyle:    cfg.BackupUsePathStyle,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create storage client: %w", err)
 	}
+	defer func() {
+		_ = storageClient.Close()
+	}()
 
 	// Stream snapshot directly to storage using a pipe
 	// The Snapshot method writes to a writer, and Upload reads from a reader
@@ -212,7 +216,7 @@ func run(ctx context.Context) error {
 
 	// Upload to storage, reading from the pipe reader
 	// This will block until the snapshot is complete or an error occurs
-	if err := storageClient.Upload(ctx, backupKey, pr, -1); err != nil {
+	if err := storageClient.Upload(ctx, backupKey, pr); err != nil {
 		_ = pr.Close()
 		_ = pw.Close()
 		return fmt.Errorf("failed to upload backup: %w", err)
@@ -320,18 +324,22 @@ func runRestore(ctx context.Context) error {
 
 	// Create storage client for downloading
 	fmt.Println("Creating storage client...")
-	storageClient, err := storage.NewS3ClientFromCredentials(
-		ctx,
-		restoreEndpoint,
-		restoreBucket,
-		cfg.StorageCredentials,
-		usePathStyle,
-		cfg.PartSize,
-		cfg.Concurrency,
-	)
+	storageClient, err := storage.OpenS3Bucket(ctx, storage.S3ClientConfig{
+		Endpoint:        restoreEndpoint,
+		Bucket:          restoreBucket,
+		Region:          cfg.StorageCredentials.Region,
+		AccessKeyID:     cfg.StorageCredentials.AccessKeyID,
+		SecretAccessKey: cfg.StorageCredentials.SecretAccessKey,
+		SessionToken:    cfg.StorageCredentials.SessionToken,
+		CACert:          cfg.StorageCredentials.CACert,
+		UsePathStyle:    usePathStyle,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create storage client: %w", err)
 	}
+	defer func() {
+		_ = storageClient.Close()
+	}()
 	fmt.Println("Storage client created")
 
 	// Verify snapshot exists before downloading
