@@ -11,6 +11,7 @@ import (
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -187,6 +188,16 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 		if upgradingCond != nil && upgradingCond.Status == metav1.ConditionTrue {
 			return m.failRestore(ctx, logger, restore, "cannot restore while cluster is upgrading")
 		}
+	}
+
+	// Validate authentication is configured.
+	// Restore jobs need to authenticate to OpenBao to perform the snapshot restore.
+	// This is especially critical for Hardened/SelfInit clusters where no root token is stored.
+	hasJWTAuth := restore.Spec.JWTAuthRole != ""
+	hasTokenSecret := restore.Spec.TokenSecretRef != nil && restore.Spec.TokenSecretRef.Name != ""
+	if !hasJWTAuth && !hasTokenSecret {
+		return m.failRestore(ctx, logger, restore,
+			"authentication is required: either jwtAuthRole or tokenSecretRef must be set in the restore spec")
 	}
 
 	// Ensure restore ServiceAccount exists
@@ -458,42 +469,111 @@ func restoreServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + RestoreServiceAccountSuffix
 }
 
-// ensureRestoreServiceAccount creates the ServiceAccount for restore jobs.
-func (m *Manager) ensureRestoreServiceAccount(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	saName := restoreServiceAccountName(cluster)
+const ssaFieldOwner = "openbao-operator"
 
+// ensureRestoreServiceAccount creates the ServiceAccount for restore jobs using Server-Side Apply.
+func (m *Manager) ensureRestoreServiceAccount(ctx context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	saName := restoreServiceAccountName(cluster)
 	sa := &corev1.ServiceAccount{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ServiceAccount",
+			APIVersion: "v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      saName,
-			Namespace: restore.Namespace,
+			Namespace: cluster.Namespace,
 			Labels:    restoreLabels(cluster),
 		},
 	}
 
-	// Set owner reference to the cluster (not the restore) so SA persists
-	if err := controllerutil.SetControllerReference(cluster, sa, m.scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference: %w", err)
-	}
-
-	existing := &corev1.ServiceAccount{}
-	err := m.client.Get(ctx, types.NamespacedName{Name: saName, Namespace: restore.Namespace}, existing)
-	if apierrors.IsNotFound(err) {
-		if err := m.client.Create(ctx, sa); err != nil {
-			return fmt.Errorf("failed to create restore service account: %w", err)
-		}
-		logger.Info("Created restore service account", "name", saName)
-	} else if err != nil {
-		return fmt.Errorf("failed to get restore service account: %w", err)
+	if err := m.applyResource(ctx, sa, cluster); err != nil {
+		return fmt.Errorf("failed to ensure restore ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
 	}
 
 	return nil
 }
 
-// ensureRestoreRBAC creates RBAC for the restore service account.
-func (m *Manager) ensureRestoreRBAC(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoRestore, _ *openbaov1alpha1.OpenBaoCluster) error {
-	// For now, we rely on the existing RBAC from the backup setup
-	// The restore SA needs permission to list pods (to find leader)
-	// This can be expanded later if needed
+// ensureRestoreRBAC creates RBAC for the restore service account using Server-Side Apply.
+// The restore job needs permission to list pods for leader discovery.
+func (m *Manager) ensureRestoreRBAC(ctx context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	saName := restoreServiceAccountName(cluster)
+	roleName := saName + "-role"
+	roleBindingName := saName + "-rolebinding"
+	resourceLabels := restoreLabels(cluster)
+
+	role := &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Role",
+			APIVersion: "rbac.authorization.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      roleName,
+			Namespace: cluster.Namespace,
+			Labels:    resourceLabels,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+		},
+	}
+
+	if err := m.applyResource(ctx, role, cluster); err != nil {
+		return fmt.Errorf("failed to ensure Role %s/%s: %w", cluster.Namespace, roleName, err)
+	}
+
+	roleBinding := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "RoleBinding",
+			APIVersion: "rbac.authorization.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      roleBindingName,
+			Namespace: cluster.Namespace,
+			Labels:    resourceLabels,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     roleName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      saName,
+				Namespace: cluster.Namespace,
+			},
+		},
+	}
+
+	if err := m.applyResource(ctx, roleBinding, cluster); err != nil {
+		return fmt.Errorf("failed to ensure RoleBinding %s/%s: %w", cluster.Namespace, roleBindingName, err)
+	}
+
+	return nil
+}
+
+// applyResource uses Server-Side Apply to create or update a Kubernetes resource.
+func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if m.scheme == nil {
+		return fmt.Errorf("scheme is required")
+	}
+
+	if err := controllerutil.SetControllerReference(cluster, obj, m.scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference: %w", err)
+	}
+
+	patchOpts := []client.PatchOption{
+		client.ForceOwnership,
+		client.FieldOwner(ssaFieldOwner),
+	}
+
+	if err := m.client.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
+		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
+	}
+
 	return nil
 }
 

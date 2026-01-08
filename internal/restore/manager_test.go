@@ -311,6 +311,62 @@ func TestValidatingUninitializedCluster(t *testing.T) {
 	assert.Contains(t, updated.Status.Message, "not initialized")
 }
 
+// TestValidatingNoAuthentication tests validation failure when no auth is configured.
+func TestValidatingNoAuthentication(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			UID:       "test-uid",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: true, // Cluster is initialized
+		},
+	}
+
+	// Restore with NO auth configured - neither jwtAuthRole nor tokenSecretRef
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-key",
+			},
+			// JWTAuthRole and TokenSecretRef are NOT set
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil)
+
+	_, err := mgr.handleValidating(context.Background(), testLogger(), restore)
+	require.NoError(t, err) // failRestore returns nil error
+
+	// Verify status was updated to Failed with auth error message
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseFailed, updated.Status.Phase)
+	assert.Contains(t, updated.Status.Message, "authentication is required")
+}
+
 // TestGetRestoreExecutorImage tests executor image resolution.
 func TestGetRestoreExecutorImage(t *testing.T) {
 	tests := []struct {
