@@ -1,11 +1,14 @@
 package security
 
 import (
+	"container/list"
 	"context"
 	"crypto"
 	_ "embed" // Required for go:embed
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -367,13 +370,16 @@ func (k *dockerConfigKeychain) Resolve(resource authn.Resource) (authn.Authentic
 	// Find matching registry in auths
 	registry := resource.RegistryStr()
 	if auth, ok := k.auths[registry]; ok {
-		// Create authenticator from docker config entry
+		// Prefer base64-encoded "auth" field if present (docker config format)
 		if auth.Auth != "" {
-			// Use base64-encoded auth string
-			return &authn.Basic{
-				Username: auth.Username,
-				Password: auth.Password,
-			}, nil
+			decoded, err := base64.StdEncoding.DecodeString(auth.Auth)
+			if err == nil {
+				parts := strings.SplitN(string(decoded), ":", 2)
+				if len(parts) == 2 {
+					return &authn.Basic{Username: parts[0], Password: parts[1]}, nil
+				}
+			}
+			// Fall through to username/password if decode fails
 		}
 		if auth.Username != "" && auth.Password != "" {
 			return &authn.Basic{
@@ -386,31 +392,62 @@ func (k *dockerConfigKeychain) Resolve(resource authn.Resource) (authn.Authentic
 	return authn.Anonymous, nil
 }
 
-// verificationCache is a simple in-memory cache for verified images.
-// It uses a map with a mutex for thread safety.
+// verificationCache is an LRU cache for verified images.
+// It limits memory usage by evicting the least recently used entries
+// when the cache exceeds maxSize.
 type verificationCache struct {
-	mu    sync.RWMutex
-	cache map[string]bool
+	mu       sync.Mutex
+	cache    map[string]*list.Element
+	eviction *list.List
+	maxSize  int
 }
+
+const defaultCacheMaxSize = 256
 
 func newVerificationCache() *verificationCache {
 	return &verificationCache{
-		cache: make(map[string]bool),
+		cache:    make(map[string]*list.Element),
+		eviction: list.New(),
+		maxSize:  defaultCacheMaxSize,
 	}
 }
 
 // isVerifiedByKey checks if an image has been verified using the provided cache key.
 func (c *verificationCache) isVerifiedByKey(cacheKey string) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.cache[cacheKey]
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if elem, ok := c.cache[cacheKey]; ok {
+		// Move to front (most recently used)
+		c.eviction.MoveToFront(elem)
+		return true
+	}
+	return false
 }
 
 // markVerifiedByKey marks an image as verified using the provided cache key.
 func (c *verificationCache) markVerifiedByKey(cacheKey string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.cache[cacheKey] = true
+
+	// Already in cache? Move to front
+	if elem, ok := c.cache[cacheKey]; ok {
+		c.eviction.MoveToFront(elem)
+		return
+	}
+
+	// Evict oldest if at capacity
+	if c.eviction.Len() >= c.maxSize {
+		oldest := c.eviction.Back()
+		if oldest != nil {
+			oldestKey := oldest.Value.(string)
+			delete(c.cache, oldestKey)
+			c.eviction.Remove(oldest)
+		}
+	}
+
+	// Add new entry
+	elem := c.eviction.PushFront(cacheKey)
+	c.cache[cacheKey] = elem
 }
 
 // cacheKey generates a cache key from image digest and verification config.
