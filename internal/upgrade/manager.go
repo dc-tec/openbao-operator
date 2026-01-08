@@ -164,7 +164,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	// Ensure upgrade ServiceAccount exists (for JWT Auth)
-	if err := m.ensureUpgradeServiceAccount(ctx, logger, cluster); err != nil {
+	if err := EnsureUpgradeServiceAccount(ctx, m.client, cluster, "openbao-operator"); err != nil {
 		return recon.Result{}, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
 	}
 
@@ -1021,7 +1021,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	}
 
 	// Ensure step-down Job exists/is running
-	result, err := ensureUpgradeExecutorJob(
+	result, err := EnsureExecutorJob(
 		ctx,
 		m.client,
 		m.scheme,
@@ -1372,41 +1372,6 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 	}
 
 	return nil
-}
-
-// ensureUpgradeServiceAccount creates or updates the ServiceAccount for upgrade operations using Server-Side Apply.
-// This ServiceAccount is used for JWT Auth authentication to OpenBao.
-func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	saName := upgradeServiceAccountName(cluster)
-
-	sa := &corev1.ServiceAccount{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ServiceAccount",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      saName,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:      cluster.Name,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: "upgrade",
-			},
-		},
-	}
-
-	if err := m.applyResource(ctx, sa, cluster, "openbao-operator"); err != nil {
-		return fmt.Errorf("failed to ensure upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-	}
-
-	return nil
-}
-
-// upgradeServiceAccountName returns the name for the upgrade ServiceAccount.
-func upgradeServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixUpgradeServiceAccount
 }
 
 // getPodURL returns the URL for connecting to a specific pod.

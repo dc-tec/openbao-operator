@@ -31,6 +31,7 @@ import (
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 	"github.com/dc-tec/openbao-operator/internal/security"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 var (
@@ -246,7 +247,7 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 		return requeueStandard(), nil
 	}
 
-	if err := m.ensureUpgradeServiceAccount(ctx, cluster); err != nil {
+	if err := upgrade.EnsureUpgradeServiceAccount(ctx, m.client, cluster, "openbao-operator"); err != nil {
 		return recon.Result{}, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
 	}
 
@@ -1188,41 +1189,6 @@ func (m *Manager) cleanupGreenStatefulSet(ctx context.Context, logger logr.Logge
 	return nil
 }
 
-// ensureUpgradeServiceAccount creates or updates the ServiceAccount for upgrade operations using Server-Side Apply.
-// This ServiceAccount is used by upgrade executor Jobs for JWT Auth authentication to OpenBao.
-func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	saName := cluster.Name + constants.SuffixUpgradeServiceAccount
-
-	sa := &corev1.ServiceAccount{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ServiceAccount",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      saName,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:      cluster.Name,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: "upgrade",
-			},
-		},
-	}
-
-	patchOpts := []client.PatchOption{
-		client.ForceOwnership,
-		client.FieldOwner("openbao-operator"),
-	}
-
-	if err := m.client.Patch(ctx, sa, client.Apply, patchOpts...); err != nil {
-		return fmt.Errorf("failed to ensure upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-	}
-
-	return nil
-}
-
 // getBluePods returns all pods belonging to the Blue revision (convenience wrapper).
 func (m *Manager) getBluePods(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, blueRevision string) ([]corev1.Pod, error) {
 	return m.getPodsByRevision(ctx, cluster, blueRevision)
@@ -1576,7 +1542,7 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 	// Repair consensus in a single pass by ensuring Blue nodes are voters and
 	// Green nodes are non-voters. This replaces the previous multi-step rollback
 	// sequence and reduces the risk of leaving the cluster in a mixed state.
-	result, err := EnsureExecutorJob(
+	result, err := upgrade.EnsureExecutorJob(
 		ctx,
 		m.client,
 		m.scheme,
@@ -1630,7 +1596,7 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 	blueRevision := cluster.Status.BlueGreen.BlueRevision
 
 	// Step 1: Remove Green peers from Raft
-	result, err := EnsureExecutorJob(
+	result, err := upgrade.EnsureExecutorJob(
 		ctx,
 		m.client,
 		m.scheme,

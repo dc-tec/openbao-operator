@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 type executorJobStep struct {
@@ -22,7 +23,7 @@ func (m *Manager) runExecutorJobStep(ctx context.Context, logger logr.Logger, cl
 	autoRollback := autoRollbackSettings(cluster)
 	runID := executorRunID(autoRollback, cluster.Status.BlueGreen.JobFailureCount)
 
-	result, err := EnsureExecutorJob(
+	result, err := upgrade.EnsureExecutorJob(
 		ctx,
 		m.client,
 		m.scheme,
