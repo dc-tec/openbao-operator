@@ -34,11 +34,53 @@ const (
 	upgradeTLSCAVolumeName       = "tls-ca"
 )
 
+// JobResult contains the status of an upgrade executor Job.
+// This is used by both rolling upgrades and blue/green upgrades.
+type JobResult struct {
+	Name      string
+	Exists    bool
+	Succeeded bool
+	Failed    bool
+	Running   bool
+}
+
 type executorJobResult struct {
 	Name      string
 	Succeeded bool
 	Failed    bool
 	Running   bool
+}
+
+// EnsureExecutorJob creates or checks the status of an upgrade executor Job.
+// The Job is owned by the OpenBaoCluster and is idempotent by (cluster, action, runID, blueRevision, greenRevision).
+func EnsureExecutorJob(
+	ctx context.Context,
+	c client.Client,
+	scheme *runtime.Scheme,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	action ExecutorAction,
+	runID string,
+	blueRevision string,
+	greenRevision string,
+) (*JobResult, error) {
+	result, err := ensureUpgradeExecutorJob(ctx, c, scheme, logger, cluster, action, runID, blueRevision, greenRevision)
+	if err != nil {
+		return nil, err
+	}
+	return &JobResult{
+		Name:      result.Name,
+		Exists:    true,
+		Succeeded: result.Succeeded,
+		Failed:    result.Failed,
+		Running:   result.Running,
+	}, nil
+}
+
+// ExecutorJobName returns the deterministic name for an upgrade executor Job.
+// This is exported for tests and for other packages that need to refer to the Job name.
+func ExecutorJobName(clusterName string, action ExecutorAction, runID string, blueRevision, greenRevision string) string {
+	return upgradeExecutorJobName(clusterName, action, runID, blueRevision, greenRevision)
 }
 
 func ensureUpgradeExecutorJob(

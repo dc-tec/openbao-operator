@@ -15,6 +15,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/infra"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
@@ -54,7 +55,7 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 		},
 	}
 
-	jobName := executorJobName(cluster.Name, ActionJoinGreenNonVoters, "", "blue", "green")
+	jobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "", "blue", "green")
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -99,7 +100,7 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 	if step.Outcome.kind != phaseOutcomeRequeueAfter {
 		t.Fatalf("expected outcome %s, got %s", phaseOutcomeRequeueAfter, step.Outcome.kind)
 	}
-	retryJobName := executorJobName(cluster.Name, ActionJoinGreenNonVoters, "retry-1", "blue", "green")
+	retryJobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "retry-1", "blue", "green")
 	retryJob := &batchv1.Job{}
 	if getErr := c.Get(context.Background(), types.NamespacedName{Namespace: cluster.Namespace, Name: retryJobName}, retryJob); getErr != nil {
 		t.Fatalf("expected retry job %s/%s to be created: %v", cluster.Namespace, retryJobName, getErr)
@@ -141,7 +142,7 @@ func TestRunExecutorJob_FailedJob_DoesNotRetryWhenAutoRollbackDisabled(t *testin
 		},
 	}
 
-	jobName := executorJobName(cluster.Name, ActionJoinGreenNonVoters, "", "blue", "green")
+	jobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "", "blue", "green")
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -221,7 +222,7 @@ func TestRunExecutorJob_FailedJob_TriggersAbortWhenMaxFailuresReached(t *testing
 		},
 	}
 
-	jobName := executorJobName(cluster.Name, ActionJoinGreenNonVoters, "", "blue", "green")
+	jobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "", "blue", "green")
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,

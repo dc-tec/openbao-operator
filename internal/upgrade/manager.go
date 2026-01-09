@@ -164,7 +164,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	// Ensure upgrade ServiceAccount exists (for JWT Auth)
-	if err := m.ensureUpgradeServiceAccount(ctx, logger, cluster); err != nil {
+	if err := EnsureUpgradeServiceAccount(ctx, m.client, cluster, "openbao-operator"); err != nil {
 		return recon.Result{}, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
 	}
 
@@ -1021,7 +1021,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	}
 
 	// Ensure step-down Job exists/is running
-	result, err := ensureUpgradeExecutorJob(
+	result, err := EnsureExecutorJob(
 		ctx,
 		m.client,
 		m.scheme,
@@ -1346,67 +1346,6 @@ func (m *Manager) getClusterCACert(ctx context.Context, cluster *openbaov1alpha1
 	}
 
 	return caCert, nil
-}
-
-// applyResource uses Server-Side Apply to create or update a Kubernetes resource.
-// This eliminates the need for Get-then-Create-or-Update logic and manual diffing.
-//
-// The resource must have TypeMeta, ObjectMeta (with Name and Namespace), and the desired Spec set.
-// Owner references are set automatically if the resource supports them.
-//
-// fieldOwner identifies the operator as the manager of this resource (used for conflict resolution).
-func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster, fieldOwner string) error {
-	// Set owner reference for garbage collection
-	if err := controllerutil.SetControllerReference(cluster, obj, m.scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference: %w", err)
-	}
-
-	// Use Server-Side Apply with ForceOwnership to ensure the operator manages this resource
-	patchOpts := []client.PatchOption{
-		client.ForceOwnership,
-		client.FieldOwner(fieldOwner),
-	}
-
-	if err := m.client.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
-		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
-	}
-
-	return nil
-}
-
-// ensureUpgradeServiceAccount creates or updates the ServiceAccount for upgrade operations using Server-Side Apply.
-// This ServiceAccount is used for JWT Auth authentication to OpenBao.
-func (m *Manager) ensureUpgradeServiceAccount(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	saName := upgradeServiceAccountName(cluster)
-
-	sa := &corev1.ServiceAccount{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ServiceAccount",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      saName,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:      cluster.Name,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: "upgrade",
-			},
-		},
-	}
-
-	if err := m.applyResource(ctx, sa, cluster, "openbao-operator"); err != nil {
-		return fmt.Errorf("failed to ensure upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-	}
-
-	return nil
-}
-
-// upgradeServiceAccountName returns the name for the upgrade ServiceAccount.
-func upgradeServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixUpgradeServiceAccount
 }
 
 // getPodURL returns the URL for connecting to a specific pod.
