@@ -242,24 +242,26 @@ var _ = Describe("Scale: Sentinel jitter and noise control", Label("sentinel", "
 			_, _ = fmt.Fprintf(GinkgoWriter, "Patched Service %q to introduce drift (at=%s)\n", clusterName, patchTime.Format(time.RFC3339Nano))
 		}
 
-		By("waiting for drift to be detected and corrected for each cluster")
-		driftDetectedTimes := make(map[string]time.Time, len(clusterNames))
+		By("waiting for Sentinel triggers to be handled for each cluster")
+		triggerHandledTimes := make(map[string]time.Time, len(clusterNames))
 		for _, clusterName := range clusterNames {
-			var detected time.Time
+			var handledAt time.Time
 			Eventually(func(g Gomega) {
 				cluster := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
+				g.Expect(cluster.Status.Sentinel).NotTo(BeNil(), "expected sentinel status to be set")
+				g.Expect(cluster.Status.Sentinel.LastHandledAt).NotTo(BeNil(), "expected LastHandledAt to be set")
+				g.Expect(cluster.Status.Sentinel.LastHandledTriggerID).NotTo(BeEmpty(), "expected LastHandledTriggerID to be set")
 				g.Expect(cluster.Status.Drift).NotTo(BeNil(), "expected drift status to be set")
-				g.Expect(cluster.Status.Drift.LastDriftDetected).NotTo(BeNil(), "expected LastDriftDetected to be set")
 				g.Expect(cluster.Status.Drift.DriftCorrectionCount).To(BeNumerically(">=", 1), "expected DriftCorrectionCount >= 1")
 				g.Expect(cluster.Status.Drift.LastCorrectionTime).NotTo(BeNil(), "expected LastCorrectionTime to be set")
 
-				detected = cluster.Status.Drift.LastDriftDetected.Time
-				g.Expect(detected).To(BeTemporally(">=", patchTimes[clusterName]))
+				handledAt = cluster.Status.Sentinel.LastHandledAt.Time
+				g.Expect(handledAt).To(BeTemporally(">=", patchTimes[clusterName]))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			driftDetectedTimes[clusterName] = detected
-			_, _ = fmt.Fprintf(GinkgoWriter, "Cluster %q drift corrected at=%s\n", clusterName, detected.Format(time.RFC3339Nano))
+			triggerHandledTimes[clusterName] = handledAt
+			_, _ = fmt.Fprintf(GinkgoWriter, "Cluster %q drift trigger handled at=%s\n", clusterName, handledAt.Format(time.RFC3339Nano))
 		}
 
 		By("verifying drift corrections are not fully synchronized")
@@ -269,7 +271,7 @@ var _ = Describe("Scale: Sentinel jitter and noise control", Label("sentinel", "
 			hasLatency bool
 		)
 		for _, clusterName := range clusterNames {
-			latency := driftDetectedTimes[clusterName].Sub(patchTimes[clusterName])
+			latency := triggerHandledTimes[clusterName].Sub(patchTimes[clusterName])
 			if !hasLatency {
 				minLatency = latency
 				maxLatency = latency
@@ -286,7 +288,7 @@ var _ = Describe("Scale: Sentinel jitter and noise control", Label("sentinel", "
 		Expect(hasLatency).To(BeTrue())
 
 		// With jitter values {0,2,4} and a 2s base window, a healthy system should show a visible
-		// spread in correction latency. Allow slack for controller scheduling and API latency.
+		// spread in trigger handling latency. Allow slack for controller scheduling and API latency.
 		Expect(maxLatency - minLatency).To(BeNumerically(">=", 1*time.Second))
 	})
 })
