@@ -20,8 +20,6 @@ const (
 	openBaoLivenessProbeTimeout  = "4s"
 	openBaoReadinessProbeTimeout = "10s"
 	openBaoStartupProbeTimeout   = "5s"
-
-	unsealTypeStatic = "static"
 )
 
 var (
@@ -213,47 +211,7 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 		},
 	}
 
-	// Add GCP credentials environment variable when using GCP Cloud KMS
-	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type == "gcpckms" {
-		if cluster.Spec.Unseal.CredentialsSecretRef != nil {
-			// Mount GCP credentials JSON file and set GOOGLE_APPLICATION_CREDENTIALS
-			// The credentials secret must contain a key named "credentials.json" with the
-			// GCP service account JSON credentials. This will be mounted at
-			// /etc/bao/seal-creds/credentials.json and referenced by the environment variable.
-			env = append(env, corev1.EnvVar{
-				Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-				Value: "/etc/bao/seal-creds/credentials.json",
-			})
-		}
-	}
-
-	// Add VAULT_TOKEN environment variable when using transit seal with credentials
-	// This allows the seal to use the "token" parameter instead of "token_file",
-	// avoiding issues with trailing newlines in mounted Secret files.
-	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type == "transit" {
-		if cluster.Spec.Unseal.CredentialsSecretRef != nil {
-			// Read token from the mounted secret file and set as VAULT_TOKEN
-			// The token will be read from /etc/bao/seal-creds/token
-			env = append(env, corev1.EnvVar{
-				Name: "VAULT_TOKEN",
-				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						Key: "token",
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: cluster.Spec.Unseal.CredentialsSecretRef.Name,
-						},
-					},
-				},
-			})
-
-			// If the credentials Secret provides a CA bundle, surface it via VAULT_CACERT
-			// so transit seal HTTP calls verify infra-bao TLS.
-			env = append(env, corev1.EnvVar{
-				Name:  "VAULT_CACERT",
-				Value: "/etc/bao/seal-creds/ca.crt",
-			})
-		}
-	}
+	env = append(env, newSealWiringProvider(cluster).EnvVars()...)
 
 	return env
 }
@@ -305,25 +263,7 @@ func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, rendere
 		})
 	}
 
-	// Only mount unseal volume when using static seal
-	if usesStaticSeal(cluster) {
-		mounts = append(mounts, corev1.VolumeMount{
-			Name:      unsealVolumeName,
-			MountPath: openBaoUnsealMountPath,
-			ReadOnly:  true,
-		})
-	}
-
-	// Mount seal credentials volume when using external KMS with credentials
-	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" && cluster.Spec.Unseal.Type != unsealTypeStatic {
-		if cluster.Spec.Unseal.CredentialsSecretRef != nil {
-			mounts = append(mounts, corev1.VolumeMount{
-				Name:      "seal-creds",
-				MountPath: "/etc/bao/seal-creds",
-				ReadOnly:  true,
-			})
-		}
-	}
+	mounts = append(mounts, newSealWiringProvider(cluster).VolumeMounts()...)
 
 	// Add utils volume mount (Read-Only for security)
 	mounts = append(mounts, corev1.VolumeMount{
@@ -678,33 +618,7 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, revision s
 		})
 	}
 
-	// Only add unseal volume when using static seal
-	if usesStaticSeal(cluster) {
-		volumes = append(volumes, corev1.Volume{
-			Name: unsealVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  unsealSecretName(cluster),
-					DefaultMode: ptr.To(secretFileMode),
-				},
-			},
-		})
-	}
-
-	// Add seal credentials volume if using external KMS with credentials
-	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" && cluster.Spec.Unseal.Type != unsealTypeStatic {
-		if cluster.Spec.Unseal.CredentialsSecretRef != nil {
-			volumes = append(volumes, corev1.Volume{
-				Name: "seal-creds",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName:  cluster.Spec.Unseal.CredentialsSecretRef.Name,
-						DefaultMode: ptr.To(secretFileMode),
-					},
-				},
-			})
-		}
-	}
+	volumes = append(volumes, newSealWiringProvider(cluster).Volumes()...)
 
 	// If self-init is enabled, add the self-init ConfigMap volume, unless disabled (Green pods)
 	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled && !disableSelfInit {
