@@ -21,9 +21,11 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +55,12 @@ const (
 	defaultUpgradeExecutorImage = "openbao/upgrade-executor:dev"
 )
 
+type suiteBootstrap struct {
+	Clusters                []string `json:"clusters"`
+	Kubeconfigs             []string `json:"kubeconfigs"`
+	CertManagerPreinstalled []bool   `json:"certManagerPreinstalled"`
+}
+
 var (
 	// namespace where the project is deployed in
 	operatorNamespace = "openbao-operator-system"
@@ -62,8 +70,8 @@ var (
 	// These variables are useful if these components are already installed, avoiding
 	// re-installation and conflicts.
 	skipCertManagerInstall = os.Getenv("CERT_MANAGER_INSTALL_SKIP") == "true"
-	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs be found on the cluster
-	isCertManagerAlreadyInstalled = false
+	// suiteBootstrapState stores cross-cluster bootstrap state for cleanup (node 1 only).
+	suiteBootstrapState *suiteBootstrap
 	// Note: Gateway API CRDs are NOT installed by default in BeforeSuite.
 	// Individual tests that require Gateway API should use InstallGatewayAPI() and UninstallGatewayAPI()
 	// helper functions to manage Gateway API CRDs on a per-test basis.
@@ -102,6 +110,28 @@ var (
 	skipImageBuild = os.Getenv("E2E_SKIP_IMAGE_BUILD") == "true"
 )
 
+func kindClusterName(base string, index int) string {
+	if index < 1 {
+		index = 1
+	}
+	return fmt.Sprintf("%s-%d", base, index)
+}
+
+func withEnv(key string, value string, fn func()) {
+	previousValue, hadPrevious := os.LookupEnv(key)
+	if err := os.Setenv(key, value); err != nil {
+		panic(err)
+	}
+	defer func() {
+		if hadPrevious {
+			_ = os.Setenv(key, previousValue)
+			return
+		}
+		_ = os.Unsetenv(key)
+	}()
+	fn()
+}
+
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
 // temporary environment to validate project changes with the purpose of being used in CI jobs.
 // The default setup requires Kind, builds/loads the Manager Docker image locally, and installs
@@ -133,6 +163,22 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		err error
 	)
 
+	suiteConfig, _ := GinkgoConfiguration()
+	parallelTotal := suiteConfig.ParallelTotal
+	if parallelTotal < 1 {
+		parallelTotal = 1
+	}
+
+	baseCluster := strings.TrimSpace(os.Getenv("KIND_CLUSTER"))
+	if baseCluster == "" {
+		baseCluster = "kind"
+	}
+
+	kindBinary := strings.TrimSpace(os.Getenv("KIND"))
+	if kindBinary == "" {
+		kindBinary = "kind"
+	}
+
 	if skipImageBuild {
 		By("skipping build of the manager(Operator) image")
 	} else {
@@ -143,10 +189,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	}
 
 	// TODO(user): If you want to change the e2e test vendor from Kind, ensure the image is
-	// built and available before running the tests. Also, remove the following block.
-	By("loading the manager(Operator) image on Kind")
-	err = utils.LoadImageToKindClusterWithName(projectImage)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
+	// built and available before running the tests. Images are loaded into Kind clusters below.
 
 	if skipImageBuild {
 		By("skipping build of the config-init image")
@@ -157,9 +200,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the config-init image")
 	}
 
-	By("loading the config-init image on Kind")
-	err = utils.LoadImageToKindClusterWithName(configInitImage)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the config-init image into Kind")
+	// Images are loaded per parallel cluster below.
 
 	if skipImageBuild {
 		By("skipping build of the Sentinel image")
@@ -170,9 +211,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the Sentinel image")
 	}
 
-	By("loading the Sentinel image on Kind")
-	err = utils.LoadImageToKindClusterWithName(sentinelImage)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the Sentinel image into Kind")
+	// Images are loaded per parallel cluster below.
 
 	if skipImageBuild {
 		By("skipping build of the backup executor image")
@@ -183,9 +222,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the backup executor image")
 	}
 
-	By("loading the backup executor image on Kind")
-	err = utils.LoadImageToKindClusterWithName(backupExecutorImage)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the backup executor image into Kind")
+	// Images are loaded per parallel cluster below.
 
 	if skipImageBuild {
 		By("skipping build of the upgrade executor image")
@@ -196,61 +233,107 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the upgrade executor image")
 	}
 
-	By("loading the upgrade executor image on Kind")
-	err = utils.LoadImageToKindClusterWithName(upgradeExecutorImage)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the upgrade executor image into Kind")
-
-	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
-	// To prevent errors when tests run in environments with CertManager already installed,
-	// we check for its presence before execution.
-	// Setup CertManager before the suite if not skipped and if not already installed
-	if !skipCertManagerInstall {
-		By("checking if cert manager is installed already")
-		isCertManagerAlreadyInstalled = utils.IsCertManagerCRDsInstalled()
-		if !isCertManagerAlreadyInstalled {
-			_, _ = fmt.Fprintf(GinkgoWriter, "Installing CertManager...\n")
-			Expect(utils.InstallCertManager()).To(Succeed(), "Failed to install CertManager")
-		} else {
-			_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: CertManager is already installed. Skipping installation...\n")
-		}
+	bootstrap := suiteBootstrap{
+		Clusters:                make([]string, 0, parallelTotal),
+		Kubeconfigs:             make([]string, 0, parallelTotal),
+		CertManagerPreinstalled: make([]bool, 0, parallelTotal),
 	}
 
-	// Gateway API CRDs are NOT installed by default in BeforeSuite.
-	// Individual tests that require Gateway API should install/uninstall them
-	// using the helper functions (InstallGatewayAPI/UninstallGatewayAPI).
-	// This allows tests like "reports Degraded when Gateway API CRDs are missing"
-	// to actually verify the degraded condition.
+	for i := 1; i <= parallelTotal; i++ {
+		clusterName := kindClusterName(baseCluster, i)
+		kubeconfigPath := filepath.Join(os.TempDir(), fmt.Sprintf("openbao-operator-e2e-%s.kubeconfig", clusterName))
+		bootstrap.Clusters = append(bootstrap.Clusters, clusterName)
+		bootstrap.Kubeconfigs = append(bootstrap.Kubeconfigs, kubeconfigPath)
 
-	By("creating operator namespace")
-	cmd = exec.Command("kubectl", "create", "ns", operatorNamespace)
-	_, err = utils.Run(cmd)
-	if err != nil {
-		// Namespace may already exist if tests are re-run without cleanup.
-		Expect(err.Error()).To(ContainSubstring("AlreadyExists"))
+		By(fmt.Sprintf("exporting kubeconfig for Kind cluster %q", clusterName))
+		cmd = exec.Command(kindBinary, "export", "kubeconfig", "--name", clusterName, "--kubeconfig", kubeconfigPath)
+		_, err = utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to export kubeconfig for Kind cluster %q", clusterName))
+
+		withEnv("KUBECONFIG", kubeconfigPath, func() {
+			withEnv("KIND_CLUSTER", clusterName, func() {
+				By(fmt.Sprintf("loading the manager(Operator) image on Kind (cluster=%s)", clusterName))
+				err = utils.LoadImageToKindClusterWithName(projectImage)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the manager(Operator) image into Kind (cluster=%s)", clusterName))
+
+				By(fmt.Sprintf("loading the config-init image on Kind (cluster=%s)", clusterName))
+				err = utils.LoadImageToKindClusterWithName(configInitImage)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the config-init image into Kind (cluster=%s)", clusterName))
+
+				By(fmt.Sprintf("loading the Sentinel image on Kind (cluster=%s)", clusterName))
+				err = utils.LoadImageToKindClusterWithName(sentinelImage)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the Sentinel image into Kind (cluster=%s)", clusterName))
+
+				By(fmt.Sprintf("loading the backup executor image on Kind (cluster=%s)", clusterName))
+				err = utils.LoadImageToKindClusterWithName(backupExecutorImage)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the backup executor image into Kind (cluster=%s)", clusterName))
+
+				By(fmt.Sprintf("loading the upgrade executor image on Kind (cluster=%s)", clusterName))
+				err = utils.LoadImageToKindClusterWithName(upgradeExecutorImage)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the upgrade executor image into Kind (cluster=%s)", clusterName))
+
+				certManagerPreinstalled := false
+				if !skipCertManagerInstall {
+					By(fmt.Sprintf("checking if cert manager is installed already (cluster=%s)", clusterName))
+					certManagerPreinstalled = utils.IsCertManagerCRDsInstalled()
+					if !certManagerPreinstalled {
+						_, _ = fmt.Fprintf(GinkgoWriter, "Installing CertManager (cluster=%s)...\n", clusterName)
+						ExpectWithOffset(1, utils.InstallCertManager()).To(Succeed(), fmt.Sprintf("Failed to install CertManager (cluster=%s)", clusterName))
+					} else {
+						_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: CertManager is already installed. Skipping installation (cluster=%s)...\n", clusterName)
+					}
+				}
+				bootstrap.CertManagerPreinstalled = append(bootstrap.CertManagerPreinstalled, certManagerPreinstalled)
+
+				By(fmt.Sprintf("creating operator namespace (cluster=%s)", clusterName))
+				cmd = exec.Command("kubectl", "create", "ns", operatorNamespace)
+				_, err = utils.Run(cmd)
+				if err != nil {
+					// Namespace may already exist if tests are re-run without cleanup.
+					Expect(err.Error()).To(ContainSubstring("AlreadyExists"))
+				}
+
+				By(fmt.Sprintf("labeling the operator namespace to enforce the restricted security policy (cluster=%s)", clusterName))
+				cmd = exec.Command("kubectl", "label", "--overwrite", "ns", operatorNamespace,
+					"pod-security.kubernetes.io/enforce=restricted")
+				_, err = utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to label operator namespace with restricted policy (cluster=%s)", clusterName))
+
+				By(fmt.Sprintf("installing CRDs (cluster=%s)", clusterName))
+				cmd = exec.Command("make", "install")
+				_, err = utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to install CRDs (cluster=%s)", clusterName))
+
+				By(fmt.Sprintf("deploying the controller-manager and provisioner (cluster=%s)", clusterName))
+				cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
+				_, err = utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to deploy the operator (cluster=%s)", clusterName))
+			})
+		})
 	}
 
-	By("labeling the operator namespace to enforce the restricted security policy")
-	cmd = exec.Command("kubectl", "label", "--overwrite", "ns", operatorNamespace,
-		"pod-security.kubernetes.io/enforce=restricted")
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to label operator namespace with restricted policy")
+	suiteBootstrapState = &bootstrap
 
-	By("installing CRDs")
-	cmd = exec.Command("make", "install")
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install CRDs")
-
-	By("deploying the controller-manager and provisioner")
-	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the operator")
-
-	return []byte("done") // Return data to other nodes if needed (not needed here)
+	data, err := json.Marshal(bootstrap)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to marshal suite bootstrap state")
+	return data
 }, func(data []byte) {
 	// THIS BLOCK RUNS ON ALL NODES (after node 1 finishes)
-	// No additional setup needed here - the client/scheme setup is done in individual test BeforeAll blocks
-	// This block must exist for SynchronizedBeforeSuite coordination, but it's intentionally empty
-	// to allow nodes to proceed immediately after node 1 completes setup
+	bootstrap := &suiteBootstrap{}
+	ExpectWithOffset(1, json.Unmarshal(data, bootstrap)).To(Succeed(), "Failed to unmarshal suite bootstrap state")
+	ExpectWithOffset(1, len(bootstrap.Clusters)).To(BeNumerically(">", 0))
+	ExpectWithOffset(1, len(bootstrap.Kubeconfigs)).To(Equal(len(bootstrap.Clusters)))
+
+	proc := GinkgoParallelProcess()
+	ExpectWithOffset(1, proc).To(BeNumerically(">=", 1))
+	ExpectWithOffset(1, proc).To(BeNumerically("<=", len(bootstrap.Clusters)))
+
+	clusterName := bootstrap.Clusters[proc-1]
+	kubeconfigPath := bootstrap.Kubeconfigs[proc-1]
+
+	ExpectWithOffset(1, os.Setenv("KIND_CLUSTER", clusterName)).To(Succeed())
+	ExpectWithOffset(1, os.Setenv("KUBECONFIG", kubeconfigPath)).To(Succeed())
+	_, _ = fmt.Fprintf(GinkgoWriter, "E2E parallel process=%d cluster=%s kubeconfig=%s\n", proc, clusterName, kubeconfigPath)
 })
 
 var _ = SynchronizedAfterSuite(func() {
@@ -266,45 +349,51 @@ var _ = SynchronizedAfterSuite(func() {
 		return
 	}
 
-	By("cleaning up the curl pod for metrics")
-	cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", operatorNamespace, "--ignore-not-found")
-	_, _ = utils.Run(cmd)
+	ExpectWithOffset(1, suiteBootstrapState).NotTo(BeNil(), "suite bootstrap state not initialized")
 
-	By("cleaning up OpenBao custom resources before undeploying")
-	// Use a shorter timeout for cleanup - if resources are stuck, we'll remove finalizers quickly
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := cleanupOpenBaoCustomResources(ctx); err != nil {
-		_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: cleanupOpenBaoCustomResources failed (will continue with undeploy): %v\n", err)
-		// Continue with cleanup even if resource deletion failed - undeploy will handle it
-	}
+	for i := range suiteBootstrapState.Clusters {
+		clusterName := suiteBootstrapState.Clusters[i]
+		kubeconfigPath := suiteBootstrapState.Kubeconfigs[i]
 
-	By("undeploying the operator")
-	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd = exec.CommandContext(ctx, "make", "undeploy", "ignore-not-found=true", "wait=false")
-	_, _ = utils.Run(cmd)
+		withEnv("KIND_CLUSTER", clusterName, func() {
+			withEnv("KUBECONFIG", kubeconfigPath, func() {
+				By(fmt.Sprintf("cleaning up the curl pod for metrics (cluster=%s)", clusterName))
+				cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", operatorNamespace, "--ignore-not-found")
+				_, _ = utils.Run(cmd)
 
-	// Note: infra-bao resources are now deployed per-test in test namespaces
-	// and will be cleaned up automatically when test namespaces are deleted.
-	// No explicit cleanup needed here.
+				By(fmt.Sprintf("cleaning up OpenBao custom resources before undeploying (cluster=%s)", clusterName))
+				// Use a shorter timeout for cleanup - if resources are stuck, we'll remove finalizers quickly
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				if err := cleanupOpenBaoCustomResources(ctx); err != nil {
+					_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: cleanupOpenBaoCustomResources failed (cluster=%s; will continue with undeploy): %v\n", clusterName, err)
+				}
+				cancel()
 
-	By("uninstalling CRDs")
-	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd = exec.CommandContext(ctx, "make", "uninstall", "ignore-not-found=true", "wait=false")
-	_, _ = utils.Run(cmd)
+				By(fmt.Sprintf("undeploying the operator (cluster=%s)", clusterName))
+				ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
+				cmd = exec.CommandContext(ctx, "make", "undeploy", "ignore-not-found=true", "wait=false")
+				_, _ = utils.Run(cmd)
+				cancel()
 
-	By("removing operator namespace")
-	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd = exec.CommandContext(ctx, "kubectl", "delete", "ns", operatorNamespace, "--ignore-not-found", "--wait=false")
-	_, _ = utils.Run(cmd)
+				By(fmt.Sprintf("uninstalling CRDs (cluster=%s)", clusterName))
+				ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
+				cmd = exec.CommandContext(ctx, "make", "uninstall", "ignore-not-found=true", "wait=false")
+				_, _ = utils.Run(cmd)
+				cancel()
 
-	// Teardown CertManager after the suite if not skipped and if it was not already installed
-	if !skipCertManagerInstall && !isCertManagerAlreadyInstalled {
-		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
-		utils.UninstallCertManager()
+				By(fmt.Sprintf("removing operator namespace (cluster=%s)", clusterName))
+				ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
+				cmd = exec.CommandContext(ctx, "kubectl", "delete", "ns", operatorNamespace, "--ignore-not-found", "--wait=false")
+				_, _ = utils.Run(cmd)
+				cancel()
+
+				// Teardown CertManager after the suite if not skipped and if it was not already installed
+				if !skipCertManagerInstall && !suiteBootstrapState.CertManagerPreinstalled[i] {
+					_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager (cluster=%s)...\n", clusterName)
+					utils.UninstallCertManager()
+				}
+			})
+		})
 	}
 
 	// Gateway API CRDs are managed per-test, not in AfterSuite.
@@ -495,34 +584,32 @@ func InstallGatewayAPI() error {
 	return installGatewayAPI()
 }
 
+func defaultGatewayAPICRDManifestPath() string {
+	// Vendored Gateway API CRDs for CI stability (no network dependency).
+	return "test/manifests/gateway-api/v1.4.1/crds"
+}
+
 // installGatewayAPI installs the Gateway API CRDs (standard and experimental).
 func installGatewayAPI() error {
 	standardManifest := os.Getenv("E2E_GATEWAY_API_STANDARD_MANIFEST")
-	if strings.TrimSpace(standardManifest) == "" {
-		standardManifest = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml"
-	}
 	experimentalManifest := os.Getenv("E2E_GATEWAY_API_EXPERIMENTAL_MANIFEST")
-	if strings.TrimSpace(experimentalManifest) == "" {
-		experimentalManifest = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/experimental-install.yaml"
+	if strings.TrimSpace(standardManifest) == "" && strings.TrimSpace(experimentalManifest) == "" {
+		standardManifest = defaultGatewayAPICRDManifestPath()
+		experimentalManifest = ""
 	}
 
-	// Install standard CRDs first
-	cmd := exec.Command("kubectl", "apply", "-f", standardManifest)
+	// Use server-side apply to avoid kubectl's client-side apply annotations, which can exceed
+	// annotation size limits for large CRDs.
+	cmd := exec.Command("kubectl", "apply", "--server-side", "--field-manager=openbao-e2e", "-f", standardManifest)
 	if _, err := utils.Run(cmd); err != nil {
 		return fmt.Errorf("failed to install Gateway API standard CRDs: %w", err)
 	}
 
-	// Install experimental CRDs using 'create' instead of 'apply' because the metadata
-	// annotations are too long for 'apply' to handle (exceeds Kubernetes annotation size limits).
-	cmd = exec.Command("kubectl", "create", "-f", experimentalManifest)
-	output, err := utils.Run(cmd)
-	if err != nil {
-		// If CRDs already exist, that's okay - we can continue
-		// kubectl create returns an error with "AlreadyExists" in the output when resources exist
-		if !strings.Contains(output, "AlreadyExists") && !strings.Contains(err.Error(), "AlreadyExists") {
+	if strings.TrimSpace(experimentalManifest) != "" {
+		cmd = exec.Command("kubectl", "apply", "--server-side", "--field-manager=openbao-e2e", "-f", experimentalManifest)
+		if _, err := utils.Run(cmd); err != nil {
 			return fmt.Errorf("failed to install Gateway API experimental CRDs: %w", err)
 		}
-		// If it's an AlreadyExists error, that's fine - CRDs are already installed
 	}
 
 	// Wait for Gateway API CRDs to be established
@@ -575,22 +662,22 @@ func isGatewayAPICRDsInstalled() bool {
 // Returns an error if uninstallation fails.
 func UninstallGatewayAPI() error {
 	standardManifest := os.Getenv("E2E_GATEWAY_API_STANDARD_MANIFEST")
-	if strings.TrimSpace(standardManifest) == "" {
-		standardManifest = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml"
-	}
 	experimentalManifest := os.Getenv("E2E_GATEWAY_API_EXPERIMENTAL_MANIFEST")
-	if strings.TrimSpace(experimentalManifest) == "" {
-		experimentalManifest = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/experimental-install.yaml"
+	if strings.TrimSpace(standardManifest) == "" && strings.TrimSpace(experimentalManifest) == "" {
+		standardManifest = defaultGatewayAPICRDManifestPath()
+		experimentalManifest = ""
 	}
 
 	// Delete experimental CRDs first (they may depend on standard CRDs)
-	cmd := exec.Command("kubectl", "delete", "-f", experimentalManifest, "--ignore-not-found")
-	if _, err := utils.Run(cmd); err != nil {
-		return fmt.Errorf("failed to uninstall Gateway API experimental CRDs: %w", err)
+	if strings.TrimSpace(experimentalManifest) != "" {
+		cmd := exec.Command("kubectl", "delete", "-f", experimentalManifest, "--ignore-not-found")
+		if _, err := utils.Run(cmd); err != nil {
+			return fmt.Errorf("failed to uninstall Gateway API experimental CRDs: %w", err)
+		}
 	}
 
 	// Delete standard CRDs
-	cmd = exec.Command("kubectl", "delete", "-f", standardManifest, "--ignore-not-found")
+	cmd := exec.Command("kubectl", "delete", "-f", standardManifest, "--ignore-not-found")
 	if _, err := utils.Run(cmd); err != nil {
 		return fmt.Errorf("failed to uninstall Gateway API standard CRDs: %w", err)
 	}
