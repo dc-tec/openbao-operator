@@ -3927,6 +3927,11 @@
 <td style="text-align: left;">Operator Managed Allowed</td>
 </tr>
 <tr>
+<td style="text-align: left;"><strong>Replicas</strong></td>
+<td style="text-align: left;">Minimum 3 (HA Required)</td>
+<td style="text-align: left;">Any (1+)</td>
+</tr>
+<tr>
 <td style="text-align: left;"><strong>Self-Init</strong></td>
 <td style="text-align: left;">Required (<code>enabled=true</code>)</td>
 <td style="text-align: left;">Optional</td>
@@ -3953,6 +3958,7 @@
 </div>
 <p>To use this profile, your <code>OpenBaoCluster</code> must meet these requirements:</p>
 <ol>
+<li><strong>High Availability:</strong> You must set <code>spec.replicas</code> to at least <code>3</code> for Raft quorum.</li>
 <li><strong>External KMS:</strong> You must provide a KMS key (AWS, GCP, Azure, or Vault Transit) for auto-unseal.</li>
 <li><strong>Valid TLS:</strong> You must provide valid TLS certificates (via <code>cert-manager</code> or external secret); <code>tlsSkipVerify</code> is rejected.</li>
 <li><strong>Self-Initialization:</strong> The Operator must drive the initialization process to ensure no humans handle initial secrets.</li>
@@ -3963,10 +3969,11 @@
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production-cluster</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hardened</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">selfInit</span><span class="p">:</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">unseal</span><span class="p">:</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awskms</span><span class="w"> </span><span class="c1"># or gcpckms, azurekeyvault</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w">  </span><span class="c1"># Minimum 3 for HA</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">selfInit</span><span class="p">:</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span><span class="nt">unseal</span><span class="p">:</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awskms</span><span class="w"> </span><span class="c1"># or gcpckms, azurekeyvault</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
