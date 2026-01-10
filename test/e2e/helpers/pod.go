@@ -67,9 +67,11 @@ func formatSingleContainerState(st corev1.ContainerStatus) string {
 	if st.State.Terminated != nil {
 		msg := strings.TrimSpace(st.State.Terminated.Message)
 		if msg != "" {
-			return fmt.Sprintf("%s state=Terminated reason=%s exitCode=%d message=%s", base, st.State.Terminated.Reason, st.State.Terminated.ExitCode, msg)
+			return fmt.Sprintf("%s state=Terminated reason=%s exitCode=%d message=%s",
+				base, st.State.Terminated.Reason, st.State.Terminated.ExitCode, msg)
 		}
-		return fmt.Sprintf("%s state=Terminated reason=%s exitCode=%d", base, st.State.Terminated.Reason, st.State.Terminated.ExitCode)
+		return fmt.Sprintf("%s state=Terminated reason=%s exitCode=%d",
+			base, st.State.Terminated.Reason, st.State.Terminated.ExitCode)
 	}
 	if st.State.Running != nil {
 		return fmt.Sprintf("%s state=Running", base)

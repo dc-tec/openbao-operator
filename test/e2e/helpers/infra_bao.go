@@ -453,7 +453,8 @@ bao operator init -format=json
 	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 2*time.Minute)
 	if err != nil {
 		// If initialization already happened (e.g., pod restarted), ensure the Secret exists.
-		if getErr := c.Get(ctx, types.NamespacedName{Name: secretName, Namespace: cfg.Namespace}, &corev1.Secret{}); getErr == nil {
+		if getErr := c.Get(ctx, types.NamespacedName{Name: secretName, Namespace: cfg.Namespace},
+			&corev1.Secret{}); getErr == nil {
 			_ = DeletePodBestEffort(ctx, c, cfg.Namespace, pod.Name)
 			return nil
 		}
@@ -707,7 +708,8 @@ bao secrets tune -tls-skip-verify \
   pki/ >/dev/null
 
 if ! bao read -format=json -tls-skip-verify pki/cert/ca >/dev/null 2>&1; then
-  bao write -format=json -tls-skip-verify pki/root/generate/internal common_name="E2E ACME Root CA" ttl=87600h >/dev/null
+  bao write -format=json -tls-skip-verify pki/root/generate/internal \
+    common_name="E2E ACME Root CA" ttl=87600h >/dev/null
 fi
 
 bao write -tls-skip-verify pki/config/cluster path="` + clusterPath + `" >/dev/null
