@@ -9,13 +9,11 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
@@ -1077,6 +1075,7 @@ type apiServerInfo struct {
 // If auto-detection fails and spec.network.apiServerCIDR is configured, it uses that as a fallback.
 func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*apiServerInfo, error) {
 	info := &apiServerInfo{}
+	discovery := newAPIServerDiscovery(m.client)
 
 	manualCIDRConfigured := false
 	if cluster.Spec.Network != nil && strings.TrimSpace(cluster.Spec.Network.APIServerCIDR) != "" {
@@ -1114,11 +1113,8 @@ func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger, c
 	}
 
 	// Get the kubernetes service to determine service network CIDR
-	kubernetesSvc := &corev1.Service{}
-	if err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: "default",
-		Name:      "kubernetes",
-	}, kubernetesSvc); err != nil {
+	serviceNetworkCIDR, err := discovery.DiscoverServiceNetworkCIDR(ctx)
+	if err != nil {
 		if manualCIDRConfigured {
 			logger.V(1).Info("Failed to get kubernetes service; using manual API server CIDR only", "error", err)
 			return info, nil
@@ -1127,14 +1123,9 @@ func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger, c
 			"Consider configuring spec.network.apiServerCIDR as a fallback", err)
 	}
 
-	// Derive service network CIDR from the ClusterIP
-	// For example, if ClusterIP is 10.43.0.1, the CIDR is 10.43.0.0/16
-	if !manualCIDRConfigured && kubernetesSvc.Spec.ClusterIP != "" && kubernetesSvc.Spec.ClusterIP != "None" {
-		parts := strings.Split(kubernetesSvc.Spec.ClusterIP, ".")
-		if len(parts) >= 2 {
-			info.ServiceNetworkCIDR = fmt.Sprintf("%s.%s.0.0/16", parts[0], parts[1])
-			logger.V(1).Info("Detected service network CIDR", "cidr", info.ServiceNetworkCIDR)
-		}
+	if !manualCIDRConfigured && serviceNetworkCIDR != "" {
+		info.ServiceNetworkCIDR = serviceNetworkCIDR
+		logger.V(1).Info("Detected service network CIDR", "cidr", info.ServiceNetworkCIDR)
 	}
 
 	// If endpoint IPs are already configured explicitly, do not attempt to auto-detect them.
@@ -1142,35 +1133,15 @@ func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger, c
 		return info, nil
 	}
 
-	// Get the kubernetes endpoint slices to find API server endpoint IPs
-	// EndpointSlices are labeled with kubernetes.io/service-name
-	endpointSliceList := &discoveryv1.EndpointSliceList{}
-	if err := m.client.List(ctx, endpointSliceList,
-		client.InNamespace("default"),
-		client.MatchingLabels(map[string]string{
-			"kubernetes.io/service-name": "kubernetes",
-		}),
-	); err != nil {
+	endpointIPs, err := discovery.DiscoverEndpointIPs(ctx)
+	if err != nil {
 		// If EndpointSlices are not available or cannot be listed, fall back to using the
 		// service network CIDR only (API server endpoints remain empty).
 		logger.V(1).Info("Failed to list kubernetes EndpointSlices, using service network CIDR only", "error", err)
 		return info, nil
-	} else {
-		// Extract endpoint IPs from the endpoint slices
-		for _, endpointSlice := range endpointSliceList.Items {
-			for _, endpoint := range endpointSlice.Endpoints {
-				// Only include ready endpoints
-				if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
-					for _, address := range endpoint.Addresses {
-						if address != "" {
-							info.EndpointIPs = append(info.EndpointIPs, address)
-						}
-					}
-				}
-			}
-		}
 	}
 
+	info.EndpointIPs = append(info.EndpointIPs, endpointIPs...)
 	if len(info.EndpointIPs) > 0 {
 		logger.V(1).Info("Detected API server endpoint IPs", "ips", info.EndpointIPs)
 	}
