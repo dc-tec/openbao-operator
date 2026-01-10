@@ -27,6 +27,7 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
@@ -77,7 +78,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 			// Placeholder; actual root token is captured from init secret below.
 			RootToken: "placeholder",
 		}
-		Expect(e2ehelpers.EnsureInfraBao(ctx, c, infraCfg)).To(Succeed())
+		Expect(e2ehelpers.EnsureInfraBao(ctx, cfg, c, infraCfg)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Infra-bao instance %q is running\n", infraBaoName)
 
 		// Fetch the actual infra-bao root token captured during initialization.
@@ -550,7 +551,12 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		// Note: Hardened profile now requires >= 3 replicas (VAP rule), so we cannot
 		// test restart by scaling down. Instead, we delete pods directly to verify
 		// that auto-unseal works after pod restart.
-		By("deleting pods to verify auto-unseal works after restart")
+		//
+		// ValidatingAdmissionPolicy blocks direct mutations of OpenBao-managed resources
+		// unless maintenance mode is enabled on the object and the request is made by a
+		// break-glass admin (system:masters). For this test, mark each Pod as being in
+		// maintenance mode before deleting it to trigger a restart.
+		By("deleting pods to verify auto-unseal works after restart (maintenance mode)")
 		podList := &corev1.PodList{}
 		err = c.List(ctx, podList, client.InNamespace(f.Namespace), client.MatchingLabels{
 			"app.kubernetes.io/instance":   clusterName,
@@ -563,7 +569,28 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		// Delete all pods to trigger restart
 		for _, pod := range podList.Items {
 			_, _ = fmt.Fprintf(GinkgoWriter, "Deleting pod %q to test auto-unseal after restart\n", pod.Name)
-			Expect(c.Delete(ctx, &pod)).To(Succeed())
+
+			podPatch := &corev1.Pod{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Pod",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      pod.Name,
+					Namespace: pod.Namespace,
+					Annotations: map[string]string{
+						constants.AnnotationMaintenance: "true",
+					},
+				},
+			}
+
+			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, "e2e-break-glass", []string{"system:masters"}, func(ic client.Client) error {
+				if err := ic.Patch(ctx, podPatch, client.Apply, client.FieldOwner("e2e-break-glass")); err != nil {
+					return err
+				}
+				return ic.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: pod.Name, Namespace: pod.Namespace}})
+			})
+			Expect(err).NotTo(HaveOccurred())
 		}
 
 		// Wait for pods to be recreated and become Ready
