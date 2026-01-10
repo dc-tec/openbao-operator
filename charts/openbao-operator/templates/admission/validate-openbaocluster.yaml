@@ -101,6 +101,12 @@ spec:
         object.spec.backup.target.endpoint.startsWith("https://") ||
         object.spec.backup.target.endpoint.startsWith("s3://")
       message: "Backup endpoint must use HTTPS or S3 scheme in Hardened profile."
+    # HA Enforcement: Hardened profile requires 3+ replicas for Raft quorum
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        object.spec.replicas >= 3
+      message: "Hardened profile requires at least 3 replicas for Raft quorum HA. Use Profile=Development for non-HA deployments."
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
