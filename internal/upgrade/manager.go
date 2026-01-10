@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -466,9 +465,33 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 		jobName = existingJobName
 		logger.Info("Found existing pre-upgrade backup job, checking status", "job", jobName)
 
-		// If job failed, return error immediately
+		// If job failed, implement retry logic
 		if existingJobStatus == "failed" {
-			return false, fmt.Errorf("pre-upgrade backup job %s failed", jobName)
+			// Count how many failed jobs exist for this cluster
+			failedCount, err := m.countFailedPreUpgradeBackupJobs(ctx, cluster)
+			if err != nil {
+				return false, fmt.Errorf("failed to count failed backup jobs: %w", err)
+			}
+
+			maxRetries := DefaultMaxPreUpgradeBackupRetries
+			if failedCount >= maxRetries {
+				return false, operatorerrors.WithReason(
+					ReasonPreUpgradeBackupFailed,
+					fmt.Errorf("pre-upgrade backup failed after %d attempts (max retries exceeded); manual intervention required", failedCount),
+				)
+			}
+
+			// Delete the failed job to allow retry
+			logger.Info("Deleting failed pre-upgrade backup job for retry",
+				"job", jobName,
+				"attempt", failedCount+1,
+				"maxRetries", maxRetries)
+			if err := m.deletePreUpgradeBackupJob(ctx, jobName, cluster.Namespace); err != nil {
+				return false, fmt.Errorf("failed to delete failed backup job %s: %w", jobName, err)
+			}
+
+			// Return false to requeue and create new job on next reconcile
+			return false, nil
 		}
 
 		// If job succeeded, we are done
@@ -516,7 +539,12 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 		}
 	}
 
-	job, err := m.buildBackupJob(cluster, jobName, verifiedExecutorDigest)
+	job, err := backup.BuildJob(cluster, backup.JobOptions{
+		JobName:                jobName,
+		JobType:                backup.JobTypePreUpgrade,
+		FilenamePrefix:         constants.BackupTypePreUpgrade,
+		VerifiedExecutorDigest: verifiedExecutorDigest,
+	})
 	if err != nil {
 		return false, fmt.Errorf("failed to build backup job: %w", err)
 	}
@@ -637,195 +665,62 @@ func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *
 // backupJobName generates a deterministic name for a pre-upgrade backup job.
 // The name is based on cluster generation to ensure idempotency per upgrade operation.
 func (m *Manager) backupJobName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return fmt.Sprintf("pre-upgrade-backup-%s-%d", cluster.Name, cluster.Generation)
+	return fmt.Sprintf("pre-upgrade-backup-%s-gen%d", cluster.Name, cluster.Generation)
 }
 
-// buildBackupJob builds a Kubernetes Job for executing a backup.
-// This mirrors the logic from internal/backup/job.go but is adapted for pre-upgrade use.
-func (m *Manager) buildBackupJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName string, verifiedExecutorDigest string) (*batchv1.Job, error) {
-	backupCfg := cluster.Spec.Backup
-	if backupCfg == nil {
-		return nil, fmt.Errorf("backup configuration is required")
+// countFailedPreUpgradeBackupJobs counts how many failed pre-upgrade backup jobs exist for this cluster.
+func (m *Manager) countFailedPreUpgradeBackupJobs(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (int, error) {
+	jobList := &batchv1.JobList{}
+	labelSelector := labels.SelectorFromSet(map[string]string{
+		constants.LabelAppInstance:       cluster.Name,
+		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:    cluster.Name,
+		constants.LabelOpenBaoComponent:  backup.ComponentBackup,
+		constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
+	})
+
+	if err := m.client.List(ctx, jobList,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabelsSelector{Selector: labelSelector},
+	); err != nil {
+		return 0, fmt.Errorf("failed to list backup jobs: %w", err)
 	}
 
-	// Build environment variables for the backup container
-	env := []corev1.EnvVar{
-		{Name: constants.EnvClusterNamespace, Value: cluster.Namespace},
-		{Name: constants.EnvClusterName, Value: cluster.Name},
-		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
-		{Name: constants.EnvBackupEndpoint, Value: backupCfg.Target.Endpoint},
-		{Name: constants.EnvBackupBucket, Value: backupCfg.Target.Bucket},
-		{Name: constants.EnvBackupPathPrefix, Value: backupCfg.Target.PathPrefix},
-		{Name: constants.EnvBackupFilenamePrefix, Value: constants.BackupTypePreUpgrade},
-		{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", backupCfg.Target.UsePathStyle)},
-	}
-
-	// Add credentials secret reference if provided
-	// SECURITY: Do NOT pass cross-namespace references. Secrets must be in cluster.Namespace.
-	if backupCfg.Target.CredentialsSecretRef != nil {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupCredentialsSecretName,
-			Value: backupCfg.Target.CredentialsSecretRef.Name,
-		})
-		// Namespace is always cluster.Namespace - cross-namespace references are not allowed
-	}
-
-	// Add JWT Auth configuration (preferred method)
-	if backupCfg.JWTAuthRole != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupJWTAuthRole,
-			Value: backupCfg.JWTAuthRole,
-		})
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupAuthMethod,
-			Value: constants.BackupAuthMethodJWT,
-		})
-	}
-
-	// Add token secret reference if provided (fallback for token-based auth)
-	// SECURITY: Do NOT pass cross-namespace references. Secrets must be in cluster.Namespace.
-	if backupCfg.TokenSecretRef != nil {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupTokenSecretName,
-			Value: backupCfg.TokenSecretRef.Name,
-		})
-		// Namespace is always cluster.Namespace - cross-namespace references are not allowed
-		// Only set auth method to token if JWT Auth is not configured
-		if backupCfg.JWTAuthRole == "" {
-			env = append(env, corev1.EnvVar{
-				Name:  constants.EnvBackupAuthMethod,
-				Value: constants.BackupAuthMethodToken,
-			})
+	count := 0
+	for i := range jobList.Items {
+		if kube.JobFailed(&jobList.Items[i]) {
+			count++
 		}
 	}
-
-	backoffLimit := int32(0)               // Don't retry failed backups automatically
-	ttlSecondsAfterFinished := int32(3600) // 1 hour TTL
-
-	image := verifiedExecutorDigest
-	if image == "" {
-		image = strings.TrimSpace(backupCfg.ExecutorImage)
-	}
-	if image == "" {
-		image = constants.DefaultBackupImage()
-	}
-
-	// Build volumes and volume mounts
-	volumes := []corev1.Volume{
-		{
-			Name: "tls-ca",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: cluster.Name + constants.SuffixTLSCA,
-				},
-			},
-		},
-	}
-
-	volumeMounts := []corev1.VolumeMount{
-		{
-			Name:      "tls-ca",
-			MountPath: constants.PathTLS,
-			ReadOnly:  true,
-		},
-	}
-
-	// Add credentials secret volume if provided
-	if backupCfg.Target.CredentialsSecretRef != nil {
-		credentialsFileMode := int32(0400)
-		volumes = append(volumes, corev1.Volume{
-			Name: "backup-credentials",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  backupCfg.Target.CredentialsSecretRef.Name,
-					DefaultMode: &credentialsFileMode,
-				},
-			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      "backup-credentials",
-			MountPath: constants.PathBackupCredentials,
-			ReadOnly:  true,
-		})
-	}
-
-	// Add token secret volume if provided
-	if backupCfg.TokenSecretRef != nil {
-		tokenFileMode := int32(0400)
-		volumes = append(volumes, corev1.Volume{
-			Name: "backup-token",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  backupCfg.TokenSecretRef.Name,
-					DefaultMode: &tokenFileMode,
-				},
-			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      "backup-token",
-			MountPath: "/etc/bao/backup/token",
-			ReadOnly:  true,
-		})
-	}
-
-	// Get backup ServiceAccount name
-	backupServiceAccountName := cluster.Name + constants.SuffixBackupServiceAccount
-
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:           constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:       cluster.Name,
-				constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:    cluster.Name,
-				constants.LabelOpenBaoComponent:  backup.ComponentBackup,
-				constants.LabelOpenBaoBackupType: "pre-upgrade",
-			},
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoffLimit,
-			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						constants.LabelAppName:           constants.LabelValueAppNameOpenBao,
-						constants.LabelAppInstance:       cluster.Name,
-						constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
-						constants.LabelOpenBaoCluster:    cluster.Name,
-						constants.LabelOpenBaoComponent:  backup.ComponentBackup,
-						constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
-					},
-				},
-				Spec: corev1.PodSpec{
-					ServiceAccountName: backupServiceAccountName,
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: ptr.To(true),
-						RunAsUser:    ptr.To(constants.UserBackup),
-						RunAsGroup:   ptr.To(constants.GroupBackup),
-						FSGroup:      ptr.To(constants.GroupBackup),
-						SeccompProfile: &corev1.SeccompProfile{
-							Type: corev1.SeccompProfileTypeRuntimeDefault,
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers: []corev1.Container{
-						{
-							Name:         backup.ComponentBackup,
-							Image:        image,
-							Env:          env,
-							VolumeMounts: volumeMounts,
-						},
-					},
-					Volumes: volumes,
-				},
-			},
-		},
-	}
-
-	return job, nil
+	return count, nil
 }
+
+// deletePreUpgradeBackupJob deletes a specific pre-upgrade backup job.
+func (m *Manager) deletePreUpgradeBackupJob(ctx context.Context, jobName, namespace string) error {
+	job := &batchv1.Job{}
+	if err := m.client.Get(ctx, types.NamespacedName{
+		Name:      jobName,
+		Namespace: namespace,
+	}, job); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil // Already deleted
+		}
+		return fmt.Errorf("failed to get job: %w", err)
+	}
+
+	// Use propagation policy to delete pods as well
+	propagation := metav1.DeletePropagationBackground
+	if err := m.client.Delete(ctx, job, &client.DeleteOptions{
+		PropagationPolicy: &propagation,
+	}); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete job: %w", err)
+	}
+
+	return nil
+}
+
+// NOTE: buildBackupJob has been removed. Pre-upgrade backup jobs are now built using
+// the shared backup.BuildJob function from internal/backup/job_builder.go.
 
 // initializeUpgrade sets up the upgrade state and locks the StatefulSet partition.
 func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {

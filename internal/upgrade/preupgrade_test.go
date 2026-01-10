@@ -356,17 +356,90 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 		},
 	}
 
-	// Create a failed backup job
+	// Create failed backup jobs - need 3 to exceed max retries (DefaultMaxPreUpgradeBackupRetries=3)
+	var failedJobs []client.Object
+	for i := 0; i < DefaultMaxPreUpgradeBackupRetries; i++ {
+		failedJobs = append(failedJobs, &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("pre-upgrade-backup-test-cluster-attempt-%d", i),
+				Namespace: "test-ns",
+				Labels: map[string]string{
+					constants.LabelAppInstance:       "test-cluster",
+					constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+					constants.LabelOpenBaoCluster:    "test-cluster",
+					constants.LabelOpenBaoComponent:  "backup",
+					constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
+				},
+			},
+			Status: batchv1.JobStatus{
+				Active:    0,
+				Succeeded: 0,
+				Failed:    1,
+			},
+		})
+	}
+
+	scheme := runtime.NewScheme()
+	_ = batchv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	objs := []client.Object{cluster}
+	objs = append(objs, failedJobs...)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(objs...).
+		Build()
+	manager := NewManager(k8sClient, scheme)
+
+	// With max retries exceeded, should return error
+	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
+	assert.Error(t, err, "should return error after max retries exceeded")
+	assert.False(t, complete, "should return complete=false when job failed")
+	assert.Contains(t, err.Error(), "max retries exceeded", "error should mention max retries exceeded")
+}
+
+func TestHandlePreUpgradeSnapshot_JobFailedRetriesOnFirstFailure(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-ns",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				PreUpgradeSnapshot: true,
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				ExecutorImage: "test-image:latest",
+				JWTAuthRole:   "backup",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "http://test-endpoint",
+					Bucket:   "test-bucket",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.3",
+			Initialized:    true,
+		},
+	}
+
+	// Create single failed backup job - should trigger retry, not error
 	failedJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pre-upgrade-backup-test-cluster-20251207-120000",
+			Name:      "pre-upgrade-backup-test-cluster-attempt-1",
 			Namespace: "test-ns",
 			Labels: map[string]string{
-				constants.LabelAppInstance:  "test-cluster",
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-				"openbao.org/cluster":       "test-cluster",
-				"openbao.org/component":     "backup",
-				"openbao.org/backup-type":   "pre-upgrade",
+				constants.LabelAppInstance:       "test-cluster",
+				constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:    "test-cluster",
+				constants.LabelOpenBaoComponent:  "backup",
+				constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
 			},
 		},
 		Status: batchv1.JobStatus{
@@ -389,10 +462,16 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 		Build()
 	manager := NewManager(k8sClient, scheme)
 
+	// With single failure, should delete and return nil to trigger retry
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
-	assert.Error(t, err, "should return error when job failed")
-	assert.False(t, complete, "should return complete=false when job failed")
-	assert.Contains(t, err.Error(), "failed", "error should mention job failure")
+	assert.NoError(t, err, "should not return error on first failure (retry)")
+	assert.False(t, complete, "should return complete=false for requeue")
+
+	// Verify job was deleted
+	jobList := &batchv1.JobList{}
+	err = k8sClient.List(context.Background(), jobList, client.InNamespace("test-ns"))
+	require.NoError(t, err)
+	assert.Len(t, jobList.Items, 0, "failed job should have been deleted for retry")
 }
 
 func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
