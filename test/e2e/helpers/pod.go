@@ -28,6 +28,57 @@ type PodResult struct {
 	Logs      string
 }
 
+func formatPodContainerStates(pod *corev1.Pod) string {
+	if pod == nil {
+		return "(no pod object)"
+	}
+
+	lines := make([]string, 0, len(pod.Status.ContainerStatuses)+len(pod.Status.InitContainerStatuses)+2)
+
+	if len(pod.Status.InitContainerStatuses) > 0 {
+		lines = append(lines, "init containers:")
+		for _, st := range pod.Status.InitContainerStatuses {
+			lines = append(lines, formatSingleContainerState(st))
+		}
+	}
+
+	if len(pod.Status.ContainerStatuses) > 0 {
+		lines = append(lines, "containers:")
+		for _, st := range pod.Status.ContainerStatuses {
+			lines = append(lines, formatSingleContainerState(st))
+		}
+	}
+
+	if len(lines) == 0 {
+		return "(no container statuses)"
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatSingleContainerState(st corev1.ContainerStatus) string {
+	base := fmt.Sprintf("- %s ready=%t restartCount=%d", st.Name, st.Ready, st.RestartCount)
+	if st.State.Waiting != nil {
+		msg := strings.TrimSpace(st.State.Waiting.Message)
+		if msg != "" {
+			return fmt.Sprintf("%s state=Waiting reason=%s message=%s", base, st.State.Waiting.Reason, msg)
+		}
+		return fmt.Sprintf("%s state=Waiting reason=%s", base, st.State.Waiting.Reason)
+	}
+	if st.State.Terminated != nil {
+		msg := strings.TrimSpace(st.State.Terminated.Message)
+		if msg != "" {
+			return fmt.Sprintf("%s state=Terminated reason=%s exitCode=%d message=%s",
+				base, st.State.Terminated.Reason, st.State.Terminated.ExitCode, msg)
+		}
+		return fmt.Sprintf("%s state=Terminated reason=%s exitCode=%d",
+			base, st.State.Terminated.Reason, st.State.Terminated.ExitCode)
+	}
+	if st.State.Running != nil {
+		return fmt.Sprintf("%s state=Running", base)
+	}
+	return fmt.Sprintf("%s state=Unknown", base)
+}
+
 // RunPodUntilCompletion creates the given Pod and waits until it completes
 // (Succeeded or Failed), then returns its logs.
 func RunPodUntilCompletion(
@@ -115,6 +166,10 @@ func RunPodUntilCompletion(
 			logs, logsErr := getPodLogs(ctx, cfg, current.Namespace, current.Name)
 			if logsErr != nil {
 				return nil, fmt.Errorf("failed to get pod logs for %s/%s: %w", current.Namespace, current.Name, logsErr)
+			}
+
+			if current.Status.Phase == corev1.PodFailed && strings.TrimSpace(logs) == "" {
+				logs = "(no container logs)\n" + formatPodContainerStates(current)
 			}
 
 			return &PodResult{

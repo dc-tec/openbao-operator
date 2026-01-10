@@ -73,7 +73,7 @@ var _ = Describe("GitOps contract (Argo-like apply)", Label("gitops", "contract"
 			Image:     openBaoImage,
 			RootToken: "placeholder",
 		}
-		Expect(e2ehelpers.EnsureInfraBao(ctx, c, infraCfg)).To(Succeed())
+		Expect(e2ehelpers.EnsureInfraBao(ctx, cfg, c, infraCfg)).To(Succeed())
 
 		infraBaoRootSecret := &corev1.Secret{}
 		Expect(c.Get(ctx, types.NamespacedName{

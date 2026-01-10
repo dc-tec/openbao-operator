@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -40,9 +39,12 @@ type InfraBaoConfig struct {
 // Infra-bao always runs in production mode with TLS (never dev mode).
 //
 //nolint:gocyclo // End-to-end provisioning must be explicit to simplify troubleshooting in CI.
-func EnsureInfraBao(ctx context.Context, c client.Client, cfg InfraBaoConfig) error {
+func EnsureInfraBao(ctx context.Context, restCfg *rest.Config, c client.Client, cfg InfraBaoConfig) error {
 	if c == nil {
 		return fmt.Errorf("kubernetes client is required")
+	}
+	if restCfg == nil {
+		return fmt.Errorf("rest config is required")
 	}
 	if cfg.Namespace == "" {
 		return fmt.Errorf("namespace is required")
@@ -330,39 +332,9 @@ listener "tcp" {
 		}
 	}
 
-	// Wait for OpenBao to be ready to accept connections (always HTTPS in production mode)
-	infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", cfg.Name, cfg.Namespace)
-
-	var lastErr error
-	readinessTimer := time.NewTimer(2 * time.Minute)
-	defer readinessTimer.Stop()
-	readinessTicker := time.NewTicker(2 * time.Second)
-	defer readinessTicker.Stop()
-
-	for {
-		if err := checkInfraBaoReadinessLocal(ctx, cfg.Namespace, cfg.Name); err != nil {
-			lastErr = err
-		} else {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf(
-				"context canceled while waiting for infra-bao %s/%s to be ready: %w",
-				cfg.Namespace,
-				cfg.Name,
-				ctx.Err(),
-			)
-		case <-readinessTimer.C:
-			return fmt.Errorf("timed out waiting for infra-bao %s/%s to be ready: %w", cfg.Namespace, cfg.Name, lastErr)
-		case <-readinessTicker.C:
-		}
-	}
-
 	// Initialize infra-bao if not already initialized
 	// This ensures infra-bao is ready for use in tests (e.g., Transit auto-unseal, ACME CA)
-	if err := initializeInfraBao(ctx, c, infraAddr, cfg); err != nil {
+	if err := initializeInfraBao(ctx, restCfg, c, cfg); err != nil {
 		return fmt.Errorf("failed to initialize infra-bao %s/%s: %w", cfg.Namespace, cfg.Name, err)
 	}
 
@@ -404,76 +376,105 @@ func CleanupInfraBao(ctx context.Context, c client.Client, cfg InfraBaoConfig) {
 
 // checkInfraBaoReadinessLocal checks readiness from inside the pod via kubectl exec.
 // We accept exit code 0 (unsealed) or 2 (sealed/uninitialized) as "responsive".
-func checkInfraBaoReadinessLocal(ctx context.Context, namespace, name string) error {
-	cmd := exec.CommandContext(ctx, "kubectl", "exec",
-		"-n", namespace,
-		name,
-		"--",
-		"sh", "-c",
-		"BAO_ADDR=https://127.0.0.1:8200 bao status -tls-skip-verify",
-	)
-
-	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 2 {
-			return nil
-		}
-		return fmt.Errorf("readiness check failed: %w", err)
-	}
-
-	return nil
-}
-
 // initializeInfraBao initializes infra-bao if it's not already initialized.
 // It uses the static auto-unseal configuration, so no secret_shares or secret_threshold
 // are needed. The root token is stored in a Secret for later use.
-//
-//nolint:unparam // infraAddr is retained to keep call sites explicit and for future HTTPS verification improvements.
-func initializeInfraBao(ctx context.Context, c client.Client, _ string, cfg InfraBaoConfig) error {
-	// Initialize infra-bao using bao operator init command inside the pod
-	// This is simpler and more reliable than HTTP API calls
-	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
-	defer initCancel()
-
-	// Run 'bao operator init' inside the pod
-	// For static seal, we don't need to pass secret_shares or secret_threshold
-	// Set BAO_ADDR to use HTTPS with the local address (since we're inside the pod)
-	// Use -tls-skip-verify since we're using self-signed certs in tests
-	// #nosec G204 -- E2E test helper, command and arguments are controlled
-	cmd := exec.CommandContext(initCtx, "kubectl", "exec",
-		"-n", cfg.Namespace,
-		cfg.Name,
-		"--",
-		"sh", "-c",
-		"BAO_ADDR=https://127.0.0.1:8200 bao operator init -format=json -tls-skip-verify",
-	)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		outputStr := strings.TrimSpace(string(output))
-		// Check if already initialized (command returns error for this)
-		if strings.Contains(outputStr, "already initialized") ||
-			strings.Contains(outputStr, "Vault is already initialized") ||
-			strings.Contains(outputStr, "OpenBao is already initialized") {
-			return nil
-		}
-		return fmt.Errorf("bao operator init failed: %w, output: %s", err, outputStr)
+func initializeInfraBao(ctx context.Context, restCfg *rest.Config, c client.Client, cfg InfraBaoConfig) error {
+	secretName := cfg.Name + "-root-token"
+	if err := c.Get(ctx, types.NamespacedName{Name: secretName, Namespace: cfg.Namespace}, &corev1.Secret{}); err == nil {
+		return nil
+	} else if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to check existing root token Secret %s/%s: %w", cfg.Namespace, secretName, err)
 	}
 
-	// Parse JSON output to extract root token
+	infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", cfg.Name, cfg.Namespace)
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cfg.Name + "-operator-init",
+			Namespace: cfg.Namespace,
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: ptr.To(true),
+				RunAsUser:    ptr.To(int64(100)),
+				RunAsGroup:   ptr.To(int64(1000)),
+				FSGroup:      ptr.To(int64(1000)),
+				SeccompProfile: &corev1.SeccompProfile{
+					Type: corev1.SeccompProfileTypeRuntimeDefault,
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:  "bao",
+					Image: cfg.Image,
+					Env: []corev1.EnvVar{
+						{Name: "BAO_ADDR", Value: infraAddr},
+						{Name: "BAO_SKIP_VERIFY", Value: "true"},
+					},
+					Command: []string{"/bin/sh", "-c"},
+					Args: []string{`
+set -u
+
+wait_for_api() {
+  i=0
+  while [ "$i" -lt 60 ]; do
+    rc=0
+    bao status >/dev/null 2>&1 || rc=$?
+    # Exit code 0: unsealed/initialized; exit code 2: sealed/uninitialized but responsive.
+    if [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]; then
+      return 0
+    fi
+    i=$((i+1))
+    sleep 2
+  done
+  echo "timed out waiting for infra-bao API to respond" >&2
+  bao status >&2 || true
+  return 1
+}
+
+wait_for_api || exit 1
+
+# For static seal, we don't need to pass secret_shares or secret_threshold.
+bao operator init -format=json
+`},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: ptr.To(false),
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+						RunAsNonRoot: ptr.To(true),
+					},
+				},
+			},
+		},
+	}
+
+	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 2*time.Minute)
+	if err != nil {
+		// If initialization already happened (e.g., pod restarted), ensure the Secret exists.
+		if getErr := c.Get(ctx, types.NamespacedName{Name: secretName, Namespace: cfg.Namespace},
+			&corev1.Secret{}); getErr == nil {
+			_ = DeletePodBestEffort(ctx, c, cfg.Namespace, pod.Name)
+			return nil
+		}
+		return fmt.Errorf("infra-bao init pod failed: %w", err)
+	}
+	if result.Phase != corev1.PodSucceeded {
+		return fmt.Errorf("infra-bao init pod phase=%s logs:\n%s", result.Phase, result.Logs)
+	}
+
+	// Parse JSON output to extract root token.
 	var initResult struct {
 		RootToken string `json:"root_token"`
 	}
-	if err := json.Unmarshal(output, &initResult); err != nil {
-		return fmt.Errorf("failed to parse bao operator init output (output: %s): %w", string(output), err)
+	if err := json.Unmarshal([]byte(result.Logs), &initResult); err != nil {
+		return fmt.Errorf("failed to parse infra-bao init output as JSON (logs:\n%s): %w", result.Logs, err)
+	}
+	if strings.TrimSpace(initResult.RootToken) == "" {
+		return fmt.Errorf("infra-bao init output missing root_token (logs:\n%s)", result.Logs)
 	}
 
-	if initResult.RootToken == "" {
-		return fmt.Errorf("bao operator init output missing root_token (output: %s)", string(output))
-	}
-
-	// Store root token in a Secret for later use
-	// The Secret name matches the pattern used by tests: <name>-root-token
-	secretName := cfg.Name + "-root-token"
 	rootTokenSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
@@ -481,31 +482,14 @@ func initializeInfraBao(ctx context.Context, c client.Client, _ string, cfg Infr
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			"token": []byte(initResult.RootToken),
+			"token": []byte(strings.TrimSpace(initResult.RootToken)),
 		},
 	}
 
-	err = c.Create(ctx, rootTokenSecret)
-	if err != nil && !apierrors.IsAlreadyExists(err) {
+	if err := c.Create(ctx, rootTokenSecret); err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create root token Secret %s/%s: %w", cfg.Namespace, secretName, err)
 	}
-
-	// If secret already exists, update it with the new token
-	if apierrors.IsAlreadyExists(err) {
-		existingSecret := &corev1.Secret{}
-		if getErr := c.Get(
-			ctx,
-			types.NamespacedName{Name: secretName, Namespace: cfg.Namespace},
-			existingSecret,
-		); getErr != nil {
-			return fmt.Errorf("failed to get existing root token Secret: %w", getErr)
-		}
-		existingSecret.Data["token"] = []byte(initResult.RootToken)
-		if updateErr := c.Update(ctx, existingSecret); updateErr != nil {
-			return fmt.Errorf("failed to update root token Secret: %w", updateErr)
-		}
-	}
-
+	_ = DeletePodBestEffort(ctx, c, cfg.Namespace, pod.Name)
 	return nil
 }
 
@@ -570,13 +554,41 @@ func ConfigureInfraBaoTransit(
 					},
 					Command: []string{"/bin/sh", "-ec"},
 					Args: []string{`
-bao status >/dev/null
-if ! bao secrets list -format=json | grep -q '"transit/"'; then
-  bao secrets enable transit >/dev/null
+wait_for_unsealed() {
+  # Ensure the server is reachable and unsealed. OpenBao CLI returns exit code 2
+  # when sealed/uninitialized; treat that as "not ready yet" and keep polling.
+  i=0
+  while [ "$i" -lt 60 ]; do
+    if bao status >/dev/null 2>&1; then
+      return 0
+    fi
+    i=$((i+1))
+    sleep 2
+  done
+  echo "timed out waiting for infra-bao to be unsealed; last status:" >&2
+  bao status >&2 || true
+  return 1
+}
+
+wait_for_unsealed
+
+# Enable transit engine; tolerate "already enabled" without relying on grep.
+if ! out="$(bao secrets enable transit 2>&1)"; then
+  case "$out" in
+    *"path is already in use"*|*"existing mount at"*|*"already in use"*)
+      ;;
+    *)
+      echo "$out" >&2
+      exit 1
+      ;;
+  esac
 fi
+
+# Ensure the transit key exists.
 if ! bao read -format=json transit/keys/` + keyName + ` >/dev/null 2>&1; then
   bao write -f transit/keys/` + keyName + ` type=aes256-gcm96 >/dev/null
 fi
+
 echo "ok"
 `},
 					SecurityContext: &corev1.SecurityContext{
@@ -661,20 +673,47 @@ func ConfigureInfraBaoPKIACME(
 					},
 					Command: []string{"/bin/sh", "-ec"},
 					Args: []string{`
-bao status >/dev/null
-if ! bao secrets list -format=json | grep -q '"pki/"'; then
-  bao secrets enable pki >/dev/null
+wait_for_unsealed() {
+  i=0
+  while [ "$i" -lt 60 ]; do
+    if bao status >/dev/null 2>&1; then
+      return 0
+    fi
+    i=$((i+1))
+    sleep 2
+  done
+  echo "timed out waiting for infra-bao to be unsealed; last status:" >&2
+  bao status >&2 || true
+  return 1
+}
+
+wait_for_unsealed
+
+# Enable PKI engine; tolerate "already enabled" without relying on grep.
+if ! out="$(bao secrets enable pki 2>&1)"; then
+  case "$out" in
+    *"path is already in use"*|*"existing mount at"*|*"already in use"*)
+      ;;
+    *)
+      echo "$out" >&2
+      exit 1
+      ;;
+  esac
 fi
-bao secrets tune \
+
+bao secrets tune -tls-skip-verify \
   -allowed-response-headers=Location \
   -allowed-response-headers=Replay-Nonce \
   -allowed-response-headers=Link \
   pki/ >/dev/null
-if ! bao read -format=json pki/cert/ca >/dev/null 2>&1; then
-  bao write -format=json pki/root/generate/internal common_name="E2E ACME Root CA" ttl=87600h >/dev/null
+
+if ! bao read -format=json -tls-skip-verify pki/cert/ca >/dev/null 2>&1; then
+  bao write -format=json -tls-skip-verify pki/root/generate/internal \
+    common_name="E2E ACME Root CA" ttl=87600h >/dev/null
 fi
-bao write pki/config/cluster path="` + clusterPath + `" >/dev/null
-bao write pki/config/acme enabled=true >/dev/null
+
+bao write -tls-skip-verify pki/config/cluster path="` + clusterPath + `" >/dev/null
+bao write -tls-skip-verify pki/config/acme enabled=true >/dev/null
 echo "ok"
 `},
 					SecurityContext: &corev1.SecurityContext{

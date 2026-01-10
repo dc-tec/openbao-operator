@@ -81,7 +81,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 			// Placeholder; actual root token is captured from init secret below.
 			RootToken: "placeholder",
 		}
-		Expect(e2ehelpers.EnsureInfraBao(ctx, c, infraCfg)).To(Succeed())
+		Expect(e2ehelpers.EnsureInfraBao(ctx, cfg, c, infraCfg)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Infra-bao instance %q is running in production mode with TLS\n", infraBaoName)
 
 		// Fetch the actual root token captured during infra-bao initialization.
