@@ -24,6 +24,10 @@ const (
 
 	// ComponentUpgrade is the component name for upgrade resources.
 	ComponentUpgrade = "upgrade"
+
+	// DefaultMaxPreUpgradeBackupRetries is the default number of retry attempts for pre-upgrade backups.
+	// If a pre-upgrade backup job fails, the operator will delete the failed job and retry up to this many times.
+	DefaultMaxPreUpgradeBackupRetries = 3
 )
 
 // Reason constants for condition updates.
