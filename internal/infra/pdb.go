@@ -22,9 +22,12 @@ import (
 func (m *Manager) ensurePodDisruptionBudget(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	pdbName := pdbName(cluster)
 
-	// For single-replica clusters, PDB doesn't make sense
-	if cluster.Spec.Replicas < 2 {
-		logger.V(1).Info("Skipping PDB creation for single-replica cluster", "replicas", cluster.Spec.Replicas)
+	// Skip PDB for clusters with < 3 replicas.
+	// Raft with 2 nodes has no failure tolerance (quorum = 2/2), and maxUnavailable=1 would break it.
+	// Hardened profile HA enforcement (replicas >= 3) is handled by ValidatingAdmissionPolicy.
+	if cluster.Spec.Replicas < 3 {
+		logger.V(1).Info("Skipping PDB: replicas < 3 does not support maxUnavailable=1 without breaking Raft quorum",
+			"replicas", cluster.Spec.Replicas)
 		return nil
 	}
 
