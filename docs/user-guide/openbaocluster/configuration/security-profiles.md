@@ -44,6 +44,7 @@ flowchart LR
       name: prod-cluster
     spec:
       profile: Hardened  # REQUIRED
+      replicas: 3          # Minimum 3 for HA (Raft quorum)
       version: "2.4.4"
       tls:
         enabled: true
@@ -70,6 +71,7 @@ flowchart LR
     - :material-check: **External TLS**: `spec.tls.mode` MUST be `External` or `ACME`.
     - :material-check: **External KMS**: `spec.unseal.type` MUST use a cloud provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`).
     - :material-check: **Self-Initialization**: `spec.selfInit.enabled` MUST be `true`.
+    - :material-check: **High Availability**: `spec.replicas` MUST be at least `3` for Raft quorum.
     - :material-check: **Secure Network**: If backups are enabled, explicit egress rules are required (fail-closed networking).
 
     ### Benefits
