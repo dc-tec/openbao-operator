@@ -38,6 +38,9 @@ func defaultImage(envVar, defaultRepo string) string {
 	if version != "" {
 		return fmt.Sprintf("%s:%s", repo, version)
 	}
-	// Fallback to latest if OPERATOR_VERSION is not set (should not happen in production)
-	return repo + ":latest"
+	// OPERATOR_VERSION must be set in production deployments.
+	// If you see this panic, ensure the operator Deployment sets the OPERATOR_VERSION env var.
+	panic("OPERATOR_VERSION environment variable is required but not set. " +
+		"This is a deployment configuration error. " +
+		"Ensure the operator Deployment sets OPERATOR_VERSION to the release version (e.g., v0.1.0).")
 }

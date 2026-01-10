@@ -494,6 +494,9 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 }
 
 func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
+	// Set OPERATOR_VERSION to avoid panic from fail-fast logic in DefaultInitImage
+	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
+
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
