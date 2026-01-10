@@ -25,14 +25,15 @@ import (
 // infraReconciler wraps InfraManager to implement SubReconciler interface.
 // It handles image verification and injects the verified digest into InfraManager.
 type infraReconciler struct {
-	client            client.Client
-	scheme            *runtime.Scheme
-	operatorNamespace string
-	oidcIssuer        string
-	oidcJWTKeys       []string
-	verifyImageFunc   func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error)
-	recorder          record.EventRecorder
-	admissionStatus   *admission.Status
+	client                  client.Client
+	scheme                  *runtime.Scheme
+	operatorNamespace       string
+	oidcIssuer              string
+	oidcJWTKeys             []string
+	verifyImageFunc         func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error)
+	verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, kubeClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
+	recorder                record.EventRecorder
+	admissionStatus         *admission.Status
 }
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -59,30 +60,71 @@ func operatorImageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoClus
 	return failurePolicy
 }
 
-func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	if cluster.Spec.ImageVerification == nil || !cluster.Spec.ImageVerification.Enabled {
+type imageVerificationOptions struct {
+	enabled              bool
+	imageRef             string
+	failurePolicy        string
+	failureReason        string
+	failureMessagePrefix string
+	successMessage       string
+	emitEventOnWarn      bool
+}
+
+func (r *infraReconciler) verifyImageDigestWithPolicy(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	opts imageVerificationOptions,
+	verify func(ctx context.Context) (string, error),
+) (string, error) {
+	if !opts.enabled {
 		return "", nil
+	}
+	imageRef := strings.TrimSpace(opts.imageRef)
+	if imageRef == "" {
+		return "", nil
+	}
+	if verify == nil {
+		return "", fmt.Errorf("verify function is required")
 	}
 
 	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 	defer cancel()
 
-	digest, err := r.verifyImageFunc(verifyCtx, logger, cluster)
+	digest, err := verify(verifyCtx)
 	if err == nil {
-		logger.Info("Image verified successfully, using digest", "digest", digest)
+		logger.Info(opts.successMessage, "digest", digest)
 		return digest, nil
 	}
 
-	failurePolicy := imageVerificationFailurePolicy(cluster)
-	if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-		return "", operatorerrors.WithReason(constants.ReasonImageVerificationFailed, fmt.Errorf("image verification failed (policy=Block): %w", err))
+	if opts.failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+		return "", operatorerrors.WithReason(opts.failureReason, fmt.Errorf("%s (policy=Block): %w", opts.failureMessagePrefix, err))
 	}
 
-	logger.Error(err, "Image verification failed but proceeding due to Warn policy", "image", cluster.Spec.Image)
-	if r.recorder != nil {
-		r.recorder.Eventf(cluster, corev1.EventTypeWarning, constants.ReasonImageVerificationFailed, "Image verification failed but proceeding due to Warn policy: %v", err)
+	logger.Error(err, opts.failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
+	if opts.emitEventOnWarn && r.recorder != nil {
+		r.recorder.Eventf(cluster, corev1.EventTypeWarning, opts.failureReason, "%s but proceeding due to Warn policy: %v", opts.failureMessagePrefix, err)
 	}
 	return "", nil
+}
+
+func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	opts := imageVerificationOptions{
+		enabled:              cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled,
+		imageRef:             cluster.Spec.Image,
+		failurePolicy:        imageVerificationFailurePolicy(cluster),
+		failureReason:        constants.ReasonImageVerificationFailed,
+		failureMessagePrefix: "Image verification failed",
+		successMessage:       "Image verified successfully, using digest",
+		emitEventOnWarn:      true,
+	}
+
+	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
+		if r.verifyImageFunc == nil {
+			return "", fmt.Errorf("verifyImageFunc is required")
+		}
+		return r.verifyImageFunc(ctx, logger, cluster)
+	})
 }
 
 func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
@@ -91,26 +133,25 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 	if verificationConfig == nil || !verificationConfig.Enabled {
 		return "", nil
 	}
-	if strings.TrimSpace(imageRef) == "" {
-		return "", nil
+
+	opts := imageVerificationOptions{
+		enabled:              true,
+		imageRef:             imageRef,
+		failurePolicy:        operatorImageVerificationFailurePolicy(cluster),
+		failureReason:        failureReason,
+		failureMessagePrefix: failureMessagePrefix,
+		successMessage:       "Operator image verified successfully",
+		emitEventOnWarn:      true,
 	}
 
-	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
-	defer cancel()
-
-	digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, r.client, cluster, imageRef)
-	if err == nil {
-		logger.Info("Operator image verified successfully", "digest", digest)
-		return digest, nil
+	verifyFunc := r.verifyOperatorImageFunc
+	if verifyFunc == nil {
+		verifyFunc = security.VerifyOperatorImageForCluster
 	}
 
-	failurePolicy := operatorImageVerificationFailurePolicy(cluster)
-	if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-		return "", operatorerrors.WithReason(failureReason, fmt.Errorf("%s (policy=Block): %w", failureMessagePrefix, err))
-	}
-
-	logger.Error(err, failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
-	return "", nil
+	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
+		return verifyFunc(ctx, logger, r.client, cluster, strings.TrimSpace(imageRef))
+	})
 }
 
 func (r *infraReconciler) verifySentinelImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
