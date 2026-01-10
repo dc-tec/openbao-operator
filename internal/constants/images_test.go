@@ -1,17 +1,15 @@
 package constants
 
 import (
-	"os"
 	"testing"
 )
 
 func TestDefaultBackupImage_WithVersion(t *testing.T) {
-	// Set the version
-	os.Setenv(EnvOperatorVersion, "v1.2.3")
-	defer os.Unsetenv(EnvOperatorVersion)
+	// Set the version using t.Setenv (auto-cleanup, no error checking needed)
+	t.Setenv(EnvOperatorVersion, "v1.2.3")
 
 	// Clear any repo override
-	os.Unsetenv(EnvOperatorBackupImageRepo)
+	t.Setenv(EnvOperatorBackupImageRepo, "")
 
 	got := DefaultBackupImage()
 	want := DefaultBackupImageRepository + ":v1.2.3"
@@ -21,10 +19,8 @@ func TestDefaultBackupImage_WithVersion(t *testing.T) {
 }
 
 func TestDefaultBackupImage_WithCustomRepo(t *testing.T) {
-	os.Setenv(EnvOperatorVersion, "v1.2.3")
-	os.Setenv(EnvOperatorBackupImageRepo, "my-registry.io/custom-backup")
-	defer os.Unsetenv(EnvOperatorVersion)
-	defer os.Unsetenv(EnvOperatorBackupImageRepo)
+	t.Setenv(EnvOperatorVersion, "v1.2.3")
+	t.Setenv(EnvOperatorBackupImageRepo, "my-registry.io/custom-backup")
 
 	got := DefaultBackupImage()
 	want := "my-registry.io/custom-backup:v1.2.3"
@@ -34,9 +30,8 @@ func TestDefaultBackupImage_WithCustomRepo(t *testing.T) {
 }
 
 func TestDefaultUpgradeImage_WithVersion(t *testing.T) {
-	os.Setenv(EnvOperatorVersion, "v2.0.0")
-	defer os.Unsetenv(EnvOperatorVersion)
-	os.Unsetenv(EnvOperatorUpgradeImageRepo)
+	t.Setenv(EnvOperatorVersion, "v2.0.0")
+	t.Setenv(EnvOperatorUpgradeImageRepo, "")
 
 	got := DefaultUpgradeImage()
 	want := DefaultUpgradeImageRepository + ":v2.0.0"
@@ -46,9 +41,8 @@ func TestDefaultUpgradeImage_WithVersion(t *testing.T) {
 }
 
 func TestDefaultInitImage_WithVersion(t *testing.T) {
-	os.Setenv(EnvOperatorVersion, "v3.0.0")
-	defer os.Unsetenv(EnvOperatorVersion)
-	os.Unsetenv(EnvOperatorInitImageRepo)
+	t.Setenv(EnvOperatorVersion, "v3.0.0")
+	t.Setenv(EnvOperatorInitImageRepo, "")
 
 	got := DefaultInitImage()
 	want := DefaultInitImageRepository + ":v3.0.0"
@@ -59,7 +53,7 @@ func TestDefaultInitImage_WithVersion(t *testing.T) {
 
 func TestDefaultImage_PanicsWithoutVersion(t *testing.T) {
 	// Ensure OPERATOR_VERSION is not set
-	os.Unsetenv(EnvOperatorVersion)
+	t.Setenv(EnvOperatorVersion, "")
 
 	// Test that each default image function panics when version is missing.
 	testCases := []struct {
