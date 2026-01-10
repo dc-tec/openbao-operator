@@ -379,14 +379,14 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1
 	// Create OpenBao client with default timeouts. The client will be used for health checks
 	// and initialization. Default timeouts are sufficient now that NetworkPolicy is correctly
 	// configured to allow operator access.
-	client, err := openbao.NewClient(openbao.ClientConfig{
+	factory := openbao.NewClientFactory(openbao.ClientConfig{
 		ClusterKey: fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
-		BaseURL:    baseURL,
 		CACert:     caCert,
 		// Use default timeouts (5s connection, 10s request) which are sufficient for
 		// normal operation. The health check context timeout (10s) matches the default
 		// RequestTimeout, ensuring the client won't timeout before the context.
 	})
+	client, err := factory.New(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OpenBao client for %s: %w", baseURL, err)
 	}
