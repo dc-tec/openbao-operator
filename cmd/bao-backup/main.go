@@ -30,6 +30,10 @@ const (
 // It retries with exponential backoff to handle cases where pods are still starting up
 // after scale-up operations.
 func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, error) {
+	factory := openbao.NewClientFactory(openbao.ClientConfig{
+		CACert: cfg.TLSCACert,
+	})
+
 	// Retry with exponential backoff: 1s, 2s, 4s, 8s, 16s
 	maxRetries := 5
 	baseDelay := 1 * time.Second
@@ -57,10 +61,7 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 			fmt.Printf("findLeader: Checking pod %s at %s\n", podName, podURL)
 
 			// Create a client without token for health checks
-			client, err := openbao.NewClient(openbao.ClientConfig{
-				BaseURL: podURL,
-				CACert:  cfg.TLSCACert,
-			})
+			client, err := factory.New(podURL)
 			if err != nil {
 				fmt.Printf("findLeader: Failed to create client for %s: %v\n", podName, err)
 				continue
@@ -100,21 +101,10 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 // authenticate authenticates to OpenBao and returns a token.
 func authenticate(ctx context.Context, cfg *backupconfig.ExecutorConfig, leaderURL string) (string, error) {
 	if cfg.AuthMethod == constants.BackupAuthMethodJWT {
-		// Create a client without token for authentication
-		client, err := openbao.NewClient(openbao.ClientConfig{
-			BaseURL: leaderURL,
-			CACert:  cfg.TLSCACert,
+		factory := openbao.NewClientFactory(openbao.ClientConfig{
+			CACert: cfg.TLSCACert,
 		})
-		if err != nil {
-			return "", fmt.Errorf("failed to create OpenBao client: %w", err)
-		}
-
-		token, err := client.LoginJWT(ctx, cfg.JWTAuthRole, cfg.JWTToken)
-		if err != nil {
-			return "", fmt.Errorf("failed to authenticate using JWT Auth: %w", err)
-		}
-
-		return token, nil
+		return factory.LoginJWT(ctx, leaderURL, cfg.JWTAuthRole, cfg.JWTToken)
 	}
 
 	// Use static token
@@ -146,11 +136,10 @@ func run(ctx context.Context) error {
 	}
 
 	// Create OpenBao client for leader
-	baoClient, err := openbao.NewClient(openbao.ClientConfig{
-		BaseURL: leaderURL,
-		Token:   token,
-		CACert:  cfg.TLSCACert,
+	factory := openbao.NewClientFactory(openbao.ClientConfig{
+		CACert: cfg.TLSCACert,
 	})
+	baoClient, err := factory.NewWithToken(leaderURL, token)
 	if err != nil {
 		return fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
@@ -304,11 +293,10 @@ func runRestore(ctx context.Context) error {
 	fmt.Println("Authentication successful")
 
 	// Create OpenBao client for leader
-	baoClient, err := openbao.NewClient(openbao.ClientConfig{
-		BaseURL: leaderURL,
-		Token:   token,
-		CACert:  cfg.TLSCACert,
+	factory := openbao.NewClientFactory(openbao.ClientConfig{
+		CACert: cfg.TLSCACert,
 	})
+	baoClient, err := factory.NewWithToken(leaderURL, token)
 	if err != nil {
 		return fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
