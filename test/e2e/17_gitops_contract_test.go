@@ -135,7 +135,7 @@ var _ = Describe("GitOps contract (Argo-like apply)", Label("gitops", "contract"
 					Profile:  openbaov1alpha1.ProfileHardened,
 					Version:  openBaoVersion,
 					Image:    openBaoImage,
-					Replicas: 1,
+					Replicas: 3, // Minimum for Hardened profile (VAP rule)
 					InitContainer: &openbaov1alpha1.InitContainerConfig{
 						Enabled: true,
 						Image:   configInitImage,
