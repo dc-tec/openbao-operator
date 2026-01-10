@@ -547,43 +547,35 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		}, 15*time.Second, 1*time.Second).Should(BeTrue())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified unseal-key Secret does not exist (using Transit auto-unseal)\n")
 
-		By("restarting via OpenBaoCluster scale-down/up to respect admission policy")
+		// Note: Hardened profile now requires >= 3 replicas (VAP rule), so we cannot
+		// test restart by scaling down. Instead, we delete pods directly to verify
+		// that auto-unseal works after pod restart.
+		By("deleting pods to verify auto-unseal works after restart")
+		podList := &corev1.PodList{}
+		err = c.List(ctx, podList, client.InNamespace(f.Namespace), client.MatchingLabels{
+			"app.kubernetes.io/instance":   clusterName,
+			"app.kubernetes.io/name":       "openbao",
+			"app.kubernetes.io/managed-by": "openbao-operator",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(podList.Items)).To(BeNumerically(">=", 1), "At least one pod should exist")
+
+		// Delete all pods to trigger restart
+		for _, pod := range podList.Items {
+			_, _ = fmt.Fprintf(GinkgoWriter, "Deleting pod %q to test auto-unseal after restart\n", pod.Name)
+			Expect(c.Delete(ctx, &pod)).To(Succeed())
+		}
+
+		// Wait for pods to be recreated and become Ready
 		clusterObj := &openbaov1alpha1.OpenBaoCluster{}
 		Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, clusterObj)).To(Succeed())
-		originalReplicas := clusterObj.Spec.Replicas
-
-		// Scale down to 1 (min allowed) to recycle pods without violating validation (replicas>=1)
-		clusterObj.Spec.Replicas = 1
-		Expect(c.Update(ctx, clusterObj)).To(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "Scaled OpenBaoCluster %q down to 1 replica for restart\n", clusterName)
-
-		// Wait for old pods to go away (statefulset will converge to 1)
-		Eventually(func(g Gomega) {
-			podList := &corev1.PodList{}
-			err := c.List(ctx, podList, client.InNamespace(f.Namespace), client.MatchingLabels{
-				"app.kubernetes.io/instance":   clusterName,
-				"app.kubernetes.io/name":       "openbao",
-				"app.kubernetes.io/managed-by": "openbao-operator",
-			})
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(len(podList.Items)).To(BeNumerically("<=", 1), "Pods should be scaled down to 1")
-		}, 2*time.Minute, 2*time.Second).Should(Succeed())
-
-		// Scale back up via the CR
-		clusterObj = &openbaov1alpha1.OpenBaoCluster{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, clusterObj)).To(Succeed())
-		clusterObj.Spec.Replicas = originalReplicas
-		Expect(c.Update(ctx, clusterObj)).To(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "Scaled OpenBaoCluster %q back up to %d replicas\n", clusterName, originalReplicas)
-
-		// Wait for pods to become Ready
 		Eventually(func(g Gomega) {
 			sts := &appsv1.StatefulSet{}
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)).To(Succeed())
-			_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet status after restart: replicas=%d ready=%d\n",
+			_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet status after pod restart: replicas=%d ready=%d\n",
 				sts.Status.Replicas, sts.Status.ReadyReplicas)
-			g.Expect(sts.Status.ReadyReplicas).To(Equal(originalReplicas))
+			g.Expect(sts.Status.ReadyReplicas).To(Equal(clusterObj.Spec.Replicas))
 		}, 8*time.Minute, 5*time.Second).Should(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "Pods restarted via scale-down/up and became Ready (Transit auto-unseal working)\n")
+		_, _ = fmt.Fprintf(GinkgoWriter, "Pods restarted and became Ready (Transit auto-unseal working)\n")
 	})
 })

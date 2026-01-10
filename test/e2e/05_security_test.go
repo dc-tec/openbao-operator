@@ -192,7 +192,7 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 					Profile:  openbaov1alpha1.ProfileHardened,
 					Version:  openBaoVersion,
 					Image:    openBaoImage,
-					Replicas: 1,
+					Replicas: 3, // Minimum for Hardened profile (VAP rule)
 					InitContainer: &openbaov1alpha1.InitContainerConfig{
 						Enabled: true,
 						Image:   configInitImage,
