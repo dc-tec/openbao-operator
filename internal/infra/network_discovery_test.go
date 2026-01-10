@@ -16,6 +16,12 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+const (
+	ClusterIP          = "10.43.0.1"
+	ServiceNetworkCIDR = "10.43.0.0/16"
+	APIServerCIDR      = "10.43.0.1/16"
+)
+
 type endpointSliceListErrorClient struct {
 	client.Client
 	err error
@@ -35,7 +41,7 @@ func TestAPIServerDiscovery_DiscoverServiceNetworkCIDR(t *testing.T) {
 			Namespace: kubernetesServiceNamespace,
 		},
 		Spec: corev1.ServiceSpec{
-			ClusterIP: "10.43.0.1",
+			ClusterIP: ClusterIP,
 		},
 	}
 
@@ -49,7 +55,7 @@ func TestAPIServerDiscovery_DiscoverServiceNetworkCIDR(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DiscoverServiceNetworkCIDR() error: %v", err)
 	}
-	if got != "10.43.0.0/16" {
+	if got != ServiceNetworkCIDR {
 		t.Fatalf("DiscoverServiceNetworkCIDR() = %q, expected %q", got, "10.43.0.0/16")
 	}
 }
@@ -109,7 +115,7 @@ func TestDetectAPIServerInfo_ManualCIDRIsNormalized(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Network: &openbaov1alpha1.NetworkConfig{
-				APIServerCIDR: "10.43.0.1/16",
+				APIServerCIDR: APIServerCIDR,
 			},
 		},
 	}
@@ -118,7 +124,7 @@ func TestDetectAPIServerInfo_ManualCIDRIsNormalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("detectAPIServerInfo() error: %v", err)
 	}
-	if info.ServiceNetworkCIDR != "10.43.0.0/16" {
+	if info.ServiceNetworkCIDR != ServiceNetworkCIDR {
 		t.Fatalf("ServiceNetworkCIDR=%q, expected %q", info.ServiceNetworkCIDR, "10.43.0.0/16")
 	}
 }
@@ -146,7 +152,7 @@ func TestDetectAPIServerInfo_ManualEndpointIPsSkipDiscovery(t *testing.T) {
 			Namespace: kubernetesServiceNamespace,
 		},
 		Spec: corev1.ServiceSpec{
-			ClusterIP: "10.43.0.1",
+			ClusterIP: ClusterIP,
 		},
 	}
 
@@ -179,7 +185,7 @@ func TestDetectAPIServerInfo_ServiceGetNotFoundWithManualCIDRSucceeds(t *testing
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Network: &openbaov1alpha1.NetworkConfig{
-				APIServerCIDR: "10.43.0.0/16",
+				APIServerCIDR: ServiceNetworkCIDR,
 			},
 		},
 	}
@@ -188,7 +194,7 @@ func TestDetectAPIServerInfo_ServiceGetNotFoundWithManualCIDRSucceeds(t *testing
 	if err != nil {
 		t.Fatalf("detectAPIServerInfo() error: %v", err)
 	}
-	if info.ServiceNetworkCIDR != "10.43.0.0/16" {
+	if info.ServiceNetworkCIDR != ServiceNetworkCIDR {
 		t.Fatalf("ServiceNetworkCIDR=%q, expected %q", info.ServiceNetworkCIDR, "10.43.0.0/16")
 	}
 }
@@ -219,7 +225,7 @@ func TestDetectAPIServerInfo_EndpointSliceListErrorFallsBackToServiceCIDR(t *tes
 			Namespace: kubernetesServiceNamespace,
 		},
 		Spec: corev1.ServiceSpec{
-			ClusterIP: "10.43.0.1",
+			ClusterIP: ClusterIP,
 		},
 	}
 
@@ -241,7 +247,7 @@ func TestDetectAPIServerInfo_EndpointSliceListErrorFallsBackToServiceCIDR(t *tes
 	if err != nil {
 		t.Fatalf("detectAPIServerInfo() error: %v", err)
 	}
-	if info.ServiceNetworkCIDR != "10.43.0.0/16" {
+	if info.ServiceNetworkCIDR != ServiceNetworkCIDR {
 		t.Fatalf("ServiceNetworkCIDR=%q, expected %q", info.ServiceNetworkCIDR, "10.43.0.0/16")
 	}
 	if len(info.EndpointIPs) != 0 {
@@ -258,7 +264,7 @@ func TestDetectAPIServerInfo_AutoDetectsReadyEndpointIPs(t *testing.T) {
 			Namespace: kubernetesServiceNamespace,
 		},
 		Spec: corev1.ServiceSpec{
-			ClusterIP: "10.43.0.1",
+			ClusterIP: ClusterIP,
 		},
 	}
 
