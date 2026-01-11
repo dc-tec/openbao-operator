@@ -11,6 +11,105 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
+func TestBuildHTTPRoute_DefaultDoesNotSetSectionName(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "infra-httproute-sectionname-default",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Gateway: &openbaov1alpha1.GatewayConfig{
+				Enabled: true,
+				GatewayRef: openbaov1alpha1.GatewayReference{
+					Name:      "traefik-gateway",
+					Namespace: "default",
+				},
+				Hostname: "bao.example.local",
+			},
+		},
+	}
+
+	route := buildHTTPRoute(cluster)
+	if route == nil {
+		t.Fatalf("expected non-nil HTTPRoute")
+	}
+	if len(route.Spec.ParentRefs) != 1 {
+		t.Fatalf("expected 1 parentRef, got %d", len(route.Spec.ParentRefs))
+	}
+	if route.Spec.ParentRefs[0].SectionName != nil {
+		t.Fatalf("expected nil sectionName by default, got %q", *route.Spec.ParentRefs[0].SectionName)
+	}
+}
+
+func TestBuildHTTPRoute_ListenerNameSetsSectionName(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "infra-httproute-sectionname",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Gateway: &openbaov1alpha1.GatewayConfig{
+				Enabled:      true,
+				ListenerName: "websecure",
+				GatewayRef: openbaov1alpha1.GatewayReference{
+					Name:      "traefik-gateway",
+					Namespace: "default",
+				},
+				Hostname: "bao.example.local",
+			},
+		},
+	}
+
+	route := buildHTTPRoute(cluster)
+	if route == nil {
+		t.Fatalf("expected non-nil HTTPRoute")
+	}
+	if len(route.Spec.ParentRefs) != 1 {
+		t.Fatalf("expected 1 parentRef, got %d", len(route.Spec.ParentRefs))
+	}
+	if route.Spec.ParentRefs[0].SectionName == nil {
+		t.Fatalf("expected sectionName to be set")
+	}
+	if string(*route.Spec.ParentRefs[0].SectionName) != "websecure" {
+		t.Fatalf("expected sectionName %q, got %q", "websecure", *route.Spec.ParentRefs[0].SectionName)
+	}
+}
+
+func TestBuildTLSRoute_ListenerNameSetsSectionName(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "infra-tlsroute-sectionname",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Gateway: &openbaov1alpha1.GatewayConfig{
+				Enabled:        true,
+				TLSPassthrough: true,
+				ListenerName:   "websecure",
+				GatewayRef: openbaov1alpha1.GatewayReference{
+					Name:      "traefik-gateway",
+					Namespace: "default",
+				},
+				Hostname: "bao.example.local",
+			},
+		},
+	}
+
+	route := buildTLSRoute(cluster)
+	if route == nil {
+		t.Fatalf("expected non-nil TLSRoute")
+	}
+	if len(route.Spec.ParentRefs) != 1 {
+		t.Fatalf("expected 1 parentRef, got %d", len(route.Spec.ParentRefs))
+	}
+	if route.Spec.ParentRefs[0].SectionName == nil {
+		t.Fatalf("expected sectionName to be set")
+	}
+	if string(*route.Spec.ParentRefs[0].SectionName) != "websecure" {
+		t.Fatalf("expected sectionName %q, got %q", "websecure", *route.Spec.ParentRefs[0].SectionName)
+	}
+}
+
 func TestBuildHTTPRouteBackends_ServiceSelectorsDefault(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
