@@ -447,6 +447,11 @@ func buildHTTPRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.HTTPRout
 	pathType := gatewayv1.PathMatchPathPrefix
 	port := gatewayv1.PortNumber(constants.PortAPI)
 	gatewayNS := gatewayv1.Namespace(gatewayNamespace)
+	var sectionName *gatewayv1.SectionName
+	if strings.TrimSpace(gw.ListenerName) != "" {
+		sn := gatewayv1.SectionName(strings.TrimSpace(gw.ListenerName))
+		sectionName = &sn
+	}
 
 	httpRoute := &gatewayv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
@@ -459,8 +464,9 @@ func buildHTTPRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.HTTPRout
 			CommonRouteSpec: gatewayv1.CommonRouteSpec{
 				ParentRefs: []gatewayv1.ParentReference{
 					{
-						Name:      gatewayv1.ObjectName(gw.GatewayRef.Name),
-						Namespace: &gatewayNS,
+						Name:        gatewayv1.ObjectName(gw.GatewayRef.Name),
+						Namespace:   &gatewayNS,
+						SectionName: sectionName,
 					},
 				},
 			},
@@ -703,6 +709,11 @@ func buildTLSRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1alpha2.TLS
 	hostname := gatewayv1alpha2.Hostname(gw.Hostname)
 	port := gatewayv1alpha2.PortNumber(constants.PortAPI)
 	gatewayNS := gatewayv1alpha2.Namespace(gatewayNamespace)
+	var sectionName *gatewayv1alpha2.SectionName
+	if strings.TrimSpace(gw.ListenerName) != "" {
+		sn := gatewayv1alpha2.SectionName(strings.TrimSpace(gw.ListenerName))
+		sectionName = &sn
+	}
 
 	tlsRoute := &gatewayv1alpha2.TLSRoute{
 		ObjectMeta: metav1.ObjectMeta{
@@ -715,8 +726,9 @@ func buildTLSRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1alpha2.TLS
 			CommonRouteSpec: gatewayv1alpha2.CommonRouteSpec{
 				ParentRefs: []gatewayv1alpha2.ParentReference{
 					{
-						Name:      gatewayv1alpha2.ObjectName(gw.GatewayRef.Name),
-						Namespace: &gatewayNS,
+						Name:        gatewayv1alpha2.ObjectName(gw.GatewayRef.Name),
+						Namespace:   &gatewayNS,
+						SectionName: sectionName,
 					},
 				},
 			},
