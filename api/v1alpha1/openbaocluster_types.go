@@ -738,6 +738,12 @@ type GatewayConfig struct {
 	// Enabled activates Gateway API support for this cluster.
 	// When true, the Operator creates an HTTPRoute for the cluster.
 	Enabled bool `json:"enabled"`
+	// ListenerName optionally targets a specific listener (sectionName) on the referenced Gateway.
+	// When set, the generated Route (HTTPRoute or TLSRoute) attaches only to that listener.
+	// This is useful when a Gateway exposes multiple listeners for the same hostname (e.g. Traefik
+	// "web" and "websecure") and you want deterministic attachment.
+	// +optional
+	ListenerName string `json:"listenerName,omitempty"`
 	// GatewayRef references an existing Gateway resource that will handle
 	// traffic for this OpenBao cluster. The Gateway must already exist.
 	GatewayRef GatewayReference `json:"gatewayRef"`
