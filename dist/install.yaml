@@ -163,9 +163,9 @@ spec:
                   executorImage:
                     description: |-
                       ExecutorImage is the container image to use for backup operations.
-                      Defaults to "openbao/backup-executor:v0.1.0" if not specified.
+                      If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_BACKUP_IMAGE_REPOSITORY
+                      (default: "ghcr.io/dc-tec/openbao-backup") and the tag matches OPERATOR_VERSION.
                       This allows users to override the image for air-gapped environments or custom registries.
-                    minLength: 1
                     type: string
                   jwtAuthRole:
                     description: |-
@@ -216,16 +216,19 @@ spec:
                         minimum: 1
                         type: integer
                       credentialsSecretRef:
-                        description: CredentialsSecretRef optionally references a
-                          Secret containing credentials for the object store.
+                        description: |-
+                          CredentialsSecretRef optionally references a Secret containing credentials for the object store.
+                          The Secret must exist in the same namespace as the OpenBaoCluster.
+                          Cross-namespace references are not allowed for security reasons.
                         properties:
                           name:
-                            description: name is unique within a namespace to reference
-                              a secret resource.
-                            type: string
-                          namespace:
-                            description: namespace defines the space within which
-                              the secret name must be unique.
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
@@ -277,6 +280,9 @@ spec:
                       TokenSecretRef optionally references a Secret containing an OpenBao API
                       token to use for backup operations (fallback method).
 
+                      The Secret must exist in the same namespace as the OpenBaoCluster.
+                      Cross-namespace references are not allowed for security reasons.
+
                       For standard clusters (non self-init), this is typically omitted and the
                       operator uses the root token from <cluster>-root-token. For self-init
                       clusters (no root token Secret), this field must reference a token with
@@ -285,12 +291,13 @@ spec:
                       If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
                     properties:
                       name:
-                        description: name is unique within a namespace to reference
-                          a secret resource.
-                        type: string
-                      namespace:
-                        description: namespace defines the space within which the
-                          secret name must be unique.
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
@@ -555,6 +562,13 @@ spec:
                       This hostname will be automatically added to the TLS SANs.
                     minLength: 1
                     type: string
+                  listenerName:
+                    description: |-
+                      ListenerName optionally targets a specific listener (sectionName) on the referenced Gateway.
+                      When set, the generated Route (HTTPRoute or TLSRoute) attaches only to that listener.
+                      This is useful when a Gateway exposes multiple listeners for the same hostname (e.g. Traefik
+                      "web" and "websecure") and you want deterministic attachment.
+                    type: string
                   path:
                     description: Path prefix for the HTTPRoute (defaults to "/").
                     type: string
@@ -695,9 +709,8 @@ spec:
                   image:
                     description: |-
                       Image is the container image to use for the init container.
-                      This value is required; the operator does not apply a default image.
-                      When omitted or empty, validation will reject the OpenBaoCluster.
-                    minLength: 1
+                      If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_INIT_IMAGE_REPOSITORY
+                      (default: "ghcr.io/dc-tec/openbao-config-init") and the tag matches OPERATOR_VERSION.
                     type: string
                 type: object
               network:
@@ -1136,6 +1149,78 @@ spec:
                           x-kubernetes-list-type: atomic
                       type: object
                     type: array
+                type: object
+              operatorImageVerification:
+                description: |-
+                  OperatorImageVerification configures supply chain security checks for operator-managed helper images
+                  (init container, sentinel, backup/upgrade/restore executors). These images are typically signed
+                  by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.
+                  If not specified, falls back to the main ImageVerification config.
+                properties:
+                  enabled:
+                    description: Enabled controls whether image verification is enforced.
+                    type: boolean
+                  failurePolicy:
+                    default: Block
+                    description: |-
+                      FailurePolicy defines behavior on verification failure.
+                      "Block" blocks reconciliation of the affected workload when verification fails.
+                      "Warn" logs an error and emits a Kubernetes Event but proceeds.
+                    enum:
+                    - Warn
+                    - Block
+                    type: string
+                  ignoreTlog:
+                    default: false
+                    description: |-
+                      IgnoreTlog controls whether to verify against the Rekor transparency log.
+                      When false (default), signatures are verified against Rekor for non-repudiation.
+                      When true, only signature verification is performed without transparency log checks.
+                    type: boolean
+                  imagePullSecrets:
+                    description: |-
+                      ImagePullSecrets is a list of references to secrets in the same namespace
+                      to use for pulling images from private registries during verification.
+                      These secrets must be of type kubernetes.io/dockerconfigjson or kubernetes.io/dockercfg.
+                    items:
+                      description: |-
+                        LocalObjectReference contains enough information to let you locate the
+                        referenced object inside the same namespace.
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                  issuer:
+                    description: |-
+                      Issuer is the OIDC issuer for keyless verification (e.g., https://token.actions.githubusercontent.com).
+                      Required for keyless verification when PublicKey is not provided.
+                      For GitHub Actions keyless verification, use: https://token.actions.githubusercontent.com
+                    type: string
+                  publicKey:
+                    description: |-
+                      PublicKey is the Cosign public key content used to verify the signature.
+                      Required for static key verification. If empty, keyless verification will be used
+                      (requires Issuer and Subject to be set).
+                    type: string
+                  subject:
+                    description: |-
+                      Subject is the OIDC subject for keyless verification.
+                      Required for keyless verification when PublicKey is not provided.
+                      Example (GitHub Actions): https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v<VERSION>
+                      The version in the subject MUST match the image tag version.
+                    type: string
+                required:
+                - enabled
+                - failurePolicy
                 type: object
               paused:
                 description: Paused, when true, pauses reconciliation for this OpenBaoCluster
@@ -1866,14 +1951,17 @@ spec:
                       CredentialsSecretRef references a Secret containing provider credentials
                       (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON, Azure client secret, etc.).
                       If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
+                      The Secret must exist in the same namespace as the OpenBaoCluster.
+                      Cross-namespace references are not allowed for security reasons.
                     properties:
                       name:
-                        description: name is unique within a namespace to reference
-                          a secret resource.
-                        type: string
-                      namespace:
-                        description: namespace defines the space within which the
-                          secret name must be unique.
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
@@ -2285,6 +2373,9 @@ spec:
                       This image is used by Kubernetes Jobs created during upgrades (for example, blue/green
                       cluster orchestration actions). The executor runs inside the tenant namespace and
                       authenticates to OpenBao using a projected ServiceAccount token (JWT auth).
+
+                      If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_UPGRADE_IMAGE_REPOSITORY
+                      (default: "ghcr.io/dc-tec/openbao-upgrade") and the tag matches OPERATOR_VERSION.
                     type: string
                   jwtAuthRole:
                     description: |-
@@ -2320,6 +2411,9 @@ spec:
                       TokenSecretRef optionally references a Secret containing an OpenBao API
                       token to use for upgrade operations.
 
+                      The Secret must exist in the same namespace as the OpenBaoCluster.
+                      Cross-namespace references are not allowed for security reasons.
+
                       The token must have permission to:
                       - read sys/health
                       - update sys/step-down
@@ -2329,12 +2423,13 @@ spec:
                       If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
                     properties:
                       name:
-                        description: name is unique within a namespace to reference
-                          a secret resource.
-                        type: string
-                      namespace:
-                        description: namespace defines the space within which the
-                          secret name must be unique.
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
@@ -2961,16 +3056,19 @@ spec:
                         minimum: 1
                         type: integer
                       credentialsSecretRef:
-                        description: CredentialsSecretRef optionally references a
-                          Secret containing credentials for the object store.
+                        description: |-
+                          CredentialsSecretRef optionally references a Secret containing credentials for the object store.
+                          The Secret must exist in the same namespace as the OpenBaoCluster.
+                          Cross-namespace references are not allowed for security reasons.
                         properties:
                           name:
-                            description: name is unique within a namespace to reference
-                              a secret resource.
-                            type: string
-                          namespace:
-                            description: namespace defines the space within which
-                              the secret name must be unique.
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
@@ -3026,17 +3124,21 @@ spec:
                   TokenSecretRef optionally references a Secret containing an OpenBao API
                   token to use for restore operations (fallback method).
 
+                  The Secret must exist in the same namespace as the OpenBaoRestore.
+                  Cross-namespace references are not allowed for security reasons.
+
                   The token must have permission to update sys/storage/raft/snapshot-force.
 
                   If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
                 properties:
                   name:
-                    description: name is unique within a namespace to reference a
-                      secret resource.
-                    type: string
-                  namespace:
-                    description: namespace defines the space within which the secret
-                      name must be unique.
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
@@ -4265,9 +4367,15 @@ spec:
   validations:
   - expression: '!variables.is_managed || variables.is_operator_controller || (variables.is_kube_controller_manager
       && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
-      (variables.is_kube_system_controller && variables.is_endpoints_controller_request)
-      || variables.is_cert_manager || (variables.is_pod_request && variables.is_kubelet_node
-      && request.operation == "DELETE") || variables.is_service_registration_label_update
+      (variables.is_system_controller && request.operation == "DELETE") || (variables.is_system_controller
+      && request.resource.resource == "pods") || (variables.is_system_controller &&
+      variables.is_endpoints_controller_request) || variables.is_kube_system_controller
+      || (variables.is_kube_system_controller && request.operation == "DELETE") ||
+      (variables.is_kube_system_controller && request.resource.resource == "pods"
+      && (request.operation == "CREATE" || request.operation == "DELETE")) || (variables.is_kube_system_controller
+      && variables.is_endpoints_controller_request) || variables.is_cert_manager ||
+      (variables.is_pod_request && variables.is_kubelet_node && request.operation
+      == "DELETE") || variables.is_service_registration_label_update || variables.is_kube_system_pod_finalizer_update
       || (variables.maintenance_enabled && variables.is_break_glass_admin)'
     message: Direct modification of OpenBao-managed resources is prohibited; modify
       the parent OpenBaoCluster/OpenBaoTenant instead.
@@ -4296,6 +4404,8 @@ spec:
   - expression: request.userInfo.username == "system:kube-controller-manager" || request.userInfo.username
       == "system:serviceaccount:kube-system:kube-controller-manager"
     name: is_kube_controller_manager
+  - expression: request.userInfo.username.startsWith("system:controller:")
+    name: is_system_controller
   - expression: request.userInfo.groups.exists(g, g == "system:serviceaccounts:kube-system")
       || request.userInfo.username.startsWith("system:serviceaccount:kube-system:")
     name: is_kube_system_controller
@@ -4351,6 +4461,18 @@ spec:
         )
       )
     name: is_service_registration_label_update
+  - expression: |-
+      variables.is_pod_request && request.operation == "UPDATE" && variables.is_kube_system_controller && object.spec == oldObject.spec && (has(object.metadata.labels) == has(oldObject.metadata.labels) &&
+
+        (!has(object.metadata.labels) || object.metadata.labels == oldObject.metadata.labels)) &&
+      (has(object.metadata.annotations) == has(oldObject.metadata.annotations) &&
+
+        (!has(object.metadata.annotations) || object.metadata.annotations == oldObject.metadata.annotations)) &&
+      (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+
+        (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+      (has(object.metadata.finalizers) || has(oldObject.metadata.finalizers)) && (!has(object.metadata.finalizers) || !has(oldObject.metadata.finalizers) || object.metadata.finalizers != oldObject.metadata.finalizers)
+    name: is_kube_system_pod_finalizer_update
   - expression: |-
       request.operation == "DELETE" ?
 
@@ -4627,10 +4749,11 @@ spec:
     message: spec.initContainer is required, must be enabled, and must specify a non-empty
       image.
   - expression: '!has(object.spec.selfInit) || object.spec.selfInit.enabled == false
-      || (has(object.spec.selfInit.requests) && size(object.spec.selfInit.requests)
+      || (has(object.spec.selfInit.bootstrapJWTAuth) && object.spec.selfInit.bootstrapJWTAuth
+      == true) || (has(object.spec.selfInit.requests) && size(object.spec.selfInit.requests)
       > 0)'
     message: spec.selfInit.requests is required and must not be empty when spec.selfInit.enabled
-      is true.
+      is true unless spec.selfInit.bootstrapJWTAuth is true.
   - expression: |-
       !has(object.spec.selfInit) || object.spec.selfInit.enabled == false || (!has(object.spec.selfInit.requests) ||
 
@@ -4678,6 +4801,10 @@ spec:
       !variables.has_backup || !has(object.spec.backup.target.endpoint) || object.spec.backup.target.endpoint
       == "" || object.spec.backup.target.endpoint.startsWith("https://") || object.spec.backup.target.endpoint.startsWith("s3://")'
     message: Backup endpoint must use HTTPS or S3 scheme in Hardened profile.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      object.spec.replicas >= 3'
+    message: Hardened profile requires at least 3 replicas for Raft quorum HA. Use
+      Profile=Development for non-HA deployments.
   variables:
   - expression: has(object.spec.backup)
     name: has_backup

@@ -563,6 +563,13 @@ spec:
                       This hostname will be automatically added to the TLS SANs.
                     minLength: 1
                     type: string
+                  listenerName:
+                    description: |-
+                      ListenerName optionally targets a specific listener (sectionName) on the referenced Gateway.
+                      When set, the generated Route (HTTPRoute or TLSRoute) attaches only to that listener.
+                      This is useful when a Gateway exposes multiple listeners for the same hostname (e.g. Traefik
+                      "web" and "websecure") and you want deterministic attachment.
+                    type: string
                   path:
                     description: Path prefix for the HTTPRoute (defaults to "/").
                     type: string
