@@ -105,6 +105,7 @@ Choose your deployment mode.
 | :--- | :--- | :--- |
 | `gateway.backendTLS.enabled` | Auto-create `BackendTLSPolicy` for secure internal hop. | `true` |
 | `gateway.backendTLS.hostname` | Override hostname for internal validation. | Service DNS |
+| `gateway.listenerName` | Attach generated Route to a specific Gateway listener (sectionName), e.g. `websecure`. | All matching listeners |
 | `gateway.annotations` | Custom annotations for the generated Route. | None |
 
 ## Blue/Green Upgrade Integration
