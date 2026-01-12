@@ -31,6 +31,22 @@ func TestRestrictProvisionerDelegatePolicyContainsDangerousVerbGuard(t *testing.
 	}
 }
 
+func TestRestrictProvisionerDelegatePolicyContainsSecretsRoleGuards(t *testing.T) {
+	const (
+		policyPath = "../../config/policy/restrict-provisioner-delegate.yaml"
+		required   = "The Provisioner Delegate can only grant Secrets permissions via the dedicated secrets allowlist Roles."
+	)
+
+	data, err := os.ReadFile(policyPath)
+	if err != nil {
+		t.Fatalf("failed to read policy %s: %v", policyPath, err)
+	}
+
+	if !containsString(string(data), required) {
+		t.Fatalf("policy %s does not contain required secrets allowlist guard message:\n%q", policyPath, required)
+	}
+}
+
 // containsString performs a simple substring check without introducing extra
 // dependencies. Kept private and local to avoid over-abstracting.
 func containsString(haystack, needle string) bool {
