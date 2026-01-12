@@ -329,52 +329,12 @@ func renderSelfInitStanzas(body *hclwrite.Body, requests []openbaov1alpha1.SelfI
 
 		// Set data if provided
 		// Use structured types for supported paths; Data only for unsupported paths
-		var dataVal cty.Value
+		dataVal := cty.NilVal
 
-		if strings.HasPrefix(req.Path, "sys/audit/") {
-			// Audit devices must use structured AuditDevice type
-			if req.AuditDevice == nil {
-				return fmt.Errorf("audit device request %q at path %q must use structured auditDevice field, not raw data", req.Name, req.Path)
-			}
-			// Build audit device data from structured config and render it as a data block.
-			var err error
-			dataVal, err = buildAuditDeviceData(req.AuditDevice)
-			if err != nil {
-				return fmt.Errorf("failed to build audit device data for request %q: %w", req.Name, err)
-			}
-		} else if strings.HasPrefix(req.Path, "sys/auth/") {
-			// Auth methods must use structured AuthMethod type
-			if req.AuthMethod == nil {
-				return fmt.Errorf("auth method request %q at path %q must use structured authMethod field, not raw data", req.Name, req.Path)
-			}
-			// Build auth method data from structured config
-			var err error
-			dataVal, err = buildAuthMethodData(req.AuthMethod)
-			if err != nil {
-				return fmt.Errorf("failed to build auth method data for request %q: %w", req.Name, err)
-			}
-		} else if strings.HasPrefix(req.Path, "sys/mounts/") {
-			// Secret engines must use structured SecretEngine type
-			if req.SecretEngine == nil {
-				return fmt.Errorf("secret engine request %q at path %q must use structured secretEngine field, not raw data", req.Name, req.Path)
-			}
-			// Build secret engine data from structured config
-			var err error
-			dataVal, err = buildSecretEngineData(req.SecretEngine)
-			if err != nil {
-				return fmt.Errorf("failed to build secret engine data for request %q: %w", req.Name, err)
-			}
-		} else if strings.HasPrefix(req.Path, "sys/policies/") {
-			// Policies must use structured Policy type
-			if req.Policy == nil {
-				return fmt.Errorf("policy request %q at path %q must use structured policy field, not raw data", req.Name, req.Path)
-			}
-			// Build policy data from structured config
-			var err error
-			dataVal, err = buildPolicyData(req.Policy)
-			if err != nil {
-				return fmt.Errorf("failed to build policy data for request %q: %w", req.Name, err)
-			}
+		if structuredVal, handled, err := resolveSelfInitRequestStructuredData(req); err != nil {
+			return err
+		} else if handled {
+			dataVal = structuredVal
 		} else if req.Data != nil && len(req.Data.Raw) > 0 {
 			// For paths without structured types, use raw Data JSON
 			var decoded interface{}
