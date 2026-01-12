@@ -411,7 +411,7 @@ jobs:
             OPERATOR_SENTINEL_IMAGE_REPOSITORY="${SENTINEL_IMAGE}"
 
       - name: Generate SBOMs (SPDX JSON)
-        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
+        uses: anchore/sbom-action@0b82b0b1a22399a1c542d4d656f70cd903571b5c # v0.21.1
         with:
           image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.build-images.outputs.manager_digest }}
           format: spdx-json
@@ -422,7 +422,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOMs (SPDX JSON) - Sentinel
-        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
+        uses: anchore/sbom-action@0b82b0b1a22399a1c542d4d656f70cd903571b5c # v0.21.1
         with:
           image: ${{ needs.prepare.outputs.sentinel_image }}@${{ needs.build-images.outputs.sentinel_digest }}
           format: spdx-json
@@ -433,7 +433,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOMs (SPDX JSON) - config-init
-        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
+        uses: anchore/sbom-action@0b82b0b1a22399a1c542d4d656f70cd903571b5c # v0.21.1
         with:
           image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.build-images.outputs.config_init_digest }}
           format: spdx-json
@@ -444,7 +444,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOMs (SPDX JSON) - backup executor
-        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
+        uses: anchore/sbom-action@0b82b0b1a22399a1c542d4d656f70cd903571b5c # v0.21.1
         with:
           image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.build-images.outputs.backup_executor_digest }}
           format: spdx-json
@@ -455,7 +455,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOMs (SPDX JSON) - upgrade executor
-        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
+        uses: anchore/sbom-action@0b82b0b1a22399a1c542d4d656f70cd903571b5c # v0.21.1
         with:
           image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.build-images.outputs.upgrade_executor_digest }}
           format: spdx-json
