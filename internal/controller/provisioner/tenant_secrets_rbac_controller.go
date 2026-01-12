@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,12 +39,12 @@ func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	// Only manage Secret RBAC for namespaces that have already been provisioned.
 	// This avoids granting Secret access in namespaces that are not part of the tenant model.
-	rb := &rbacv1.RoleBinding{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: provisioner.TenantRoleBindingName}, rb); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil
-		}
-		return ctrl.Result{}, fmt.Errorf("failed to check tenant RoleBinding %s/%s: %w", req.Namespace, provisioner.TenantRoleBindingName, err)
+	provisioned, err := r.Provisioner.IsTenantNamespaceProvisioned(ctx, req.Namespace)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if !provisioned {
+		return ctrl.Result{}, nil
 	}
 
 	if err := r.Provisioner.EnsureTenantSecretRBAC(ctx, req.Namespace); err != nil {

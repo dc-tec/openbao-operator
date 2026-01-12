@@ -120,12 +120,12 @@ rules:
     resources:
       - pods
     verbs:
+      - delete
       - get
       - list
-      - watch
-      - update
       - patch
-      - delete
+      - update
+      - watch
   - apiGroups:
       - ""
     resources:

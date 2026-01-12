@@ -7,11 +7,22 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
+var (
+	verbsReadOnly     = []string{"get", "list", "watch"}
+	verbsManage       = []string{"create", "delete", "get", "list", "patch", "update", "watch"}
+	verbsPatchOnly    = []string{"patch"}
+	verbsEventWrite   = []string{"create", "patch"}
+	verbsPodManage    = []string{"delete", "get", "list", "patch", "update", "watch"}
+	verbsSecretRead   = []string{"get"}
+	verbsSecretCreate = []string{"create"}
+	verbsSecretMutate = []string{"delete", "get", "patch", "update"}
+)
+
+func cloneStrings(in []string) []string {
+	return append([]string(nil), in...)
+}
+
 const (
-	// TenantLabelKey is the label key used to identify tenant namespaces.
-	TenantLabelKey = "openbao.org/tenant"
-	// TenantLabelValue is the label value that marks a namespace as a tenant.
-	TenantLabelValue = "true"
 	// TenantRoleName is the name of the Role created in each tenant namespace.
 	TenantRoleName = "openbao-operator-tenant-role"
 	// TenantRoleBindingName is the name of the RoleBinding created in each tenant namespace.
@@ -39,71 +50,83 @@ type OperatorServiceAccount struct {
 // GenerateTenantRole generates a namespaced Role that grants the operator
 // the permissions needed to manage OpenBaoCluster resources in a tenant namespace.
 func GenerateTenantRole(namespace string) *rbacv1.Role {
-	// Common set of verbs for managing resources (excludes "deletecollection" for safety)
-	commonVerbs := []string{"create", "delete", "get", "list", "patch", "update", "watch"}
-
-	rules := newPolicyRulesBuilder().
-		// 1. Manage OpenBao Clusters and Restores
-		Group("openbao.org").
-		Resources("openbaoclusters", "openbaoclusters/status", "openbaoclusters/finalizers").
-		Verbs(commonVerbs...).
-		Group("openbao.org").
-		Resources("openbaorestores", "openbaorestores/status", "openbaorestores/finalizers").
-		Verbs(commonVerbs...).
-		// 2. Manage Workload Infrastructure
-		Group("apps").
-		Resources("statefulsets").
-		Verbs(commonVerbs...).
-		Group("apps").
-		Resources("deployments").
-		Verbs(commonVerbs...).
-		Group("").
-		Resources("services", "configmaps", "serviceaccounts").
-		Verbs(commonVerbs...).
-		// Events for operator visibility (kubectl describe, auditing, troubleshooting).
-		// Events are namespaced and do not expand access to tenant resources.
-		Group("").
-		Resources("events").
-		Verbs("create", "patch").
-		// 3. Pod access for health checks, leader detection, and cleanup
-		// The operator needs delete permission to clean up pods during OpenBaoCluster deletion,
-		// especially when pods become orphaned after StatefulSet deletion is blocked by the webhook.
-		Group("").
-		Resources("pods").
-		Verbs("get", "list", "watch", "update", "patch", "delete").
-		// 4. PVC access for StatefulSets
-		Group("").
-		Resources("persistentvolumeclaims").
-		Verbs(commonVerbs...).
-		// 5. Jobs for backups
-		Group("batch").
-		Resources("jobs").
-		Verbs(commonVerbs...).
-		// 6. PodDisruptionBudgets for StatefulSet protection
-		Group("policy").
-		Resources("poddisruptionbudgets").
-		Verbs(commonVerbs...).
-		// 7. Networking resources
-		Group("networking.k8s.io").
-		Resources("ingresses", "networkpolicies").
-		Verbs(commonVerbs...).
-		// 8. Gateway API
-		Group("gateway.networking.k8s.io").
-		Resources("httproutes", "tlsroutes", "backendtlspolicies").
-		Verbs(commonVerbs...).
-		// 9. RBAC for OpenBao pod discovery
-		Group("rbac.authorization.k8s.io").
-		Resources("roles", "rolebindings").
-		Verbs(commonVerbs...).
-		// 10. Endpoints for service discovery
-		Group("").
-		Resources("endpoints").
-		Verbs("get", "list", "watch").
-		// 11. EndpointSlices for service discovery (Required for modern K8s)
-		Group("discovery.k8s.io").
-		Resources("endpointslices").
-		Verbs("get", "list", "watch").
-		Rules()
+	rules := []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"openbao.org"},
+			Resources: []string{"openbaoclusters", "openbaoclusters/status", "openbaoclusters/finalizers"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{"openbao.org"},
+			Resources: []string{"openbaorestores", "openbaorestores/status", "openbaorestores/finalizers"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{"apps"},
+			Resources: []string{"statefulsets"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{"apps"},
+			Resources: []string{"deployments"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"services", "configmaps", "serviceaccounts"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"events"},
+			Verbs:     cloneStrings(verbsEventWrite),
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"pods"},
+			Verbs:     cloneStrings(verbsPodManage),
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"persistentvolumeclaims"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{"batch"},
+			Resources: []string{"jobs"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{"policy"},
+			Resources: []string{"poddisruptionbudgets"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{"networking.k8s.io"},
+			Resources: []string{"ingresses", "networkpolicies"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{"gateway.networking.k8s.io"},
+			Resources: []string{"httproutes", "tlsroutes", "backendtlspolicies"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{"rbac.authorization.k8s.io"},
+			Resources: []string{"roles", "rolebindings"},
+			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"endpoints"},
+			Verbs:     cloneStrings(verbsReadOnly),
+		},
+		{
+			APIGroups: []string{"discovery.k8s.io"},
+			Resources: []string{"endpointslices"},
+			Verbs:     cloneStrings(verbsReadOnly),
+		},
+	}
 
 	return &rbacv1.Role{
 		TypeMeta: metav1.TypeMeta{
@@ -136,7 +159,7 @@ func GenerateTenantRoleBinding(namespace string, operatorSA OperatorServiceAccou
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: "provisioner",
+				constants.LabelAppComponent: constants.LabelValueAppComponentProvisioner,
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
@@ -162,7 +185,7 @@ func GenerateTenantSecretsReaderRole(namespace string, secretNames []string) *rb
 		{
 			APIGroups:     []string{""},
 			Resources:     []string{"secrets"},
-			Verbs:         []string{"get"},
+			Verbs:         cloneStrings(verbsSecretRead),
 			ResourceNames: secretNames,
 		},
 	}
@@ -177,7 +200,7 @@ func GenerateTenantSecretsReaderRole(namespace string, secretNames []string) *rb
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: "provisioner",
+				constants.LabelAppComponent: constants.LabelValueAppComponentProvisioner,
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
@@ -198,7 +221,7 @@ func GenerateTenantSecretsReaderRoleBinding(namespace string, operatorSA Operato
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: "provisioner",
+				constants.LabelAppComponent: constants.LabelValueAppComponentProvisioner,
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
@@ -228,12 +251,12 @@ func GenerateTenantSecretsWriterRole(namespace string, secretNames []string) *rb
 			rbacv1.PolicyRule{
 				APIGroups: []string{""},
 				Resources: []string{"secrets"},
-				Verbs:     []string{"create"},
+				Verbs:     cloneStrings(verbsSecretCreate),
 			},
 			rbacv1.PolicyRule{
 				APIGroups:     []string{""},
 				Resources:     []string{"secrets"},
-				Verbs:         []string{"delete", "get", "patch", "update"},
+				Verbs:         cloneStrings(verbsSecretMutate),
 				ResourceNames: secretNames,
 			},
 		)
@@ -249,7 +272,7 @@ func GenerateTenantSecretsWriterRole(namespace string, secretNames []string) *rb
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: "provisioner",
+				constants.LabelAppComponent: constants.LabelValueAppComponentProvisioner,
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
@@ -270,7 +293,7 @@ func GenerateTenantSecretsWriterRoleBinding(namespace string, operatorSA Operato
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: "provisioner",
+				constants.LabelAppComponent: constants.LabelValueAppComponentProvisioner,
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
 		},
@@ -297,20 +320,28 @@ func GenerateTenantSecretsWriterRoleBinding(namespace string, operatorSA Operato
 // - Minimal write access: only "patch" on OpenBaoCluster status to emit drift triggers
 // - list/watch on OpenBaoCluster required for controller-runtime cache to function (best-effort)
 func GenerateSentinelRole(namespace string) *rbacv1.Role {
-	rules := newPolicyRulesBuilder().
-		Group("apps").
-		Resources("statefulsets").
-		Verbs("get", "list", "watch").
-		Group("").
-		Resources("services", "configmaps").
-		Verbs("get", "list", "watch").
-		Group("openbao.org").
-		Resources("openbaoclusters").
-		Verbs("get", "list", "watch").
-		Group("openbao.org").
-		Resources("openbaoclusters/status").
-		Verbs("patch").
-		Rules()
+	rules := []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"apps"},
+			Resources: []string{"statefulsets"},
+			Verbs:     cloneStrings(verbsReadOnly),
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"services", "configmaps"},
+			Verbs:     cloneStrings(verbsReadOnly),
+		},
+		{
+			APIGroups: []string{"openbao.org"},
+			Resources: []string{"openbaoclusters"},
+			Verbs:     cloneStrings(verbsReadOnly),
+		},
+		{
+			APIGroups: []string{"openbao.org"},
+			Resources: []string{"openbaoclusters/status"},
+			Verbs:     cloneStrings(verbsPatchOnly),
+		},
+	}
 
 	return &rbacv1.Role{
 		TypeMeta: metav1.TypeMeta{

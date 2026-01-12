@@ -2,9 +2,12 @@ package provisioner
 
 import (
 	"context"
+	"reflect"
+	"sort"
 	"testing"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -450,6 +453,184 @@ func TestEnsureTenantRBAC_UpdatesPodSecurityLabels(t *testing.T) {
 	if updatedNS.Labels["pod-security.kubernetes.io/warn"] != podSecurityRestrictedLevel {
 		t.Errorf("Pod Security warn label was not added")
 	}
+}
+
+func TestEnsureTenantSecretRBAC_CreatesRolesAndRoleBindings(t *testing.T) {
+	namespace := testNamespace
+	clusterName := "bao"
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.0",
+			Image:    "openbao:2.4.0",
+			Replicas: 1,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+				Mode:    openbaov1alpha1.TLSModeOperatorManaged,
+			},
+			Unseal: &openbaov1alpha1.UnsealConfig{
+				Type: "static",
+				CredentialsSecretRef: &corev1.LocalObjectReference{
+					Name: "unseal-creds",
+				},
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Schedule: "0 3 * * *",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "https://s3.example",
+					Bucket:   "bucket",
+					CredentialsSecretRef: &corev1.LocalObjectReference{
+						Name: "backup-creds",
+					},
+				},
+				TokenSecretRef: &corev1.LocalObjectReference{
+					Name: "backup-token",
+				},
+			},
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				TokenSecretRef: &corev1.LocalObjectReference{
+					Name: "upgrade-token",
+				},
+			},
+		},
+	}
+
+	k8sClient := newTestClient(t, cluster)
+	logger := logr.Discard()
+	manager, err := NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := manager.EnsureTenantSecretRBAC(ctx, namespace); err != nil {
+		t.Fatalf("EnsureTenantSecretRBAC() error = %v", err)
+	}
+
+	expectedWriterNames := []string{
+		clusterName + constants.SuffixRootToken,
+		clusterName + constants.SuffixTLSCA,
+		clusterName + constants.SuffixTLSServer,
+		clusterName + constants.SuffixUnsealKey,
+	}
+	sort.Strings(expectedWriterNames)
+
+	expectedReaderNames := []string{
+		"backup-creds",
+		"backup-token",
+		"unseal-creds",
+		"upgrade-token",
+	}
+	sort.Strings(expectedReaderNames)
+
+	writerRole := &rbacv1.Role{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantSecretsWriterRoleName}, writerRole); err != nil {
+		t.Fatalf("expected writer Role to exist: %v", err)
+	}
+	if got := extractSecretResourceNames(writerRole.Rules); !reflect.DeepEqual(got, expectedWriterNames) {
+		t.Errorf("writer Role allowlist = %v, want %v", got, expectedWriterNames)
+	}
+
+	writerRoleBinding := &rbacv1.RoleBinding{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantSecretsWriterRoleBindingName}, writerRoleBinding); err != nil {
+		t.Fatalf("expected writer RoleBinding to exist: %v", err)
+	}
+	if writerRoleBinding.RoleRef.Name != TenantSecretsWriterRoleName {
+		t.Errorf("writer RoleBinding RoleRef.Name = %v, want %v", writerRoleBinding.RoleRef.Name, TenantSecretsWriterRoleName)
+	}
+
+	readerRole := &rbacv1.Role{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantSecretsReaderRoleName}, readerRole); err != nil {
+		t.Fatalf("expected reader Role to exist: %v", err)
+	}
+	if got := extractSecretResourceNames(readerRole.Rules); !reflect.DeepEqual(got, expectedReaderNames) {
+		t.Errorf("reader Role allowlist = %v, want %v", got, expectedReaderNames)
+	}
+
+	readerRoleBinding := &rbacv1.RoleBinding{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantSecretsReaderRoleBindingName}, readerRoleBinding); err != nil {
+		t.Fatalf("expected reader RoleBinding to exist: %v", err)
+	}
+	if readerRoleBinding.RoleRef.Name != TenantSecretsReaderRoleName {
+		t.Errorf("reader RoleBinding RoleRef.Name = %v, want %v", readerRoleBinding.RoleRef.Name, TenantSecretsReaderRoleName)
+	}
+}
+
+func TestEnsureTenantSecretRBAC_DeletesRolesAndRoleBindingsWhenNoClustersRemain(t *testing.T) {
+	namespace := testNamespace
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "bao",
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.0",
+			Image:    "openbao:2.4.0",
+			Replicas: 1,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+				Mode:    openbaov1alpha1.TLSModeOperatorManaged,
+			},
+		},
+	}
+
+	k8sClient := newTestClient(t, cluster)
+	logger := logr.Discard()
+	manager, err := NewManager(k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	ctx := context.Background()
+
+	if err := manager.EnsureTenantSecretRBAC(ctx, namespace); err != nil {
+		t.Fatalf("EnsureTenantSecretRBAC() error = %v", err)
+	}
+
+	if err := k8sClient.Delete(ctx, cluster); err != nil {
+		t.Fatalf("failed to delete OpenBaoCluster: %v", err)
+	}
+
+	if err := manager.EnsureTenantSecretRBAC(ctx, namespace); err != nil {
+		t.Fatalf("EnsureTenantSecretRBAC() error = %v", err)
+	}
+
+	for _, name := range []string{TenantSecretsReaderRoleBindingName, TenantSecretsWriterRoleBindingName} {
+		roleBinding := &rbacv1.RoleBinding{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, roleBinding)
+		if !apierrors.IsNotFound(err) {
+			t.Errorf("expected RoleBinding %s to be deleted, got error: %v", name, err)
+		}
+	}
+
+	for _, name := range []string{TenantSecretsReaderRoleName, TenantSecretsWriterRoleName} {
+		role := &rbacv1.Role{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, role)
+		if !apierrors.IsNotFound(err) {
+			t.Errorf("expected Role %s to be deleted, got error: %v", name, err)
+		}
+	}
+}
+
+func extractSecretResourceNames(rules []rbacv1.PolicyRule) []string {
+	var out []string
+	for i := range rules {
+		rule := rules[i]
+		if !contains(rule.Resources, "secrets") {
+			continue
+		}
+		if len(rule.ResourceNames) == 0 {
+			continue
+		}
+		out = append(out, rule.ResourceNames...)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // contains is a helper function to check if a slice contains a value

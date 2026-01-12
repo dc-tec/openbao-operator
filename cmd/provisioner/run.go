@@ -25,6 +25,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -117,6 +118,11 @@ func Run(args []string) {
 					// cluster topology enumeration. It only needs direct GET/PATCH on
 					// specific namespaces declared in OpenBaoTenant.Spec.TargetNamespace.
 					&corev1.Namespace{},
+					// SECURITY: RBAC resources are managed via the impersonated (delegate)
+					// client, so we avoid caching Roles/RoleBindings to prevent requiring
+					// cluster-wide list/watch permissions.
+					&rbacv1.Role{},
+					&rbacv1.RoleBinding{},
 				},
 			},
 		},
