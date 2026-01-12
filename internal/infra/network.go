@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
@@ -198,63 +199,31 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 func (m *Manager) ensureIngress(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	ingressCfg := cluster.Spec.Ingress
 	enabled := ingressCfg != nil && ingressCfg.Enabled
-	name := cluster.Name
+	name := types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}
 
-	// If Ingress is disabled, check if it exists and delete it
-	if !enabled {
-		ingress := &networkingv1.Ingress{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		}, ingress)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil // Already deleted, nothing to do
+	return reconcileOptionalResource(ctx, optionalResourceOptions{
+		kind:              "Ingress",
+		apiVersion:        "networking.k8s.io/v1",
+		enabled:           enabled,
+		name:              name,
+		logger:            logger,
+		logKey:            "ingress",
+		deleteDisabledMsg: "Ingress no longer enabled; deleting",
+		deleteInvalidMsg:  "Ingress configuration invalid; deleting existing Ingress",
+		newEmpty: func() client.Object {
+			return &networkingv1.Ingress{}
+		},
+		buildDesired: func() (client.Object, bool, error) {
+			desired := buildIngress(cluster)
+			if desired == nil {
+				return nil, false, nil
 			}
-			return fmt.Errorf("failed to get Ingress %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		logger.Info("Ingress no longer enabled; deleting", "ingress", name)
-		if err := m.client.Delete(ctx, ingress); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete Ingress %s/%s: %w", cluster.Namespace, name, err)
-		}
-		return nil
-	}
-
-	// Build the desired Ingress
-	desired := buildIngress(cluster)
-	if desired == nil {
-		// Configuration invalid, check if Ingress exists and delete it
-		ingress := &networkingv1.Ingress{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		}, ingress)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil // Already deleted, nothing to do
-			}
-			return fmt.Errorf("failed to get Ingress %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		logger.Info("Ingress configuration invalid; deleting existing Ingress", "ingress", name)
-		if err := m.client.Delete(ctx, ingress); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete Ingress %s/%s after invalid config: %w", cluster.Namespace, name, err)
-		}
-		return nil
-	}
-
-	// Set TypeMeta for SSA
-	desired.TypeMeta = metav1.TypeMeta{
-		Kind:       "Ingress",
-		APIVersion: "networking.k8s.io/v1",
-	}
-
-	if err := m.applyResource(ctx, desired, cluster); err != nil {
-		return fmt.Errorf("failed to ensure Ingress %s/%s: %w", cluster.Namespace, name, err)
-	}
-
-	return nil
+			return desired, true, nil
+		},
+		get:    m.client.Get,
+		delete: func(ctx context.Context, obj client.Object) error { return m.client.Delete(ctx, obj) },
+		apply:  func(ctx context.Context, obj client.Object) error { return m.applyResource(ctx, obj, cluster) },
+	})
 }
 
 // buildIngress constructs an Ingress resource for the given OpenBaoCluster.
@@ -341,74 +310,32 @@ func buildIngress(cluster *openbaov1alpha1.OpenBaoCluster) *networkingv1.Ingress
 func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	gatewayCfg := cluster.Spec.Gateway
 	enabled := gatewayCfg != nil && gatewayCfg.Enabled && !gatewayCfg.TLSPassthrough
-	name := httpRouteName(cluster)
+	name := types.NamespacedName{Namespace: cluster.Namespace, Name: httpRouteName(cluster)}
 
-	// If HTTPRoute is disabled, check if it exists and delete it
-	if !enabled {
-		httpRoute := &gatewayv1.HTTPRoute{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		}, httpRoute)
-		if err != nil {
-			if operatorerrors.IsCRDMissingError(err) {
-				return nil // CRD not installed, nothing to do
+	return reconcileOptionalResource(ctx, optionalResourceOptions{
+		kind:              "HTTPRoute",
+		apiVersion:        "gateway.networking.k8s.io/v1",
+		enabled:           enabled,
+		name:              name,
+		logger:            logger,
+		logKey:            "httproute",
+		deleteDisabledMsg: "HTTPRoute no longer enabled; deleting",
+		deleteInvalidMsg:  "HTTPRoute configuration invalid; deleting existing HTTPRoute",
+		newEmpty: func() client.Object {
+			return &gatewayv1.HTTPRoute{}
+		},
+		buildDesired: func() (client.Object, bool, error) {
+			desired := buildHTTPRoute(cluster)
+			if desired == nil {
+				return nil, false, nil
 			}
-			if apierrors.IsNotFound(err) {
-				return nil // Already deleted, nothing to do
-			}
-			return fmt.Errorf("failed to get HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		logger.Info("HTTPRoute no longer enabled; deleting", "httproute", name)
-		if err := m.client.Delete(ctx, httpRoute); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
-		}
-		return nil
-	}
-
-	// Build the desired HTTPRoute
-	desired := buildHTTPRoute(cluster)
-	if desired == nil {
-		// Configuration invalid, check if HTTPRoute exists and delete it
-		httpRoute := &gatewayv1.HTTPRoute{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		}, httpRoute)
-		if err != nil {
-			if operatorerrors.IsCRDMissingError(err) {
-				return nil // CRD not installed, nothing to do
-			}
-			if apierrors.IsNotFound(err) {
-				return nil // Already deleted, nothing to do
-			}
-			return fmt.Errorf("failed to get HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		logger.Info("HTTPRoute configuration invalid; deleting existing HTTPRoute", "httproute", name)
-		if err := m.client.Delete(ctx, httpRoute); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete HTTPRoute %s/%s after invalid config: %w", cluster.Namespace, name, err)
-		}
-		return nil
-	}
-
-	// Set TypeMeta for SSA
-	desired.TypeMeta = metav1.TypeMeta{
-		Kind:       "HTTPRoute",
-		APIVersion: "gateway.networking.k8s.io/v1",
-	}
-
-	// Use SSA to create or update, handling CRD missing errors gracefully
-	if err := m.applyResource(ctx, desired, cluster); err != nil {
-		if operatorerrors.IsCRDMissingError(err) {
-			logger.Info("Gateway API CRDs not installed; HTTPRoute reconciliation will be marked as degraded", "httproute", name)
-			return ErrGatewayAPIMissing
-		}
-		return fmt.Errorf("failed to ensure HTTPRoute %s/%s: %w", cluster.Namespace, name, err)
-	}
-
-	return nil
+			return desired, true, nil
+		},
+		degradeOnCRDMissing: true,
+		get:                 m.client.Get,
+		delete:              func(ctx context.Context, obj client.Object) error { return m.client.Delete(ctx, obj) },
+		apply:               func(ctx context.Context, obj client.Object) error { return m.applyResource(ctx, obj, cluster) },
+	})
 }
 
 // buildHTTPRoute constructs an HTTPRoute for the given OpenBaoCluster.
@@ -608,74 +535,32 @@ func httpRouteName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	gatewayCfg := cluster.Spec.Gateway
 	enabled := gatewayCfg != nil && gatewayCfg.Enabled && gatewayCfg.TLSPassthrough
-	name := tlsRouteName(cluster)
+	name := types.NamespacedName{Namespace: cluster.Namespace, Name: tlsRouteName(cluster)}
 
-	// If TLSRoute is disabled, check if it exists and delete it
-	if !enabled {
-		tlsRoute := &gatewayv1alpha2.TLSRoute{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		}, tlsRoute)
-		if err != nil {
-			if operatorerrors.IsCRDMissingError(err) {
-				return nil // CRD not installed, nothing to do
+	return reconcileOptionalResource(ctx, optionalResourceOptions{
+		kind:              "TLSRoute",
+		apiVersion:        "gateway.networking.k8s.io/v1alpha2",
+		enabled:           enabled,
+		name:              name,
+		logger:            logger,
+		logKey:            "tlsroute",
+		deleteDisabledMsg: "TLSRoute no longer enabled; deleting",
+		deleteInvalidMsg:  "TLSRoute configuration invalid; deleting existing TLSRoute",
+		newEmpty: func() client.Object {
+			return &gatewayv1alpha2.TLSRoute{}
+		},
+		buildDesired: func() (client.Object, bool, error) {
+			desired := buildTLSRoute(cluster)
+			if desired == nil {
+				return nil, false, nil
 			}
-			if apierrors.IsNotFound(err) {
-				return nil // Already deleted, nothing to do
-			}
-			return fmt.Errorf("failed to get TLSRoute %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		logger.Info("TLSRoute no longer enabled; deleting", "tlsroute", name)
-		if err := m.client.Delete(ctx, tlsRoute); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete TLSRoute %s/%s: %w", cluster.Namespace, name, err)
-		}
-		return nil
-	}
-
-	// Build the desired TLSRoute
-	desired := buildTLSRoute(cluster)
-	if desired == nil {
-		// Configuration invalid, check if TLSRoute exists and delete it
-		tlsRoute := &gatewayv1alpha2.TLSRoute{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		}, tlsRoute)
-		if err != nil {
-			if operatorerrors.IsCRDMissingError(err) {
-				return nil // CRD not installed, nothing to do
-			}
-			if apierrors.IsNotFound(err) {
-				return nil // Already deleted, nothing to do
-			}
-			return fmt.Errorf("failed to get TLSRoute %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		logger.Info("TLSRoute configuration invalid; deleting existing TLSRoute", "tlsroute", name)
-		if err := m.client.Delete(ctx, tlsRoute); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete TLSRoute %s/%s after invalid config: %w", cluster.Namespace, name, err)
-		}
-		return nil
-	}
-
-	// Set TypeMeta for SSA
-	desired.TypeMeta = metav1.TypeMeta{
-		Kind:       "TLSRoute",
-		APIVersion: "gateway.networking.k8s.io/v1alpha2",
-	}
-
-	// Use SSA to create or update, handling CRD missing errors gracefully
-	if err := m.applyResource(ctx, desired, cluster); err != nil {
-		if operatorerrors.IsCRDMissingError(err) {
-			logger.Info("Gateway API CRDs not installed; TLSRoute reconciliation will be marked as degraded", "tlsroute", name)
-			return ErrGatewayAPIMissing
-		}
-		return fmt.Errorf("failed to ensure TLSRoute %s/%s: %w", cluster.Namespace, name, err)
-	}
-
-	return nil
+			return desired, true, nil
+		},
+		degradeOnCRDMissing: true,
+		get:                 m.client.Get,
+		delete:              func(ctx context.Context, obj client.Object) error { return m.client.Delete(ctx, obj) },
+		apply:               func(ctx context.Context, obj client.Object) error { return m.applyResource(ctx, obj, cluster) },
+	})
 }
 
 // buildTLSRoute constructs a TLSRoute for the given OpenBaoCluster.
@@ -809,74 +694,32 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 		return nil
 	}
 
-	name := backendTLSPolicyName(cluster)
+	name := types.NamespacedName{Namespace: cluster.Namespace, Name: backendTLSPolicyName(cluster)}
 
-	// If BackendTLSPolicy is disabled, check if it exists and delete it
-	if !backendTLSEnabled {
-		backendTLSPolicy := &gatewayv1.BackendTLSPolicy{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		}, backendTLSPolicy)
-		if err != nil {
-			if operatorerrors.IsCRDMissingError(err) {
-				return nil // CRD not installed, nothing to do
+	return reconcileOptionalResource(ctx, optionalResourceOptions{
+		kind:              "BackendTLSPolicy",
+		apiVersion:        "gateway.networking.k8s.io/v1",
+		enabled:           backendTLSEnabled,
+		name:              name,
+		logger:            logger,
+		logKey:            "backendtlspolicy",
+		deleteDisabledMsg: "BackendTLSPolicy no longer enabled; deleting",
+		deleteInvalidMsg:  "BackendTLSPolicy configuration invalid; deleting existing BackendTLSPolicy",
+		newEmpty: func() client.Object {
+			return &gatewayv1.BackendTLSPolicy{}
+		},
+		buildDesired: func() (client.Object, bool, error) {
+			desired := buildBackendTLSPolicy(cluster)
+			if desired == nil {
+				return nil, false, nil
 			}
-			if apierrors.IsNotFound(err) {
-				return nil // Already deleted, nothing to do
-			}
-			return fmt.Errorf("failed to get BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		logger.Info("BackendTLSPolicy no longer enabled; deleting", "backendtlspolicy", name)
-		if err := m.client.Delete(ctx, backendTLSPolicy); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
-		}
-		return nil
-	}
-
-	// Build the desired BackendTLSPolicy
-	desired := buildBackendTLSPolicy(cluster)
-	if desired == nil {
-		// Configuration invalid, check if BackendTLSPolicy exists and delete it
-		backendTLSPolicy := &gatewayv1.BackendTLSPolicy{}
-		err := m.client.Get(ctx, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		}, backendTLSPolicy)
-		if err != nil {
-			if operatorerrors.IsCRDMissingError(err) {
-				return nil // CRD not installed, nothing to do
-			}
-			if apierrors.IsNotFound(err) {
-				return nil // Already deleted, nothing to do
-			}
-			return fmt.Errorf("failed to get BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
-		}
-
-		logger.Info("BackendTLSPolicy configuration invalid; deleting existing BackendTLSPolicy", "backendtlspolicy", name)
-		if err := m.client.Delete(ctx, backendTLSPolicy); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete BackendTLSPolicy %s/%s after invalid config: %w", cluster.Namespace, name, err)
-		}
-		return nil
-	}
-
-	// Set TypeMeta for SSA
-	desired.TypeMeta = metav1.TypeMeta{
-		Kind:       "BackendTLSPolicy",
-		APIVersion: "gateway.networking.k8s.io/v1",
-	}
-
-	// Use SSA to create or update, handling CRD missing errors gracefully
-	if err := m.applyResource(ctx, desired, cluster); err != nil {
-		if operatorerrors.IsCRDMissingError(err) {
-			logger.Info("Gateway API CRDs not installed; BackendTLSPolicy reconciliation will be marked as degraded", "backendtlspolicy", name)
-			return ErrGatewayAPIMissing
-		}
-		return fmt.Errorf("failed to ensure BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
-	}
-
-	return nil
+			return desired, true, nil
+		},
+		degradeOnCRDMissing: true,
+		get:                 m.client.Get,
+		delete:              func(ctx context.Context, obj client.Object) error { return m.client.Delete(ctx, obj) },
+		apply:               func(ctx context.Context, obj client.Object) error { return m.applyResource(ctx, obj, cluster) },
+	})
 }
 
 // buildBackendTLSPolicy constructs a BackendTLSPolicy for the given OpenBaoCluster.
