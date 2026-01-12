@@ -41,7 +41,7 @@ flowchart TB
 
 === ":material-account-cog: Provisioner"
 
-    The **Provisioner** is responsible for "Day 1" setup. It has permission to create Roles but **not** to manage workloads.
+    The **Provisioner** is responsible for "Day 1" setup. It provisions tenant RBAC by impersonating a dedicated **Delegate** ServiceAccount.
 
     !!! info "Blind Write Pattern"
         The Provisioner creates Roles in tenant namespaces but does not grant *itself* permission to use them. It delegates these permissions to the Controller. This prevents the Provisioner from inspecting tenant data.
@@ -50,8 +50,15 @@ flowchart TB
     | :--- | :--- | :--- |
     | `Namespace` | `get`, `update`, `patch` | Manage namespace labels/annotations. **No `list`** (prevents discovery). |
     | `OpenBaoTenant` | `get`, `list`, `watch` | Watch for new tenant requests. |
-    | `Role / RoleBinding` | `create`, `update`, `patch`, `delete` | Grant permissions to the Controller in tenant namespaces. |
+    | `Role / RoleBinding` | *(none directly)* | RBAC objects are created/updated/deleted via the **Delegate** ServiceAccount through impersonation. |
     | `ServiceAccount` | `impersonate` | Use the "Delegate" to safely elevate privileges for Role creation. |
+
+=== ":material-account-switch: Delegate (Impersonated)"
+
+    The **Delegate** ServiceAccount is never used directly by a controller. It exists only to provide a tightly scoped identity that the Provisioner can impersonate for RBAC management.
+
+    !!! warning "Defense In Depth"
+        The Delegate is additionally constrained by the `restrict-provisioner-delegate` ValidatingAdmissionPolicy, which limits the RBAC objects it can create/update and enforces strict Secret allowlist Roles.
 
 === ":material-controller: Controller"
 
@@ -74,7 +81,8 @@ flowchart TB
     | :--- | :--- | :--- |
     | `StatefulSet` | `*` | Manage OpenBao pods. |
     | `Service`, `Ingress` | `*` | Manage network access. |
-    | `Secret`, `ConfigMap` | `*` | Manage configuration and TLS (No `list` on Secrets). |
+    | `Secret` | *(allowlisted)* | Secret access is limited by name (dedicated reader/writer Roles). No `list`/`watch`. |
+    | `ConfigMap` | `*` | Manage configuration and TLS metadata. |
     | `Job` | `*` | Run snapshots and upgrades. |
 
 ## Security Guarantees
@@ -82,6 +90,7 @@ flowchart TB
 1. **No Secret Enumeration:** Neither ServiceAccount has `list` permissions on Secrets cluster-wide.
 2. **No Topology Discovery:** Neither ServiceAccount has `list` permissions on Namespaces (Provisioner knows only what you tell it via CRs).
 3. **Privilege Separation:** The account that *writes* the permissions (Provisioner) cannot *use* them, and the account that *uses* them (Controller) cannot *change* them.
+4. **Name-Scoped Secrets:** Tenant Secret access is restricted to explicit Secret name allowlists and enforced by admission policy (no Secrets wildcards or enumeration).
 
 ## See Also
 
