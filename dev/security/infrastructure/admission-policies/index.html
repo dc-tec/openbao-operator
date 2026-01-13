@@ -2672,6 +2672,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#provisioner-delegate-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Provisioner Delegate Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sentinel-hardening" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3866,6 +3877,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#provisioner-delegate-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Provisioner Delegate Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sentinel-hardening" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3992,6 +4014,15 @@
 </tr>
 </tbody>
 </table>
+<h2 id="provisioner-delegate-hardening">Provisioner Delegate Hardening<a class="headerlink" href="#provisioner-delegate-hardening" title="Permanent link">&para;</a></h2>
+<p>The <code>restrict-provisioner-delegate</code> policy is a defense-in-depth control that applies to RBAC mutations performed by the impersonated Provisioner Delegate identity.</p>
+<p><strong>Key guarantees:</strong></p>
+<ul>
+<li>Only specific Role/RoleBinding names are allowed (tenant/sentinel + secrets allowlist roles).</li>
+<li>RoleBindings are restricted to known ServiceAccount subjects (prevents backdoor bindings).</li>
+<li>Dangerous verbs and wildcards are denied (<code>impersonate</code>, <code>bind</code>, <code>escalate</code>, <code>*</code>).</li>
+<li>Secret permissions are only allowed via the dedicated secrets allowlist Roles, and those Roles must be name-scoped (<code>resourceNames</code>) and non-enumerating (no <code>list</code>/<code>watch</code>).</li>
+</ul>
 <h2 id="sentinel-hardening">Sentinel Hardening<a class="headerlink" href="#sentinel-hardening" title="Permanent link">&para;</a></h2>
 <div class="admonition success">
 <p class="admonition-title">Broken Object Prevention</p>

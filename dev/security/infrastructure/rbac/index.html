@@ -3931,10 +3931,10 @@
     class Prov,Tmpl,TRole security;
     class Ctrl,Workload write;</code></pre>
 <h2 id="serviceaccount-permissions">ServiceAccount Permissions<a class="headerlink" href="#serviceaccount-permissions" title="Permanent link">&para;</a></h2>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 4a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m7 8a.26.26 0 0 0-.26.21l-.19 1.32c-.3.13-.59.29-.85.47l-1.24-.5c-.11 0-.24 0-.31.13l-1 1.73c-.06.11-.04.24.06.32l1.06.82a4.2 4.2 0 0 0 0 1l-1.06.82a.26.26 0 0 0-.06.32l1 1.73c.06.13.19.13.31.13l1.24-.5c.26.18.54.35.85.47l.19 1.32c.02.12.12.21.26.21h2c.11 0 .22-.09.24-.21l.19-1.32c.3-.13.57-.29.84-.47l1.23.5c.13 0 .26 0 .33-.13l1-1.73a.26.26 0 0 0-.06-.32l-1.07-.82c.02-.17.04-.33.04-.5s-.01-.33-.04-.5l1.06-.82a.26.26 0 0 0 .06-.32l-1-1.73c-.06-.13-.19-.13-.32-.13l-1.23.5c-.27-.18-.54-.35-.85-.47l-.19-1.32A.236.236 0 0 0 19 12zm-7 2c-4.42 0-8 1.79-8 4v2h9.68a7 7 0 0 1-.68-3 7 7 0 0 1 .64-2.91c-.53-.06-1.08-.09-1.64-.09m8 1.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5c-.84 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5"/></svg></span> Provisioner</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7.97 16 5 19c-.33.3-.77.5-1.25.5A1.75 1.75 0 0 1 2 17.75v-.25l1-7.38A4.524 4.524 0 0 1 7.5 6h9c2.36 0 4.29 1.81 4.5 4.12l1 7.38v.25a1.75 1.75 0 0 1-1.75 1.75c-.48 0-.92-.2-1.25-.5l-2.97-3zM7 8v2H5v1h2v2h1v-2h2v-1H8V8zm9.5 0a.75.75 0 0 0-.75.75.75.75 0 0 0 .75.75.75.75 0 0 0 .75-.75.75.75 0 0 0-.75-.75m-1.75 1.75a.75.75 0 0 0-.75.75.75.75 0 0 0 .75.75.75.75 0 0 0 .75-.75.75.75 0 0 0-.75-.75m3.5 0a.75.75 0 0 0-.75.75.75.75 0 0 0 .75.75.75.75 0 0 0 .75-.75.75.75 0 0 0-.75-.75M16.5 11.5a.75.75 0 0 0-.75.75.75.75 0 0 0 .75.75.75.75 0 0 0 .75-.75.75.75 0 0 0-.75-.75"/></svg></span> Controller</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 4a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m7 8a.26.26 0 0 0-.26.21l-.19 1.32c-.3.13-.59.29-.85.47l-1.24-.5c-.11 0-.24 0-.31.13l-1 1.73c-.06.11-.04.24.06.32l1.06.82a4.2 4.2 0 0 0 0 1l-1.06.82a.26.26 0 0 0-.06.32l1 1.73c.06.13.19.13.31.13l1.24-.5c.26.18.54.35.85.47l.19 1.32c.02.12.12.21.26.21h2c.11 0 .22-.09.24-.21l.19-1.32c.3-.13.57-.29.84-.47l1.23.5c.13 0 .26 0 .33-.13l1-1.73a.26.26 0 0 0-.06-.32l-1.07-.82c.02-.17.04-.33.04-.5s-.01-.33-.04-.5l1.06-.82a.26.26 0 0 0 .06-.32l-1-1.73c-.06-.13-.19-.13-.32-.13l-1.23.5c-.27-.18-.54-.35-.85-.47l-.19-1.32A.236.236 0 0 0 19 12zm-7 2c-4.42 0-8 1.79-8 4v2h9.68a7 7 0 0 1-.68-3 7 7 0 0 1 .64-2.91c-.53-.06-1.08-.09-1.64-.09m8 1.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5c-.84 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5"/></svg></span> Provisioner</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 9c6 0 6 4 6 4v2h-6v-2s0-1.69-1.15-3.2c-.17-.23-.38-.45-.6-.66C14.77 9.06 15.34 9 16 9M2 13s0-4 6-4 6 4 6 4v2H2zm7 4v2h6v-2l3 3-3 3v-2H9v2l-3-3zM8 1C6.34 1 5 2.34 5 4s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3m8 0c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3"/></svg></span> Delegate (Impersonated)</label><label for="__tabbed_1_3"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7.97 16 5 19c-.33.3-.77.5-1.25.5A1.75 1.75 0 0 1 2 17.75v-.25l1-7.38A4.524 4.524 0 0 1 7.5 6h9c2.36 0 4.29 1.81 4.5 4.12l1 7.38v.25a1.75 1.75 0 0 1-1.75 1.75c-.48 0-.92-.2-1.25-.5l-2.97-3zM7 8v2H5v1h2v2h1v-2h2v-1H8V8zm9.5 0a.75.75 0 0 0-.75.75.75.75 0 0 0 .75.75.75.75 0 0 0 .75-.75.75.75 0 0 0-.75-.75m-1.75 1.75a.75.75 0 0 0-.75.75.75.75 0 0 0 .75.75.75.75 0 0 0 .75-.75.75.75 0 0 0-.75-.75m3.5 0a.75.75 0 0 0-.75.75.75.75 0 0 0 .75.75.75.75 0 0 0 .75-.75.75.75 0 0 0-.75-.75M16.5 11.5a.75.75 0 0 0-.75.75.75.75 0 0 0 .75.75.75.75 0 0 0 .75-.75.75.75 0 0 0-.75-.75"/></svg></span> Controller</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>The <strong>Provisioner</strong> is responsible for "Day 1" setup. It has permission to create Roles but <strong>not</strong> to manage workloads.</p>
+<p>The <strong>Provisioner</strong> is responsible for "Day 1" setup. It provisions tenant RBAC by impersonating a dedicated <strong>Delegate</strong> ServiceAccount.</p>
 <div class="admonition info">
 <p class="admonition-title">Blind Write Pattern</p>
 <p>The Provisioner creates Roles in tenant namespaces but does not grant <em>itself</em> permission to use them. It delegates these permissions to the Controller. This prevents the Provisioner from inspecting tenant data.</p>
@@ -3960,8 +3960,8 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>Role / RoleBinding</code></td>
-<td style="text-align: left;"><code>create</code>, <code>update</code>, <code>patch</code>, <code>delete</code></td>
-<td style="text-align: left;">Grant permissions to the Controller in tenant namespaces.</td>
+<td style="text-align: left;"><em>(none directly)</em></td>
+<td style="text-align: left;">RBAC objects are created/updated/deleted via the <strong>Delegate</strong> ServiceAccount through impersonation.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>ServiceAccount</code></td>
@@ -3970,6 +3970,13 @@
 </tr>
 </tbody>
 </table>
+</div>
+<div class="tabbed-block">
+<p>The <strong>Delegate</strong> ServiceAccount is never used directly by a controller. It exists only to provide a tightly scoped identity that the Provisioner can impersonate for RBAC management.</p>
+<div class="admonition warning">
+<p class="admonition-title">Defense In Depth</p>
+<p>The Delegate is additionally constrained by the <code>restrict-provisioner-delegate</code> ValidatingAdmissionPolicy, which limits the RBAC objects it can create/update and enforces strict Secret allowlist Roles.</p>
+</div>
 </div>
 <div class="tabbed-block">
 <p>The <strong>Controller</strong> is responsible for "Day 2" operations. It has high privileges within tenant namespaces but <strong>zero</strong> privileges outside them.</p>
@@ -4025,9 +4032,14 @@
 <td style="text-align: left;">Manage network access.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>Secret</code>, <code>ConfigMap</code></td>
+<td style="text-align: left;"><code>Secret</code></td>
+<td style="text-align: left;"><em>(allowlisted)</em></td>
+<td style="text-align: left;">Secret access is limited by name (dedicated reader/writer Roles). No <code>list</code>/<code>watch</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>ConfigMap</code></td>
 <td style="text-align: left;"><code>*</code></td>
-<td style="text-align: left;">Manage configuration and TLS (No <code>list</code> on Secrets).</td>
+<td style="text-align: left;">Manage configuration and TLS metadata.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Job</code></td>
@@ -4044,6 +4056,7 @@
 <li><strong>No Secret Enumeration:</strong> Neither ServiceAccount has <code>list</code> permissions on Secrets cluster-wide.</li>
 <li><strong>No Topology Discovery:</strong> Neither ServiceAccount has <code>list</code> permissions on Namespaces (Provisioner knows only what you tell it via CRs).</li>
 <li><strong>Privilege Separation:</strong> The account that <em>writes</em> the permissions (Provisioner) cannot <em>use</em> them, and the account that <em>uses</em> them (Controller) cannot <em>change</em> them.</li>
+<li><strong>Name-Scoped Secrets:</strong> Tenant Secret access is restricted to explicit Secret name allowlists and enforced by admission policy (no Secrets wildcards or enumeration).</li>
 </ol>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
