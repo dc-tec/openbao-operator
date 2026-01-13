@@ -1,4 +1,4 @@
-package upgrade
+package rolling
 
 import (
 	"context"
@@ -20,6 +20,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 func TestHandlePreUpgradeSnapshot_NotEnabled(t *testing.T) {
@@ -358,7 +359,7 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 
 	// Create failed backup jobs - need 3 to exceed max retries (DefaultMaxPreUpgradeBackupRetries=3)
 	var failedJobs []client.Object
-	for i := 0; i < DefaultMaxPreUpgradeBackupRetries; i++ {
+	for i := 0; i < upgrade.DefaultMaxPreUpgradeBackupRetries; i++ {
 		failedJobs = append(failedJobs, &batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("pre-upgrade-backup-test-cluster-attempt-%d", i),
