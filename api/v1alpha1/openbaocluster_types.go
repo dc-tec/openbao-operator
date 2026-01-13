@@ -258,15 +258,6 @@ type VerificationConfig struct {
 	// If the job fails, the upgrade enters a paused state until manually resolved.
 	// +optional
 	PrePromotionHook *ValidationHookConfig `json:"prePromotionHook,omitempty"`
-
-	// PostSwitchHook specifies a Job template to run after switching traffic
-	// to the Green cluster. The job must complete successfully (exit 0) before
-	// the upgrade proceeds beyond the TrafficSwitching phase. If the job fails
-	// and auto-rollback on traffic failure is enabled, the operator triggers
-	// a rollback; otherwise, the upgrade remains paused in TrafficSwitching
-	// until manually resolved.
-	// +optional
-	PostSwitchHook *ValidationHookConfig `json:"postSwitchHook,omitempty"`
 }
 
 // ValidationHookConfig defines a user-supplied validation Job.
@@ -292,22 +283,12 @@ type AutoRollbackConfig struct {
 	// +kubebuilder:default=true
 	Enabled bool `json:"enabled"`
 	// OnJobFailure triggers rollback when job failures exceed MaxJobFailures.
-	// Only applies during early phases (before TrafficSwitching).
+	// Only applies during early phases (before demoting Blue).
 	// +kubebuilder:default=true
 	OnJobFailure bool `json:"onJobFailure,omitempty"`
 	// OnValidationFailure triggers rollback if pre-promotion hook fails.
 	// +kubebuilder:default=true
 	OnValidationFailure bool `json:"onValidationFailure,omitempty"`
-	// OnTrafficFailure triggers rollback if Green fails health checks
-	// during TrafficSwitching phase (stabilization period).
-	// +kubebuilder:default=false
-	OnTrafficFailure bool `json:"onTrafficFailure,omitempty"`
-	// StabilizationSeconds is the observation period during TrafficSwitching.
-	// Green must remain healthy for this duration before proceeding to DemotingBlue.
-	// +kubebuilder:default=60
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	StabilizationSeconds *int32 `json:"stabilizationSeconds,omitempty"`
 }
 
 // BlueGreenConfig configures the behavior when Type is BlueGreen.
@@ -338,29 +319,7 @@ type BlueGreenConfig struct {
 	// AutoRollback configures automatic rollback behavior.
 	// +optional
 	AutoRollback *AutoRollbackConfig `json:"autoRollback,omitempty"`
-
-	// TrafficStrategy controls how traffic is routed during blue/green upgrades.
-	// When empty, the effective strategy defaults to ServiceSelectors when
-	// Gateway is disabled, and GatewayWeights when spec.gateway.enabled is true.
-	// +optional
-	TrafficStrategy BlueGreenTrafficStrategy `json:"trafficStrategy,omitempty"`
 }
-
-// BlueGreenTrafficStrategy defines how traffic is routed during blue/green upgrades.
-// +kubebuilder:validation:Enum=ServiceSelectors;GatewayWeights
-type BlueGreenTrafficStrategy string
-
-const (
-	// BlueGreenTrafficStrategyServiceSelectors routes traffic by switching the
-	// external Service selector between Blue and Green revisions. This is the
-	// default strategy when Gateway API is not enabled for the cluster.
-	BlueGreenTrafficStrategyServiceSelectors BlueGreenTrafficStrategy = "ServiceSelectors"
-	// BlueGreenTrafficStrategyGatewayWeights routes traffic using Gateway API
-	// weighted backends when spec.gateway.enabled is true. In this mode, the
-	// external Gateway HTTPRoute is responsible for gradually shifting traffic
-	// between Blue and Green.
-	BlueGreenTrafficStrategyGatewayWeights BlueGreenTrafficStrategy = "GatewayWeights"
-)
 
 // UpdateStrategy controls how the operator handles version changes.
 type UpdateStrategy struct {
@@ -1565,7 +1524,7 @@ type AdminOpsControllerStatus struct {
 }
 
 // BlueGreenPhase is a high-level summary of blue/green upgrade state.
-// +kubebuilder:validation:Enum=Idle;DeployingGreen;JoiningMesh;Syncing;Promoting;TrafficSwitching;DemotingBlue;Cleanup;RollingBack;RollbackCleanup
+// +kubebuilder:validation:Enum=Idle;DeployingGreen;JoiningMesh;Syncing;Promoting;DemotingBlue;Cleanup;RollingBack;RollbackCleanup
 type BlueGreenPhase string
 
 const (
@@ -1580,9 +1539,6 @@ const (
 	PhaseSyncing BlueGreenPhase = "Syncing"
 	// PhasePromoting indicates Green nodes are being promoted to voters.
 	PhasePromoting BlueGreenPhase = "Promoting"
-	// PhaseTrafficSwitching indicates traffic is being switched to Green before demoting Blue.
-	// This includes an optional stabilization period to observe Green under traffic.
-	PhaseTrafficSwitching BlueGreenPhase = "TrafficSwitching"
 	// PhaseDemotingBlue indicates Blue nodes are being demoted to non-voters.
 	PhaseDemotingBlue BlueGreenPhase = "DemotingBlue"
 	// PhaseCleanup indicates Blue StatefulSet is being deleted.
@@ -1624,18 +1580,6 @@ type BlueGreenStatus struct {
 	// It is used to produce stable, deterministic Job names per attempt.
 	// +optional
 	RollbackAttempt int32 `json:"rollbackAttempt,omitempty"`
-	// TrafficSwitchedTime records when traffic was switched to Green.
-	// Used for calculating stabilization period.
-	// +optional
-	TrafficSwitchedTime *metav1.Time `json:"trafficSwitchedTime,omitempty"`
-
-	// TrafficStep indicates the current traffic shifting step when using
-	// GatewayWeights traffic strategy. It is used by the infra layer to
-	// derive Gateway backend weights. The operator treats 0 as initial
-	// state (100% Blue), 1 as canary (e.g., 90/10), 2 as mid-step (e.g., 50/50),
-	// and 3 as final (0/100).
-	// +optional
-	TrafficStep int32 `json:"trafficStep,omitempty"`
 }
 
 // BackupStatus tracks the state of backups for a cluster.

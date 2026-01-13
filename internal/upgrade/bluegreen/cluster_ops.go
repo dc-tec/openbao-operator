@@ -2,6 +2,7 @@ package bluegreen
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 type ClusterOps interface {
@@ -22,10 +24,10 @@ type ClusterOps interface {
 
 type openBaoClusterOps struct {
 	k8sClient     client.Client
-	clientFactory OpenBaoClientFactory
+	clientFactory upgrade.OpenBaoClientFactory
 }
 
-func newOpenBaoClusterOps(k8sClient client.Client, clientFactory OpenBaoClientFactory) ClusterOps {
+func newOpenBaoClusterOps(k8sClient client.Client, clientFactory upgrade.OpenBaoClientFactory) ClusterOps {
 	return &openBaoClusterOps{
 		k8sClient:     k8sClient,
 		clientFactory: clientFactory,
@@ -33,26 +35,24 @@ func newOpenBaoClusterOps(k8sClient client.Client, clientFactory OpenBaoClientFa
 }
 
 func (o *openBaoClusterOps) podURL(cluster *openbaov1alpha1.OpenBaoCluster, podName string) string {
-	return fmt.Sprintf("https://%s.%s.%s.svc:%d", podName, cluster.Name, cluster.Namespace, constants.PortAPI)
+	return upgrade.PodURL(cluster, podName)
 }
 
 func (o *openBaoClusterOps) clusterCACert(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) ([]byte, error) {
 	for _, suffix := range []string{constants.SuffixTLSCA, constants.SuffixTLSServer} {
 		secretName := cluster.Name + suffix
-		secret := &corev1.Secret{}
-		if err := o.k8sClient.Get(ctx, types.NamespacedName{
+		caCert, err := upgrade.ReadCACertSecret(ctx, o.k8sClient, types.NamespacedName{
 			Namespace: cluster.Namespace,
 			Name:      secretName,
-		}, secret); err != nil {
+		})
+		if err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
 			}
+			if errors.Is(err, upgrade.ErrCACertMissing) {
+				return nil, fmt.Errorf("CA certificate not found in secret %s/%s", cluster.Namespace, secretName)
+			}
 			return nil, fmt.Errorf("failed to get CA secret %s/%s: %w", cluster.Namespace, secretName, err)
-		}
-
-		caCert, ok := secret.Data["ca.crt"]
-		if !ok {
-			return nil, fmt.Errorf("CA certificate not found in secret %s/%s", cluster.Namespace, secretName)
 		}
 		return caCert, nil
 	}

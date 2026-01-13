@@ -134,91 +134,6 @@ func TestBuildHTTPRouteBackends_ServiceSelectorsDefault(t *testing.T) {
 	}
 }
 
-func TestBuildHTTPRouteBackends_GatewayWeightsSteps(t *testing.T) {
-	base := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "infra-httproute-weights",
-			Namespace: "default",
-		},
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Gateway: &openbaov1alpha1.GatewayConfig{
-				Enabled: true,
-				GatewayRef: openbaov1alpha1.GatewayReference{
-					Name: "traefik-gateway",
-				},
-				Hostname: "bao.example.local",
-			},
-			UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-				Type: openbaov1alpha1.UpdateStrategyBlueGreen,
-				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
-					TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
-				},
-			},
-		},
-		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
-				BlueRevision:  "blue123",
-				GreenRevision: "green456",
-			},
-		},
-	}
-
-	type weights struct {
-		blue  int32
-		green int32
-	}
-
-	tests := []struct {
-		name string
-		step int32
-		want weights
-	}{
-		{"step 0 initial", 0, weights{blue: 100, green: 0}},
-		{"step 1 canary", 1, weights{blue: 90, green: 10}},
-		{"step 2 mid", 2, weights{blue: 50, green: 50}},
-		{"step 3 final", 3, weights{blue: 0, green: 100}},
-		{"step 4 final-plus", 4, weights{blue: 0, green: 100}},
-	}
-
-	port := gatewayv1.PortNumber(constants.PortAPI)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cluster := base.DeepCopy()
-			cluster.Status.BlueGreen.TrafficStep = tt.step
-
-			backends := buildHTTPRouteBackends(cluster, port)
-			if len(backends) != 2 {
-				t.Fatalf("expected 2 backends, got %d", len(backends))
-			}
-
-			var blueBackend, greenBackend *gatewayv1.HTTPBackendRef
-			for i := range backends {
-				b := &backends[i]
-				switch string(b.Name) {
-				case externalServiceNameBlue(cluster):
-					blueBackend = b
-				case externalServiceNameGreen(cluster):
-					greenBackend = b
-				}
-			}
-
-			if blueBackend == nil || greenBackend == nil {
-				t.Fatalf("expected both blue and green backends to be present")
-			}
-
-			if blueBackend.Weight == nil || greenBackend.Weight == nil {
-				t.Fatalf("expected both backends to have weights, got blue=%v green=%v", blueBackend.Weight, greenBackend.Weight)
-			}
-
-			if *blueBackend.Weight != tt.want.blue || *greenBackend.Weight != tt.want.green {
-				t.Fatalf("unexpected weights: blue=%d green=%d, want blue=%d green=%d",
-					*blueBackend.Weight, *greenBackend.Weight, tt.want.blue, tt.want.green)
-			}
-		})
-	}
-}
-
 func TestBuildJobNetworkPolicy_DevelopmentDefaultEgressIncludesHTTPS(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -290,66 +205,6 @@ func TestBuildBackendTLSPolicy_DefaultOnlyMainService(t *testing.T) {
 	}
 }
 
-func TestBuildBackendTLSPolicy_GatewayWeightsIncludesBlueGreenServices(t *testing.T) {
-	cluster := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "tls-policy-bluegreen",
-			Namespace: "default",
-		},
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			TLS: openbaov1alpha1.TLSConfig{
-				Enabled: true,
-			},
-			Gateway: &openbaov1alpha1.GatewayConfig{
-				Enabled: true,
-				GatewayRef: openbaov1alpha1.GatewayReference{
-					Name: "gateway",
-				},
-				Hostname: "bao.example.com",
-			},
-			UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-				Type: openbaov1alpha1.UpdateStrategyBlueGreen,
-				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
-					TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
-				},
-			},
-		},
-		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
-				BlueRevision:  "blue123",
-				GreenRevision: "green456",
-			},
-		},
-	}
-
-	policy := buildBackendTLSPolicy(cluster)
-	if policy == nil {
-		t.Fatalf("expected non-nil BackendTLSPolicy")
-	}
-
-	if len(policy.Spec.TargetRefs) != 3 {
-		t.Fatalf("expected 3 target refs (main, blue, green), got %d", len(policy.Spec.TargetRefs))
-	}
-
-	// Verify all three services are included
-	names := make(map[string]bool)
-	for _, ref := range policy.Spec.TargetRefs {
-		names[string(ref.Name)] = true
-	}
-
-	expectedNames := []string{
-		externalServiceName(cluster),
-		externalServiceNameBlue(cluster),
-		externalServiceNameGreen(cluster),
-	}
-
-	for _, expected := range expectedNames {
-		if !names[expected] {
-			t.Fatalf("expected target ref %q to be present", expected)
-		}
-	}
-}
-
 func TestBuildBackendTLSPolicy_AfterUpgradeCompleteOnlyMainService(t *testing.T) {
 	// After upgrade completes, GreenRevision is cleared, so only main service should be targeted
 	cluster := &openbaov1alpha1.OpenBaoCluster{
@@ -367,12 +222,6 @@ func TestBuildBackendTLSPolicy_AfterUpgradeCompleteOnlyMainService(t *testing.T)
 					Name: "gateway",
 				},
 				Hostname: "bao.example.com",
-			},
-			UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-				Type: openbaov1alpha1.UpdateStrategyBlueGreen,
-				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
-					TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
-				},
 			},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
