@@ -2226,27 +2226,13 @@ spec:
                             default: true
                             description: |-
                               OnJobFailure triggers rollback when job failures exceed MaxJobFailures.
-                              Only applies during early phases (before TrafficSwitching).
-                            type: boolean
-                          onTrafficFailure:
-                            default: false
-                            description: |-
-                              OnTrafficFailure triggers rollback if Green fails health checks
-                              during TrafficSwitching phase (stabilization period).
+                              Only applies during early phases (before demoting Blue).
                             type: boolean
                           onValidationFailure:
                             default: true
                             description: OnValidationFailure triggers rollback if
                               pre-promotion hook fails.
                             type: boolean
-                          stabilizationSeconds:
-                            default: 60
-                            description: |-
-                              StabilizationSeconds is the observation period during TrafficSwitching.
-                              Green must remain healthy for this duration before proceeding to DemotingBlue.
-                            format: int32
-                            minimum: 0
-                            type: integer
                         required:
                         - enabled
                         type: object
@@ -2264,15 +2250,6 @@ spec:
                           Creates a recovery point before any changes are made.
                           Requires spec.backup to be configured.
                         type: boolean
-                      trafficStrategy:
-                        description: |-
-                          TrafficStrategy controls how traffic is routed during blue/green upgrades.
-                          When empty, the effective strategy defaults to ServiceSelectors when
-                          Gateway is disabled, and GatewayWeights when spec.gateway.enabled is true.
-                        enum:
-                        - ServiceSelectors
-                        - GatewayWeights
-                        type: string
                       verification:
                         description: VerificationConfig allows defining custom health
                           checks before promotion.
@@ -2282,39 +2259,6 @@ spec:
                               MinSyncDuration ensures the Green cluster stays healthy as a non-voter
                               for at least this duration before promotion (e.g., "5m").
                             type: string
-                          postSwitchHook:
-                            description: |-
-                              PostSwitchHook specifies a Job template to run after switching traffic
-                              to the Green cluster. The job must complete successfully (exit 0) before
-                              the upgrade proceeds beyond the TrafficSwitching phase. If the job fails
-                              and auto-rollback on traffic failure is enabled, the operator triggers
-                              a rollback; otherwise, the upgrade remains paused in TrafficSwitching
-                              until manually resolved.
-                            properties:
-                              args:
-                                description: Args are arguments passed to the command.
-                                items:
-                                  type: string
-                                type: array
-                              command:
-                                description: Command is the command to run.
-                                items:
-                                  type: string
-                                type: array
-                              image:
-                                description: Image is the container image for the
-                                  validation job.
-                                minLength: 1
-                                type: string
-                              timeoutSeconds:
-                                default: 300
-                                description: 'TimeoutSeconds is the job timeout (default:
-                                  300s).'
-                                format: int32
-                                type: integer
-                            required:
-                            - image
-                            type: object
                           prePromotionHook:
                             description: |-
                               PrePromotionHook specifies a Job template to run before promoting Green.
@@ -2569,7 +2513,6 @@ spec:
                     - JoiningMesh
                     - Syncing
                     - Promoting
-                    - TrafficSwitching
                     - DemotingBlue
                     - Cleanup
                     - RollingBack
@@ -2595,21 +2538,6 @@ spec:
                     type: string
                   startTime:
                     description: StartTime is when the current phase began.
-                    format: date-time
-                    type: string
-                  trafficStep:
-                    description: |-
-                      TrafficStep indicates the current traffic shifting step when using
-                      GatewayWeights traffic strategy. It is used by the infra layer to
-                      derive Gateway backend weights. The operator treats 0 as initial
-                      state (100% Blue), 1 as canary (e.g., 90/10), 2 as mid-step (e.g., 50/50),
-                      and 3 as final (0/100).
-                    format: int32
-                    type: integer
-                  trafficSwitchedTime:
-                    description: |-
-                      TrafficSwitchedTime records when traffic was switched to Green.
-                      Used for calculating stabilization period.
                     format: date-time
                     type: string
                 type: object
@@ -3570,16 +3498,6 @@ rules:
   - get
   - list
   - watch
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - roles
-  - rolebindings
-  verbs:
-  - get
-  - list
-  - watch
-  - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -3681,12 +3599,12 @@ rules:
   resources:
   - pods
   verbs:
+  - delete
   - get
   - list
-  - watch
-  - update
   - patch
-  - delete
+  - update
+  - watch
 - apiGroups:
   - ""
   resources:
@@ -4637,17 +4555,53 @@ spec:
         has(rule.resources) &&
         rule.resources != null &&
         rule.resources.exists(r, r == 'secrets') &&
-        (
-          object.metadata.name == 'openbao-sentinel-role' ||
-          (
-            has(rule.verbs) &&
-            rule.verbs != null &&
-            rule.verbs.exists(v, v == 'list' || v == 'watch' || v == '*')
-          )
+        !(object.metadata.name in [
+          'openbao-operator-tenant-secrets-reader',
+          'openbao-operator-tenant-secrets-writer'
+        ])
+      )
+    message: The Provisioner Delegate can only grant Secrets permissions via the dedicated
+      secrets allowlist Roles.
+  - expression: |-
+      !variables.is_delegate || request.resource.resource != 'roles' || object.metadata.name != 'openbao-operator-tenant-secrets-reader' || (
+
+        has(object.rules) &&
+        object.rules != null &&
+        object.rules.size() == 1 &&
+        object.rules[0].apiGroups == [''] &&
+        object.rules[0].resources == ['secrets'] &&
+        object.rules[0].verbs == ['get'] &&
+        has(object.rules[0].resourceNames) &&
+        object.rules[0].resourceNames != null &&
+        object.rules[0].resourceNames.size() > 0
+      )
+    message: The Provisioner Delegate can only create the secrets reader Role with
+      a non-empty, name-scoped (resourceNames) get-only rule.
+  - expression: |-
+      !variables.is_delegate || request.resource.resource != 'roles' || object.metadata.name != 'openbao-operator-tenant-secrets-writer' || (
+
+        has(object.rules) &&
+        object.rules != null &&
+        object.rules.size() == 2 &&
+        object.rules.all(r, r.apiGroups == [''] && r.resources == ['secrets']) &&
+        object.rules.exists(r,
+          has(r.verbs) &&
+          r.verbs != null &&
+          r.verbs == ['create'] &&
+          (!has(r.resourceNames) || r.resourceNames == null || r.resourceNames.size() == 0)
+        ) &&
+        object.rules.exists(r,
+          has(r.verbs) &&
+          r.verbs != null &&
+          r.verbs.size() > 0 &&
+          r.verbs.all(v, v in ['delete', 'get', 'patch', 'update']) &&
+          has(r.resourceNames) &&
+          r.resourceNames != null &&
+          r.resourceNames.size() > 0
         )
       )
-    message: The Provisioner Delegate cannot grant Secrets list/watch, and Sentinel
-      RBAC must not include Secrets permissions.
+    message: The Provisioner Delegate can only create the secrets writer Role with
+      create + name-scoped mutations (resourceNames) on Secrets.
   variables:
   - expression: request.userInfo.username == "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner-delegate"
     name: is_delegate
