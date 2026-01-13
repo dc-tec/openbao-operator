@@ -31,9 +31,6 @@ const (
 	// ComponentValidationHook is the component name for validation hook.
 	ComponentValidationHook = "validation-hook"
 
-	// ComponentPostSwitchValidationHook is the component name for post-switch validation hook.
-	ComponentPostSwitchValidationHook = "post-switch-validation-hook"
-
 	// ComponentUpgradeSnapshot is the component name for upgrade snapshot.
 	ComponentUpgradeSnapshot = "upgrade-snapshot"
 )

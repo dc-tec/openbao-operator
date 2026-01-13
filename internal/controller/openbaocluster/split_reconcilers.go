@@ -21,8 +21,8 @@ import (
 	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
-	upgrademanager "github.com/dc-tec/openbao-operator/internal/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/upgrade/bluegreen"
+	rollingupgrade "github.com/dc-tec/openbao-operator/internal/upgrade/rolling"
 )
 
 type openBaoClusterWorkloadReconciler struct {
@@ -337,7 +337,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 		infraMgr := inframanager.NewManagerWithSentinelAdmission(r.parent.Client, r.parent.Scheme, r.parent.OperatorNamespace, r.parent.OIDCIssuer, r.parent.OIDCJWTKeys, sentinelFastPathAllowed)
 		reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr))
 	} else {
-		reconcilers = append(reconcilers, upgrademanager.NewManager(r.parent.Client, r.parent.Scheme))
+		reconcilers = append(reconcilers, rollingupgrade.NewManager(r.parent.Client, r.parent.Scheme))
 	}
 	reconcilers = append(reconcilers, backupmanager.NewManager(r.parent.Client, r.parent.Scheme))
 

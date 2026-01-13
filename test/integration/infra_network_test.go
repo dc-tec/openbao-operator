@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
@@ -25,8 +26,6 @@ const (
 	infraHTTPRouteSuffix        = "-httproute"
 	infraTLSRouteSuffix         = "-tlsroute"
 	infraBackendTLSPolicySuffix = "-backend-tls-policy"
-	infraExternalServiceBlue    = "-public-blue"
-	infraExternalServiceGreen   = "-public-green"
 	gatewayCAConfigMapKeyCACert = "ca.crt"
 )
 
@@ -268,15 +267,12 @@ func TestInfraNetwork_GatewayCAConfigMap_CreatesUpdatesAndDeletes(t *testing.T) 
 	}
 }
 
-func TestInfraNetwork_GatewayWeights_CreatesWeightedBackendServices(t *testing.T) {
+func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStaleServices(t *testing.T) {
 	namespace := newTestNamespace(t)
 
-	cluster := newMinimalClusterObj(namespace, "infra-gateway-weights")
+	cluster := newMinimalClusterObj(namespace, "infra-bluegreen-service-selector")
 	cluster.Spec.UpdateStrategy = openbaov1alpha1.UpdateStrategy{
 		Type: openbaov1alpha1.UpdateStrategyBlueGreen,
-		BlueGreen: &openbaov1alpha1.BlueGreenConfig{
-			TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
-		},
 	}
 	cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
 		Enabled: true,
@@ -290,12 +286,41 @@ func TestInfraNetwork_GatewayWeights_CreatesWeightedBackendServices(t *testing.T
 	}
 	createTLSSecret(t, namespace, cluster.Name)
 
+	staleBlue := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-public-blue",
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Name: "api", Port: constants.PortAPI, Protocol: corev1.ProtocolTCP},
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, staleBlue); err != nil {
+		t.Fatalf("create stale blue Service: %v", err)
+	}
+	staleGreen := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-public-green",
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Name: "api", Port: constants.PortAPI, Protocol: corev1.ProtocolTCP},
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, staleGreen); err != nil {
+		t.Fatalf("create stale green Service: %v", err)
+	}
+
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 		status.Initialized = true
 		status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+			Phase:         openbaov1alpha1.PhasePromoting,
 			BlueRevision:  "blue123",
 			GreenRevision: "green456",
-			TrafficStep:   1,
 		}
 	})
 
@@ -304,29 +329,48 @@ func TestInfraNetwork_GatewayWeights_CreatesWeightedBackendServices(t *testing.T
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
-	blueSvc := &corev1.Service{}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraExternalServiceBlue}, blueSvc); err != nil {
-		t.Fatalf("expected blue backend Service to exist: %v", err)
+	mainSvc := &corev1.Service{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraPublicServiceSuffix}, mainSvc); err != nil {
+		t.Fatalf("expected main external Service to exist: %v", err)
 	}
-	if blueSvc.Spec.Selector[constants.LabelOpenBaoRevision] != "blue123" {
-		t.Fatalf("expected blue Service selector revision=blue123 got %#v", blueSvc.Spec.Selector)
-	}
-
-	greenSvc := &corev1.Service{}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraExternalServiceGreen}, greenSvc); err != nil {
-		t.Fatalf("expected green backend Service to exist: %v", err)
-	}
-	if greenSvc.Spec.Selector[constants.LabelOpenBaoRevision] != "green456" {
-		t.Fatalf("expected green Service selector revision=green456 got %#v", greenSvc.Spec.Selector)
+	if mainSvc.Spec.Selector[constants.LabelOpenBaoRevision] != "blue123" {
+		t.Fatalf("expected main Service selector revision=blue123 got %#v", mainSvc.Spec.Selector)
 	}
 
-	// Ensure HTTPRoute exists and references the weighted Services.
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: staleBlue.Name}, staleBlue); err == nil {
+		t.Fatalf("expected stale blue Service to be deleted")
+	} else if !apierrors.IsNotFound(err) {
+		t.Fatalf("get stale blue Service: %v", err)
+	}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: staleGreen.Name}, staleGreen); err == nil {
+		t.Fatalf("expected stale green Service to be deleted")
+	} else if !apierrors.IsNotFound(err) {
+		t.Fatalf("get stale green Service: %v", err)
+	}
+
+	// Ensure HTTPRoute exists and references the main Service.
 	route := &gatewayv1.HTTPRoute{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraHTTPRouteSuffix}, route); err != nil {
 		t.Fatalf("expected HTTPRoute to exist: %v", err)
 	}
-	if len(route.Spec.Rules) == 0 || len(route.Spec.Rules[0].BackendRefs) != 2 {
-		t.Fatalf("expected HTTPRoute to have 2 backends, got %#v", route.Spec.Rules)
+	if len(route.Spec.Rules) == 0 || len(route.Spec.Rules[0].BackendRefs) != 1 {
+		t.Fatalf("expected HTTPRoute to have 1 backend, got %#v", route.Spec.Rules)
+	}
+	if string(route.Spec.Rules[0].BackendRefs[0].Name) != cluster.Name+infraPublicServiceSuffix {
+		t.Fatalf("expected HTTPRoute backend %q got %q", cluster.Name+infraPublicServiceSuffix, route.Spec.Rules[0].BackendRefs[0].Name)
+	}
+
+	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+		status.BlueGreen.Phase = openbaov1alpha1.PhaseDemotingBlue
+	})
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", "", ""); err != nil {
+		t.Fatalf("Reconcile() after cutover error = %v", err)
+	}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraPublicServiceSuffix}, mainSvc); err != nil {
+		t.Fatalf("get main Service after cutover: %v", err)
+	}
+	if mainSvc.Spec.Selector[constants.LabelOpenBaoRevision] != "green456" {
+		t.Fatalf("expected main Service selector revision=green456 got %#v", mainSvc.Spec.Selector)
 	}
 }
 

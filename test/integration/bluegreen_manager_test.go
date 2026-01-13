@@ -151,7 +151,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	promoteJob := findUpgradeJobByAction(t, namespace, string(bluegreen.ActionPromoteGreenVoters))
 	markJobSucceeded(t, promoteJob)
 
-	// Advance to TrafficSwitching
+	// Advance to DemotingBlue (cutover)
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
@@ -162,141 +162,8 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	if result.RequeueAfter <= 0 {
 		t.Fatalf("expected requeue")
 	}
-	if latestCluster.Status.BlueGreen == nil || latestCluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseTrafficSwitching {
-		t.Fatalf("phase=%v want=%v", phaseOrEmpty(latestCluster), openbaov1alpha1.PhaseTrafficSwitching)
-	}
-
-	// Set TrafficSwitchedTime in the past to pass stabilization.
-	latestCluster.Status.BlueGreen.TrafficSwitchedTime = &metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
-	if err := k8sClient.Status().Update(ctx, latestCluster); err != nil {
-		t.Fatalf("persist TrafficSwitchedTime: %v", err)
-	}
-
-	result, err = mgr.Reconcile(ctx, logr.Discard(), latestCluster)
-	if err != nil {
-		t.Fatalf("reconcile TrafficSwitching: %v", err)
-	}
-	if result.RequeueAfter <= 0 {
-		t.Fatalf("expected requeue")
-	}
 	if latestCluster.Status.BlueGreen == nil || latestCluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseDemotingBlue {
 		t.Fatalf("phase=%v want=%v", phaseOrEmpty(latestCluster), openbaov1alpha1.PhaseDemotingBlue)
-	}
-}
-
-func TestBlueGreenManager_TrafficSwitching_GatewayWeightsTrafficSteps(t *testing.T) {
-	namespace := newTestNamespace(t)
-
-	cluster := newMinimalClusterObj(namespace, "bluegreen-gateway-weights")
-	cluster.Spec.Replicas = 1
-	cluster.Spec.UpdateStrategy = openbaov1alpha1.UpdateStrategy{
-		Type: openbaov1alpha1.UpdateStrategyBlueGreen,
-		BlueGreen: &openbaov1alpha1.BlueGreenConfig{
-			TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
-		},
-	}
-	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
-		ExecutorImage: "openbao/upgrade-executor:dev",
-		JWTAuthRole:   "upgrade",
-	}
-	cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
-		Enabled: true,
-		GatewayRef: openbaov1alpha1.GatewayReference{
-			Name: "traefik-gateway",
-		},
-		Hostname: "bao.example.local",
-	}
-	if err := k8sClient.Create(ctx, cluster); err != nil {
-		t.Fatalf("create OpenBaoCluster: %v", err)
-	}
-	createCASecret(t, namespace, cluster.Name, []byte("test-ca"))
-
-	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
-		status.Initialized = true
-		status.CurrentVersion = "2.4.3"
-		status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
-			Phase:         openbaov1alpha1.PhaseTrafficSwitching,
-			BlueRevision:  "blue123",
-			GreenRevision: "green456",
-			TrafficStep:   0,
-		}
-	})
-
-	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
-	mgr := bluegreen.NewManager(k8sClient, k8sScheme, infraMgr)
-
-	latestCluster := &openbaov1alpha1.OpenBaoCluster{}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
-		t.Fatalf("get cluster: %v", err)
-	}
-
-	// Step 0 -> 1
-	result, err := mgr.Reconcile(ctx, logr.Discard(), latestCluster)
-	if err != nil {
-		t.Fatalf("reconcile TrafficSwitching step 0: %v", err)
-	}
-	if result.RequeueAfter <= 0 {
-		t.Fatalf("expected requeue at step 0")
-	}
-	if latestCluster.Status.BlueGreen.TrafficStep != 1 {
-		t.Fatalf("TrafficStep=%d want=%d", latestCluster.Status.BlueGreen.TrafficStep, 1)
-	}
-	if err := k8sClient.Status().Update(ctx, latestCluster); err != nil {
-		t.Fatalf("persist cluster status: %v", err)
-	}
-
-	// Step 1 -> 2
-	latestCluster.Status.BlueGreen.TrafficSwitchedTime = &metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
-	if err := k8sClient.Status().Update(ctx, latestCluster); err != nil {
-		t.Fatalf("persist cluster status: %v", err)
-	}
-	result, err = mgr.Reconcile(ctx, logr.Discard(), latestCluster)
-	if err != nil {
-		t.Fatalf("reconcile TrafficSwitching step 1: %v", err)
-	}
-	if result.RequeueAfter <= 0 {
-		t.Fatalf("expected requeue at step 1")
-	}
-	if latestCluster.Status.BlueGreen.TrafficStep != 2 {
-		t.Fatalf("TrafficStep=%d want=%d", latestCluster.Status.BlueGreen.TrafficStep, 2)
-	}
-	if err := k8sClient.Status().Update(ctx, latestCluster); err != nil {
-		t.Fatalf("persist cluster status: %v", err)
-	}
-
-	// Step 2 -> 3
-	latestCluster.Status.BlueGreen.TrafficSwitchedTime = &metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
-	if err := k8sClient.Status().Update(ctx, latestCluster); err != nil {
-		t.Fatalf("persist cluster status: %v", err)
-	}
-	result, err = mgr.Reconcile(ctx, logr.Discard(), latestCluster)
-	if err != nil {
-		t.Fatalf("reconcile TrafficSwitching step 2: %v", err)
-	}
-	if result.RequeueAfter <= 0 {
-		t.Fatalf("expected requeue at step 2")
-	}
-	if latestCluster.Status.BlueGreen.TrafficStep != 3 {
-		t.Fatalf("TrafficStep=%d want=%d", latestCluster.Status.BlueGreen.TrafficStep, 3)
-	}
-	if err := k8sClient.Status().Update(ctx, latestCluster); err != nil {
-		t.Fatalf("persist cluster status: %v", err)
-	}
-
-	// Final step -> DemotingBlue
-	latestCluster.Status.BlueGreen.TrafficSwitchedTime = &metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
-	if err := k8sClient.Status().Update(ctx, latestCluster); err != nil {
-		t.Fatalf("persist cluster status: %v", err)
-	}
-	result, err = mgr.Reconcile(ctx, logr.Discard(), latestCluster)
-	if err != nil {
-		t.Fatalf("reconcile TrafficSwitching final step: %v", err)
-	}
-	if result.RequeueAfter <= 0 {
-		t.Fatalf("expected requeue when transitioning to DemotingBlue")
-	}
-	if latestCluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseDemotingBlue {
-		t.Fatalf("phase=%s want=%s", latestCluster.Status.BlueGreen.Phase, openbaov1alpha1.PhaseDemotingBlue)
 	}
 }
 

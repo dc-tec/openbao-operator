@@ -110,13 +110,6 @@ Choose your deployment mode.
 
 ## Blue/Green Upgrade Integration
 
-When combining Gateway API with [Blue/Green upgrades](../operations/upgrades.md), the Operator supports **weighted traffic shifting** via HTTPRoute backends.
+When combining Gateway API with [Blue/Green upgrades](../operations/upgrades.md), the Operator keeps the generated `HTTPRoute` stable by targeting the cluster's main external Service (`<cluster>-public`).
 
-With `trafficStrategy: GatewayWeights` (default when Gateway is enabled):
-
-- Temporary `-blue` and `-green` Services are created during the upgrade
-- HTTPRoute weights shift gradually: `100/0 → 90/10 → 50/50 → 0/100`
-- `BackendTLSPolicy` automatically covers all backend services
-- Resources are cleaned up after upgrade completes
-
-See the [Upgrades documentation](../operations/upgrades.md#gateway-weighted-traffic-shifting) for configuration details.
+During cutover, the operator updates that Service's selector to point at the Green revision.

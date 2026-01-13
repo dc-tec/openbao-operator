@@ -79,12 +79,3 @@ func (m *Manager) ensurePrePromotionHookJob(
 ) (*JobResult, error) {
 	return m.ensureValidationHookJob(ctx, logger, cluster, fmt.Sprintf("%s-validation-hook", cluster.Name), ComponentValidationHook, hook)
 }
-
-func (m *Manager) ensurePostSwitchHookJob(
-	ctx context.Context,
-	logger logr.Logger,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-	hook *openbaov1alpha1.ValidationHookConfig,
-) (*JobResult, error) {
-	return m.ensureValidationHookJob(ctx, logger, cluster, fmt.Sprintf("%s-post-switch-validation-hook", cluster.Name), ComponentPostSwitchValidationHook, hook)
-}

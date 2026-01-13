@@ -118,7 +118,7 @@ To upgrade, simply update the `spec.version` field. The `updateStrategy` determi
 
 ### Verification Hooks
 
-Run a custom container to "smoke test" the Green cluster before traffic is switched.
+Run a custom container to "smoke test" the Green cluster before cutover.
 
 ```yaml
 spec:
@@ -132,7 +132,7 @@ spec:
 
 ### Auto-Rollback
 
-If the Green cluster fails validation or crashes during the "Traffic Switching" window (default 60s), the Operator can automatically revert traffic to Blue.
+If the Green cluster fails validation or upgrade jobs fail during the early upgrade phases, the Operator can automatically roll back.
 
 ```yaml
 spec:
@@ -140,13 +140,13 @@ spec:
     blueGreen:
       autoRollback:
         enabled: true
+        onJobFailure: true
         onValidationFailure: true
-        onTrafficFailure: true 
 ```
 
-### Gateway-Weighted Traffic Shifting
+### Gateway API and Blue/Green upgrades
 
-When using **Gateway API** with Blue/Green upgrades, the Operator can leverage the Gateway's native traffic weighting capabilities for gradual traffic shifting.
+When using **Gateway API**, the Operator creates an `HTTPRoute` that targets the cluster's main external Service (`<cluster>-public`). During cutover, the operator updates that Service's selector to point at the Green revision.
 
 ```yaml
 spec:
@@ -159,18 +159,7 @@ spec:
     type: BlueGreen
     blueGreen:
       autoPromote: true
-      trafficStrategy: GatewayWeights  # Uses Gateway HTTPRoute weights
 ```
-
-**How it works:**
-
-1. The Operator creates separate `-blue` and `-green` Services during the upgrade.
-2. The HTTPRoute is configured with weighted backends: `90/10 → 50/50 → 0/100`.
-3. The `BackendTLSPolicy` automatically includes all three services for proper HTTPS backend connections.
-4. After upgrade completes, the temporary services are cleaned up.
-
-!!! tip "Default Behavior"
-    When Gateway is enabled, `GatewayWeights` is the default traffic strategy. You can explicitly set `trafficStrategy: ServiceSelectors` to use Service selector-based switching instead.
 
 ### Monitoring Progress
 

@@ -2228,27 +2228,13 @@ spec:
                             default: true
                             description: |-
                               OnJobFailure triggers rollback when job failures exceed MaxJobFailures.
-                              Only applies during early phases (before TrafficSwitching).
-                            type: boolean
-                          onTrafficFailure:
-                            default: false
-                            description: |-
-                              OnTrafficFailure triggers rollback if Green fails health checks
-                              during TrafficSwitching phase (stabilization period).
+                              Only applies during early phases (before demoting Blue).
                             type: boolean
                           onValidationFailure:
                             default: true
                             description: OnValidationFailure triggers rollback if
                               pre-promotion hook fails.
                             type: boolean
-                          stabilizationSeconds:
-                            default: 60
-                            description: |-
-                              StabilizationSeconds is the observation period during TrafficSwitching.
-                              Green must remain healthy for this duration before proceeding to DemotingBlue.
-                            format: int32
-                            minimum: 0
-                            type: integer
                         required:
                         - enabled
                         type: object
@@ -2266,15 +2252,6 @@ spec:
                           Creates a recovery point before any changes are made.
                           Requires spec.backup to be configured.
                         type: boolean
-                      trafficStrategy:
-                        description: |-
-                          TrafficStrategy controls how traffic is routed during blue/green upgrades.
-                          When empty, the effective strategy defaults to ServiceSelectors when
-                          Gateway is disabled, and GatewayWeights when spec.gateway.enabled is true.
-                        enum:
-                        - ServiceSelectors
-                        - GatewayWeights
-                        type: string
                       verification:
                         description: VerificationConfig allows defining custom health
                           checks before promotion.
@@ -2284,39 +2261,6 @@ spec:
                               MinSyncDuration ensures the Green cluster stays healthy as a non-voter
                               for at least this duration before promotion (e.g., "5m").
                             type: string
-                          postSwitchHook:
-                            description: |-
-                              PostSwitchHook specifies a Job template to run after switching traffic
-                              to the Green cluster. The job must complete successfully (exit 0) before
-                              the upgrade proceeds beyond the TrafficSwitching phase. If the job fails
-                              and auto-rollback on traffic failure is enabled, the operator triggers
-                              a rollback; otherwise, the upgrade remains paused in TrafficSwitching
-                              until manually resolved.
-                            properties:
-                              args:
-                                description: Args are arguments passed to the command.
-                                items:
-                                  type: string
-                                type: array
-                              command:
-                                description: Command is the command to run.
-                                items:
-                                  type: string
-                                type: array
-                              image:
-                                description: Image is the container image for the
-                                  validation job.
-                                minLength: 1
-                                type: string
-                              timeoutSeconds:
-                                default: 300
-                                description: 'TimeoutSeconds is the job timeout (default:
-                                  300s).'
-                                format: int32
-                                type: integer
-                            required:
-                            - image
-                            type: object
                           prePromotionHook:
                             description: |-
                               PrePromotionHook specifies a Job template to run before promoting Green.
@@ -2571,7 +2515,6 @@ spec:
                     - JoiningMesh
                     - Syncing
                     - Promoting
-                    - TrafficSwitching
                     - DemotingBlue
                     - Cleanup
                     - RollingBack
@@ -2597,21 +2540,6 @@ spec:
                     type: string
                   startTime:
                     description: StartTime is when the current phase began.
-                    format: date-time
-                    type: string
-                  trafficStep:
-                    description: |-
-                      TrafficStep indicates the current traffic shifting step when using
-                      GatewayWeights traffic strategy. It is used by the infra layer to
-                      derive Gateway backend weights. The operator treats 0 as initial
-                      state (100% Blue), 1 as canary (e.g., 90/10), 2 as mid-step (e.g., 50/50),
-                      and 3 as final (0/100).
-                    format: int32
-                    type: integer
-                  trafficSwitchedTime:
-                    description: |-
-                      TrafficSwitchedTime records when traffic was switched to Green.
-                      Used for calculating stabilization period.
                     format: date-time
                     type: string
                 type: object

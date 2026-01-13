@@ -1,4 +1,4 @@
-package upgrade
+package rolling
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 // testLogger returns a no-op logger for testing.
@@ -640,7 +641,7 @@ func TestVersionMismatchDuringUpgrade(t *testing.T) {
 
 			// If we should clear, verify the clear function works
 			if tt.shouldClearState {
-				ClearUpgrade(status, ReasonVersionMismatch, "version changed", 1)
+				upgrade.ClearUpgrade(status, upgrade.ReasonVersionMismatch, "version changed", 1)
 				if status.Upgrade != nil {
 					t.Error("expected Upgrade to be cleared")
 				}
@@ -693,7 +694,7 @@ func TestWaitForPodReady_LevelTriggered(t *testing.T) {
 			name:         "timeout exceeded - returns error",
 			podExists:    true,
 			podReady:     false,
-			upgradeStart: DefaultPodReadyTimeout + 1*time.Minute,
+			upgradeStart: upgrade.DefaultPodReadyTimeout + 1*time.Minute,
 			wantReady:    false,
 			wantErr:      true,
 			description:  "Past timeout, should return error",
@@ -719,11 +720,11 @@ func TestWaitForPodReady_LevelTriggered(t *testing.T) {
 
 			// The actual function call requires a real client and pod.
 			// For this unit test, we verify the timeout logic directly.
-			if tt.upgradeStart > DefaultPodReadyTimeout {
+			if tt.upgradeStart > upgrade.DefaultPodReadyTimeout {
 				// Timeout case - verify the function would detect timeout
 				elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
-				if elapsed <= DefaultPodReadyTimeout {
-					t.Errorf("Expected timeout condition, but elapsed %v <= %v", elapsed, DefaultPodReadyTimeout)
+				if elapsed <= upgrade.DefaultPodReadyTimeout {
+					t.Errorf("Expected timeout condition, but elapsed %v <= %v", elapsed, upgrade.DefaultPodReadyTimeout)
 				}
 			}
 		})
@@ -744,7 +745,7 @@ func TestWaitForPodHealthy_LevelTriggered(t *testing.T) {
 		},
 		{
 			name:         "past timeout window",
-			upgradeStart: DefaultPodReadyTimeout + DefaultHealthCheckTimeout + 1*time.Minute,
+			upgradeStart: upgrade.DefaultPodReadyTimeout + upgrade.DefaultHealthCheckTimeout + 1*time.Minute,
 			wantTimeout:  true,
 		},
 	}
@@ -767,7 +768,7 @@ func TestWaitForPodHealthy_LevelTriggered(t *testing.T) {
 			}
 
 			elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
-			isTimeout := elapsed > DefaultPodReadyTimeout+DefaultHealthCheckTimeout
+			isTimeout := elapsed > upgrade.DefaultPodReadyTimeout+upgrade.DefaultHealthCheckTimeout
 
 			if isTimeout != tt.wantTimeout {
 				t.Errorf("timeout detection: got %v, want %v (elapsed: %v)", isTimeout, tt.wantTimeout, elapsed)

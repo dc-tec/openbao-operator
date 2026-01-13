@@ -20,7 +20,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/infra"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
-	"github.com/dc-tec/openbao-operator/internal/operationlock"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
@@ -38,29 +37,23 @@ type Manager struct {
 	client        client.Client
 	scheme        *runtime.Scheme
 	infraManager  *infra.Manager
-	clientFactory OpenBaoClientFactory
+	clientFactory upgrade.OpenBaoClientFactory
 	clusterOps    ClusterOps
 }
-
-// OpenBaoClientFactory creates OpenBao API clients for connecting to cluster pods.
-// This is primarily used for testing to inject mock clients.
-type OpenBaoClientFactory func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error)
 
 // NewManager constructs a Manager.
 func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager) *Manager {
 	mgr := &Manager{
-		client:       c,
-		scheme:       scheme,
-		infraManager: infraManager,
-		clientFactory: func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
-			return openbaoapi.NewClient(config)
-		},
+		client:        c,
+		scheme:        scheme,
+		infraManager:  infraManager,
+		clientFactory: upgrade.DefaultOpenBaoClientFactory,
 	}
 	mgr.clusterOps = newOpenBaoClusterOps(c, mgr.clientFactory)
 	return mgr
 }
 
-func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory OpenBaoClientFactory) *Manager {
+func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory upgrade.OpenBaoClientFactory) *Manager {
 	mgr := NewManager(c, scheme, infraManager)
 	if clientFactory != nil {
 		mgr.clientFactory = clientFactory
@@ -236,12 +229,8 @@ func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logge
 	if !upgradeActive && !upgradeNeeded {
 		return false, recon.Result{}, nil
 	}
-	if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
-		Holder:    constants.ControllerNameOpenBaoCluster + "/upgrade",
-		Operation: openbaov1alpha1.ClusterOperationUpgrade,
-		Message:   fmt.Sprintf("blue/green upgrade phase %s", cluster.Status.BlueGreen.Phase),
-	}); err != nil {
-		if errors.Is(err, operationlock.ErrLockHeld) {
+	if err := upgrade.AcquireUpgradeOperationLock(ctx, m.client, cluster, fmt.Sprintf("blue/green upgrade phase %s", cluster.Status.BlueGreen.Phase)); err != nil {
+		if upgrade.IsOperationLockHeld(err) {
 			if upgradeActive {
 				return true, recon.Result{}, fmt.Errorf("blue/green upgrade in progress but operation lock is held by another operation: %w", err)
 			}
@@ -341,14 +330,13 @@ func (m *Manager) executeStateMachine(ctx context.Context, logger logr.Logger, c
 		openbaov1alpha1.PhaseDeployingGreen: func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 			return m.handlePhaseDeployingGreen(ctx, logger, cluster, verifiedImageDigest)
 		},
-		openbaov1alpha1.PhaseJoiningMesh:      m.handlePhaseJoiningMesh,
-		openbaov1alpha1.PhaseSyncing:          m.handlePhaseSyncing,
-		openbaov1alpha1.PhasePromoting:        m.handlePhasePromoting,
-		openbaov1alpha1.PhaseTrafficSwitching: m.handlePhaseTrafficSwitching,
-		openbaov1alpha1.PhaseDemotingBlue:     m.handlePhaseDemotingBlue,
-		openbaov1alpha1.PhaseCleanup:          m.handlePhaseCleanup,
-		openbaov1alpha1.PhaseRollingBack:      m.handlePhaseRollingBack,
-		openbaov1alpha1.PhaseRollbackCleanup:  m.handlePhaseRollbackCleanup,
+		openbaov1alpha1.PhaseJoiningMesh:     m.handlePhaseJoiningMesh,
+		openbaov1alpha1.PhaseSyncing:         m.handlePhaseSyncing,
+		openbaov1alpha1.PhasePromoting:       m.handlePhasePromoting,
+		openbaov1alpha1.PhaseDemotingBlue:    m.handlePhaseDemotingBlue,
+		openbaov1alpha1.PhaseCleanup:         m.handlePhaseCleanup,
+		openbaov1alpha1.PhaseRollingBack:     m.handlePhaseRollingBack,
+		openbaov1alpha1.PhaseRollbackCleanup: m.handlePhaseRollbackCleanup,
 	}
 
 	handler, ok := handlers[phase]
@@ -682,9 +670,7 @@ func (m *Manager) handlePhasePromoting(ctx context.Context, logger logr.Logger, 
 		return step.Outcome, nil
 	}
 
-	// Transition to TrafficSwitching (instead of DemotingBlue)
-	// This decouples traffic switching from Blue demotion for safer rollbacks
-	return advance(openbaov1alpha1.PhaseTrafficSwitching), nil
+	return advance(openbaov1alpha1.PhaseDemotingBlue), nil
 }
 
 // handlePhaseDemotingBlue demotes Blue nodes to non-voters and verifies Green becomes leader.
@@ -714,15 +700,9 @@ func (m *Manager) handlePhaseDemotingBlue(ctx context.Context, logger logr.Logge
 		return phaseOutcome{}, err
 	}
 
-	// If using GatewayWeights strategy, only proceed once we have reached the final
-	// traffic step (0% Blue / 100% Green).
-	strategy := trafficStrategy(cluster)
-
 	ok, message := demotionPreconditionsSatisfied(
 		greenSnapshots,
 		int(cluster.Spec.Replicas),
-		strategy,
-		cluster.Status.BlueGreen.TrafficStep,
 	)
 	if !ok {
 		logger.Info(message)
@@ -848,14 +828,14 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 	cluster.Status.BlueGreen.GreenRevision = ""
 	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
 
-	if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/upgrade", openbaov1alpha1.ClusterOperationUpgrade); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
+	if err := upgrade.ReleaseUpgradeOperationLock(ctx, m.client, cluster); err != nil && !upgrade.IsOperationLockHeld(err) {
 		logger.Error(err, "Failed to release upgrade operation lock after blue/green completion")
 	}
 
 	logger.Info("Blue/green upgrade completed", "newVersion", cluster.Spec.Version)
 
-	// Return a requeue to trigger another reconcile cycle so the InfraManager
-	// can clean up the temporary -blue and -green Services used during GatewayWeights upgrades.
+	// Return a requeue to trigger another reconcile cycle so dependent reconcilers
+	// can observe the new steady-state and clean up any upgrade-time resources.
 	return requeueAfterOutcome(constants.RequeueShort), nil
 }
 
@@ -926,8 +906,6 @@ func (m *Manager) abortUpgrade(ctx context.Context, logger logr.Logger, cluster 
 	cluster.Status.BlueGreen.GreenRevision = ""
 	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
 	cluster.Status.BlueGreen.StartTime = nil
-	cluster.Status.BlueGreen.TrafficSwitchedTime = nil
-	cluster.Status.BlueGreen.TrafficStep = 0
 	cluster.Status.BlueGreen.JobFailureCount = 0
 	cluster.Status.BlueGreen.LastJobFailure = ""
 
@@ -983,17 +961,6 @@ func (m *Manager) triggerRollback(logger logr.Logger, cluster *openbaov1alpha1.O
 	logger.Info("Rollback initiated", "reason", reason)
 
 	return requeueShort(), nil // Requeue to process rollback
-}
-
-// handlePhaseTrafficSwitching handles the TrafficSwitching phase.
-// This phase switches traffic to Green and optionally waits for stabilization.
-func (m *Manager) handlePhaseTrafficSwitching(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
-	if cluster.Status.BlueGreen == nil {
-		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
-	}
-
-	greenRevision := cluster.Status.BlueGreen.GreenRevision
-	return m.handleTrafficSwitching(ctx, logger, cluster, greenRevision, trafficStrategy(cluster))
 }
 
 // handlePhaseRollingBack orchestrates the rollback sequence.
@@ -1110,7 +1077,6 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 	cluster.Status.BlueGreen.GreenRevision = ""
 	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
 	cluster.Status.BlueGreen.StartTime = nil
-	cluster.Status.BlueGreen.TrafficSwitchedTime = nil
 	cluster.Status.BlueGreen.JobFailureCount = 0
 	cluster.Status.BlueGreen.LastJobFailure = ""
 	// Keep RollbackReason and RollbackStartTime for observability
