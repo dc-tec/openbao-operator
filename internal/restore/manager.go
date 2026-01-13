@@ -27,6 +27,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
 	"github.com/dc-tec/openbao-operator/internal/security"
+	"github.com/dc-tec/openbao-operator/internal/status"
 )
 
 const (
@@ -167,13 +168,8 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 			m.recorder.Eventf(restore, corev1.EventTypeWarning, "OperationLockOverride",
 				"OverrideOperationLock used; cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder)
 		}
-		meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
-			Type:               constants.ConditionTypeOperationLockOverride,
-			Status:             metav1.ConditionTrue,
-			LastTransitionTime: metav1.Now(),
-			Reason:             constants.ReasonOperationLockOverridden,
-			Message:            fmt.Sprintf("Cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder),
-		})
+
+		status.True(&restore.Status.Conditions, restore.Generation, constants.ConditionTypeOperationLockOverride, constants.ReasonOperationLockOverridden, fmt.Sprintf("Cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder))
 	}
 
 	// Check if cluster is in a valid state for restore (unless Force is set)
@@ -355,13 +351,7 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 	restore.Status.CompletionTime = &now
 	restore.Status.Message = message
 
-	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
-		Type:               string(RestoreConditionType),
-		Status:             metav1.ConditionFalse,
-		Reason:             ReasonRestoreFailed,
-		Message:            message,
-		LastTransitionTime: now,
-	})
+	status.False(&restore.Status.Conditions, restore.Generation, string(RestoreConditionType), ReasonRestoreFailed, message)
 
 	if err := m.client.Status().Update(ctx, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update restore status: %w", err)
@@ -381,13 +371,7 @@ func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, resto
 	restore.Status.CompletionTime = &now
 	restore.Status.Message = message
 
-	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
-		Type:               string(RestoreConditionType),
-		Status:             metav1.ConditionTrue,
-		Reason:             ReasonRestoreSucceeded,
-		Message:            message,
-		LastTransitionTime: now,
-	})
+	status.True(&restore.Status.Conditions, restore.Generation, string(RestoreConditionType), ReasonRestoreSucceeded, message)
 
 	if err := m.client.Status().Update(ctx, restore); err != nil {
 		return fmt.Errorf("failed to update restore status: %w", err)

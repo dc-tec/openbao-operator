@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
 )
 
-func TestBuildAvailableCondition(t *testing.T) {
+func TestSetAvailableCondition(t *testing.T) {
 	tests := []struct {
 		name          string
 		replicas      int32
@@ -48,9 +49,11 @@ func TestBuildAvailableCondition(t *testing.T) {
 					Replicas: tt.replicas,
 				},
 			}
+			var conditions []metav1.Condition
+			setAvailableCondition(&conditions, 1, cluster, tt.readyReplicas)
 
-			cond := buildAvailableCondition(cluster, tt.readyReplicas)
-
+			cond := meta.FindStatusCondition(conditions, string(openbaov1alpha1.ConditionAvailable))
+			assert.NotNil(t, cond)
 			assert.Equal(t, string(openbaov1alpha1.ConditionAvailable), cond.Type)
 			assert.Equal(t, tt.wantStatus, cond.Status)
 			assert.Equal(t, tt.wantReason, cond.Reason)
@@ -58,7 +61,7 @@ func TestBuildAvailableCondition(t *testing.T) {
 	}
 }
 
-func TestBuildDegradedCondition(t *testing.T) {
+func TestSetDegradedCondition(t *testing.T) {
 	tests := []struct {
 		name            string
 		cluster         *openbaov1alpha1.OpenBaoCluster
@@ -100,8 +103,11 @@ func TestBuildDegradedCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cond := buildDegradedCondition(tt.cluster, tt.admissionStatus, tt.upgradeFailed)
+			var conditions []metav1.Condition
+			setDegradedCondition(&conditions, 1, tt.cluster, tt.admissionStatus, tt.upgradeFailed)
 
+			cond := meta.FindStatusCondition(conditions, string(openbaov1alpha1.ConditionDegraded))
+			assert.NotNil(t, cond)
 			assert.Equal(t, string(openbaov1alpha1.ConditionDegraded), cond.Type)
 			assert.Equal(t, tt.wantStatus, cond.Status)
 			if tt.wantReason != "" {
@@ -111,7 +117,7 @@ func TestBuildDegradedCondition(t *testing.T) {
 	}
 }
 
-func TestBuildUpgradingCondition(t *testing.T) {
+func TestSetUpgradingCondition(t *testing.T) {
 	tests := []struct {
 		name       string
 		cluster    *openbaov1alpha1.OpenBaoCluster
@@ -150,15 +156,18 @@ func TestBuildUpgradingCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cond := buildUpgradingCondition(tt.cluster)
+			var conditions []metav1.Condition
+			setUpgradingCondition(&conditions, 1, tt.cluster)
 
+			cond := meta.FindStatusCondition(conditions, string(openbaov1alpha1.ConditionUpgrading))
+			assert.NotNil(t, cond)
 			assert.Equal(t, string(openbaov1alpha1.ConditionUpgrading), cond.Type)
 			assert.Equal(t, tt.wantStatus, cond.Status)
 		})
 	}
 }
 
-func TestBuildBackupCondition(t *testing.T) {
+func TestSetBackupCondition(t *testing.T) {
 	tests := []struct {
 		name             string
 		backupInProgress bool
@@ -180,15 +189,18 @@ func TestBuildBackupCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cond := buildBackupCondition(tt.backupInProgress, tt.backupJobName)
+			var conditions []metav1.Condition
+			setBackupCondition(&conditions, 1, tt.backupInProgress, tt.backupJobName)
 
+			cond := meta.FindStatusCondition(conditions, string(openbaov1alpha1.ConditionBackingUp))
+			assert.NotNil(t, cond)
 			assert.Equal(t, string(openbaov1alpha1.ConditionBackingUp), cond.Type)
 			assert.Equal(t, tt.wantStatus, cond.Status)
 		})
 	}
 }
 
-func TestBuildLeaderCondition(t *testing.T) {
+func TestSetLeaderCondition(t *testing.T) {
 	tests := []struct {
 		name        string
 		leaderCount int
@@ -219,8 +231,11 @@ func TestBuildLeaderCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cond := buildLeaderCondition(tt.leaderCount, tt.leaderName)
+			var conditions []metav1.Condition
+			setLeaderCondition(&conditions, 1, tt.leaderCount, tt.leaderName)
 
+			cond := meta.FindStatusCondition(conditions, string(openbaov1alpha1.ConditionOpenBaoLeader))
+			assert.NotNil(t, cond)
 			assert.Equal(t, string(openbaov1alpha1.ConditionOpenBaoLeader), cond.Type)
 			assert.Equal(t, tt.wantStatus, cond.Status)
 			assert.Equal(t, tt.wantReason, cond.Reason)
@@ -228,7 +243,7 @@ func TestBuildLeaderCondition(t *testing.T) {
 	}
 }
 
-func TestBuildInitializedCondition(t *testing.T) {
+func TestSetInitializedCondition(t *testing.T) {
 	tests := []struct {
 		name        string
 		initialized bool
@@ -256,8 +271,11 @@ func TestBuildInitializedCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cond := buildInitializedCondition(tt.initialized, tt.present)
+			var conditions []metav1.Condition
+			setInitializedCondition(&conditions, 1, tt.initialized, tt.present)
 
+			cond := meta.FindStatusCondition(conditions, string(openbaov1alpha1.ConditionOpenBaoInitialized))
+			assert.NotNil(t, cond)
 			assert.Equal(t, string(openbaov1alpha1.ConditionOpenBaoInitialized), cond.Type)
 			assert.Equal(t, tt.wantStatus, cond.Status)
 		})

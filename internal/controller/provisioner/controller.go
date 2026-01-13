@@ -23,8 +23,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
@@ -37,6 +35,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	controllerpredicates "github.com/dc-tec/openbao-operator/internal/controller"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
+	"github.com/dc-tec/openbao-operator/internal/status"
 )
 
 // NamespaceProvisionerReconciler reconciles OpenBaoTenant objects to provision
@@ -111,12 +110,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		tenant.Status.Provisioned = false
 		tenant.Status.LastError = err.Error()
 
-		meta.SetStatusCondition(&tenant.Status.Conditions, metav1.Condition{
-			Type:    constants.ConditionTypeProvisioned,
-			Status:  metav1.ConditionFalse,
-			Reason:  ReasonSecurityViolation,
-			Message: err.Error(),
-		})
+		status.False(&tenant.Status.Conditions, tenant.Generation, constants.ConditionTypeProvisioned, ReasonSecurityViolation, err.Error())
 
 		if patchErr := r.Status().Patch(ctx, tenant, client.MergeFrom(original)); patchErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to patch status for security violation: %w", patchErr)
