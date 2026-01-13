@@ -4066,15 +4066,8 @@
 </tbody>
 </table>
 <h2 id="bluegreen-upgrade-integration">Blue/Green Upgrade Integration<a class="headerlink" href="#bluegreen-upgrade-integration" title="Permanent link">&para;</a></h2>
-<p>When combining Gateway API with <a href="../../operations/upgrades/">Blue/Green upgrades</a>, the Operator supports <strong>weighted traffic shifting</strong> via HTTPRoute backends.</p>
-<p>With <code>trafficStrategy: GatewayWeights</code> (default when Gateway is enabled):</p>
-<ul>
-<li>Temporary <code>-blue</code> and <code>-green</code> Services are created during the upgrade</li>
-<li>HTTPRoute weights shift gradually: <code>100/0 → 90/10 → 50/50 → 0/100</code></li>
-<li><code>BackendTLSPolicy</code> automatically covers all backend services</li>
-<li>Resources are cleaned up after upgrade completes</li>
-</ul>
-<p>See the <a href="../../operations/upgrades/#gateway-weighted-traffic-shifting">Upgrades documentation</a> for configuration details.</p>
+<p>When combining Gateway API with <a href="../../operations/upgrades/">Blue/Green upgrades</a>, the Operator keeps the generated <code>HTTPRoute</code> stable by targeting the cluster's main external Service (<code>&lt;cluster&gt;-public</code>).</p>
+<p>During cutover, the operator updates that Service's selector to point at the Green revision.</p>
 
 
 
