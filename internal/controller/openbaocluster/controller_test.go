@@ -353,10 +353,10 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			Expect(serverSecret.Data).To(HaveKey("ca.crt"))
 		})
 
-		It("creates Gateway weighted HTTPRoute backends based on TrafficStep", func() {
+		It("creates Gateway HTTPRoute backends and switches external Service selector during cutover", func() {
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-gateway-weights",
+					Name:      "test-gateway-bluegreen-cutover",
 					Namespace: "default",
 				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -376,9 +376,6 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 					},
 					UpdateStrategy: openbaov1alpha1.UpdateStrategy{
 						Type: openbaov1alpha1.UpdateStrategyBlueGreen,
-						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
-							TrafficStrategy: openbaov1alpha1.BlueGreenTrafficStrategyGatewayWeights,
-						},
 					},
 					Gateway: &openbaov1alpha1.GatewayConfig{
 						Enabled: true,
@@ -391,10 +388,9 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					Initialized: true,
 					BlueGreen: &openbaov1alpha1.BlueGreenStatus{
-						Phase:         openbaov1alpha1.PhaseTrafficSwitching,
+						Phase:         openbaov1alpha1.PhasePromoting,
 						BlueRevision:  "blue123",
 						GreenRevision: "green456",
-						TrafficStep:   1,
 					},
 				},
 			}
@@ -405,10 +401,9 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			cluster.Status = openbaov1alpha1.OpenBaoClusterStatus{
 				Initialized: true,
 				BlueGreen: &openbaov1alpha1.BlueGreenStatus{
-					Phase:         openbaov1alpha1.PhaseTrafficSwitching,
+					Phase:         openbaov1alpha1.PhasePromoting,
 					BlueRevision:  "blue123",
 					GreenRevision: "green456",
-					TrafficStep:   1,
 				},
 			}
 			Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
@@ -429,54 +424,52 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 
 			infraMgr := infra.NewManager(k8sClient, k8sClient.Scheme(), "openbao-operator-system", "", nil)
 
-			// Use the infra manager directly to reconcile networking resources for this cluster.
+			By("reconciling networking resources")
 			err := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "", "")
 			Expect(err).NotTo(HaveOccurred())
 
-			// Helper to assert weights for a given TrafficStep.
-			assertWeights := func(step int32, wantBlue, wantGreen int32) {
-				cluster.Status.BlueGreen.TrafficStep = step
-				// Reconcile again to apply new backend weights.
-				reconcileErr := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "", "")
-				Expect(reconcileErr).NotTo(HaveOccurred())
-
-				route := &gatewayv1.HTTPRoute{}
-				err = k8sClient.Get(ctx, types.NamespacedName{
-					Namespace: cluster.Namespace,
-					Name:      cluster.Name + "-httproute",
-				}, route)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(route.Spec.Rules).ToNot(BeEmpty())
-				backends := route.Spec.Rules[0].BackendRefs
-				Expect(backends).To(HaveLen(2))
-
-				var blueBackend, greenBackend *gatewayv1.HTTPBackendRef
-				for i := range backends {
-					b := &backends[i]
-					switch string(b.Name) {
-					case cluster.Name + "-public-blue":
-						blueBackend = b
-					case cluster.Name + "-public-green":
-						greenBackend = b
-					}
-				}
-
-				Expect(blueBackend).ToNot(BeNil())
-				Expect(greenBackend).ToNot(BeNil())
-				Expect(blueBackend.Weight).ToNot(BeNil())
-				Expect(greenBackend.Weight).ToNot(BeNil())
-				Expect(*blueBackend.Weight).To(Equal(wantBlue))
-				Expect(*greenBackend.Weight).To(Equal(wantGreen))
+			By("ensuring the HTTPRoute references only the main external service")
+			route := &gatewayv1.HTTPRoute{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Namespace: cluster.Namespace,
+				Name:      cluster.Name + "-httproute",
+			}, route)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(route.Spec.Rules).ToNot(BeEmpty())
+			backends := route.Spec.Rules[0].BackendRefs
+			Expect(backends).To(HaveLen(1))
+			Expect(string(backends[0].Name)).To(Equal(cluster.Name + "-public"))
+			// Some Gateway API implementations default Weight to 1 when unset.
+			if backends[0].Weight != nil {
+				Expect(*backends[0].Weight).To(Equal(int32(1)))
 			}
 
-			By("verifying canary step weights (step 1: 90/10)")
-			assertWeights(1, 90, 10)
+			By("ensuring the external Service selects the Blue revision before cutover")
+			svc := &corev1.Service{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Namespace: cluster.Namespace,
+				Name:      cluster.Name + "-public",
+			}, svc)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svc.Spec.Selector).To(HaveKeyWithValue(constants.LabelOpenBaoRevision, "blue123"))
 
-			By("verifying mid-step weights (step 2: 50/50)")
-			assertWeights(2, 50, 50)
+			By("switching to DemotingBlue and ensuring the external Service selects the Green revision")
+			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseDemotingBlue
+			err = infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "", "")
+			Expect(err).NotTo(HaveOccurred())
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Namespace: cluster.Namespace,
+				Name:      cluster.Name + "-public",
+			}, svc)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svc.Spec.Selector).To(HaveKeyWithValue(constants.LabelOpenBaoRevision, "green456"))
 
-			By("verifying final-step weights (step 3: 0/100)")
-			assertWeights(3, 0, 100)
+			By("ensuring any legacy blue/green backend Services do not exist")
+			legacySvc := &corev1.Service{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name + "-public-blue"}, legacySvc)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name + "-public-green"}, legacySvc)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
 		It("honors DeletionPolicy Retain by preserving PVCs while deleting StatefulSet", func() {
