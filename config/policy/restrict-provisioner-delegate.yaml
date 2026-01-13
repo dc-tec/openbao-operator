@@ -180,8 +180,8 @@ spec:
       message: "The Provisioner Delegate cannot create Roles granting nonResourceURLs."
 
     # Rule 8: Content Restriction (Secrets)
-    # Defense-in-depth: prevent accidental broadening of tenant roles to include
-    # Secrets enumeration, and ensure the Sentinel role never touches Secrets.
+    # Defense-in-depth: prevent accidental broadening of tenant/sentinel roles to include
+    # Secrets access. Secret access is only allowed via the explicit allowlist Roles.
     - expression: >-
         !variables.is_delegate ||
         request.resource.resource != 'roles' ||
@@ -191,13 +191,57 @@ spec:
           has(rule.resources) &&
           rule.resources != null &&
           rule.resources.exists(r, r == 'secrets') &&
-          (
-            object.metadata.name == 'openbao-sentinel-role' ||
-            (
-              has(rule.verbs) &&
-              rule.verbs != null &&
-              rule.verbs.exists(v, v == 'list' || v == 'watch' || v == '*')
-            )
+          !(object.metadata.name in [
+            'openbao-operator-tenant-secrets-reader',
+            'openbao-operator-tenant-secrets-writer'
+          ])
+        )
+      message: "The Provisioner Delegate can only grant Secrets permissions via the dedicated secrets allowlist Roles."
+
+    # Rule 9: Content Restriction (Secrets Reader Role)
+    # The secrets reader Role must be strictly name-scoped (resourceNames) and read-only.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'roles' ||
+        object.metadata.name != 'openbao-operator-tenant-secrets-reader' ||
+        (
+          has(object.rules) &&
+          object.rules != null &&
+          object.rules.size() == 1 &&
+          object.rules[0].apiGroups == [''] &&
+          object.rules[0].resources == ['secrets'] &&
+          object.rules[0].verbs == ['get'] &&
+          has(object.rules[0].resourceNames) &&
+          object.rules[0].resourceNames != null &&
+          object.rules[0].resourceNames.size() > 0
+        )
+      message: "The Provisioner Delegate can only create the secrets reader Role with a non-empty, name-scoped (resourceNames) get-only rule."
+
+    # Rule 10: Content Restriction (Secrets Writer Role)
+    # The secrets writer Role must be limited to: create on the collection + name-scoped mutations.
+    - expression: >-
+        !variables.is_delegate ||
+        request.resource.resource != 'roles' ||
+        object.metadata.name != 'openbao-operator-tenant-secrets-writer' ||
+        (
+          has(object.rules) &&
+          object.rules != null &&
+          object.rules.size() == 2 &&
+          object.rules.all(r, r.apiGroups == [''] && r.resources == ['secrets']) &&
+          object.rules.exists(r,
+            has(r.verbs) &&
+            r.verbs != null &&
+            r.verbs == ['create'] &&
+            (!has(r.resourceNames) || r.resourceNames == null || r.resourceNames.size() == 0)
+          ) &&
+          object.rules.exists(r,
+            has(r.verbs) &&
+            r.verbs != null &&
+            r.verbs.size() > 0 &&
+            r.verbs.all(v, v in ['delete', 'get', 'patch', 'update']) &&
+            has(r.resourceNames) &&
+            r.resourceNames != null &&
+            r.resourceNames.size() > 0
           )
         )
-      message: "The Provisioner Delegate cannot grant Secrets list/watch, and Sentinel RBAC must not include Secrets permissions."
+      message: "The Provisioner Delegate can only create the secrets writer Role with create + name-scoped mutations (resourceNames) on Secrets."

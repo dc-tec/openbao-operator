@@ -45,6 +45,17 @@ The Operator ships with a suite of policies to enforce "Least Privilege" and "Gi
 | `restrict-sentinel-mutations` | `OpenBaoCluster` (Status) | **Restrict** | Ensures the Sentinel can *only* update specific status trigger fields. |
 | `restrict-provisioner-delegate` | `Role`, `RoleBinding` | **Restrict** | Limits the Provisioner Delegate to creating only specific, pre-approved RBAC roles. |
 
+## Provisioner Delegate Hardening
+
+The `restrict-provisioner-delegate` policy is a defense-in-depth control that applies to RBAC mutations performed by the impersonated Provisioner Delegate identity.
+
+**Key guarantees:**
+
+- Only specific Role/RoleBinding names are allowed (tenant/sentinel + secrets allowlist roles).
+- RoleBindings are restricted to known ServiceAccount subjects (prevents backdoor bindings).
+- Dangerous verbs and wildcards are denied (`impersonate`, `bind`, `escalate`, `*`).
+- Secret permissions are only allowed via the dedicated secrets allowlist Roles, and those Roles must be name-scoped (`resourceNames`) and non-enumerating (no `list`/`watch`).
+
 ## Sentinel Hardening
 
 !!! success "Broken Object Prevention"

@@ -80,16 +80,6 @@ rules:
       - watch
 
   # 5. RBAC Management
-  # The Provisioner needs delete permission to clean up tenant Roles and RoleBindings
-  # when OpenBaoTenant resources are deleted. Create/update operations use impersonation
-  # via the delegate ServiceAccount, but cleanup uses the Provisioner's own ServiceAccount.
-  - apiGroups:
-      - rbac.authorization.k8s.io
-    resources:
-      - roles
-      - rolebindings
-    verbs:
-      - get
-      - list
-      - watch
-      - delete
+  # RBAC resources are always managed via impersonation of the delegate ServiceAccount.
+  # This eliminates the need for the Provisioner ServiceAccount to have any direct
+  # Role/RoleBinding permissions.

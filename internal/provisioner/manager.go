@@ -257,18 +257,38 @@ func (m *Manager) EnsureTenantSecretRBAC(ctx context.Context, namespace string) 
 	writerList := sortedUniqueSecretNames(writerNames)
 	readerList := sortedUniqueSecretNames(readerNames)
 
-	if err := m.ensureSecretsRole(ctx, namespace, TenantSecretsWriterRoleName, writerList, GenerateTenantSecretsWriterRole); err != nil {
-		return err
-	}
-	if err := m.ensureSecretsRoleBinding(ctx, namespace, TenantSecretsWriterRoleBindingName, TenantSecretsWriterRoleName, len(writerList) > 0, GenerateTenantSecretsWriterRoleBinding); err != nil {
-		return err
+	type secretsRBACSpec struct {
+		roleName           string
+		roleBindingName    string
+		secretNames        []string
+		roleFactory        secretsRoleFactory
+		roleBindingFactory secretsRoleBindingFactory
 	}
 
-	if err := m.ensureSecretsRole(ctx, namespace, TenantSecretsReaderRoleName, readerList, GenerateTenantSecretsReaderRole); err != nil {
-		return err
+	desired := []secretsRBACSpec{
+		{
+			roleName:           TenantSecretsWriterRoleName,
+			roleBindingName:    TenantSecretsWriterRoleBindingName,
+			secretNames:        writerList,
+			roleFactory:        GenerateTenantSecretsWriterRole,
+			roleBindingFactory: GenerateTenantSecretsWriterRoleBinding,
+		},
+		{
+			roleName:           TenantSecretsReaderRoleName,
+			roleBindingName:    TenantSecretsReaderRoleBindingName,
+			secretNames:        readerList,
+			roleFactory:        GenerateTenantSecretsReaderRole,
+			roleBindingFactory: GenerateTenantSecretsReaderRoleBinding,
+		},
 	}
-	if err := m.ensureSecretsRoleBinding(ctx, namespace, TenantSecretsReaderRoleBindingName, TenantSecretsReaderRoleName, len(readerList) > 0, GenerateTenantSecretsReaderRoleBinding); err != nil {
-		return err
+
+	for _, spec := range desired {
+		if err := m.ensureSecretsRole(ctx, namespace, spec.roleName, spec.secretNames, spec.roleFactory); err != nil {
+			return err
+		}
+		if err := m.ensureSecretsRoleBinding(ctx, namespace, spec.roleBindingName, spec.roleName, len(spec.secretNames) > 0, spec.roleBindingFactory); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -364,14 +384,14 @@ func (m *Manager) ensureSecretsRole(ctx context.Context, namespace string, roleN
 	// Handle deletion case: if no secrets, delete the role if it exists
 	if len(secretNames) == 0 {
 		existing := &rbacv1.Role{}
-		if err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleName}, existing); err != nil {
+		if err := m.impersonatedClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleName}, existing); err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
 			return fmt.Errorf("failed to get Role %s/%s: %w", namespace, roleName, err)
 		}
 		m.logger.Info("Deleting tenant secrets Role (no clusters reference Secrets)", "namespace", namespace, "role", roleName)
-		if err := m.client.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.impersonatedClient.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete Role %s/%s: %w", namespace, roleName, err)
 		}
 		return nil
@@ -379,6 +399,12 @@ func (m *Manager) ensureSecretsRole(ctx context.Context, namespace string, roleN
 
 	// Apply Role using Server-Side Apply
 	role := factory(namespace, secretNames)
+	if role == nil {
+		return fmt.Errorf("failed to build Role %s/%s: factory returned nil", namespace, roleName)
+	}
+	if role.GetName() != roleName || role.GetNamespace() != namespace {
+		return fmt.Errorf("failed to build Role %s/%s: factory returned %s/%s", namespace, roleName, role.GetNamespace(), role.GetName())
+	}
 	m.logger.Info("Applying tenant secrets Role", "namespace", namespace, "role", roleName,
 		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
 	if err := m.applyResource(ctx, role); err != nil {
@@ -398,14 +424,14 @@ func (m *Manager) ensureSecretsRoleBinding(ctx context.Context, namespace string
 	// Handle deletion case: if shouldExist is false, delete the role binding if it exists
 	if !shouldExist {
 		existing := &rbacv1.RoleBinding{}
-		if err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleBindingName}, existing); err != nil {
+		if err := m.impersonatedClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleBindingName}, existing); err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
 			return fmt.Errorf("failed to get RoleBinding %s/%s: %w", namespace, roleBindingName, err)
 		}
 		m.logger.Info("Deleting tenant secrets RoleBinding (no clusters reference Secrets)", "namespace", namespace, "rolebinding", roleBindingName)
-		if err := m.client.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.impersonatedClient.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete RoleBinding %s/%s: %w", namespace, roleBindingName, err)
 		}
 		return nil
@@ -413,6 +439,15 @@ func (m *Manager) ensureSecretsRoleBinding(ctx context.Context, namespace string
 
 	// Apply RoleBinding using Server-Side Apply
 	roleBinding := factory(namespace, m.operatorSA)
+	if roleBinding == nil {
+		return fmt.Errorf("failed to build RoleBinding %s/%s: factory returned nil", namespace, roleBindingName)
+	}
+	if roleBinding.GetName() != roleBindingName || roleBinding.GetNamespace() != namespace {
+		return fmt.Errorf("failed to build RoleBinding %s/%s: factory returned %s/%s", namespace, roleBindingName, roleBinding.GetNamespace(), roleBinding.GetName())
+	}
+	if roleBinding.RoleRef.Name != roleName {
+		return fmt.Errorf("failed to build RoleBinding %s/%s: roleRef.name=%q want %q", namespace, roleBindingName, roleBinding.RoleRef.Name, roleName)
+	}
 	m.logger.Info("Applying tenant secrets RoleBinding", "namespace", namespace, "rolebinding", roleBindingName,
 		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
 	if err := m.applyResource(ctx, roleBinding); err != nil {
@@ -420,6 +455,26 @@ func (m *Manager) ensureSecretsRoleBinding(ctx context.Context, namespace string
 	}
 
 	return nil
+}
+
+// IsTenantNamespaceProvisioned returns true if the tenant namespace has been provisioned
+// (i.e., the core tenant RoleBinding exists).
+//
+// SECURITY: This uses the impersonated (delegate) client to avoid requiring the Provisioner
+// ServiceAccount to list/watch/get RBAC resources cluster-wide via the controller-runtime cache.
+func (m *Manager) IsTenantNamespaceProvisioned(ctx context.Context, namespace string) (bool, error) {
+	if namespace == "" {
+		return false, fmt.Errorf("namespace is required")
+	}
+
+	existing := &rbacv1.RoleBinding{}
+	if err := m.impersonatedClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantRoleBindingName}, existing); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get tenant RoleBinding %s/%s: %w", namespace, TenantRoleBindingName, err)
+	}
+	return true, nil
 }
 
 // CleanupTenantRBAC removes the Role and RoleBinding from the given namespace.
@@ -430,7 +485,7 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 	}
 	for _, name := range secretRoleBindings {
 		roleBinding := &rbacv1.RoleBinding{}
-		err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, roleBinding)
+		err := m.impersonatedClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, roleBinding)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
@@ -438,7 +493,7 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 			return fmt.Errorf("failed to get RoleBinding %s/%s: %w", namespace, name, err)
 		}
 		m.logger.Info("Deleting tenant secrets RoleBinding", "namespace", namespace, "rolebinding", name)
-		if err := m.client.Delete(ctx, roleBinding); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.impersonatedClient.Delete(ctx, roleBinding); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete RoleBinding %s/%s: %w", namespace, name, err)
 		}
 	}
@@ -449,7 +504,7 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 	}
 	for _, name := range secretRoles {
 		role := &rbacv1.Role{}
-		err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, role)
+		err := m.impersonatedClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, role)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
@@ -457,14 +512,14 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 			return fmt.Errorf("failed to get Role %s/%s: %w", namespace, name, err)
 		}
 		m.logger.Info("Deleting tenant secrets Role", "namespace", namespace, "role", name)
-		if err := m.client.Delete(ctx, role); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.impersonatedClient.Delete(ctx, role); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete Role %s/%s: %w", namespace, name, err)
 		}
 	}
 
 	// Delete RoleBinding first
 	roleBinding := &rbacv1.RoleBinding{}
-	err := m.client.Get(ctx, types.NamespacedName{
+	err := m.impersonatedClient.Get(ctx, types.NamespacedName{
 		Namespace: namespace,
 		Name:      TenantRoleBindingName,
 	}, roleBinding)
@@ -474,14 +529,14 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 		}
 	} else {
 		m.logger.Info("Deleting tenant RoleBinding", "namespace", namespace, "rolebinding", TenantRoleBindingName)
-		if err := m.client.Delete(ctx, roleBinding); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.impersonatedClient.Delete(ctx, roleBinding); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete RoleBinding %s/%s: %w", namespace, TenantRoleBindingName, err)
 		}
 	}
 
 	// Delete Role
 	role := &rbacv1.Role{}
-	err = m.client.Get(ctx, types.NamespacedName{
+	err = m.impersonatedClient.Get(ctx, types.NamespacedName{
 		Namespace: namespace,
 		Name:      TenantRoleName,
 	}, role)
@@ -491,7 +546,7 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 		}
 	} else {
 		m.logger.Info("Deleting tenant Role", "namespace", namespace, "role", TenantRoleName)
-		if err := m.client.Delete(ctx, role); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.impersonatedClient.Delete(ctx, role); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete Role %s/%s: %w", namespace, TenantRoleName, err)
 		}
 	}
