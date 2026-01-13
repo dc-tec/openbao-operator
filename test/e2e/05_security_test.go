@@ -457,7 +457,7 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 			// Gateway API CRDs are NOT installed by default in the e2e suite, so this test
 			// should work without any setup.
 			//
-			// Skip if Gateway API CRDs are already installed (by another test like Blue/Green GatewayWeights)
+			// Skip if Gateway API CRDs are already installed (by another Gateway-related test)
 			// Check by trying to list HTTPRoutes - if it succeeds, CRDs are installed
 			var httpRouteList unstructured.UnstructuredList
 			httpRouteList.SetGroupVersionKind(schema.GroupVersionKind{
