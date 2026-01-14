@@ -22,7 +22,7 @@ func TestVAP_ProvisionerDelegate_DeniesWrongRoleName(t *testing.T) {
 
 	namespace := newTestNamespace(t)
 	delegateClient := newImpersonatedClient(t, provisionerDelegateUsername)
-	legacyRoleName := "openbao-sentinel-role"
+	legacyRoleName := "openbao-operator-legacy-role"
 
 	// Admission policies can take a short moment to become effective after apply.
 	// Retry until the request is denied, failing if it never happens.

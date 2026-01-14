@@ -20,7 +20,7 @@ These coding standards ensure consistency and quality across the OpenBao Operato
 
     ---
 
-    Proper error wrapping, checking, and defining sentinel errors.
+    Proper error wrapping, checking, and defining well-known errors.
 
     [:material-arrow-right: Read Guide](error-handling.md)
 

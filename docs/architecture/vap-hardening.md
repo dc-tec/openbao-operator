@@ -1,25 +1,25 @@
-# VAP Hardening (Sentinel Removed)
+# VAP Hardening (Drift Detector Removed)
 
 This document captures the rationale and the shipped changes to rely on Validating Admission Policies
-(VAPs) for drift prevention and remove the Sentinel drift detector.
+(VAPs) for drift prevention and remove the drift detector component.
 
 ## Goals
 
 - Block meaningful drift of OpenBao Operator-managed resources at admission time (GitOps-safe).
 - Preserve compatibility with common cluster add-ons (cloud load balancers, kube controllers, GC).
-- Reduce maintenance burden by removing Sentinel.
+- Reduce maintenance burden by removing the drift detector component.
 - Keep the operator usable in both single-tenant and multi-tenant modes.
 
 ## Non-Goals
 
-- Guarantee drift correction latency of seconds (Sentinel's main value-add).
+- Guarantee drift correction latency of seconds (the drift detector's main value-add).
 - Support every third-party controller mutating operator-managed objects; only Kubernetes-required
   flows and widely deployed infrastructure controllers are in scope.
 - Execute CEL expressions in unit tests (we rely on integration/e2e for behavioral validation).
 
 !!! note
-    Sentinel only triggers on **successful** mutations that reach etcd. When drift is blocked at admission
-    time, Sentinel provides little practical value beyond faster reconciliation.
+    The drift detector only triggers on **successful** mutations that reach etcd. When drift is blocked at admission
+    time, it provides little practical value beyond faster reconciliation.
 
 ## Current State (Summary)
 
@@ -81,7 +81,7 @@ Target: `config/policy/lock-managed-resource-mutations.yaml`.
 
 ## Changes Implemented
 
-- Removed Sentinel feature (code, CRD fields, manifests, and tests).
+- Removed drift detector feature (code, CRD fields, manifests, and tests).
 - Tightened `lock-managed-resource-mutations` to remove broad identity bypasses while allowing required
   kube-system Service metadata updates and Secrets-only cert-manager writes.
 
@@ -94,7 +94,7 @@ Target: `config/policy/lock-managed-resource-mutations.yaml`.
 
 - Drift attempts against operator-managed `StatefulSet`/`ConfigMap`/`Service` are denied at admission time.
 - LoadBalancer and service discovery still function in common environments.
-- No Sentinel is required to maintain correctness.
+- No drift detector is required to maintain correctness.
 
 ## Local Verification (PR-Equivalent)
 

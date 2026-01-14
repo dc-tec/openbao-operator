@@ -73,9 +73,9 @@ Always wrap errors to preserve context using `%w`.
     }
     ```
 
-### Sentinel Errors
+### Checkable Errors
 
-Define exported sentinel errors for conditions callers might need to check.
+Define exported, well-known errors for conditions callers might need to check.
 
 ```go
 var (

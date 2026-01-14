@@ -21,12 +21,12 @@ func TestIsTransientConnection(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "sentinel error",
+			name: "well-known error",
 			err:  ErrTransientConnection,
 			want: true,
 		},
 		{
-			name: "wrapped sentinel error",
+			name: "wrapped well-known error",
 			err:  fmt.Errorf("context: %w", ErrTransientConnection),
 			want: true,
 		},
@@ -119,12 +119,12 @@ func TestIsTransientKubernetesAPI(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "sentinel error",
+			name: "well-known error",
 			err:  ErrTransientKubernetesAPI,
 			want: true,
 		},
 		{
-			name: "wrapped sentinel error",
+			name: "wrapped well-known error",
 			err:  fmt.Errorf("context: %w", ErrTransientKubernetesAPI),
 			want: true,
 		},
@@ -197,12 +197,12 @@ func TestIsTransientRemoteOverloaded(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "sentinel error",
+			name: "well-known error",
 			err:  ErrTransientRemoteOverloaded,
 			want: true,
 		},
 		{
-			name: "wrapped sentinel error",
+			name: "wrapped well-known error",
 			err:  fmt.Errorf("context: %w", ErrTransientRemoteOverloaded),
 			want: true,
 		},

@@ -89,7 +89,7 @@ func IsTransientConnection(err error) bool {
 		return false
 	}
 
-	// Check for our sentinel error
+	// Check for our well-known error
 	if errors.Is(err, ErrTransientConnection) {
 		return true
 	}
@@ -138,7 +138,7 @@ func IsTransientKubernetesAPI(err error) bool {
 		return false
 	}
 
-	// Check for our sentinel error
+	// Check for our well-known error
 	if errors.Is(err, ErrTransientKubernetesAPI) {
 		return true
 	}
