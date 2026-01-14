@@ -503,7 +503,6 @@ type NetworkConfig struct {
 	IngressRules []networkingv1.NetworkPolicyIngressRule `json:"ingressRules,omitempty"`
 }
 
-
 // SelfInitOperation defines valid operations for self-initialization requests.
 // +kubebuilder:validation:Enum=create;read;update;delete;list
 type SelfInitOperation string
