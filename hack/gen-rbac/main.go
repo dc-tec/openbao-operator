@@ -58,7 +58,6 @@ func desiredRules() ([]rbacv1.PolicyRule, error) {
 	tenantRole := provisioner.GenerateTenantRole(namespace)
 	tenantSecretsReaderRole := provisioner.GenerateTenantSecretsReaderRole(namespace, nil)
 	tenantSecretsWriterRole := provisioner.GenerateTenantSecretsWriterRole(namespace, nil)
-	sentinelRole := provisioner.GenerateSentinelRole(namespace)
 
 	rbacRule, ok := findRBACManagementRule(tenantRole.Rules)
 	if !ok {
@@ -68,7 +67,7 @@ func desiredRules() ([]rbacv1.PolicyRule, error) {
 	}
 
 	rules := make([]rbacv1.PolicyRule, 0,
-		len(tenantRole.Rules)+len(tenantSecretsReaderRole.Rules)+len(tenantSecretsWriterRole.Rules)+len(sentinelRole.Rules)+1,
+		len(tenantRole.Rules)+len(tenantSecretsReaderRole.Rules)+len(tenantSecretsWriterRole.Rules)+1,
 	)
 	rules = append(rules, rbacRule)
 
@@ -109,13 +108,6 @@ func desiredRules() ([]rbacv1.PolicyRule, error) {
 		if !anyRuleCovers(rules, maxSecretsWriteRule) {
 			rules = append(rules, maxSecretsWriteRule)
 		}
-	}
-
-	for _, rule := range sentinelRole.Rules {
-		if anyRuleCovers(rules, rule) {
-			continue
-		}
-		rules = append(rules, rule)
 	}
 
 	return rules, nil

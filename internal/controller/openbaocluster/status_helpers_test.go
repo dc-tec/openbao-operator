@@ -100,7 +100,7 @@ func TestBuildDegradedCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cond := buildDegradedCondition(tt.cluster, tt.admissionStatus, tt.upgradeFailed)
+			cond := buildDegradedCondition(tt.cluster, tt.upgradeFailed)
 
 			assert.Equal(t, string(openbaov1alpha1.ConditionDegraded), cond.Type)
 			assert.Equal(t, tt.wantStatus, cond.Status)

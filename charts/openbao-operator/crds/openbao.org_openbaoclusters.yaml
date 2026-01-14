@@ -1155,7 +1155,7 @@ spec:
               operatorImageVerification:
                 description: |-
                   OperatorImageVerification configures supply chain security checks for operator-managed helper images
-                  (init container, sentinel, backup/upgrade/restore executors). These images are typically signed
+                  (init container, backup/upgrade/restore executors). These images are typically signed
                   by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.
                   If not specified, falls back to the main ImageVerification config.
                 properties:
@@ -1577,93 +1577,6 @@ spec:
                       - path
                       type: object
                     type: array
-                required:
-                - enabled
-                type: object
-              sentinel:
-                description: Sentinel configures the high-availability watcher/healer.
-                properties:
-                  debounceWindowSeconds:
-                    default: 2
-                    description: |-
-                      DebounceWindowSeconds controls the debounce window for drift detection.
-                      Multiple drift events within this window will be coalesced into a single trigger.
-                    format: int32
-                    maximum: 60
-                    minimum: 1
-                    type: integer
-                  enabled:
-                    default: true
-                    description: Enabled controls whether the Sentinel sidecar controller
-                      is deployed.
-                    type: boolean
-                  image:
-                    description: |-
-                      Image allows overriding the Sentinel container image.
-                      If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_SENTINEL_IMAGE_REPOSITORY
-                      (default: "ghcr.io/dc-tec/openbao-operator-sentinel") and the tag matches OPERATOR_VERSION.
-                    type: string
-                  resources:
-                    description: |-
-                      Resources allows configuring resource limits for the Sentinel.
-                      If not specified, defaults to requests/limits: 64Mi memory, 100m CPU.
-                    properties:
-                      claims:
-                        description: |-
-                          Claims lists the names of resources, defined in spec.resourceClaims,
-                          that are used by this container.
-
-                          This field depends on the
-                          DynamicResourceAllocation feature gate.
-
-                          This field is immutable. It can only be set for containers.
-                        items:
-                          description: ResourceClaim references one entry in PodSpec.ResourceClaims.
-                          properties:
-                            name:
-                              description: |-
-                                Name must match the name of one entry in pod.spec.resourceClaims of
-                                the Pod where this field is used. It makes that resource available
-                                inside a container.
-                              type: string
-                            request:
-                              description: |-
-                                Request is the name chosen for a request in the referenced claim.
-                                If empty, everything from the claim is made available, otherwise
-                                only the result of this request.
-                              type: string
-                          required:
-                          - name
-                          type: object
-                        type: array
-                        x-kubernetes-list-map-keys:
-                        - name
-                        x-kubernetes-list-type: map
-                      limits:
-                        additionalProperties:
-                          anyOf:
-                          - type: integer
-                          - type: string
-                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                          x-kubernetes-int-or-string: true
-                        description: |-
-                          Limits describes the maximum amount of compute resources allowed.
-                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-                        type: object
-                      requests:
-                        additionalProperties:
-                          anyOf:
-                          - type: integer
-                          - type: string
-                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                          x-kubernetes-int-or-string: true
-                        description: |-
-                          Requests describes the minimum amount of compute resources required.
-                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
-                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
-                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-                        type: object
-                    type: object
                 required:
                 - enabled
                 type: object
@@ -2645,44 +2558,6 @@ spec:
                 description: CurrentVersion is the OpenBao version currently running
                   on the cluster.
                 type: string
-              drift:
-                description: Drift tracks drift detection and correction events for
-                  this cluster.
-                properties:
-                  consecutiveFastPaths:
-                    description: |-
-                      ConsecutiveFastPaths tracks consecutive Sentinel-triggered reconciliations
-                      without a full reconcile. Reset to 0 after each full reconcile.
-                    format: int32
-                    type: integer
-                  driftCorrectionCount:
-                    description: DriftCorrectionCount is the total number of times
-                      drift has been detected and corrected.
-                    format: int32
-                    type: integer
-                  lastCorrectionTime:
-                    description: LastCorrectionTime is the timestamp when drift was
-                      last corrected by the operator.
-                    format: date-time
-                    type: string
-                  lastDriftDetected:
-                    description: LastDriftDetected is the timestamp when drift was
-                      last detected by Sentinel.
-                    format: date-time
-                    type: string
-                  lastDriftResource:
-                    description: |-
-                      LastDriftResource is the resource that triggered the last drift detection
-                      (e.g., "Service/sentinel-cluster" or "StatefulSet/sentinel-cluster").
-                    type: string
-                  lastFullReconcileTime:
-                    description: |-
-                      LastFullReconcileTime is the timestamp of the last full reconciliation
-                      (including UpgradeManager and BackupManager). Used to prevent Sentinel-triggered
-                      fast path from indefinitely blocking administrative operations.
-                    format: date-time
-                    type: string
-                type: object
               initialized:
                 description: |-
                   Initialized indicates whether the OpenBao cluster has been initialized.
@@ -2746,35 +2621,6 @@ spec:
                   OpenBao's self-initialization feature. When true, no root token Secret
                   exists for this cluster (the root token was auto-revoked).
                 type: boolean
-              sentinel:
-                description: Sentinel records drift triggers emitted by the Sentinel
-                  component.
-                properties:
-                  lastHandledAt:
-                    description: LastHandledAt is when the operator last handled a
-                      Sentinel trigger (best-effort).
-                    format: date-time
-                    type: string
-                  lastHandledTriggerID:
-                    description: |-
-                      LastHandledTriggerID is the last TriggerID that the operator has fully processed.
-                      This prevents re-processing the same trigger across reconciles.
-                    type: string
-                  triggerID:
-                    description: |-
-                      TriggerID is an edge-trigger identifier set by Sentinel whenever it detects drift.
-                      The operator treats a trigger as new when TriggerID != LastHandledTriggerID.
-                      Recommended format: RFC3339Nano timestamp string or UUID.
-                    type: string
-                  triggerResource:
-                    description: TriggerResource optionally indicates what drifted
-                      (e.g., "Service/foo", "StatefulSet/bar").
-                    type: string
-                  triggeredAt:
-                    description: TriggeredAt is when Sentinel detected drift (best-effort).
-                    format: date-time
-                    type: string
-                type: object
               upgrade:
                 description: |-
                   Upgrade tracks the state of an in-progress upgrade (if any).
@@ -2829,7 +2675,7 @@ spec:
                 type: object
               workload:
                 description: Workload holds signals owned by the workload controller
-                  (infrastructure + drift correction).
+                  (infrastructure reconciliation).
                 properties:
                   lastError:
                     description: LastError is the last workload-controller error observed

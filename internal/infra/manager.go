@@ -64,12 +64,11 @@ const (
 
 // Manager reconciles infrastructure resources such as ConfigMaps, StatefulSets, and Services for an OpenBaoCluster.
 type Manager struct {
-	client                 client.Client
-	scheme                 *runtime.Scheme
-	operatorNamespace      string
-	oidcIssuer             string
-	oidcJWTKeys            []string
-	sentinelAdmissionReady bool
+	client            client.Client
+	scheme            *runtime.Scheme
+	operatorNamespace string
+	oidcIssuer        string
+	oidcJWTKeys       []string
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client.
@@ -78,26 +77,11 @@ type Manager struct {
 // oidcIssuer and oidcJWTKeys are the OIDC configuration discovered at operator startup.
 func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string) *Manager {
 	return &Manager{
-		client:                 c,
-		scheme:                 scheme,
-		operatorNamespace:      operatorNamespace,
-		oidcIssuer:             oidcIssuer,
-		oidcJWTKeys:            oidcJWTKeys,
-		sentinelAdmissionReady: true,
-	}
-}
-
-// NewManagerWithSentinelAdmission constructs a Manager with an explicit admission readiness
-// signal for Sentinel. When sentinelAdmissionReady is false, the Manager will not deploy
-// Sentinel resources even if spec.sentinel.enabled is true.
-func NewManagerWithSentinelAdmission(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string, sentinelAdmissionReady bool) *Manager {
-	return &Manager{
-		client:                 c,
-		scheme:                 scheme,
-		operatorNamespace:      operatorNamespace,
-		oidcIssuer:             oidcIssuer,
-		oidcJWTKeys:            oidcJWTKeys,
-		sentinelAdmissionReady: sentinelAdmissionReady,
+		client:            c,
+		scheme:            scheme,
+		operatorNamespace: operatorNamespace,
+		oidcIssuer:        oidcIssuer,
+		oidcJWTKeys:       oidcJWTKeys,
 	}
 }
 
@@ -107,14 +91,12 @@ func NewManagerWithSentinelAdmission(c client.Client, scheme *runtime.Scheme, op
 //   - Managing a per-cluster static auto-unseal Secret (only when using static seal).
 //   - Rendering a config.hcl ConfigMap that injects TLS paths, storage configuration, retry_join, and seal configuration.
 //   - Reconciling a headless StatefulSet-backed Service, an optional external Service/Ingress, and the StatefulSet itself.
-//   - Managing the Sentinel sidecar controller for drift detection (if enabled).
 //
 // verifiedImageDigest is the verified image digest (e.g., "openbao/openbao@sha256:abc...") from image verification.
 // If provided, it will be used instead of cluster.Spec.Image to prevent TOCTOU attacks.
 // If empty, cluster.Spec.Image will be used.
-// verifiedSentinelDigest is the verified Sentinel image digest (if provided).
 // verifiedInitContainerDigest is the verified init container image digest (if provided).
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string, verifiedSentinelDigest string, verifiedInitContainerDigest string) error {
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string, verifiedInitContainerDigest string) error {
 	// Only create unseal secret if using static seal (default or explicit)
 	if usesStaticSeal(cluster) {
 		if err := m.ensureUnsealSecret(ctx, logger, cluster); err != nil {
@@ -153,10 +135,6 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// SECURITY: Create PodDisruptionBudget to prevent simultaneous pod evictions
 	// that could cause quorum loss during node drains or cluster upgrades
 	if err := m.ensurePodDisruptionBudget(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.reconcileSentinel(ctx, logger, cluster, verifiedSentinelDigest); err != nil {
 		return err
 	}
 
@@ -250,33 +228,6 @@ func statefulSetRevisionName(logger logr.Logger, cluster *openbaov1alpha1.OpenBa
 
 	// Bootstrap revision for initial reconciliation before BlueGreen status is initialized.
 	return revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas), false
-}
-
-func (m *Manager) reconcileSentinel(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedSentinelDigest string) error {
-	// Manage Sentinel deployment.
-	sentinelEnabled := cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled
-	if sentinelEnabled && m.sentinelAdmissionReady {
-		if err := m.ensureSentinelServiceAccount(ctx, logger, cluster); err != nil {
-			return err
-		}
-		if err := m.ensureSentinelRBAC(ctx, logger, cluster); err != nil {
-			return err
-		}
-		if err := m.ensureSentinelDeployment(ctx, logger, cluster, verifiedSentinelDigest); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	// Sentinel is disabled or unsafe; clean up resources.
-	if sentinelEnabled && !m.sentinelAdmissionReady {
-		logger.Info("Sentinel is enabled but admission policies are not ready; skipping Sentinel deployment and cleaning up any existing Sentinel resources")
-	}
-	if err := m.ensureSentinelCleanup(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // applyResource uses Server-Side Apply to create or update a Kubernetes resource.

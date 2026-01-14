@@ -1,6 +1,6 @@
 package constants
 
-// Annotation keys used by the operator and Sentinel.
+// Annotation keys used by the operator.
 const (
 	// AnnotationTriggerBackup is the annotation key used to trigger an immediate manual backup.
 	AnnotationTriggerBackup = "openbao.org/trigger-backup"
@@ -22,16 +22,4 @@ const (
 	AnnotationLastRootTokenWarning = "openbao.org/last-root-token-warning"
 	// AnnotationLastStaticUnsealWarning is the last time the operator emitted a static unseal warning event.
 	AnnotationLastStaticUnsealWarning = "openbao.org/last-static-unseal-warning"
-)
-
-// Sentinel resource names.
-const (
-	// SentinelServiceAccountName is the name of the ServiceAccount used by the Sentinel.
-	SentinelServiceAccountName = "openbao-sentinel"
-	// SentinelRoleName is the name of the Role created for the Sentinel.
-	SentinelRoleName = "openbao-sentinel-role"
-	// SentinelRoleBindingName is the name of the RoleBinding created for the Sentinel.
-	SentinelRoleBindingName = "openbao-sentinel-rolebinding"
-	// SentinelDeploymentNameSuffix is the suffix for the Sentinel Deployment name.
-	SentinelDeploymentNameSuffix = "-sentinel"
 )

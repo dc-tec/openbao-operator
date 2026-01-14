@@ -1140,32 +1140,6 @@ type WorkloadHardeningConfig struct {
 	AppArmorEnabled bool `json:"appArmorEnabled,omitempty"`
 }
 
-// SentinelConfig configures the Sentinel sidecar controller that watches for infrastructure drift.
-type SentinelConfig struct {
-	// Enabled controls whether the Sentinel sidecar controller is deployed.
-	// +kubebuilder:default=true
-	Enabled bool `json:"enabled"`
-
-	// Image allows overriding the Sentinel container image.
-	// If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_SENTINEL_IMAGE_REPOSITORY
-	// (default: "ghcr.io/dc-tec/openbao-operator-sentinel") and the tag matches OPERATOR_VERSION.
-	// +optional
-	Image string `json:"image,omitempty"`
-
-	// Resources allows configuring resource limits for the Sentinel.
-	// If not specified, defaults to requests/limits: 64Mi memory, 100m CPU.
-	// +optional
-	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
-
-	// DebounceWindowSeconds controls the debounce window for drift detection.
-	// Multiple drift events within this window will be coalesced into a single trigger.
-	// +kubebuilder:default=2
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=60
-	// +optional
-	DebounceWindowSeconds *int32 `json:"debounceWindowSeconds,omitempty"`
-}
-
 // OpenBaoConfiguration defines the server configuration for OpenBao.
 type OpenBaoConfiguration struct {
 	// UI enables the built-in web interface.
@@ -1440,7 +1414,7 @@ type OpenBaoClusterSpec struct {
 	// +optional
 	ImageVerification *ImageVerificationConfig `json:"imageVerification,omitempty"`
 	// OperatorImageVerification configures supply chain security checks for operator-managed helper images
-	// (init container, sentinel, backup/upgrade/restore executors). These images are typically signed
+	// (init container, backup/upgrade/restore executors). These images are typically signed
 	// by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.
 	// If not specified, falls back to the main ImageVerification config.
 	// +optional
@@ -1458,9 +1432,6 @@ type OpenBaoClusterSpec struct {
 	// +kubebuilder:validation:Enum=Hardened;Development
 	// +optional
 	Profile Profile `json:"profile,omitempty"`
-	// Sentinel configures the high-availability watcher/healer.
-	// +optional
-	Sentinel *SentinelConfig `json:"sentinel,omitempty"`
 	// UpdateStrategy controls how the operator handles version changes.
 	// +optional
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty"`
@@ -1617,54 +1588,6 @@ type BackupStatus struct {
 }
 
 // DriftStatus tracks drift detection and correction events for a cluster.
-type DriftStatus struct {
-	// LastDriftDetected is the timestamp when drift was last detected by Sentinel.
-	// +optional
-	LastDriftDetected *metav1.Time `json:"lastDriftDetected,omitempty"`
-	// DriftCorrectionCount is the total number of times drift has been detected and corrected.
-	// +optional
-	DriftCorrectionCount int32 `json:"driftCorrectionCount,omitempty"`
-	// LastCorrectionTime is the timestamp when drift was last corrected by the operator.
-	// +optional
-	LastCorrectionTime *metav1.Time `json:"lastCorrectionTime,omitempty"`
-	// LastDriftResource is the resource that triggered the last drift detection
-	// (e.g., "Service/sentinel-cluster" or "StatefulSet/sentinel-cluster").
-	// +optional
-	LastDriftResource string `json:"lastDriftResource,omitempty"`
-	// LastFullReconcileTime is the timestamp of the last full reconciliation
-	// (including UpgradeManager and BackupManager). Used to prevent Sentinel-triggered
-	// fast path from indefinitely blocking administrative operations.
-	// +optional
-	LastFullReconcileTime *metav1.Time `json:"lastFullReconcileTime,omitempty"`
-	// ConsecutiveFastPaths tracks consecutive Sentinel-triggered reconciliations
-	// without a full reconcile. Reset to 0 after each full reconcile.
-	// +optional
-	ConsecutiveFastPaths int32 `json:"consecutiveFastPaths,omitempty"`
-}
-
-// SentinelStatus records drift triggers emitted by the Sentinel component.
-// This lives in status (not annotations) to be GitOps-friendly (e.g., ArgoCD).
-type SentinelStatus struct {
-	// TriggerID is an edge-trigger identifier set by Sentinel whenever it detects drift.
-	// The operator treats a trigger as new when TriggerID != LastHandledTriggerID.
-	// Recommended format: RFC3339Nano timestamp string or UUID.
-	// +optional
-	TriggerID string `json:"triggerID,omitempty"`
-	// TriggeredAt is when Sentinel detected drift (best-effort).
-	// +optional
-	TriggeredAt *metav1.Time `json:"triggeredAt,omitempty"`
-	// TriggerResource optionally indicates what drifted (e.g., "Service/foo", "StatefulSet/bar").
-	// +optional
-	TriggerResource string `json:"triggerResource,omitempty"`
-	// LastHandledTriggerID is the last TriggerID that the operator has fully processed.
-	// This prevents re-processing the same trigger across reconciles.
-	// +optional
-	LastHandledTriggerID string `json:"lastHandledTriggerID,omitempty"`
-	// LastHandledAt is when the operator last handled a Sentinel trigger (best-effort).
-	// +optional
-	LastHandledAt *metav1.Time `json:"lastHandledAt,omitempty"`
-}
-
 // OpenBaoClusterStatus defines the observed state of an OpenBaoCluster.
 type OpenBaoClusterStatus struct {
 	// Phase is a high-level summary of the cluster state.
@@ -1701,12 +1624,6 @@ type OpenBaoClusterStatus struct {
 	// Backup tracks the state of backups for this cluster.
 	// +optional
 	Backup *BackupStatus `json:"backup,omitempty"`
-	// Drift tracks drift detection and correction events for this cluster.
-	// +optional
-	Drift *DriftStatus `json:"drift,omitempty"`
-	// Sentinel records drift triggers emitted by the Sentinel component.
-	// +optional
-	Sentinel *SentinelStatus `json:"sentinel,omitempty"`
 	// BlueGreen tracks the state of blue/green upgrades (if enabled).
 	// +optional
 	BlueGreen *BlueGreenStatus `json:"blueGreen,omitempty"`
@@ -1718,7 +1635,7 @@ type OpenBaoClusterStatus struct {
 	// explicit operator acknowledgment to continue.
 	// +optional
 	BreakGlass *BreakGlassStatus `json:"breakGlass,omitempty"`
-	// Workload holds signals owned by the workload controller (infrastructure + drift correction).
+	// Workload holds signals owned by the workload controller (infrastructure reconciliation).
 	// +optional
 	Workload *WorkloadControllerStatus `json:"workload,omitempty"`
 	// AdminOps holds signals owned by the adminops controller (upgrade + backup).

@@ -166,8 +166,6 @@ var policyFileMapping = map[string]string{
 	"lock-controller-statefulset-mutations-binding.yaml": "validating-policies.yaml", // merged
 	"restrict-provisioner-delegate.yaml":                 "provisioner-delegate.yaml",
 	"restrict-provisioner-delegate-binding.yaml":         "provisioner-delegate.yaml", // merged
-	"restrict-sentinel-mutations.yaml":                   "sentinel-mutations.yaml",
-	"restrict-sentinel-mutations-binding.yaml":           "sentinel-mutations.yaml", // merged
 	"validate-openbaocluster.yaml":                       "validate-openbaocluster.yaml",
 	"validate-openbaocluster-binding.yaml":               "validate-openbaocluster.yaml", // merged
 }

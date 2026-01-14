@@ -154,19 +154,6 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 	})
 }
 
-func (r *infraReconciler) verifySentinelImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	if cluster.Spec.Sentinel == nil || !cluster.Spec.Sentinel.Enabled {
-		return "", nil
-	}
-
-	sentinelImage := cluster.Spec.Sentinel.Image
-	if sentinelImage == "" {
-		sentinelImage = inframanager.SentinelImage(cluster, logger)
-	}
-
-	return r.verifyOperatorImageDigest(ctx, logger, cluster, sentinelImage, constants.ReasonSentinelImageVerificationFailed, "Sentinel image verification failed")
-}
-
 func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
 	if cluster.Spec.InitContainer == nil {
 		return "", nil
@@ -180,21 +167,6 @@ func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, lo
 	return r.verifyOperatorImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Init container image verification failed")
 }
 
-func (r *infraReconciler) reconcileSentinelAdmissionStatus(cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	sentinelAdmissionReady := r.admissionStatus == nil || r.admissionStatus.SentinelReady
-	sentinelEnabled := cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled
-
-	if sentinelEnabled && !sentinelAdmissionReady {
-		if r.recorder != nil {
-			r.recorder.Eventf(cluster, corev1.EventTypeWarning, ReasonAdmissionPoliciesNotReady,
-				"Sentinel is enabled but admission policies are not ready; Sentinel will be disabled: %s", r.admissionStatus.SummaryMessage())
-		}
-		return false
-	}
-
-	return sentinelAdmissionReady
-}
-
 // Reconcile implements SubReconciler for infrastructure reconciliation.
 func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	logger.Info("Reconciling infrastructure for OpenBaoCluster")
@@ -204,17 +176,10 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		return recon.Result{}, err
 	}
 
-	verifiedSentinelDigest, err := r.verifySentinelImageDigest(ctx, logger, cluster)
-	if err != nil {
-		return recon.Result{}, err
-	}
-
 	verifiedInitContainerDigest, err := r.verifyInitContainerImageDigest(ctx, logger, cluster)
 	if err != nil {
 		return recon.Result{}, err
 	}
-
-	sentinelAdmissionReady := r.reconcileSentinelAdmissionStatus(cluster)
 
 	// Bootstrap/correct BlueGreen status before infra reconciliation so the infra manager can
 	// keep reconciling the active ("Blue") revision even when spec.version/spec.image has been
@@ -245,8 +210,8 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		}
 	}
 
-	manager := inframanager.NewManagerWithSentinelAdmission(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, sentinelAdmissionReady)
-	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest, verifiedSentinelDigest, verifiedInitContainerDigest); err != nil {
+	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys)
+	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest, verifiedInitContainerDigest); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			return recon.Result{}, operatorerrors.WithReason(ReasonGatewayAPIMissing, err)
 		}

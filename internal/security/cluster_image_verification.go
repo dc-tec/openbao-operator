@@ -48,7 +48,7 @@ func VerifyImageForCluster(ctx context.Context, logger logr.Logger, k8sClient cl
 	return digest, nil
 }
 
-// VerifyOperatorImageForCluster verifies an operator-managed helper image (init container, sentinel,
+// VerifyOperatorImageForCluster verifies an operator-managed helper image (init container,
 // backup/upgrade/restore executors) using the cluster's OperatorImageVerification config.
 // Unlike VerifyImageForCluster, this function does NOT fall back to ImageVerification.
 // If OperatorImageVerification is not configured, verification is skipped for helper images.

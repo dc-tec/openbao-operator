@@ -27,11 +27,10 @@ spec:
         request.resource.resource != 'roles' ||
         object.metadata.name in [
           'openbao-operator-tenant-role',
-          'openbao-sentinel-role',
           'openbao-operator-tenant-secrets-reader',
           'openbao-operator-tenant-secrets-writer'
         ]
-      message: "The Provisioner Delegate can only create Roles for the operator tenant template (tenant/sentinel/secrets allowlists)."
+      message: "The Provisioner Delegate can only create Roles for the operator tenant template (tenant + secrets allowlists)."
 
     # Rule 2: RoleBinding Name Restriction
     # The Delegate can ONLY create RoleBindings with specific names.
@@ -40,11 +39,10 @@ spec:
         request.resource.resource != 'rolebindings' ||
         object.metadata.name in [
           'openbao-operator-tenant-rolebinding',
-          'openbao-sentinel-rolebinding',
           'openbao-operator-tenant-secrets-reader-rolebinding',
           'openbao-operator-tenant-secrets-writer-rolebinding'
         ]
-      message: "The Provisioner Delegate can only create RoleBindings for the operator tenant template (tenant/sentinel/secrets allowlists)."
+      message: "The Provisioner Delegate can only create RoleBindings for the operator tenant template (tenant + secrets allowlists)."
 
     # Rule 3: Role Reference Restriction (Prevent Admin Grant)
     # The Delegate can ONLY bind to the specific operator-defined roles.
@@ -54,11 +52,10 @@ spec:
         request.resource.resource != 'rolebindings' ||
         object.roleRef.name in [
           'openbao-operator-tenant-role',
-          'openbao-sentinel-role',
           'openbao-operator-tenant-secrets-reader',
           'openbao-operator-tenant-secrets-writer'
         ]
-      message: "The Provisioner Delegate is restricted to binding only the operator tenant template Roles (tenant/sentinel/secrets allowlists)."
+      message: "The Provisioner Delegate is restricted to binding only the operator tenant template Roles (tenant + secrets allowlists)."
 
     # Rule 4: Subject Type Restriction
     # The Delegate can ONLY bind roles to ServiceAccounts (not users or groups).
@@ -86,7 +83,6 @@ spec:
 
     # Rule 5: Subject Restriction (Prevent Backdoor Creation)
     # Tenant RoleBinding must bind ONLY the controller ServiceAccount in the operator namespace.
-    # Sentinel RoleBinding must bind ONLY the openbao-sentinel ServiceAccount in the tenant namespace.
     - expression: >-
         !variables.is_delegate ||
         request.resource.resource != 'rolebindings' ||
@@ -98,14 +94,6 @@ spec:
             object.subjects[0].kind == 'ServiceAccount' &&
             object.subjects[0].name == 'openbao-operator-controller' &&
             object.subjects[0].namespace == '{{ .Release.Namespace }}'
-          ) ||
-          (
-            object.metadata.name == 'openbao-sentinel-rolebinding' &&
-            object.roleRef.name == 'openbao-sentinel-role' &&
-            object.subjects.size() == 1 &&
-            object.subjects[0].kind == 'ServiceAccount' &&
-            object.subjects[0].name == 'openbao-sentinel' &&
-            object.subjects[0].namespace == object.metadata.namespace
           ) ||
           (
             object.metadata.name == 'openbao-operator-tenant-secrets-reader-rolebinding' &&
@@ -124,7 +112,7 @@ spec:
             object.subjects[0].namespace == '{{ .Release.Namespace }}'
           )
         )
-      message: "The Provisioner Delegate can only bind tenant RBAC to the operator controller ServiceAccount, or sentinel RBAC to the tenant-local openbao-sentinel ServiceAccount."
+      message: "The Provisioner Delegate can only bind tenant RBAC to the operator controller ServiceAccount."
 
     # Rule 6: Content Restriction (Prevent Dangerous Verbs)
     # The Delegate cannot create or update Roles that grant impersonation,
@@ -183,7 +171,7 @@ spec:
       message: "The Provisioner Delegate cannot create Roles granting nonResourceURLs."
 
     # Rule 8: Content Restriction (Secrets)
-    # Defense-in-depth: prevent accidental broadening of tenant/sentinel roles to include
+    # Defense-in-depth: prevent accidental broadening of tenant roles to include
     # Secrets access. Secret access is only allowed via the explicit allowlist Roles.
     - expression: >-
         !variables.is_delegate ||

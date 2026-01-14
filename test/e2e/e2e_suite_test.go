@@ -50,7 +50,6 @@ import (
 const (
 	defaultProjectImage         = "example.com/openbao-operator:v0.0.1"
 	defaultConfigInitImage      = "openbao-config-init:dev"
-	defaultSentinelImage        = "ghcr.io/dc-tec/openbao-operator-sentinel:v0.0.0"
 	defaultBackupExecutorImage  = "openbao/backup-executor:dev"
 	defaultUpgradeExecutorImage = "openbao/upgrade-executor:dev"
 )
@@ -84,11 +83,6 @@ var (
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
 	// and load it into kind.
 	configInitImage = defaultConfigInitImage
-
-	// sentinelImage is the image used by Sentinel Deployment.
-	// It must be resolvable inside the kind cluster; in E2E we build it locally
-	// and load it into kind. The version matches OPERATOR_VERSION in the operator deployment.
-	sentinelImage = defaultSentinelImage
 
 	// backupExecutorImage is the image used by backup Jobs.
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
@@ -140,7 +134,6 @@ func TestE2E(t *testing.T) {
 	logf.SetLogger(zap.New(zap.UseDevMode(false)))
 	projectImage = envOrDefault("E2E_OPERATOR_IMAGE", projectImage)
 	configInitImage = envOrDefault("E2E_CONFIG_INIT_IMAGE", configInitImage)
-	sentinelImage = envOrDefault("E2E_SENTINEL_IMAGE", sentinelImage)
 	backupExecutorImage = envOrDefault("E2E_BACKUP_EXECUTOR_IMAGE", backupExecutorImage)
 	upgradeExecutorImage = envOrDefault("E2E_UPGRADE_EXECUTOR_IMAGE", upgradeExecutorImage)
 	RegisterFailHandler(Fail)
@@ -203,17 +196,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	// Images are loaded per parallel cluster below.
 
 	if skipImageBuild {
-		By("skipping build of the Sentinel image")
-	} else {
-		By("building the Sentinel image")
-		cmd = exec.Command("make", "docker-build-sentinel", fmt.Sprintf("IMG=%s", sentinelImage))
-		_, err = utils.Run(cmd)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the Sentinel image")
-	}
-
-	// Images are loaded per parallel cluster below.
-
-	if skipImageBuild {
 		By("skipping build of the backup executor image")
 	} else {
 		By("building the backup executor image")
@@ -259,10 +241,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 				By(fmt.Sprintf("loading the config-init image on Kind (cluster=%s)", clusterName))
 				err = utils.LoadImageToKindClusterWithName(configInitImage)
 				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the config-init image into Kind (cluster=%s)", clusterName))
-
-				By(fmt.Sprintf("loading the Sentinel image on Kind (cluster=%s)", clusterName))
-				err = utils.LoadImageToKindClusterWithName(sentinelImage)
-				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the Sentinel image into Kind (cluster=%s)", clusterName))
 
 				By(fmt.Sprintf("loading the backup executor image on Kind (cluster=%s)", clusterName))
 				err = utils.LoadImageToKindClusterWithName(backupExecutorImage)

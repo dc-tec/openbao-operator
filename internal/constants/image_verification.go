@@ -9,7 +9,6 @@ const (
 // Condition reasons for image verification failures.
 const (
 	ReasonImageVerificationFailed                  = "ImageVerificationFailed"
-	ReasonSentinelImageVerificationFailed          = "SentinelImageVerificationFailed"
 	ReasonInitContainerImageVerificationFailed     = "InitContainerImageVerificationFailed"
 	ReasonBackupExecutorImageVerificationFailed    = "BackupExecutorImageVerificationFailed"
 	ReasonUpgradeExecutorImageVerificationFailed   = "UpgradeExecutorImageVerificationFailed"

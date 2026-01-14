@@ -141,7 +141,7 @@ func TestInfraReconcilerVerifyOperatorImageDigest_WarnEmitsEvent(t *testing.T) {
 		},
 	}
 
-	digest, err := r.verifyOperatorImageDigest(context.Background(), logr.Discard(), cluster, "example/sentinel:test", constants.ReasonSentinelImageVerificationFailed, "Sentinel image verification failed")
+	digest, err := r.verifyOperatorImageDigest(context.Background(), logr.Discard(), cluster, "example/init:test", constants.ReasonInitContainerImageVerificationFailed, "Init container image verification failed")
 	if err != nil {
 		t.Fatalf("verifyOperatorImageDigest() error = %v, want nil", err)
 	}
@@ -151,10 +151,10 @@ func TestInfraReconcilerVerifyOperatorImageDigest_WarnEmitsEvent(t *testing.T) {
 
 	select {
 	case evt := <-recorder.Events:
-		if !strings.Contains(evt, constants.ReasonSentinelImageVerificationFailed) {
-			t.Fatalf("event %q missing reason %q", evt, constants.ReasonSentinelImageVerificationFailed)
+		if !strings.Contains(evt, constants.ReasonInitContainerImageVerificationFailed) {
+			t.Fatalf("event %q missing reason %q", evt, constants.ReasonInitContainerImageVerificationFailed)
 		}
-		if !strings.Contains(evt, "Sentinel image verification failed but proceeding due to Warn policy") {
+		if !strings.Contains(evt, "Init container image verification failed but proceeding due to Warn policy") {
 			t.Fatalf("event %q missing expected message", evt)
 		}
 	case <-time.After(2 * time.Second):

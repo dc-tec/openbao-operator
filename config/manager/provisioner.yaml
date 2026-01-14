@@ -38,8 +38,6 @@ spec:
           env:
             - name: OPERATOR_VERSION
               value: "v0.0.0" # [FIX] Set to actual version during release/build
-            - name: OPERATOR_SENTINEL_IMAGE_REPOSITORY
-              value: "ghcr.io/dc-tec/openbao-operator-sentinel"
           ports: []
           securityContext:
             readOnlyRootFilesystem: true

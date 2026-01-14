@@ -53,13 +53,6 @@ Manager image reference
 {{- end -}}
 
 {{/*
-Sentinel image repository
-*/}}
-{{- define "openbao-operator.sentinelImageRepository" -}}
-{{- .Values.sentinel.imageRepository -}}
-{{- end -}}
-
-{{/*
 Common labels
 */}}
 {{- define "openbao-operator.labels" -}}
