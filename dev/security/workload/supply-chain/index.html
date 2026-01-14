@@ -871,34 +871,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/sentinel/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sentinel
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../../user-guide/openbaocluster/configuration/server/" class="md-nav__link">
         
   
@@ -2183,34 +2155,6 @@
           </ul>
         </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../architecture/sentinel/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sentinel Drift Detector
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -4061,11 +4005,6 @@
 <td style="text-align: left;">Helper for config rendering</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Sentinel Sidecar</strong></td>
-<td style="text-align: left;"><code>spec.operatorImageVerification</code></td>
-<td style="text-align: left;">Drift detection sidecar</td>
-</tr>
-<tr>
 <td style="text-align: left;"><strong>Backup/Restore Jobs</strong></td>
 <td style="text-align: left;"><code>spec.operatorImageVerification</code></td>
 <td style="text-align: left;">Snapshot executors</td>
@@ -4078,7 +4017,7 @@
 </tbody>
 </table>
 <h2 id="separate-signers-for-openbao-and-operator-images">Separate Signers for OpenBao and Operator Images<a class="headerlink" href="#separate-signers-for-openbao-and-operator-images" title="Permanent link">&para;</a></h2>
-<p>The OpenBao main image (<code>openbao/openbao</code>) is signed by the <strong>OpenBao project</strong>, while helper images (init container, sentinel, backup/restore executors) are signed by the <strong>operator project</strong>. Use <code>operatorImageVerification</code> to specify different signing credentials:</p>
+<p>The OpenBao main image (<code>openbao/openbao</code>) is signed by the <strong>OpenBao project</strong>, while helper images (init container, backup/restore executors, upgrade jobs) are signed by the <strong>operator project</strong>. Use <code>operatorImageVerification</code> to specify different signing credentials:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="c1"># Main OpenBao image (signed by openbao/openbao)</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;openbao/openbao:2.4.4&quot;</span>

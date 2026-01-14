@@ -871,34 +871,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/sentinel/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sentinel
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../../user-guide/openbaocluster/configuration/server/" class="md-nav__link">
         
   
@@ -2188,34 +2160,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../architecture/sentinel/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sentinel Drift Detector
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -3356,10 +3300,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#sentinel-errors" class="md-nav__link">
+  <a href="#checkable-errors" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sentinel Errors
+        Checkable Errors
       
     </span>
   </a>
@@ -4023,10 +3967,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#sentinel-errors" class="md-nav__link">
+  <a href="#checkable-errors" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sentinel Errors
+        Checkable Errors
       
     </span>
   </a>
@@ -4202,8 +4146,8 @@
 </div>
 </div>
 </div>
-<h3 id="sentinel-errors">Sentinel Errors<a class="headerlink" href="#sentinel-errors" title="Permanent link">&para;</a></h3>
-<p>Define exported sentinel errors for conditions callers might need to check.</p>
+<h3 id="checkable-errors">Checkable Errors<a class="headerlink" href="#checkable-errors" title="Permanent link">&para;</a></h3>
+<p>Define exported, well-known errors for conditions callers might need to check.</p>
 <div class="language-go highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kd">var</span><span class="w"> </span><span class="p">(</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">    </span><span class="nx">ErrClusterNotReady</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="s">&quot;cluster not ready&quot;</span><span class="p">)</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nx">ErrSecretNotFound</span><span class="w">  </span><span class="p">=</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="s">&quot;secret not found&quot;</span><span class="p">)</span>

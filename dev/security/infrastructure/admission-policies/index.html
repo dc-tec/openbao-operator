@@ -871,34 +871,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/sentinel/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sentinel
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../../user-guide/openbaocluster/configuration/server/" class="md-nav__link">
         
   
@@ -2188,34 +2160,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../architecture/sentinel/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sentinel Drift Detector
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -2676,17 +2620,6 @@
     <span class="md-ellipsis">
       
         Provisioner Delegate Hardening
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sentinel-hardening" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sentinel Hardening
       
     </span>
   </a>
@@ -3888,17 +3821,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#sentinel-hardening" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sentinel Hardening
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#configuration-ownership" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4001,12 +3923,6 @@
 <td style="text-align: left;">Enforces spec invariants (e.g., Hardened profile requirements, TLS configs).</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>restrict-sentinel-mutations</code></td>
-<td style="text-align: left;"><code>OpenBaoCluster</code> (Status)</td>
-<td style="text-align: left;"><strong>Restrict</strong></td>
-<td style="text-align: left;">Ensures the Sentinel can <em>only</em> update specific status trigger fields.</td>
-</tr>
-<tr>
 <td style="text-align: left;"><code>restrict-provisioner-delegate</code></td>
 <td style="text-align: left;"><code>Role</code>, <code>RoleBinding</code></td>
 <td style="text-align: left;"><strong>Restrict</strong></td>
@@ -4018,26 +3934,10 @@
 <p>The <code>restrict-provisioner-delegate</code> policy is a defense-in-depth control that applies to RBAC mutations performed by the impersonated Provisioner Delegate identity.</p>
 <p><strong>Key guarantees:</strong></p>
 <ul>
-<li>Only specific Role/RoleBinding names are allowed (tenant/sentinel + secrets allowlist roles).</li>
+<li>Only specific Role/RoleBinding names are allowed (tenant + secrets allowlist roles).</li>
 <li>RoleBindings are restricted to known ServiceAccount subjects (prevents backdoor bindings).</li>
 <li>Dangerous verbs and wildcards are denied (<code>impersonate</code>, <code>bind</code>, <code>escalate</code>, <code>*</code>).</li>
 <li>Secret permissions are only allowed via the dedicated secrets allowlist Roles, and those Roles must be name-scoped (<code>resourceNames</code>) and non-enumerating (no <code>list</code>/<code>watch</code>).</li>
-</ul>
-<h2 id="sentinel-hardening">Sentinel Hardening<a class="headerlink" href="#sentinel-hardening" title="Permanent link">&para;</a></h2>
-<div class="admonition success">
-<p class="admonition-title">Broken Object Prevention</p>
-<p>The <code>restrict-sentinel-mutations</code> policy acts as a firewall for the Sentinel sidecar. Since the Sentinel runs <em>alongside</em> the controller, a compromise of the Sentinel could theoretically affect the cluster status. This policy ensures the Sentinel works strictly as a "drift detector" and cannot mutate <code>spec</code> or other status conditions.</p>
-</div>
-<p><strong>Allowed Mutations:</strong></p>
-<ul>
-<li><code>status.sentinel.triggerID</code></li>
-<li><code>status.sentinel.triggeredAt</code></li>
-</ul>
-<p><strong>Blocked Mutations:</strong></p>
-<ul>
-<li><code>spec.*</code> (All fields)</li>
-<li><code>metadata.labels</code>, <code>metadata.annotations</code></li>
-<li><code>status.conditions</code> (Phase transitions)</li>
 </ul>
 <h2 id="configuration-ownership">Configuration Ownership<a class="headerlink" href="#configuration-ownership" title="Permanent link">&para;</a></h2>
 <p>The Operator ensures that user intent (<code>spec.configuration</code>) is respected while enforcing mandatory platform settings.</p>

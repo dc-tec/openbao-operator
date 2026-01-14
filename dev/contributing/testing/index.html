@@ -871,34 +871,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/sentinel/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sentinel
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../user-guide/openbaocluster/configuration/server/" class="md-nav__link">
         
   
@@ -2183,34 +2155,6 @@
           </ul>
         </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../architecture/sentinel/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sentinel Drift Detector
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -4045,7 +3989,7 @@
 <li><strong>CRUD Operations</strong>: Ensuring Objects are created/updated correctly.</li>
 <li><strong>Status Updates</strong>: Verifying <code>Status.Phase</code> transitions.</li>
 <li><strong>Finalizers</strong>: Testing deletion interception.</li>
-<li><strong>Drift Detection</strong>: Verifying Sentinel reactions to modifications.</li>
+<li><strong>Admission Policies</strong>: Verifying VAP-enforced invariants and safety checks.</li>
 </ul>
 <div class="admonition tip">
 <p class="admonition-title">Speed vs Fidelity</p>
@@ -4058,14 +4002,14 @@
 <ul>
 <li><strong>Kind Cluster</strong>: Runs actual Kubernetes nodes in Docker.</li>
 <li><strong>Real Images</strong>: Builds and loads the Operator and OpenBao images.</li>
-<li><strong>Helpers</strong>: automated <code>backup-executor</code>, <code>upgrade-executor</code>, <code>sentinel</code>.</li>
+<li><strong>Helpers</strong>: automated <code>backup-executor</code>, <code>upgrade-executor</code>.</li>
 </ul>
 <p><strong>Core Scenarios</strong>:</p>
 <ol>
 <li><strong>Lifecycle</strong>: Provision -&gt; Init -&gt; Scale -&gt; Delete.</li>
 <li><strong>Upgrades</strong>: Rolling Updates (with pre-upgrade backups) and Blue/Green.</li>
 <li><strong>Backups</strong>: Streaming Raft snapshots to MinIO.</li>
-<li><strong>Security</strong>: Sentinel VAP enforcement and drift remediation.</li>
+<li><strong>Security</strong>: RBAC and admission policy enforcement.</li>
 <li><strong>Multi-Tenancy</strong>: Namespace isolation verification.</li>
 </ol>
 <p><strong>Filtering Tests</strong>:</p>
