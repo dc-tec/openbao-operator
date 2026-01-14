@@ -77,9 +77,15 @@ spec:
     - name: is_cert_manager
       expression: >-
         request.userInfo.username.startsWith("system:serviceaccount:cert-manager:")
+    - name: is_cert_manager_secret_request
+      expression: >-
+        variables.is_cert_manager && request.resource.resource == "secrets"
     - name: is_pod_request
       expression: >-
         request.kind.group == "" && request.kind.kind == "Pod"
+    - name: is_service_request
+      expression: >-
+        request.kind.group == "" && request.kind.kind == "Service"
     - name: is_kubelet_node
       expression: >-
         request.userInfo.username.startsWith("system:node:")
@@ -142,6 +148,28 @@ spec:
           (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
         (has(object.metadata.finalizers) || has(oldObject.metadata.finalizers)) &&
         (!has(object.metadata.finalizers) || !has(oldObject.metadata.finalizers) || object.metadata.finalizers != oldObject.metadata.finalizers)
+    - name: service_new_annotations
+      expression: >-
+        (object != null && has(object.metadata) && has(object.metadata.annotations)) ? object.metadata.annotations : {}
+    - name: service_old_annotations
+      expression: >-
+        (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.annotations)) ? oldObject.metadata.annotations : {}
+    - name: is_kube_system_service_metadata_update
+      expression: >-
+        variables.is_service_request &&
+        request.operation == "UPDATE" &&
+        variables.is_kube_system_controller &&
+        object.spec == oldObject.spec &&
+        (has(object.metadata.labels) == has(oldObject.metadata.labels) &&
+          (!has(object.metadata.labels) || object.metadata.labels == oldObject.metadata.labels)) &&
+        (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+          (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+        variables.service_new_annotations.all(k, v,
+          !k.startsWith("openbao.org/") ||
+          (k in variables.service_old_annotations && variables.service_old_annotations[k] == v)) &&
+        variables.service_old_annotations.all(k, v,
+          !k.startsWith("openbao.org/") ||
+          (k in variables.service_new_annotations && variables.service_new_annotations[k] == v))
     - name: maintenance_enabled
       expression: >-
         request.operation == "DELETE" ?
@@ -171,11 +199,10 @@ spec:
         (variables.is_system_controller && request.operation == "DELETE") ||
         (variables.is_system_controller && request.resource.resource == "pods") ||
         (variables.is_system_controller && variables.is_endpoints_controller_request) ||
-        variables.is_kube_system_controller ||
-        (variables.is_kube_system_controller && request.operation == "DELETE") ||
         (variables.is_kube_system_controller && request.resource.resource == "pods" && (request.operation == "CREATE" || request.operation == "DELETE")) ||
         (variables.is_kube_system_controller && variables.is_endpoints_controller_request) ||
-        variables.is_cert_manager ||
+        variables.is_kube_system_service_metadata_update ||
+        variables.is_cert_manager_secret_request ||
         (variables.is_pod_request && variables.is_kubelet_node && request.operation == "DELETE") ||
         variables.is_service_registration_label_update ||
         variables.is_kube_system_pod_finalizer_update ||

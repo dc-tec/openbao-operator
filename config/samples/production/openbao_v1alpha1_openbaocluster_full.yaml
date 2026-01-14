@@ -131,7 +131,7 @@ spec:
   #
   # imageVerification: Verifies the main OpenBao server image (openbao/openbao).
   # operatorImageVerification: Verifies operator-provided helper images (init container,
-  #   Sentinel, backup executor, upgrade executor, etc.). If not specified, falls back
+  #   backup executor, upgrade executor, etc.). If not specified, falls back
   #   to imageVerification.
   imageVerification:
     enabled: true

@@ -58,9 +58,9 @@ When interacting with the Kubernetes API, check for specific error types using `
     }
     ```
 
-## 4. Sentinel Errors
+## 4. Checkable Errors
 
-Define exported sentinel errors for implementation-specific conditions that callers might need to handle.
+Define exported, well-known errors for implementation-specific conditions that callers might need to handle.
 
 ```go
 var (

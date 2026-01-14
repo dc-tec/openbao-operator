@@ -2,12 +2,8 @@
 IMG ?= controller:latest
 
 # OPERATOR_VERSION is injected into the controller/provisioner Deployments.
-# This is used by the controller to derive version-matched helper images (e.g., Sentinel).
+# This is used by the controller to derive version-matched helper images.
 OPERATOR_VERSION ?= v0.0.0
-
-# OPERATOR_SENTINEL_IMAGE_REPOSITORY controls the base image repository used for deriving the
-# Sentinel image when spec.sentinel.image is not set.
-OPERATOR_SENTINEL_IMAGE_REPOSITORY ?= ghcr.io/dc-tec/openbao-operator-sentinel
 
 # INIT_IMG is the image for the config-init helper used as an init container
 # in OpenBao pods to render the final config.hcl from the template.
@@ -550,10 +546,6 @@ docker-build-backup: ## Build docker image with the backup-executor helper.
 docker-build-upgrade: ## Build docker image with the upgrade executor helper.
 	$(CONTAINER_TOOL) build -f Dockerfile.upgrade -t ${IMG} .
 
-.PHONY: docker-build-sentinel
-docker-build-sentinel: ## Build docker image with the Sentinel binary.
-	$(CONTAINER_TOOL) build -f Dockerfile.sentinel -t ${IMG} .
-
 .PHONY: docker-push-backup
 docker-push-backup: ## Push docker image with the backup-executor helper.
 	$(CONTAINER_TOOL) push ${IMG}
@@ -586,7 +578,7 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	mkdir -p dist; \
 	cp -R config "$$tmp/config"; \
 	for f in "$$tmp/config/manager/controller.yaml" "$$tmp/config/manager/provisioner.yaml"; do \
-		python3 -c 'import pathlib,re,sys; p=pathlib.Path(sys.argv[1]); v=sys.argv[2]; r=sys.argv[3]; q=chr(34); s=p.read_text(encoding="utf-8"); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_VERSION\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+v+q, s, count=1); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_SENTINEL_IMAGE_REPOSITORY\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+r+q, s, count=1); p.write_text(s, encoding="utf-8")' "$$f" "$(OPERATOR_VERSION)" "$(OPERATOR_SENTINEL_IMAGE_REPOSITORY)"; \
+		python3 -c 'import pathlib,re,sys; p=pathlib.Path(sys.argv[1]); v=sys.argv[2]; q=chr(34); s=p.read_text(encoding="utf-8"); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_VERSION\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+v+q, s, count=1); p.write_text(s, encoding="utf-8")' "$$f" "$(OPERATOR_VERSION)"; \
 	done; \
 	( cd "$$tmp/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
 	"$(KUSTOMIZE)" build "$$tmp/config/default" > "$$out"
@@ -617,7 +609,7 @@ deploy: manifests kustomize ## Deploy both provisioner and controller to the K8s
 	trap 'rm -rf "$$tmp"' EXIT; \
 	cp -R config "$$tmp/config"; \
 	for f in "$$tmp/config/manager/controller.yaml" "$$tmp/config/manager/provisioner.yaml"; do \
-		python3 -c 'import pathlib,re,sys; p=pathlib.Path(sys.argv[1]); v=sys.argv[2]; r=sys.argv[3]; q=chr(34); s=p.read_text(encoding="utf-8"); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_VERSION\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+v+q, s, count=1); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_SENTINEL_IMAGE_REPOSITORY\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+r+q, s, count=1); p.write_text(s, encoding="utf-8")' "$$f" "$(OPERATOR_VERSION)" "$(OPERATOR_SENTINEL_IMAGE_REPOSITORY)"; \
+		python3 -c 'import pathlib,re,sys; p=pathlib.Path(sys.argv[1]); v=sys.argv[2]; q=chr(34); s=p.read_text(encoding="utf-8"); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_VERSION\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+v+q, s, count=1); p.write_text(s, encoding="utf-8")' "$$f" "$(OPERATOR_VERSION)"; \
 	done; \
 	( cd "$$tmp/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
 	"$(KUSTOMIZE)" build "$$tmp/config/default" | "$(KUBECTL)" apply -f -

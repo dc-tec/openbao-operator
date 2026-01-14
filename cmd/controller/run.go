@@ -284,7 +284,6 @@ func Run(args []string) {
 	}
 
 	// Admission policy dependency check (release-critical security boundary).
-	// If this check fails, the controller stays up, but Sentinel is treated as unsafe.
 	admissionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	admissionStatus, err := admission.CheckDependencies(
@@ -296,23 +295,12 @@ func Run(args []string) {
 	if err != nil {
 		setupLog.Error(err, "Failed to evaluate admission policy dependencies; treating admission as not ready")
 		admissionStatus.OverallReady = false
-		admissionStatus.SentinelReady = false
 	}
 	admission.SetAdmissionDependenciesReady(admissionStatus.OverallReady)
 	if admissionStatus.OverallReady {
-		setupLog.Info("Admission policy dependencies ready", "sentinel_ready", admissionStatus.SentinelReady)
+		setupLog.Info("Admission policy dependencies ready")
 	} else {
-		if admissionStatus.SentinelReady {
-			setupLog.Info("Admission policy dependencies not ready; Sentinel remains enabled",
-				"sentinel_ready", admissionStatus.SentinelReady,
-				"summary", admissionStatus.SummaryMessage(),
-			)
-		} else {
-			setupLog.Info("Admission policy dependencies not ready; Sentinel will be disabled",
-				"sentinel_ready", admissionStatus.SentinelReady,
-				"summary", admissionStatus.SummaryMessage(),
-			)
-		}
+		setupLog.Info("Admission policy dependencies not ready", "summary", admissionStatus.SummaryMessage())
 	}
 
 	// Pass these values into the Reconciler struct

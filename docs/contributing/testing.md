@@ -134,7 +134,7 @@ graph BT
     - **CRUD Operations**: Ensuring Objects are created/updated correctly.
     - **Status Updates**: Verifying `Status.Phase` transitions.
     - **Finalizers**: Testing deletion interception.
-    - **Drift Detection**: Verifying Sentinel reactions to modifications.
+    - **Admission Policies**: Verifying VAP-enforced invariants and safety checks.
     
     !!! tip "Speed vs Fidelity"
         Since no Pods run, you cannot test network connectivity, volume mounting, or OpenBao startup. Use E2E tests for those.
@@ -147,14 +147,14 @@ graph BT
     
     - **Kind Cluster**: Runs actual Kubernetes nodes in Docker.
     - **Real Images**: Builds and loads the Operator and OpenBao images.
-    - **Helpers**: automated `backup-executor`, `upgrade-executor`, `sentinel`.
+    - **Helpers**: automated `backup-executor`, `upgrade-executor`.
     
     **Core Scenarios**:
     
     1.  **Lifecycle**: Provision -> Init -> Scale -> Delete.
     2.  **Upgrades**: Rolling Updates (with pre-upgrade backups) and Blue/Green.
     3.  **Backups**: Streaming Raft snapshots to MinIO.
-    4.  **Security**: Sentinel VAP enforcement and drift remediation.
+    4.  **Security**: RBAC and admission policy enforcement.
     5.  **Multi-Tenancy**: Namespace isolation verification.
     
     **Filtering Tests**:

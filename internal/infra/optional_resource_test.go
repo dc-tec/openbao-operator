@@ -189,7 +189,7 @@ func TestReconcileOptionalResource_Enabled_ValidConfig_Applies(t *testing.T) {
 func TestReconcileOptionalResource_Enabled_BuildError_Propagates(t *testing.T) {
 	t.Parallel()
 
-	sentinelErr := errors.New("boom")
+	buildErr := errors.New("boom")
 
 	var getCalls, deleteCalls, applyCalls int
 
@@ -203,7 +203,7 @@ func TestReconcileOptionalResource_Enabled_BuildError_Propagates(t *testing.T) {
 			return &corev1.ConfigMap{}
 		},
 		buildDesired: func() (client.Object, bool, error) {
-			return nil, false, sentinelErr
+			return nil, false, buildErr
 		},
 		get: func(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
 			getCalls++
@@ -220,8 +220,8 @@ func TestReconcileOptionalResource_Enabled_BuildError_Propagates(t *testing.T) {
 	}
 
 	err := reconcileOptionalResource(context.Background(), opts)
-	if !errors.Is(err, sentinelErr) {
-		t.Fatalf("expected %v, got %v", sentinelErr, err)
+	if !errors.Is(err, buildErr) {
+		t.Fatalf("expected %v, got %v", buildErr, err)
 	}
 	if getCalls != 0 || deleteCalls != 0 || applyCalls != 0 {
 		t.Fatalf("unexpected calls: get=%d delete=%d apply=%d", getCalls, deleteCalls, applyCalls)

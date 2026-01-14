@@ -177,7 +177,6 @@ var _ = Describe("Workstream B: RBAC & Admission Hardening", Label("security", "
 		status, err := admission.CheckDependencies(checkCtx, c, admission.DefaultDependencies(), []string{"openbao-operator-", ""})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.OverallReady).To(BeTrue(), status.SummaryMessage())
-		Expect(status.SentinelReady).To(BeTrue(), status.SummaryMessage())
 	})
 })
 

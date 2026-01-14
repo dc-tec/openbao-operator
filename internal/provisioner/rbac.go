@@ -10,7 +10,6 @@ import (
 var (
 	verbsReadOnly     = []string{"get", "list", "watch"}
 	verbsManage       = []string{"create", "delete", "get", "list", "patch", "update", "watch"}
-	verbsPatchOnly    = []string{"patch"}
 	verbsEventWrite   = []string{"create", "patch"}
 	verbsPodManage    = []string{"delete", "get", "list", "patch", "update", "watch"}
 	verbsSecretRead   = []string{"get"}
@@ -307,86 +306,6 @@ func GenerateTenantSecretsWriterRoleBinding(namespace string, operatorSA Operato
 				Kind:      "ServiceAccount",
 				Name:      operatorSA.Name,
 				Namespace: operatorSA.Namespace,
-			},
-		},
-	}
-}
-
-// GenerateSentinelRole generates the read-only + trigger role for the Sentinel.
-// Follows least-privilege principles:
-// - Read-only access to resources Sentinel watches (StatefulSets, Services, ConfigMaps)
-// - No access to Secrets (Sentinel does not detect drift in unseal keys or root tokens)
-// - No access to Pods or Ingresses (not used by Sentinel)
-// - Minimal write access: only "patch" on OpenBaoCluster status to emit drift triggers
-// - list/watch on OpenBaoCluster required for controller-runtime cache to function (best-effort)
-func GenerateSentinelRole(namespace string) *rbacv1.Role {
-	rules := []rbacv1.PolicyRule{
-		{
-			APIGroups: []string{"apps"},
-			Resources: []string{"statefulsets"},
-			Verbs:     cloneStrings(verbsReadOnly),
-		},
-		{
-			APIGroups: []string{""},
-			Resources: []string{"services", "configmaps"},
-			Verbs:     cloneStrings(verbsReadOnly),
-		},
-		{
-			APIGroups: []string{"openbao.org"},
-			Resources: []string{"openbaoclusters"},
-			Verbs:     cloneStrings(verbsReadOnly),
-		},
-		{
-			APIGroups: []string{"openbao.org"},
-			Resources: []string{"openbaoclusters/status"},
-			Verbs:     cloneStrings(verbsPatchOnly),
-		},
-	}
-
-	return &rbacv1.Role{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "rbac.authorization.k8s.io/v1",
-			Kind:       "Role",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.SentinelRoleName,
-			Namespace: namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: "sentinel",
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-			},
-		},
-		Rules: rules,
-	}
-}
-
-// GenerateSentinelRoleBinding generates a RoleBinding for the Sentinel ServiceAccount.
-func GenerateSentinelRoleBinding(namespace string) *rbacv1.RoleBinding {
-	return &rbacv1.RoleBinding{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "rbac.authorization.k8s.io/v1",
-			Kind:       "RoleBinding",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.SentinelRoleBindingName,
-			Namespace: namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: "sentinel",
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-			},
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "Role",
-			Name:     constants.SentinelRoleName,
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      constants.SentinelServiceAccountName,
-				Namespace: namespace,
 			},
 		},
 	}

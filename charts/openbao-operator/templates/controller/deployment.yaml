@@ -56,8 +56,6 @@ spec:
               value: {{ include "openbao-operator.controllerServiceAccountName" . }}
             - name: OPERATOR_VERSION
               value: {{ include "openbao-operator.operatorVersion" . | quote }}
-            - name: OPERATOR_SENTINEL_IMAGE_REPOSITORY
-              value: {{ include "openbao-operator.sentinelImageRepository" . | quote }}
             {{- with .Values.controller.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -107,4 +105,3 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-

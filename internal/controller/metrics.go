@@ -46,33 +46,6 @@ var (
 		[]string{"namespace", "name", "phase"},
 	)
 
-	driftDetectedTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: "openbao",
-			Name:      "drift_detected_total",
-			Help:      "Total number of drift events detected by Sentinel",
-		},
-		[]string{"namespace", "name", "resource_kind"},
-	)
-
-	driftCorrectedTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: "openbao",
-			Name:      "drift_corrected_total",
-			Help:      "Total number of drift events corrected by the operator",
-		},
-		[]string{"namespace", "name"},
-	)
-
-	driftLastDetectedTimestamp = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "openbao",
-			Name:      "drift_last_detected_timestamp",
-			Help:      "Unix timestamp when drift was last detected",
-		},
-		[]string{"namespace", "name"},
-	)
-
 	// Restore metrics
 	restoreTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -118,9 +91,6 @@ func init() {
 		reconcileErrorsTotal,
 		clusterReadyReplicasGauge,
 		clusterPhaseGauge,
-		driftDetectedTotal,
-		driftCorrectedTotal,
-		driftLastDetectedTimestamp,
 		// Restore metrics
 		restoreTotal,
 		restoreSuccessTotal,
@@ -191,27 +161,6 @@ func (m *ClusterMetrics) SetPhase(phase openbaov1alpha1.ClusterPhase) {
 		Set(1.0)
 }
 
-// RecordDriftDetected records that Sentinel detected drift on a specific resource.
-func (m *ClusterMetrics) RecordDriftDetected(resourceKind string) {
-	driftDetectedTotal.
-		WithLabelValues(m.namespace, m.name, resourceKind).
-		Inc()
-}
-
-// RecordDriftCorrected records that the operator corrected drift.
-func (m *ClusterMetrics) RecordDriftCorrected() {
-	driftCorrectedTotal.
-		WithLabelValues(m.namespace, m.name).
-		Inc()
-}
-
-// SetDriftLastDetectedTimestamp records the timestamp when drift was last detected.
-func (m *ClusterMetrics) SetDriftLastDetectedTimestamp(timestampSeconds float64) {
-	driftLastDetectedTimestamp.
-		WithLabelValues(m.namespace, m.name).
-		Set(timestampSeconds)
-}
-
 // Clear removes all per-cluster metrics for this cluster. This should be
 // called during finalization to avoid leaving stale series after deletion.
 func (m *ClusterMetrics) Clear() {
@@ -229,10 +178,6 @@ func (m *ClusterMetrics) Clear() {
 		clusterPhaseGauge.
 			DeleteLabelValues(m.namespace, m.name, string(phase))
 	}
-
-	// Clear drift metrics
-	driftLastDetectedTimestamp.
-		DeleteLabelValues(m.namespace, m.name)
 }
 
 // RestoreMetrics provides helpers to record restore operation metrics.

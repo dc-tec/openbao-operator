@@ -104,18 +104,6 @@ patchesJson6902:
       kind: ValidatingAdmissionPolicyBinding
       name: openbao-operator-openbao-restrict-provisioner-delegate-binding
     path: policy_strip_namespace_patch.yaml
-  - target:
-      group: admissionregistration.k8s.io
-      version: v1
-      kind: ValidatingAdmissionPolicy
-      name: openbao-operator-openbao-restrict-sentinel-mutations
-    path: policy_strip_namespace_patch.yaml
-  - target:
-      group: admissionregistration.k8s.io
-      version: v1
-      kind: ValidatingAdmissionPolicyBinding
-      name: openbao-operator-openbao-restrict-sentinel-mutations
-    path: policy_strip_namespace_patch.yaml
 
     # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER' prefix.
     # The following replacements add the cert-manager CA injection annotations.

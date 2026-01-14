@@ -67,31 +67,6 @@ flowchart TB
     !!! note "Backup Jobs"
         Backup and Restore jobs are **excluded** from this restrictive policy. They run as separate pods that need broad access to reach external object storage (S3, GCS, Azure).
 
-## Sentinel Protection
-
-To prevent the Sentinel sidecar (which watches for config drift) from overwhelming the Operator or the Kubernetes API, a strict **Rate Limiting** logic is enforced:
-
-```mermaid
-stateDiagram-v2
-    [*] --> CheckCount
-    
-    CheckCount --> FastPath: Count < 5
-    CheckCount --> ForceFull: Count >= 5
-    
-    FastPath --> CheckTime
-    CheckTime --> Reconcile: < 5 mins
-    CheckTime --> ForceFull: > 5 mins
-
-    Reconcile --> [*]: Quick Drift Fix
-    ForceFull --> [*]: Full Reconcile (Backup/Upgrade)
-
-    classDef logic fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    class CheckCount,FastPath,CheckTime,Reconcile,ForceFull logic;
-```
-
-- **Fast Path:** Simple drift correction (e.g., fixing a label).
-- **Force Full:** Limits "fast checks" to prevents loops. After 5 fast corrections or 5 minutes, a full reconciliation (checking backups, upgrades, statefulsets) is forced to ensure overall system consistency.
-
 ## See Also
 
 - [:material-network-outline: Network Configuration](../../user-guide/openbaocluster/configuration/network.md)

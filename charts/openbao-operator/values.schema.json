@@ -56,19 +56,6 @@
       "type": "string",
       "description": "Override operator version reported in status"
     },
-    "sentinel": {
-      "type": "object",
-      "description": "Sentinel sidecar configuration",
-      "additionalProperties": false,
-      "properties": {
-        "imageRepository": {
-          "type": "string",
-          "description": "Image repository for the sentinel sidecar",
-          "minLength": 1
-        }
-      },
-      "required": ["imageRepository"]
-    },
     "tenancy": {
       "type": "object",
       "description": "Tenancy mode configuration",
@@ -255,7 +242,7 @@
       }
     }
   },
-  "required": ["image", "sentinel", "tenancy"],
+  "required": ["image", "tenancy"],
   "$defs": {
     "resources": {
       "type": "object",

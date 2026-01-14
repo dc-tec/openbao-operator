@@ -42,7 +42,6 @@ The Operator ships with a suite of policies to enforce "Least Privilege" and "Gi
 | `lock-managed-resource-mutations` | `StatefulSet`, `Service`, `Secret` | **Block** | Prevents users/GitOps from modifying resources managed by the Operator (labeled `app.kubernetes.io/managed-by=openbao-operator`). |
 | `lock-controller-statefulset-mutations` | `StatefulSet` (Controller) | **Block** | Self-protection: prevents the Controller from modifying its own sensitive fields (volumes, args). |
 | `validate-openbaocluster` | `OpenBaoCluster` | **Validate** | Enforces spec invariants (e.g., Hardened profile requirements, TLS configs). |
-| `restrict-sentinel-mutations` | `OpenBaoCluster` (Status) | **Restrict** | Ensures the Sentinel can *only* update specific status trigger fields. |
 | `restrict-provisioner-delegate` | `Role`, `RoleBinding` | **Restrict** | Limits the Provisioner Delegate to creating only specific, pre-approved RBAC roles. |
 
 ## Provisioner Delegate Hardening
@@ -51,26 +50,10 @@ The `restrict-provisioner-delegate` policy is a defense-in-depth control that ap
 
 **Key guarantees:**
 
-- Only specific Role/RoleBinding names are allowed (tenant/sentinel + secrets allowlist roles).
+- Only specific Role/RoleBinding names are allowed (tenant + secrets allowlist roles).
 - RoleBindings are restricted to known ServiceAccount subjects (prevents backdoor bindings).
 - Dangerous verbs and wildcards are denied (`impersonate`, `bind`, `escalate`, `*`).
 - Secret permissions are only allowed via the dedicated secrets allowlist Roles, and those Roles must be name-scoped (`resourceNames`) and non-enumerating (no `list`/`watch`).
-
-## Sentinel Hardening
-
-!!! success "Broken Object Prevention"
-    The `restrict-sentinel-mutations` policy acts as a firewall for the Sentinel sidecar. Since the Sentinel runs *alongside* the controller, a compromise of the Sentinel could theoretically affect the cluster status. This policy ensures the Sentinel works strictly as a "drift detector" and cannot mutate `spec` or other status conditions.
-
-**Allowed Mutations:**
-
-- `status.sentinel.triggerID`
-- `status.sentinel.triggeredAt`
-
-**Blocked Mutations:**
-
-- `spec.*` (All fields)
-- `metadata.labels`, `metadata.annotations`
-- `status.conditions` (Phase transitions)
 
 ## Configuration Ownership
 

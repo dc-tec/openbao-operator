@@ -28,10 +28,6 @@ import (
 
 // OpenBaoClusterPredicateOptions controls which OpenBaoCluster changes should trigger reconciliation.
 type OpenBaoClusterPredicateOptions struct {
-	// ReconcileOnSentinelTrigger enables reconciliation when status.sentinel.triggerID changes.
-	ReconcileOnSentinelTrigger bool
-	// ReconcileOnSentinelHandled enables reconciliation when status.sentinel.lastHandledTriggerID changes.
-	ReconcileOnSentinelHandled bool
 	// ReconcileOnUpgradeStatus enables reconciliation when status.upgrade changes.
 	ReconcileOnUpgradeStatus bool
 	// ReconcileOnBackupStatus enables reconciliation when status.backup changes.
@@ -62,13 +58,11 @@ type OpenBaoClusterPredicateOptions struct {
 // since they don't require reconciliation - the controller updates status
 // based on observed state, not in response to status changes.
 func OpenBaoClusterPredicate() predicate.Predicate {
-	return OpenBaoClusterPredicateWithOptions(OpenBaoClusterPredicateOptions{
-		ReconcileOnSentinelTrigger: true,
-	})
+	return OpenBaoClusterPredicateWithOptions(OpenBaoClusterPredicateOptions{})
 }
 
 // OpenBaoClusterPredicateWithOptions is like OpenBaoClusterPredicate but allows opting into
-// reconciliation on specific status-based signals (such as Sentinel triggers).
+// reconciliation on specific status-based signals.
 func OpenBaoClusterPredicateWithOptions(opts OpenBaoClusterPredicateOptions) predicate.Predicate {
 	return predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
@@ -101,12 +95,6 @@ func shouldReconcileOpenBaoClusterUpdate(
 	opts OpenBaoClusterPredicateOptions,
 	oldCluster, newCluster *openbaov1alpha1.OpenBaoCluster,
 ) bool {
-	if opts.ReconcileOnSentinelTrigger && sentinelTriggerChanged(oldCluster, newCluster) {
-		return true
-	}
-	if opts.ReconcileOnSentinelHandled && sentinelHandledChanged(oldCluster, newCluster) {
-		return true
-	}
 	if opts.ReconcileOnUpgradeStatus && !equality.Semantic.DeepEqual(oldCluster.Status.Upgrade, newCluster.Status.Upgrade) {
 		return true
 	}
@@ -153,31 +141,6 @@ func shouldReconcileOpenBaoClusterUpdate(
 
 	// Filter out status-only updates
 	return false
-}
-
-func sentinelTriggerChanged(oldCluster, newCluster *openbaov1alpha1.OpenBaoCluster) bool {
-	// Reconcile if Sentinel emitted a new drift trigger via status.
-	oldTriggerID := ""
-	if oldCluster.Status.Sentinel != nil {
-		oldTriggerID = oldCluster.Status.Sentinel.TriggerID
-	}
-	newTriggerID := ""
-	if newCluster.Status.Sentinel != nil {
-		newTriggerID = newCluster.Status.Sentinel.TriggerID
-	}
-	return newTriggerID != "" && newTriggerID != oldTriggerID
-}
-
-func sentinelHandledChanged(oldCluster, newCluster *openbaov1alpha1.OpenBaoCluster) bool {
-	oldHandled := ""
-	if oldCluster.Status.Sentinel != nil {
-		oldHandled = oldCluster.Status.Sentinel.LastHandledTriggerID
-	}
-	newHandled := ""
-	if newCluster.Status.Sentinel != nil {
-		newHandled = newCluster.Status.Sentinel.LastHandledTriggerID
-	}
-	return newHandled != "" && newHandled != oldHandled
 }
 
 func workloadLastError(cluster *openbaov1alpha1.OpenBaoCluster) *openbaov1alpha1.ControllerErrorStatus {

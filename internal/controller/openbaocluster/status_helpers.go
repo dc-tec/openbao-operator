@@ -88,7 +88,6 @@ func buildAvailableCondition(cluster *openbaov1alpha1.OpenBaoCluster, readyRepli
 // ObservedGeneration and LastTransitionTime must be set by the caller.
 func buildDegradedCondition(
 	cluster *openbaov1alpha1.OpenBaoCluster,
-	admissionStatus *admission.Status,
 	upgradeFailed bool,
 ) metav1.Condition {
 	// Check break glass first
@@ -98,17 +97,6 @@ func buildDegradedCondition(
 			Status:  metav1.ConditionTrue,
 			Reason:  constants.ReasonBreakGlassRequired,
 			Message: "Break glass required; see status.breakGlass for recovery steps",
-		}
-	}
-
-	// Check admission policies for Sentinel
-	sentinelEnabled := cluster.Spec.Sentinel != nil && cluster.Spec.Sentinel.Enabled
-	if sentinelEnabled && admissionStatus != nil && !admissionStatus.SentinelReady {
-		return metav1.Condition{
-			Type:    string(openbaov1alpha1.ConditionDegraded),
-			Status:  metav1.ConditionTrue,
-			Reason:  ReasonAdmissionPoliciesNotReady,
-			Message: "Sentinel is enabled but required admission policies are missing or misbound; Sentinel will not be deployed. " + admissionStatus.SummaryMessage(),
 		}
 	}
 
@@ -351,7 +339,7 @@ func applyAllConditions(
 	meta.SetStatusCondition(&cluster.Status.Conditions, availableCond)
 
 	// Degraded condition
-	degradedCond := buildDegradedCondition(cluster, admissionStatus, state.UpgradeFailed)
+	degradedCond := buildDegradedCondition(cluster, state.UpgradeFailed)
 	degradedCond.ObservedGeneration = gen
 	degradedCond.LastTransitionTime = now
 	meta.SetStatusCondition(&cluster.Status.Conditions, degradedCond)

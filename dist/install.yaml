@@ -1153,7 +1153,7 @@ spec:
               operatorImageVerification:
                 description: |-
                   OperatorImageVerification configures supply chain security checks for operator-managed helper images
-                  (init container, sentinel, backup/upgrade/restore executors). These images are typically signed
+                  (init container, backup/upgrade/restore executors). These images are typically signed
                   by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.
                   If not specified, falls back to the main ImageVerification config.
                 properties:
@@ -1575,93 +1575,6 @@ spec:
                       - path
                       type: object
                     type: array
-                required:
-                - enabled
-                type: object
-              sentinel:
-                description: Sentinel configures the high-availability watcher/healer.
-                properties:
-                  debounceWindowSeconds:
-                    default: 2
-                    description: |-
-                      DebounceWindowSeconds controls the debounce window for drift detection.
-                      Multiple drift events within this window will be coalesced into a single trigger.
-                    format: int32
-                    maximum: 60
-                    minimum: 1
-                    type: integer
-                  enabled:
-                    default: true
-                    description: Enabled controls whether the Sentinel sidecar controller
-                      is deployed.
-                    type: boolean
-                  image:
-                    description: |-
-                      Image allows overriding the Sentinel container image.
-                      If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_SENTINEL_IMAGE_REPOSITORY
-                      (default: "ghcr.io/dc-tec/openbao-operator-sentinel") and the tag matches OPERATOR_VERSION.
-                    type: string
-                  resources:
-                    description: |-
-                      Resources allows configuring resource limits for the Sentinel.
-                      If not specified, defaults to requests/limits: 64Mi memory, 100m CPU.
-                    properties:
-                      claims:
-                        description: |-
-                          Claims lists the names of resources, defined in spec.resourceClaims,
-                          that are used by this container.
-
-                          This field depends on the
-                          DynamicResourceAllocation feature gate.
-
-                          This field is immutable. It can only be set for containers.
-                        items:
-                          description: ResourceClaim references one entry in PodSpec.ResourceClaims.
-                          properties:
-                            name:
-                              description: |-
-                                Name must match the name of one entry in pod.spec.resourceClaims of
-                                the Pod where this field is used. It makes that resource available
-                                inside a container.
-                              type: string
-                            request:
-                              description: |-
-                                Request is the name chosen for a request in the referenced claim.
-                                If empty, everything from the claim is made available, otherwise
-                                only the result of this request.
-                              type: string
-                          required:
-                          - name
-                          type: object
-                        type: array
-                        x-kubernetes-list-map-keys:
-                        - name
-                        x-kubernetes-list-type: map
-                      limits:
-                        additionalProperties:
-                          anyOf:
-                          - type: integer
-                          - type: string
-                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                          x-kubernetes-int-or-string: true
-                        description: |-
-                          Limits describes the maximum amount of compute resources allowed.
-                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-                        type: object
-                      requests:
-                        additionalProperties:
-                          anyOf:
-                          - type: integer
-                          - type: string
-                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                          x-kubernetes-int-or-string: true
-                        description: |-
-                          Requests describes the minimum amount of compute resources required.
-                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
-                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
-                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-                        type: object
-                    type: object
                 required:
                 - enabled
                 type: object
@@ -2643,44 +2556,6 @@ spec:
                 description: CurrentVersion is the OpenBao version currently running
                   on the cluster.
                 type: string
-              drift:
-                description: Drift tracks drift detection and correction events for
-                  this cluster.
-                properties:
-                  consecutiveFastPaths:
-                    description: |-
-                      ConsecutiveFastPaths tracks consecutive Sentinel-triggered reconciliations
-                      without a full reconcile. Reset to 0 after each full reconcile.
-                    format: int32
-                    type: integer
-                  driftCorrectionCount:
-                    description: DriftCorrectionCount is the total number of times
-                      drift has been detected and corrected.
-                    format: int32
-                    type: integer
-                  lastCorrectionTime:
-                    description: LastCorrectionTime is the timestamp when drift was
-                      last corrected by the operator.
-                    format: date-time
-                    type: string
-                  lastDriftDetected:
-                    description: LastDriftDetected is the timestamp when drift was
-                      last detected by Sentinel.
-                    format: date-time
-                    type: string
-                  lastDriftResource:
-                    description: |-
-                      LastDriftResource is the resource that triggered the last drift detection
-                      (e.g., "Service/sentinel-cluster" or "StatefulSet/sentinel-cluster").
-                    type: string
-                  lastFullReconcileTime:
-                    description: |-
-                      LastFullReconcileTime is the timestamp of the last full reconciliation
-                      (including UpgradeManager and BackupManager). Used to prevent Sentinel-triggered
-                      fast path from indefinitely blocking administrative operations.
-                    format: date-time
-                    type: string
-                type: object
               initialized:
                 description: |-
                   Initialized indicates whether the OpenBao cluster has been initialized.
@@ -2744,35 +2619,6 @@ spec:
                   OpenBao's self-initialization feature. When true, no root token Secret
                   exists for this cluster (the root token was auto-revoked).
                 type: boolean
-              sentinel:
-                description: Sentinel records drift triggers emitted by the Sentinel
-                  component.
-                properties:
-                  lastHandledAt:
-                    description: LastHandledAt is when the operator last handled a
-                      Sentinel trigger (best-effort).
-                    format: date-time
-                    type: string
-                  lastHandledTriggerID:
-                    description: |-
-                      LastHandledTriggerID is the last TriggerID that the operator has fully processed.
-                      This prevents re-processing the same trigger across reconciles.
-                    type: string
-                  triggerID:
-                    description: |-
-                      TriggerID is an edge-trigger identifier set by Sentinel whenever it detects drift.
-                      The operator treats a trigger as new when TriggerID != LastHandledTriggerID.
-                      Recommended format: RFC3339Nano timestamp string or UUID.
-                    type: string
-                  triggerResource:
-                    description: TriggerResource optionally indicates what drifted
-                      (e.g., "Service/foo", "StatefulSet/bar").
-                    type: string
-                  triggeredAt:
-                    description: TriggeredAt is when Sentinel detected drift (best-effort).
-                    format: date-time
-                    type: string
-                type: object
               upgrade:
                 description: |-
                   Upgrade tracks the state of an in-progress upgrade (if any).
@@ -2827,7 +2673,7 @@ spec:
                 type: object
               workload:
                 description: Workload holds signals owned by the workload controller
-                  (infrastructure + drift correction).
+                  (infrastructure reconciliation).
                 properties:
                   lastError:
                     description: LastError is the last workload-controller error observed
@@ -4016,8 +3862,6 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: v0.0.0
-        - name: OPERATOR_SENTINEL_IMAGE_REPOSITORY
-          value: ghcr.io/dc-tec/openbao-operator-sentinel
         image: controller:latest
         livenessProbe:
           httpGet:
@@ -4105,8 +3949,6 @@ spec:
         env:
         - name: OPERATOR_VERSION
           value: v0.0.0
-        - name: OPERATOR_SENTINEL_IMAGE_REPOSITORY
-          value: ghcr.io/dc-tec/openbao-operator-sentinel
         image: controller:latest
         livenessProbe:
           httpGet:
@@ -4287,12 +4129,11 @@ spec:
       && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
       (variables.is_system_controller && request.operation == "DELETE") || (variables.is_system_controller
       && request.resource.resource == "pods") || (variables.is_system_controller &&
-      variables.is_endpoints_controller_request) || variables.is_kube_system_controller
-      || (variables.is_kube_system_controller && request.operation == "DELETE") ||
-      (variables.is_kube_system_controller && request.resource.resource == "pods"
-      && (request.operation == "CREATE" || request.operation == "DELETE")) || (variables.is_kube_system_controller
-      && variables.is_endpoints_controller_request) || variables.is_cert_manager ||
-      (variables.is_pod_request && variables.is_kubelet_node && request.operation
+      variables.is_endpoints_controller_request) || (variables.is_kube_system_controller
+      && request.resource.resource == "pods" && (request.operation == "CREATE" ||
+      request.operation == "DELETE")) || (variables.is_kube_system_controller && variables.is_endpoints_controller_request)
+      || variables.is_kube_system_service_metadata_update || variables.is_cert_manager_secret_request
+      || (variables.is_pod_request && variables.is_kubelet_node && request.operation
       == "DELETE") || variables.is_service_registration_label_update || variables.is_kube_system_pod_finalizer_update
       || (variables.maintenance_enabled && variables.is_break_glass_admin)'
     message: Direct modification of OpenBao-managed resources is prohibited; modify
@@ -4331,8 +4172,12 @@ spec:
     name: is_endpoints_controller_request
   - expression: request.userInfo.username.startsWith("system:serviceaccount:cert-manager:")
     name: is_cert_manager
+  - expression: variables.is_cert_manager && request.resource.resource == "secrets"
+    name: is_cert_manager_secret_request
   - expression: request.kind.group == "" && request.kind.kind == "Pod"
     name: is_pod_request
+  - expression: request.kind.group == "" && request.kind.kind == "Service"
+    name: is_service_request
   - expression: request.userInfo.username.startsWith("system:node:")
     name: is_kubelet_node
   - expression: |-
@@ -4391,6 +4236,28 @@ spec:
         (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
       (has(object.metadata.finalizers) || has(oldObject.metadata.finalizers)) && (!has(object.metadata.finalizers) || !has(oldObject.metadata.finalizers) || object.metadata.finalizers != oldObject.metadata.finalizers)
     name: is_kube_system_pod_finalizer_update
+  - expression: '(object != null && has(object.metadata) && has(object.metadata.annotations))
+      ? object.metadata.annotations : {}'
+    name: service_new_annotations
+  - expression: '(oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.annotations))
+      ? oldObject.metadata.annotations : {}'
+    name: service_old_annotations
+  - expression: |-
+      variables.is_service_request && request.operation == "UPDATE" && variables.is_kube_system_controller && object.spec == oldObject.spec && (has(object.metadata.labels) == has(oldObject.metadata.labels) &&
+
+        (!has(object.metadata.labels) || object.metadata.labels == oldObject.metadata.labels)) &&
+      (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+
+        (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+      variables.service_new_annotations.all(k, v,
+
+        !k.startsWith("openbao.org/") ||
+        (k in variables.service_old_annotations && variables.service_old_annotations[k] == v)) &&
+      variables.service_old_annotations.all(k, v,
+
+        !k.startsWith("openbao.org/") ||
+        (k in variables.service_new_annotations && variables.service_new_annotations[k] == v))
+    name: is_kube_system_service_metadata_update
   - expression: |-
       request.operation == "DELETE" ?
 
@@ -4436,32 +4303,29 @@ spec:
       !variables.is_delegate || request.resource.resource != 'roles' || object.metadata.name in [
 
         'openbao-operator-tenant-role',
-        'openbao-sentinel-role',
         'openbao-operator-tenant-secrets-reader',
         'openbao-operator-tenant-secrets-writer'
       ]
     message: The Provisioner Delegate can only create Roles for the operator tenant
-      template (tenant/sentinel/secrets allowlists).
+      template (tenant + secrets allowlists).
   - expression: |-
       !variables.is_delegate || request.resource.resource != 'rolebindings' || object.metadata.name in [
 
         'openbao-operator-tenant-rolebinding',
-        'openbao-sentinel-rolebinding',
         'openbao-operator-tenant-secrets-reader-rolebinding',
         'openbao-operator-tenant-secrets-writer-rolebinding'
       ]
     message: The Provisioner Delegate can only create RoleBindings for the operator
-      tenant template (tenant/sentinel/secrets allowlists).
+      tenant template (tenant + secrets allowlists).
   - expression: |-
       !variables.is_delegate || request.resource.resource != 'rolebindings' || object.roleRef.name in [
 
         'openbao-operator-tenant-role',
-        'openbao-sentinel-role',
         'openbao-operator-tenant-secrets-reader',
         'openbao-operator-tenant-secrets-writer'
       ]
     message: The Provisioner Delegate is restricted to binding only the operator tenant
-      template Roles (tenant/sentinel/secrets allowlists).
+      template Roles (tenant + secrets allowlists).
   - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings''
       || object.subjects.all(s, s.kind == ''ServiceAccount'')'
     message: The Provisioner Delegate can only grant permissions to ServiceAccounts.
@@ -4485,14 +4349,6 @@ spec:
           object.subjects[0].namespace == 'openbao-operator-system'
         ) ||
         (
-          object.metadata.name == 'openbao-sentinel-rolebinding' &&
-          object.roleRef.name == 'openbao-sentinel-role' &&
-          object.subjects.size() == 1 &&
-          object.subjects[0].kind == 'ServiceAccount' &&
-          object.subjects[0].name == 'openbao-sentinel' &&
-          object.subjects[0].namespace == object.metadata.namespace
-        ) ||
-        (
           object.metadata.name == 'openbao-operator-tenant-secrets-reader-rolebinding' &&
           object.roleRef.name == 'openbao-operator-tenant-secrets-reader' &&
           object.subjects.size() == 1 &&
@@ -4510,7 +4366,7 @@ spec:
         )
       )
     message: The Provisioner Delegate can only bind tenant RBAC to the operator controller
-      ServiceAccount, or sentinel RBAC to the tenant-local openbao-sentinel ServiceAccount.
+      ServiceAccount.
   - expression: |-
       !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
 
@@ -4605,69 +4461,6 @@ spec:
   variables:
   - expression: request.userInfo.username == "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner-delegate"
     name: is_delegate
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: openbao-operator-openbao-restrict-sentinel-mutations
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    resourceRules:
-    - apiGroups:
-      - openbao.org
-      apiVersions:
-      - v1alpha1
-      operations:
-      - UPDATE
-      resources:
-      - openbaoclusters/status
-  validations:
-  - expression: |-
-      !variables.is_sentinel || (
-        (has(variables.new_status.phase) ? variables.new_status.phase : "") == (has(variables.old_status.phase) ? variables.old_status.phase : "") &&
-        (has(variables.new_status.activeLeader) ? variables.new_status.activeLeader : "") == (has(variables.old_status.activeLeader) ? variables.old_status.activeLeader : "") &&
-        (has(variables.new_status.readyReplicas) ? variables.new_status.readyReplicas : 0) == (has(variables.old_status.readyReplicas) ? variables.old_status.readyReplicas : 0) &&
-        (has(variables.new_status.currentVersion) ? variables.new_status.currentVersion : "") == (has(variables.old_status.currentVersion) ? variables.old_status.currentVersion : "") &&
-        (has(variables.new_status.initialized) ? variables.new_status.initialized : false) == (has(variables.old_status.initialized) ? variables.old_status.initialized : false) &&
-        (has(variables.new_status.selfInitialized) ? variables.new_status.selfInitialized : false) == (has(variables.old_status.selfInitialized) ? variables.old_status.selfInitialized : false) &&
-        (has(variables.new_status.lastBackupTime) ? variables.new_status.lastBackupTime : null) == (has(variables.old_status.lastBackupTime) ? variables.old_status.lastBackupTime : null) &&
-        (has(variables.new_status.upgrade) ? variables.new_status.upgrade : null) == (has(variables.old_status.upgrade) ? variables.old_status.upgrade : null) &&
-        (has(variables.new_status.backup) ? variables.new_status.backup : null) == (has(variables.old_status.backup) ? variables.old_status.backup : null) &&
-        (has(variables.new_status.drift) ? variables.new_status.drift : null) == (has(variables.old_status.drift) ? variables.old_status.drift : null) &&
-        (has(variables.new_status.blueGreen) ? variables.new_status.blueGreen : null) == (has(variables.old_status.blueGreen) ? variables.old_status.blueGreen : null) &&
-        (has(variables.new_status.operationLock) ? variables.new_status.operationLock : null) == (has(variables.old_status.operationLock) ? variables.old_status.operationLock : null) &&
-        (has(variables.new_status.breakGlass) ? variables.new_status.breakGlass : null) == (has(variables.old_status.breakGlass) ? variables.old_status.breakGlass : null) &&
-        (has(variables.new_status.workload) ? variables.new_status.workload : null) == (has(variables.old_status.workload) ? variables.old_status.workload : null) &&
-        (has(variables.new_status.adminOps) ? variables.new_status.adminOps : null) == (has(variables.old_status.adminOps) ? variables.old_status.adminOps : null) &&
-        (has(variables.new_status.conditions) ? variables.new_status.conditions : []) == (has(variables.old_status.conditions) ? variables.old_status.conditions : []) &&
-
-        has(variables.new_status.sentinel) &&
-        (
-          (!has(variables.old_status.sentinel) &&
-            !has(variables.new_status.sentinel.lastHandledTriggerID) &&
-            !has(variables.new_status.sentinel.lastHandledAt)
-          ) ||
-          (has(variables.old_status.sentinel) &&
-            ((!has(variables.new_status.sentinel.lastHandledTriggerID) && !has(variables.old_status.sentinel.lastHandledTriggerID)) ||
-              (has(variables.new_status.sentinel.lastHandledTriggerID) && has(variables.old_status.sentinel.lastHandledTriggerID) &&
-                variables.new_status.sentinel.lastHandledTriggerID == variables.old_status.sentinel.lastHandledTriggerID)) &&
-            ((!has(variables.new_status.sentinel.lastHandledAt) && !has(variables.old_status.sentinel.lastHandledAt)) ||
-              (has(variables.new_status.sentinel.lastHandledAt) && has(variables.old_status.sentinel.lastHandledAt) &&
-                variables.new_status.sentinel.lastHandledAt == variables.old_status.sentinel.lastHandledAt))
-          )
-        )
-      )
-    message: The Sentinel may only update status.sentinel trigger fields (triggerID/triggeredAt/triggerResource).
-      Spec, metadata, and all other status fields are forbidden.
-  variables:
-  - expression: request.userInfo.username.startsWith("system:serviceaccount:") &&
-      request.userInfo.username.endsWith(":openbao-sentinel")
-    name: is_sentinel
-  - expression: 'has(object.status) ? object.status : object'
-    name: new_status
-  - expression: 'has(oldObject.status) ? oldObject.status : oldObject'
-    name: old_status
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -4805,15 +4598,6 @@ spec:
       - roles
       - rolebindings
   policyName: openbao-operator-openbao-restrict-provisioner-delegate
-  validationActions:
-  - Deny
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicyBinding
-metadata:
-  name: openbao-operator-openbao-restrict-sentinel-mutations
-spec:
-  policyName: openbao-operator-openbao-restrict-sentinel-mutations
   validationActions:
   - Deny
 ---

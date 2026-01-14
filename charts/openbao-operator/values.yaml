@@ -25,11 +25,6 @@ imagePullSecrets: []
 # -- Override operator version reported in status. Defaults to Chart.appVersion
 operatorVersion: ""
 
-# -- Sentinel sidecar configuration
-sentinel:
-  # -- Image repository for the sentinel sidecar
-  imageRepository: ghcr.io/dc-tec/openbao-operator-sentinel
-
 # -- Tenancy mode configuration.
 # -- Controls how the operator manages permissions and namespace access.
 tenancy:

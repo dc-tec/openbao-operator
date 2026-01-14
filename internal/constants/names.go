@@ -22,7 +22,6 @@ const (
 	ComponentOpenBaoCluster  = "openbaocluster"
 	ComponentBackup          = "backup"
 	ComponentRestore         = "restore"
-	ComponentSentinel        = "sentinel"
 	ComponentUpgradeSnapshot = "upgrade-snapshot"
 	ComponentProvisioner     = "provisioner"
 	ComponentController      = "controller"

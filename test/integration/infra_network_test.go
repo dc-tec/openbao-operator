@@ -40,10 +40,10 @@ func TestInfraNetwork_HeadlessService_IsIdempotent(t *testing.T) {
 
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() second call error = %v", err)
 	}
 
@@ -78,7 +78,7 @@ func TestInfraNetwork_ExternalService_CreatesAndDeletes(t *testing.T) {
 	createTLSSecret(t, namespace, cluster.Name)
 
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -101,7 +101,7 @@ func TestInfraNetwork_ExternalService_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() after disabling external access error = %v", err)
 	}
 
@@ -126,7 +126,7 @@ func TestInfraNetwork_Ingress_CreatesAndDeletes(t *testing.T) {
 	createTLSSecret(t, namespace, cluster.Name)
 
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -140,7 +140,7 @@ func TestInfraNetwork_Ingress_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() after disabling ingress error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, ing); err == nil {
@@ -167,7 +167,7 @@ func TestInfraNetwork_HTTPRoute_CreatesAndDeletes(t *testing.T) {
 	createTLSSecret(t, namespace, cluster.Name)
 
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -188,7 +188,7 @@ func TestInfraNetwork_HTTPRoute_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() after disabling gateway error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: routeName}, httpRoute); err == nil {
@@ -218,7 +218,7 @@ func TestInfraNetwork_GatewayCAConfigMap_CreatesUpdatesAndDeletes(t *testing.T) 
 	createCASecret(t, namespace, cluster.Name, ca1)
 
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -242,7 +242,7 @@ func TestInfraNetwork_GatewayCAConfigMap_CreatesUpdatesAndDeletes(t *testing.T) 
 	if err := k8sClient.Update(ctx, secret); err != nil {
 		t.Fatalf("update CA secret: %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() after CA update error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cmName}, cm); err != nil {
@@ -257,7 +257,7 @@ func TestInfraNetwork_GatewayCAConfigMap_CreatesUpdatesAndDeletes(t *testing.T) 
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() after disabling gateway error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cmName}, cm); err == nil {
@@ -325,7 +325,7 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 	})
 
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -363,7 +363,7 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 		status.BlueGreen.Phase = openbaov1alpha1.PhaseDemotingBlue
 	})
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() after cutover error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraPublicServiceSuffix}, mainSvc); err != nil {
@@ -394,7 +394,7 @@ func TestInfraNetwork_TLSRoute_CreatesAndDeletes(t *testing.T) {
 	createCASecret(t, namespace, cluster.Name, []byte("ca-1"))
 
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -440,7 +440,7 @@ func TestInfraNetwork_TLSRoute_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() after disabling TLS passthrough error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: tlsRouteName}, tlsRoute); err == nil {
@@ -471,7 +471,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	createCASecret(t, namespace, cluster.Name, []byte("ca-1"))
 
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -497,7 +497,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() after disabling BackendTLS error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: backendTLSName}, backendTLS); err == nil {
@@ -512,7 +512,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() after enabling BackendTLS error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: backendTLSName}, backendTLS); err != nil {
@@ -524,7 +524,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() after enabling TLS passthrough error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: backendTLSName}, backendTLS); err == nil {

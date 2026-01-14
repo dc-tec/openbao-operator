@@ -30,7 +30,7 @@ const (
 	rootTokenSecretKey = "token"
 )
 
-// errRetryLater is a sentinel error indicating that initialization should be retried
+// errRetryLater is a marker error indicating that initialization should be retried
 // on the next reconcile, rather than being treated as a failure or success.
 // This is kept for backward compatibility but new code should use operatorerrors.WrapTransientConnection.
 var errRetryLater = operatorerrors.ErrTransientConnection

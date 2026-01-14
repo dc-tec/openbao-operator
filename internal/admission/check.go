@@ -30,14 +30,12 @@ type DependencyStatus struct {
 
 // Status summarizes admission dependency readiness.
 type Status struct {
-	CheckedAt     time.Time
-	Dependencies  []DependencyStatus
-	OverallReady  bool
-	SentinelReady bool
+	CheckedAt    time.Time
+	Dependencies []DependencyStatus
+	OverallReady bool
 }
 
 const (
-	dependencySentinelMutations    = "sentinel-mutations"
 	dependencyProvisionerDelegate  = "provisioner-delegate"
 	dependencyManagedResourceLocks = "managed-resource-locks"
 )
@@ -45,11 +43,6 @@ const (
 // DefaultDependencies returns the admission dependencies treated as release-critical.
 func DefaultDependencies() []Dependency {
 	return []Dependency{
-		{
-			Name:        dependencySentinelMutations,
-			PolicyName:  "openbao-restrict-sentinel-mutations",
-			BindingName: "openbao-restrict-sentinel-mutations",
-		},
 		{
 			Name:        "validate-openbaocluster",
 			PolicyName:  "validate-openbaocluster",
@@ -97,21 +90,16 @@ func CheckDependencies(ctx context.Context, c client.Reader, deps []Dependency, 
 	}
 
 	var overallReady = true
-	var sentinelReady = true
 
 	for _, dep := range deps {
 		depStatus := checkDependency(ctx, c, dep, namePrefixes)
 		status.Dependencies = append(status.Dependencies, depStatus)
 		if !depStatus.Ready {
 			overallReady = false
-			if dep.Name == dependencySentinelMutations {
-				sentinelReady = false
-			}
 		}
 	}
 
 	status.OverallReady = overallReady
-	status.SentinelReady = sentinelReady
 
 	return status, nil
 }

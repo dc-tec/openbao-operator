@@ -89,7 +89,7 @@ func TestGenerateTenantRole(t *testing.T) {
 					hasStatefulSetRule = true
 				}
 
-				// Check for Deployment rule (for Sentinel)
+				// Check for Deployment rule (used for controller-managed Deployments where enabled)
 				if contains(rule.APIGroups, "apps") &&
 					contains(rule.Resources, "deployments") &&
 					contains(rule.Verbs, "get") &&

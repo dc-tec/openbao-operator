@@ -29,7 +29,7 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -135,7 +135,7 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 
 			ctx := context.Background()
 
-			if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+			if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 				t.Fatalf("Reconcile() error = %v", err)
 			}
 
@@ -175,7 +175,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -361,7 +361,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -411,7 +411,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 	// No Unseal config, so no seal-creds volume - this simulates public ACME
 
 	ctx := context.Background()
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -462,7 +462,7 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -510,7 +510,7 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -539,7 +539,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
