@@ -71,8 +71,6 @@ graph TD
     
     STS -->|Run| Pods[OpenBao Pods]
     Pods -->|Data| PVC[Persistent Volumes]
-    
-    Sentinel[Sentinel Deployment] -.->|Drift Detect| API
 ```
 
 ### 1.3 Component Interaction

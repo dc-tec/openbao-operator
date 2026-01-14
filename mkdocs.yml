@@ -103,7 +103,6 @@ nav:
           - Configuration:
               - Security Profiles: user-guide/openbaocluster/configuration/security-profiles.md
               - Self-Initialization: user-guide/openbaocluster/configuration/self-init.md
-              - Sentinel: user-guide/openbaocluster/configuration/sentinel.md
               - Server Configuration: user-guide/openbaocluster/configuration/server.md
               - External Access: user-guide/openbaocluster/configuration/external-access.md
               - Network: user-guide/openbaocluster/configuration/network.md
@@ -143,7 +142,6 @@ nav:
           - Day 1 (Creation): architecture/lifecycle/day1-creation.md
           - Day 2 (Operations): architecture/lifecycle/day2-operations.md
           - Day N (Backups): architecture/lifecycle/dayN-backups.md
-      - Sentinel Drift Detector: architecture/sentinel.md
   - Security:
       - Overview: security/index.md
       - Fundamentals:

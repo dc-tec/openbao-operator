@@ -93,13 +93,12 @@ Verification applies to all images managed by the Operator:
 | :--- | :--- | :--- |
 | **OpenBao Server** | `spec.imageVerification` | The main OpenBao binary |
 | **Init Container** | `spec.operatorImageVerification` | Helper for config rendering |
-| **Sentinel Sidecar** | `spec.operatorImageVerification` | Drift detection sidecar |
 | **Backup/Restore Jobs** | `spec.operatorImageVerification` | Snapshot executors |
 | **Upgrade Jobs** | `spec.operatorImageVerification` | Raft membership jobs |
 
 ## Separate Signers for OpenBao and Operator Images
 
-The OpenBao main image (`openbao/openbao`) is signed by the **OpenBao project**, while helper images (init container, sentinel, backup/restore executors) are signed by the **operator project**. Use `operatorImageVerification` to specify different signing credentials:
+The OpenBao main image (`openbao/openbao`) is signed by the **OpenBao project**, while helper images (init container, backup/restore executors, upgrade jobs) are signed by the **operator project**. Use `operatorImageVerification` to specify different signing credentials:
 
 ```yaml
 spec:

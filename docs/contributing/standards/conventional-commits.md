@@ -64,7 +64,6 @@ We enforce specific scopes to categorize changes by component.
 | `restore` | Restore Manager and recovery logic |
 | `upgrade` | Upgrade Manager and version transitions |
 | `bluegreen` | Blue/Green upgrade strategy |
-| `sentinel` | Drift detection and policy enforcement |
 
 ### Testing
 

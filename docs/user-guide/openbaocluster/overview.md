@@ -123,8 +123,6 @@ flowchart LR
 
     [:material-arrow-right: Self-Initialization](configuration/self-init.md)
 
-    [:material-arrow-right: Sentinel Drift Detection](configuration/sentinel.md)
-
 - :material-wrench: **Operations**
 
     ---
