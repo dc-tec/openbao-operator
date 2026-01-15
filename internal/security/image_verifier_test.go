@@ -32,6 +32,10 @@ func TestNewImageVerifier(t *testing.T) {
 		t.Error("NewImageVerifier() cache not initialized")
 	}
 
+	if verifier.tagCache == nil {
+		t.Error("NewImageVerifier() tagCache not initialized")
+	}
+
 	if verifier.client != client {
 		t.Error("NewImageVerifier() client not set correctly")
 	}
@@ -267,6 +271,99 @@ func TestVerificationCache_ConcurrentAccess(t *testing.T) {
 	// Should still be verified
 	if !cache.isVerifiedByKey(cacheKey) {
 		t.Error("Concurrent isVerifiedByKey() calls should not cause race conditions")
+	}
+}
+
+func TestTagResolutionCache_GetSet(t *testing.T) {
+	cache := newTagResolutionCache()
+
+	imageRef := "docker.io/openbao/openbao:2.0.0"
+	digest := "docker.io/openbao/openbao@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+	// Initially not in cache
+	if cached, ok := cache.get(imageRef); ok {
+		t.Errorf("get() should return false for uncached image, got %s", cached)
+	}
+
+	// Set the mapping
+	cache.set(imageRef, digest)
+
+	// Should now be in cache
+	cached, ok := cache.get(imageRef)
+	if !ok {
+		t.Error("get() should return true for cached image")
+	}
+	if cached != digest {
+		t.Errorf("get() = %v, want %v", cached, digest)
+	}
+}
+
+func TestTagResolutionCache_DifferentTags(t *testing.T) {
+	cache := newTagResolutionCache()
+
+	imageRef1 := "docker.io/openbao/openbao:2.0.0"
+	digest1 := "docker.io/openbao/openbao@sha256:abc123"
+	imageRef2 := "docker.io/openbao/openbao:2.1.0"
+	digest2 := "docker.io/openbao/openbao@sha256:def456"
+
+	// Set both mappings
+	cache.set(imageRef1, digest1)
+	cache.set(imageRef2, digest2)
+
+	// Both should be retrievable independently
+	cached1, ok1 := cache.get(imageRef1)
+	if !ok1 || cached1 != digest1 {
+		t.Errorf("get(%s) = (%v, %v), want (%v, true)", imageRef1, cached1, ok1, digest1)
+	}
+
+	cached2, ok2 := cache.get(imageRef2)
+	if !ok2 || cached2 != digest2 {
+		t.Errorf("get(%s) = (%v, %v), want (%v, true)", imageRef2, cached2, ok2, digest2)
+	}
+}
+
+func TestTagResolutionCache_ConcurrentAccess(t *testing.T) {
+	cache := newTagResolutionCache()
+
+	imageRef := "docker.io/openbao/openbao:2.0.0"
+	digest := "docker.io/openbao/openbao@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+	// Test concurrent writes
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			cache.set(imageRef, digest)
+			done <- true
+		}()
+	}
+
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// Should be cached (no race condition)
+	cached, ok := cache.get(imageRef)
+	if !ok || cached != digest {
+		t.Errorf("Concurrent set() calls caused issues: get() = (%v, %v)", cached, ok)
+	}
+
+	// Test concurrent reads
+	readDone := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			_, _ = cache.get(imageRef)
+			readDone <- true
+		}()
+	}
+
+	for i := 0; i < 10; i++ {
+		<-readDone
+	}
+
+	// Should still be cached
+	cached, ok = cache.get(imageRef)
+	if !ok || cached != digest {
+		t.Errorf("Concurrent get() calls caused issues: get() = (%v, %v)", cached, ok)
 	}
 }
 
