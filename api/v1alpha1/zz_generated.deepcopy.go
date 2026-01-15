@@ -772,6 +772,11 @@ func (in *OpenBaoClusterSpec) DeepCopyInto(out *OpenBaoClusterSpec) {
 		*out = new(ImageVerificationConfig)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Resources != nil {
+		in, out := &in.Resources, &out.Resources
+		*out = new(v1.ResourceRequirements)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.WorkloadHardening != nil {
 		in, out := &in.WorkloadHardening, &out.WorkloadHardening
 		*out = new(WorkloadHardeningConfig)

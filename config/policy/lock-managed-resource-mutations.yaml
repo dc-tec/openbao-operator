@@ -77,6 +77,20 @@ spec:
     - name: is_cert_manager_secret_request
       expression: >-
         variables.is_cert_manager && request.resource.resource == "secrets"
+    - name: is_vpa_updater
+      expression: >-
+        request.userInfo.username.startsWith("system:serviceaccount:kube-system:vpa-updater") ||
+        request.userInfo.username.startsWith("system:serviceaccount:vertical-pod-autoscaler:vpa-updater")
+    - name: is_vpa_openbaocluster_resource_update
+      expression: >-
+        variables.is_vpa_updater &&
+        request.resource.group == "openbao.org" &&
+        request.resource.resource == "openbaoclusters" &&
+        request.operation == "UPDATE" &&
+        object.spec.version == oldObject.spec.version &&
+        object.spec.image == oldObject.spec.image &&
+        object.spec.replicas == oldObject.spec.replicas &&
+        object.spec.profile == oldObject.spec.profile
     - name: is_pod_request
       expression: >-
         request.kind.group == "" && request.kind.kind == "Pod"
@@ -200,6 +214,7 @@ spec:
         (variables.is_kube_system_controller && variables.is_endpoints_controller_request) ||
         variables.is_kube_system_service_metadata_update ||
         variables.is_cert_manager_secret_request ||
+        variables.is_vpa_openbaocluster_resource_update ||
         (variables.is_pod_request && variables.is_kubelet_node && request.operation == "DELETE") ||
         variables.is_service_registration_label_update ||
         variables.is_kube_system_pod_finalizer_update ||

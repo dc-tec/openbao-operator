@@ -67,6 +67,15 @@ func computeConfigHash(configContent string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// getContainerResources returns the container resources from the cluster spec.
+// If cluster.Spec.Resources is nil, returns an empty ResourceRequirements.
+func getContainerResources(cluster *openbaov1alpha1.OpenBaoCluster) corev1.ResourceRequirements {
+	if cluster.Spec.Resources != nil {
+		return *cluster.Spec.Resources
+	}
+	return corev1.ResourceRequirements{}
+}
+
 func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedInitContainerDigest string, disableSelfInit bool) []corev1.Container {
 	renderedConfigDir := path.Dir(openBaoRenderedConfig)
 
@@ -355,6 +364,7 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 				PeriodSeconds:       10,
 				FailureThreshold:    6,
 			},
+			Resources: getContainerResources(cluster),
 		},
 	}
 
