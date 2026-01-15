@@ -115,6 +115,7 @@ nav:
               - Maintenance: user-guide/openbaocluster/operations/maintenance.md
               - Pausing: user-guide/openbaocluster/operations/pausing.md
               - Deletion: user-guide/openbaocluster/operations/deletion.md
+              - Vertical Pod Autoscaling: user-guide/openbaocluster/operations/vpa-autoscaling.md
               - Production Checklist: user-guide/openbaocluster/operations/production-checklist.md
           - Security Considerations: user-guide/openbaocluster/security-considerations.md
           - Recovery:
