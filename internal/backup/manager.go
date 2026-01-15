@@ -110,6 +110,9 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Initialize backup status if needed
 	if cluster.Status.Backup == nil {
 		cluster.Status.Backup = &openbaov1alpha1.BackupStatus{}
+		if err := m.patchStatusSSA(ctx, cluster); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to initialize backup status: %w", err)
+		}
 	}
 
 	// Parse schedule and set NextScheduledBackup
@@ -211,6 +214,7 @@ func (m *Manager) handleManualTrigger(
 
 // clearTriggerAnnotation removes the manual trigger annotation from the cluster.
 func (m *Manager) clearTriggerAnnotation(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, annotation string) {
+	// We use MergeFrom for annotation deletion to avoid claiming ownership of all annotations
 	original := cluster.DeepCopy()
 	if cluster.Annotations == nil {
 		cluster.Annotations = make(map[string]string)
@@ -221,6 +225,28 @@ func (m *Manager) clearTriggerAnnotation(ctx context.Context, logger logr.Logger
 	} else {
 		logger.Info("Cleared manual backup trigger annotation")
 	}
+}
+
+// patchStatusSSA updates the backup status using Server-Side Apply.
+func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	applyCluster := &openbaov1alpha1.OpenBaoCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: openbaov1alpha1.GroupVersion.String(),
+			Kind:       "OpenBaoCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Backup: cluster.Status.Backup,
+		},
+	}
+
+	return m.client.Status().Patch(ctx, applyCluster, client.Apply,
+		client.FieldOwner("openbao-backup-controller"),
+		client.ForceOwnership,
+	)
 }
 
 // checkBackupDue determines if a backup should be executed now.
@@ -313,7 +339,10 @@ func (m *Manager) executeAndProcessBackup(
 		m.clearTriggerAnnotation(ctx, logger, cluster, constants.AnnotationTriggerBackup)
 	}
 
-	m.recordBackupAttempt(cluster, now, scheduledTime, nextScheduled)
+	if err := m.recordBackupAttempt(ctx, cluster, now, scheduledTime, nextScheduled); err != nil {
+		logger.Error(err, "Failed to record backup attempt")
+		// Continue even if recording attempt fails, as the job is created
+	}
 
 	if jobInProgress {
 		_, err := m.processBackupJobResult(ctx, logger, cluster, jobName)
@@ -341,6 +370,9 @@ func (m *Manager) executeAndProcessBackup(
 		}
 		nextScheduledMeta := metav1.NewTime(nextScheduled)
 		cluster.Status.Backup.NextScheduledBackup = &nextScheduledMeta
+		if err := m.patchStatusSSA(ctx, cluster); err != nil {
+			logger.Error(err, "Failed to patch backup status after retention")
+		}
 	}
 
 	if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
@@ -353,7 +385,7 @@ func (m *Manager) executeAndProcessBackup(
 	return recon.Result{RequeueAfter: time.Until(nextScheduled)}, nil
 }
 
-func (m *Manager) recordBackupAttempt(cluster *openbaov1alpha1.OpenBaoCluster, now time.Time, scheduledTime time.Time, nextScheduled time.Time) {
+func (m *Manager) recordBackupAttempt(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, now time.Time, scheduledTime time.Time, nextScheduled time.Time) error {
 	if cluster.Status.Backup == nil {
 		cluster.Status.Backup = &openbaov1alpha1.BackupStatus{}
 	}
@@ -366,6 +398,8 @@ func (m *Manager) recordBackupAttempt(cluster *openbaov1alpha1.OpenBaoCluster, n
 
 	nextScheduledMeta := metav1.NewTime(nextScheduled)
 	cluster.Status.Backup.NextScheduledBackup = &nextScheduledMeta
+
+	return m.patchStatusSSA(ctx, cluster)
 }
 
 // BackupResult contains the result of a successful backup.

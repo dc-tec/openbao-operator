@@ -18,10 +18,30 @@ import (
 	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
 )
 
-func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	// Capture original state for status patching to avoid optimistic locking conflicts
-	original := cluster.DeepCopy()
+// patchStatusSSA updates the cluster status using Server-Side Apply.
+// SSA eliminates race conditions by having the API server merge changes,
+// rather than requiring the client to refresh and merge manually.
+func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	// Create a minimal apply configuration with just the status fields we own
+	applyCluster := &openbaov1alpha1.OpenBaoCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: openbaov1alpha1.GroupVersion.String(),
+			Kind:       "OpenBaoCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		Status: cluster.Status,
+	}
 
+	return r.Status().Patch(ctx, applyCluster, client.Apply,
+		client.FieldOwner("openbao-cluster-controller"),
+		client.ForceOwnership,
+	)
+}
+
+func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if cluster.Status.Phase == "" {
 		cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
 	}
@@ -55,7 +75,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 		Message:            "TLS readiness is not being evaluated while reconciliation is paused",
 	})
 
-	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+	if err := r.patchStatusSSA(ctx, cluster); err != nil {
 		return fmt.Errorf("failed to update status for paused OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
@@ -65,8 +85,6 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 }
 
 func (r *OpenBaoClusterReconciler) updateStatusForProfileNotSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	original := cluster.DeepCopy()
-
 	now := metav1.Now()
 	if cluster.Status.Phase == "" {
 		cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
@@ -108,7 +126,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForProfileNotSet(ctx context.Cont
 		Message:            "Cluster cannot be considered production-ready until spec.profile is explicitly set",
 	})
 
-	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+	if err := r.patchStatusSSA(ctx, cluster); err != nil {
 		return fmt.Errorf("failed to update status for missing profile on OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
@@ -117,7 +135,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForProfileNotSet(ctx context.Cont
 }
 
 func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
-	// Capture original state for status patching to avoid optimistic locking conflicts
+	// Capture original state to check for changes (e.g. ReadyReplicas), but NOT for patching merge
 	original := cluster.DeepCopy()
 
 	// Set TLSReady early (evaluated separately from clusterState)
@@ -158,8 +176,8 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 			"secret_name", cluster.Name+"-root-token")
 	}
 
-	// 4. Persist status (single API call)
-	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+	// 4. Persist status (single API call via SSA)
+	if err := r.patchStatusSSA(ctx, cluster); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update status for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 

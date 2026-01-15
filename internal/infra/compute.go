@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -107,25 +106,6 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 	desired.TypeMeta = metav1.TypeMeta{
 		Kind:       "StatefulSet",
 		APIVersion: "apps/v1",
-	}
-
-	// Check if the StatefulSet already exists to preserve fields managed by other controllers (UpgradeManager)
-	existing := &appsv1.StatefulSet{}
-	err := m.client.Get(ctx, types.NamespacedName{Name: name, Namespace: cluster.Namespace}, existing)
-	if err == nil {
-		// If existing STS has a partition set, preserve it in our desired object.
-		// The UpgradeManager sets this field via Patch/SSA, but if we don't include it here,
-		// our SSA apply might interfere or try to reset it to nil (depending on ownership).
-		// By explicitly including the current value, we tell SSA we are okay with this state.
-		if existing.Spec.UpdateStrategy.RollingUpdate != nil && existing.Spec.UpdateStrategy.RollingUpdate.Partition != nil {
-			if desired.Spec.UpdateStrategy.RollingUpdate == nil {
-				desired.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{}
-			}
-			desired.Spec.UpdateStrategy.RollingUpdate.Partition = existing.Spec.UpdateStrategy.RollingUpdate.Partition
-		}
-	} else if !apierrors.IsNotFound(err) {
-		// If error is something other than NotFound, return it
-		return fmt.Errorf("failed to get existing StatefulSet %s/%s: %w", cluster.Namespace, name, err)
 	}
 
 	// Note: We intentionally do NOT set UpdateStrategy here. The UpgradeManager manages

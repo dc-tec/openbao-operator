@@ -52,10 +52,24 @@ func patchStatusIfChanged(ctx context.Context, c client.Client, logger logr.Logg
 	if reflect.DeepEqual(original.Status, cluster.Status) {
 		return nil
 	}
-	if err := c.Status().Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+
+	// Create a minimal apply configuration with just the status fields we own
+	applyCluster := &openbaov1alpha1.OpenBaoCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: openbaov1alpha1.GroupVersion.String(),
+			Kind:       "OpenBaoCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		Status: cluster.Status,
+	}
+
+	if err := c.Status().Patch(ctx, applyCluster, client.Apply, client.FieldOwner("openbao-cluster-controller"), client.ForceOwnership); err != nil {
 		return fmt.Errorf("failed to patch status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
-	logger.V(1).Info("Patched OpenBaoCluster status", "reason", reason)
+	logger.V(1).Info("Patched OpenBaoCluster status (SSA)", "reason", reason)
 	return nil
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -22,6 +23,7 @@ func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context
 	now := time.Now().UTC()
 	annotationUpdates := make(map[string]string)
 
+	// Helper to check and potentially add warning
 	maybeWarn := func(annotationKey, reason, message string) {
 		if !shouldEmitSecurityWarning(cluster.Annotations, annotationKey, now) {
 			return
@@ -51,16 +53,37 @@ func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context
 		return nil
 	}
 
-	original := cluster.DeepCopy()
+	// Prepare SSA patch for annotations
+	// We only include the annotations we want to update. SSA will merge these.
+	// We must ensure the object has proper TypeMeta for SSA.
+	patch := &openbaov1alpha1.OpenBaoCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: openbaov1alpha1.GroupVersion.String(),
+			Kind:       "OpenBaoCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        cluster.Name,
+			Namespace:   cluster.Namespace,
+			Annotations: annotationUpdates,
+		},
+	}
+
+	// Apply partial patch with specific field owner for security events
+	patchOpts := []client.PatchOption{
+		client.FieldOwner("openbao-security-events"),
+		client.ForceOwnership,
+	}
+
+	if err := r.Patch(ctx, patch, client.Apply, patchOpts...); err != nil {
+		return fmt.Errorf("failed to persist security warning timestamps on OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
+
+	// Update the in-memory object to reflect the changes so subsequent logic sees them
 	if cluster.Annotations == nil {
 		cluster.Annotations = make(map[string]string)
 	}
 	for k, v := range annotationUpdates {
 		cluster.Annotations[k] = v
-	}
-
-	if err := r.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
-		return fmt.Errorf("failed to persist security warning timestamps on OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
 	logger.V(1).Info("Emitted security warning events", "count", len(annotationUpdates))
