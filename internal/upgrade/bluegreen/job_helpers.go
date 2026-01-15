@@ -34,6 +34,7 @@ func (m *Manager) runExecutorJobStep(ctx context.Context, logger logr.Logger, cl
 		cluster.Status.BlueGreen.BlueRevision,
 		cluster.Status.BlueGreen.GreenRevision,
 		m.clientConfig,
+		m.operatorImageVerifier,
 	)
 	if err != nil {
 		return executorJobStep{}, err

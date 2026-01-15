@@ -8,6 +8,7 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/security"
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -17,6 +18,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
@@ -543,7 +545,7 @@ func TestEnsureBackupJob_CreatesJob(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{})
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
 
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
@@ -588,7 +590,7 @@ func TestEnsureBackupJob_JobAlreadyRunning(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, runningJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{})
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
@@ -618,7 +620,7 @@ func TestEnsureBackupJob_JobCompleted(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, completedJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{})
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
@@ -648,7 +650,7 @@ func TestEnsureBackupJob_JobFailed(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, failedJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{})
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
@@ -681,7 +683,7 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, succeededJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{})
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -729,7 +731,7 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, failedJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{})
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -758,7 +760,7 @@ func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{})
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
 
 	// Should not error when job doesn't exist
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
@@ -789,7 +791,8 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, runningJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{})
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager.operatorImageVerifier = security.NewImageVerifier(log.Log.WithName("backup-image-verifier"), k8sClient, nil)
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {

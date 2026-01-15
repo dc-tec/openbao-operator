@@ -196,6 +196,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		"",
 		"",
 		m.clientConfig,
+		m.operatorImageVerifier,
 	)
 	if err != nil {
 		return false, fmt.Errorf("failed to ensure step-down Job: %w", err)

@@ -1,7 +1,6 @@
 package security
 
 import (
-	"container/list"
 	"context"
 	"crypto"
 	_ "embed" // Required for go:embed
@@ -9,12 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	ggcrremote "github.com/google/go-containerregistry/pkg/v1/remote"
+	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/sigstore/cosign/v3/pkg/cosign"
 	ociremote "github.com/sigstore/cosign/v3/pkg/oci/remote"
 	"github.com/sigstore/cosign/v3/pkg/signature"
@@ -41,11 +42,13 @@ type VerifyConfig struct {
 }
 
 // ImageVerifier verifies container image signatures using Cosign.
-// It implements a simple in-memory cache to avoid re-verifying
-// the same image digest on every reconcile loop.
+// It implements two caches to minimize network I/O:
+//   - tagCache: TTL-based cache for tag→digest resolution (avoids HEAD requests)
+//   - cache: LRU cache for verified digests (avoids signature verification)
 type ImageVerifier struct {
 	logger            logr.Logger
 	cache             *verificationCache
+	tagCache          *tagResolutionCache
 	client            client.Client
 	trustedRootConfig *TrustedRootConfig
 }
@@ -67,13 +70,17 @@ func NewImageVerifier(logger logr.Logger, k8sClient client.Client, trustedRootCo
 	return &ImageVerifier{
 		logger:            logger,
 		cache:             newVerificationCache(),
+		tagCache:          newTagResolutionCache(),
 		client:            k8sClient,
 		trustedRootConfig: trustedRootConfig,
 	}
 }
 
 // Verify verifies the signature of the given image reference using the provided configuration.
-// It uses an in-memory cache keyed by image digest and verification config to avoid redundant network calls.
+// It uses two caches to minimize network I/O:
+//   - Tag resolution cache: TTL-based cache to avoid repeated HEAD requests for tag→digest resolution
+//   - Verification cache: LRU cache to avoid repeated signature verification for the same digest
+//
 // Returns the resolved image digest (e.g., "openbao/openbao@sha256:abc...") and an error if verification fails.
 // The digest can be used to pin the image in StatefulSets to prevent TOCTOU attacks.
 func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config VerifyConfig) (string, error) {
@@ -82,14 +89,15 @@ func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config Veri
 		return "", fmt.Errorf("either PublicKey OR (Issuer and Subject) must be provided for image verification")
 	}
 
-	// Step 1: Resolve tag to digest (cheap HEAD request)
-	// This must happen BEFORE cache lookup to get the digest for the cache key
-	digest, err := v.resolveDigest(ctx, imageRef, config)
+	// Step 1: Resolve tag to digest
+	// For digest references, this returns immediately without network I/O.
+	// For tag references, we first check the TTL cache to avoid HEAD requests on every reconcile.
+	digest, err := v.resolveDigestWithCache(ctx, imageRef, config)
 	if err != nil {
 		return "", err
 	}
 
-	// Step 2: Check cache BEFORE expensive cryptographic verification
+	// Step 2: Check verification cache BEFORE expensive cryptographic verification
 	cacheKey := v.cacheKey(digest, config)
 	if v.cache.isVerifiedByKey(cacheKey) {
 		v.logger.V(1).Info("Image verification cache hit", "digest", digest)
@@ -113,10 +121,46 @@ func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config Veri
 	return digest, nil
 }
 
-// resolveDigest resolves an image reference (tag or digest) to a digest reference.
+// resolveDigestWithCache resolves an image reference (tag or digest) to a digest reference.
+// For digest references, it returns them directly without any network I/O.
+// For tag references, it first checks the TTL cache to avoid repeated HEAD requests,
+// only performing a network call on cache miss or expiration.
+func (v *ImageVerifier) resolveDigestWithCache(ctx context.Context, imageRef string, config VerifyConfig) (string, error) {
+	// Parse the image reference
+	ref, err := name.ParseReference(imageRef)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse image reference: %w", err)
+	}
+
+	// If already a digest reference, return it directly (no cache needed)
+	if d, ok := ref.(name.Digest); ok {
+		return d.String(), nil
+	}
+
+	// For tag references, check the TTL cache first to avoid network I/O on every reconcile
+	if cached, ok := v.tagCache.get(imageRef); ok {
+		v.logger.V(1).Info("Tag resolution cache hit", "imageRef", imageRef, "digest", cached)
+		return cached, nil
+	}
+
+	// Cache miss - perform network call to resolve tag to digest
+	digest, err := v.resolveDigest(ctx, imageRef, config)
+	if err != nil {
+		return "", err
+	}
+
+	// Cache the resolution for future reconciles
+	v.tagCache.set(imageRef, digest)
+	v.logger.V(1).Info("Tag resolution cached", "imageRef", imageRef, "digest", digest)
+
+	return digest, nil
+}
+
+// resolveDigest resolves an image reference (tag or digest) to a digest reference via network.
 // For digest references, it returns them directly.
 // For tag references, it performs a HEAD request to resolve the tag to a digest.
 // This is a cheap operation that only fetches manifest metadata, not the full image.
+// NOTE: Callers should prefer resolveDigestWithCache to benefit from TTL caching.
 func (v *ImageVerifier) resolveDigest(ctx context.Context, imageRef string, config VerifyConfig) (string, error) {
 	// Parse the image reference
 	ref, err := name.ParseReference(imageRef)
@@ -392,62 +436,65 @@ func (k *dockerConfigKeychain) Resolve(resource authn.Resource) (authn.Authentic
 	return authn.Anonymous, nil
 }
 
-// verificationCache is an LRU cache for verified images.
-// It limits memory usage by evicting the least recently used entries
-// when the cache exceeds maxSize.
+// Cache configuration constants.
+const (
+	// defaultVerificationCacheSize is the maximum number of verified digests to cache.
+	defaultVerificationCacheSize = 256
+
+	// defaultTagCacheSize is the maximum number of tag→digest mappings to cache.
+	defaultTagCacheSize = 128
+
+	// defaultTagCacheTTL is how long tag→digest mappings are cached before re-resolution.
+	// This balances between avoiding excessive registry calls and detecting tag updates
+	// (e.g., when a mutable tag like "latest" is updated).
+	defaultTagCacheTTL = 5 * time.Minute
+)
+
+// verificationCache is an LRU cache for verified image digests.
+// It uses hashicorp/golang-lru for thread-safe LRU eviction.
 type verificationCache struct {
-	mu       sync.Mutex
-	cache    map[string]*list.Element
-	eviction *list.List
-	maxSize  int
+	cache *lru.Cache[string, struct{}]
 }
 
-const defaultCacheMaxSize = 256
-
 func newVerificationCache() *verificationCache {
-	return &verificationCache{
-		cache:    make(map[string]*list.Element),
-		eviction: list.New(),
-		maxSize:  defaultCacheMaxSize,
-	}
+	// lru.New returns an error only if size <= 0, which we control.
+	cache, _ := lru.New[string, struct{}](defaultVerificationCacheSize)
+	return &verificationCache{cache: cache}
 }
 
 // isVerifiedByKey checks if an image has been verified using the provided cache key.
 func (c *verificationCache) isVerifiedByKey(cacheKey string) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if elem, ok := c.cache[cacheKey]; ok {
-		// Move to front (most recently used)
-		c.eviction.MoveToFront(elem)
-		return true
-	}
-	return false
+	_, ok := c.cache.Get(cacheKey)
+	return ok
 }
 
 // markVerifiedByKey marks an image as verified using the provided cache key.
 func (c *verificationCache) markVerifiedByKey(cacheKey string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.cache.Add(cacheKey, struct{}{})
+}
 
-	// Already in cache? Move to front
-	if elem, ok := c.cache[cacheKey]; ok {
-		c.eviction.MoveToFront(elem)
-		return
+// tagResolutionCache is a TTL-based cache for tag→digest resolution.
+// It prevents repeated HEAD requests to the registry on every reconcile loop.
+// Uses hashicorp/golang-lru/v2/expirable for thread-safe TTL-based eviction.
+type tagResolutionCache struct {
+	cache *expirable.LRU[string, string]
+}
+
+func newTagResolutionCache() *tagResolutionCache {
+	return &tagResolutionCache{
+		cache: expirable.NewLRU[string, string](defaultTagCacheSize, nil, defaultTagCacheTTL),
 	}
+}
 
-	// Evict oldest if at capacity
-	if c.eviction.Len() >= c.maxSize {
-		oldest := c.eviction.Back()
-		if oldest != nil {
-			oldestKey := oldest.Value.(string)
-			delete(c.cache, oldestKey)
-			c.eviction.Remove(oldest)
-		}
-	}
+// get retrieves a cached digest for the given image reference (tag).
+// Returns the digest and true if found and not expired, otherwise returns empty string and false.
+func (c *tagResolutionCache) get(imageRef string) (string, bool) {
+	return c.cache.Get(imageRef)
+}
 
-	// Add new entry
-	elem := c.eviction.PushFront(cacheKey)
-	c.cache[cacheKey] = elem
+// set stores a tag→digest mapping in the cache with TTL.
+func (c *tagResolutionCache) set(imageRef, digest string) {
+	c.cache.Add(imageRef, digest)
 }
 
 // cacheKey generates a cache key from image digest and verification config.

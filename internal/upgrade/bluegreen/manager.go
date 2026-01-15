@@ -22,6 +22,7 @@ import (
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/revision"
+	"github.com/dc-tec/openbao-operator/internal/security"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
@@ -34,29 +35,33 @@ var (
 
 // Manager manages blue/green upgrade operations for OpenBaoCluster.
 type Manager struct {
-	client        client.Client
-	scheme        *runtime.Scheme
-	infraManager  *infra.Manager
-	clientFactory upgrade.OpenBaoClientFactory
-	clusterOps    ClusterOps
-	clientConfig  openbaoapi.ClientConfig
+	client                client.Client
+	scheme                *runtime.Scheme
+	infraManager          *infra.Manager
+	clientFactory         upgrade.OpenBaoClientFactory
+	clusterOps            ClusterOps
+	clientConfig          openbaoapi.ClientConfig
+	imageVerifier         *security.ImageVerifier
+	operatorImageVerifier *security.ImageVerifier
 }
 
 // NewManager constructs a Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientConfig openbaoapi.ClientConfig) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientConfig openbaoapi.ClientConfig, imageVerifier *security.ImageVerifier, operatorImageVerifier *security.ImageVerifier) *Manager {
 	mgr := &Manager{
-		client:        c,
-		scheme:        scheme,
-		infraManager:  infraManager,
-		clientFactory: upgrade.DefaultOpenBaoClientFactory,
-		clientConfig:  clientConfig,
+		client:                c,
+		scheme:                scheme,
+		infraManager:          infraManager,
+		clientFactory:         upgrade.DefaultOpenBaoClientFactory,
+		clientConfig:          clientConfig,
+		imageVerifier:         imageVerifier,
+		operatorImageVerifier: operatorImageVerifier,
 	}
 	mgr.clusterOps = newOpenBaoClusterOps(c, mgr.clientFactory)
 	return mgr
 }
 
-func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig) *Manager {
-	mgr := NewManager(c, scheme, infraManager, clientConfig)
+func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, imageVerifier *security.ImageVerifier, operatorImageVerifier *security.ImageVerifier) *Manager {
+	mgr := NewManager(c, scheme, infraManager, clientConfig, imageVerifier, operatorImageVerifier)
 	if clientFactory != nil {
 		mgr.clientFactory = clientFactory
 	}
@@ -988,6 +993,7 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 		blueRevision,
 		greenRevision,
 		m.clientConfig,
+		m.operatorImageVerifier,
 	)
 	if err != nil {
 		return phaseOutcome{}, err
@@ -1043,6 +1049,7 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 		blueRevision,
 		greenRevision,
 		m.clientConfig,
+		m.operatorImageVerifier,
 	)
 	if err != nil {
 		return phaseOutcome{}, err

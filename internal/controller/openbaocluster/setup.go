@@ -14,6 +14,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 // SetupWithManager sets up the OpenBaoCluster controllers with the Manager.
@@ -24,6 +25,22 @@ import (
 // In multi-tenant mode, the controller uses polling-based reconciliation to avoid requiring
 // cluster-wide list/watch permissions.
 func (r *OpenBaoClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Initialize ImageVerifier with embedded trusted root (nil config)
+	// This ensures we reuse the same verifier (and its internal caches) across reconciliations.
+	r.ImageVerifier = security.NewImageVerifier(
+		mgr.GetLogger().WithName("image-verifier"),
+		r.Client,
+		nil, // trustedRootConfig
+	)
+
+	// Initialize OperatorImageVerifier with embedded trusted root (nil config)
+	// This ensures we reuse the same verifier (and its internal caches) across reconciliations.
+	r.OperatorImageVerifier = security.NewImageVerifier(
+		mgr.GetLogger().WithName("operator-image-verifier"),
+		r.Client,
+		nil, // trustedRootConfig
+	)
+
 	if r.SingleTenantMode {
 		return r.setupSingleTenantMode(mgr)
 	}

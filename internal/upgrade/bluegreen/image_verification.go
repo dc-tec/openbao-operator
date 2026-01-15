@@ -53,7 +53,7 @@ func (m *Manager) verifyImageDigest(ctx context.Context, logger logr.Logger, clu
 	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 	defer cancel()
 
-	digest, err := security.VerifyImageForCluster(verifyCtx, logger, m.client, cluster, imageRef)
+	digest, err := security.VerifyImageForCluster(verifyCtx, logger, m.imageVerifier, cluster, imageRef)
 	if err == nil {
 		logger.Info("Image verified successfully", "digest", digest)
 		return digest, nil
@@ -81,7 +81,7 @@ func (m *Manager) verifyOperatorImageDigest(ctx context.Context, logger logr.Log
 	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 	defer cancel()
 
-	digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.client, cluster, imageRef)
+	digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.operatorImageVerifier, cluster, imageRef)
 	if err == nil {
 		logger.Info("Operator image verified successfully", "digest", digest)
 		return digest, nil

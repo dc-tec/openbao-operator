@@ -24,11 +24,8 @@ func (r *OpenBaoClusterReconciler) verifyImage(ctx context.Context, logger logr.
 		return "", fmt.Errorf("image verification is enabled but neither public key nor keyless configuration (issuer and subject) is provided")
 	}
 
-	// ImageVerifier can optionally load trusted_root.json from a ConfigMap.
-	// For now, we use nil to use the embedded version. In the future, this could
-	// be configured via operator flags or environment variables.
-	var trustedRootConfig *security.TrustedRootConfig = nil
-	verifier := security.NewImageVerifier(logger, r.Client, trustedRootConfig)
+	// Use the singleton ImageVerifier (initialized in SetupWithManager)
+	// This ensures we benefit from the internal LRU and TTL caches.
 	config := security.VerifyConfig{
 		PublicKey:        cluster.Spec.ImageVerification.PublicKey,
 		Issuer:           cluster.Spec.ImageVerification.Issuer,
@@ -37,7 +34,7 @@ func (r *OpenBaoClusterReconciler) verifyImage(ctx context.Context, logger logr.
 		ImagePullSecrets: cluster.Spec.ImageVerification.ImagePullSecrets,
 		Namespace:        cluster.Namespace,
 	}
-	digest, err := verifier.Verify(ctx, cluster.Spec.Image, config)
+	digest, err := r.ImageVerifier.Verify(ctx, cluster.Spec.Image, config)
 	if err != nil {
 		return "", err
 	}

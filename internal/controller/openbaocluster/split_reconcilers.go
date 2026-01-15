@@ -111,14 +111,15 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(ctx context.Context,
 	reconcilers := []SubReconciler{
 		certmanager.NewManagerWithReloader(r.parent.Client, r.parent.Scheme, r.parent.TLSReload),
 		&infraReconciler{
-			client:            r.parent.Client,
-			scheme:            r.parent.Scheme,
-			operatorNamespace: r.parent.OperatorNamespace,
-			oidcIssuer:        r.parent.OIDCIssuer,
-			oidcJWTKeys:       r.parent.OIDCJWTKeys,
-			verifyImageFunc:   r.parent.verifyImage,
-			recorder:          r.parent.Recorder,
-			admissionStatus:   r.parent.AdmissionStatus,
+			client:                r.parent.Client,
+			scheme:                r.parent.Scheme,
+			operatorNamespace:     r.parent.OperatorNamespace,
+			oidcIssuer:            r.parent.OIDCIssuer,
+			oidcJWTKeys:           r.parent.OIDCJWTKeys,
+			operatorImageVerifier: r.parent.OperatorImageVerifier,
+			verifyImageFunc:       r.parent.verifyImage,
+			recorder:              r.parent.Recorder,
+			admissionStatus:       r.parent.AdmissionStatus,
 		},
 	}
 	if r.parent.InitManager != nil {
@@ -220,13 +221,15 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	var reconcilers []SubReconciler
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
-		infraMgr := inframanager.NewManager(r.parent.Client, r.parent.Scheme, r.parent.OperatorNamespace, r.parent.OIDCIssuer, r.parent.OIDCJWTKeys)
-		reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr, r.parent.SmartClientConfig))
-	} else {
-		reconcilers = append(reconcilers, rollingupgrade.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig))
-	}
-	reconcilers = append(reconcilers, backupmanager.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig))
+	infraMgr := inframanager.NewManager(r.parent.Client, r.parent.Scheme, r.parent.OperatorNamespace, r.parent.OIDCIssuer, r.parent.OIDCJWTKeys)
+	// Blue/green upgrade strategy
+	reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr, r.parent.SmartClientConfig, r.parent.ImageVerifier, r.parent.OperatorImageVerifier))
+
+	// Rolling upgrade strategy
+	reconcilers = append(reconcilers, rollingupgrade.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig, r.parent.OperatorImageVerifier))
+
+	// Backup
+	reconcilers = append(reconcilers, backupmanager.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig, r.parent.OperatorImageVerifier))
 
 	for _, rec := range reconcilers {
 		result, err := rec.Reconcile(ctx, logger, cluster)

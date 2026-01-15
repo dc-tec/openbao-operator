@@ -12,6 +12,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/infra"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {
@@ -40,7 +41,7 @@ func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {
 		WithObjects(cluster).
 		Build()
 	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil)
-	mgr := NewManager(c, scheme, infraMgr, openbao.ClientConfig{})
+	mgr := NewManager(c, scheme, infraMgr, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil))
 
 	result, err := mgr.Reconcile(context.Background(), logr.Discard(), cluster)
 	if err != nil {

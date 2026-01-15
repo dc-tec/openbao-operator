@@ -30,8 +30,9 @@ type infraReconciler struct {
 	operatorNamespace       string
 	oidcIssuer              string
 	oidcJWTKeys             []string
+	operatorImageVerifier   *security.ImageVerifier
 	verifyImageFunc         func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error)
-	verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, kubeClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
+	verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, verifier *security.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
 	recorder                record.EventRecorder
 	admissionStatus         *admission.Status
 }
@@ -150,7 +151,7 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 	}
 
 	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
-		return verifyFunc(ctx, logger, r.client, cluster, strings.TrimSpace(imageRef))
+		return verifyFunc(ctx, logger, r.operatorImageVerifier, cluster, strings.TrimSpace(imageRef))
 	})
 }
 

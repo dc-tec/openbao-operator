@@ -10,11 +10,11 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	security "github.com/dc-tec/openbao-operator/internal/security"
 )
 
 func TestInfraReconcilerVerifyMainImageDigest_DisabledDoesNotCallVerifier(t *testing.T) {
@@ -124,7 +124,7 @@ func TestInfraReconcilerVerifyOperatorImageDigest_WarnEmitsEvent(t *testing.T) {
 
 	recorder := record.NewFakeRecorder(1)
 	r := &infraReconciler{
-		verifyOperatorImageFunc: func(ctx context.Context, logger logr.Logger, kubeClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
+		verifyOperatorImageFunc: func(ctx context.Context, logger logr.Logger, verifier *security.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 			return "", errors.New("verification failed")
 		},
 		recorder: recorder,
