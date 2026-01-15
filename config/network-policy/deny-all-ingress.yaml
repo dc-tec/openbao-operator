@@ -1,0 +1,19 @@
+# Default Deny Ingress for Operator Pods
+#
+# This NetworkPolicy implements a default-deny ingress posture for all
+# operator pods. Specific allow rules are added via additional policies.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+  namespace: system
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openbao-operator
+  policyTypes:
+    - Ingress
+  ingress: []  # Deny all ingress by default

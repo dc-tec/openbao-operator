@@ -1,0 +1,24 @@
+# Allow Health Probe Traffic
+#
+# This NetworkPolicy allows kubelet health probe traffic to operator pods.
+# Port 8081 is used for liveness and readiness probes.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-health-probes
+  namespace: system
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openbao-operator
+  policyTypes:
+    - Ingress
+  ingress:
+    # Health probes from kubelet - allow from any source since kubelets
+    # can be on any node and may use various source IPs
+    - ports:
+        - port: 8081
+          protocol: TCP

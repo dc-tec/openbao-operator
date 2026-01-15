@@ -1,0 +1,13 @@
+# Optional Gateway API RBAC Component
+#
+# Include this in your base kustomization.yaml to enable Gateway API support:
+#
+#   components:
+#     - optional
+#
+# This adds HTTPRoute, TLSRoute, and BackendTLSPolicy permissions to the
+# Provisioner Delegate ClusterRole.
+resources: []
+
+patchesStrategicMerge:
+  - gateway-api-rules.yaml

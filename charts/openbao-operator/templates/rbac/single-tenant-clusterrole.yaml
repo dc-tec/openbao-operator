@@ -1,19 +1,15 @@
 {{- if eq .Values.tenancy.mode "single" }}
-# Single-Tenant Mode ClusterRole
-#
-# This ClusterRole grants the controller permissions to manage OpenBao clusters
-# in single-tenant mode. Unlike multi-tenant mode where permissions are granted
-# per-namespace via the Provisioner, this ClusterRole is bound directly to the
-# controller ServiceAccount.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: {{ include "openbao-operator.fullname" . }}-single-tenant
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
+  labels:
+    app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: controller
+    app.kubernetes.io/managed-by: kustomize
 rules:
-  # OpenBaoCluster and OpenBaoRestore management
   - apiGroups:
       - openbao.org
     resources:
@@ -42,7 +38,6 @@ rules:
       - patch
       - update
       - watch
-  # Workload infrastructure
   - apiGroups:
       - apps
     resources:
@@ -136,7 +131,6 @@ rules:
       - patch
       - update
       - watch
-  # Networking
   - apiGroups:
       - networking.k8s.io
     resources:
@@ -150,6 +144,7 @@ rules:
       - patch
       - update
       - watch
+  {{- if .Values.gatewayAPI.enabled }}
   - apiGroups:
       - gateway.networking.k8s.io
     resources:
@@ -163,8 +158,8 @@ rules:
       - list
       - patch
       - update
-      - watch
-  # RBAC for OpenBao pod discovery
+      - watch{{- end }}
+
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -178,7 +173,6 @@ rules:
       - patch
       - update
       - watch
-  # Service discovery
   - apiGroups:
       - ""
     resources:
@@ -200,7 +194,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: {{ include "openbao-operator.fullname" . }}-single-tenant
-  namespace: {{ if .Values.tenancy.targetNamespace }}{{ .Values.tenancy.targetNamespace }}{{ else }}{{ .Release.Namespace }}{{ end }}
+  namespace: {{ .Values.tenancy.targetNamespace | default .Release.Namespace }}
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
     app.kubernetes.io/component: controller

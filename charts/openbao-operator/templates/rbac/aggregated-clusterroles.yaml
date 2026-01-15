@@ -1,10 +1,10 @@
-{{/*
-Aggregated ClusterRoles for OpenBaoCluster and OpenBaoTenant resources.
-These allow users with admin/edit/view roles to manage the CRDs.
-*/}}
+
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-admin
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
@@ -22,9 +22,13 @@ rules:
     verbs:
       - get
 ---
+
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-editor
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
@@ -48,9 +52,13 @@ rules:
     verbs:
       - get
 ---
+
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-viewer
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
@@ -76,6 +84,7 @@ metadata:
   name: {{ include "openbao-operator.fullname" . }}-openbaotenant-editor
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
+  labels:
     rbac.authorization.k8s.io/aggregate-to-admin: "true"
     rbac.authorization.k8s.io/aggregate-to-edit: "true"
 rules:

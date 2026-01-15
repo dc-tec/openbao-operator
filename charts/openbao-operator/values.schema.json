@@ -33,10 +33,17 @@
         "pullPolicy": {
           "type": "string",
           "description": "Image pull policy",
-          "enum": ["Always", "IfNotPresent", "Never"]
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
         }
       },
-      "required": ["repository", "pullPolicy"]
+      "required": [
+        "repository",
+        "pullPolicy"
+      ]
     },
     "imagePullSecrets": {
       "type": "array",
@@ -49,7 +56,9 @@
             "minLength": 1
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       }
     },
     "operatorVersion": {
@@ -64,7 +73,10 @@
         "mode": {
           "type": "string",
           "description": "Tenancy mode: multi (deploys controller + provisioner) or single (controller only)",
-          "enum": ["multi", "single"],
+          "enum": [
+            "multi",
+            "single"
+          ],
           "default": "multi"
         },
         "targetNamespace": {
@@ -72,7 +84,9 @@
           "description": "Target namespace for single-tenant mode"
         }
       },
-      "required": ["mode"]
+      "required": [
+        "mode"
+      ]
     },
     "controller": {
       "type": "object",
@@ -240,9 +254,43 @@
           "default": true
         }
       }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "description": "NetworkPolicy configuration for operator pods",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable NetworkPolicies for operator pod isolation",
+          "default": true
+        },
+        "metricsAllowedNamespaceLabels": {
+          "type": "object",
+          "description": "Namespace labels required to access metrics endpoint",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "gatewayAPI": {
+      "type": "object",
+      "description": "Gateway API configuration",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable Gateway API RBAC permissions (httproutes, tlsroutes, backendtlspolicies)",
+          "default": true
+        }
+      }
     }
   },
-  "required": ["image", "tenancy"],
+  "required": [
+    "image",
+    "tenancy"
+  ],
   "$defs": {
     "resources": {
       "type": "object",
@@ -253,16 +301,24 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "cpu": { "type": "string" },
-            "memory": { "type": "string" }
+            "cpu": {
+              "type": "string"
+            },
+            "memory": {
+              "type": "string"
+            }
           }
         },
         "requests": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "cpu": { "type": "string" },
-            "memory": { "type": "string" }
+            "cpu": {
+              "type": "string"
+            },
+            "memory": {
+              "type": "string"
+            }
           }
         }
       }
@@ -273,17 +329,27 @@
       "items": {
         "type": "object",
         "properties": {
-          "name": { "type": "string" },
-          "value": { "type": "string" },
-          "valueFrom": { "type": "object" }
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "valueFrom": {
+            "type": "object"
+          }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       }
     },
     "nodeSelector": {
       "type": "object",
       "description": "Node selector for pod scheduling",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "tolerations": {
       "type": "array",
@@ -291,11 +357,30 @@
       "items": {
         "type": "object",
         "properties": {
-          "key": { "type": "string" },
-          "operator": { "type": "string", "enum": ["Exists", "Equal"] },
-          "value": { "type": "string" },
-          "effect": { "type": "string", "enum": ["NoSchedule", "PreferNoSchedule", "NoExecute"] },
-          "tolerationSeconds": { "type": "integer" }
+          "key": {
+            "type": "string"
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "Exists",
+              "Equal"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "NoSchedule",
+              "PreferNoSchedule",
+              "NoExecute"
+            ]
+          },
+          "tolerationSeconds": {
+            "type": "integer"
+          }
         }
       }
     },
@@ -303,52 +388,99 @@
       "type": "object",
       "description": "Affinity rules for pod scheduling",
       "properties": {
-        "nodeAffinity": { "type": "object" },
-        "podAffinity": { "type": "object" },
-        "podAntiAffinity": { "type": "object" }
+        "nodeAffinity": {
+          "type": "object"
+        },
+        "podAffinity": {
+          "type": "object"
+        },
+        "podAntiAffinity": {
+          "type": "object"
+        }
       }
     },
     "annotations": {
       "type": "object",
       "description": "Annotations to add",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "labels": {
       "type": "object",
       "description": "Labels to add",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "containerSecurityContext": {
       "type": "object",
       "description": "Container security context",
       "properties": {
-        "allowPrivilegeEscalation": { "type": "boolean" },
+        "allowPrivilegeEscalation": {
+          "type": "boolean"
+        },
         "capabilities": {
           "type": "object",
           "properties": {
-            "add": { "type": "array", "items": { "type": "string" } },
-            "drop": { "type": "array", "items": { "type": "string" } }
+            "add": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "drop": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         },
-        "readOnlyRootFilesystem": { "type": "boolean" },
-        "runAsGroup": { "type": "integer" },
-        "runAsUser": { "type": "integer" },
-        "runAsNonRoot": { "type": "boolean" }
+        "readOnlyRootFilesystem": {
+          "type": "boolean"
+        },
+        "runAsGroup": {
+          "type": "integer"
+        },
+        "runAsUser": {
+          "type": "integer"
+        },
+        "runAsNonRoot": {
+          "type": "boolean"
+        }
       }
     },
     "podSecurityContext": {
       "type": "object",
       "description": "Pod security context",
       "properties": {
-        "runAsNonRoot": { "type": "boolean" },
-        "runAsUser": { "type": "integer" },
-        "runAsGroup": { "type": "integer" },
-        "fsGroup": { "type": "integer" },
+        "runAsNonRoot": {
+          "type": "boolean"
+        },
+        "runAsUser": {
+          "type": "integer"
+        },
+        "runAsGroup": {
+          "type": "integer"
+        },
+        "fsGroup": {
+          "type": "integer"
+        },
         "seccompProfile": {
           "type": "object",
           "properties": {
-            "type": { "type": "string", "enum": ["RuntimeDefault", "Localhost", "Unconfined"] },
-            "localhostProfile": { "type": "string" }
+            "type": {
+              "type": "string",
+              "enum": [
+                "RuntimeDefault",
+                "Localhost",
+                "Unconfined"
+              ]
+            },
+            "localhostProfile": {
+              "type": "string"
+            }
           }
         }
       }
