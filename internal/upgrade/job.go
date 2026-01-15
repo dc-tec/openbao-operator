@@ -195,7 +195,11 @@ func buildUpgradeExecutorJob(
 		image = strings.TrimSpace(cluster.Spec.Upgrade.ExecutorImage)
 	}
 	if image == "" {
-		image = constants.DefaultUpgradeImage()
+		var err error
+		image, err = constants.DefaultUpgradeImage()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get default upgrade image: %w", err)
+		}
 	}
 
 	jwtRole := strings.TrimSpace(cluster.Spec.Upgrade.JWTAuthRole)

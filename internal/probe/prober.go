@@ -110,7 +110,7 @@ func (p *HTTPProber) CheckLiveness(ctx context.Context) error {
 		// For liveness we can fall back to a TCP dial when TLS assets are not yet
 		// available (e.g., ACME mode) or when the OpenBao process is temporarily
 		// not accepting connections yet.
-		tcpCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		tcpCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 		defer cancel()
 		if tcpErr := tcpDial(tcpCtx, p.hostPort); tcpErr == nil {
 			return nil
@@ -327,7 +327,7 @@ func tcpDial(ctx context.Context, address string) error {
 	dialer := &net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
-		return err
+		return fmt.Errorf("dial failed: %w", err)
 	}
 	_ = conn.Close()
 	return nil

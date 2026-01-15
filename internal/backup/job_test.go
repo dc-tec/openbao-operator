@@ -157,7 +157,10 @@ func TestGetBackupExecutorImage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetBackupExecutorImage(tt.cluster)
+			got, err := GetBackupExecutorImage(tt.cluster)
+			if err != nil {
+				t.Fatalf("GetBackupExecutorImage() unexpected error: %v", err)
+			}
 			if got != tt.want {
 				t.Errorf("GetBackupExecutorImage() = %v, want %v", got, tt.want)
 			}

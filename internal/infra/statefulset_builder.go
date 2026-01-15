@@ -39,9 +39,9 @@ type probeExecActions struct {
 // getInitContainerImage returns the init container image to use.
 // If not specified in the cluster spec, returns the default image derived from
 // OPERATOR_INIT_IMAGE_REPOSITORY and OPERATOR_VERSION environment variables.
-func getInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) string {
+func getInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
 	if cluster.Spec.InitContainer != nil && cluster.Spec.InitContainer.Image != "" {
-		return cluster.Spec.InitContainer.Image
+		return cluster.Spec.InitContainer.Image, nil
 	}
 	return constants.DefaultInitImage()
 }
@@ -67,7 +67,7 @@ func computeConfigHash(configContent string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedInitContainerDigest string, disableSelfInit bool) []corev1.Container {
+func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedInitContainerDigest string, disableSelfInit bool) ([]corev1.Container, error) {
 	renderedConfigDir := path.Dir(openBaoRenderedConfig)
 
 	args := []string{
@@ -103,7 +103,10 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedInitCo
 		})
 	}
 
-	initImage := getInitContainerImage(cluster)
+	initImage, err := getInitContainerImage(cluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get init container image: %w", err)
+	}
 	if verifiedInitContainerDigest != "" {
 		initImage = verifiedInitContainerDigest
 	}
@@ -156,7 +159,7 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedInitCo
 			},
 			VolumeMounts: volumeMounts,
 		},
-	}
+	}, nil
 }
 
 // buildContainerEnv builds the environment variables for the OpenBao container.
@@ -666,6 +669,11 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 	renderedConfigDir := path.Dir(openBaoRenderedConfig)
 	volumes := buildStatefulSetVolumes(cluster, revision, disableSelfInit)
 
+	initContainers, err := buildInitContainers(cluster, verifiedInitContainerDigest, disableSelfInit)
+	if err != nil {
+		return nil, err
+	}
+
 	statefulSetName := statefulSetNameWithRevision(cluster, revision)
 	statefulSet := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -696,7 +704,7 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 					AutomountServiceAccountToken: ptr.To(false),
 					ServiceAccountName:           serviceAccountName(cluster),
 					SecurityContext:              buildStatefulSetPodSecurityContext(cluster),
-					InitContainers:               buildInitContainers(cluster, verifiedInitContainerDigest, disableSelfInit),
+					InitContainers:               initContainers,
 					Containers:                   buildContainers(cluster, verifiedImageDigest, renderedConfigDir, probes),
 					Volumes:                      volumes,
 				},

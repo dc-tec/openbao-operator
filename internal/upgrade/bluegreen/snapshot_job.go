@@ -57,12 +57,12 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 		if err != nil {
 			return nil, err
 		}
-		return m.buildSnapshotJob(cluster, jobName, "pre-upgrade", verifiedExecutorDigest), nil
+		return m.buildSnapshotJob(cluster, jobName, "pre-upgrade", verifiedExecutorDigest)
 	}, "component", ComponentUpgradeSnapshot, "phase", "pre-upgrade")
 }
 
 // buildSnapshotJob creates a backup Job spec for upgrade snapshots.
-func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, phase string, verifiedExecutorDigest string) *batchv1.Job {
+func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, phase string, verifiedExecutorDigest string) (*batchv1.Job, error) {
 	region := cluster.Spec.Backup.Target.Region
 	if region == "" {
 		region = "us-east-1"
@@ -222,7 +222,11 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 		image = cluster.Spec.Backup.ExecutorImage
 	}
 	if image == "" {
-		image = constants.DefaultBackupImage()
+		var err error
+		image, err = constants.DefaultBackupImage()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get default backup image: %w", err)
+		}
 	}
 
 	job := &batchv1.Job{
@@ -291,5 +295,5 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 		},
 	}
 
-	return job
+	return job, nil
 }
