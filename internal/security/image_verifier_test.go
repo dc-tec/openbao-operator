@@ -9,8 +9,9 @@ import (
 )
 
 const (
+	OpenBaoImageRef = "ghcr.io/openbao/openbao:2.4.4"
 	// Use a valid digest format: SHA256 requires 64 hex characters
-	testImageDigest = "docker.io/test/image@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	testImageDigest = "ghcr.io/test/image@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	testOIDCIssuer  = "https://token.actions.githubusercontent.com"
 	testOIDCSubject = "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v2.0.0"
 )
@@ -277,8 +278,8 @@ func TestVerificationCache_ConcurrentAccess(t *testing.T) {
 func TestTagResolutionCache_GetSet(t *testing.T) {
 	cache := newTagResolutionCache()
 
-	imageRef := "docker.io/openbao/openbao:2.0.0"
-	digest := "docker.io/openbao/openbao@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	imageRef := OpenBaoImageRef
+	digest := "ghcr.io/openbao/openbao@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 	// Initially not in cache
 	if cached, ok := cache.get(imageRef); ok {
@@ -301,10 +302,10 @@ func TestTagResolutionCache_GetSet(t *testing.T) {
 func TestTagResolutionCache_DifferentTags(t *testing.T) {
 	cache := newTagResolutionCache()
 
-	imageRef1 := "docker.io/openbao/openbao:2.0.0"
-	digest1 := "docker.io/openbao/openbao@sha256:abc123"
-	imageRef2 := "docker.io/openbao/openbao:2.1.0"
-	digest2 := "docker.io/openbao/openbao@sha256:def456"
+	imageRef1 := OpenBaoImageRef
+	digest1 := "ghcr.io/openbao/openbao@sha256:abc123"
+	imageRef2 := "ghcr.io/openbao/openbao:2.1.0"
+	digest2 := "ghcr.io/openbao/openbao@sha256:def456"
 
 	// Set both mappings
 	cache.set(imageRef1, digest1)
@@ -325,8 +326,8 @@ func TestTagResolutionCache_DifferentTags(t *testing.T) {
 func TestTagResolutionCache_ConcurrentAccess(t *testing.T) {
 	cache := newTagResolutionCache()
 
-	imageRef := "docker.io/openbao/openbao:2.0.0"
-	digest := "docker.io/openbao/openbao@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	imageRef := OpenBaoImageRef
+	digest := "ghcr.io/openbao/openbao@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 	// Test concurrent writes
 	done := make(chan bool, 10)
