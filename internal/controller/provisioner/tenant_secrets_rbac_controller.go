@@ -37,14 +37,18 @@ func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, fmt.Errorf("provisioner manager is required")
 	}
 
-	// Only manage Secret RBAC for namespaces that have already been provisioned.
-	// This avoids granting Secret access in namespaces that are not part of the tenant model.
+	// check if the tenant namespace is provisioned
 	provisioned, err := r.Provisioner.IsTenantNamespaceProvisioned(ctx, req.Namespace)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if !provisioned {
-		return ctrl.Result{}, nil
+		// If not yet provisioned, we should verify that this is actually a target namespace
+		// for some OpenBaoTenant. However, this controller watches OpenBaoClusters.
+		// If an OpenBaoCluster exists, we generally expect the namespace to be provisioned soon.
+		// We requeue with a delay to wait for the Provisioner to complete the base RBAC setup.
+		logger.V(1).Info("Tenant namespace not yet provisioned; requeueing to sync secrets RBAC")
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
 	if err := r.Provisioner.EnsureTenantSecretRBAC(ctx, req.Namespace); err != nil {
