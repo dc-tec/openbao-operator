@@ -249,8 +249,8 @@ func TestCleanupReliesOnGarbageCollection(t *testing.T) {
 	// Create the cluster in the fake client so it has a UID for OwnerReference
 	cluster := newMinimalCluster("infra-gc-cleanup", "default")
 	cluster.Status.Initialized = true
-	cluster.APIVersion = "openbao.org/v1alpha1"
-	cluster.Kind = "OpenBaoCluster"
+	cluster.APIVersion = apiVersion
+	cluster.Kind = kind
 
 	ctx := context.Background()
 
@@ -346,7 +346,7 @@ func TestCleanupReliesOnGarbageCollection(t *testing.T) {
 
 	foundOwnerRef := false
 	for _, ref := range sts.OwnerReferences {
-		if ref.Kind == "OpenBaoCluster" && ref.Name == cluster.Name {
+		if ref.Kind == kind && ref.Name == cluster.Name {
 			foundOwnerRef = true
 			break
 		}
@@ -564,8 +564,8 @@ func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 	cluster.Status.Initialized = true
 
 	// Set TypeMeta (required for SetControllerReference)
-	cluster.APIVersion = "openbao.org/v1alpha1"
-	cluster.Kind = "OpenBaoCluster"
+	cluster.APIVersion = apiVersion
+	cluster.Kind = kind
 
 	// Create the cluster resource first
 	if err := k8sClient.Create(ctx, cluster); err != nil {
@@ -597,8 +597,8 @@ func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 		for _, ref := range refs {
 			if ref.UID == cluster.UID {
 				found = true
-				if ref.Kind != "OpenBaoCluster" {
-					t.Errorf("%s: expected OwnerReference Kind 'OpenBaoCluster', got %s", resourceType, ref.Kind)
+				if ref.Kind != kind {
+					t.Errorf("%s: expected OwnerReference Kind '%s', got %s", resourceType, kind, ref.Kind)
 				}
 				if ref.Name != cluster.Name {
 					t.Errorf("%s: expected OwnerReference Name %s, got %s", resourceType, cluster.Name, ref.Name)

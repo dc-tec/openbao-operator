@@ -139,60 +139,6 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 	return nil
 }
 
-// deleteStatefulSet removes the StatefulSet for the OpenBaoCluster.
-func (m *Manager) deleteStatefulSet(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	statefulSet := &appsv1.StatefulSet{}
-	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      statefulSetName(cluster),
-	}, statefulSet)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		return err
-	}
-
-	if err := m.client.Delete(ctx, statefulSet); err != nil && !apierrors.IsNotFound(err) {
-		return err
-	}
-
-	return nil
-}
-
-// deletePods removes all Pods associated with the OpenBaoCluster.
-// This ensures pods are cleaned up even if they become orphaned after StatefulSet deletion.
-func (m *Manager) deletePods(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	var podList corev1.PodList
-	if err := m.client.List(ctx, &podList,
-		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(podSelectorLabels(cluster)),
-	); err != nil {
-		// If RBAC does not permit listing pods (for example, tenant Roles have
-		// been removed or were never provisioned), treat this as a best-effort
-		// condition rather than blocking finalizer removal. At this point the
-		// StatefulSet is being deleted and kubelet is allowed to delete pods via
-		// the resource lock webhook, so lingering pods will still be cleaned up.
-		if apierrors.IsForbidden(err) {
-			logger.Info("Skipping pod cleanup during deletion due to missing list permission",
-				"namespace", cluster.Namespace,
-				"cluster", cluster.Name)
-			return nil
-		}
-		return fmt.Errorf("failed to list pods for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	for i := range podList.Items {
-		pod := &podList.Items[i]
-		logger.Info("Deleting pod during cleanup", "pod", pod.Name)
-		if err := m.client.Delete(ctx, pod); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete pod %s/%s: %w", pod.Namespace, pod.Name, err)
-		}
-	}
-
-	return nil
-}
-
 // deletePVCs removes all PersistentVolumeClaims associated with the OpenBaoCluster.
 func (m *Manager) deletePVCs(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	var pvcList corev1.PersistentVolumeClaimList

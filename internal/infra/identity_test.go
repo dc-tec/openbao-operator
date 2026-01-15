@@ -12,6 +12,11 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+const (
+	apiVersion = "openbao.org/v1alpha1"
+	kind       = "OpenBaoCluster"
+)
+
 func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
@@ -245,8 +250,8 @@ func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
 	cluster := newMinimalCluster("infra-sa-gc", "default")
-	cluster.APIVersion = "openbao.org/v1alpha1"
-	cluster.Kind = "OpenBaoCluster"
+	cluster.APIVersion = apiVersion
+	cluster.Kind = kind
 
 	ctx := context.Background()
 
@@ -281,7 +286,7 @@ func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 
 	foundOwnerRef := false
 	for _, ref := range sa.OwnerReferences {
-		if ref.Kind == "OpenBaoCluster" && ref.Name == cluster.Name {
+		if ref.Kind == kind && ref.Name == cluster.Name {
 			foundOwnerRef = true
 			break
 		}
@@ -314,8 +319,8 @@ func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
 	cluster := newMinimalCluster("infra-rbac-gc", "default")
-	cluster.APIVersion = "openbao.org/v1alpha1"
-	cluster.Kind = "OpenBaoCluster"
+	cluster.APIVersion = apiVersion
+	cluster.Kind = kind
 
 	ctx := context.Background()
 
@@ -351,7 +356,7 @@ func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 
 	foundOwnerRef := false
 	for _, ref := range roleBinding.OwnerReferences {
-		if ref.Kind == "OpenBaoCluster" && ref.Name == cluster.Name {
+		if ref.Kind == kind && ref.Name == cluster.Name {
 			foundOwnerRef = true
 			break
 		}
@@ -373,7 +378,7 @@ func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 
 	foundOwnerRef = false
 	for _, ref := range role.OwnerReferences {
-		if ref.Kind == "OpenBaoCluster" && ref.Name == cluster.Name {
+		if ref.Kind == kind && ref.Name == cluster.Name {
 			foundOwnerRef = true
 			break
 		}
