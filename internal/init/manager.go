@@ -348,6 +348,14 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 		return err
 	}
 
+	// Configure Raft Autopilot for automatic dead server cleanup.
+	// This must be done after initialization when we have a valid root token.
+	if err := m.configureAutopilot(ctx, logger, cluster, initResp.RootToken); err != nil {
+		// Non-fatal: cluster still works, just won't auto-cleanup dead peers.
+		// Log the error but do not fail initialization.
+		logger.Error(err, "Failed to configure Raft Autopilot; dead server cleanup may not work automatically")
+	}
+
 	logger.Info("OpenBao cluster initialized successfully via HTTP API")
 	return nil
 }
@@ -398,6 +406,110 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1
 	}
 
 	return client, nil
+}
+
+// configureAutopilot configures Raft Autopilot for automatic dead server cleanup.
+// This is called after cluster initialization with the root token.
+func (m *Manager) configureAutopilot(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, rootToken string) error {
+	// Create authenticated client with root token
+	client, err := m.newOpenBaoClientWithToken(ctx, cluster, rootToken)
+	if err != nil {
+		return fmt.Errorf("failed to create authenticated OpenBao client: %w", err)
+	}
+
+	// Build Autopilot configuration from CRD or use defaults
+	config := m.buildAutopilotConfig(cluster)
+
+	logger.Info("Configuring Raft Autopilot",
+		"cleanup_dead_servers", config.CleanupDeadServers,
+		"dead_server_last_contact_threshold", config.DeadServerLastContactThreshold,
+		"min_quorum", config.MinQuorum,
+	)
+
+	autopilotCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if err := client.ConfigureRaftAutopilot(autopilotCtx, config); err != nil {
+		return fmt.Errorf("failed to configure Raft Autopilot: %w", err)
+	}
+
+	logger.Info("Raft Autopilot configured successfully")
+	return nil
+}
+
+// buildAutopilotConfig constructs the Autopilot configuration from CRD settings or defaults.
+func (m *Manager) buildAutopilotConfig(cluster *openbaov1alpha1.OpenBaoCluster) openbao.AutopilotConfig {
+	config := openbao.AutopilotConfig{
+		CleanupDeadServers:             true, // Enable by default
+		DeadServerLastContactThreshold: "5m", // Shorter than OpenBao's 24h default
+		MinQuorum:                      maxInt(3, int(cluster.Spec.Replicas/2)+1),
+	}
+
+	// Override with CRD settings if provided
+	if cluster.Spec.Configuration != nil &&
+		cluster.Spec.Configuration.Raft != nil &&
+		cluster.Spec.Configuration.Raft.Autopilot != nil {
+		ap := cluster.Spec.Configuration.Raft.Autopilot
+
+		if ap.CleanupDeadServers != nil {
+			config.CleanupDeadServers = *ap.CleanupDeadServers
+		}
+		if ap.DeadServerLastContactThreshold != "" {
+			config.DeadServerLastContactThreshold = ap.DeadServerLastContactThreshold
+		}
+		if ap.MinQuorum != nil {
+			config.MinQuorum = int(*ap.MinQuorum)
+		}
+		if ap.ServerStabilizationTime != "" {
+			config.ServerStabilizationTime = ap.ServerStabilizationTime
+		}
+	}
+
+	return config
+}
+
+// newOpenBaoClientWithToken creates an authenticated OpenBao client with the given token.
+func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, token string) (*openbao.Client, error) {
+	if strings.TrimSpace(cluster.Name) == "" || strings.TrimSpace(cluster.Namespace) == "" {
+		return nil, fmt.Errorf("cluster name and namespace are required to build OpenBao client")
+	}
+
+	baseURL := fmt.Sprintf("https://%s-0.%s.%s.svc:%d", cluster.Name, cluster.Name, cluster.Namespace, constants.PortAPI)
+
+	caSecretName := cluster.Name + constants.SuffixTLSCA
+	secret, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, caSecretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
+	}
+
+	caCert, ok := secret.Data["ca.crt"]
+	if !ok || len(caCert) == 0 {
+		return nil, fmt.Errorf("TLS CA Secret %s/%s missing 'ca.crt' key", cluster.Namespace, caSecretName)
+	}
+
+	factory := openbao.NewClientFactory(openbao.ClientConfig{
+		ClusterKey:                     fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
+		Token:                          token,
+		CACert:                         caCert,
+		RateLimitQPS:                   m.limits.RateLimitQPS,
+		RateLimitBurst:                 m.limits.RateLimitBurst,
+		CircuitBreakerFailureThreshold: m.limits.CircuitBreakerFailureThreshold,
+		CircuitBreakerOpenDuration:     m.limits.CircuitBreakerOpenDuration,
+	})
+	client, err := factory.New(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OpenBao client for %s: %w", baseURL, err)
+	}
+
+	return client, nil
+}
+
+// maxInt returns the greater of two integers.
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, rootToken string) error {
