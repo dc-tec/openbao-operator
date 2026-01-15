@@ -31,7 +31,11 @@ const (
 // after scale-up operations.
 func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, error) {
 	factory := openbao.NewClientFactory(openbao.ClientConfig{
-		CACert: cfg.TLSCACert,
+		CACert:                         cfg.TLSCACert,
+		RateLimitQPS:                   cfg.RateLimitQPS,
+		RateLimitBurst:                 cfg.RateLimitBurst,
+		CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
+		CircuitBreakerOpenDuration:     parseDuration(cfg.CircuitBreakerOpenDuration),
 	})
 
 	// Retry with exponential backoff: 1s, 2s, 4s, 8s, 16s
@@ -102,7 +106,11 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 func authenticate(ctx context.Context, cfg *backupconfig.ExecutorConfig, leaderURL string) (string, error) {
 	if cfg.AuthMethod == constants.BackupAuthMethodJWT {
 		factory := openbao.NewClientFactory(openbao.ClientConfig{
-			CACert: cfg.TLSCACert,
+			CACert:                         cfg.TLSCACert,
+			RateLimitQPS:                   cfg.RateLimitQPS,
+			RateLimitBurst:                 cfg.RateLimitBurst,
+			CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
+			CircuitBreakerOpenDuration:     parseDuration(cfg.CircuitBreakerOpenDuration),
 		})
 		return factory.LoginJWT(ctx, leaderURL, cfg.JWTAuthRole, cfg.JWTToken)
 	}
@@ -137,7 +145,11 @@ func run(ctx context.Context) error {
 
 	// Create OpenBao client for leader
 	factory := openbao.NewClientFactory(openbao.ClientConfig{
-		CACert: cfg.TLSCACert,
+		CACert:                         cfg.TLSCACert,
+		RateLimitQPS:                   cfg.RateLimitQPS,
+		RateLimitBurst:                 cfg.RateLimitBurst,
+		CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
+		CircuitBreakerOpenDuration:     parseDuration(cfg.CircuitBreakerOpenDuration),
 	})
 	baoClient, err := factory.NewWithToken(leaderURL, token)
 	if err != nil {
@@ -294,7 +306,11 @@ func runRestore(ctx context.Context) error {
 
 	// Create OpenBao client for leader
 	factory := openbao.NewClientFactory(openbao.ClientConfig{
-		CACert: cfg.TLSCACert,
+		CACert:                         cfg.TLSCACert,
+		RateLimitQPS:                   cfg.RateLimitQPS,
+		RateLimitBurst:                 cfg.RateLimitBurst,
+		CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
+		CircuitBreakerOpenDuration:     parseDuration(cfg.CircuitBreakerOpenDuration),
 	})
 	baoClient, err := factory.NewWithToken(leaderURL, token)
 	if err != nil {
@@ -411,4 +427,17 @@ func main() {
 		}
 	}
 	os.Exit(exitSuccess)
+}
+
+// parseDuration parses a duration string, returning 0 if empty or invalid.
+func parseDuration(s string) time.Duration {
+	if s == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: invalid duration %q: %v\n", s, err)
+		return 0
+	}
+	return d
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/kube"
+	"github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/storage"
@@ -37,16 +38,18 @@ var ErrNoBackupToken = errors.New("no backup token configured: either jwtAuthRol
 
 // Manager reconciles backup configuration and execution for an OpenBaoCluster.
 type Manager struct {
-	client client.Client
-	scheme *runtime.Scheme
+	client       client.Client
+	scheme       *runtime.Scheme
+	clientConfig openbao.ClientConfig
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
-func NewManager(c client.Client, scheme *runtime.Scheme) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbao.ClientConfig) *Manager {
 	return &Manager{
-		client: c,
-		scheme: scheme,
+		client:       c,
+		scheme:       scheme,
+		clientConfig: clientConfig,
 	}
 }
 

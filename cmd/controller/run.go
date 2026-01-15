@@ -55,6 +55,8 @@ import (
 	initmanager "github.com/dc-tec/openbao-operator/internal/init"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
+
+	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 var (
@@ -86,6 +88,12 @@ func Run(args []string) {
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
 
+	// Smart Client Limits
+	var clientQPS float64
+	var clientBurst int
+	var clientCBFailureThreshold int
+	var clientCBOpenDuration time.Duration
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -99,6 +107,15 @@ func Run(args []string) {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics server")
+
+	flag.Float64Var(&clientQPS, "openbao-client-qps", 50.0,
+		"The queries per second (QPS) limit for OpenBao API clients.")
+	flag.IntVar(&clientBurst, "openbao-client-burst", 100,
+		"The burst limit for OpenBao API clients.")
+	flag.IntVar(&clientCBFailureThreshold, "openbao-client-cb-failure-threshold", 50,
+		"The number of consecutive failures before opening the circuit breaker.")
+	flag.DurationVar(&clientCBOpenDuration, "openbao-client-cb-open-duration", 30*time.Second,
+		"The duration the circuit breaker remains open before testing the connection.")
 
 	opts := zap.Options{
 		Development: true,
@@ -254,8 +271,16 @@ func Run(args []string) {
 	// the need for pods/exec privileges in the operator.
 	reloadSignaler := certmanager.NewKubernetesReloadSignaler(clientset)
 
+	// Create smart client configuration
+	smartClientConfig := openbao.ClientConfig{
+		RateLimitQPS:                   clientQPS,
+		RateLimitBurst:                 clientBurst,
+		CircuitBreakerFailureThreshold: clientCBFailureThreshold,
+		CircuitBreakerOpenDuration:     clientCBOpenDuration,
+	}
+
 	// Create initialization manager
-	initMgr := initmanager.NewManager(config, clientset)
+	initMgr := initmanager.NewManager(config, clientset, smartClientConfig)
 
 	// Get operator namespace from POD_NAMESPACE environment variable (set by Kubernetes)
 	// Default to "openbao-operator-system" for backward compatibility
@@ -315,6 +340,7 @@ func Run(args []string) {
 		AdmissionStatus:   &admissionStatus,
 		Recorder:          mgr.GetEventRecorderFor(constants.ControllerNameOpenBaoCluster),
 		SingleTenantMode:  singleTenantMode,
+		SmartClientConfig: smartClientConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
 		os.Exit(1)

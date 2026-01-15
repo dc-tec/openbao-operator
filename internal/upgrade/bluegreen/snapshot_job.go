@@ -88,6 +88,32 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 		{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", cluster.Spec.Backup.Target.UsePathStyle)},
 	}
 
+	// Smart Client Limits
+	if m.clientConfig.RateLimitQPS > 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  constants.EnvClientQPS,
+			Value: fmt.Sprintf("%f", m.clientConfig.RateLimitQPS),
+		})
+	}
+	if m.clientConfig.RateLimitBurst > 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  constants.EnvClientBurst,
+			Value: fmt.Sprintf("%d", m.clientConfig.RateLimitBurst),
+		})
+	}
+	if m.clientConfig.CircuitBreakerFailureThreshold > 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  constants.EnvClientCircuitBreakerFailureThreshold,
+			Value: fmt.Sprintf("%d", m.clientConfig.CircuitBreakerFailureThreshold),
+		})
+	}
+	if m.clientConfig.CircuitBreakerOpenDuration > 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  constants.EnvClientCircuitBreakerOpenDuration,
+			Value: m.clientConfig.CircuitBreakerOpenDuration.String(),
+		})
+	}
+
 	// Add role ARN if configured
 	if cluster.Spec.Backup.Target.RoleARN != "" {
 		env = append(env, corev1.EnvVar{

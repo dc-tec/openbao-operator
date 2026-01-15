@@ -39,13 +39,15 @@ var errRetryLater = operatorerrors.ErrTransientConnection
 type Manager struct {
 	config    *rest.Config
 	clientset kubernetes.Interface
+	limits    openbao.ClientConfig
 }
 
 // NewManager creates a new initialization Manager.
-func NewManager(config *rest.Config, clientset kubernetes.Interface) *Manager {
+func NewManager(config *rest.Config, clientset kubernetes.Interface, limits openbao.ClientConfig) *Manager {
 	return &Manager{
 		config:    config,
 		clientset: clientset,
+		limits:    limits,
 	}
 }
 
@@ -380,8 +382,12 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1
 	// and initialization. Default timeouts are sufficient now that NetworkPolicy is correctly
 	// configured to allow operator access.
 	factory := openbao.NewClientFactory(openbao.ClientConfig{
-		ClusterKey: fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
-		CACert:     caCert,
+		ClusterKey:                     fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
+		CACert:                         caCert,
+		RateLimitQPS:                   m.limits.RateLimitQPS,
+		RateLimitBurst:                 m.limits.RateLimitBurst,
+		CircuitBreakerFailureThreshold: m.limits.CircuitBreakerFailureThreshold,
+		CircuitBreakerOpenDuration:     m.limits.CircuitBreakerOpenDuration,
 		// Use default timeouts (5s connection, 10s request) which are sufficient for
 		// normal operation. The health check context timeout (10s) matches the default
 		// RequestTimeout, ensuring the client won't timeout before the context.

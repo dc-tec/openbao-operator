@@ -43,6 +43,12 @@ type ExecutorConfig struct {
 	// S3 upload configuration
 	PartSize    int64
 	Concurrency int32
+
+	// Smart Client Limits
+	RateLimitQPS                   float64
+	RateLimitBurst                 int
+	CircuitBreakerFailureThreshold int
+	CircuitBreakerOpenDuration     string // Duration string format (e.g. "30s")
 }
 
 // Validate validates the configuration and returns an error if invalid.
@@ -100,6 +106,9 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 		return nil, err
 	}
 	if err := loadUploadConfig(cfg); err != nil {
+		return nil, err
+	}
+	if err := loadClientConfig(cfg); err != nil {
 		return nil, err
 	}
 
@@ -373,4 +382,37 @@ func loadStorageCredentials(credsPath string) (*storage.Credentials, error) {
 	}
 
 	return creds, nil
+}
+
+// loadClientConfig loads smart client configuration from environment variables.
+func loadClientConfig(cfg *ExecutorConfig) error {
+	qpsStr := strings.TrimSpace(os.Getenv(constants.EnvClientQPS))
+	if qpsStr != "" {
+		qps, err := strconv.ParseFloat(qpsStr, 64)
+		if err != nil {
+			return fmt.Errorf("invalid %s value %q: %w", constants.EnvClientQPS, qpsStr, err)
+		}
+		cfg.RateLimitQPS = qps
+	}
+
+	burstStr := strings.TrimSpace(os.Getenv(constants.EnvClientBurst))
+	if burstStr != "" {
+		burst, err := strconv.ParseInt(burstStr, 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid %s value %q: %w", constants.EnvClientBurst, burstStr, err)
+		}
+		cfg.RateLimitBurst = int(burst)
+	}
+
+	failureThresholdStr := strings.TrimSpace(os.Getenv(constants.EnvClientCircuitBreakerFailureThreshold))
+	if failureThresholdStr != "" {
+		failureThreshold, err := strconv.ParseInt(failureThresholdStr, 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid %s value %q: %w", constants.EnvClientCircuitBreakerFailureThreshold, failureThresholdStr, err)
+		}
+		cfg.CircuitBreakerFailureThreshold = int(failureThreshold)
+	}
+
+	cfg.CircuitBreakerOpenDuration = strings.TrimSpace(os.Getenv(constants.EnvClientCircuitBreakerOpenDuration))
+	return nil
 }

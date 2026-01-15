@@ -75,7 +75,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	}
 
 	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
-	mgr := bluegreen.NewManager(k8sClient, k8sScheme, infraMgr)
+	mgr := bluegreen.NewManager(k8sClient, k8sScheme, infraMgr, openbaoapi.ClientConfig{})
 
 	// Phase: JoiningMesh -> create join job
 	latestCluster := &openbaov1alpha1.OpenBaoCluster{}
@@ -250,7 +250,7 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 				return true, nil
 			},
 		}, nil
-	})
+	}, openbaoapi.ClientConfig{})
 
 	latestCluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {

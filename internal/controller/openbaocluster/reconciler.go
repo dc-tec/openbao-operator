@@ -8,6 +8,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/admission"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
 	initmanager "github.com/dc-tec/openbao-operator/internal/init"
+	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 // OpenBaoClusterReconciler reconciles a OpenBaoCluster object.
@@ -24,5 +25,6 @@ type OpenBaoClusterReconciler struct {
 	// SingleTenantMode indicates the controller is running in single-tenant mode.
 	// When true, the controller uses Owns() watches for event-driven reconciliation
 	// and caching is enabled for the watched namespace.
-	SingleTenantMode bool
+	SingleTenantMode  bool
+	SmartClientConfig openbao.ClientConfig
 }

@@ -222,11 +222,11 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	var reconcilers []SubReconciler
 	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
 		infraMgr := inframanager.NewManager(r.parent.Client, r.parent.Scheme, r.parent.OperatorNamespace, r.parent.OIDCIssuer, r.parent.OIDCJWTKeys)
-		reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr))
+		reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr, r.parent.SmartClientConfig))
 	} else {
-		reconcilers = append(reconcilers, rollingupgrade.NewManager(r.parent.Client, r.parent.Scheme))
+		reconcilers = append(reconcilers, rollingupgrade.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig))
 	}
-	reconcilers = append(reconcilers, backupmanager.NewManager(r.parent.Client, r.parent.Scheme))
+	reconcilers = append(reconcilers, backupmanager.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig))
 
 	for _, rec := range reconcilers {
 		result, err := rec.Reconcile(ctx, logger, cluster)

@@ -195,6 +195,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		podName,
 		"",
 		"",
+		m.clientConfig,
 	)
 	if err != nil {
 		return false, fmt.Errorf("failed to ensure step-down Job: %w", err)

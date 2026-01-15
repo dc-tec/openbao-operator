@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 // JobType distinguishes between scheduled backups and pre-upgrade snapshots.
@@ -39,6 +40,8 @@ type JobOptions struct {
 	// FilenamePrefix is prepended to the backup filename (e.g., "pre-upgrade").
 	// Only used when BackupKey is empty.
 	FilenamePrefix string
+	// ClientConfig holds the smart client configuration to be injected as environment variables.
+	ClientConfig openbao.ClientConfig
 }
 
 // BuildJob creates a Kubernetes Job for executing a backup.
@@ -261,6 +264,32 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 				Value: constants.BackupAuthMethodToken,
 			})
 		}
+	}
+
+	// Smart Client Limits
+	if opts.ClientConfig.RateLimitQPS > 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  constants.EnvClientQPS,
+			Value: fmt.Sprintf("%f", opts.ClientConfig.RateLimitQPS),
+		})
+	}
+	if opts.ClientConfig.RateLimitBurst > 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  constants.EnvClientBurst,
+			Value: fmt.Sprintf("%d", opts.ClientConfig.RateLimitBurst),
+		})
+	}
+	if opts.ClientConfig.CircuitBreakerFailureThreshold > 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  constants.EnvClientCircuitBreakerFailureThreshold,
+			Value: fmt.Sprintf("%d", opts.ClientConfig.CircuitBreakerFailureThreshold),
+		})
+	}
+	if opts.ClientConfig.CircuitBreakerOpenDuration > 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  constants.EnvClientCircuitBreakerOpenDuration,
+			Value: opts.ClientConfig.CircuitBreakerOpenDuration.String(),
+		})
 	}
 
 	return env

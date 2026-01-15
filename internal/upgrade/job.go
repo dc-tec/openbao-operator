@@ -21,6 +21,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/kube"
+	"github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
@@ -63,8 +64,9 @@ func EnsureExecutorJob(
 	runID string,
 	blueRevision string,
 	greenRevision string,
+	clientConfig openbao.ClientConfig,
 ) (*JobResult, error) {
-	result, err := ensureUpgradeExecutorJob(ctx, c, scheme, logger, cluster, action, runID, blueRevision, greenRevision)
+	result, err := ensureUpgradeExecutorJob(ctx, c, scheme, logger, cluster, action, runID, blueRevision, greenRevision, clientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +95,7 @@ func ensureUpgradeExecutorJob(
 	runID string,
 	blueRevision string,
 	greenRevision string,
+	clientConfig openbao.ClientConfig,
 ) (*executorJobResult, error) {
 	if cluster == nil {
 		return nil, fmt.Errorf("cluster is required")
@@ -131,7 +134,7 @@ func ensureUpgradeExecutorJob(
 			}
 		}
 
-		job, err := buildUpgradeExecutorJob(cluster, jobName, action, runID, blueRevision, greenRevision, verifiedExecutorDigest)
+		job, err := buildUpgradeExecutorJob(cluster, jobName, action, runID, blueRevision, greenRevision, verifiedExecutorDigest, clientConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build upgrade Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
@@ -179,6 +182,7 @@ func buildUpgradeExecutorJob(
 	blueRevision string,
 	greenRevision string,
 	verifiedExecutorDigest string,
+	clientConfig openbao.ClientConfig,
 ) (*batchv1.Job, error) {
 	if cluster.Spec.Upgrade == nil {
 		return nil, fmt.Errorf("spec.upgrade is required for upgrade Jobs")
@@ -210,6 +214,20 @@ func buildUpgradeExecutorJob(
 	}
 	if greenRevision != "" {
 		env = append(env, corev1.EnvVar{Name: constants.EnvUpgradeGreenRevision, Value: greenRevision})
+	}
+
+	// Inject Smart Client Limits
+	if clientConfig.RateLimitQPS > 0 {
+		env = append(env, corev1.EnvVar{Name: constants.EnvClientQPS, Value: fmt.Sprintf("%f", clientConfig.RateLimitQPS)})
+	}
+	if clientConfig.RateLimitBurst > 0 {
+		env = append(env, corev1.EnvVar{Name: constants.EnvClientBurst, Value: fmt.Sprintf("%d", clientConfig.RateLimitBurst)})
+	}
+	if clientConfig.CircuitBreakerFailureThreshold > 0 {
+		env = append(env, corev1.EnvVar{Name: constants.EnvClientCircuitBreakerFailureThreshold, Value: fmt.Sprintf("%d", clientConfig.CircuitBreakerFailureThreshold)})
+	}
+	if clientConfig.CircuitBreakerOpenDuration > 0 {
+		env = append(env, corev1.EnvVar{Name: constants.EnvClientCircuitBreakerOpenDuration, Value: clientConfig.CircuitBreakerOpenDuration.String()})
 	}
 
 	backoffLimit := int32(0)

@@ -28,6 +28,12 @@ type ExecutorConfig struct {
 
 	SyncThreshold uint64
 	Timeout       time.Duration
+
+	// Smart Client Limits
+	ClientQPS                            float64
+	ClientBurst                          int
+	ClientCircuitBreakerFailureThreshold int
+	ClientCircuitBreakerOpenDuration     time.Duration
 }
 
 // Validate validates the executor configuration.
@@ -155,6 +161,38 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvUpgradeTimeout, timeoutStr, err)
 		}
 		cfg.Timeout = timeout
+	}
+
+	if qpsStr := strings.TrimSpace(os.Getenv(constants.EnvClientQPS)); qpsStr != "" {
+		qps, err := strconv.ParseFloat(qpsStr, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvClientQPS, qpsStr, err)
+		}
+		cfg.ClientQPS = qps
+	}
+
+	if burstStr := strings.TrimSpace(os.Getenv(constants.EnvClientBurst)); burstStr != "" {
+		burst, err := strconv.Atoi(burstStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvClientBurst, burstStr, err)
+		}
+		cfg.ClientBurst = burst
+	}
+
+	if thresholdStr := strings.TrimSpace(os.Getenv(constants.EnvClientCircuitBreakerFailureThreshold)); thresholdStr != "" {
+		threshold, err := strconv.Atoi(thresholdStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvClientCircuitBreakerFailureThreshold, thresholdStr, err)
+		}
+		cfg.ClientCircuitBreakerFailureThreshold = threshold
+	}
+
+	if durationStr := strings.TrimSpace(os.Getenv(constants.EnvClientCircuitBreakerOpenDuration)); durationStr != "" {
+		duration, err := time.ParseDuration(durationStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvClientCircuitBreakerOpenDuration, durationStr, err)
+		}
+		cfg.ClientCircuitBreakerOpenDuration = duration
 	}
 
 	return cfg, nil

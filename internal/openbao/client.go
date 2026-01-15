@@ -499,9 +499,9 @@ type JWTAuthLoginResponse struct {
 //
 // The role must be configured in OpenBao and must bind to the ServiceAccount
 // that issued the JWT token.
-func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, error) {
+func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, int, error) {
 	if role == "" || jwtToken == "" {
-		return "", fmt.Errorf("role and jwtToken are required for JWT authentication")
+		return "", 0, fmt.Errorf("role and jwtToken are required for JWT authentication")
 	}
 
 	// Build request body
@@ -511,35 +511,35 @@ func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, e
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal JWT auth request: %w", err)
+		return "", 0, fmt.Errorf("failed to marshal JWT auth request: %w", err)
 	}
 
 	req, err := c.newRequest(ctx, http.MethodPost, constants.APIPathAuthJWTLogin, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return "", fmt.Errorf("failed to create JWT auth request: %w", err)
+		return "", 0, fmt.Errorf("failed to create JWT auth request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, respBody, err := c.doAndReadAll(req, nil, "failed to execute JWT auth request")
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("JWT auth request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return "", 0, fmt.Errorf("JWT auth request failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var authResp JWTAuthLoginResponse
 	if err := json.Unmarshal(respBody, &authResp); err != nil {
-		return "", fmt.Errorf("failed to parse JWT auth response: %w", err)
+		return "", 0, fmt.Errorf("failed to parse JWT auth response: %w", err)
 	}
 
 	if authResp.Auth.ClientToken == "" {
-		return "", fmt.Errorf("JWT auth response missing client_token")
+		return "", 0, fmt.Errorf("JWT auth response missing client_token")
 	}
 
-	return authResp.Auth.ClientToken, nil
+	return authResp.Auth.ClientToken, authResp.Auth.TTL, nil
 }
 
 // JoinRaftClusterRequest represents the payload sent to PUT /v1/sys/storage/raft/join.

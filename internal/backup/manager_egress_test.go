@@ -14,6 +14,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 func TestBackupReconcile_HardenedRequiresEgressRules(t *testing.T) {
@@ -47,7 +48,7 @@ func TestBackupReconcile_HardenedRequiresEgressRules(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		Build()
 
-	manager := NewManager(k8sClient, scheme)
+	manager := NewManager(k8sClient, scheme, openbao.ClientConfig{})
 
 	_, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.Error(t, err)
