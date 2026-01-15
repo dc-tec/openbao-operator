@@ -48,7 +48,7 @@ func TestHandlePreUpgradeSnapshot_NotEnabled(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
 		Build()
-	manager := NewManager(k8sClient, scheme)
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{})
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "should return nil when preUpgradeSnapshot is disabled")
@@ -81,7 +81,7 @@ func TestHandlePreUpgradeSnapshot_NoBackupConfig(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
 		Build()
-	manager := NewManager(k8sClient, scheme)
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{})
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.Error(t, err, "should return error when backup config is missing")
@@ -139,7 +139,7 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster, secret).
 		Build()
-	manager := NewManager(k8sClient, scheme)
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{})
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "should create backup job successfully")
@@ -192,7 +192,7 @@ func TestHandlePreUpgradeSnapshot_HardenedRequiresEgressRules(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
 		Build()
-	manager := NewManager(k8sClient, scheme)
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{})
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.Error(t, err)
@@ -258,7 +258,7 @@ func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster, runningJob).
 		Build()
-	manager := NewManager(k8sClient, scheme)
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{})
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "should return nil when job is running (requeue)")
@@ -323,7 +323,7 @@ func TestHandlePreUpgradeSnapshot_JobCompleted(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster, completedJob).
 		Build()
-	manager := NewManager(k8sClient, scheme)
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{})
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "should return nil when job is completed")
@@ -394,7 +394,7 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(objs...).
 		Build()
-	manager := NewManager(k8sClient, scheme)
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{})
 
 	// With max retries exceeded, should return error
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
@@ -461,7 +461,7 @@ func TestHandlePreUpgradeSnapshot_JobFailedRetriesOnFirstFailure(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster, failedJob).
 		Build()
-	manager := NewManager(k8sClient, scheme)
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{})
 
 	// With single failure, should delete and return nil to trigger retry
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
@@ -602,7 +602,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 		}, nil
 	}
 
-	manager := NewManagerWithClientFactory(k8sClient, scheme, mockFactory)
+	manager := NewManagerWithClientFactory(k8sClient, scheme, mockFactory, openbaoapi.ClientConfig{})
 
 	// Call Reconcile - it should handle pre-upgrade snapshot and requeue
 	_, err := manager.Reconcile(context.Background(), testLogger(), cluster)

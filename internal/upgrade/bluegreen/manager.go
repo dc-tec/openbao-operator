@@ -39,22 +39,24 @@ type Manager struct {
 	infraManager  *infra.Manager
 	clientFactory upgrade.OpenBaoClientFactory
 	clusterOps    ClusterOps
+	clientConfig  openbaoapi.ClientConfig
 }
 
 // NewManager constructs a Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientConfig openbaoapi.ClientConfig) *Manager {
 	mgr := &Manager{
 		client:        c,
 		scheme:        scheme,
 		infraManager:  infraManager,
 		clientFactory: upgrade.DefaultOpenBaoClientFactory,
+		clientConfig:  clientConfig,
 	}
 	mgr.clusterOps = newOpenBaoClusterOps(c, mgr.clientFactory)
 	return mgr
 }
 
-func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory upgrade.OpenBaoClientFactory) *Manager {
-	mgr := NewManager(c, scheme, infraManager)
+func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig) *Manager {
+	mgr := NewManager(c, scheme, infraManager, clientConfig)
 	if clientFactory != nil {
 		mgr.clientFactory = clientFactory
 	}
@@ -985,6 +987,7 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 		rollbackRunID(cluster),
 		blueRevision,
 		greenRevision,
+		m.clientConfig,
 	)
 	if err != nil {
 		return phaseOutcome{}, err
@@ -1039,6 +1042,7 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 		rollbackRunID(cluster),
 		blueRevision,
 		greenRevision,
+		m.clientConfig,
 	)
 	if err != nil {
 		return phaseOutcome{}, err

@@ -25,6 +25,12 @@ const (
 	EnvUpgradeSyncThreshold = "UPGRADE_SYNC_THRESHOLD"
 	EnvUpgradeTimeout       = "UPGRADE_TIMEOUT"
 
+	// Smart Client Limits
+	EnvClientQPS                            = "OPENBAO_CLIENT_QPS"
+	EnvClientBurst                          = "OPENBAO_CLIENT_BURST"
+	EnvClientCircuitBreakerFailureThreshold = "OPENBAO_CLIENT_CB_FAILURE_THRESHOLD"
+	EnvClientCircuitBreakerOpenDuration     = "OPENBAO_CLIENT_CB_OPEN_DURATION"
+
 	// Backup executor (S3/object storage target)
 	EnvBackupEndpoint       = "BACKUP_ENDPOINT"
 	EnvBackupBucket         = "BACKUP_BUCKET"

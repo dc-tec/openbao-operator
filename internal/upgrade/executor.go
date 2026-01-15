@@ -735,7 +735,11 @@ func newOpenBaoClientFactory(cfg *ExecutorConfig) (*openbao.ClientFactory, error
 	}
 
 	return openbao.NewClientFactory(openbao.ClientConfig{
-		ClusterKey: fmt.Sprintf("%s/%s", cfg.ClusterNamespace, cfg.ClusterName),
-		CACert:     cfg.TLSCACert,
+		ClusterKey:                     fmt.Sprintf("%s/%s", cfg.ClusterNamespace, cfg.ClusterName),
+		CACert:                         cfg.TLSCACert,
+		RateLimitQPS:                   cfg.ClientQPS,
+		RateLimitBurst:                 cfg.ClientBurst,
+		CircuitBreakerFailureThreshold: cfg.ClientCircuitBreakerFailureThreshold,
+		CircuitBreakerOpenDuration:     cfg.ClientCircuitBreakerOpenDuration,
 	}), nil
 }
