@@ -671,3 +671,71 @@ func UninstallGatewayAPI() error {
 
 	return nil
 }
+
+// InstallVPA installs the VPA CRDs.
+// This is exported so individual tests can install VPA when needed.
+// Returns an error if installation fails.
+func InstallVPA() error {
+	return installVPA()
+}
+
+func defaultVPACRDManifestPath() string {
+	// Vendored VPA CRDs for CI stability (no network dependency).
+	return "test/manifests/vpa/v0.8.0/vpa-crd.yaml"
+}
+
+// installVPA installs the VPA CRDs.
+func installVPA() error {
+	manifest := os.Getenv("E2E_VPA_CRD_MANIFEST")
+	if strings.TrimSpace(manifest) == "" {
+		manifest = defaultVPACRDManifestPath()
+	}
+
+	// Use server-side apply to avoid kubectl's client-side apply annotations
+	cmd := exec.Command("kubectl", "apply", "--server-side", "--field-manager=openbao-e2e", "-f", manifest)
+	if _, err := utils.Run(cmd); err != nil {
+		return fmt.Errorf("failed to install VPA CRDs: %w", err)
+	}
+
+	// Wait for VPA CRDs to be established
+	cmd = exec.Command("kubectl", "wait", "--for", "condition=Established",
+		"crd/verticalpodautoscalers.autoscaling.k8s.io",
+		"--timeout", "2m")
+	if _, err := utils.Run(cmd); err != nil {
+		return fmt.Errorf("failed to wait for VPA CRDs: %w", err)
+	}
+
+	return nil
+}
+
+// isVPACRDsInstalled checks if VPA CRDs are installed
+// by verifying the existence of the VPA CRD.
+func isVPACRDsInstalled() bool {
+	cmd := exec.Command("kubectl", "get", "crd", "verticalpodautoscalers.autoscaling.k8s.io")
+	_, err := utils.Run(cmd)
+	return err == nil
+}
+
+// UninstallVPA removes the VPA CRDs from the cluster.
+// This is exported so individual tests can clean up VPA after use.
+// Returns an error if uninstallation fails.
+func UninstallVPA() error {
+	manifest := os.Getenv("E2E_VPA_CRD_MANIFEST")
+	if strings.TrimSpace(manifest) == "" {
+		manifest = defaultVPACRDManifestPath()
+	}
+
+	// Delete VPA CRDs
+	cmd := exec.Command("kubectl", "delete", "-f", manifest, "--ignore-not-found")
+	if _, err := utils.Run(cmd); err != nil {
+		return fmt.Errorf("failed to uninstall VPA CRDs: %w", err)
+	}
+
+	// Wait for CRDs to be fully removed
+	cmd = exec.Command("kubectl", "wait", "--for=delete",
+		"crd/verticalpodautoscalers.autoscaling.k8s.io",
+		"--timeout", "30s")
+	_, _ = utils.Run(cmd) // Ignore errors - CRDs may already be deleted
+
+	return nil
+}
