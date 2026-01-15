@@ -76,7 +76,7 @@ func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, namespace, tenant)
-	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestNamespaceProvisionerReconcile_TargetNamespaceNotFound(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, tenant)
-	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestNamespaceProvisionerReconcile_OpenBaoTenantDeleted(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, namespace, tenant, existingRole, existingRoleBinding)
-	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
@@ -364,7 +364,7 @@ func TestNamespaceProvisionerReconcile_SecurityViolation(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, tenant)
-	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
@@ -438,7 +438,7 @@ func TestNamespaceProvisionerReconcile_SelfService_Success(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, tenant, namespace)
-	provisionerManager, err := provisioner.NewManager(k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}

@@ -38,7 +38,7 @@ type DelegateServiceAccount struct {
 // NewManager creates a new provisioner Manager.
 // It creates a separate client configured for impersonation to enforce least privilege.
 // restConfig is the REST config used to create the impersonated client.
-func NewManager(c client.Client, restConfig *rest.Config, logger logr.Logger) (*Manager, error) {
+func NewManager(ctx context.Context, c client.Client, restConfig *rest.Config, logger logr.Logger) (*Manager, error) {
 	// Get operator namespace from environment or use default
 	saNamespace := os.Getenv("OPERATOR_NAMESPACE")
 	if saNamespace == "" {
@@ -53,7 +53,7 @@ func NewManager(c client.Client, restConfig *rest.Config, logger logr.Logger) (*
 	// Verify the ServiceAccount exists
 	if restConfig != nil {
 		controllerSA := &corev1.ServiceAccount{}
-		if err := c.Get(context.Background(), types.NamespacedName{
+		if err := c.Get(ctx, types.NamespacedName{
 			Namespace: controllerSANamespace,
 			Name:      controllerSAName,
 		}, controllerSA); err != nil {
@@ -69,7 +69,7 @@ func NewManager(c client.Client, restConfig *rest.Config, logger logr.Logger) (*
 	// Verify the delegate ServiceAccount exists
 	if restConfig != nil {
 		delegateSA := &corev1.ServiceAccount{}
-		if err := c.Get(context.Background(), types.NamespacedName{
+		if err := c.Get(ctx, types.NamespacedName{
 			Namespace: delegateNamespace,
 			Name:      delegateName,
 		}, delegateSA); err != nil {

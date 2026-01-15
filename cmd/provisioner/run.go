@@ -17,6 +17,7 @@ limitations under the License.
 package provisioner
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -134,7 +135,10 @@ func Run(args []string) {
 
 	// Create provisioner manager for namespace onboarding
 	// SECURITY: The manager uses impersonation to enforce least privilege
-	provisionerMgr, err := provisioner.NewManager(mgr.GetClient(), mgr.GetConfig(), setupLog.WithName("provisioner"))
+	provisionerMgr, err := provisioner.NewManager(context.Background(),
+		mgr.GetClient(),
+		mgr.GetConfig(),
+		setupLog.WithName("provisioner"))
 	if err != nil {
 		setupLog.Error(err, "unable to create provisioner manager")
 		os.Exit(1)

@@ -13,6 +13,10 @@ import (
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
+const (
+	leaderElectionWaitDuration = 5 * time.Second
+)
+
 // RunExecutor runs the upgrade executor action.
 func RunExecutor(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) error {
 	if cfg == nil {
@@ -244,10 +248,12 @@ func runBlueGreenWaitGreenSynced(ctx context.Context, logger logr.Logger, cfg *E
 			nextProgressLog = time.Now().Add(10 * time.Second)
 		}
 
+		timer := time.NewTimer(2 * time.Second)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return fmt.Errorf("timed out waiting for Green sync: %w", ctx.Err())
-		case <-time.After(2 * time.Second):
+		case <-timer.C:
 		}
 	}
 }
@@ -591,7 +597,7 @@ func runBlueGreenDemoteBlueNonVotersStepDown(ctx context.Context, logger logr.Lo
 
 		// Wait for new leader to be elected
 		logger.Info("Waiting for new leader election...")
-		time.Sleep(5 * time.Second)
+		time.Sleep(leaderElectionWaitDuration)
 
 		// Re-find the new leader (should now be a Green node, but might be Blue)
 		logger.Info("Finding new leader...")
@@ -703,10 +709,12 @@ func findLeader(ctx context.Context, cfg *ExecutorConfig, revision string) (stri
 			}
 		}
 
+		timer := time.NewTimer(2 * time.Second)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return "", fmt.Errorf("context cancelled while finding leader: %w", ctx.Err())
-		case <-time.After(2 * time.Second):
+		case <-timer.C:
 		}
 	}
 
