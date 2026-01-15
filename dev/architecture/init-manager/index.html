@@ -1940,6 +1940,56 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#4-autopilot-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Autopilot Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Autopilot Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#disabling-autopilot-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disabling Autopilot Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3798,6 +3848,56 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#4-autopilot-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Autopilot Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Autopilot Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#disabling-autopilot-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disabling Autopilot Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3899,6 +3999,62 @@ The initialization response is held in memory only for the duration of the reque
 <li><strong>Failure Handling:</strong> If <code>sys/init</code> fails (network, timeout), the operator retries. The cluster remains at <code>replicas: 1</code> until success.</li>
 <li><strong>Adoption:</strong> You can bring an existing OpenBao cluster under management. If the operator detects it is already initialized, it simply adopts it and moves to Scale Up.</li>
 </ul>
+<hr />
+<h2 id="4-autopilot-configuration">4. Autopilot Configuration<a class="headerlink" href="#4-autopilot-configuration" title="Permanent link">&para;</a></h2>
+<p>After successful initialization, the InitManager configures <strong>Raft Autopilot</strong> for automatic dead server cleanup.</p>
+<div class="admonition note">
+<p class="admonition-title">Always-On Feature</p>
+<p>Autopilot dead server cleanup is <strong>enabled by default</strong> for all clusters. This prevents orphaned Raft peers from accumulating when pods are terminated.</p>
+</div>
+<h3 id="default-configuration">Default Configuration<a class="headerlink" href="#default-configuration" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Setting</th>
+<th style="text-align: left;">Default Value</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>cleanup_dead_servers</code></td>
+<td style="text-align: left;"><code>true</code></td>
+<td style="text-align: left;">Enable automatic removal of failed peers</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>dead_server_last_contact_threshold</code></td>
+<td style="text-align: left;"><code>5m</code></td>
+<td style="text-align: left;">Time before a server is considered dead</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>min_quorum</code></td>
+<td style="text-align: left;"><code>max(3, replicas/2+1)</code></td>
+<td style="text-align: left;">Minimum servers before pruning allowed</td>
+</tr>
+</tbody>
+</table>
+<h3 id="customization">Customization<a class="headerlink" href="#customization" title="Permanent link">&para;</a></h3>
+<p>Override defaults via <code>spec.configuration.raft.autopilot</code>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">configuration</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">raft</span><span class="p">:</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">      </span><span class="nt">autopilot</span><span class="p">:</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">        </span><span class="nt">cleanupDeadServers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">        </span><span class="nt">deadServerLastContactThreshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5m&quot;</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">        </span><span class="nt">minQuorum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+</span></code></pre></div>
+<h3 id="disabling-autopilot-cleanup">Disabling Autopilot Cleanup<a class="headerlink" href="#disabling-autopilot-cleanup" title="Permanent link">&para;</a></h3>
+<p>To disable automatic dead server cleanup:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">configuration</span><span class="p">:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">raft</span><span class="p">:</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">      </span><span class="nt">autopilot</span><span class="p">:</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">        </span><span class="nt">cleanupDeadServers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Manual Cleanup Required</p>
+<p>When disabled, you must manually remove dead Raft peers via <code>bao operator raft remove-peer</code>.</p>
+</div>
 
 
 
