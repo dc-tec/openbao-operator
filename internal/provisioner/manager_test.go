@@ -50,7 +50,7 @@ func TestEnsureTenantRBAC_CreatesRoleAndRoleBinding(t *testing.T) {
 	}
 	k8sClient := newTestClient(t, ns)
 	logger := logr.Discard()
-	manager, err := NewManager(k8sClient, nil, logger)
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 
 	k8sClient := newTestClient(t, ns, existingRole)
 	logger := logr.Discard()
-	manager, err := NewManager(k8sClient, nil, logger)
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestEnsureTenantRBAC_UpdatesRoleBindingWhenSubjectsChange(t *testing.T) {
 
 	k8sClient := newTestClient(t, ns, existingRoleBinding)
 	logger := logr.Discard()
-	manager, err := NewManager(k8sClient, nil, logger)
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestEnsureTenantRBAC_HandlesAlreadyExistsGracefully(t *testing.T) {
 
 	k8sClient := newTestClient(t, ns, existingRole, existingRoleBinding)
 	logger := logr.Discard()
-	manager, err := NewManager(k8sClient, nil, logger)
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -306,7 +306,7 @@ func TestCleanupTenantRBAC_DeletesRoleAndRoleBinding(t *testing.T) {
 
 	k8sClient := newTestClient(t, existingRole, existingRoleBinding)
 	logger := logr.Discard()
-	manager, err := NewManager(k8sClient, nil, logger)
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestCleanupTenantRBAC_HandlesNotFoundGracefully(t *testing.T) {
 	namespace := testNamespace
 	k8sClient := newTestClient(t)
 	logger := logr.Discard()
-	manager, err := NewManager(k8sClient, nil, logger)
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestEnsureTenantRBAC_AppliesPodSecurityLabels(t *testing.T) {
 	}
 	k8sClient := newTestClient(t, ns)
 	logger := logr.Discard()
-	manager, err := NewManager(k8sClient, nil, logger)
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestEnsureTenantRBAC_UpdatesPodSecurityLabels(t *testing.T) {
 	}
 	k8sClient := newTestClient(t, ns)
 	logger := logr.Discard()
-	manager, err := NewManager(k8sClient, nil, logger)
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -501,7 +501,7 @@ func TestEnsureTenantSecretRBAC_CreatesRolesAndRoleBindings(t *testing.T) {
 
 	k8sClient := newTestClient(t, cluster)
 	logger := logr.Discard()
-	manager, err := NewManager(k8sClient, nil, logger)
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -581,7 +581,7 @@ func TestEnsureTenantSecretRBAC_DeletesRolesAndRoleBindingsWhenNoClustersRemain(
 
 	k8sClient := newTestClient(t, cluster)
 	logger := logr.Discard()
-	manager, err := NewManager(k8sClient, nil, logger)
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
