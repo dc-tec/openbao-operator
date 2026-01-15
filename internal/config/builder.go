@@ -23,7 +23,8 @@ const (
 
 	jwtPolicyHealthStepDownSnapshot = `path "sys/health" { capabilities = ["read"] }
 path "sys/step-down" { capabilities = ["sudo", "update"] }
-path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }
+path "sys/storage/raft/autopilot/configuration" { capabilities = ["read", "update"] }`
 
 	jwtPolicyUpgradeRolling = `path "sys/health" { capabilities = ["read"] }
 path "sys/step-down" { capabilities = ["sudo", "update"] }

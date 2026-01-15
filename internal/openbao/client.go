@@ -770,6 +770,62 @@ func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*RaftAutopilotStat
 	return &envelope.RaftAutopilotStateResponse, nil
 }
 
+// AutopilotConfig represents the configuration for Raft Autopilot.
+// This is used with POST /v1/sys/storage/raft/autopilot/configuration.
+type AutopilotConfig struct {
+	// CleanupDeadServers controls whether dead servers are removed from
+	// the Raft peer list periodically. Requires MinQuorum to be set.
+	CleanupDeadServers bool `json:"cleanup_dead_servers"`
+	// DeadServerLastContactThreshold is the limit on the amount of time
+	// a server can go without leader contact before being considered failed.
+	// Minimum: "1m". Default: "24h".
+	DeadServerLastContactThreshold string `json:"dead_server_last_contact_threshold,omitempty"`
+	// MinQuorum is the minimum number of servers allowed in a cluster before
+	// autopilot can prune dead servers. This should be at least 3.
+	MinQuorum int `json:"min_quorum,omitempty"`
+	// LastContactThreshold is the limit on the amount of time a server can
+	// go without leader contact before being considered unhealthy.
+	LastContactThreshold string `json:"last_contact_threshold,omitempty"`
+	// ServerStabilizationTime is the minimum amount of time a server must
+	// be in a stable, healthy state before it can be added to the cluster.
+	ServerStabilizationTime string `json:"server_stabilization_time,omitempty"`
+}
+
+// ConfigureRaftAutopilot sets the Raft Autopilot configuration.
+// This endpoint requires authentication with a token that has
+// update capability on sys/storage/raft/autopilot/configuration.
+//
+// This is used to enable dead server cleanup and configure thresholds.
+func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config AutopilotConfig) error {
+	if c.token == "" {
+		return fmt.Errorf("authentication token required for raft autopilot configuration")
+	}
+
+	bodyBytes, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal autopilot config: %w", err)
+	}
+
+	httpReq, err := c.newRequest(ctx, http.MethodPost, constants.APIPathRaftAutopilotConfig, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create autopilot config request: %w", err)
+	}
+
+	httpReq.Header.Set("X-Vault-Token", c.token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute autopilot config request")
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("autopilot config request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 // RemoveRaftPeerRequest represents the payload sent to POST /v1/sys/storage/raft/remove-peer.
 type RemoveRaftPeerRequest struct {
 	// ServerID is the node ID of the peer to remove.
