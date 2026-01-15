@@ -7,10 +7,14 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+)
+
+const (
+	apiVersion = "openbao.org/v1alpha1"
+	kind       = "OpenBaoCluster"
 )
 
 func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
@@ -237,75 +241,172 @@ func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 	}
 }
 
-func TestDeleteServiceAccountDeletesServiceAccount(t *testing.T) {
+// TestServiceAccountHasOwnerReferenceForGC verifies that ServiceAccount has an OwnerReference
+// to the OpenBaoCluster, ensuring Kubernetes GC will delete it when the cluster is deleted.
+// Cleanup() no longer manually deletes ServiceAccounts - GC handles this.
+func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
-	cluster := newMinimalCluster("infra-sa-delete", "default")
-
-	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
-	createTLSSecretForTest(t, k8sClient, cluster)
+	// Create the cluster in the fake client so it has a UID for OwnerReference
+	cluster := newMinimalCluster("infra-sa-gc", "default")
+	cluster.APIVersion = apiVersion
+	cluster.Kind = kind
 
 	ctx := context.Background()
 
-	// Create ServiceAccount first
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("failed to create cluster: %v", err)
+	}
+
+	// Re-fetch to get the UID
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cluster.Name,
+	}, cluster); err != nil {
+		t.Fatalf("failed to get cluster: %v", err)
+	}
+
+	createTLSSecretForTest(t, k8sClient, cluster)
+
+	// Create ServiceAccount via Reconcile
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
-	// Cleanup should delete ServiceAccount
-	if err := manager.Cleanup(ctx, logr.Discard(), cluster, openbaov1alpha1.DeletionPolicyRetain); err != nil {
-		t.Fatalf("Cleanup() error = %v", err)
-	}
-
-	// Verify ServiceAccount is deleted
+	// Verify ServiceAccount has OwnerReference (for GC)
+	sa := &corev1.ServiceAccount{}
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      serviceAccountName(cluster),
-	}, &corev1.ServiceAccount{})
-	if !apierrors.IsNotFound(err) {
-		t.Fatalf("expected ServiceAccount to be deleted, got error: %v", err)
-	}
-}
-
-func TestDeleteRBACDeletesRoleAndRoleBinding(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
-
-	cluster := newMinimalCluster("infra-rbac-delete", "default")
-
-	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
-	createTLSSecretForTest(t, k8sClient, cluster)
-
-	ctx := context.Background()
-
-	// Create RBAC first
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
-		t.Fatalf("Reconcile() error = %v", err)
+	}, sa)
+	if err != nil {
+		t.Fatalf("expected ServiceAccount to exist: %v", err)
 	}
 
-	// Cleanup should delete RBAC
+	foundOwnerRef := false
+	for _, ref := range sa.OwnerReferences {
+		if ref.Kind == kind && ref.Name == cluster.Name {
+			foundOwnerRef = true
+			break
+		}
+	}
+	if !foundOwnerRef {
+		t.Error("expected ServiceAccount to have OwnerReference to OpenBaoCluster for GC")
+	}
+
+	// Verify Cleanup() does NOT delete ServiceAccount (GC handles it)
 	if err := manager.Cleanup(ctx, logr.Discard(), cluster, openbaov1alpha1.DeletionPolicyRetain); err != nil {
 		t.Fatalf("Cleanup() error = %v", err)
 	}
 
-	// Verify RoleBinding is deleted
+	// ServiceAccount should still exist after Cleanup (GC deletes it when cluster is deleted)
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      serviceAccountName(cluster),
+	}, &corev1.ServiceAccount{})
+	if err != nil {
+		t.Errorf("expected ServiceAccount to still exist after Cleanup() (GC handles deletion): %v", err)
+	}
+}
+
+// TestRBACHasOwnerReferenceForGC verifies that Role and RoleBinding have OwnerReferences
+// to the OpenBaoCluster, ensuring Kubernetes GC will delete them when the cluster is deleted.
+// Cleanup() no longer manually deletes RBAC resources - GC handles this.
+func TestRBACHasOwnerReferenceForGC(t *testing.T) {
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+
+	// Create the cluster in the fake client so it has a UID for OwnerReference
+	cluster := newMinimalCluster("infra-rbac-gc", "default")
+	cluster.APIVersion = apiVersion
+	cluster.Kind = kind
+
+	ctx := context.Background()
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("failed to create cluster: %v", err)
+	}
+
+	// Re-fetch to get the UID
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cluster.Name,
+	}, cluster); err != nil {
+		t.Fatalf("failed to get cluster: %v", err)
+	}
+
+	createTLSSecretForTest(t, k8sClient, cluster)
+
+	// Create RBAC via Reconcile
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	// Verify RoleBinding has OwnerReference (for GC)
 	roleBindingName := serviceAccountName(cluster) + "-rolebinding"
+	roleBinding := &rbacv1.RoleBinding{}
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      roleBindingName,
-	}, &rbacv1.RoleBinding{})
-	if !apierrors.IsNotFound(err) {
-		t.Fatalf("expected RoleBinding to be deleted, got error: %v", err)
+	}, roleBinding)
+	if err != nil {
+		t.Fatalf("expected RoleBinding to exist: %v", err)
 	}
 
-	// Verify Role is deleted
+	foundOwnerRef := false
+	for _, ref := range roleBinding.OwnerReferences {
+		if ref.Kind == kind && ref.Name == cluster.Name {
+			foundOwnerRef = true
+			break
+		}
+	}
+	if !foundOwnerRef {
+		t.Error("expected RoleBinding to have OwnerReference to OpenBaoCluster for GC")
+	}
+
+	// Verify Role has OwnerReference (for GC)
 	roleName := serviceAccountName(cluster) + "-role"
+	role := &rbacv1.Role{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      roleName,
+	}, role)
+	if err != nil {
+		t.Fatalf("expected Role to exist: %v", err)
+	}
+
+	foundOwnerRef = false
+	for _, ref := range role.OwnerReferences {
+		if ref.Kind == kind && ref.Name == cluster.Name {
+			foundOwnerRef = true
+			break
+		}
+	}
+	if !foundOwnerRef {
+		t.Error("expected Role to have OwnerReference to OpenBaoCluster for GC")
+	}
+
+	// Verify Cleanup() does NOT delete RBAC (GC handles it)
+	if err := manager.Cleanup(ctx, logr.Discard(), cluster, openbaov1alpha1.DeletionPolicyRetain); err != nil {
+		t.Fatalf("Cleanup() error = %v", err)
+	}
+
+	// RoleBinding should still exist after Cleanup (GC deletes it when cluster is deleted)
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      roleBindingName,
+	}, &rbacv1.RoleBinding{})
+	if err != nil {
+		t.Errorf("expected RoleBinding to still exist after Cleanup() (GC handles deletion): %v", err)
+	}
+
+	// Role should still exist after Cleanup (GC deletes it when cluster is deleted)
 	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      roleName,
 	}, &rbacv1.Role{})
-	if !apierrors.IsNotFound(err) {
-		t.Fatalf("expected Role to be deleted, got error: %v", err)
+	if err != nil {
+		t.Errorf("expected Role to still exist after Cleanup() (GC handles deletion): %v", err)
 	}
 }

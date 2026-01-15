@@ -262,7 +262,15 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 	return nil
 }
 
-// Cleanup removes Kubernetes infrastructure resources associated with the given OpenBaoCluster according to the provided DeletionPolicy.
+// Cleanup handles resources that require special deletion logic beyond Kubernetes Garbage Collection.
+//
+// Most infrastructure resources (StatefulSet, Services, ConfigMaps, RBAC, etc.) have OwnerReferences
+// set to the OpenBaoCluster and are automatically deleted by Kubernetes GC when the cluster is deleted.
+// This method only handles resources that need explicit policy-based handling:
+//   - PVCs: Only deleted when DeletionPolicy is DeletePVCs or DeleteAll
+//
+// Note: Secret preservation for DeletionPolicy=Retain is handled by the deletion controller
+// (deletion.go orphanSecretsForRetention) which removes OwnerReferences before finalization.
 //
 // It is safe to call Cleanup multiple times; missing resources are treated as successfully deleted.
 func (m *Manager) Cleanup(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, policy openbaov1alpha1.DeletionPolicy) error {
@@ -271,64 +279,19 @@ func (m *Manager) Cleanup(ctx context.Context, logger logr.Logger, cluster *open
 	}
 
 	logger = logger.WithValues("deletionPolicy", string(policy))
-	logger.Info("Cleaning up infrastructure for deleted OpenBaoCluster")
+	logger.Info("Processing cleanup for deleted OpenBaoCluster",
+		"note", "Most resources are deleted by Kubernetes GC via OwnerReferences")
 
-	// Delete pods first to ensure they're cleaned up even if StatefulSet deletion
-	// is blocked or pods become orphaned. The operator can delete pods it manages.
-	if err := m.deletePods(ctx, logger, cluster); err != nil {
-		return fmt.Errorf("failed to delete pods for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	if err := m.deleteStatefulSet(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to delete StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	if err := m.deleteConfigMap(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to delete config ConfigMap for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	if err := m.deleteServices(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to delete Services for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	if err := m.deleteIngress(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to delete Ingress for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	if err := m.deleteHTTPRoute(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to delete HTTPRoute for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	if err := m.deleteNetworkPolicy(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to delete NetworkPolicy for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	// CRITICAL: Only delete secrets if we are NOT retaining data.
-	// If DeletionPolicy is Retain, we must preserve the unseal key along with the PVCs,
-	// otherwise the encrypted data becomes unrecoverable.
-	if policy != openbaov1alpha1.DeletionPolicyRetain {
-		if err := m.deleteSecrets(ctx, cluster); err != nil {
-			return fmt.Errorf("failed to delete Secrets for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-		}
-	} else {
-		logger.Info("Skipping Secret deletion due to Retain policy; unseal keys must be preserved with data")
-	}
-
-	// Note: We don't delete the ClusterRoleBinding automatically since we don't create it.
-	// Users are responsible for cleaning up cluster-scoped RBAC resources.
-
-	if err := m.deleteRBAC(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to delete RBAC for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	if err := m.deleteServiceAccount(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to delete ServiceAccount for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
+	// PVCs require explicit deletion based on policy because they are not owned by the
+	// StatefulSet (they use volumeClaimTemplates which creates independent PVCs).
+	// Kubernetes GC does not automatically delete these when the OpenBaoCluster is deleted.
 	if policy == openbaov1alpha1.DeletionPolicyDeletePVCs || policy == openbaov1alpha1.DeletionPolicyDeleteAll {
 		if err := m.deletePVCs(ctx, cluster); err != nil {
 			return fmt.Errorf("failed to delete PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 		}
+		logger.Info("PVCs deleted per deletion policy")
+	} else {
+		logger.Info("Preserving PVCs per Retain policy")
 	}
 
 	return nil
