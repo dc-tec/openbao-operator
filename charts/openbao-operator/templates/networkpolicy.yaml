@@ -1,0 +1,71 @@
+{{- if .Values.networkPolicy.enabled }}
+---
+# Default Deny Ingress for Operator Pods
+#
+# This NetworkPolicy implements a default-deny ingress posture for all
+# operator pods. Specific allow rules are added via additional policies.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-deny-all-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openbao-operator
+  policyTypes:
+    - Ingress
+  ingress: []  # Deny all ingress by default
+---
+# Allow Metrics Traffic
+#
+# This NetworkPolicy allows ingress traffic for metrics collection.
+# Only pods in namespaces with the configured label can access metrics.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-allow-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "openbao-operator.controllerSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.metricsAllowedNamespaceLabels | nindent 14 }}
+      ports:
+        - port: {{ .Values.metrics.port }}
+          protocol: TCP
+---
+# Allow Health Probe Traffic
+#
+# This NetworkPolicy allows kubelet health probe traffic to operator pods.
+# Port is used for liveness and readiness probes.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-allow-health-probes
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openbao-operator
+  policyTypes:
+    - Ingress
+  ingress:
+    # Health probes from kubelet - allow from any source since kubelets
+    # can be on any node and may use various source IPs
+    - ports:
+        - port: {{ .Values.healthProbes.port }}
+          protocol: TCP
+{{- end }}

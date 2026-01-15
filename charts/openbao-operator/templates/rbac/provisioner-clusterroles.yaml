@@ -5,7 +5,10 @@ metadata:
   name: {{ include "openbao-operator.fullname" . }}-provisioner
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
+  labels:
+    app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: provisioner
+    app.kubernetes.io/managed-by: kustomize
 rules:
   - apiGroups:
       - ""
@@ -15,20 +18,23 @@ rules:
       - get
       - update
       - patch
+
   - apiGroups:
       - ""
-    resourceNames:
-      - {{ include "openbao-operator.provisionerDelegateServiceAccountName" . }}
     resources:
       - serviceaccounts
     verbs:
       - impersonate
+    resourceNames:
+      - {{ include "openbao-operator.provisionerDelegateServiceAccountName" . }}
+
   - apiGroups:
       - ""
     resources:
       - serviceaccounts
     verbs:
       - get
+
   - apiGroups:
       - openbao.org
     resources:
@@ -41,6 +47,7 @@ rules:
       - watch
       - update
       - patch
+
   - apiGroups:
       - openbao.org
     resources:
@@ -49,6 +56,7 @@ rules:
       - get
       - list
       - watch
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -56,7 +64,10 @@ metadata:
   name: {{ include "openbao-operator.fullname" . }}-tenant-template
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
+  labels:
+    app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: provisioner
+    app.kubernetes.io/managed-by: kustomize
 rules:
   - apiGroups:
       - rbac.authorization.k8s.io
@@ -149,12 +160,12 @@ rules:
     resources:
       - pods
     verbs:
+      - delete
       - get
       - list
-      - watch
-      - update
       - patch
-      - delete
+      - update
+      - watch
   - apiGroups:
       - ""
     resources:
@@ -204,6 +215,7 @@ rules:
       - patch
       - update
       - watch
+  {{- if .Values.gatewayAPI.enabled }}
   - apiGroups:
       - gateway.networking.k8s.io
     resources:
@@ -217,7 +229,8 @@ rules:
       - list
       - patch
       - update
-      - watch
+      - watch{{- end }}
+
   - apiGroups:
       - ""
     resources:

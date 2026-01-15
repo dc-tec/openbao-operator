@@ -185,3 +185,17 @@ healthProbes:
 admissionPolicies:
   # -- Enable ValidatingAdmissionPolicies for resource protection
   enabled: true
+
+# -- NetworkPolicy configuration for operator pods
+networkPolicy:
+  # -- Enable NetworkPolicies for operator pod isolation
+  enabled: true
+  # -- Namespace labels required to access metrics endpoint
+  metricsAllowedNamespaceLabels:
+    metrics: enabled
+
+# -- Gateway API configuration
+gatewayAPI:
+  # -- Enable Gateway API RBAC permissions (httproutes, tlsroutes, backendtlspolicies)
+  # Set to false if your cluster does not use Gateway API
+  enabled: true
