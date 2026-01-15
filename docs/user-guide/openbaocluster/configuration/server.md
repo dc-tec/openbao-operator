@@ -20,6 +20,11 @@ The `OpenBaoCluster` Custom Resource provides comprehensive configuration option
         # Raft Storage
         raft:
           performanceMultiplier: 2
+          # Autopilot (enabled by default)
+          autopilot:
+            cleanupDeadServers: true
+            deadServerLastContactThreshold: "5m"
+            minQuorum: 2
         
         # Lease Management
         defaultLeaseTTL: "720h" # 30 days
@@ -35,6 +40,7 @@ The `OpenBaoCluster` Custom Resource provides comprehensive configuration option
     | `ui` | Enable/Disable the web interface. |
     | `listener` | Configure TLS and Proxy Protocol usage. |
     | `raft.performanceMultiplier` | Tune Raft timing for high-latency environments. |
+    | `raft.autopilot` | Configure Autopilot dead server cleanup (enabled by default). |
     | `defaultLeaseTTL` | Default Time-To-Live for leases. |
 
 === "Observability"

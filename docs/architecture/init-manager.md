@@ -80,3 +80,49 @@ sequenceDiagram
 - **One-Time Operation:** The InitManager is designed to be **idempotent** but typically runs only once in the cluster's lifecycle.
 - **Failure Handling:** If `sys/init` fails (network, timeout), the operator retries. The cluster remains at `replicas: 1` until success.
 - **Adoption:** You can bring an existing OpenBao cluster under management. If the operator detects it is already initialized, it simply adopts it and moves to Scale Up.
+
+---
+
+## 4. Autopilot Configuration
+
+After successful initialization, the InitManager configures **Raft Autopilot** for automatic dead server cleanup.
+
+!!! note "Always-On Feature"
+    Autopilot dead server cleanup is **enabled by default** for all clusters. This prevents orphaned Raft peers from accumulating when pods are terminated.
+
+### Default Configuration
+
+| Setting | Default Value | Description |
+| :--- | :--- | :--- |
+| `cleanup_dead_servers` | `true` | Enable automatic removal of failed peers |
+| `dead_server_last_contact_threshold` | `5m` | Time before a server is considered dead |
+| `min_quorum` | `max(3, replicas/2+1)` | Minimum servers before pruning allowed |
+
+### Customization
+
+Override defaults via `spec.configuration.raft.autopilot`:
+
+```yaml
+spec:
+  configuration:
+    raft:
+      autopilot:
+        cleanupDeadServers: true
+        deadServerLastContactThreshold: "5m"
+        minQuorum: 2
+```
+
+### Disabling Autopilot Cleanup
+
+To disable automatic dead server cleanup:
+
+```yaml
+spec:
+  configuration:
+    raft:
+      autopilot:
+        cleanupDeadServers: false
+```
+
+!!! warning "Manual Cleanup Required"
+    When disabled, you must manually remove dead Raft peers via `bao operator raft remove-peer`.
