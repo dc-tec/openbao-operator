@@ -16,6 +16,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/restore"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
@@ -52,7 +53,7 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 		t.Fatalf("create OpenBaoRestore: %v", err)
 	}
 
-	mgr := restore.NewManager(k8sClient, k8sScheme, nil)
+	mgr := restore.NewManager(k8sClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
 
 	// Pending -> Validating
 	latest := &openbaov1alpha1.OpenBaoRestore{}
