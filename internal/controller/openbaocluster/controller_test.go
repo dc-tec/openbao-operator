@@ -469,7 +469,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
-		It("honors DeletionPolicy Retain by preserving PVCs while deleting StatefulSet", func() {
+		It("honors DeletionPolicy Retain by preserving PVCs and verifying GC cleanup via OwnerReferences", func() {
 			cluster := createMinimalCluster("test-delete-retain", false)
 			cluster.Spec.DeletionPolicy = openbaov1alpha1.DeletionPolicyRetain
 			Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
@@ -488,6 +488,24 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			_, err = reconciler.Reconcile(ctx, req)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Verify StatefulSet exists and has OwnerReference for GC cleanup.
+			sts := &appsv1.StatefulSet{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      cluster.Name,
+				Namespace: cluster.Namespace,
+			}, sts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify OwnerReference is set (indicates GC will delete it when cluster is deleted)
+			foundOwnerRef := false
+			for _, ref := range sts.OwnerReferences {
+				if ref.Kind == "OpenBaoCluster" && ref.Name == cluster.Name {
+					foundOwnerRef = true
+					break
+				}
+			}
+			Expect(foundOwnerRef).To(BeTrue(), "StatefulSet should have OwnerReference for GC cleanup")
 
 			// Seed a PVC that would normally be created by the StatefulSet controller.
 			pvc := &corev1.PersistentVolumeClaim{
@@ -516,20 +534,16 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			_, err = reconciler.Reconcile(ctx, req)
 			Expect(err).NotTo(HaveOccurred())
 
-			// StatefulSet should be gone.
-			sts := &appsv1.StatefulSet{}
-			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      cluster.Name,
-				Namespace: cluster.Namespace,
-			}, sts)
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-
-			// PVC should be retained.
+			// PVC should be retained per DeletionPolicy=Retain.
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      pvc.Name,
 				Namespace: pvc.Namespace,
 			}, &corev1.PersistentVolumeClaim{})
 			Expect(err).NotTo(HaveOccurred())
+
+			// Note: StatefulSet deletion is handled by Kubernetes GC via OwnerReferences.
+			// In envtest, GC may not run immediately, so we verify OwnerReference exists instead
+			// of checking that StatefulSet is deleted.
 		})
 
 		It("accepts OpenBaoCluster with structured configuration", func() {
