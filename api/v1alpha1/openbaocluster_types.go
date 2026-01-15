@@ -1259,6 +1259,42 @@ type RaftConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	PerformanceMultiplier *int32 `json:"performanceMultiplier,omitempty"`
+
+	// Autopilot configures Raft Autopilot settings.
+	// By default, dead server cleanup is enabled with a 5-minute threshold.
+	// +optional
+	Autopilot *RaftAutopilotConfig `json:"autopilot,omitempty"`
+}
+
+// RaftAutopilotConfig configures Raft Autopilot behavior for dead server cleanup.
+// See: https://openbao.org/docs/concepts/integrated-storage/autopilot/
+type RaftAutopilotConfig struct {
+	// CleanupDeadServers enables automatic removal of dead Raft peers.
+	// When enabled, Autopilot periodically removes servers that have been
+	// unhealthy for longer than DeadServerLastContactThreshold.
+	// Requires MinQuorum to be set (defaults to replicas/2 + 1).
+	// +kubebuilder:default=true
+	// +optional
+	CleanupDeadServers *bool `json:"cleanupDeadServers,omitempty"`
+
+	// DeadServerLastContactThreshold is the duration after which a server
+	// is considered dead if it hasn't contacted the leader.
+	// Minimum: "1m". Default: "5m" (operator default, shorter than OpenBao's 24h).
+	// +kubebuilder:default="5m"
+	// +optional
+	DeadServerLastContactThreshold string `json:"deadServerLastContactThreshold,omitempty"`
+
+	// MinQuorum is the minimum number of servers before Autopilot can prune
+	// dead servers. This prevents removing so many servers that quorum is lost.
+	// If not specified, defaults to max(3, replicas/2 + 1).
+	// +kubebuilder:validation:Minimum=3
+	// +optional
+	MinQuorum *int32 `json:"minQuorum,omitempty"`
+
+	// ServerStabilizationTime is the minimum time a server must be healthy
+	// before being promoted to voter. Default: "10s".
+	// +optional
+	ServerStabilizationTime string `json:"serverStabilizationTime,omitempty"`
 }
 
 // LoggingConfig allows configuring logging behavior for OpenBao.

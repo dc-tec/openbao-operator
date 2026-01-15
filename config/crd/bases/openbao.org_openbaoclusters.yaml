@@ -471,6 +471,40 @@ spec:
                   raft:
                     description: Raft allows tuning the Raft storage backend.
                     properties:
+                      autopilot:
+                        description: |-
+                          Autopilot configures Raft Autopilot settings.
+                          By default, dead server cleanup is enabled with a 5-minute threshold.
+                        properties:
+                          cleanupDeadServers:
+                            default: true
+                            description: |-
+                              CleanupDeadServers enables automatic removal of dead Raft peers.
+                              When enabled, Autopilot periodically removes servers that have been
+                              unhealthy for longer than DeadServerLastContactThreshold.
+                              Requires MinQuorum to be set (defaults to replicas/2 + 1).
+                            type: boolean
+                          deadServerLastContactThreshold:
+                            default: 5m
+                            description: |-
+                              DeadServerLastContactThreshold is the duration after which a server
+                              is considered dead if it hasn't contacted the leader.
+                              Minimum: "1m". Default: "5m" (operator default, shorter than OpenBao's 24h).
+                            type: string
+                          minQuorum:
+                            description: |-
+                              MinQuorum is the minimum number of servers before Autopilot can prune
+                              dead servers. This prevents removing so many servers that quorum is lost.
+                              If not specified, defaults to max(3, replicas/2 + 1).
+                            format: int32
+                            minimum: 3
+                            type: integer
+                          serverStabilizationTime:
+                            description: |-
+                              ServerStabilizationTime is the minimum time a server must be healthy
+                              before being promoted to voter. Default: "10s".
+                            type: string
+                        type: object
                       performanceMultiplier:
                         description: PerformanceMultiplier scales the Raft timing
                           parameters.
