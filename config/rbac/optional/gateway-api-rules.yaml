@@ -1,0 +1,28 @@
+# Gateway API RBAC Rules (Optional)
+#
+# This file contains the Gateway API permissions for the Provisioner Delegate.
+# Include this via Kustomize strategic merge patch when using Gateway API.
+#
+# Usage:
+#   In your kustomization.yaml:
+#   patchesStrategicMerge:
+#     - optional/gateway-api-rules.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openbao-operator-tenant-template
+rules:
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - httproutes
+      - tlsroutes
+      - backendtlspolicies
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch

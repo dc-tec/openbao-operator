@@ -1,2 +1,4 @@
 resources:
-- allow-metrics-traffic.yaml
+  - deny-all-ingress.yaml
+  - allow-metrics-traffic.yaml
+  - allow-health-probes.yaml
