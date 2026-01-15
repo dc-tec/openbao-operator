@@ -1419,6 +1419,12 @@ type OpenBaoClusterSpec struct {
 	// If not specified, falls back to the main ImageVerification config.
 	// +optional
 	OperatorImageVerification *ImageVerificationConfig `json:"operatorImageVerification,omitempty"`
+	// Resources specifies container resource requirements for OpenBao pods.
+	// When specified, these resource requests and limits are applied to the openbao container
+	// in the StatefulSet. This field can be managed by VerticalPodAutoscaler (VPA) to automatically
+	// adjust resource allocation based on observed usage patterns.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 	// WorkloadHardening configures opt-in workload hardening features.
 	// +optional
 	WorkloadHardening *WorkloadHardeningConfig `json:"workloadHardening,omitempty"`
