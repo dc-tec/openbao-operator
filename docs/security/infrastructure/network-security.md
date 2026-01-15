@@ -67,6 +67,29 @@ flowchart TB
     !!! note "Backup Jobs"
         Backup and Restore jobs are **excluded** from this restrictive policy. They run as separate pods that need broad access to reach external object storage (S3, GCS, Azure).
 
+## Controller Network Security
+
+The OpenBao Operator Controller itself runs in a highly restricted network environment to minimize its attack surface.
+
+=== ":material-shield-lock: Ingress"
+
+    **Default Deny:** All incoming traffic to the controller is blocked by default.
+
+    | Source | Port | Reason |
+    | :--- | :--- | :--- |
+    | **Monitoring** | `8080` / `8443` | Metrics endpoint (Prometheus). |
+    | **Kubelet** | `8081` | healthz/readyz probes. |
+    | **Webhook**| `9443` | Kubernetes API Server admission (validating/mutating) webhook requests. |
+
+=== ":material-logout: Egress"
+
+    The controller is permitted to initiate connections only to essential services:
+
+    | Destination | Reason |
+    | :--- | :--- |
+    | **Kubernetes API** | Watching and reconciling resources. |
+    | **Webhooks** | Self-calls for admission webhooks (if applicable). |
+
 ## See Also
 
 - [:material-network-outline: Network Configuration](../../user-guide/openbaocluster/configuration/network.md)

@@ -84,6 +84,7 @@ flowchart TB
     | `Secret` | *(allowlisted)* | Secret access is limited by name (dedicated reader/writer Roles). No `list`/`watch`. |
     | `ConfigMap` | `*` | Manage configuration and TLS metadata. |
     | `Job` | `*` | Run snapshots and upgrades. |
+    | `Gateway` ... | `*` | (Optional) Manage Gateway API resources if enabled. |
 
 ## Security Guarantees
 
