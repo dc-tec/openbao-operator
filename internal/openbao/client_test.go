@@ -729,7 +729,7 @@ func TestClient_LoginJWT(t *testing.T) {
 				t.Fatalf("failed to create client: %v", err)
 			}
 
-			token, err := client.LoginJWT(context.Background(), tt.role, tt.jwtToken)
+			token, _, err := client.LoginJWT(context.Background(), tt.role, tt.jwtToken)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("LoginJWT() error = %v, wantErr %v", err, tt.wantErr)
 				return
