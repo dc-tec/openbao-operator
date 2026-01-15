@@ -54,7 +54,11 @@ func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*OID
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch OIDC well-known endpoint: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			_ = err
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("OIDC well-known endpoint returned status %d", resp.StatusCode)
@@ -149,7 +153,11 @@ func FetchJWKSKeys(ctx context.Context, cfg *rest.Config, jwksURL string) ([]str
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch jwks endpoint: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			_ = err
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("jwks endpoint returned status %d", resp.StatusCode)
