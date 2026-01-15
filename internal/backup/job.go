@@ -79,7 +79,7 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 			verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 			defer cancel()
 
-			digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.client, cluster, executorImage)
+			digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.operatorImageVerifier, cluster, executorImage)
 			if err != nil {
 				failurePolicy := verificationConfig.FailurePolicy
 				if failurePolicy == "" {

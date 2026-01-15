@@ -13,6 +13,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/security"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
@@ -28,33 +29,36 @@ var (
 
 // Manager reconciles version and Raft-aware upgrade behavior for an OpenBaoCluster.
 type Manager struct {
-	client        client.Client
-	scheme        *runtime.Scheme
-	clientFactory upgrade.OpenBaoClientFactory
-	clientConfig  openbaoapi.ClientConfig
+	client                client.Client
+	scheme                *runtime.Scheme
+	clientFactory         upgrade.OpenBaoClientFactory
+	clientConfig          openbaoapi.ClientConfig
+	operatorImageVerifier *security.ImageVerifier
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
-func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbaoapi.ClientConfig) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbaoapi.ClientConfig, operatorImageVerifier *security.ImageVerifier) *Manager {
 	return &Manager{
-		client:        c,
-		scheme:        scheme,
-		clientFactory: upgrade.DefaultOpenBaoClientFactory,
-		clientConfig:  clientConfig,
+		client:                c,
+		scheme:                scheme,
+		clientFactory:         upgrade.DefaultOpenBaoClientFactory,
+		clientConfig:          clientConfig,
+		operatorImageVerifier: operatorImageVerifier,
 	}
 }
 
 // NewManagerWithClientFactory constructs a Manager with a custom OpenBao client factory.
 // This is primarily used for testing.
-func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig) *Manager {
+func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, operatorImageVerifier *security.ImageVerifier) *Manager {
 	if factory == nil {
 		factory = upgrade.DefaultOpenBaoClientFactory
 	}
 	return &Manager{
-		client:        c,
-		scheme:        scheme,
-		clientFactory: factory,
-		clientConfig:  clientConfig,
+		client:                c,
+		scheme:                scheme,
+		clientFactory:         factory,
+		clientConfig:          clientConfig,
+		operatorImageVerifier: operatorImageVerifier,
 	}
 }
 

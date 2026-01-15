@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 func TestRestoreHandleValidating_HardenedRequiresEgressRules(t *testing.T) {
@@ -53,7 +54,7 @@ func TestRestoreHandleValidating_HardenedRequiresEgressRules(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
 		Build()
 
-	mgr := NewManager(k8sClient, scheme, nil)
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
 
 	_, err := mgr.handleValidating(context.Background(), logr.Discard(), restore)
 	require.NoError(t, err)

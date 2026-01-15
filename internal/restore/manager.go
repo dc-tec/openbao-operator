@@ -44,17 +44,19 @@ const (
 
 // Manager orchestrates restore operations for OpenBao clusters.
 type Manager struct {
-	client   client.Client
-	scheme   *runtime.Scheme
-	recorder record.EventRecorder
+	client                client.Client
+	scheme                *runtime.Scheme
+	recorder              record.EventRecorder
+	operatorImageVerifier *security.ImageVerifier
 }
 
 // NewManager creates a new restore Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme, recorder record.EventRecorder) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, recorder record.EventRecorder, operatorImageVerifier *security.ImageVerifier) *Manager {
 	return &Manager{
-		client:   c,
-		scheme:   scheme,
-		recorder: recorder,
+		client:                c,
+		scheme:                scheme,
+		recorder:              recorder,
+		operatorImageVerifier: operatorImageVerifier,
 	}
 }
 
@@ -268,7 +270,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 			verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 			defer cancel()
 
-			digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.client, cluster, executorImage)
+			digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.operatorImageVerifier, cluster, executorImage)
 			if err != nil {
 				failurePolicy := verificationConfig.FailurePolicy
 				if failurePolicy == "" {

@@ -65,8 +65,9 @@ func EnsureExecutorJob(
 	blueRevision string,
 	greenRevision string,
 	clientConfig openbao.ClientConfig,
+	operatorImageVerifier *security.ImageVerifier,
 ) (*JobResult, error) {
-	result, err := ensureUpgradeExecutorJob(ctx, c, scheme, logger, cluster, action, runID, blueRevision, greenRevision, clientConfig)
+	result, err := ensureUpgradeExecutorJob(ctx, c, scheme, logger, cluster, action, runID, blueRevision, greenRevision, clientConfig, operatorImageVerifier)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +97,7 @@ func ensureUpgradeExecutorJob(
 	blueRevision string,
 	greenRevision string,
 	clientConfig openbao.ClientConfig,
+	operatorImageVerifier *security.ImageVerifier,
 ) (*executorJobResult, error) {
 	if cluster == nil {
 		return nil, fmt.Errorf("cluster is required")
@@ -113,13 +115,13 @@ func ensureUpgradeExecutorJob(
 		verifiedExecutorDigest := ""
 		if cluster.Spec.Upgrade != nil {
 			executorImage := strings.TrimSpace(cluster.Spec.Upgrade.ExecutorImage)
-			if executorImage != "" && cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled {
+			if executorImage != "" && cluster.Spec.OperatorImageVerification != nil && cluster.Spec.OperatorImageVerification.Enabled {
 				verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 				defer cancel()
 
-				digest, err := security.VerifyImageForCluster(verifyCtx, logger, c, cluster, executorImage)
+				digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, operatorImageVerifier, cluster, executorImage)
 				if err != nil {
-					failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
+					failurePolicy := cluster.Spec.OperatorImageVerification.FailurePolicy
 					if failurePolicy == "" {
 						failurePolicy = constants.ImageVerificationFailurePolicyBlock
 					}

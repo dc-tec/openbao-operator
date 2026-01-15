@@ -30,14 +30,16 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/restore"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 // OpenBaoRestoreReconciler reconciles a OpenBaoRestore object.
 type OpenBaoRestoreReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	RestoreManager *restore.Manager
-	Recorder       record.EventRecorder
+	Scheme                *runtime.Scheme
+	RestoreManager        *restore.Manager
+	Recorder              record.EventRecorder
+	OperatorImageVerifier *security.ImageVerifier
 }
 
 // SECURITY: RBAC is provided via namespace-scoped tenant Roles, not cluster-wide.
@@ -70,7 +72,7 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Create restore manager if not set
 	if r.RestoreManager == nil {
-		r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder)
+		r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder, r.OperatorImageVerifier)
 	}
 
 	// Delegate to restore manager
@@ -97,7 +99,10 @@ func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Recorder == nil {
 		r.Recorder = mgr.GetEventRecorderFor("openbaorestore")
 	}
-	r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder)
+	if r.OperatorImageVerifier == nil {
+		r.OperatorImageVerifier = security.NewImageVerifier(log.Log.WithName("openbaorestore-image-verifier"), r.Client, nil)
+	}
+	r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder, r.OperatorImageVerifier)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoRestore{}).
