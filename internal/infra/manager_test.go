@@ -238,27 +238,49 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 	}
 }
 
-func TestCleanupDeletesAllResources(t *testing.T) {
+// TestCleanupReliesOnGarbageCollection verifies that the Cleanup method delegates
+// resource deletion to Kubernetes GC. Since all resources have OwnerReferences,
+// they will be automatically deleted when the OpenBaoCluster is deleted.
+// Cleanup() only handles PVC deletion based on policy.
+func TestCleanupReliesOnGarbageCollection(t *testing.T) {
 	k8sClient := newTestClient(t)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
 
-	cluster := newMinimalCluster("infra-cleanup", "default")
+	// Create the cluster in the fake client so it has a UID for OwnerReference
+	cluster := newMinimalCluster("infra-gc-cleanup", "default")
 	cluster.Status.Initialized = true
-	createTLSSecretForTest(t, k8sClient, cluster)
+	cluster.APIVersion = "openbao.org/v1alpha1"
+	cluster.Kind = "OpenBaoCluster"
 
 	ctx := context.Background()
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("failed to create cluster: %v", err)
+	}
+
+	// Re-fetch to get the UID
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cluster.Name,
+	}, cluster); err != nil {
+		t.Fatalf("failed to get cluster: %v", err)
+	}
+
+	createTLSSecretForTest(t, k8sClient, cluster)
 
 	// Create all resources
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
-	// Cleanup
+	// Cleanup should succeed (it now only handles PVCs)
 	if err := manager.Cleanup(ctx, logr.Discard(), cluster, openbaov1alpha1.DeletionPolicyRetain); err != nil {
 		t.Fatalf("Cleanup() error = %v", err)
 	}
 
-	// Verify resources are deleted
+	// Verify resources STILL EXIST after Cleanup (GC handles deletion, not Cleanup())
+	// These resources have OwnerReferences setting and will be deleted by K8s GC
+	// when the OpenBaoCluster is deleted.
 	resources := []struct {
 		name     string
 		getFunc  func() error
@@ -308,9 +330,29 @@ func TestCleanupDeletesAllResources(t *testing.T) {
 
 	for _, r := range resources {
 		err := r.getFunc()
-		if !apierrors.IsNotFound(err) {
-			t.Errorf("expected %s to be deleted, got error: %v", r.resource, err)
+		if err != nil {
+			t.Errorf("expected %s to still exist after Cleanup() (GC handles deletion): %v", r.resource, err)
 		}
+	}
+
+	// Verify StatefulSet has owner reference (confirming GC will clean it up)
+	sts := &appsv1.StatefulSet{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      statefulSetName(cluster),
+	}, sts); err != nil {
+		t.Fatalf("failed to get StatefulSet: %v", err)
+	}
+
+	foundOwnerRef := false
+	for _, ref := range sts.OwnerReferences {
+		if ref.Kind == "OpenBaoCluster" && ref.Name == cluster.Name {
+			foundOwnerRef = true
+			break
+		}
+	}
+	if !foundOwnerRef {
+		t.Error("expected StatefulSet to have OwnerReference to OpenBaoCluster for GC")
 	}
 }
 
