@@ -67,6 +67,17 @@ spec:
     - name: is_system_controller
       expression: >-
         request.userInfo.username.startsWith("system:controller:")
+    # K3s/K3d and some distributions use service accounts for GC instead of system:controller:*
+    - name: is_garbage_collector_sa
+      expression: >-
+        request.userInfo.username in [
+          "system:serviceaccount:kube-system:generic-garbage-collector",
+          "system:serviceaccount:kube-system:resourcequota-controller",
+          "system:serviceaccount:kube-system:statefulset-controller",
+          "system:serviceaccount:kube-system:replicaset-controller",
+          "system:serviceaccount:kube-system:job-controller",
+          "system:serviceaccount:kube-system:cronjob-controller"
+        ]
     - name: is_kube_system_controller
       expression: >-
         request.userInfo.groups.exists(g, g == "system:serviceaccounts:kube-system") ||
@@ -197,6 +208,7 @@ spec:
         variables.is_operator_controller ||
         (variables.is_kube_controller_manager && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
         (variables.is_system_controller && request.operation == "DELETE") ||
+        (variables.is_garbage_collector_sa && request.operation == "DELETE") ||
         (variables.is_system_controller && request.resource.resource == "pods") ||
         (variables.is_system_controller && variables.is_endpoints_controller_request) ||
         (variables.is_kube_system_controller && request.resource.resource == "pods" && (request.operation == "CREATE" || request.operation == "DELETE")) ||
