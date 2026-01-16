@@ -163,7 +163,9 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object) error {
 
 // EnsureTenantRBAC ensures that a Role and RoleBinding exist in the given namespace
 // for the operator to manage OpenBaoCluster resources.
-func (m *Manager) EnsureTenantRBAC(ctx context.Context, namespace string) error {
+func (m *Manager) EnsureTenantRBAC(ctx context.Context, tenant *openbaov1alpha1.OpenBaoTenant) error {
+	namespace := tenant.Spec.TargetNamespace
+
 	// Apply Role using Server-Side Apply
 	role := GenerateTenantRole(namespace)
 	m.logger.Info("Applying tenant Role", "namespace", namespace, "role", TenantRoleName,
@@ -223,6 +225,11 @@ func (m *Manager) EnsureTenantRBAC(ctx context.Context, namespace string) error 
 
 	// Reconcile Secret allowlist RBAC for this tenant namespace.
 	if err := m.EnsureTenantSecretRBAC(ctx, namespace); err != nil {
+		return err
+	}
+
+	// Apply ResourceQuota and LimitRange for this tenant namespace.
+	if err := m.EnsureTenantQuotas(ctx, namespace, tenant.Spec.Quota, tenant.Spec.LimitRange); err != nil {
 		return err
 	}
 

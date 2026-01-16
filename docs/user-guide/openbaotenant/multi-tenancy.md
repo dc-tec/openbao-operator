@@ -122,20 +122,21 @@ Configure isolation across four key layers:
     Prevent "Noisy Neighbor" issues where one tenant consumes all cluster resources.
 
     ### Resource Quotas
-    Limit the number of nodes and storage a tenant can provision.
+    Limit the number of nodes and storage a tenant can provision by configuring the `OpenBaoTenant` Custom Resource.
 
     ```yaml
-    apiVersion: v1
-    kind: ResourceQuota
+    apiVersion: openbao.org/v1alpha1
+    kind: OpenBaoTenant
     metadata:
-      name: openbao-quota
-      namespace: tenant-a
+      name: tenant-a
     spec:
-      hard:
-        pods: "10"
-        requests.storage: "100Gi"
-        requests.cpu: "4"
-        requests.memory: "8Gi"
+      targetNamespace: tenant-a
+      quota:
+        hard:
+          pods: "10"
+          requests.storage: "100Gi"
+          requests.cpu: "4"
+          requests.memory: "8Gi"
     ```
 
     ### S3 Bucket Isolation

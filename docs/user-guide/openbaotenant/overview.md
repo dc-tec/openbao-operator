@@ -43,7 +43,7 @@ graph TD
 
 - :material-chart-pie: **Resource Quotas**
 
-    Applies **ResourceQuotas** to prevent a single tenant from consuming all cluster storage or compute.
+    Applies **ResourceQuotas** to prevent a single tenant from consuming all cluster storage or compute. Limits are configurable via the `OpenBaoTenant` spec.
 
 </div>
 

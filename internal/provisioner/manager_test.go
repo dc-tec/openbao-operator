@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -71,7 +72,17 @@ func TestEnsureTenantRBAC_CreatesRoleAndRoleBinding(t *testing.T) {
 		}
 	}
 
-	err = manager.EnsureTenantRBAC(ctx, namespace)
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-tenant",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+
+	err = manager.EnsureTenantRBAC(ctx, tenant)
 	if err != nil {
 		t.Fatalf("EnsureTenantRBAC() error = %v", err)
 	}
@@ -163,7 +174,16 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 
 	ctx := context.Background()
 
-	err = manager.EnsureTenantRBAC(ctx, namespace)
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-tenant",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+	err = manager.EnsureTenantRBAC(ctx, tenant)
 	if err != nil {
 		t.Fatalf("EnsureTenantRBAC() error = %v", err)
 	}
@@ -235,7 +255,16 @@ func TestEnsureTenantRBAC_UpdatesRoleBindingWhenSubjectsChange(t *testing.T) {
 
 	ctx := context.Background()
 
-	err = manager.EnsureTenantRBAC(ctx, namespace)
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-tenant",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+	err = manager.EnsureTenantRBAC(ctx, tenant)
 	if err != nil {
 		t.Fatalf("EnsureTenantRBAC() error = %v", err)
 	}
@@ -290,7 +319,16 @@ func TestEnsureTenantRBAC_HandlesAlreadyExistsGracefully(t *testing.T) {
 	ctx := context.Background()
 
 	// Should not error when resources already exist with correct content
-	err = manager.EnsureTenantRBAC(ctx, namespace)
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-tenant",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+	err = manager.EnsureTenantRBAC(ctx, tenant)
 	if err != nil {
 		t.Fatalf("EnsureTenantRBAC() error = %v", err)
 	}
@@ -378,7 +416,16 @@ func TestEnsureTenantRBAC_AppliesPodSecurityLabels(t *testing.T) {
 
 	ctx := context.Background()
 
-	err = manager.EnsureTenantRBAC(ctx, namespace)
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-tenant",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+	err = manager.EnsureTenantRBAC(ctx, tenant)
 	if err != nil {
 		t.Fatalf("EnsureTenantRBAC() error = %v", err)
 	}
@@ -432,7 +479,16 @@ func TestEnsureTenantRBAC_UpdatesPodSecurityLabels(t *testing.T) {
 
 	ctx := context.Background()
 
-	err = manager.EnsureTenantRBAC(ctx, namespace)
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-tenant",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+	err = manager.EnsureTenantRBAC(ctx, tenant)
 	if err != nil {
 		t.Fatalf("EnsureTenantRBAC() error = %v", err)
 	}
@@ -641,4 +697,78 @@ func contains(slice []string, value string) bool {
 		}
 	}
 	return false
+}
+
+func TestEnsureTenantRBAC_AppliesConfiguredQuotas(t *testing.T) {
+	namespace := testNamespace
+	// Create namespace
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	k8sClient := newTestClient(t, ns)
+	logger := logr.Discard()
+	manager, err := NewManager(context.Background(), k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Define custom quota and limit range
+	customQuota := &corev1.ResourceQuotaSpec{
+		Hard: corev1.ResourceList{
+			corev1.ResourcePods: resource.MustParse("10"),
+		},
+	}
+	customLimitRange := &corev1.LimitRangeSpec{
+		Limits: []corev1.LimitRangeItem{
+			{
+				Type: corev1.LimitTypeContainer,
+				Default: corev1.ResourceList{
+					corev1.ResourceCPU: resource.MustParse("100m"),
+				},
+			},
+		},
+	}
+
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-tenant",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+			Quota:           customQuota,
+			LimitRange:      customLimitRange,
+		},
+	}
+
+	err = manager.EnsureTenantRBAC(ctx, tenant)
+	if err != nil {
+		t.Fatalf("EnsureTenantRBAC() error = %v", err)
+	}
+
+	// Verify ResourceQuota
+	quota := &corev1.ResourceQuota{}
+	err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantResourceQuotaName}, quota)
+	if err != nil {
+		t.Fatalf("expected ResourceQuota to exist: %v", err)
+	}
+	pods := quota.Spec.Hard[corev1.ResourcePods]
+	if pods.String() != "10" {
+		t.Errorf("ResourceQuota pods limit = %v, want 10", pods.String())
+	}
+
+	// Verify LimitRange
+	limitRange := &corev1.LimitRange{}
+	err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantLimitRangeName}, limitRange)
+	if err != nil {
+		t.Fatalf("expected LimitRange to exist: %v", err)
+	}
+	cpu := limitRange.Spec.Limits[0].Default[corev1.ResourceCPU]
+	if cpu.String() != "100m" {
+		t.Errorf("LimitRange default CPU = %v, want 100m", cpu.String())
+	}
 }
