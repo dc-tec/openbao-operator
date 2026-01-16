@@ -189,9 +189,17 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 	}
 
 	if kube.JobFailed(job) {
-		// Job failed
+		// Job failed - check if we've already processed this specific job failure
+		// to avoid incrementing ConsecutiveFailures on every reconcile
+		expectedFailureReason := fmt.Sprintf("Backup Job %s failed", jobName)
+		if cluster.Status.Backup.LastFailureReason == expectedFailureReason {
+			// Already processed this job failure, don't update status again
+			logger.V(1).Info("Backup Job failure already processed", "job", jobName)
+			return false, nil
+		}
+
 		cluster.Status.Backup.ConsecutiveFailures++
-		cluster.Status.Backup.LastFailureReason = fmt.Sprintf("Backup Job %s failed", jobName)
+		cluster.Status.Backup.LastFailureReason = expectedFailureReason
 
 		logger.Error(fmt.Errorf("backup job failed"), "Backup Job failed, status updated",
 			"job", jobName,

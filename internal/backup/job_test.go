@@ -755,6 +755,56 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	}
 }
 
+func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
+	// This test verifies that processBackupJobResult is idempotent for failed jobs.
+	// Calling it multiple times for the same failed job should only increment
+	// ConsecutiveFailures once, not on every call.
+	cluster := newTestClusterWithBackup("test-cluster", "default")
+	cluster.Status.Backup.ConsecutiveFailures = 0
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
+
+	failedJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: cluster.Namespace,
+		},
+		Status: batchv1.JobStatus{
+			Failed: 1,
+		},
+	}
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	k8sClient := newTestClient(t, failedJob)
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+
+	// First call should update status
+	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	if err != nil {
+		t.Fatalf("processBackupJobResult() first call error = %v", err)
+	}
+	if !statusUpdated {
+		t.Error("processBackupJobResult() first call should return true")
+	}
+	if cluster.Status.Backup.ConsecutiveFailures != 1 {
+		t.Errorf("processBackupJobResult() first call ConsecutiveFailures = %v, want 1", cluster.Status.Backup.ConsecutiveFailures)
+	}
+
+	// Second call should NOT update status (already processed)
+	statusUpdated, err = manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	if err != nil {
+		t.Fatalf("processBackupJobResult() second call error = %v", err)
+	}
+	if statusUpdated {
+		t.Error("processBackupJobResult() second call should return false (already processed)")
+	}
+	// ConsecutiveFailures should still be 1, not 2
+	if cluster.Status.Backup.ConsecutiveFailures != 1 {
+		t.Errorf("processBackupJobResult() second call ConsecutiveFailures = %v, want 1 (idempotent)", cluster.Status.Backup.ConsecutiveFailures)
+	}
+}
+
 func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
