@@ -191,7 +191,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 
 	// Provision RBAC
 	logger.Info("Provisioning tenant RBAC", "target_namespace", targetNS)
-	if err := r.Provisioner.EnsureTenantRBAC(ctx, targetNS); err != nil {
+	if err := r.Provisioner.EnsureTenantRBAC(ctx, tenant); err != nil {
 		tenant.Status.Provisioned = false
 		tenant.Status.LastError = err.Error()
 		if statusErr := r.patchStatusSSA(ctx, tenant); statusErr != nil {
