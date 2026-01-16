@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,6 +33,14 @@ type OpenBaoTenantSpec struct {
 	// resources in that namespace.
 	// +kubebuilder:validation:MinLength=1
 	TargetNamespace string `json:"targetNamespace"`
+
+	// Quota defines the resource quota to apply to the tenant namespace.
+	// +optional
+	Quota *corev1.ResourceQuotaSpec `json:"quota,omitempty"`
+
+	// LimitRange defines the limit range to apply to the tenant namespace.
+	// +optional
+	LimitRange *corev1.LimitRangeSpec `json:"limitRange,omitempty"`
 }
 
 // OpenBaoTenantStatus defines the observed state of OpenBaoTenant.
