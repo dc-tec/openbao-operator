@@ -688,6 +688,8 @@ func (m *Manager) hasPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1
 // checkForCompletedJobs checks for any completed backup jobs and processes them.
 // Returns (statusUpdated, error) where statusUpdated indicates if any job was processed and status was updated.
 // This is used to ensure completed jobs are processed even when backup is not due yet.
+// Only the most recent completed job is processed to avoid incrementing ConsecutiveFailures multiple times
+// when there are several old failed jobs.
 func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
 	jobList := &batchv1.JobList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
@@ -704,30 +706,37 @@ func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger,
 		return false, fmt.Errorf("failed to list backup jobs: %w", err)
 	}
 
-	// Check for completed jobs (succeeded or failed) and process them
-	// Process all completed jobs, but return true if any status was updated
-	anyStatusUpdated := false
+	// Find the most recent completed job (by creation timestamp).
+	// We only process the most recent one to avoid processing stale failures repeatedly.
+	var mostRecentCompleted *batchv1.Job
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
-		// Only process jobs that have completed (succeeded or failed)
-		if kube.JobSucceeded(job) || kube.JobFailed(job) {
-			logger.Info("Processing completed backup job", "job", job.Name, "succeeded", job.Status.Succeeded, "failed", job.Status.Failed)
-			statusUpdated, err := m.processBackupJobResult(ctx, logger, cluster, job.Name)
-			if err != nil {
-				logger.Error(err, "Failed to process completed backup job", "job", job.Name)
-				continue // Continue processing other jobs even if one fails
-			}
-			if statusUpdated {
-				anyStatusUpdated = true
-				logger.Info("Completed backup job processed, status updated", "job", job.Name)
-				// Continue processing other jobs - we'll requeue after processing all
-			} else {
-				logger.V(1).Info("Completed backup job already processed", "job", job.Name)
-			}
+		if !kube.JobSucceeded(job) && !kube.JobFailed(job) {
+			continue // Skip jobs that are still running
+		}
+		if mostRecentCompleted == nil || job.CreationTimestamp.After(mostRecentCompleted.CreationTimestamp.Time) {
+			mostRecentCompleted = job
 		}
 	}
 
-	return anyStatusUpdated, nil
+	if mostRecentCompleted == nil {
+		return false, nil // No completed jobs to process
+	}
+
+	logger.Info("Processing completed backup job", "job", mostRecentCompleted.Name,
+		"succeeded", mostRecentCompleted.Status.Succeeded, "failed", mostRecentCompleted.Status.Failed)
+
+	statusUpdated, err := m.processBackupJobResult(ctx, logger, cluster, mostRecentCompleted.Name)
+	if err != nil {
+		return false, err
+	}
+	if statusUpdated {
+		logger.Info("Completed backup job processed, status updated", "job", mostRecentCompleted.Name)
+	} else {
+		logger.V(1).Info("Completed backup job already processed", "job", mostRecentCompleted.Name)
+	}
+
+	return statusUpdated, nil
 }
 
 // hasActiveBackupJob checks if there's any backup job (scheduled or manual) running or pending for this cluster.

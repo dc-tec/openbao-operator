@@ -182,6 +182,21 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		// The backup key is stored in the Job annotation by the manager when creating the job
 		backupKey := job.Annotations["openbao.org/backup-key"]
 
+		// Check if we've already processed this specific job success
+		// to avoid updating status on every reconcile
+		if cluster.Status.Backup.LastBackupName == backupKey && backupKey != "" {
+			// Already processed this job success, don't update status again
+			logger.V(1).Info("Backup Job success already processed", "job", jobName, "backupKey", backupKey)
+			return false, nil
+		}
+
+		// Skip processing successful jobs that are older than the last recorded backup.
+		// This prevents re-processing old successful jobs if they're still in the job list.
+		if cluster.Status.Backup.LastBackupTime != nil && job.CreationTimestamp.Before(cluster.Status.Backup.LastBackupTime) {
+			logger.V(1).Info("Skipping stale successful backup job (older than last backup time)", "job", jobName)
+			return false, nil
+		}
+
 		now := metav1.Now()
 		cluster.Status.Backup.LastBackupTime = &now
 		if backupKey != "" {
@@ -205,6 +220,13 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		if cluster.Status.Backup.LastFailureReason == expectedFailureReason {
 			// Already processed this job failure, don't update status again
 			logger.V(1).Info("Backup Job failure already processed", "job", jobName)
+			return false, nil
+		}
+
+		// Skip processing failed jobs that are older than the last successful backup.
+		// This prevents re-processing old failures after a successful backup clears LastFailureReason.
+		if cluster.Status.Backup.LastBackupTime != nil && job.CreationTimestamp.Before(cluster.Status.Backup.LastBackupTime) {
+			logger.V(1).Info("Skipping stale failed backup job (older than last successful backup)", "job", jobName)
 			return false, nil
 		}
 
