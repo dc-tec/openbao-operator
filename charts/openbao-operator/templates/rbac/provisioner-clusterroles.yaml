@@ -140,6 +140,8 @@ rules:
       - services
       - configmaps
       - serviceaccounts
+      - resourcequotas
+      - limitranges
     verbs:
       - create
       - delete
