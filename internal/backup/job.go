@@ -91,12 +91,18 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 				if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
 					if cluster.Status.Backup != nil {
 						cluster.Status.Backup.LastFailureReason = fmt.Sprintf("%s: %v", constants.ReasonBackupExecutorImageVerificationFailed, err)
+						if patchErr := m.patchStatusSSA(ctx, cluster); patchErr != nil {
+							logger.Error(patchErr, "Failed to patch cluster status for image verification failure")
+						}
 					}
 					return false, fmt.Errorf("backup executor image verification failed (policy=Block): %w", err)
 				}
 
 				if cluster.Status.Backup != nil {
 					cluster.Status.Backup.LastFailureReason = fmt.Sprintf("%s: %v", constants.ReasonBackupExecutorImageVerificationFailed, err)
+					if patchErr := m.patchStatusSSA(ctx, cluster); patchErr != nil {
+						logger.Error(patchErr, "Failed to patch cluster status for image verification warning warning")
+					}
 				}
 				logger.Error(err, "Backup executor image verification failed but proceeding due to Warn policy", "image", executorImage)
 			} else {
@@ -184,6 +190,10 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		cluster.Status.Backup.ConsecutiveFailures = 0
 		cluster.Status.Backup.LastFailureReason = ""
 
+		if err := m.patchStatusSSA(ctx, cluster); err != nil {
+			return false, fmt.Errorf("failed to patch backup status (success): %w", err)
+		}
+
 		logger.Info("Backup Job completed successfully, status updated", "job", jobName, "lastBackupTime", now, "backupKey", backupKey)
 		return true, nil // Status was updated - request requeue to persist
 	}
@@ -200,6 +210,10 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 
 		cluster.Status.Backup.ConsecutiveFailures++
 		cluster.Status.Backup.LastFailureReason = expectedFailureReason
+
+		if err := m.patchStatusSSA(ctx, cluster); err != nil {
+			return false, fmt.Errorf("failed to patch backup status (failed): %w", err)
+		}
 
 		logger.Error(fmt.Errorf("backup job failed"), "Backup Job failed, status updated",
 			"job", jobName,

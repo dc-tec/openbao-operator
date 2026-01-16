@@ -91,11 +91,30 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, restore *op
 	}
 }
 
+// patchStatusSSA updates the restore status using Server-Side Apply.
+func (m *Manager) patchStatusSSA(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore) error {
+	applyRestore := &openbaov1alpha1.OpenBaoRestore{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: openbaov1alpha1.GroupVersion.String(),
+			Kind:       "OpenBaoRestore",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      restore.Name,
+			Namespace: restore.Namespace,
+		},
+		Status: restore.Status,
+	}
+
+	return m.client.Status().Patch(ctx, applyRestore, client.Apply,
+		client.FieldOwner("openbao-restore-controller"),
+		client.ForceOwnership,
+	)
+}
+
 // handlePending transitions from Pending to Validating phase.
 func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
 	logger.Info("Starting restore validation", "cluster", restore.Spec.Cluster)
 
-	original := restore.DeepCopy()
 	// Record start time
 	now := metav1.Now()
 	restore.Status.StartTime = &now
@@ -103,7 +122,7 @@ func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore
 	restore.Status.SnapshotKey = restore.Spec.Source.Key
 	restore.Status.Message = "Validating restore preconditions"
 
-	if err := m.client.Status().Patch(ctx, restore, client.MergeFrom(original)); err != nil {
+	if err := m.patchStatusSSA(ctx, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
 	}
 
@@ -112,7 +131,6 @@ func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore
 
 // handleValidating validates preconditions and transitions to Running.
 func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
-	original := restore.DeepCopy()
 	// Validate target cluster exists
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := m.client.Get(ctx, types.NamespacedName{
@@ -158,7 +176,7 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 			} else {
 				restore.Status.Message = "Waiting for cluster operation lock"
 			}
-			if statusErr := m.client.Status().Patch(ctx, restore, client.MergeFrom(original)); statusErr != nil {
+			if statusErr := m.patchStatusSSA(ctx, restore); statusErr != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to patch restore status after lock contention: %w", statusErr)
 			}
 			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
@@ -218,7 +236,7 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
 	restore.Status.Message = "Creating restore job"
 
-	if err := m.client.Status().Patch(ctx, restore, client.MergeFrom(original)); err != nil {
+	if err := m.patchStatusSSA(ctx, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
 	}
 
@@ -228,7 +246,6 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 
 // handleRunning manages the restore job and checks for completion.
 func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
-	original := restore.DeepCopy()
 	// Get target cluster for job configuration
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := m.client.Get(ctx, types.NamespacedName{
@@ -282,7 +299,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 				if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
 					if operatorerrors.IsTransient(err) {
 						restore.Status.Message = fmt.Sprintf("Waiting for restore executor image verification: %v", err)
-						if statusErr := m.client.Status().Patch(ctx, restore, client.MergeFrom(original)); statusErr != nil {
+						if statusErr := m.patchStatusSSA(ctx, restore); statusErr != nil {
 							return ctrl.Result{}, fmt.Errorf("failed to patch restore status after transient image verification failure: %w", statusErr)
 						}
 						return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
@@ -312,7 +329,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 
 		logger.Info("Created restore job", "job", jobName)
 		restore.Status.Message = "Restore job running"
-		if err := m.client.Status().Patch(ctx, restore, client.MergeFrom(original)); err != nil {
+		if err := m.patchStatusSSA(ctx, restore); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to patch restore status after job creation: %w", err)
 		}
 
@@ -346,7 +363,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 
 	// Job still running
 	restore.Status.Message = "Restore job in progress"
-	if err := m.client.Status().Patch(ctx, restore, client.MergeFrom(original)); err != nil {
+	if err := m.patchStatusSSA(ctx, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status while job is running: %w", err)
 	}
 
@@ -355,8 +372,6 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 
 // failRestore transitions the restore to Failed phase.
 func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
-	original := restore.DeepCopy()
-
 	now := metav1.Now()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseFailed
 	restore.Status.CompletionTime = &now
@@ -370,7 +385,7 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 		LastTransitionTime: now,
 	})
 
-	if err := m.client.Status().Patch(ctx, restore, client.MergeFrom(original)); err != nil {
+	if err := m.patchStatusSSA(ctx, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
 	}
 
@@ -383,7 +398,6 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 
 // completeRestore transitions the restore to Completed phase.
 func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) error {
-	original := restore.DeepCopy()
 	now := metav1.Now()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseCompleted
 	restore.Status.CompletionTime = &now
@@ -397,7 +411,7 @@ func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, resto
 		LastTransitionTime: now,
 	})
 
-	if err := m.client.Status().Patch(ctx, restore, client.MergeFrom(original)); err != nil {
+	if err := m.patchStatusSSA(ctx, restore); err != nil {
 		return fmt.Errorf("failed to patch restore status: %w", err)
 	}
 

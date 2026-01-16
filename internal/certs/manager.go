@@ -26,7 +26,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
@@ -79,6 +78,15 @@ func NewManagerWithReloader(c client.Client, scheme *runtime.Scheme, r ReloadSig
 		scheme:   scheme,
 		reloader: r,
 	}
+}
+
+// applySecret creates or patches a Secret using Server-Side Apply.
+func (m *Manager) applySecret(ctx context.Context, secret *corev1.Secret) error {
+	secret.TypeMeta = metav1.TypeMeta{
+		APIVersion: "v1",
+		Kind:       "Secret",
+	}
+	return m.client.Patch(ctx, secret, client.Apply, client.FieldOwner("openbao-cert-manager"), client.ForceOwnership)
 }
 
 // Reconcile ensures TLS assets are aligned with the desired state for the given OpenBaoCluster.
@@ -152,12 +160,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			return recon.Result{}, fmt.Errorf("failed to set owner reference on CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 		}
 
-		if err := m.client.Create(ctx, caSecret); err != nil {
-			// Wrap transient Kubernetes API errors
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err))
-			}
-			return recon.Result{}, fmt.Errorf("failed to create CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
+		if err := m.applySecret(ctx, caSecret); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to apply CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 		}
 	}
 
@@ -198,12 +202,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			return recon.Result{}, fmt.Errorf("failed to set owner reference on server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 
-		if err := m.client.Create(ctx, serverSecret); err != nil {
-			// Wrap transient Kubernetes API errors
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to create server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
-			}
-			return recon.Result{}, fmt.Errorf("failed to create server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+		if err := m.applySecret(ctx, serverSecret); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to apply server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 		if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
 			return recon.Result{}, err
@@ -231,16 +231,13 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			return recon.Result{}, fmt.Errorf("failed to reissue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 		}
 
-		serverSecret.Data[tlsCertKey] = serverCertPEM
-		serverSecret.Data[tlsKeyKey] = serverKeyPEM
-		serverSecret.Data[caCertKey] = caCertPEM
+		serverSecret = buildServerSecret(cluster, serverSecretName, serverCertPEM, serverKeyPEM, caCertPEM)
+		if err := controllerutil.SetControllerReference(cluster, serverSecret, m.scheme); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to set owner reference on server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+		}
 
-		if err := m.client.Update(ctx, serverSecret); err != nil {
-			// Wrap transient Kubernetes API errors
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
-			}
-			return recon.Result{}, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+		if err := m.applySecret(ctx, serverSecret); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to apply server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 
 		if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
@@ -289,16 +286,13 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			return recon.Result{}, fmt.Errorf("failed to reissue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 		}
 
-		serverSecret.Data[tlsCertKey] = serverCertPEM
-		serverSecret.Data[tlsKeyKey] = serverKeyPEM
-		serverSecret.Data[caCertKey] = caCertPEM
+		serverSecret = buildServerSecret(cluster, serverSecretName, serverCertPEM, serverKeyPEM, caCertPEM)
+		if err := controllerutil.SetControllerReference(cluster, serverSecret, m.scheme); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to set owner reference on server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+		}
 
-		if err := m.client.Update(ctx, serverSecret); err != nil {
-			// Wrap transient Kubernetes API errors
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err))
-			}
-			return recon.Result{}, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+		if err := m.applySecret(ctx, serverSecret); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to apply server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 
 		if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
@@ -332,12 +326,13 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return recon.Result{}, fmt.Errorf("failed to rotate server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 	}
 
-	serverSecret.Data[tlsCertKey] = serverCertPEM
-	serverSecret.Data[tlsKeyKey] = serverKeyPEM
-	serverSecret.Data[caCertKey] = caCertPEM
+	serverSecret = buildServerSecret(cluster, serverSecretName, serverCertPEM, serverKeyPEM, caCertPEM)
+	if err := controllerutil.SetControllerReference(cluster, serverSecret, m.scheme); err != nil {
+		return recon.Result{}, fmt.Errorf("failed to set owner reference on server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+	}
 
-	if err := m.client.Update(ctx, serverSecret); err != nil {
-		return recon.Result{}, fmt.Errorf("failed to update server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
+	if err := m.applySecret(ctx, serverSecret); err != nil {
+		return recon.Result{}, fmt.Errorf("failed to apply server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 	}
 
 	if err := m.signalReloadIfNeeded(ctx, logger, cluster, serverCertPEM); err != nil {
