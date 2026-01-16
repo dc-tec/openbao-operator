@@ -13,6 +13,7 @@ Day 0 operations focus on onboarding tenants and ensuring they have the necessar
 ## 2. Resource Quotas
 
 - Default `ResourceQuota` and `LimitRange` objects are applied to the tenant namespace to prevent noisy neighbor issues.
+- These limits can be customized by setting `spec.quota` and `spec.limitRange` in the `OpenBaoTenant` CR.
 
 ## 3. Tenant Onboarding
 

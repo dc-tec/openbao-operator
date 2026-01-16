@@ -96,6 +96,6 @@ The architecture provides the following immutable security properties:
 | Threat | Mitigation Strategy | Control |
 | :--- | :--- | :--- |
 | **Tenant A reads Tenant B's Keys** | **RBAC Scoping** | Controller has no cluster-wide Secret access. |
-| **Tenant A DoS attack on Node** | **Resource Quotas** | Namespace Quotas + Controller Rate Limiting. |
+| **Tenant A DoS attack on Node** | **Resource Quotas** | Namespace Quotas (Configurable via `OpenBaoTenant`) + Controller Rate Limiting. |
 | **Tenant A attacks Tenant B's Pods** | **Network Isolation** | Default Deny NetworkPolicy. |
 | **Tenant A spoofs Admin** | **Role Restrictions** | Self-Service mode enforces `targetNamespace == namespace`. |
