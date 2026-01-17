@@ -137,7 +137,7 @@ path "sys/storage/raft/demote" {
 	}, nil
 }
 
-var _ = Describe("Blue/Green Upgrade", Label("upgrade", "cluster", "slow"), Ordered, func() {
+var _ = Describe("Blue/Green Upgrade", Label("upgrade", "bluegreen", "cluster", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (

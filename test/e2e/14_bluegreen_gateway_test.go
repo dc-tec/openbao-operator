@@ -31,7 +31,7 @@ import (
 // This test drives a Blue/Green upgrade flow with Gateway API enabled and verifies that:
 // - the HTTPRoute always targets the main external Service (no weighted traffic splitting)
 // - the external Service selector switches to the Green revision at cutover (DemotingBlue)
-var _ = Describe("Blue/Green Upgrade with Gateway API", Label("upgrade", "gateway-api", "requires-gateway-api", "slow"), Ordered, func() {
+var _ = Describe("Blue/Green Upgrade with Gateway API", Label("upgrade", "bluegreen", "gateway-api", "requires-gateway-api", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (
