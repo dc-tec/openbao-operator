@@ -451,6 +451,9 @@ func buildCASecret(cluster *openbaov1alpha1.OpenBaoCluster, name string, certPEM
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+			},
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
@@ -536,6 +539,9 @@ func buildServerSecret(cluster *openbaov1alpha1.OpenBaoCluster, name string, cer
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+			},
 		},
 		Type: corev1.SecretTypeTLS,
 		Data: map[string][]byte{
