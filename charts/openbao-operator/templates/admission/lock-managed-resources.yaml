@@ -76,7 +76,8 @@ spec:
           "system:serviceaccount:kube-system:statefulset-controller",
           "system:serviceaccount:kube-system:replicaset-controller",
           "system:serviceaccount:kube-system:job-controller",
-          "system:serviceaccount:kube-system:cronjob-controller"
+          "system:serviceaccount:kube-system:cronjob-controller",
+          "system:serviceaccount:kube-system:ttl-after-finished-controller"
         ]
     - name: is_kube_system_controller
       expression: >-

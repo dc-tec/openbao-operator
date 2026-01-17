@@ -78,9 +78,10 @@ spec:
         !(
           object.spec.backup.target.endpoint.contains("localhost") ||
           object.spec.backup.target.endpoint.contains("127.0.0.1") ||
-          object.spec.backup.target.endpoint.contains("::1")
+          object.spec.backup.target.endpoint.contains("::1") ||
+          object.spec.backup.target.endpoint.matches("^https?://[0-9]+[:/].*")
         )
-      message: "Backup endpoint cannot point to localhost (SSRF protection)."
+      message: "Backup endpoint cannot point to localhost or use numeric IP encoding (SSRF protection)."
     # SSRF Protection: Block link-local addresses (all profiles - cloud metadata is always dangerous)
     - expression: >-
         !variables.has_backup ||
@@ -104,3 +105,12 @@ spec:
         object.spec.profile != "Hardened" ||
         object.spec.replicas >= 3
       message: "Hardened profile requires at least 3 replicas for Raft quorum HA. Use Profile=Development for non-HA deployments."
+    # Block references to system secrets in backup/upgrade
+    - expression: >-
+        (!has(object.spec.backup) || !has(object.spec.backup.target.credentialsSecretRef) ||
+          !object.spec.backup.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
+        (!has(object.spec.backup) || !has(object.spec.backup.tokenSecretRef) ||
+          !object.spec.backup.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
+        (!has(object.spec.upgrade) || !has(object.spec.upgrade.tokenSecretRef) ||
+          !object.spec.upgrade.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
+      message: "References to system secrets (unseal-key, root-token, tls-ca, tls-server) are prohibited in backup/upgrade configurations to prevent confused deputy attacks."

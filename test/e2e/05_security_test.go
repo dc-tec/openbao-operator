@@ -224,6 +224,74 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Hardened profile requires"))
 		})
+
+		It("blocks decimal IP encoding in backup endpoint (SSRF protection)", func() {
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ssrf-decimal-ip",
+					Namespace: guardrailsNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  openBaoVersion,
+					Image:    openBaoImage,
+					Replicas: 1,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: kindDefaultServiceCIDR,
+					},
+					Backup: &openbaov1alpha1.BackupSchedule{
+						Schedule:      "0 0 * * *",
+						ExecutorImage: "ghcr.io/dc-tec/openbao-backup:v1.0.0",
+						JWTAuthRole:   "backup-role",
+						Target: openbaov1alpha1.BackupTarget{
+							Endpoint: "http://2130706433:9000", // decimal for 127.0.0.1
+							Bucket:   "test-bucket",
+							CredentialsSecretRef: &corev1.LocalObjectReference{
+								Name: "backup-creds",
+							},
+						},
+					},
+				},
+			}
+
+			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+				return c.Create(ctx, cluster)
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("numeric IP encoding"))
+		})
+
+		It("blocks cross-namespace tenant targeting (self-service mode)", func() {
+			// This tests the validate-openbao-tenant VAP
+			// Tenants created outside the operator namespace cannot target different namespaces
+			tenant := &openbaov1alpha1.OpenBaoTenant{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cross-ns-tenant",
+					Namespace: guardrailsNamespace, // Not the operator namespace
+				},
+				Spec: openbaov1alpha1.OpenBaoTenantSpec{
+					TargetNamespace: "kube-system", // Trying to target a different namespace
+				},
+			}
+
+			err := admin.Create(ctx, tenant)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("self-service mode"))
+
+			// Cleanup in case the test fails and tenant is created
+			_ = admin.Delete(ctx, tenant)
+		})
 	})
 
 	Context("Resource Locking (anti-tamper)", func() {
@@ -360,6 +428,27 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 
 			Consistently(func() error {
 				return admin.Get(ctx, types.NamespacedName{Name: unsealName, Namespace: tenantNamespace}, &corev1.Secret{})
+			}, 5*time.Second, 1*time.Second).Should(Succeed())
+		})
+
+		It("prevents unauthorized deletion of the TLS CA secret", func() {
+			// This test verifies that TLS CA secrets now have the managed-by label
+			// and are protected by the lock-managed-resource-mutations VAP.
+			// This was a red-team finding: TLS CA secret could be deleted before the fix.
+			tlsCAName := victim.Name + "-tls-ca"
+			secret := &corev1.Secret{}
+			err := admin.Get(ctx, types.NamespacedName{Name: tlsCAName, Namespace: tenantNamespace}, secret)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(secret.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "openbao-operator"))
+
+			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+				return c.Delete(ctx, secret)
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
+
+			Consistently(func() error {
+				return admin.Get(ctx, types.NamespacedName{Name: tlsCAName, Namespace: tenantNamespace}, &corev1.Secret{})
 			}, 5*time.Second, 1*time.Second).Should(Succeed())
 		})
 
