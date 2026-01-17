@@ -92,6 +92,9 @@ spec:
     - name: is_pod_request
       expression: >-
         request.kind.group == "" && request.kind.kind == "Pod"
+    - name: is_job_request
+      expression: >-
+        request.kind.group == "batch" && request.kind.kind == "Job"
     - name: is_service_request
       expression: >-
         request.kind.group == "" && request.kind.kind == "Service"
@@ -149,6 +152,22 @@ spec:
         request.operation == "UPDATE" &&
         variables.is_kube_system_controller &&
         object.spec == oldObject.spec &&
+        (has(object.metadata.labels) == has(oldObject.metadata.labels) &&
+          (!has(object.metadata.labels) || object.metadata.labels == oldObject.metadata.labels)) &&
+        (has(object.metadata.annotations) == has(oldObject.metadata.annotations) &&
+          (!has(object.metadata.annotations) || object.metadata.annotations == oldObject.metadata.annotations)) &&
+        (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+          (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+        (has(object.metadata.finalizers) || has(oldObject.metadata.finalizers)) &&
+        (!has(object.metadata.finalizers) || !has(oldObject.metadata.finalizers) || object.metadata.finalizers != oldObject.metadata.finalizers)
+    - name: is_kube_system_job_finalizer_update
+      expression: >-
+        variables.is_job_request &&
+        request.operation == "UPDATE" &&
+        (variables.is_kube_controller_manager || variables.is_system_controller || variables.is_kube_system_controller || variables.is_garbage_collector_sa) &&
+        has(oldObject.metadata.deletionTimestamp) &&
+        object.spec == oldObject.spec &&
+        object.status == oldObject.status &&
         (has(object.metadata.labels) == has(oldObject.metadata.labels) &&
           (!has(object.metadata.labels) || object.metadata.labels == oldObject.metadata.labels)) &&
         (has(object.metadata.annotations) == has(oldObject.metadata.annotations) &&
@@ -216,5 +235,6 @@ spec:
         (variables.is_pod_request && variables.is_kubelet_node && request.operation == "DELETE") ||
         variables.is_service_registration_label_update ||
         variables.is_kube_system_pod_finalizer_update ||
+        variables.is_kube_system_job_finalizer_update ||
         (variables.maintenance_enabled && variables.is_break_glass_admin)
       message: Direct modification of OpenBao-managed resources is prohibited; modify the parent OpenBaoCluster/OpenBaoTenant instead.

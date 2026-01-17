@@ -470,6 +470,40 @@ spec:
                   raft:
                     description: Raft allows tuning the Raft storage backend.
                     properties:
+                      autopilot:
+                        description: |-
+                          Autopilot configures Raft Autopilot settings.
+                          By default, dead server cleanup is enabled with a 5-minute threshold.
+                        properties:
+                          cleanupDeadServers:
+                            default: true
+                            description: |-
+                              CleanupDeadServers enables automatic removal of dead Raft peers.
+                              When enabled, Autopilot periodically removes servers that have been
+                              unhealthy for longer than DeadServerLastContactThreshold.
+                              Requires MinQuorum to be set (defaults to replicas/2 + 1).
+                            type: boolean
+                          deadServerLastContactThreshold:
+                            default: 5m
+                            description: |-
+                              DeadServerLastContactThreshold is the duration after which a server
+                              is considered dead if it hasn't contacted the leader.
+                              Minimum: "1m". Default: "5m" (operator default, shorter than OpenBao's 24h).
+                            type: string
+                          minQuorum:
+                            description: |-
+                              MinQuorum is the minimum number of servers before Autopilot can prune
+                              dead servers. This prevents removing so many servers that quorum is lost.
+                              If not specified, defaults to max(3, replicas/2 + 1).
+                            format: int32
+                            minimum: 3
+                            type: integer
+                          serverStabilizationTime:
+                            description: |-
+                              ServerStabilizationTime is the minimum time a server must be healthy
+                              before being promoted to voter. Default: "10s".
+                            type: string
+                        type: object
                       performanceMultiplier:
                         description: PerformanceMultiplier scales the Raft timing
                           parameters.
@@ -3076,6 +3110,149 @@ spec:
           spec:
             description: OpenBaoTenantSpec defines the desired state of OpenBaoTenant.
             properties:
+              limitRange:
+                description: LimitRange defines the limit range to apply to the tenant
+                  namespace.
+                properties:
+                  limits:
+                    description: Limits is the list of LimitRangeItem objects that
+                      are enforced.
+                    items:
+                      description: LimitRangeItem defines a min/max usage limit for
+                        any resource that matches on kind.
+                      properties:
+                        default:
+                          additionalProperties:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          description: Default resource requirement limit value by
+                            resource name if resource limit is omitted.
+                          type: object
+                        defaultRequest:
+                          additionalProperties:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          description: DefaultRequest is the default resource requirement
+                            request value by resource name if resource request is
+                            omitted.
+                          type: object
+                        max:
+                          additionalProperties:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          description: Max usage constraints on this kind by resource
+                            name.
+                          type: object
+                        maxLimitRequestRatio:
+                          additionalProperties:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          description: MaxLimitRequestRatio if specified, the named
+                            resource must have a request and limit that are both non-zero
+                            where limit divided by request is less than or equal to
+                            the enumerated value; this represents the max burst for
+                            the named resource.
+                          type: object
+                        min:
+                          additionalProperties:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          description: Min usage constraints on this kind by resource
+                            name.
+                          type: object
+                        type:
+                          description: Type of resource that this limit applies to.
+                          type: string
+                      required:
+                      - type
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
+                required:
+                - limits
+                type: object
+              quota:
+                description: Quota defines the resource quota to apply to the tenant
+                  namespace.
+                properties:
+                  hard:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      hard is the set of desired hard limits for each named resource.
+                      More info: https://kubernetes.io/docs/concepts/policy/resource-quotas/
+                    type: object
+                  scopeSelector:
+                    description: |-
+                      scopeSelector is also a collection of filters like scopes that must match each object tracked by a quota
+                      but expressed using ScopeSelectorOperator in combination with possible values.
+                      For a resource to match, both scopes AND scopeSelector (if specified in spec), must be matched.
+                    properties:
+                      matchExpressions:
+                        description: A list of scope selector requirements by scope
+                          of the resources.
+                        items:
+                          description: |-
+                            A scoped-resource selector requirement is a selector that contains values, a scope name, and an operator
+                            that relates the scope name and values.
+                          properties:
+                            operator:
+                              description: |-
+                                Represents a scope's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists, DoesNotExist.
+                              type: string
+                            scopeName:
+                              description: The name of the scope that the selector
+                                applies to.
+                              type: string
+                            values:
+                              description: |-
+                                An array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty.
+                                This array is replaced during a strategic merge patch.
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - operator
+                          - scopeName
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  scopes:
+                    description: |-
+                      A collection of filters that must match each object tracked by a quota.
+                      If not specified, the quota matches all objects.
+                    items:
+                      description: A ResourceQuotaScope defines a filter that must
+                        match each object tracked by a quota
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                type: object
               targetNamespace:
                 description: |-
                   TargetNamespace is the name of the namespace to provision with tenant RBAC.
@@ -3425,6 +3602,8 @@ rules:
   - services
   - configmaps
   - serviceaccounts
+  - resourcequotas
+  - limitranges
   verbs:
   - create
   - delete
@@ -3994,6 +4173,30 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  name: openbao-operator-validate-openbao-tenant
+  namespace: openbao-operator-system
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - openbao.org
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - openbaotenants
+  validations:
+  - expression: object.metadata.namespace == 'openbao-operator-system' || !has(object.spec.targetNamespace)
+      || object.spec.targetNamespace == '' || object.spec.targetNamespace == object.metadata.namespace
+    message: OpenBaoTenant can only target its own namespace (self-service mode).
+      Create the OpenBaoTenant in the operator namespace for cross-namespace targeting.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
   name: openbao-operator-lock-controller-statefulset-mutations
 spec:
   failurePolicy: Fail
@@ -4127,14 +4330,15 @@ spec:
   validations:
   - expression: '!variables.is_managed || variables.is_operator_controller || (variables.is_kube_controller_manager
       && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
-      (variables.is_system_controller && request.operation == "DELETE") || (variables.is_system_controller
-      && request.resource.resource == "pods") || (variables.is_system_controller &&
-      variables.is_endpoints_controller_request) || (variables.is_kube_system_controller
-      && request.resource.resource == "pods" && (request.operation == "CREATE" ||
-      request.operation == "DELETE")) || (variables.is_kube_system_controller && variables.is_endpoints_controller_request)
-      || variables.is_kube_system_service_metadata_update || variables.is_cert_manager_secret_request
-      || (variables.is_pod_request && variables.is_kubelet_node && request.operation
-      == "DELETE") || variables.is_service_registration_label_update || variables.is_kube_system_pod_finalizer_update
+      (variables.is_system_controller && request.operation == "DELETE") || (variables.is_garbage_collector_sa
+      && request.operation == "DELETE") || (variables.is_system_controller && request.resource.resource
+      == "pods") || (variables.is_system_controller && variables.is_endpoints_controller_request)
+      || (variables.is_kube_system_controller && request.resource.resource == "pods"
+      && (request.operation == "CREATE" || request.operation == "DELETE")) || (variables.is_kube_system_controller
+      && variables.is_endpoints_controller_request) || variables.is_kube_system_service_metadata_update
+      || variables.is_cert_manager_secret_request || (variables.is_pod_request &&
+      variables.is_kubelet_node && request.operation == "DELETE") || variables.is_service_registration_label_update
+      || variables.is_kube_system_pod_finalizer_update || variables.is_kube_system_job_finalizer_update
       || (variables.maintenance_enabled && variables.is_break_glass_admin)'
     message: Direct modification of OpenBao-managed resources is prohibited; modify
       the parent OpenBaoCluster/OpenBaoTenant instead.
@@ -4165,6 +4369,18 @@ spec:
     name: is_kube_controller_manager
   - expression: request.userInfo.username.startsWith("system:controller:")
     name: is_system_controller
+  - expression: |-
+      request.userInfo.username in [
+
+        "system:serviceaccount:kube-system:generic-garbage-collector",
+        "system:serviceaccount:kube-system:resourcequota-controller",
+        "system:serviceaccount:kube-system:statefulset-controller",
+        "system:serviceaccount:kube-system:replicaset-controller",
+        "system:serviceaccount:kube-system:job-controller",
+        "system:serviceaccount:kube-system:cronjob-controller",
+        "system:serviceaccount:kube-system:ttl-after-finished-controller"
+      ]
+    name: is_garbage_collector_sa
   - expression: request.userInfo.groups.exists(g, g == "system:serviceaccounts:kube-system")
       || request.userInfo.username.startsWith("system:serviceaccount:kube-system:")
     name: is_kube_system_controller
@@ -4176,6 +4392,8 @@ spec:
     name: is_cert_manager_secret_request
   - expression: request.kind.group == "" && request.kind.kind == "Pod"
     name: is_pod_request
+  - expression: request.kind.group == "batch" && request.kind.kind == "Job"
+    name: is_job_request
   - expression: request.kind.group == "" && request.kind.kind == "Service"
     name: is_service_request
   - expression: request.userInfo.username.startsWith("system:node:")
@@ -4236,6 +4454,18 @@ spec:
         (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
       (has(object.metadata.finalizers) || has(oldObject.metadata.finalizers)) && (!has(object.metadata.finalizers) || !has(oldObject.metadata.finalizers) || object.metadata.finalizers != oldObject.metadata.finalizers)
     name: is_kube_system_pod_finalizer_update
+  - expression: |-
+      variables.is_job_request && request.operation == "UPDATE" && (variables.is_kube_controller_manager || variables.is_system_controller || variables.is_kube_system_controller || variables.is_garbage_collector_sa) && has(oldObject.metadata.deletionTimestamp) && object.spec == oldObject.spec && object.status == oldObject.status && (has(object.metadata.labels) == has(oldObject.metadata.labels) &&
+
+        (!has(object.metadata.labels) || object.metadata.labels == oldObject.metadata.labels)) &&
+      (has(object.metadata.annotations) == has(oldObject.metadata.annotations) &&
+
+        (!has(object.metadata.annotations) || object.metadata.annotations == oldObject.metadata.annotations)) &&
+      (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+
+        (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+      (has(object.metadata.finalizers) || has(oldObject.metadata.finalizers)) && (!has(object.metadata.finalizers) || !has(oldObject.metadata.finalizers) || object.metadata.finalizers != oldObject.metadata.finalizers)
+    name: is_kube_system_job_finalizer_update
   - expression: '(object != null && has(object.metadata) && has(object.metadata.annotations))
       ? object.metadata.annotations : {}'
     name: service_new_annotations
@@ -4537,9 +4767,11 @@ spec:
 
         object.spec.backup.target.endpoint.contains("localhost") ||
         object.spec.backup.target.endpoint.contains("127.0.0.1") ||
-        object.spec.backup.target.endpoint.contains("::1")
+        object.spec.backup.target.endpoint.contains("::1") ||
+        object.spec.backup.target.endpoint.matches("^https?://[0-9]+[:/].*")
       )
-    message: Backup endpoint cannot point to localhost (SSRF protection).
+    message: Backup endpoint cannot point to localhost or use numeric IP encoding
+      (SSRF protection).
   - expression: '!variables.has_backup || !has(object.spec.backup.target.endpoint)
       || object.spec.backup.target.endpoint == "" || !object.spec.backup.target.endpoint.matches("^https?://169\\.254\\..*")'
     message: Backup endpoint cannot point to link-local addresses (SSRF protection
@@ -4552,6 +4784,18 @@ spec:
       object.spec.replicas >= 3'
     message: Hardened profile requires at least 3 replicas for Raft quorum HA. Use
       Profile=Development for non-HA deployments.
+  - expression: |-
+      (!has(object.spec.backup) || !has(object.spec.backup.target.credentialsSecretRef) ||
+
+        !object.spec.backup.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
+      (!has(object.spec.backup) || !has(object.spec.backup.tokenSecretRef) ||
+
+        !object.spec.backup.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
+      (!has(object.spec.upgrade) || !has(object.spec.upgrade.tokenSecretRef) ||
+
+        !object.spec.upgrade.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
+    message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
+      are prohibited in backup/upgrade configurations to prevent confused deputy attacks.
   variables:
   - expression: has(object.spec.backup)
     name: has_backup
@@ -4561,6 +4805,16 @@ spec:
   - expression: has(object.spec.upgrade) && has(object.spec.upgrade.blueGreen) &&
       object.spec.upgrade.blueGreen.preUpgradeSnapshot == true
     name: has_bluegreen_pre_upgrade_snapshot
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-validate-openbao-tenant
+  namespace: openbao-operator-system
+spec:
+  policyName: openbao-operator-validate-openbao-tenant
+  validationActions:
+  - Deny
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
