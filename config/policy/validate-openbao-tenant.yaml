@@ -1,0 +1,21 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: validate-openbao-tenant
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["openbaotenants"]
+  validations:
+    # Self-Service Constraint: targetNamespace must match metadata.namespace
+    # Exception: Tenants in the operator namespace can target any namespace (admin mode)
+    - expression: >-
+        object.metadata.namespace == 'openbao-operator-system' ||
+        !has(object.spec.targetNamespace) ||
+        object.spec.targetNamespace == '' ||
+        object.spec.targetNamespace == object.metadata.namespace
+      message: "OpenBaoTenant can only target its own namespace (self-service mode). Create the OpenBaoTenant in the operator namespace for cross-namespace targeting."

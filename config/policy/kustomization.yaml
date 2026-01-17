@@ -5,5 +5,7 @@ resources:
   - lock-managed-resource-mutations-binding.yaml
   - validate-openbaocluster.yaml
   - validate-openbaocluster-binding.yaml
+  - validate-openbao-tenant.yaml
+  - validate-openbao-tenant-binding.yaml
   - restrict-provisioner-delegate.yaml
   - restrict-provisioner-delegate-binding.yaml
