@@ -116,18 +116,12 @@ var _ = Describe("Tenant Self-Service", Label("security", "tenant", "critical"),
 				},
 			}
 
-			// Creation should succeed (RBAC allows it)
-			Expect(attackerClient.Create(ctx, tenant)).To(Succeed())
-
-			// But Controller should mark it as Failed/SecurityViolation
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoTenant{}
-				err := admin.Get(ctx, types.NamespacedName{Name: tenant.Name, Namespace: attackerNS}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-
-				g.Expect(updated.Status.Provisioned).To(BeFalse(), "Status.Provisioned should be false")
-				g.Expect(updated.Status.LastError).To(ContainSubstring("security violation"), "LastError should contain security violation")
-			}, 30*time.Second, 1*time.Second).Should(Succeed())
+			// Creation should be BLOCKED by ValidatingAdmissionPolicy (defense in depth)
+			// The VAP enforces self-service: tenants can only target their own namespace
+			// unless created in the operator namespace (admin mode)
+			err = attackerClient.Create(ctx, tenant)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("self-service mode"))
 		})
 
 		It("allows self-service provisioning within own namespace", func() {
