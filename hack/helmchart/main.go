@@ -175,6 +175,8 @@ var policyFileMapping = map[string]string{
 	"restrict-provisioner-delegate-binding.yaml":         "provisioner-delegate.yaml", // merged
 	"validate-openbaocluster.yaml":                       "validate-openbaocluster.yaml",
 	"validate-openbaocluster-binding.yaml":               "validate-openbaocluster.yaml", // merged
+	"validate-openbao-tenant.yaml":                       "validate-openbao-tenant.yaml",
+	"validate-openbao-tenant-binding.yaml":               "validate-openbao-tenant.yaml", // merged
 }
 
 // syncPolicies syncs ValidatingAdmissionPolicy YAMLs from config/policy to Helm templates.
