@@ -25,7 +25,7 @@ import (
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 )
 
-var _ = Describe("Upgrade", Label("upgrade", "cluster", "slow"), Ordered, func() {
+var _ = Describe("Upgrade", Label("upgrade", "rolling", "cluster", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (

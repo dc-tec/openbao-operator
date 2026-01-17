@@ -54,7 +54,7 @@ func findUpgradeExecutorJob(jobs []batchv1.Job, action bluegreen.ExecutorAction,
 	return nil
 }
 
-var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "cluster", "slow"), Ordered, func() {
+var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "bluegreen", "cluster", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (

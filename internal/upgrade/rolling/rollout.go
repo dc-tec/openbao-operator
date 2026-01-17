@@ -9,7 +9,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -279,38 +278,35 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	return false, nil // Requeue
 }
 
-// setStatefulSetPartition updates the StatefulSet's partition value using Server-Side Apply
-// with a distinct field manager to avoid conflicts with InfraManager's SSA operations.
-// This ensures the partition field is owned by the upgrade manager and won't be overridden
-// by InfraManager's reconciliation loop.
+// setStatefulSetPartition updates the StatefulSet's partition value using strategic merge patch.
+// We use MergeFrom instead of SSA because StatefulSet validation requires all required fields
+// (selector, serviceName, template labels) to be present in SSA patches, but MergeFrom only
+// sends the diff and doesn't have this limitation.
 func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, partition int32) error {
-	// Create a patch object that only contains the fields we want to control (Partition)
-	patch := &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
-			APIVersion: "apps/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
-		},
-		Spec: appsv1.StatefulSetSpec{
-			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
-				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
-					Partition: &partition,
-				},
-			},
-		},
+	sts := &appsv1.StatefulSet{}
+	stsName := types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cluster.Name,
 	}
 
-	// Use Server-Side Apply with a distinct FieldManager
-	patchOpts := []client.PatchOption{
-		client.ForceOwnership,
-		client.FieldOwner("openbao-upgrade-manager"),
+	if err := m.client.Get(ctx, stsName, sts); err != nil {
+		return fmt.Errorf("failed to get StatefulSet: %w", err)
 	}
 
-	if err := m.client.Patch(ctx, patch, client.Apply, patchOpts...); err != nil {
-		return fmt.Errorf("failed to update partition via SSA: %w", err)
+	// Create a patch that only updates the partition field.
+	// We use client.MergeFrom instead of Server-Side Apply (SSA) because SSA requires
+	// all required StatefulSet fields (selector, serviceName, template labels) to be present,
+	// which causes validation errors. MergeFrom generates a strategic merge patch that only
+	// touches the modified fields.
+	newSts := sts.DeepCopy()
+	newSts.Spec.UpdateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
+	newSts.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
+		Partition: &partition,
+	}
+
+	// Patch using MergeFrom to send only the differences
+	if err := m.client.Patch(ctx, newSts, client.MergeFrom(sts)); err != nil {
+		return fmt.Errorf("failed to update StatefulSet partition: %w", err)
 	}
 
 	return nil
