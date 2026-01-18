@@ -15,6 +15,7 @@ import (
 // OpenBaoClusterReconciler reconciles a OpenBaoCluster object.
 type OpenBaoClusterReconciler struct {
 	client.Client
+	APIReader         client.Reader
 	Scheme            *runtime.Scheme
 	TLSReload         certmanager.ReloadSignaler
 	InitManager       *initmanager.Manager

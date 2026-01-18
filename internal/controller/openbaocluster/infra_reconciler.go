@@ -26,6 +26,7 @@ import (
 // It handles image verification and injects the verified digest into InfraManager.
 type infraReconciler struct {
 	client                  client.Client
+	apiReader               client.Reader
 	scheme                  *runtime.Scheme
 	operatorNamespace       string
 	oidcIssuer              string
@@ -212,6 +213,9 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	}
 
 	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys)
+	if r.apiReader != nil {
+		manager = inframanager.NewManagerWithReader(r.client, r.apiReader, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys)
+	}
 	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest, verifiedInitContainerDigest); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			return recon.Result{}, operatorerrors.WithReason(ReasonGatewayAPIMissing, err)

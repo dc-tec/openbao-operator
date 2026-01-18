@@ -331,6 +331,7 @@ func Run(args []string) {
 	// Pass these values into the Reconciler struct
 	if err := (&openbaoclustercontroller.OpenBaoClusterReconciler{
 		Client:            mgr.GetClient(),
+		APIReader:         mgr.GetAPIReader(),
 		Scheme:            mgr.GetScheme(),
 		TLSReload:         reloadSignaler,
 		InitManager:       initMgr,
