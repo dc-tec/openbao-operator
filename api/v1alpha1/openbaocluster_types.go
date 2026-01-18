@@ -405,8 +405,8 @@ type BackupRetention struct {
 type NetworkConfig struct {
 	// APIServerCIDR is an optional CIDR block for the Kubernetes API server.
 	// When specified, this value is used instead of auto-detection for NetworkPolicy egress rules.
-	// This is useful in restricted multi-tenant environments where the operator may not have
-	// permissions to read Services/Endpoints in the default namespace.
+	// This is useful when you want an explicit allow-list (or when the in-cluster service VIP
+	// injected into pods is unavailable/unusable in your environment).
 	// Example: "10.43.0.0/16" for service network or "192.168.1.0/24" for control plane nodes.
 	// +optional
 	APIServerCIDR string `json:"apiServerCIDR,omitempty"`
@@ -416,8 +416,8 @@ type NetworkConfig struct {
 	// This is required on some CNI implementations where egress enforcement happens on the post-NAT
 	// destination (the API server endpoint) rather than the kubernetes Service IP (10.43.0.1:443).
 	//
-	// Use this in restricted environments where the operator cannot list EndpointSlices/Endpoints in
-	// the default namespace to auto-detect endpoint IPs.
+	// The operator does not auto-detect these endpoint IPs because doing so reliably requires broader
+	// cluster permissions (list/watch). Configure this field explicitly when needed.
 	// Example (k3d): ["192.168.166.2"]
 	// +optional
 	APIServerEndpointIPs []string `json:"apiServerEndpointIPs,omitempty"`
