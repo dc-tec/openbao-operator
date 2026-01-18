@@ -1350,6 +1350,20 @@ spec:
                 format: int32
                 minimum: 1
                 type: integer
+              restore:
+                description: Restore configures optional restore authentication bootstrap
+                  for the cluster.
+                properties:
+                  jwtAuthRole:
+                    description: |-
+                      JWTAuthRole is the name of the JWT Auth role configured in OpenBao
+                      for restore operations. When set, and when spec.selfInit.bootstrapJWTAuth is true,
+                      the operator bootstraps a restore policy and JWT role bound to the restore ServiceAccount
+                      (<cluster-name>-restore-serviceaccount).
+
+                      The role must grant "update" capability on sys/storage/raft/snapshot-force.
+                    type: string
+                type: object
               selfInit:
                 description: |-
                   SelfInit configures OpenBao's native self-initialization feature.
