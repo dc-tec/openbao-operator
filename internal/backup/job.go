@@ -31,7 +31,6 @@ const (
 	openBaoTokenVolumeName       = "openbao-token"
 	openBaoTokenMountPath        = "/var/run/secrets/tokens" // #nosec G101 -- This is a mount path constant, not a credential
 	openBaoTokenFileRelativePath = "openbao-token"
-	openBaoTokenAudience         = "openbao-internal"
 	backupCredentialsVolumeName  = "backup-credentials"          // #nosec G101 -- This is a volume name constant, not a credential
 	backupCredentialsMountPath   = "/etc/bao/backup/credentials" // #nosec G101 -- This is a mount path constant, not a credential
 	backupTokenVolumeName        = "backup-token"

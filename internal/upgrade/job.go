@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
@@ -325,7 +326,7 @@ func buildUpgradeExecutorJob(
 											ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
 												Path:              upgradeTokenFileRelativePath,
 												ExpirationSeconds: ptr.To(int64(3600)),
-												Audience:          constants.TokenAudienceOpenBaoInternal,
+												Audience:          auth.OpenBaoJWTAudience(),
 											},
 										},
 									},
