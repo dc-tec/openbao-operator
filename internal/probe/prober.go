@@ -97,10 +97,11 @@ func (p *HTTPProber) CheckLiveness(ctx context.Context) error {
 	base := strings.TrimRight(p.addr, "/")
 	probeURL := base + p.livenessPath
 
-	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	baseCtx := ctx
+	reqCtx, cancel := context.WithTimeout(baseCtx, 4*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, probeURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -110,7 +111,7 @@ func (p *HTTPProber) CheckLiveness(ctx context.Context) error {
 		// For liveness we can fall back to a TCP dial when TLS assets are not yet
 		// available (e.g., ACME mode) or when the OpenBao process is temporarily
 		// not accepting connections yet.
-		tcpCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		tcpCtx, cancel := context.WithTimeout(baseCtx, 1*time.Second)
 		defer cancel()
 		if tcpErr := tcpDial(tcpCtx, p.hostPort); tcpErr == nil {
 			return nil
