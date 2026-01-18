@@ -4,8 +4,8 @@ api_addr         = "https://$${HOSTNAME}.config-hcl.security.svc:8200"
 cluster_addr     = "https://$${HOSTNAME}.config-hcl.security.svc:8201"
 plugin_directory = "/openbao/plugins"
 listener "tcp" {
-  address              = "0.0.0.0:8200"
-  cluster_address      = "0.0.0.0:8201"
+  address              = "[::]:8200"
+  cluster_address      = "[::]:8201"
   tls_disable          = 0
   max_request_duration = "90s"
   tls_cert_file        = "/etc/bao/tls/tls.crt"

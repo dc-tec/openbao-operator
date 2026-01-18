@@ -150,13 +150,22 @@ func TestBuildJobNetworkPolicy_DevelopmentDefaultEgressIncludesHTTPS(t *testing.
 		t.Fatalf("buildJobNetworkPolicy() error: %v", err)
 	}
 
-	var found bool
+	var foundIPv4, foundIPv6 bool
 	for _, rule := range policy.Spec.Egress {
 		for _, peer := range rule.To {
-			if peer.IPBlock == nil || peer.IPBlock.CIDR != "0.0.0.0/0" {
+			if peer.IPBlock == nil {
 				continue
 			}
-			found = true
+
+			switch peer.IPBlock.CIDR {
+			case "0.0.0.0/0":
+				foundIPv4 = true
+			case "::/0":
+				foundIPv6 = true
+			default:
+				continue
+			}
+
 			got := map[int32]bool{}
 			for _, port := range rule.Ports {
 				if port.Port == nil || port.Port.Type != intstr.Int {
@@ -165,12 +174,15 @@ func TestBuildJobNetworkPolicy_DevelopmentDefaultEgressIncludesHTTPS(t *testing.
 				got[port.Port.IntVal] = true
 			}
 			if !got[443] {
-				t.Fatalf("expected development job NetworkPolicy to allow TCP egress on port 443")
+				t.Fatalf("expected development job NetworkPolicy to allow TCP egress on port 443 for %s", peer.IPBlock.CIDR)
 			}
 		}
 	}
-	if !found {
+	if !foundIPv4 {
 		t.Fatalf("expected development job NetworkPolicy to include an allow-all (0.0.0.0/0) egress rule")
+	}
+	if !foundIPv6 {
+		t.Fatalf("expected development job NetworkPolicy to include an allow-all (::/0) egress rule")
 	}
 }
 
