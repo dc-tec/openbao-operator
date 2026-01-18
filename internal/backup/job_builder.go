@@ -11,6 +11,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
@@ -399,6 +400,7 @@ func BuildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 
 	// JWT token from projected volume (preferred method)
 	if cluster.Spec.Backup.JWTAuthRole != "" {
+		audience := auth.OpenBaoJWTAudience()
 		volumes = append(volumes, corev1.Volume{
 			Name: openBaoTokenVolumeName,
 			VolumeSource: corev1.VolumeSource{
@@ -408,7 +410,7 @@ func BuildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
 								Path:              openBaoTokenFileRelativePath,
 								ExpirationSeconds: ptr.To(int64(3600)),
-								Audience:          openBaoTokenAudience,
+								Audience:          audience,
 							},
 						},
 					},

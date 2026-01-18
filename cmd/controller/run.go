@@ -300,12 +300,17 @@ func Run(args []string) {
 		// TIGHTENED: Do not exit; just log. If a user tries to use Hardened mode later,
 		// the Reconciler will fail then. This allows the operator to run on clusters
 		// without OIDC if they only use Development mode.
-		oidcConfig = &auth.OIDCConfig{}
+		if oidcConfig == nil {
+			oidcConfig = &auth.OIDCConfig{}
+		}
 	} else {
 		setupLog.Info("Discovered Kubernetes OIDC configuration", "issuer", oidcConfig.IssuerURL)
 		if len(oidcConfig.JWKSKeys) > 0 {
 			setupLog.Info("Fetched OIDC JWKS public keys", "count", len(oidcConfig.JWKSKeys))
 		}
+	}
+	if err != nil && oidcConfig.IssuerURL != "" {
+		setupLog.Info("Continuing with partial OIDC discovery results", "issuer", oidcConfig.IssuerURL)
 	}
 
 	// Admission policy dependency check (release-critical security boundary).

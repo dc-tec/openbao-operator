@@ -81,18 +81,6 @@ spec:
             {{- toYaml .Values.controller.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.controller.securityContext | nindent 12 }}
-          volumeMounts:
-            - name: openbao-token
-              mountPath: /var/run/secrets/tokens
-              readOnly: true
-      volumes:
-        - name: openbao-token
-          projected:
-            sources:
-              - serviceAccountToken:
-                  audience: openbao-internal
-                  expirationSeconds: 3600
-                  path: openbao-token
       {{- with .Values.controller.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -23,119 +23,8 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
-	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
-
-// createRestoreSelfInitRequests creates SelfInit requests for restore operations.
-// This configures JWT auth and a restore policy with permission to call snapshot-force.
-func createRestoreSelfInitRequests(ctx context.Context, clusterNamespace, clusterName string, restCfg *rest.Config) ([]openbaov1alpha1.SelfInitRequest, error) {
-	// Discover OIDC config using the REST config host
-	apiServerURL := restCfg.Host
-	if apiServerURL == "" {
-		return nil, fmt.Errorf("REST config host is empty")
-	}
-
-	oidcConfig, err := auth.DiscoverConfig(ctx, restCfg, apiServerURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to discover OIDC config: %w", err)
-	}
-
-	if oidcConfig.IssuerURL == "" {
-		return nil, fmt.Errorf("OIDC config missing issuer URL")
-	}
-
-	if len(oidcConfig.JWKSKeys) == 0 {
-		return nil, fmt.Errorf("no JWKS keys found in OIDC config")
-	}
-
-	jwtConfigData := map[string]interface{}{
-		"jwt_validation_pubkeys": oidcConfig.JWKSKeys,
-		"bound_issuer":           oidcConfig.IssuerURL,
-	}
-
-	return []openbaov1alpha1.SelfInitRequest{
-		{
-			Name:      "enable-jwt-auth",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "sys/auth/jwt",
-			AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
-				Type: "jwt",
-			},
-		},
-		{
-			Name:      "configure-jwt-auth",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "auth/jwt/config",
-			Data:      e2ehelpers.MustJSON(jwtConfigData),
-		},
-		// Backup policy for taking snapshots
-		{
-			Name:      "create-backup-policy",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "sys/policies/acl/backup",
-			Policy: &openbaov1alpha1.SelfInitPolicy{
-				Policy: `path "sys/storage/raft/snapshot" {
-  capabilities = ["read"]
-}`,
-			},
-		},
-		// Restore policy for force-restoring snapshots
-		{
-			Name:      "create-restore-policy",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "sys/policies/acl/restore",
-			Policy: &openbaov1alpha1.SelfInitPolicy{
-				Policy: `path "sys/storage/raft/snapshot-force" {
-  capabilities = ["update"]
-}`,
-			},
-		},
-		// Enable KV secrets engine for test data
-		{
-			Name:      "enable-kv-secrets",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "sys/mounts/secret",
-			SecretEngine: &openbaov1alpha1.SelfInitSecretEngine{
-				Type: "kv",
-				Options: map[string]string{
-					"version": "2",
-				},
-			},
-		},
-		// Backup JWT role
-		{
-			Name:      "create-backup-jwt-role",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "auth/jwt/role/backup",
-			Data: e2ehelpers.MustJSON(map[string]interface{}{
-				"role_type":       "jwt",
-				"user_claim":      "sub",
-				"bound_audiences": []string{"openbao-internal"},
-				"bound_subject":   fmt.Sprintf("system:serviceaccount:%s:%s-backup-serviceaccount", clusterNamespace, clusterName),
-				"token_policies":  []string{"backup"},
-				"policies":        []string{"backup"},
-				"ttl":             "1h",
-			}),
-		},
-		// Restore JWT role
-		{
-			Name:      "create-restore-jwt-role",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "auth/jwt/role/restore",
-			Data: e2ehelpers.MustJSON(map[string]interface{}{
-				"role_type":       "jwt",
-				"user_claim":      "sub",
-				"bound_audiences": []string{"openbao-internal"},
-				"bound_subject":   fmt.Sprintf("system:serviceaccount:%s:%s-restore-serviceaccount", clusterNamespace, clusterName),
-				"token_policies":  []string{"restore"},
-				"policies":        []string{"restore"},
-				"ttl":             "1h",
-			}),
-		},
-	}, nil
-}
 
 var _ = Describe("Restore", Label("backup", "restore", "cluster", "requires-rustfs", "slow"), Ordered, func() {
 	ctx := context.Background()
@@ -203,11 +92,7 @@ var _ = Describe("Restore", Label("backup", "restore", "cluster", "requires-rust
 			Expect(admin.Create(ctx, credentialsSecret)).To(Succeed())
 			_, _ = fmt.Fprintf(GinkgoWriter, "[RESTORE TEST] S3 credentials secret created\n")
 
-			_, _ = fmt.Fprintf(GinkgoWriter, "[RESTORE TEST] Creating SelfInit requests for JWT auth...\n")
-			// Create SelfInit requests with JWT validation pubkeys
-			selfInitRequests, err := createRestoreSelfInitRequests(ctx, tenantNamespace, "restore-cluster", cfg)
-			Expect(err).NotTo(HaveOccurred(), "failed to create SelfInit requests")
-			_, _ = fmt.Fprintf(GinkgoWriter, "[RESTORE TEST] Created %d SelfInit requests\n", len(selfInitRequests))
+			_, _ = fmt.Fprintf(GinkgoWriter, "[RESTORE TEST] Enabling self-init JWT bootstrap...\n")
 
 			_, _ = fmt.Fprintf(GinkgoWriter, "[RESTORE TEST] Creating OpenBaoCluster with backup configuration...\n")
 			// Create cluster with backup configuration
@@ -226,8 +111,8 @@ var _ = Describe("Restore", Label("backup", "restore", "cluster", "requires-rust
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:  true,
-						Requests: selfInitRequests,
+						Enabled:          true,
+						BootstrapJWTAuth: true,
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -253,6 +138,9 @@ var _ = Describe("Restore", Label("backup", "restore", "cluster", "requires-rust
 								Name: credentialsSecret.Name,
 							},
 						},
+					},
+					Restore: &openbaov1alpha1.RestoreConfig{
+						JWTAuthRole: "restore",
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},

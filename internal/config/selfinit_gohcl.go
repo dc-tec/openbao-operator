@@ -2,11 +2,13 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 type hclInitialize struct {
@@ -66,6 +68,7 @@ func buildInitializeRequestBlock(label, operation, path string, allowFailure boo
 func buildOperatorBootstrapInitializeBlock(config OperatorBootstrapConfig) *hclwrite.Block {
 	initBlock := buildInitializeBlock("operator-bootstrap")
 	initBody := initBlock.Body()
+	jwtAudiences := jwtAuthAudiences(config)
 
 	// 1. Enable JWT Auth
 	{
@@ -101,7 +104,7 @@ func buildOperatorBootstrapInitializeBlock(config OperatorBootstrapConfig) *hclw
 		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTRoleData{
 			RoleType:       "jwt",
 			UserClaim:      "sub",
-			BoundAudiences: []string{"openbao-internal"},
+			BoundAudiences: jwtAudiences,
 			BoundSubject:   &subject,
 			TokenPolicies:  []string{"openbao-operator"},
 			TTL:            "1h",
@@ -115,6 +118,7 @@ func buildOperatorBootstrapInitializeBlock(config OperatorBootstrapConfig) *hclw
 func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoCluster, config OperatorBootstrapConfig) *hclwrite.Block {
 	initBlock := buildInitializeBlock("operator-bootstrap")
 	initBody := initBlock.Body()
+	jwtAudiences := jwtAuthAudiences(config)
 
 	// 1. Enable JWT Auth
 	{
@@ -151,7 +155,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTRoleData{
 			RoleType:       "jwt",
 			UserClaim:      "sub",
-			BoundAudiences: []string{"openbao-internal"},
+			BoundAudiences: jwtAudiences,
 			BoundSubject:   &subject,
 			TokenPolicies:  []string{"openbao-operator"},
 			Policies:       &policies,
@@ -174,7 +178,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 			req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTRoleData{
 				RoleType:       "jwt",
 				UserClaim:      "sub",
-				BoundAudiences: []string{"openbao-internal"},
+				BoundAudiences: jwtAudiences,
 				BoundSubject:   &subject,
 				TokenPolicies:  []string{"backup"},
 				Policies:       &policies,
@@ -198,7 +202,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 			req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTRoleData{
 				RoleType:       "jwt",
 				UserClaim:      "sub",
-				BoundAudiences: []string{"openbao-internal"},
+				BoundAudiences: jwtAudiences,
 				BoundSubject:   &subject,
 				TokenPolicies:  []string{"upgrade"},
 				Policies:       &policies,
@@ -208,5 +212,38 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 		}
 	}
 
+	// 7. Auto-create restore policy and role if restore JWT Auth is configured (opt-in via bootstrap)
+	if cluster.Spec.Restore != nil && strings.TrimSpace(cluster.Spec.Restore.JWTAuthRole) != "" {
+		{
+			req := buildInitializeRequestBlock("create-restore-policy", "update", "sys/policies/acl/restore", false)
+			req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: `path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }`}, "data"))
+			initBody.AppendBlock(req)
+		}
+		{
+			roleName := strings.TrimSpace(cluster.Spec.Restore.JWTAuthRole)
+			subject := fmt.Sprintf("system:serviceaccount:%s:%s", cluster.Namespace, cluster.Name+constants.SuffixRestoreServiceAccount)
+			policies := []string{"restore"}
+			req := buildInitializeRequestBlock("create-restore-jwt-role", "update", fmt.Sprintf("auth/jwt/role/%s", roleName), false)
+			req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTRoleData{
+				RoleType:       "jwt",
+				UserClaim:      "sub",
+				BoundAudiences: jwtAudiences,
+				BoundSubject:   &subject,
+				TokenPolicies:  []string{"restore"},
+				Policies:       &policies,
+				TTL:            "1h",
+			}, "data"))
+			initBody.AppendBlock(req)
+		}
+	}
+
 	return initBlock
+}
+
+func jwtAuthAudiences(config OperatorBootstrapConfig) []string {
+	audience := strings.TrimSpace(config.JWTAuthAudience)
+	if audience == "" {
+		audience = constants.TokenAudienceOpenBaoInternal
+	}
+	return []string{audience}
 }

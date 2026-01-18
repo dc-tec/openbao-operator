@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
 )
 
@@ -176,10 +177,11 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		}
 
 		bootstrapConfig = &configbuilder.OperatorBootstrapConfig{
-			OIDCIssuerURL: m.oidcIssuer,
-			JWTKeysPEM:    m.oidcJWTKeys,
-			OperatorNS:    operatorNS,
-			OperatorSA:    operatorSA,
+			OIDCIssuerURL:   m.oidcIssuer,
+			JWTKeysPEM:      m.oidcJWTKeys,
+			OperatorNS:      operatorNS,
+			OperatorSA:      operatorSA,
+			JWTAuthAudience: auth.OpenBaoJWTAudience(),
 		}
 	}
 

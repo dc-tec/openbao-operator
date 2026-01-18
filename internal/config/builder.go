@@ -44,10 +44,11 @@ path "sys/storage/raft/demote" { capabilities = ["update"] }`
 
 // OperatorBootstrapConfig holds configuration for operator bootstrap.
 type OperatorBootstrapConfig struct {
-	OIDCIssuerURL string
-	JWTKeysPEM    []string
-	OperatorNS    string
-	OperatorSA    string
+	OIDCIssuerURL   string
+	JWTKeysPEM      []string
+	OperatorNS      string
+	OperatorSA      string
+	JWTAuthAudience string
 }
 
 // InfrastructureDetails captures the pieces of topology information required to

@@ -11,6 +11,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
@@ -191,7 +192,7 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
 								Path:              "openbao-token",
 								ExpirationSeconds: ptr.To(int64(3600)),
-								Audience:          constants.TokenAudienceOpenBaoInternal,
+								Audience:          auth.OpenBaoJWTAudience(),
 							},
 						},
 					},

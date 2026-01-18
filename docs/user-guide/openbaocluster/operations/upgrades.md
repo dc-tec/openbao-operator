@@ -38,6 +38,11 @@ To perform upgrades safely, the Operator uses a temporary "Upgrade Executor" job
               ttl: 1h
     ```
 
+    !!! note "JWT audience"
+        The upgrade Job uses the audience from `OPENBAO_JWT_AUDIENCE` (default: `openbao-internal`).
+        Set the same value in the OpenBao role `bound_audiences` and pass the env var to the operator
+        (`controller.extraEnv` and `provisioner.extraEnv` in Helm).
+
     **2. Configure the Operator to use this role**
 
     ```yaml

@@ -10,6 +10,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
@@ -102,10 +103,14 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: restoreServiceAccountName(cluster),
-					RestartPolicy:      corev1.RestartPolicyOnFailure,
+					ServiceAccountName:           restoreServiceAccountName(cluster),
+					AutomountServiceAccountToken: ptr.To(false),
+					RestartPolicy:                corev1.RestartPolicyOnFailure,
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: ptr.To(true),
+						RunAsUser:    ptr.To(constants.UserBackup),
+						RunAsGroup:   ptr.To(constants.GroupBackup),
+						FSGroup:      ptr.To(constants.GroupBackup),
 						SeccompProfile: &corev1.SeccompProfile{
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
@@ -247,7 +252,7 @@ func buildRestoreVolumes(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 
 	// JWT token volume (if using JWT auth)
 	if restore.Spec.JWTAuthRole != "" {
-		audience := "openbao-internal"
+		audience := auth.OpenBaoJWTAudience()
 		expirationSeconds := int64(3600)
 		volumes = append(volumes, corev1.Volume{
 			Name: restoreJWTTokenVolumeName,

@@ -389,6 +389,22 @@ type UpgradeConfig struct {
 	TokenSecretRef *corev1.LocalObjectReference `json:"tokenSecretRef,omitempty"`
 }
 
+// RestoreConfig defines optional configuration for restore operations.
+//
+// This is primarily used with self-init JWT bootstrap to pre-create a JWT role
+// that can be referenced by OpenBaoRestore resources.
+type RestoreConfig struct {
+	// JWTAuthRole is the name of the JWT Auth role configured in OpenBao
+	// for restore operations. When set, and when spec.selfInit.bootstrapJWTAuth is true,
+	// the operator bootstraps a restore policy and JWT role bound to the restore ServiceAccount
+	// (<cluster-name>-restore-serviceaccount).
+	//
+	// The role must grant "update" capability on sys/storage/raft/snapshot-force.
+	//
+	// +optional
+	JWTAuthRole string `json:"jwtAuthRole,omitempty"`
+}
+
 // BackupRetention defines retention policy for backups.
 type BackupRetention struct {
 	// MaxCount is the maximum number of backups to retain (0 = unlimited).
@@ -1400,6 +1416,9 @@ type OpenBaoClusterSpec struct {
 	// Backup configures scheduled backups for the cluster.
 	// +optional
 	Backup *BackupSchedule `json:"backup,omitempty"`
+	// Restore configures optional restore authentication bootstrap for the cluster.
+	// +optional
+	Restore *RestoreConfig `json:"restore,omitempty"`
 	// DeletionPolicy controls what happens to underlying resources when the CR is deleted.
 	// +optional
 	DeletionPolicy DeletionPolicy `json:"deletionPolicy,omitempty"`
