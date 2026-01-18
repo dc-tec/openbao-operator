@@ -109,22 +109,27 @@ You can append **additional** rules to the default policy to allow integrations 
 Configuring how OpenBao reaches the Kubernetes API server for Auth Method validation.
 
 === "Auto-Detection (Default)"
-    The Operator attempts to automatically detect the API Server CIDR by reading the `kubernetes` Service in the `default` namespace.
+    The Operator allow-lists the in-cluster Kubernetes service VIP (`KUBERNETES_SERVICE_HOST`) as a single-host CIDR (`/32` for IPv4, `/128` for IPv6) on port `443`.
 
-    **Prerequisite:** The Operator ServiceAccount must have permission to read Services in `default`.
+    This does not require cross-namespace RBAC reads.
 
 === "Manual CIDR"
-    **Use Case:** Restricted environments where the Operator strictly cannot read `default` namespace.
+    **Use Case:** Override the detected VIP allow-list (for example, if you want to allow a larger CIDR).
 
     ```yaml
     spec:
       network:
-        # E.g., EKS (10.100.0.0/16) or GKE (10.0.0.0/16)
-        apiServerCIDR: "10.43.0.0/16"
+        # Prefer single-host CIDRs when possible (least privilege).
+        # Example (k3s): "10.43.0.1/32"
+        apiServerCIDR: "10.43.0.1/32"
     ```
 
 === "Endpoint IPs"
-    **Use Case:** Local clusters (Kind/k3d/minikube) where CNI enforcement happens *after* NAT (Post-NAT destination), meaning the destination IP is the API Server IP, not the Service CIDR.
+    **Use Case:** CNIs / NetworkPolicy implementations that enforce egress on post-DNAT traffic.
+
+    In these environments, allowing only the Service VIP (port `443`) may not be sufficient because traffic is evaluated against the backing API server endpoint IP (commonly port `6443`).
+
+    The Operator does not auto-detect these endpoint IPs because that would require broader cluster permissions (list/watch).
 
     ```yaml
     spec:

@@ -145,7 +145,10 @@ func TestBuildJobNetworkPolicy_DevelopmentDefaultEgressIncludesHTTPS(t *testing.
 		},
 	}
 
-	policy := buildJobNetworkPolicy(cluster, &apiServerInfo{ServiceNetworkCIDR: "10.0.0.0/16"})
+	policy, err := buildJobNetworkPolicy(cluster, &apiServerInfo{ServiceNetworkCIDR: "10.0.0.0/16"})
+	if err != nil {
+		t.Fatalf("buildJobNetworkPolicy() error: %v", err)
+	}
 
 	var found bool
 	for _, rule := range policy.Spec.Egress {

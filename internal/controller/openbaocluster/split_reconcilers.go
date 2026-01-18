@@ -126,6 +126,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(ctx context.Context,
 		certmanager.NewManagerWithReloader(r.parent.Client, r.parent.Scheme, r.parent.TLSReload),
 		&infraReconciler{
 			client:                r.parent.Client,
+			apiReader:             r.parent.APIReader,
 			scheme:                r.parent.Scheme,
 			operatorNamespace:     r.parent.OperatorNamespace,
 			oidcIssuer:            r.parent.OIDCIssuer,
@@ -235,7 +236,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	var reconcilers []SubReconciler
-	infraMgr := inframanager.NewManager(r.parent.Client, r.parent.Scheme, r.parent.OperatorNamespace, r.parent.OIDCIssuer, r.parent.OIDCJWTKeys)
+	infraMgr := inframanager.NewManagerWithReader(r.parent.Client, r.parent.APIReader, r.parent.Scheme, r.parent.OperatorNamespace, r.parent.OIDCIssuer, r.parent.OIDCJWTKeys)
 	// Blue/green upgrade strategy
 	reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr, r.parent.SmartClientConfig, r.parent.ImageVerifier, r.parent.OperatorImageVerifier))
 

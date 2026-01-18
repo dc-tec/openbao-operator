@@ -27,7 +27,7 @@ func newTestClient(t *testing.T) client.Client {
 			Namespace: "default",
 		},
 		Spec: corev1.ServiceSpec{
-			ClusterIP: "10.43.0.1", // Used to derive service network CIDR (10.43.0.0/16)
+			ClusterIP: "10.43.0.1", // Used to derive the kubernetes Service IP CIDR (10.43.0.1/32)
 			Ports: []corev1.ServicePort{
 				{
 					Name: "https",
