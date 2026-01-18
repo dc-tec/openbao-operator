@@ -438,6 +438,31 @@ func TestRenderSelfInitHCL_AutoCreatesBackupAndUpgradePolicies(t *testing.T) {
 	compareGolden(t, "render_self_init_backup_upgrade_policies", got)
 }
 
+func TestRenderSelfInitHCL_AutoCreatesRestorePolicyAndRole(t *testing.T) {
+	cluster := newMinimalCluster("hardened-cluster", "default")
+	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+	}
+	cluster.Spec.Restore = &openbaov1alpha1.RestoreConfig{
+		JWTAuthRole: "restore",
+	}
+
+	bootstrapConfig := &OperatorBootstrapConfig{
+		OIDCIssuerURL: "https://kubernetes.default.svc",
+		JWTKeysPEM:    []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
+		OperatorNS:    "openbao-operator-system",
+		OperatorSA:    "openbao-operator-controller",
+	}
+
+	got, err := RenderSelfInitHCL(cluster, bootstrapConfig)
+	if err != nil {
+		t.Fatalf("RenderSelfInitHCL() error = %v", err)
+	}
+
+	compareGolden(t, "render_self_init_restore_policy", got)
+}
+
 func TestRenderSelfInitHCL_DoesNotCreateBackupUpgradePoliciesWhenNotConfigured(t *testing.T) {
 	cluster := newMinimalCluster("hardened-cluster", "default")
 	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
