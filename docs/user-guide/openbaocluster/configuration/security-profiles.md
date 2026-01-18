@@ -77,7 +77,7 @@ flowchart LR
     ### Benefits
 
     - **Zero Trust**: No root tokens are ever generated.
-    - **Identity**: Automatic JWT identity bootstrapping.
+    - **Identity**: Automatic JWT identity bootstrapping when `spec.selfInit.bootstrapJWTAuth` is enabled.
     - **Encryption**: Root of trust is delegated to a hardware-backed KMS, not Kubernetes etcd.
 
 === "Development"

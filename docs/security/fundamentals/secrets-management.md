@@ -48,7 +48,12 @@ The Operator manages the lifecycle of several critical secrets, from the Root To
 
 ## JWT Authentication & OIDC
 
-The Operator uses Kubernetes OIDC to securely authenticate **Backup** and **Upgrade** executor jobs without managing static long-lived tokens.
+The OpenBao Operator uses Kubernetes OIDC to authenticate **Backup** and **Upgrade** executor jobs without managing static long-lived tokens.
+
+!!! note "JWT bootstrap"
+    Enable automatic JWT auth bootstrap with `spec.selfInit.bootstrapJWTAuth: true`.
+    This requires the OIDC issuer and JWKS keys to be discoverable at operator startup.
+    If you disable bootstrap, configure JWT auth manually via self-init requests.
 
 ### Workflow
 
@@ -69,7 +74,7 @@ sequenceDiagram
     
     Note over Op, Job: 3. Execution
     Op->>K8s: Create Job (Mounts Projected Token)
-    K8s-->>Job: Start with Token (aud=openbao-internal)
+    K8s-->>Job: Start with Token (aud=OPENBAO_JWT_AUDIENCE)
     
     Job->>Bao: Login (JWT)
     Bao-->>Job: OpenBao Token
@@ -80,7 +85,10 @@ sequenceDiagram
 
 1. **Short-Lived:** Projected tokens expire automatically (default 1 hour).
 2. **Rotated:** Kubernetes rotates the tokens automatically.
-3. **Audience Bound:** Tokens are valid only for the `openbao-internal` audience, preventing replay attacks against other services.
+3. **Audience Bound:** Tokens are valid only for the configured audience (default: `openbao-internal`), preventing replay attacks against other services.
+
+!!! note "JWT audience"
+    Set `OPENBAO_JWT_AUDIENCE` on the operator deployment and keep `bound_audiences` aligned in OpenBao roles.
 
 ## See Also
 

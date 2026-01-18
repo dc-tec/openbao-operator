@@ -75,6 +75,11 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
                   ttl: 1h
         ```
 
+    !!! note "JWT audience"
+        The backup Job uses the audience from `OPENBAO_JWT_AUDIENCE` (default: `openbao-internal`).
+        Set the same value in the OpenBao role `bound_audiences` and pass the env var to the operator
+        (`controller.extraEnv` and `provisioner.extraEnv` in Helm).
+
     **Cluster Configuration:**
 
     ```yaml

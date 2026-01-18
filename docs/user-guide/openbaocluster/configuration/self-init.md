@@ -57,6 +57,29 @@ spec:
             filePath: /tmp/audit.log
 ```
 
+### JWT bootstrap (Optional)
+
+Enable automatic JWT auth bootstrap during self-init.
+The OpenBao Operator configures JWT auth, OIDC settings, and the operator policy/role.
+It also creates backup and upgrade roles when `spec.backup.jwtAuthRole` or `spec.upgrade.jwtAuthRole` are set.
+
+To bootstrap a restore role, set `spec.restore.jwtAuthRole`.
+
+```yaml
+spec:
+  selfInit:
+    enabled: true
+    bootstrapJWTAuth: true
+```
+
+!!! note "OIDC prerequisites"
+    The operator must discover the Kubernetes OIDC issuer and JWKS keys at startup.
+
+!!! note "JWT audience"
+    The operator uses `OPENBAO_JWT_AUDIENCE` (default: `openbao-internal`) when creating JWT roles.
+    Set the same value in any manually managed roles and pass the env var to the operator
+    (`controller.extraEnv` and `provisioner.extraEnv` in Helm).
+
 ### Request Structure
 
 Each item in `requests[]` maps to an OpenBao API call.
