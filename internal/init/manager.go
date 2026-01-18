@@ -185,7 +185,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if err := m.initializeCluster(ctx, logger, cluster); err != nil {
 		// If initialization should be retried later (e.g., pod not ready), return nil
 		// to allow the reconciliation loop to requeue without marking as failed.
-		if operatorerrors.IsTransientConnection(err) || errors.Is(err, errRetryLater) {
+		if operatorerrors.IsTransient(err) || errors.Is(err, errRetryLater) {
 			logger.Info("Initialization will be retried on next reconcile", "cluster", cluster.Name)
 			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
@@ -260,6 +260,10 @@ func (m *Manager) findFirstPod(ctx context.Context, cluster *openbaov1alpha1.Ope
 // initializeCluster explicitly initializes OpenBao using the HTTP API (PUT /v1/sys/init).
 // With static auto-unseal, this should rarely be needed, but we provide it as a fallback.
 func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if err := m.preflightRootTokenStorage(ctx, cluster); err != nil {
+		return err
+	}
+
 	client, err := m.newOpenBaoClient(ctx, cluster)
 	if err != nil {
 		return fmt.Errorf("failed to create OpenBao client for initialization: %w", err)
@@ -360,6 +364,44 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 	return nil
 }
 
+// preflightRootTokenStorage ensures that root token Secret writes are permitted before we
+// call the OpenBao init API. The init API returns the root token only once; if we cannot
+// persist it, we cannot recover it later.
+//
+// This uses a DryRun create of the Secret to validate RBAC and admission policies without
+// leaving artifacts behind.
+func (m *Manager) preflightRootTokenStorage(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster == nil {
+		return fmt.Errorf("cluster is required")
+	}
+
+	secretName := cluster.Name + constants.SuffixRootToken
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: cluster.Namespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			rootTokenSecretKey: []byte("dry-run"),
+		},
+	}
+
+	_, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Create(ctx, secret, metav1.CreateOptions{
+		DryRun: []string{metav1.DryRunAll},
+	})
+	if err == nil || apierrors.IsAlreadyExists(err) {
+		return nil
+	}
+	if apierrors.IsForbidden(err) {
+		return operatorerrors.WrapTransientKubernetesAPI(
+			fmt.Errorf("forbidden to create root token Secret %s/%s (dry-run): %w", cluster.Namespace, secretName, err),
+		)
+	}
+	return fmt.Errorf("failed to dry-run create root token Secret %s/%s: %w", cluster.Namespace, secretName, err)
+}
+
 // newOpenBaoClient constructs a minimal OpenBao client for talking to the pod-0 instance
 // of the StatefulSet using the per-cluster TLS CA bundle.
 func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (*openbao.Client, error) {
@@ -377,6 +419,11 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("TLS CA Secret %s/%s not found", cluster.Namespace, caSecretName)
+		}
+		if apierrors.IsForbidden(err) {
+			return nil, operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err),
+			)
 		}
 		return nil, fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 	}
@@ -479,6 +526,11 @@ func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openba
 	caSecretName := cluster.Name + constants.SuffixTLSCA
 	secret, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, caSecretName, metav1.GetOptions{})
 	if err != nil {
+		if apierrors.IsForbidden(err) {
+			return nil, operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err),
+			)
+		}
 		return nil, fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 	}
 
@@ -521,11 +573,6 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 
 	secretsClient := m.clientset.CoreV1().Secrets(cluster.Namespace)
 
-	existing, err := secretsClient.Get(ctx, secretName, metav1.GetOptions{})
-	if err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("failed to get root token Secret %s/%s: %w", cluster.Namespace, secretName, err)
-	}
-
 	// Build labels for the secret
 	secretLabels := map[string]string{
 		constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
@@ -547,28 +594,34 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 		Controller:         &controller,
 	}
 
-	if apierrors.IsNotFound(err) {
-		immutable := true
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            secretName,
-				Namespace:       cluster.Namespace,
-				Labels:          secretLabels,
-				OwnerReferences: []metav1.OwnerReference{ownerRef},
-			},
-			Type: corev1.SecretTypeOpaque,
-			// Root tokens are high-value credentials. Treat the Secret as immutable once written.
-			Immutable: &immutable,
-			Data: map[string][]byte{
-				rootTokenSecretKey: []byte(rootToken),
-			},
-		}
+	immutable := true
+	desired := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            secretName,
+			Namespace:       cluster.Namespace,
+			Labels:          secretLabels,
+			OwnerReferences: []metav1.OwnerReference{ownerRef},
+		},
+		Type: corev1.SecretTypeOpaque,
+		// Root tokens are high-value credentials. Treat the Secret as immutable once written.
+		Immutable: &immutable,
+		Data: map[string][]byte{
+			rootTokenSecretKey: []byte(rootToken),
+		},
+	}
 
-		if _, createErr := secretsClient.Create(ctx, secret, metav1.CreateOptions{}); createErr != nil {
-			return fmt.Errorf("failed to create root token Secret %s/%s: %w", cluster.Namespace, secretName, createErr)
-		}
-
+	// Create-first to avoid requiring "get" permissions for the Secret name.
+	// If tenant Secret allowlist RBAC is still converging, we want to persist the
+	// init-time root token as soon as we're allowed to create it.
+	if _, err := secretsClient.Create(ctx, desired, metav1.CreateOptions{}); err == nil {
 		return nil
+	} else if !apierrors.IsAlreadyExists(err) {
+		if apierrors.IsForbidden(err) {
+			return operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("failed to create root token Secret %s/%s: %w", cluster.Namespace, secretName, err),
+			)
+		}
+		return fmt.Errorf("failed to create root token Secret %s/%s: %w", cluster.Namespace, secretName, err)
 	}
 
 	// Never overwrite an existing root token Secret. If it exists, treat it as a
@@ -576,6 +629,15 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 	// This avoids accidental token rotation/replacement and enables setting Immutable=true.
 
 	// Ensure labels and owner reference are set on existing secret
+	existing, err := secretsClient.Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		// Best-effort: do not block initialization if we can't read back the Secret.
+		if apierrors.IsForbidden(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get root token Secret %s/%s: %w", cluster.Namespace, secretName, err)
+	}
+
 	if existing.Labels == nil {
 		existing.Labels = make(map[string]string)
 	}
@@ -595,12 +657,15 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 		existing.OwnerReferences = append(existing.OwnerReferences, ownerRef)
 	}
 
-	immutable := true
 	if existing.Immutable == nil || *existing.Immutable != immutable {
 		existing.Immutable = &immutable
 	}
 
 	if _, updateErr := secretsClient.Update(ctx, existing, metav1.UpdateOptions{}); updateErr != nil {
+		if apierrors.IsForbidden(updateErr) {
+			// Best-effort: if we cannot update metadata on the Secret, do not block.
+			return nil
+		}
 		return fmt.Errorf("failed to update root token Secret %s/%s: %w", cluster.Namespace, secretName, updateErr)
 	}
 
