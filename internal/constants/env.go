@@ -60,7 +60,8 @@ const (
 	EnvAWSRoleARN              = "AWS_ROLE_ARN"
 	EnvAWSWebIdentityTokenFile = "AWS_WEB_IDENTITY_TOKEN_FILE" // #nosec G101 -- This is an environment variable name constant, not a credential
 
-	EnvOperatorVersion = "OPERATOR_VERSION"
+	EnvOperatorVersion    = "OPERATOR_VERSION"
+	EnvOpenBaoJWTAudience = "OPENBAO_JWT_AUDIENCE"
 
 	// Operator-managed image repositories
 	EnvOperatorBackupImageRepo  = "OPERATOR_BACKUP_IMAGE_REPOSITORY"
