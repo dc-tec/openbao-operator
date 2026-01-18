@@ -773,6 +773,12 @@ spec:
                     items:
                       type: string
                     type: array
+                  dnsNamespace:
+                    default: kube-system
+                    description: |-
+                      DNSNamespace specifies the namespace where the cluster DNS service resides.
+                      Defaults to "kube-system" if not specified.
+                    type: string
                   egressRules:
                     description: |-
                       EgressRules allows users to specify additional egress rules that will be merged into
