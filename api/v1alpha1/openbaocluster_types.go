@@ -438,6 +438,12 @@ type NetworkConfig struct {
 	// +optional
 	APIServerEndpointIPs []string `json:"apiServerEndpointIPs,omitempty"`
 
+	// DNSNamespace specifies the namespace where the cluster DNS service resides.
+	// Defaults to "kube-system" if not specified.
+	// +optional
+	// +kubebuilder:default="kube-system"
+	DNSNamespace string `json:"dnsNamespace,omitempty"`
+
 	// EgressRules allows users to specify additional egress rules that will be merged into
 	// the operator-managed NetworkPolicy. This is useful for allowing access to external
 	// services such as transit seal backends, object storage endpoints, or other dependencies.
