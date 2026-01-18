@@ -1061,6 +1061,10 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	dnsPort := intstr.FromInt(53)
 	dnsProtocolUDP := corev1.ProtocolUDP
 	dnsProtocolTCP := corev1.ProtocolTCP
+	dnsNamespace := "kube-system"
+	if cluster.Spec.Network != nil && cluster.Spec.Network.DNSNamespace != "" {
+		dnsNamespace = cluster.Spec.Network.DNSNamespace
+	}
 
 	// Kubernetes API egress ports
 	kubernetesAPIPort443 := intstr.FromInt(443)   // Service IP port
@@ -1079,7 +1083,7 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 				{
 					NamespaceSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"kubernetes.io/metadata.name": "kube-system",
+							"kubernetes.io/metadata.name": dnsNamespace,
 						},
 					},
 				},
@@ -1231,6 +1235,11 @@ func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInf
 		},
 	}
 
+	dnsNamespace := "kube-system"
+	if cluster.Spec.Network != nil && cluster.Spec.Network.DNSNamespace != "" {
+		dnsNamespace = cluster.Spec.Network.DNSNamespace
+	}
+
 	egressRules := []networkingv1.NetworkPolicyEgressRule{
 		{
 			// Allow DNS egress for name resolution.
@@ -1238,7 +1247,7 @@ func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInf
 				{
 					NamespaceSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"kubernetes.io/metadata.name": "kube-system",
+							"kubernetes.io/metadata.name": dnsNamespace,
 						},
 					},
 				},
