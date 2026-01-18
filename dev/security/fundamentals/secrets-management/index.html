@@ -4004,7 +4004,13 @@
 <p><strong>Recommendation:</strong> Immediately revoke the root token after initial setup or use <strong>Self-Initialization</strong> with the <strong>Hardened</strong> profile, which avoids storing the root token entirely.</p>
 </div>
 <h2 id="jwt-authentication-oidc">JWT Authentication &amp; OIDC<a class="headerlink" href="#jwt-authentication-oidc" title="Permanent link">&para;</a></h2>
-<p>The Operator uses Kubernetes OIDC to securely authenticate <strong>Backup</strong> and <strong>Upgrade</strong> executor jobs without managing static long-lived tokens.</p>
+<p>The OpenBao Operator uses Kubernetes OIDC to authenticate <strong>Backup</strong> and <strong>Upgrade</strong> executor jobs without managing static long-lived tokens.</p>
+<div class="admonition note">
+<p class="admonition-title">JWT bootstrap</p>
+<p>Enable automatic JWT auth bootstrap with <code>spec.selfInit.bootstrapJWTAuth: true</code>.
+This requires the OIDC issuer and JWKS keys to be discoverable at operator startup.
+If you disable bootstrap, configure JWT auth manually via self-init requests.</p>
+</div>
 <h3 id="workflow">Workflow<a class="headerlink" href="#workflow" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>sequenceDiagram
     autonumber
@@ -4022,7 +4028,7 @@
 
     Note over Op, Job: 3. Execution
     Op-&gt;&gt;K8s: Create Job (Mounts Projected Token)
-    K8s--&gt;&gt;Job: Start with Token (aud=openbao-internal)
+    K8s--&gt;&gt;Job: Start with Token (aud=OPENBAO_JWT_AUDIENCE)
 
     Job-&gt;&gt;Bao: Login (JWT)
     Bao--&gt;&gt;Job: OpenBao Token
@@ -4031,8 +4037,12 @@
 <ol>
 <li><strong>Short-Lived:</strong> Projected tokens expire automatically (default 1 hour).</li>
 <li><strong>Rotated:</strong> Kubernetes rotates the tokens automatically.</li>
-<li><strong>Audience Bound:</strong> Tokens are valid only for the <code>openbao-internal</code> audience, preventing replay attacks against other services.</li>
+<li><strong>Audience Bound:</strong> Tokens are valid only for the configured audience (default: <code>openbao-internal</code>), preventing replay attacks against other services.</li>
 </ol>
+<div class="admonition note">
+<p class="admonition-title">JWT audience</p>
+<p>Set <code>OPENBAO_JWT_AUDIENCE</code> on the operator deployment and keep <code>bound_audiences</code> aligned in OpenBao roles.</p>
+</div>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../../../user-guide/openbaocluster/configuration/external-access/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m22 12-4-4v3h-8v2h8v3m2 2a10 10 0 1 1 0-12h-2.73a8 8 0 1 0 0 12Z"/></svg></span> External Access</a></li>

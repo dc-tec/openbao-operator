@@ -3951,6 +3951,12 @@
 </span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">          </span><span class="nt">token_policies</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">upgrade</span>
 </span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">          </span><span class="nt">ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1h</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">JWT audience</p>
+<p>The upgrade Job uses the audience from <code>OPENBAO_JWT_AUDIENCE</code> (default: <code>openbao-internal</code>).
+Set the same value in the OpenBao role <code>bound_audiences</code> and pass the env var to the operator
+(<code>controller.extraEnv</code> and <code>provisioner.extraEnv</code> in Helm).</p>
+</div>
 <p><strong>2. Configure the Operator to use this role</strong></p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">upgrade</span><span class="p">:</span>

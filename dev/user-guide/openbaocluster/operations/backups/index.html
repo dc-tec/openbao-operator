@@ -4008,6 +4008,12 @@
 </span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">          </span><span class="nt">ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1h</span>
 </span></code></pre></div></p>
 </details>
+<div class="admonition note">
+<p class="admonition-title">JWT audience</p>
+<p>The backup Job uses the audience from <code>OPENBAO_JWT_AUDIENCE</code> (default: <code>openbao-internal</code>).
+Set the same value in the OpenBao role <code>bound_audiences</code> and pass the env var to the operator
+(<code>controller.extraEnv</code> and <code>provisioner.extraEnv</code> in Helm).</p>
+</div>
 <p><strong>Cluster Configuration:</strong></p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoCluster</span>
