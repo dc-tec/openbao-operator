@@ -26,6 +26,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
@@ -143,6 +144,11 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}, caSecret)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
+			if apierrors.IsForbidden(err) {
+				return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(
+					fmt.Errorf("failed to get CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err),
+				)
+			}
 			return recon.Result{}, fmt.Errorf("failed to get CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 		}
 
@@ -179,6 +185,11 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	var serverCertPEM []byte
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
+			if apierrors.IsForbidden(err) {
+				return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(
+					fmt.Errorf("failed to get server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err),
+				)
+			}
 			return recon.Result{}, fmt.Errorf("failed to get server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 		}
 
@@ -360,6 +371,11 @@ func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, 
 			logger.Info("Waiting for external TLS CA Secret", "secret", caSecretName)
 			return true, nil
 		}
+		if apierrors.IsForbidden(err) {
+			return false, operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("failed to get CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err),
+			)
+		}
 		return false, fmt.Errorf("failed to get CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 	}
 
@@ -373,6 +389,11 @@ func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, 
 		if apierrors.IsNotFound(err) {
 			logger.Info("Waiting for external TLS server Secret", "secret", serverSecretName)
 			return true, nil
+		}
+		if apierrors.IsForbidden(err) {
+			return false, operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("failed to get server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err),
+			)
 		}
 		return false, fmt.Errorf("failed to get server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 	}
