@@ -1320,6 +1320,9 @@ func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInf
 				{
 					IPBlock: &networkingv1.IPBlock{CIDR: "0.0.0.0/0"},
 				},
+				{
+					IPBlock: &networkingv1.IPBlock{CIDR: "::/0"},
+				},
 			},
 			Ports: []networkingv1.NetworkPolicyPort{
 				{
