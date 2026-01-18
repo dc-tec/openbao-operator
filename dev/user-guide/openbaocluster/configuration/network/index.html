@@ -3996,19 +3996,22 @@
 <div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Auto-Detection (Default)</label><label for="__tabbed_2_2">Manual CIDR</label><label for="__tabbed_2_3">Endpoint IPs</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>The Operator attempts to automatically detect the API Server CIDR by reading the <code>kubernetes</code> Service in the <code>default</code> namespace.</p>
-<p><strong>Prerequisite:</strong> The Operator ServiceAccount must have permission to read Services in <code>default</code>.</p>
+<p>The Operator allow-lists the in-cluster Kubernetes service VIP (<code>KUBERNETES_SERVICE_HOST</code>) as a single-host CIDR (<code>/32</code> for IPv4, <code>/128</code> for IPv6) on port <code>443</code>.</p>
+<p>This does not require cross-namespace RBAC reads.</p>
 </div>
 <div class="tabbed-block">
-<p><strong>Use Case:</strong> Restricted environments where the Operator strictly cannot read <code>default</code> namespace.</p>
+<p><strong>Use Case:</strong> Override the detected VIP allow-list (for example, if you want to allow a larger CIDR).</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">network</span><span class="p">:</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="c1"># E.g., EKS (10.100.0.0/16) or GKE (10.0.0.0/16)</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">apiServerCIDR</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10.43.0.0/16&quot;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="c1"># Prefer single-host CIDRs when possible (least privilege).</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="c1"># Example (k3s): &quot;10.43.0.1/32&quot;</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">apiServerCIDR</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10.43.0.1/32&quot;</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p><strong>Use Case:</strong> Local clusters (Kind/k3d/minikube) where CNI enforcement happens <em>after</em> NAT (Post-NAT destination), meaning the destination IP is the API Server IP, not the Service CIDR.</p>
+<p><strong>Use Case:</strong> CNIs / NetworkPolicy implementations that enforce egress on post-DNAT traffic.</p>
+<p>In these environments, allowing only the Service VIP (port <code>443</code>) may not be sufficient because traffic is evaluated against the backing API server endpoint IP (commonly port <code>6443</code>).</p>
+<p>The Operator does not auto-detect these endpoint IPs because that would require broader cluster permissions (list/watch).</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">network</span><span class="p">:</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">apiServerEndpointIPs</span><span class="p">:</span>
