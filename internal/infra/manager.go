@@ -65,6 +65,7 @@ const (
 // Manager reconciles infrastructure resources such as ConfigMaps, StatefulSets, and Services for an OpenBaoCluster.
 type Manager struct {
 	client            client.Client
+	reader            client.Reader
 	scheme            *runtime.Scheme
 	operatorNamespace string
 	oidcIssuer        string
@@ -78,11 +79,24 @@ type Manager struct {
 func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string) *Manager {
 	return &Manager{
 		client:            c,
+		reader:            c,
 		scheme:            scheme,
 		operatorNamespace: operatorNamespace,
 		oidcIssuer:        oidcIssuer,
 		oidcJWTKeys:       oidcJWTKeys,
 	}
+}
+
+// NewManagerWithReader constructs a Manager with a dedicated reader.
+// Use this when the controller-runtime client is backed by a namespace-scoped cache
+// (e.g. single-tenant mode) but the operator must still read cluster/system resources
+// outside the watched namespace (e.g. default/kubernetes Service).
+func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string) *Manager {
+	m := NewManager(c, scheme, operatorNamespace, oidcIssuer, oidcJWTKeys)
+	if r != nil {
+		m.reader = r
+	}
+	return m
 }
 
 // Reconcile ensures infrastructure resources are aligned with the desired state for the given OpenBaoCluster.

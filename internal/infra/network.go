@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -748,7 +749,10 @@ func (m *Manager) ensureJobNetworkPolicy(ctx context.Context, logger logr.Logger
 			"Consider explicitly configuring spec.network.apiServerCIDR")
 	}
 
-	desired := buildJobNetworkPolicy(cluster, apiServerInfo)
+	desired, err := buildJobNetworkPolicy(cluster, apiServerInfo)
+	if err != nil {
+		return fmt.Errorf("failed to build Job NetworkPolicy: %w", err)
+	}
 
 	desired.TypeMeta = metav1.TypeMeta{
 		Kind:       "NetworkPolicy",
@@ -765,24 +769,52 @@ func (m *Manager) ensureJobNetworkPolicy(ctx context.Context, logger logr.Logger
 // apiServerInfo contains detected information about the Kubernetes API server
 // for use in NetworkPolicy IPBlock rules.
 type apiServerInfo struct {
-	// ServiceNetworkCIDR is the CIDR of the service network (e.g., "10.43.0.0/16").
-	// This is derived from the kubernetes service ClusterIP and allows access
-	// to the service IP which routes to the API server.
+	// ServiceNetworkCIDR is a single-host CIDR that represents the `kubernetes`
+	// Service ClusterIP (e.g., "10.43.0.1/32" or "fd00::1/128").
+	// This allows least-privilege access to the in-cluster API service VIP on port 443.
 	ServiceNetworkCIDR string
-	// EndpointIPs are the actual API server endpoint IPs (e.g., control plane node IPs).
-	// These are detected from the kubernetes endpoints and allow direct access
-	// to the API server on port 6443.
+	// EndpointIPs are optional explicit API server endpoint IPs (e.g., control plane node IPs)
+	// to allow direct access to the API server on port 6443 in locked-down environments.
 	EndpointIPs []string
 }
 
+func ipToSingleHostCIDR(ip string) (string, error) {
+	parsed := net.ParseIP(strings.TrimSpace(ip))
+	if parsed == nil {
+		return "", fmt.Errorf("invalid IP address %q", ip)
+	}
+	if parsed.To4() != nil {
+		return parsed.String() + "/32", nil
+	}
+	return parsed.String() + "/128", nil
+}
+
+func kubernetesServiceIPCIDRFromEnv() (string, bool) {
+	host := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_HOST"))
+	if host == "" {
+		return "", false
+	}
+	cidr, err := ipToSingleHostCIDR(host)
+	if err != nil {
+		return "", false
+	}
+	return cidr, true
+}
+
 // detectAPIServerInfo detects the Kubernetes API server information needed for NetworkPolicy rules.
-// It queries the kubernetes service and endpoints to determine:
-// - The service network CIDR (for service IP access on port 443)
-// - The API server endpoint IPs (for direct access on port 6443)
-// If auto-detection fails and spec.network.apiServerCIDR is configured, it uses that as a fallback.
+//
+// Primary detection uses the in-cluster service VIP injected into the pod environment
+// (KUBERNETES_SERVICE_HOST) so it works under namespace-scoped RBAC (single-tenant mode).
+//
+// API server endpoint IPs are not auto-detected; they can be configured explicitly via
+// spec.network.apiServerEndpointIPs if needed.
 func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*apiServerInfo, error) {
 	info := &apiServerInfo{}
-	discovery := newAPIServerDiscovery(m.client)
+	reader := m.reader
+	if reader == nil {
+		reader = m.client
+	}
+	discovery := newAPIServerDiscovery(reader)
 
 	manualCIDRConfigured := false
 	if cluster.Spec.Network != nil && strings.TrimSpace(cluster.Spec.Network.APIServerCIDR) != "" {
@@ -819,39 +851,36 @@ func (m *Manager) detectAPIServerInfo(ctx context.Context, logger logr.Logger, c
 		}
 	}
 
-	// Get the kubernetes service to determine service network CIDR
-	serviceNetworkCIDR, err := discovery.DiscoverServiceNetworkCIDR(ctx)
-	if err != nil {
-		if manualCIDRConfigured {
-			logger.V(1).Info("Failed to get kubernetes service; using manual API server CIDR only", "error", err)
-			return info, nil
+	// Primary, RBAC-free detection path: use the service IP injected into the Pod environment.
+	// This is the same source used by in-cluster client-go config and works in single-tenant
+	// namespace-scoped installs without cross-namespace reads.
+	if !manualCIDRConfigured {
+		if cidr, ok := kubernetesServiceIPCIDRFromEnv(); ok {
+			info.ServiceNetworkCIDR = cidr
+			logger.V(1).Info("Using kubernetes Service IP CIDR from environment", "cidr", cidr)
 		}
-		return nil, fmt.Errorf("failed to get kubernetes service: %w. "+
-			"Consider configuring spec.network.apiServerCIDR as a fallback", err)
 	}
 
-	if !manualCIDRConfigured && serviceNetworkCIDR != "" {
-		info.ServiceNetworkCIDR = serviceNetworkCIDR
-		logger.V(1).Info("Detected service network CIDR", "cidr", info.ServiceNetworkCIDR)
+	// Fallback only if env vars are missing/unparseable and no manual CIDR is configured.
+	if !manualCIDRConfigured && info.ServiceNetworkCIDR == "" {
+		serviceNetworkCIDR, err := discovery.DiscoverServiceNetworkCIDR(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to detect kubernetes Service IP CIDR (env KUBERNETES_SERVICE_HOST missing/unusable): %w. "+
+				"Consider configuring spec.network.apiServerCIDR as a fallback", err)
+		}
+		if serviceNetworkCIDR != "" {
+			info.ServiceNetworkCIDR = serviceNetworkCIDR
+			logger.V(1).Info("Detected kubernetes service IP CIDR", "cidr", info.ServiceNetworkCIDR)
+		}
 	}
 
-	// If endpoint IPs are already configured explicitly, do not attempt to auto-detect them.
-	if len(info.EndpointIPs) > 0 {
-		return info, nil
-	}
-
-	endpointIPs, err := discovery.DiscoverEndpointIPs(ctx)
-	if err != nil {
-		// If EndpointSlices are not available or cannot be listed, fall back to using the
-		// service network CIDR only (API server endpoints remain empty).
-		logger.V(1).Info("Failed to list kubernetes EndpointSlices, using service network CIDR only", "error", err)
-		return info, nil
-	}
-
-	info.EndpointIPs = append(info.EndpointIPs, endpointIPs...)
-	if len(info.EndpointIPs) > 0 {
-		logger.V(1).Info("Detected API server endpoint IPs", "ips", info.EndpointIPs)
-	}
+	// Note: We intentionally do not auto-detect API server endpoint IPs.
+	// Some CNI/NetworkPolicy implementations enforce egress rules on post-DNAT traffic, so
+	// allowing only the kubernetes service VIP (port 443) may not be sufficient if traffic is
+	// evaluated against the backing endpoint IP/port (commonly port 6443).
+	//
+	// In those environments, users must configure spec.network.apiServerEndpointIPs to add
+	// explicit /32 or /128 egress allow rules for the control plane endpoint(s) on port 6443.
 
 	return info, nil
 }
@@ -1093,8 +1122,10 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	// Add endpoint IP rules if detected (works for self-managed clusters)
 	if apiServerInfo != nil && len(apiServerInfo.EndpointIPs) > 0 {
 		for _, endpointIP := range apiServerInfo.EndpointIPs {
-			// Create /32 CIDR for each endpoint IP for maximum security
-			endpointCIDR := endpointIP + "/32"
+			endpointCIDR, err := ipToSingleHostCIDR(endpointIP)
+			if err != nil {
+				return nil, err
+			}
 			egressRules = append(egressRules, networkingv1.NetworkPolicyEgressRule{
 				// Allow egress to Kubernetes API server endpoint IPs (port 6443).
 				// This works for self-managed clusters (k3d, kubeadm) where the API server
@@ -1184,7 +1215,7 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	return networkPolicy, nil
 }
 
-func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *apiServerInfo) *networkingv1.NetworkPolicy {
+func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *apiServerInfo) (*networkingv1.NetworkPolicy, error) {
 	labels := infraLabels(cluster)
 
 	dnsPort := intstr.FromInt(53)
@@ -1257,7 +1288,10 @@ func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInf
 	// Add endpoint IP rules if detected (self-managed clusters).
 	if apiServerInfo != nil && len(apiServerInfo.EndpointIPs) > 0 {
 		for _, endpointIP := range apiServerInfo.EndpointIPs {
-			endpointCIDR := endpointIP + "/32"
+			endpointCIDR, err := ipToSingleHostCIDR(endpointIP)
+			if err != nil {
+				return nil, err
+			}
 			egressRules = append(egressRules, networkingv1.NetworkPolicyEgressRule{
 				To: []networkingv1.NetworkPolicyPeer{
 					{
@@ -1328,7 +1362,7 @@ func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInf
 			Ingress: []networkingv1.NetworkPolicyIngressRule{},
 			Egress:  egressRules,
 		},
-	}
+	}, nil
 }
 
 // networkPolicyName returns the name for the NetworkPolicy resource.
