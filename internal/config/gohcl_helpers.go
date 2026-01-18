@@ -272,8 +272,8 @@ func boolPtrTrue(v bool) *bool {
 func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, error) {
 	listener := hclListenerTCP{
 		Type:               "tcp",
-		Address:            fmt.Sprintf("0.0.0.0:%d", constants.PortAPI),
-		ClusterAddress:     fmt.Sprintf("0.0.0.0:%d", constants.PortCluster),
+		Address:            fmt.Sprintf("[::]:%d", constants.PortAPI),
+		ClusterAddress:     fmt.Sprintf("[::]:%d", constants.PortCluster),
 		TLSDisable:         0,
 		MaxRequestDuration: configMaxRequestDuration,
 	}
