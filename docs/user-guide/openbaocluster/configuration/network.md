@@ -58,6 +58,21 @@ The Operator ensures these rules always exist to keep the cluster functional.
 | **Egress** | **K8s API** | `443` | Kubernetes Auth Method validation. |
 | **Egress** | **Self** | `8201` | Raft consensus replication. |
 
+## DNS Configuration
+
+By default, the NetworkPolicy allows egress to DNS services in the `kube-system` namespace. If your cluster uses a different namespace for DNS (e.g., `openshift-dns` on OpenShift), you must explicitly configure it.
+
+```yaml
+spec:
+  network:
+    dnsNamespace: "openshift-dns" # (1)!
+```
+
+1.  Defaults to `kube-system` if not specified.
+
+!!! warning "DNS Resolution Failure"
+    If `dnsNamespace` does not match your cluster's actual DNS namespace, OpenBao pods will fail to resolve addresses (including Cloud KMS or Storage endpoints), leading to crash loops.
+
 ## Custom Rules (Advanced)
 
 You can append **additional** rules to the default policy to allow integrations like backups or monitoring.

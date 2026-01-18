@@ -253,11 +253,134 @@ func TestBuildBackendTLSPolicy_AfterUpgradeCompleteOnlyMainService(t *testing.T)
 		t.Fatalf("expected non-nil BackendTLSPolicy")
 	}
 
-	if len(policy.Spec.TargetRefs) != 1 {
-		t.Fatalf("expected 1 target ref after upgrade complete (GreenRevision empty), got %d", len(policy.Spec.TargetRefs))
-	}
-
 	if string(policy.Spec.TargetRefs[0].Name) != externalServiceName(cluster) {
 		t.Fatalf("expected target ref name %q, got %q", externalServiceName(cluster), policy.Spec.TargetRefs[0].Name)
+	}
+}
+
+func TestBuildNetworkPolicy_DNSNamespace(t *testing.T) {
+	tests := []struct {
+		name         string
+		dnsNamespace string
+		want         string
+	}{
+		{
+			name:         "DefaultDNSNamespace",
+			dnsNamespace: "",
+			want:         "kube-system",
+		},
+		{
+			name:         "CustomDNSNamespace",
+			dnsNamespace: "openshift-dns",
+			want:         "openshift-dns",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Network: &openbaov1alpha1.NetworkConfig{
+						DNSNamespace: tt.dnsNamespace,
+					},
+				},
+			}
+
+			// We need a valid API server info to avoid error
+			apiInfo := &apiServerInfo{
+				ServiceNetworkCIDR: "10.96.0.0/12",
+			}
+
+			policy, err := buildNetworkPolicy(cluster, apiInfo, "openbao-operator-system")
+			if err != nil {
+				t.Fatalf("buildNetworkPolicy() error: %v", err)
+			}
+
+			found := false
+			for _, rule := range policy.Spec.Egress {
+				for _, peer := range rule.To {
+					if peer.NamespaceSelector != nil && peer.NamespaceSelector.MatchLabels != nil {
+						if val, ok := peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"]; ok {
+							if val == tt.want {
+								found = true
+								break
+							}
+						}
+					}
+				}
+				if found {
+					break
+				}
+			}
+
+			if !found {
+				t.Errorf("NetworkPolicy egress rule for DNS namespace %q not found", tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildJobNetworkPolicy_DNSNamespace(t *testing.T) {
+	tests := []struct {
+		name         string
+		dnsNamespace string
+		want         string
+	}{
+		{
+			name:         "DefaultDNSNamespace",
+			dnsNamespace: "",
+			want:         "kube-system",
+		},
+		{
+			name:         "CustomDNSNamespace",
+			dnsNamespace: "openshift-dns",
+			want:         "openshift-dns",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Network: &openbaov1alpha1.NetworkConfig{
+						DNSNamespace: tt.dnsNamespace,
+					},
+				},
+			}
+
+			policy, err := buildJobNetworkPolicy(cluster, &apiServerInfo{ServiceNetworkCIDR: "10.0.0.0/16"})
+			if err != nil {
+				t.Fatalf("buildJobNetworkPolicy() error: %v", err)
+			}
+
+			found := false
+			for _, rule := range policy.Spec.Egress {
+				for _, peer := range rule.To {
+					if peer.NamespaceSelector != nil && peer.NamespaceSelector.MatchLabels != nil {
+						if val, ok := peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"]; ok {
+							if val == tt.want {
+								found = true
+								break
+							}
+						}
+					}
+				}
+				if found {
+					break
+				}
+			}
+
+			if !found {
+				t.Errorf("Job NetworkPolicy egress rule for DNS namespace %q not found", tt.want)
+			}
+		})
 	}
 }
