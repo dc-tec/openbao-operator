@@ -53,7 +53,7 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 		t.Fatalf("create OpenBaoRestore: %v", err)
 	}
 
-	mgr := restore.NewManager(k8sClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	mgr := restore.NewManager(k8sClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	// Pending -> Validating
 	latest := &openbaov1alpha1.OpenBaoRestore{}

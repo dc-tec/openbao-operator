@@ -75,11 +75,8 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 		t.Fatalf("create pod: %v", err)
 	}
 
-	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
-	mgr := bluegreen.NewManager(k8sClient, k8sScheme, infraMgr, openbaoapi.ClientConfig{},
-		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-	)
+	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	manager := bluegreen.NewManager(k8sClient, k8sScheme, infraMgr, openbaoapi.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	// Phase: JoiningMesh -> create join job
 	latestCluster := &openbaov1alpha1.OpenBaoCluster{}
@@ -87,7 +84,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 		t.Fatalf("get cluster: %v", err)
 	}
 
-	result, err := mgr.Reconcile(ctx, logr.Discard(), latestCluster)
+	result, err := manager.Reconcile(ctx, logr.Discard(), latestCluster)
 	if err != nil {
 		t.Fatalf("reconcile JoiningMesh: %v", err)
 	}
@@ -101,7 +98,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
-	result, err = mgr.Reconcile(ctx, logr.Discard(), latestCluster)
+	result, err = manager.Reconcile(ctx, logr.Discard(), latestCluster)
 	if err != nil {
 		t.Fatalf("reconcile after join success: %v", err)
 	}
@@ -116,7 +113,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	}
 
 	// Phase: Syncing -> create wait sync job
-	result, err = mgr.Reconcile(ctx, logr.Discard(), latestCluster)
+	result, err = manager.Reconcile(ctx, logr.Discard(), latestCluster)
 	if err != nil {
 		t.Fatalf("reconcile Syncing: %v", err)
 	}
@@ -130,7 +127,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
-	result, err = mgr.Reconcile(ctx, logr.Discard(), latestCluster)
+	result, err = manager.Reconcile(ctx, logr.Discard(), latestCluster)
 	if err != nil {
 		t.Fatalf("reconcile after sync success: %v", err)
 	}
@@ -145,7 +142,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	}
 
 	// Phase: Promoting -> create promote job
-	result, err = mgr.Reconcile(ctx, logr.Discard(), latestCluster)
+	result, err = manager.Reconcile(ctx, logr.Discard(), latestCluster)
 	if err != nil {
 		t.Fatalf("reconcile Promoting: %v", err)
 	}
@@ -159,7 +156,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
-	result, err = mgr.Reconcile(ctx, logr.Discard(), latestCluster)
+	result, err = manager.Reconcile(ctx, logr.Discard(), latestCluster)
 	if err != nil {
 		t.Fatalf("reconcile after promote success: %v", err)
 	}
@@ -247,7 +244,7 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 		t.Fatalf("expected green pod to be Ready in test setup")
 	}
 
-	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil)
+	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
 	mgr := bluegreen.NewManagerWithClientFactory(k8sClient, k8sScheme, infraMgr, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {
@@ -257,14 +254,13 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 	}, openbaoapi.ClientConfig{},
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-	)
+		"")
 
 	latestCluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
 
-	// First reconcile should create the demotion job.
 	result, err := mgr.Reconcile(ctx, logr.Discard(), latestCluster)
 	if err != nil {
 		t.Fatalf("reconcile DemotingBlue: %v", err)
