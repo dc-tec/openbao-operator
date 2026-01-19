@@ -161,6 +161,78 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 	return nil
 }
 
+// ensureACMEChallengeService manages a dedicated Service for ACME validation in ACME TLS mode.
+//
+// In ACME mode, OpenBao must complete ACME challenges before it can become Ready (it has no
+// serving certificate yet). Most Kubernetes Services only publish ready pod endpoints, creating
+// a circular dependency. This Service sets PublishNotReadyAddresses so ACME validators can reach
+// pods while they are still initializing.
+//
+// The Service exposes standard ACME ports (80/443) and forwards to the OpenBao listener port
+// (8200). This is particularly useful for private ACME CAs running inside the cluster.
+func (m *Manager) ensureACMEChallengeService(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	enabled := usesACMEMode(cluster)
+	svcName := acmeServiceName(cluster)
+
+	if !enabled {
+		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, svcName); err != nil {
+			return fmt.Errorf("failed to delete ACME challenge Service %s/%s: %w", cluster.Namespace, svcName, err)
+		}
+		return nil
+	}
+
+	selectorLabels := podSelectorLabels(cluster)
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+			activeRevision := cluster.Status.BlueGreen.BlueRevision
+			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
+				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
+				if cluster.Status.BlueGreen.GreenRevision != "" {
+					activeRevision = cluster.Status.BlueGreen.GreenRevision
+				}
+			}
+			selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
+		}
+	}
+
+	service := &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      svcName,
+			Namespace: cluster.Namespace,
+			Labels:    infraLabels(cluster),
+		},
+		Spec: corev1.ServiceSpec{
+			Type:                     corev1.ServiceTypeClusterIP,
+			PublishNotReadyAddresses: true,
+			Selector:                 selectorLabels,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "http-80",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       80,
+					TargetPort: intstr.FromInt(constants.PortAPI),
+				},
+				{
+					Name:       "https-443",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       443,
+					TargetPort: intstr.FromInt(constants.PortAPI),
+				},
+			},
+		},
+	}
+
+	if err := m.applyResource(ctx, service, cluster); err != nil {
+		return fmt.Errorf("failed to ensure ACME challenge Service %s/%s: %w", cluster.Namespace, svcName, err)
+	}
+
+	return nil
+}
+
 // ensureIngress manages external access via Ingress using Server-Side Apply.
 func (m *Manager) ensureIngress(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	ingressCfg := cluster.Spec.Ingress
