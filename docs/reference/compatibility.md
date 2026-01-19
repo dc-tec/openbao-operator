@@ -16,14 +16,21 @@ We run full E2E tests against these versions.
 | **v1.33** | <span style="color: #22c55e">**Supported**</span> | Minimum supported version |
 | **v1.32** | <span style="color: #ef4444">**End of Life**</span> | No longer tested |
 
-## 2. OpenBao Versions
+## 2. Platforms
+
+| Platform | Status | Configuration |
+| :--- | :--- | :--- |
+| **Kubernetes** | <span style="color: #22c55e">**Supported**</span> | Default (no flags required) |
+| **OpenShift** | <span style="color: #22c55e">**Supported**</span> | Default (auto-detected), or force with `OPERATOR_PLATFORM=openshift` / `--platform=openshift` |
+
+## 3. OpenBao Versions
 
 | Version | Status | Notes |
 | :--- | :--- | :--- |
 | **2.4.x** | <span style="color: #22c55e">**Supported**</span> | Primary target |
 | **2.3.x** | <span style="color: #f59e0b">**Deprecated**</span> | Best effort support |
 
-## 3. CI Validation Matrix
+## 4. CI Validation Matrix
 
 We treat our CI configuration as the source of truth for compatibility.
 
