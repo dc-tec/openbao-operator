@@ -21,7 +21,7 @@ storage "raft" {
   node_id = "$${HOSTNAME}"
   retry_join {
     auto_join             = "provider=k8s namespace=default label_selector=\"openbao.org/cluster=acme-cluster\""
-    leader_tls_servername = "openbao-cluster-acme-cluster.local"
+    leader_tls_servername = "example.com"
   }
 }
 service_registration "kubernetes" {

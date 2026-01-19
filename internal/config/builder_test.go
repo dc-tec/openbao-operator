@@ -573,6 +573,29 @@ func TestRenderHCL_ACMEMode_NoRetryJoinTLSFiles(t *testing.T) {
 	compareGolden(t, "render_hcl_acme_mode_no_email", got)
 }
 
+func TestRenderHCL_ACMEMode_DefaultDomain(t *testing.T) {
+	cluster := newMinimalCluster("acme-cluster", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
+		// Domain(s) omitted - operator should default to an internal Service domain.
+	}
+
+	infraDetails := InfrastructureDetails{
+		HeadlessServiceName: cluster.Name,
+		Namespace:           cluster.Namespace,
+		APIPort:             8200,
+		ClusterPort:         8201,
+	}
+
+	got, err := RenderHCL(cluster, infraDetails)
+	if err != nil {
+		t.Fatalf("RenderHCL() error = %v", err)
+	}
+
+	compareGolden(t, "render_hcl_acme_mode_default_domain", got)
+}
+
 func TestRenderHCL_ACMEMode_RequiresACMEConfig(t *testing.T) {
 	cluster := newMinimalCluster("acme-cluster", "default")
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
