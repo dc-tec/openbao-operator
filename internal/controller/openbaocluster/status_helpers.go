@@ -2,6 +2,7 @@ package openbaocluster
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -395,6 +396,42 @@ func applyAllConditions(
 		Reason:             productionReason,
 		Message:            productionMessage,
 	})
+
+	applyNodeSecurityCapabilityMismatchCondition(cluster, state, gen, now)
+}
+
+func applyNodeSecurityCapabilityMismatchCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState, gen int64, now metav1.Time) {
+	appArmorEnabled := cluster.Spec.WorkloadHardening != nil && cluster.Spec.WorkloadHardening.AppArmorEnabled
+	if !appArmorEnabled {
+		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionNodeSecurityCapabilityMismatch))
+		return
+	}
+
+	cond := metav1.Condition{
+		Type:               string(openbaov1alpha1.ConditionNodeSecurityCapabilityMismatch),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: gen,
+		LastTransitionTime: now,
+		Reason:             constants.ReasonReady,
+		Message:            "No node security capability mismatch detected for enabled workload hardening settings",
+	}
+
+	if state != nil && state.StatefulSet != nil {
+		for _, ssCond := range state.StatefulSet.Status.Conditions {
+			if ssCond.Type != "ReplicaFailure" {
+				continue
+			}
+			msg := strings.ToLower(ssCond.Message)
+			if strings.Contains(msg, "apparmor") {
+				cond.Status = metav1.ConditionTrue
+				cond.Reason = "AppArmorUnsupported"
+				cond.Message = "AppArmor is enabled (spec.workloadHardening.appArmorEnabled=true) but the workload cannot be admitted/scheduled due to AppArmor support mismatch: " + ssCond.Message
+				break
+			}
+		}
+	}
+
+	meta.SetStatusCondition(&cluster.Status.Conditions, cond)
 }
 
 // computePhase determines the cluster phase from state.
