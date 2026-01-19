@@ -49,9 +49,9 @@ func TestBuildUpgradeExecutorJob_SecurityContext(t *testing.T) {
 		{
 			name:     "empty platform defaults to pinning IDs",
 			platform: "",
-			wantUser: ptr.To(int64(constants.UserBackup)),
-			wantGrp:  ptr.To(int64(constants.GroupBackup)),
-			wantFS:   ptr.To(int64(constants.GroupBackup)),
+			wantUser: ptr.To(constants.UserBackup),
+			wantGrp:  ptr.To(constants.GroupBackup),
+			wantFS:   ptr.To(constants.GroupBackup),
 		},
 	}
 

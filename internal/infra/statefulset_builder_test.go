@@ -35,9 +35,9 @@ func TestBuildStatefulSetPodSecurityContext(t *testing.T) {
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{},
 			},
 			platform: "",
-			wantUser: ptr.To(int64(constants.UserOpenBao)),
-			wantGrp:  ptr.To(int64(constants.GroupOpenBao)),
-			wantFS:   ptr.To(int64(constants.GroupOpenBao)),
+			wantUser: ptr.To(constants.UserOpenBao),
+			wantGrp:  ptr.To(constants.GroupOpenBao),
+			wantFS:   ptr.To(constants.GroupOpenBao),
 		},
 		{
 			name: "openshift platform omits IDs",
