@@ -372,16 +372,56 @@ func desiredStatefulSetReplicas(cluster *openbaov1alpha1.OpenBaoCluster, initial
 	return replicas
 }
 
-func buildStatefulSetPodSecurityContext(cluster *openbaov1alpha1.OpenBaoCluster) *corev1.PodSecurityContext {
+func buildStatefulSetPodSecurityContext(cluster *openbaov1alpha1.OpenBaoCluster, platform string) *corev1.PodSecurityContext {
 	securityContext := &corev1.PodSecurityContext{
 		RunAsNonRoot: ptr.To(true),
-		RunAsUser:    ptr.To(openBaoUserID),
-		RunAsGroup:   ptr.To(openBaoGroupID),
-		FSGroup:      ptr.To(openBaoGroupID),
 		// Enforce a secure seccomp profile to limit available system calls
 		SeccompProfile: &corev1.SeccompProfile{
 			Type: corev1.SeccompProfileTypeRuntimeDefault,
 		},
+	}
+
+	// For OpenShift, we must NOT set RunAsUser, RunAsGroup, or FSGroup.
+	// OpenShift assigns these dynamically via Security Context Constraints (SCC).
+	// For standard Kubernetes (default), we pin them to ensure file ownership matches the image.
+	if platform != "openshift" {
+		securityContext.RunAsUser = ptr.To(openBaoUserID)
+		securityContext.RunAsGroup = ptr.To(openBaoGroupID)
+		securityContext.FSGroup = ptr.To(openBaoGroupID)
+	}
+
+	// Apply configured overrides from CRD if any.
+	// This allows users to set specific IDs (e.g. for custom SCCs or specific security requirements)
+	// regardless of the platform default.
+	if cluster.Spec.SecurityContext != nil {
+		override := cluster.Spec.SecurityContext
+		if override.RunAsUser != nil {
+			securityContext.RunAsUser = override.RunAsUser
+		}
+		if override.RunAsGroup != nil {
+			securityContext.RunAsGroup = override.RunAsGroup
+		}
+		if override.FSGroup != nil {
+			securityContext.FSGroup = override.FSGroup
+		}
+		if override.RunAsNonRoot != nil {
+			securityContext.RunAsNonRoot = override.RunAsNonRoot
+		}
+		if override.SeccompProfile != nil {
+			securityContext.SeccompProfile = override.SeccompProfile
+		}
+		if override.FSGroupChangePolicy != nil {
+			securityContext.FSGroupChangePolicy = override.FSGroupChangePolicy
+		}
+		if override.SupplementalGroups != nil {
+			securityContext.SupplementalGroups = override.SupplementalGroups
+		}
+		if override.Sysctls != nil {
+			securityContext.Sysctls = override.Sysctls
+		}
+		if override.WindowsOptions != nil {
+			securityContext.WindowsOptions = override.WindowsOptions
+		}
 	}
 
 	if cluster.Spec.WorkloadHardening != nil && cluster.Spec.WorkloadHardening.AppArmorEnabled {
@@ -644,8 +684,8 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, revision s
 // This is a convenience wrapper that calls buildStatefulSetWithRevision with an empty revision.
 //
 //nolint:unparam // configContent varies in production with actual config values
-func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string) (*appsv1.StatefulSet, error) {
-	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, "", false)
+func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, platform string) (*appsv1.StatefulSet, error) {
+	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, "", false, platform)
 }
 
 // buildStatefulSetWithRevision constructs a StatefulSet for the given OpenBaoCluster.
@@ -653,7 +693,7 @@ func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent str
 // verifiedInitContainerDigest is the verified init container image digest to use (if provided, overrides cluster.Spec.InitContainer.Image).
 // revision is an optional revision identifier for blue/green deployments.
 // disableSelfInit prevents adding self-init logic (used for Green pods).
-func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool) (*appsv1.StatefulSet, error) {
+func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool, platform string) (*appsv1.StatefulSet, error) {
 	labels := podSelectorLabelsWithRevision(cluster, revision)
 
 	replicas := desiredStatefulSetReplicas(cluster, initialized)
@@ -703,7 +743,7 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 					// ServiceAccount token only where needed (OpenBao container for Kubernetes Auth)
 					AutomountServiceAccountToken: ptr.To(false),
 					ServiceAccountName:           serviceAccountName(cluster),
-					SecurityContext:              buildStatefulSetPodSecurityContext(cluster),
+					SecurityContext:              buildStatefulSetPodSecurityContext(cluster, platform),
 					InitContainers:               initContainers,
 					Containers:                   buildContainers(cluster, verifiedImageDigest, renderedConfigDir, probes),
 					Volumes:                      volumes,
