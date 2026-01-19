@@ -491,6 +491,12 @@ func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoClu
 		configHashAnnotation: configHash,
 	}
 
+	if cluster.Spec.Maintenance != nil {
+		if restartAt := strings.TrimSpace(cluster.Spec.Maintenance.RestartAt); restartAt != "" {
+			annotations[constants.AnnotationRestartAt] = restartAt
+		}
+	}
+
 	return podLabels, annotations
 }
 
@@ -777,11 +783,19 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 	}
 
 	statefulSetName := statefulSetNameWithRevision(cluster, revision)
+	var statefulSetAnnotations map[string]string
+	if cluster.Spec.Maintenance != nil && cluster.Spec.Maintenance.Enabled {
+		statefulSetAnnotations = map[string]string{
+			constants.AnnotationMaintenance: "true",
+		}
+	}
+
 	statefulSet := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      statefulSetName,
-			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Name:        statefulSetName,
+			Namespace:   cluster.Namespace,
+			Labels:      infraLabels(cluster),
+			Annotations: statefulSetAnnotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: headlessServiceName(cluster),

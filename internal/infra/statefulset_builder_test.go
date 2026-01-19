@@ -114,3 +114,24 @@ func ptrInt64Value(p *int64) int64 {
 	}
 	return *p
 }
+
+func TestBuildStatefulSet_MaintenanceAnnotations(t *testing.T) {
+	cluster := newMinimalCluster("maintenance-cluster", "default")
+	cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{
+		Enabled:   true,
+		RestartAt: "2026-01-19T00:00:00Z",
+	}
+
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
+	}
+
+	if got := statefulSet.Annotations[constants.AnnotationMaintenance]; got != "true" {
+		t.Fatalf("expected StatefulSet annotation %q to be %q, got %q", constants.AnnotationMaintenance, "true", got)
+	}
+
+	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != "2026-01-19T00:00:00Z" {
+		t.Fatalf("expected Pod template annotation %q to be set, got %q", constants.AnnotationRestartAt, got)
+	}
+}
