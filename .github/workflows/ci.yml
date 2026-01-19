@@ -193,6 +193,9 @@ jobs:
       - name: Template
         run: helm template openbao-operator charts/openbao-operator --namespace openbao-operator-system --include-crds > /dev/null
 
+      - name: Verify OpenShift templating (SCC-compatible)
+        run: bash hack/ci/verify-openshift-helm.sh
+
   e2e-smoke:
     name: E2E Smoke (kind v1.34)
     runs-on: ubuntu-24.04
