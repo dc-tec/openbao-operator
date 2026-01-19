@@ -28,6 +28,14 @@ spec:
   tls:
     enabled: true
     mode: External # Use external certificate management
+  # External access (example: Gateway API termination + backend TLS).
+  # Ensure your externally-managed server certificate includes this hostname as a DNS SAN.
+  gateway:
+    enabled: true
+    gatewayRef:
+      name: traefik-gateway
+      namespace: default
+    hostname: "openbao.example.com"
   # Hardened profile requires external unseal (non-static).
   # This example uses Transit auto-unseal as a portable default; replace with your preferred KMS.
   unseal:
@@ -86,6 +94,10 @@ spec:
 # spec:
 #   secretName: openbaocluster-external-tls-tls-server
 #   dnsNames:
+#     # Client access (Gateway/Ingress hostname)
+#     - openbao.example.com
+#     # Raft join verification (required; used as retry_join leader_tls_servername)
+#     - openbao-cluster-openbaocluster-external-tls.local
 #     - openbaocluster-external-tls.default.svc
 #     - *.openbaocluster-external-tls.default.svc
 #     - openbaocluster-external-tls-public.default.svc

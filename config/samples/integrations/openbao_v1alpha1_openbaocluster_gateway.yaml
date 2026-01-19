@@ -13,7 +13,7 @@ metadata:
   namespace: default
 spec:
   # This secret is referenced by the Traefik Gateway HTTPS listener in
-  # test/user/gateway-values.yaml (certificateRefs.name: bao-tls).
+  # test/cluster/traefik-gateway-values.yaml (certificateRefs.name: bao-tls).
   secretName: bao-tls
   dnsNames:
     - bao.adfinis.localhost

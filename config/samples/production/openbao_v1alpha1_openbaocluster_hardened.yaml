@@ -178,6 +178,8 @@ spec:
 # spec:
 #   secretName: openbaocluster-hardened-tls-server
 #   dnsNames:
+#     # Raft join verification (required; used as retry_join leader_tls_servername)
+#     - openbao-cluster-openbaocluster-hardened.local
 #     - openbaocluster-hardened.openbaocluster-hardened.svc
 #     - *.openbaocluster-hardened.openbaocluster-hardened.svc
 #   issuerRef:
