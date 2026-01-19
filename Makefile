@@ -401,6 +401,23 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 		echo "E2E_SKIP_CLEANUP=true: Keeping Kind cluster $(KIND_CLUSTER) for debugging"; \
 	fi
 
+.PHONY: test-e2e-existing
+test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests against an existing cluster (e.g. OpenShift Local/CRC). Requires KUBECONFIG set and E2E_OPERATOR_IMAGE pointing to a pullable image. Use E2E_LABEL_FILTER to run a subset (e.g. 'openshift').
+	@GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
+	if [ -n "$(E2E_FOCUS)" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=$(E2E_FOCUS)"; \
+	fi; \
+	if [ -n "$(E2E_LABEL_FILTER)" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.label-filter=$(E2E_LABEL_FILTER)"; \
+	fi; \
+	if [ "$(E2E_TRACE)" = "true" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.trace"; \
+	fi; \
+	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
+	fi; \
+	E2E_USE_EXISTING_CLUSTER=true go test $$GO_TEST_FLAGS ./test/e2e/
+
 .PHONY: test-e2e-ci
 test-e2e-ci: setup-test-e2e manifests generate vet ginkgo ## Run the e2e tests in CI mode (does not modify files).
 	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \

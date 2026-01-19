@@ -142,7 +142,7 @@ var _ = Describe("Blue/Green Upgrade with Gateway API", Label("upgrade", "bluegr
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: kindDefaultServiceCIDR,
+					APIServerCIDR: apiServerCIDR,
 				},
 				Upgrade: &openbaov1alpha1.UpgradeConfig{
 					ExecutorImage: upgradeExecutorImage,

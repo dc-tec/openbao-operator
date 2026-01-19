@@ -164,7 +164,7 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					Configuration: &openbaov1alpha1.OpenBaoConfiguration{
 						UI:       &uiEnabled,
@@ -210,7 +210,7 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					Unseal: &openbaov1alpha1.UnsealConfig{
 						Type: "static",
@@ -248,7 +248,7 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					Backup: &openbaov1alpha1.BackupSchedule{
 						Schedule:      "0 0 * * *",
@@ -357,7 +357,7 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -522,7 +522,7 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},

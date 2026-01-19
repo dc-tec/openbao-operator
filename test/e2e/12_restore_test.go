@@ -123,7 +123,7 @@ var _ = Describe("Restore", Label("backup", "restore", "cluster", "requires-rust
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					Backup: &openbaov1alpha1.BackupSchedule{
 						Schedule:      "*/5 * * * *",

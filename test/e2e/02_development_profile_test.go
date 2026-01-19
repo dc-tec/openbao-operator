@@ -74,7 +74,7 @@ var _ = Describe("Basic: Development profile (operator init + operator-managed T
 			Version:       openBaoVersion,
 			Image:         openBaoImage,
 			ConfigInitImg: configInitImage,
-			APIServerCIDR: kindDefaultServiceCIDR,
+			APIServerCIDR: apiServerCIDR,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created OpenBaoCluster %q in namespace %q\n", clusterName, f.Namespace)
