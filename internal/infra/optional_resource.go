@@ -89,7 +89,7 @@ func reconcileOptionalResource(ctx context.Context, opts optionalResourceOptions
 	desired.GetObjectKind().SetGroupVersionKind(gvk)
 
 	if err := opts.apply(ctx, desired); err != nil {
-		if opts.degradeOnCRDMissing && operatorerrors.IsCRDMissingError(err) {
+		if opts.degradeOnCRDMissing && (operatorerrors.IsCRDMissingError(err) || apierrors.IsNotFound(err)) {
 			return ErrGatewayAPIMissing
 		}
 		return fmt.Errorf("failed to ensure %s %s/%s: %w", opts.kind, opts.name.Namespace, opts.name.Name, err)

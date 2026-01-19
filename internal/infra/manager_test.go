@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/dc-tec/openbao-operator/internal/constants"
@@ -158,6 +159,98 @@ func TestReconcileCreatesAllResources(t *testing.T) {
 		if err := r.getFunc(); err != nil {
 			t.Errorf("expected %s to exist: %v", r.resource, err)
 		}
+	}
+}
+
+func TestReconcile_ACMEMode_CreatesChallengeService(t *testing.T) {
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+
+	cluster := newMinimalCluster("infra-acme", "default")
+	cluster.Status.Initialized = true
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://example.invalid/acme",
+		Domains:      []string{"infra-acme-acme.default.svc"},
+	}
+
+	ctx := context.Background()
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	svc := &corev1.Service{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      acmeServiceName(cluster),
+	}, svc); err != nil {
+		t.Fatalf("expected ACME challenge Service to exist: %v", err)
+	}
+	if !svc.Spec.PublishNotReadyAddresses {
+		t.Fatalf("expected ACME challenge Service to set publishNotReadyAddresses=true")
+	}
+
+	gotPorts := map[int32]bool{}
+	for _, p := range svc.Spec.Ports {
+		gotPorts[p.Port] = true
+	}
+	if !gotPorts[80] || !gotPorts[443] {
+		t.Fatalf("expected ACME challenge Service to expose ports 80 and 443, got %v", svc.Spec.Ports)
+	}
+}
+
+func TestReconcile_ACMEMode_PreflightRejectsGatewayTermination(t *testing.T) {
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+
+	cluster := newMinimalCluster("acme-gw", "default")
+	cluster.Status.Initialized = true
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://example.invalid/acme",
+		Domains:      []string{"acme-gw-acme.default.svc"},
+	}
+	cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+		Enabled:        true,
+		TLSPassthrough: false,
+		GatewayRef: openbaov1alpha1.GatewayReference{
+			Name: "gateway",
+		},
+		Hostname: "bao.example.com",
+	}
+
+	ctx := context.Background()
+	err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "")
+	if err == nil {
+		t.Fatalf("expected Reconcile() to fail preflight for ACME + Gateway termination")
+	}
+	if !errors.Is(err, ErrACMEGatewayNotConfiguredForPassthrough) {
+		t.Fatalf("expected ErrACMEGatewayNotConfiguredForPassthrough, got %T: %v", err, err)
+	}
+}
+
+func TestReconcile_ACMEMode_PreflightRejectsUnresolvableDomainForPrivateCA(t *testing.T) {
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+
+	cluster := newMinimalCluster("acme-dns", "default")
+	cluster.Status.Initialized = true
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://example.invalid/acme",
+		Domains:      []string{"no-such-host.openbao.invalid"},
+	}
+	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
+		ACMECARoot: "/etc/bao/seal-creds/ca.crt",
+	}
+
+	ctx := context.Background()
+	err := manager.Reconcile(ctx, logr.Discard(), cluster, "", "")
+	if err == nil {
+		t.Fatalf("expected Reconcile() to fail preflight for unresolvable ACME domain")
+	}
+	if !errors.Is(err, ErrACMEDomainNotResolvable) {
+		t.Fatalf("expected ErrACMEDomainNotResolvable, got %T: %v", err, err)
 	}
 }
 
