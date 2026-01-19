@@ -782,6 +782,11 @@ func (in *OpenBaoClusterSpec) DeepCopyInto(out *OpenBaoClusterSpec) {
 		*out = new(WorkloadHardeningConfig)
 		**out = **in
 	}
+	if in.SecurityContext != nil {
+		in, out := &in.SecurityContext, &out.SecurityContext
+		*out = new(v1.PodSecurityContext)
+		(*in).DeepCopyInto(*out)
+	}
 	in.UpdateStrategy.DeepCopyInto(&out.UpdateStrategy)
 }
 
