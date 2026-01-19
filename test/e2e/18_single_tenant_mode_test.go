@@ -170,7 +170,7 @@ var _ = Describe("Single-Tenant Mode", Label("single-tenant", "tenancy"), Ordere
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: kindDefaultServiceCIDR,
+					APIServerCIDR: apiServerCIDR,
 				},
 				DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 			},

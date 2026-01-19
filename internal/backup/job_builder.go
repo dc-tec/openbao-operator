@@ -43,6 +43,8 @@ type JobOptions struct {
 	FilenamePrefix string
 	// ClientConfig holds the smart client configuration to be injected as environment variables.
 	ClientConfig openbao.ClientConfig
+	// Platform indicates the target platform (e.g., "kubernetes", "openshift").
+	Platform string
 }
 
 // BuildJob creates a Kubernetes Job for executing a backup.
@@ -83,6 +85,22 @@ func BuildJob(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) (*batchv
 	backoffLimit := int32(0)
 	ttlSecondsAfterFinished := int32(backupJobTTLSeconds)
 
+	podSecurityContext := &corev1.PodSecurityContext{
+		RunAsNonRoot: ptr.To(true),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+
+	// For OpenShift, we must NOT set RunAsUser, RunAsGroup, or FSGroup.
+	// OpenShift assigns these dynamically via Security Context Constraints (SCC).
+	// For standard Kubernetes (default), we pin them to ensure file ownership matches the image.
+	if opts.Platform != constants.PlatformOpenShift {
+		podSecurityContext.RunAsUser = ptr.To(constants.UserBackup)
+		podSecurityContext.RunAsGroup = ptr.To(constants.GroupBackup)
+		podSecurityContext.FSGroup = ptr.To(constants.GroupBackup)
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      opts.JobName,
@@ -114,16 +132,8 @@ func BuildJob(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) (*batchv
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           serviceAccountName,
 					AutomountServiceAccountToken: ptr.To(false),
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: ptr.To(true),
-						RunAsUser:    ptr.To(constants.UserBackup),
-						RunAsGroup:   ptr.To(constants.GroupBackup),
-						FSGroup:      ptr.To(constants.GroupBackup),
-						SeccompProfile: &corev1.SeccompProfile{
-							Type: corev1.SeccompProfileTypeRuntimeDefault,
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyNever,
+					SecurityContext:              podSecurityContext,
+					RestartPolicy:                corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
 							Name:  ComponentBackup,

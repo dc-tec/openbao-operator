@@ -40,8 +40,8 @@ func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {
 		WithScheme(scheme).
 		WithObjects(cluster).
 		Build()
-	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil)
-	mgr := NewManager(c, scheme, infraMgr, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil))
+	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
+	mgr := NewManager(c, scheme, infraMgr, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	result, err := mgr.Reconcile(context.Background(), logr.Discard(), cluster)
 	if err != nil {

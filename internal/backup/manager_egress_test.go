@@ -49,7 +49,7 @@ func TestBackupReconcile_HardenedRequiresEgressRules(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		Build()
 
-	manager := NewManager(k8sClient, scheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	_, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.Error(t, err)

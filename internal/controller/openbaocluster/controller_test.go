@@ -421,7 +421,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, serverSecret)).To(Succeed())
 
-			infraMgr := infra.NewManager(k8sClient, k8sClient.Scheme(), "openbao-operator-system", "", nil)
+			infraMgr := infra.NewManager(k8sClient, k8sClient.Scheme(), "openbao-operator-system", "", nil, "")
 
 			By("reconciling networking resources")
 			err := infraMgr.Reconcile(ctx, logr.Discard(), cluster, "", "")

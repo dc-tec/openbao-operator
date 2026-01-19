@@ -251,7 +251,7 @@ var _ = Describe("Backup", Label("backup", "requires-rustfs", "slow"), Ordered, 
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					Backup: &openbaov1alpha1.BackupSchedule{
 						// Schedule: Every 5 minutes for testing (production uses "*/15 * * * *")

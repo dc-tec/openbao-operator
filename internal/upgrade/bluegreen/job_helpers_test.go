@@ -71,8 +71,8 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 		WithObjects(cluster, job).
 		Build()
 
-	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil)
-	mgr := NewManager(c, scheme, infraMgr, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil))
+	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
+	mgr := NewManager(c, scheme, infraMgr, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	step, err := mgr.runExecutorJobStep(context.Background(), logr.Discard(), cluster, ActionJoinGreenNonVoters, "job failure threshold exceeded")
 	if err != nil {
@@ -158,8 +158,8 @@ func TestRunExecutorJob_FailedJob_DoesNotRetryWhenAutoRollbackDisabled(t *testin
 		WithObjects(cluster, job).
 		Build()
 
-	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil)
-	mgr := NewManager(c, scheme, infraMgr, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil))
+	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
+	mgr := NewManager(c, scheme, infraMgr, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	step, err := mgr.runExecutorJobStep(context.Background(), logr.Discard(), cluster, ActionJoinGreenNonVoters, "job failure threshold exceeded")
 	if err != nil {
@@ -238,8 +238,8 @@ func TestRunExecutorJob_FailedJob_TriggersAbortWhenMaxFailuresReached(t *testing
 		WithObjects(cluster, job).
 		Build()
 
-	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil)
-	mgr := NewManager(c, scheme, infraMgr, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil))
+	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
+	mgr := NewManager(c, scheme, infraMgr, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	step, err := mgr.runExecutorJobStep(context.Background(), logr.Discard(), cluster, ActionJoinGreenNonVoters, "job failure threshold exceeded")
 	if err != nil {

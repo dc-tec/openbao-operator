@@ -87,7 +87,7 @@ var _ = Describe("Chaos", Label("chaos", "security", "cluster", "slow"), Ordered
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},

@@ -34,22 +34,24 @@ type Manager struct {
 	clientFactory         upgrade.OpenBaoClientFactory
 	clientConfig          openbaoapi.ClientConfig
 	operatorImageVerifier *security.ImageVerifier
+	Platform              string
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
-func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbaoapi.ClientConfig, operatorImageVerifier *security.ImageVerifier) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbaoapi.ClientConfig, operatorImageVerifier *security.ImageVerifier, platform string) *Manager {
 	return &Manager{
 		client:                c,
 		scheme:                scheme,
 		clientFactory:         upgrade.DefaultOpenBaoClientFactory,
 		clientConfig:          clientConfig,
 		operatorImageVerifier: operatorImageVerifier,
+		Platform:              platform,
 	}
 }
 
 // NewManagerWithClientFactory constructs a Manager with a custom OpenBao client factory.
 // This is primarily used for testing.
-func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, operatorImageVerifier *security.ImageVerifier) *Manager {
+func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, operatorImageVerifier *security.ImageVerifier, platform string) *Manager {
 	if factory == nil {
 		factory = upgrade.DefaultOpenBaoClientFactory
 	}
@@ -59,6 +61,7 @@ func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factor
 		clientFactory:         factory,
 		clientConfig:          clientConfig,
 		operatorImageVerifier: operatorImageVerifier,
+		Platform:              platform,
 	}
 }
 

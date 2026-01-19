@@ -106,15 +106,25 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 					ServiceAccountName:           restoreServiceAccountName(cluster),
 					AutomountServiceAccountToken: ptr.To(false),
 					RestartPolicy:                corev1.RestartPolicyOnFailure,
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: ptr.To(true),
-						RunAsUser:    ptr.To(constants.UserBackup),
-						RunAsGroup:   ptr.To(constants.GroupBackup),
-						FSGroup:      ptr.To(constants.GroupBackup),
-						SeccompProfile: &corev1.SeccompProfile{
-							Type: corev1.SeccompProfileTypeRuntimeDefault,
-						},
-					},
+					SecurityContext: func() *corev1.PodSecurityContext {
+						podSecurityContext := &corev1.PodSecurityContext{
+							RunAsNonRoot: ptr.To(true),
+							SeccompProfile: &corev1.SeccompProfile{
+								Type: corev1.SeccompProfileTypeRuntimeDefault,
+							},
+						}
+
+						// For OpenShift, we must NOT set RunAsUser, RunAsGroup, or FSGroup.
+						// OpenShift assigns these dynamically via Security Context Constraints (SCC).
+						// For standard Kubernetes (default), we pin them to ensure file ownership matches the image.
+						if m.Platform != constants.PlatformOpenShift {
+							podSecurityContext.RunAsUser = ptr.To(constants.UserBackup)
+							podSecurityContext.RunAsGroup = ptr.To(constants.GroupBackup)
+							podSecurityContext.FSGroup = ptr.To(constants.GroupBackup)
+						}
+
+						return podSecurityContext
+					}(),
 					Containers: []corev1.Container{container},
 					Volumes:    volumes,
 				},

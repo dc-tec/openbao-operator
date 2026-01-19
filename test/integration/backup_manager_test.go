@@ -63,7 +63,7 @@ func TestBackupManager_ManualTrigger_CreatesJobAndWiring(t *testing.T) {
 		t.Fatalf("get cluster after trigger: %v", err)
 	}
 
-	mgr := backup.NewManager(k8sClient, k8sScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	mgr := backup.NewManager(k8sClient, k8sScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 	result, err := mgr.Reconcile(ctx, logr.Discard(), &latest)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)

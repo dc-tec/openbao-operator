@@ -110,7 +110,7 @@ var _ = Describe("Upgrade", Label("upgrade", "rolling", "cluster", "slow"), Orde
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						ExecutorImage: upgradeExecutorImage,

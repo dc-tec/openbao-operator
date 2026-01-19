@@ -91,7 +91,7 @@ var _ = Describe("Workstream B: RBAC & Admission Hardening", Label("security", "
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: kindDefaultServiceCIDR,
+					APIServerCIDR: apiServerCIDR,
 				},
 				DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 			},

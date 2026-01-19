@@ -1,0 +1,12 @@
+resources:
+  - ../../default
+
+# Optional overlay for Kubernetes-only environments.
+# Pins the operator's container UID/GID to match the distroless nonroot image user.
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name=openbao-operator
+    path: pin_operator_ids_patch.yaml

@@ -7,6 +7,12 @@ nameOverride: ""
 # -- Override the full name of resources
 fullnameOverride: ""
 
+# -- Target platform configuration
+# -- Options: "auto" (default), "kubernetes", "openshift"
+# -- When set to "auto", the operator auto-detects OpenShift by API discovery.
+# -- When set to "openshift", the chart and operator adapt security contexts for SCC compatibility.
+platform: "auto"
+
 # -- Operator image configuration
 image:
   # -- Image repository for the operator manager

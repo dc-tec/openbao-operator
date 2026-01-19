@@ -169,6 +169,30 @@ graph BT
     make test-e2e E2E_LABEL_FILTER='upgrade'
     ```
 
+    ### OpenShift Local / Existing Cluster
+
+    To validate OpenShift compatibility, run a focused subset of E2E tests against an existing cluster
+    (for example OpenShift Local / CRC).
+
+    ```bash
+    export KUBECONFIG=/path/to/your/kubeconfig
+
+    # Operator image must be pullable by the cluster (push it to a registry accessible from CRC).
+    export E2E_OPERATOR_IMAGE=quay.io/your-org/openbao-operator:dev
+
+    # For non-kind clusters, configure the API server CIDR used in NetworkPolicies.
+    # A permissive value works for smoke testing if you don't know the exact CIDR:
+    export E2E_API_SERVER_CIDR=0.0.0.0/0
+
+    # Run only OpenShift platform checks
+    make test-e2e-existing E2E_LABEL_FILTER='openshift'
+    ```
+
+    !!! note "Cleanup behavior"
+        When `E2E_USE_EXISTING_CLUSTER=true` (used by `make test-e2e-existing`), the suite does **not**
+        uninstall CRDs or cert-manager by default. To enable full cleanup, set:
+        `E2E_EXISTING_CLUSTER_FULL_CLEANUP=true`.
+
 === ":material-human-handsup: 4. Manual / Exploratory"
 
     Some scenarios are difficult or impossible to automate reliably in CI. These must be tested manually before major releases (Minor/Major versions).

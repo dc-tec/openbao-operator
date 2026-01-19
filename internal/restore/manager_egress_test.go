@@ -54,7 +54,7 @@ func TestRestoreHandleValidating_HardenedRequiresEgressRules(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
 		Build()
 
-	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	_, err := mgr.handleValidating(context.Background(), logr.Discard(), restore)
 	require.NoError(t, err)

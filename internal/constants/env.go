@@ -86,3 +86,10 @@ const (
 	BackupAuthMethodJWT   = "jwt"
 	BackupAuthMethodToken = "token"
 )
+
+// Platform values.
+const (
+	PlatformAuto       = "auto"
+	PlatformKubernetes = "kubernetes"
+	PlatformOpenShift  = "openshift"
+)

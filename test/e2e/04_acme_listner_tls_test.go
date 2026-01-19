@@ -353,7 +353,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: kindDefaultServiceCIDR,
+					APIServerCIDR: apiServerCIDR,
 					IngressRules: []networkingv1.NetworkPolicyIngressRule{
 						{
 							// Allow ingress from same namespace for ACME validation.

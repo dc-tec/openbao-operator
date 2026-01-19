@@ -226,7 +226,7 @@ var _ = Describe("Blue/Green Upgrade", Label("upgrade", "bluegreen", "cluster", 
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						ExecutorImage: upgradeExecutorImage,

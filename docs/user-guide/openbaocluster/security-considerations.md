@@ -182,3 +182,33 @@ spec:
     imagePullSecrets:
       - name: my-registry-creds
 ```
+
+---
+
+## Workload Isolation
+
+By default, the operator configures Pods with a strict security context:
+- **UID/GID:** `100:1000` (pinned to the `bao` user in official images)
+- **Privileges:** `runAsNonRoot: true`, `allowPrivilegeEscalation: false`
+- **Capabilities:** Drop `ALL`
+
+### Platform Compatibility & Overrides
+
+For platforms with strict admission controllers (e.g., OpenShift SCC) or custom requirements, you can override the Pod Security Context.
+
+```yaml
+spec:
+  securityContext:
+    # Example: Run as a specific UID provided by your security team
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+    
+    # Example: Explicitly unset IDs to let the platform assign them (OpenShift behavior)
+    # Note: On OpenShift, prefer leaving these unset and rely on the operator's platform auto-detection (default).
+    # To force OpenShift mode, set OPERATOR_PLATFORM=openshift (or --platform=openshift).
+    # runAsUser: null 
+```
+
+!!! tip "OpenShift Users"
+    On OpenShift, the operator defaults to platform auto-detection and will omit pinned IDs in generated Pods/Jobs. If needed, force OpenShift mode via `OPERATOR_PLATFORM=openshift` (or `--platform=openshift`).

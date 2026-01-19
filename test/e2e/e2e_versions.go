@@ -23,6 +23,7 @@ const defaultUpgradeToVersion = "2.4.4"
 var (
 	openBaoVersion string
 	openBaoImage   string
+	apiServerCIDR  string
 )
 
 // kindDefaultServiceCIDR is the default service CIDR used by kind clusters.
@@ -39,5 +40,10 @@ func init() {
 	openBaoImage = strings.TrimSpace(os.Getenv("E2E_OPENBAO_IMAGE"))
 	if openBaoImage == "" {
 		openBaoImage = fmt.Sprintf("openbao/openbao:%s", openBaoVersion)
+	}
+
+	apiServerCIDR = strings.TrimSpace(os.Getenv("E2E_API_SERVER_CIDR"))
+	if apiServerCIDR == "" {
+		apiServerCIDR = kindDefaultServiceCIDR
 	}
 }

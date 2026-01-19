@@ -18,7 +18,7 @@ import (
 
 func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-init", "default")
 	cluster.Status.Initialized = false
@@ -54,7 +54,7 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 
 func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-scaled", "default")
 	cluster.Status.Initialized = true
@@ -124,7 +124,7 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k8sClient := newTestClient(t)
-			manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+			manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 			cluster := newMinimalCluster("test-replica", "default")
 			cluster.Spec.Replicas = tt.specReplicas
@@ -162,7 +162,7 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 //nolint:gocyclo // This is a comprehensive, table-free assertion test for container configuration.
 func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-container", "default")
 	uiEnabled := true
@@ -320,7 +320,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 
 func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("acme-probe", "default")
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
@@ -399,7 +399,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 
 func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("acme-public", "default")
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
@@ -449,7 +449,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 
 func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-init-container", "default")
 	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
@@ -498,7 +498,7 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
 
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-no-init-container", "default")
 	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
@@ -530,7 +530,7 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 
 func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-volumes", "default")
 
@@ -583,7 +583,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 
 func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-delete-pvcs", "default")
 
@@ -648,7 +648,7 @@ func TestStatefulSet_ACMEMode_NoSidecar(t *testing.T) {
 	}
 
 	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "")
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
 	if err != nil {
 		t.Fatalf("buildStatefulSet() error = %v", err)
 	}
@@ -684,7 +684,7 @@ func TestStatefulSet_ACMEMode_NoTLSVolume(t *testing.T) {
 	}
 
 	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "")
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
 	if err != nil {
 		t.Fatalf("buildStatefulSet() error = %v", err)
 	}
@@ -725,7 +725,7 @@ func TestStatefulSet_ACMEMode_NoShareProcessNamespace(t *testing.T) {
 	}
 
 	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "")
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
 	if err != nil {
 		t.Fatalf("buildStatefulSet() error = %v", err)
 	}
@@ -742,7 +742,7 @@ func TestStatefulSet_NonACMEMode_UsesWrapper(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
 
 	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "")
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
 	if err != nil {
 		t.Fatalf("buildStatefulSet() error = %v", err)
 	}

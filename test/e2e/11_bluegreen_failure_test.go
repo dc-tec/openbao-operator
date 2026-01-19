@@ -142,7 +142,7 @@ var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "blueg
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						ExecutorImage: upgradeExecutorImage,
@@ -271,7 +271,7 @@ var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "blueg
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						ExecutorImage: upgradeExecutorImage,
@@ -524,7 +524,7 @@ var _ = Describe("Blue/Green Upgrade Failure Scenarios", Label("upgrade", "blueg
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: kindDefaultServiceCIDR,
+						APIServerCIDR: apiServerCIDR,
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						ExecutorImage: upgradeExecutorImage,

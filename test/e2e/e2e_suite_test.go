@@ -102,6 +102,20 @@ var (
 	// This is useful for release workflows that build images once (externally) and only need
 	// to load pre-built images into kind.
 	skipImageBuild = os.Getenv("E2E_SKIP_IMAGE_BUILD") == "true"
+
+	// useExistingCluster runs the e2e suite against an already-running cluster (e.g. OpenShift Local / CRC).
+	// When enabled, the suite:
+	// - does NOT create kind clusters
+	// - does NOT build/load local images into kind
+	// - uses the current kubectl context (or KUBECONFIG) to install CRDs and deploy the operator
+	useExistingCluster = os.Getenv("E2E_USE_EXISTING_CLUSTER") == "true"
+
+	// existingClusterName is used only when E2E_USE_EXISTING_CLUSTER=true.
+	existingClusterName = envOrDefault("E2E_CLUSTER_NAME", "existing")
+
+	// existingClusterFullCleanup controls whether we uninstall CRDs and cert-manager in existing-cluster mode.
+	// Default is false to reduce blast radius on shared clusters.
+	existingClusterFullCleanup = os.Getenv("E2E_EXISTING_CLUSTER_FULL_CLEANUP") == "true"
 )
 
 func kindClusterName(base string, index int) string {
@@ -160,6 +174,73 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	parallelTotal := suiteConfig.ParallelTotal
 	if parallelTotal < 1 {
 		parallelTotal = 1
+	}
+
+	if useExistingCluster {
+		ExpectWithOffset(1, parallelTotal).To(Equal(1), "E2E_USE_EXISTING_CLUSTER requires E2E_PARALLEL_NODES=1")
+
+		kubeconfigPath := strings.TrimSpace(os.Getenv("KUBECONFIG"))
+		if kubeconfigPath == "" {
+			By("KUBECONFIG not set; exporting current kubectl context to a temporary kubeconfig")
+			cmd = exec.Command("kubectl", "config", "view", "--raw") // #nosec G204 -- test harness command
+			out, err := utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to export kubeconfig from current kubectl context")
+			kubeconfigPath = filepath.Join(os.TempDir(), "openbao-operator-e2e-existing.kubeconfig")
+			ExpectWithOffset(1, os.WriteFile(kubeconfigPath, []byte(out), 0o600)).To(Succeed(), "Failed to write exported kubeconfig")
+		}
+
+		if strings.TrimSpace(projectImage) == "" || projectImage == defaultProjectImage {
+			Fail("E2E_USE_EXISTING_CLUSTER requires E2E_OPERATOR_IMAGE to be set to a pullable image reference")
+		}
+
+		bootstrap := suiteBootstrap{
+			Clusters:                []string{existingClusterName},
+			Kubeconfigs:             []string{kubeconfigPath},
+			CertManagerPreinstalled: []bool{},
+		}
+
+		withEnv("KUBECONFIG", kubeconfigPath, func() {
+			certManagerPreinstalled := false
+			if !skipCertManagerInstall {
+				By("checking if cert manager is installed already")
+				certManagerPreinstalled = utils.IsCertManagerCRDsInstalled()
+				if !certManagerPreinstalled {
+					_, _ = fmt.Fprintf(GinkgoWriter, "Installing CertManager...\n")
+					ExpectWithOffset(1, utils.InstallCertManager()).To(Succeed(), "Failed to install CertManager")
+				} else {
+					_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: CertManager is already installed. Skipping installation...\n")
+				}
+			}
+			bootstrap.CertManagerPreinstalled = append(bootstrap.CertManagerPreinstalled, certManagerPreinstalled)
+
+			By("creating operator namespace")
+			cmd = exec.Command("kubectl", "create", "ns", operatorNamespace) // #nosec G204 -- test harness command
+			_, err = utils.Run(cmd)
+			if err != nil {
+				Expect(err.Error()).To(ContainSubstring("AlreadyExists"))
+			}
+
+			By("labeling the operator namespace to enforce the restricted security policy (best-effort)")
+			cmd = exec.Command("kubectl", "label", "--overwrite", "ns", operatorNamespace,
+				"pod-security.kubernetes.io/enforce=restricted") // #nosec G204 -- test harness command
+			_, _ = utils.Run(cmd)
+
+			By("installing CRDs")
+			cmd = exec.Command("make", "install")
+			_, err = utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install CRDs")
+
+			By("deploying the controller-manager and provisioner")
+			cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
+			_, err = utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the operator")
+		})
+
+		suiteBootstrapState = &bootstrap
+
+		data, err := json.Marshal(bootstrap)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to marshal suite bootstrap state")
+		return data
 	}
 
 	baseCluster := strings.TrimSpace(os.Getenv("KIND_CLUSTER"))
@@ -353,11 +434,15 @@ var _ = SynchronizedAfterSuite(func() {
 				_, _ = utils.Run(cmd)
 				cancel()
 
-				By(fmt.Sprintf("uninstalling CRDs (cluster=%s)", clusterName))
-				ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
-				cmd = exec.CommandContext(ctx, "make", "uninstall", "ignore-not-found=true", "wait=false")
-				_, _ = utils.Run(cmd)
-				cancel()
+				if !useExistingCluster || existingClusterFullCleanup {
+					By(fmt.Sprintf("uninstalling CRDs (cluster=%s)", clusterName))
+					ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
+					cmd = exec.CommandContext(ctx, "make", "uninstall", "ignore-not-found=true", "wait=false")
+					_, _ = utils.Run(cmd)
+					cancel()
+				} else {
+					_, _ = fmt.Fprintf(GinkgoWriter, "E2E_USE_EXISTING_CLUSTER: skipping CRD uninstall (set E2E_EXISTING_CLUSTER_FULL_CLEANUP=true to enable)\n")
+				}
 
 				By(fmt.Sprintf("removing operator namespace (cluster=%s)", clusterName))
 				ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
@@ -365,10 +450,15 @@ var _ = SynchronizedAfterSuite(func() {
 				_, _ = utils.Run(cmd)
 				cancel()
 
-				// Teardown CertManager after the suite if not skipped and if it was not already installed
+				// Teardown CertManager after the suite if not skipped and if it was not already installed.
+				// In existing-cluster mode, keep cert-manager by default.
 				if !skipCertManagerInstall && !suiteBootstrapState.CertManagerPreinstalled[i] {
-					_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager (cluster=%s)...\n", clusterName)
-					utils.UninstallCertManager()
+					if !useExistingCluster || existingClusterFullCleanup {
+						_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager (cluster=%s)...\n", clusterName)
+						utils.UninstallCertManager()
+					} else {
+						_, _ = fmt.Fprintf(GinkgoWriter, "E2E_USE_EXISTING_CLUSTER: skipping CertManager uninstall (set E2E_EXISTING_CLUSTER_FULL_CLEANUP=true to enable)\n")
+					}
 				}
 			})
 		})

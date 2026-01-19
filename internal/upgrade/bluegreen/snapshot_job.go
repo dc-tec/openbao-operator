@@ -6,12 +6,8 @@ import (
 
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
@@ -64,237 +60,37 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 
 // buildSnapshotJob creates a backup Job spec for upgrade snapshots.
 func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, phase string, verifiedExecutorDigest string) (*batchv1.Job, error) {
-	region := cluster.Spec.Backup.Target.Region
-	if region == "" {
-		region = "us-east-1"
+	job, err := backup.BuildJob(cluster, backup.JobOptions{
+		JobName:                jobName,
+		JobType:                backup.JobTypePreUpgrade,
+		VerifiedExecutorDigest: verifiedExecutorDigest,
+		FilenamePrefix:         phase,
+		ClientConfig:           m.clientConfig,
+		Platform:               m.Platform,
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	// Compute StatefulSet name for pod discovery
-	// For pre-upgrade snapshots, use the Blue revision (current stable pods)
-	statefulSetName := cluster.Name
-	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
-		statefulSetName = fmt.Sprintf("%s-%s", cluster.Name, cluster.Status.BlueGreen.BlueRevision)
+	// Keep labels/annotations stable for the upgrade snapshot use-case.
+	// We build the Job via the backup builder (shared logic), but expose it as an
+	// "upgrade-snapshot" component so it remains distinguishable from scheduled backups.
+	if job.Labels == nil {
+		job.Labels = map[string]string{}
 	}
+	job.Labels[constants.LabelOpenBaoComponent] = ComponentUpgradeSnapshot
+	delete(job.Labels, constants.LabelOpenBaoBackupType)
 
-	// Build environment variables for the backup container
-	env := []corev1.EnvVar{
-		{Name: constants.EnvClusterNamespace, Value: cluster.Namespace},
-		{Name: constants.EnvClusterName, Value: cluster.Name},
-		{Name: constants.EnvStatefulSetName, Value: statefulSetName},
-		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
-		{Name: constants.EnvBackupEndpoint, Value: cluster.Spec.Backup.Target.Endpoint},
-		{Name: constants.EnvBackupBucket, Value: cluster.Spec.Backup.Target.Bucket},
-		{Name: constants.EnvBackupPathPrefix, Value: cluster.Spec.Backup.Target.PathPrefix},
-		{Name: constants.EnvBackupRegion, Value: region},
-		{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", cluster.Spec.Backup.Target.UsePathStyle)},
+	if job.Spec.Template.Labels == nil {
+		job.Spec.Template.Labels = map[string]string{}
 	}
+	job.Spec.Template.Labels[constants.LabelOpenBaoComponent] = ComponentUpgradeSnapshot
+	delete(job.Spec.Template.Labels, constants.LabelOpenBaoBackupType)
 
-	// Smart Client Limits
-	if m.clientConfig.RateLimitQPS > 0 {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvClientQPS,
-			Value: fmt.Sprintf("%f", m.clientConfig.RateLimitQPS),
-		})
+	if job.Annotations == nil {
+		job.Annotations = map[string]string{}
 	}
-	if m.clientConfig.RateLimitBurst > 0 {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvClientBurst,
-			Value: fmt.Sprintf("%d", m.clientConfig.RateLimitBurst),
-		})
-	}
-	if m.clientConfig.CircuitBreakerFailureThreshold > 0 {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvClientCircuitBreakerFailureThreshold,
-			Value: fmt.Sprintf("%d", m.clientConfig.CircuitBreakerFailureThreshold),
-		})
-	}
-	if m.clientConfig.CircuitBreakerOpenDuration > 0 {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvClientCircuitBreakerOpenDuration,
-			Value: m.clientConfig.CircuitBreakerOpenDuration.String(),
-		})
-	}
-
-	// Add role ARN if configured
-	if cluster.Spec.Backup.Target.RoleARN != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvAWSRoleARN,
-			Value: cluster.Spec.Backup.Target.RoleARN,
-		})
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvAWSWebIdentityTokenFile,
-			Value: "/var/run/secrets/aws/token",
-		})
-	}
-
-	// Add JWT Auth configuration if available
-	if cluster.Spec.Backup.JWTAuthRole != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupJWTAuthRole,
-			Value: cluster.Spec.Backup.JWTAuthRole,
-		})
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupAuthMethod,
-			Value: constants.BackupAuthMethodJWT,
-		})
-	}
-
-	backoffLimit := int32(0) // Don't retry
-	ttlSecondsAfterFinished := int32(3600)
-
-	// Build volume mounts
-	volumeMounts := []corev1.VolumeMount{
-		{
-			Name:      "tls-ca",
-			MountPath: constants.PathTLS,
-			ReadOnly:  true,
-		},
-	}
-
-	// Add JWT token mount if configured
-	if cluster.Spec.Backup.JWTAuthRole != "" {
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      "openbao-token",
-			MountPath: "/var/run/secrets/tokens",
-			ReadOnly:  true,
-		})
-	}
-
-	// Add credentials secret mount if provided
-	if cluster.Spec.Backup.Target.CredentialsSecretRef != nil {
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      "backup-credentials",
-			MountPath: constants.PathBackupCredentials,
-			ReadOnly:  true,
-		})
-	}
-
-	// Build volumes
-	volumes := []corev1.Volume{
-		{
-			Name: "tls-ca",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: cluster.Name + constants.SuffixTLSCA,
-				},
-			},
-		},
-	}
-
-	// Add JWT token volume if configured
-	if cluster.Spec.Backup.JWTAuthRole != "" {
-		volumes = append(volumes, corev1.Volume{
-			Name: "openbao-token",
-			VolumeSource: corev1.VolumeSource{
-				Projected: &corev1.ProjectedVolumeSource{
-					Sources: []corev1.VolumeProjection{
-						{
-							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-								Path:              "openbao-token",
-								ExpirationSeconds: ptr.To(int64(3600)),
-								Audience:          auth.OpenBaoJWTAudience(),
-							},
-						},
-					},
-				},
-			},
-		})
-	}
-
-	// Add credentials secret volume if provided
-	if cluster.Spec.Backup.Target.CredentialsSecretRef != nil {
-		credentialsFileMode := int32(0400) // Owner read-only
-		volumes = append(volumes, corev1.Volume{
-			Name: "backup-credentials",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  cluster.Spec.Backup.Target.CredentialsSecretRef.Name,
-					DefaultMode: &credentialsFileMode,
-				},
-			},
-		})
-	}
-
-	// Service account name - use backup service account
-	serviceAccountName := cluster.Name + constants.SuffixBackupServiceAccount
-
-	image := verifiedExecutorDigest
-	if image == "" {
-		image = cluster.Spec.Backup.ExecutorImage
-	}
-	if image == "" {
-		var err error
-		image, err = constants.DefaultBackupImage()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get default backup image: %w", err)
-		}
-	}
-
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:      cluster.Name,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: ComponentUpgradeSnapshot,
-			},
-			Annotations: map[string]string{
-				AnnotationSnapshotPhase: phase,
-			},
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(cluster, openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster")),
-			},
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoffLimit,
-			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-						constants.LabelAppInstance:      cluster.Name,
-						constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-						constants.LabelOpenBaoCluster:   cluster.Name,
-						constants.LabelOpenBaoComponent: ComponentUpgradeSnapshot,
-					},
-				},
-				Spec: corev1.PodSpec{
-					ServiceAccountName:           serviceAccountName,
-					AutomountServiceAccountToken: ptr.To(false),
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: ptr.To(true),
-						RunAsUser:    ptr.To(constants.UserBackup),
-						RunAsGroup:   ptr.To(constants.GroupBackup),
-						FSGroup:      ptr.To(constants.GroupBackup),
-						SeccompProfile: &corev1.SeccompProfile{
-							Type: corev1.SeccompProfileTypeRuntimeDefault,
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers: []corev1.Container{
-						{
-							Name:  "backup",
-							Image: image,
-							SecurityContext: &corev1.SecurityContext{
-								AllowPrivilegeEscalation: ptr.To(false),
-								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{"ALL"},
-								},
-								ReadOnlyRootFilesystem: ptr.To(true),
-								RunAsNonRoot:           ptr.To(true),
-							},
-							Env:          env,
-							VolumeMounts: volumeMounts,
-						},
-					},
-					Volumes: volumes,
-				},
-			},
-		},
-	}
+	job.Annotations[AnnotationSnapshotPhase] = phase
 
 	return job, nil
 }

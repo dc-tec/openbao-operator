@@ -54,6 +54,7 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
     | `image.tag` | Image tag (defaults to appVersion) | `""` |
     | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
     | `imagePullSecrets` | Registry credentials | `[]` |
+    | `platform` | Target platform (`auto`, `kubernetes`, `openshift`) | `auto` |
     | `tenancy.mode` | `multi` or `single` | `multi` |
     | `tenancy.targetNamespace` | Target namespace (single-tenant only) | `""` |
     | `controller.replicas` | Controller replica count | `1` |
@@ -64,6 +65,21 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
     | `metrics.enabled` | Enable metrics endpoints | `true` |
 
     [:material-arrow-right: Full values.yaml](https://github.com/dc-tec/openbao-operator/blob/main/charts/openbao-operator/values.yaml)
+
+=== ":material-redhat: OpenShift"
+
+    For Red Hat OpenShift clusters, the operator defaults to platform auto-detection.
+    You can optionally force the platform mode to ensure compatibility with Security Context Constraints (SCC):
+
+    ```bash
+    helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
+      --namespace openbao-operator-system \
+      --create-namespace \
+      --set platform=openshift
+    ```
+
+    !!! tip "What this does"
+        This setting instructs the chart/operator to omit pinned `runAsUser` / `fsGroup` IDs in generated Pods, allowing OpenShift's SCC admission controller to inject namespace-scoped IDs automatically.
 
 === ":material-file-document-multiple-outline: YAML Manifests"
 

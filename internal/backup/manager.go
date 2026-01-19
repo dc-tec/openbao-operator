@@ -43,16 +43,18 @@ type Manager struct {
 	scheme                *runtime.Scheme
 	clientConfig          openbao.ClientConfig
 	operatorImageVerifier *security.ImageVerifier
+	Platform              string
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
-func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbao.ClientConfig, operatorImageVerifier *security.ImageVerifier) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbao.ClientConfig, operatorImageVerifier *security.ImageVerifier, platform string) *Manager {
 	return &Manager{
 		client:                c,
 		scheme:                scheme,
 		clientConfig:          clientConfig,
 		operatorImageVerifier: operatorImageVerifier,
+		Platform:              platform,
 	}
 }
 
