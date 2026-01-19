@@ -48,15 +48,17 @@ type Manager struct {
 	scheme                *runtime.Scheme
 	recorder              record.EventRecorder
 	operatorImageVerifier *security.ImageVerifier
+	Platform              string
 }
 
 // NewManager creates a new restore Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme, recorder record.EventRecorder, operatorImageVerifier *security.ImageVerifier) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, recorder record.EventRecorder, operatorImageVerifier *security.ImageVerifier, platform string) *Manager {
 	return &Manager{
 		client:                c,
 		scheme:                scheme,
 		recorder:              recorder,
 		operatorImageVerifier: operatorImageVerifier,
+		Platform:              platform,
 	}
 }
 

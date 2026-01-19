@@ -36,6 +36,7 @@ type infraReconciler struct {
 	verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, verifier *security.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
 	recorder                record.EventRecorder
 	admissionStatus         *admission.Status
+	platform                string
 }
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -212,9 +213,9 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		}
 	}
 
-	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys)
+	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, r.platform)
 	if r.apiReader != nil {
-		manager = inframanager.NewManagerWithReader(r.client, r.apiReader, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys)
+		manager = inframanager.NewManagerWithReader(r.client, r.apiReader, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, r.platform)
 	}
 	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest, verifiedInitContainerDigest); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {

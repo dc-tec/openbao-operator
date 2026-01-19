@@ -26,6 +26,7 @@ func TestInfraReconcilerVerifyMainImageDigest_DisabledDoesNotCallVerifier(t *tes
 			called++
 			return "", nil
 		},
+		platform: "",
 	}
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{
@@ -54,6 +55,7 @@ func TestInfraReconcilerVerifyMainImageDigest_BlockReturnsReasonedError(t *testi
 		verifyImageFunc: func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
 			return "", errors.New("verification failed")
 		},
+		platform: "",
 	}
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{
@@ -85,6 +87,7 @@ func TestInfraReconcilerVerifyMainImageDigest_WarnEmitsEvent(t *testing.T) {
 			return "", errors.New("verification failed")
 		},
 		recorder: recorder,
+		platform: "",
 	}
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{
@@ -128,6 +131,7 @@ func TestInfraReconcilerVerifyOperatorImageDigest_WarnEmitsEvent(t *testing.T) {
 			return "", errors.New("verification failed")
 		},
 		recorder: recorder,
+		platform: "",
 	}
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{

@@ -384,7 +384,7 @@ func buildStatefulSetPodSecurityContext(cluster *openbaov1alpha1.OpenBaoCluster,
 	// For OpenShift, we must NOT set RunAsUser, RunAsGroup, or FSGroup.
 	// OpenShift assigns these dynamically via Security Context Constraints (SCC).
 	// For standard Kubernetes (default), we pin them to ensure file ownership matches the image.
-	if platform != "openshift" {
+	if platform != constants.PlatformOpenShift {
 		securityContext.RunAsUser = ptr.To(openBaoUserID)
 		securityContext.RunAsGroup = ptr.To(openBaoGroupID)
 		securityContext.FSGroup = ptr.To(openBaoGroupID)

@@ -67,8 +67,9 @@ func EnsureExecutorJob(
 	greenRevision string,
 	clientConfig openbao.ClientConfig,
 	operatorImageVerifier *security.ImageVerifier,
+	platform string,
 ) (*JobResult, error) {
-	result, err := ensureUpgradeExecutorJob(ctx, c, scheme, logger, cluster, action, runID, blueRevision, greenRevision, clientConfig, operatorImageVerifier)
+	result, err := ensureUpgradeExecutorJob(ctx, c, scheme, logger, cluster, action, runID, blueRevision, greenRevision, clientConfig, operatorImageVerifier, platform)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +100,7 @@ func ensureUpgradeExecutorJob(
 	greenRevision string,
 	clientConfig openbao.ClientConfig,
 	operatorImageVerifier *security.ImageVerifier,
+	platform string,
 ) (*executorJobResult, error) {
 	if cluster == nil {
 		return nil, fmt.Errorf("cluster is required")
@@ -137,7 +139,7 @@ func ensureUpgradeExecutorJob(
 			}
 		}
 
-		job, err := buildUpgradeExecutorJob(cluster, jobName, action, runID, blueRevision, greenRevision, verifiedExecutorDigest, clientConfig)
+		job, err := buildUpgradeExecutorJob(cluster, jobName, action, runID, blueRevision, greenRevision, verifiedExecutorDigest, clientConfig, platform)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build upgrade Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
@@ -186,6 +188,7 @@ func buildUpgradeExecutorJob(
 	greenRevision string,
 	verifiedExecutorDigest string,
 	clientConfig openbao.ClientConfig,
+	platform string,
 ) (*batchv1.Job, error) {
 	if cluster.Spec.Upgrade == nil {
 		return nil, fmt.Errorf("spec.upgrade is required for upgrade Jobs")
@@ -242,6 +245,22 @@ func buildUpgradeExecutorJob(
 
 	tokenFileMode := int32(0400) // Owner read-only
 
+	podSecurityContext := &corev1.PodSecurityContext{
+		RunAsNonRoot: ptr.To(true),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+
+	// For OpenShift, we must NOT set RunAsUser, RunAsGroup, or FSGroup.
+	// OpenShift assigns these dynamically via Security Context Constraints (SCC).
+	// For standard Kubernetes (default), we pin them to ensure file ownership matches the image.
+	if platform != constants.PlatformOpenShift {
+		podSecurityContext.RunAsUser = ptr.To(constants.UserBackup)
+		podSecurityContext.RunAsGroup = ptr.To(constants.GroupBackup)
+		podSecurityContext.FSGroup = ptr.To(constants.GroupBackup)
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -271,16 +290,8 @@ func buildUpgradeExecutorJob(
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           cluster.Name + constants.SuffixUpgradeServiceAccount,
 					AutomountServiceAccountToken: ptr.To(false),
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: ptr.To(true),
-						RunAsUser:    ptr.To(constants.UserBackup),
-						RunAsGroup:   ptr.To(constants.GroupBackup),
-						FSGroup:      ptr.To(constants.GroupBackup),
-						SeccompProfile: &corev1.SeccompProfile{
-							Type: corev1.SeccompProfileTypeRuntimeDefault,
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyNever,
+					SecurityContext:              podSecurityContext,
+					RestartPolicy:                corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
 							Name:  "upgrade-executor",

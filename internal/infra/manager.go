@@ -70,13 +70,14 @@ type Manager struct {
 	operatorNamespace string
 	oidcIssuer        string
 	oidcJWTKeys       []string
+	Platform          string
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
 // operatorNamespace is the namespace where the operator is deployed, used for NetworkPolicy rules.
 // oidcIssuer and oidcJWTKeys are the OIDC configuration discovered at operator startup.
-func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string, platform string) *Manager {
 	return &Manager{
 		client:            c,
 		reader:            c,
@@ -84,6 +85,7 @@ func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace strin
 		operatorNamespace: operatorNamespace,
 		oidcIssuer:        oidcIssuer,
 		oidcJWTKeys:       oidcJWTKeys,
+		Platform:          platform,
 	}
 }
 
@@ -91,8 +93,8 @@ func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace strin
 // Use this when the controller-runtime client is backed by a namespace-scoped cache
 // (e.g. single-tenant mode) but the operator must still read cluster/system resources
 // outside the watched namespace (e.g. default/kubernetes Service).
-func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string) *Manager {
-	m := NewManager(c, scheme, operatorNamespace, oidcIssuer, oidcJWTKeys)
+func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string, platform string) *Manager {
+	m := NewManager(c, scheme, operatorNamespace, oidcIssuer, oidcJWTKeys, platform)
 	if r != nil {
 		m.reader = r
 	}

@@ -94,7 +94,7 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 			"desiredReplicas", desiredReplicas)
 	}
 
-	desired, buildErr := buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, revision, disableSelfInit)
+	desired, buildErr := buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, revision, disableSelfInit, m.Platform)
 	if buildErr != nil {
 		return fmt.Errorf("failed to build StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, buildErr)
 	}

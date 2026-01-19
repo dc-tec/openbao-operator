@@ -24,10 +24,10 @@ func TestBuildStatefulSetPodSecurityContext(t *testing.T) {
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{},
 			},
-			platform: "kubernetes",
-			wantUser: ptr.To(int64(constants.UserOpenBao)),
-			wantGrp:  ptr.To(int64(constants.GroupOpenBao)),
-			wantFS:   ptr.To(int64(constants.GroupOpenBao)),
+			platform: constants.PlatformKubernetes,
+			wantUser: ptr.To(constants.UserOpenBao),
+			wantGrp:  ptr.To(constants.GroupOpenBao),
+			wantFS:   ptr.To(constants.GroupOpenBao),
 		},
 		{
 			name: "empty platform defaults to pinning IDs (same as kubernetes)",
@@ -44,7 +44,7 @@ func TestBuildStatefulSetPodSecurityContext(t *testing.T) {
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{},
 			},
-			platform: "openshift",
+			platform: constants.PlatformOpenShift,
 			wantUser: nil,
 			wantGrp:  nil,
 			wantFS:   nil,
@@ -60,7 +60,7 @@ func TestBuildStatefulSetPodSecurityContext(t *testing.T) {
 					},
 				},
 			},
-			platform: "kubernetes",
+			platform: constants.PlatformKubernetes,
 			wantUser: ptr.To(int64(1001)),
 			wantGrp:  ptr.To(int64(2001)),
 			wantFS:   ptr.To(int64(3001)),
@@ -74,7 +74,7 @@ func TestBuildStatefulSetPodSecurityContext(t *testing.T) {
 					},
 				},
 			},
-			platform: "openshift",
+			platform: constants.PlatformOpenShift,
 			wantUser: ptr.To(int64(1001)),
 			wantGrp:  nil, // Should remain nil as not overridden
 			wantFS:   nil, // Should remain nil as not overridden

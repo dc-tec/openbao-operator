@@ -31,4 +31,5 @@ type OpenBaoClusterReconciler struct {
 	SmartClientConfig     openbao.ClientConfig
 	ImageVerifier         *security.ImageVerifier
 	OperatorImageVerifier *security.ImageVerifier
+	Platform              string
 }

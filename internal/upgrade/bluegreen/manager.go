@@ -43,10 +43,11 @@ type Manager struct {
 	clientConfig          openbaoapi.ClientConfig
 	imageVerifier         *security.ImageVerifier
 	operatorImageVerifier *security.ImageVerifier
+	Platform              string
 }
 
 // NewManager constructs a Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientConfig openbaoapi.ClientConfig, imageVerifier *security.ImageVerifier, operatorImageVerifier *security.ImageVerifier) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientConfig openbaoapi.ClientConfig, imageVerifier *security.ImageVerifier, operatorImageVerifier *security.ImageVerifier, platform string) *Manager {
 	mgr := &Manager{
 		client:                c,
 		scheme:                scheme,
@@ -55,13 +56,14 @@ func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Man
 		clientConfig:          clientConfig,
 		imageVerifier:         imageVerifier,
 		operatorImageVerifier: operatorImageVerifier,
+		Platform:              platform,
 	}
 	mgr.clusterOps = newOpenBaoClusterOps(c, mgr.clientFactory)
 	return mgr
 }
 
-func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, imageVerifier *security.ImageVerifier, operatorImageVerifier *security.ImageVerifier) *Manager {
-	mgr := NewManager(c, scheme, infraManager, clientConfig, imageVerifier, operatorImageVerifier)
+func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, imageVerifier *security.ImageVerifier, operatorImageVerifier *security.ImageVerifier, platform string) *Manager {
+	mgr := NewManager(c, scheme, infraManager, clientConfig, imageVerifier, operatorImageVerifier, platform)
 	if clientFactory != nil {
 		mgr.clientFactory = clientFactory
 	}
@@ -994,6 +996,7 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 		greenRevision,
 		m.clientConfig,
 		m.operatorImageVerifier,
+		m.Platform,
 	)
 	if err != nil {
 		return phaseOutcome{}, err
@@ -1050,6 +1053,7 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 		greenRevision,
 		m.clientConfig,
 		m.operatorImageVerifier,
+		m.Platform,
 	)
 	if err != nil {
 		return phaseOutcome{}, err

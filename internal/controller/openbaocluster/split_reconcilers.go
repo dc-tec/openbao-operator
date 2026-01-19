@@ -135,6 +135,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(ctx context.Context,
 			verifyImageFunc:       r.parent.verifyImage,
 			recorder:              r.parent.Recorder,
 			admissionStatus:       r.parent.AdmissionStatus,
+			platform:              r.parent.Platform,
 		},
 	}
 	if r.parent.InitManager != nil {
@@ -236,15 +237,15 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	var reconcilers []SubReconciler
-	infraMgr := inframanager.NewManagerWithReader(r.parent.Client, r.parent.APIReader, r.parent.Scheme, r.parent.OperatorNamespace, r.parent.OIDCIssuer, r.parent.OIDCJWTKeys)
+	infraMgr := inframanager.NewManagerWithReader(r.parent.Client, r.parent.APIReader, r.parent.Scheme, r.parent.OperatorNamespace, r.parent.OIDCIssuer, r.parent.OIDCJWTKeys, r.parent.Platform)
 	// Blue/green upgrade strategy
-	reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr, r.parent.SmartClientConfig, r.parent.ImageVerifier, r.parent.OperatorImageVerifier))
+	reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr, r.parent.SmartClientConfig, r.parent.ImageVerifier, r.parent.OperatorImageVerifier, r.parent.Platform))
 
 	// Rolling upgrade strategy
-	reconcilers = append(reconcilers, rollingupgrade.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig, r.parent.OperatorImageVerifier))
+	reconcilers = append(reconcilers, rollingupgrade.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig, r.parent.OperatorImageVerifier, r.parent.Platform))
 
 	// Backup
-	reconcilers = append(reconcilers, backupmanager.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig, r.parent.OperatorImageVerifier))
+	reconcilers = append(reconcilers, backupmanager.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig, r.parent.OperatorImageVerifier, r.parent.Platform))
 
 	for _, rec := range reconcilers {
 		result, err := rec.Reconcile(ctx, logger, cluster)

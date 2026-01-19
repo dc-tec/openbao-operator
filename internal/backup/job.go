@@ -116,6 +116,7 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 			BackupKey:              backupKey,
 			VerifiedExecutorDigest: verifiedExecutorDigest,
 			ClientConfig:           m.clientConfig,
+			Platform:               m.Platform,
 		})
 		if buildErr != nil {
 			return false, fmt.Errorf("failed to build backup Job %s/%s: %w", cluster.Namespace, jobName, buildErr)

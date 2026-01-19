@@ -137,7 +137,7 @@ func TestReconcilePending(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
 		Build()
 
-	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil))
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	result, err := mgr.handlePending(context.Background(), testLogger(), restore)
 	require.NoError(t, err)
@@ -202,7 +202,7 @@ func TestReconcilePhaseRouting(t *testing.T) {
 				WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
 				Build()
 
-			mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil))
+			mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 			result, err := mgr.Reconcile(context.Background(), testLogger(), restore)
 			require.NoError(t, err)
@@ -246,7 +246,7 @@ func TestValidatingClusterNotFound(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
 		Build()
 
-	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil))
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	_, err := mgr.handleValidating(context.Background(), testLogger(), restore)
 	require.NoError(t, err) // failRestore returns nil error
@@ -300,7 +300,7 @@ func TestValidatingUninitializedCluster(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
 		Build()
 
-	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil))
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	_, err := mgr.handleValidating(context.Background(), testLogger(), restore)
 	require.NoError(t, err)
@@ -356,7 +356,7 @@ func TestValidatingNoAuthentication(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
 		Build()
 
-	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil))
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	_, err := mgr.handleValidating(context.Background(), testLogger(), restore)
 	require.NoError(t, err) // failRestore returns nil error
@@ -589,7 +589,7 @@ func TestEnsureFinalizer(t *testing.T) {
 		WithObjects(restore).
 		Build()
 
-	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil))
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	err := mgr.ensureFinalizer(context.Background(), restore)
 	require.NoError(t, err)
@@ -629,7 +629,7 @@ func TestHandleDeletion(t *testing.T) {
 		WithObjects(restore).
 		Build()
 
-	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil))
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	result, err := mgr.handleDeletion(context.Background(), testLogger(), restore)
 	require.NoError(t, err)
@@ -660,7 +660,7 @@ func TestReleaseClusterLock_ClusterNotFound(t *testing.T) {
 		WithScheme(scheme).
 		Build()
 
-	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil))
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	err := mgr.releaseClusterLock(context.Background(), testLogger(), restore)
 	require.NoError(t, err, "should not error when cluster not found")
@@ -685,7 +685,7 @@ func TestReleaseClusterLock_EmptyCluster(t *testing.T) {
 		WithScheme(scheme).
 		Build()
 
-	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil))
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	err := mgr.releaseClusterLock(context.Background(), testLogger(), restore)
 	require.NoError(t, err, "should return nil for empty cluster name")
@@ -696,7 +696,7 @@ func TestNewManager(t *testing.T) {
 	scheme := runtime.NewScheme()
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil))
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	assert.NotNil(t, mgr)
 	assert.NotNil(t, mgr.client)

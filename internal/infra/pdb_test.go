@@ -15,7 +15,7 @@ import (
 
 func TestEnsurePodDisruptionBudget(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("pdb-test", "default")
 	cluster.Spec.Replicas = 3
@@ -68,7 +68,7 @@ func TestEnsurePodDisruptionBudget(t *testing.T) {
 
 func TestEnsurePodDisruptionBudgetExcludesJobPods(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("pdb-exclude-jobs", "default")
 	cluster.Spec.Replicas = 3
@@ -132,7 +132,7 @@ func TestEnsurePodDisruptionBudgetExcludesJobPods(t *testing.T) {
 
 func TestEnsurePodDisruptionBudgetSkipsSingleReplica(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("pdb-single", "default")
 	cluster.Spec.Replicas = 1
@@ -156,7 +156,7 @@ func TestEnsurePodDisruptionBudgetSkipsSingleReplica(t *testing.T) {
 
 func TestEnsurePodDisruptionBudgetLabels(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("pdb-labels", "default")
 	cluster.Spec.Replicas = 5
@@ -192,7 +192,7 @@ func TestEnsurePodDisruptionBudgetLabels(t *testing.T) {
 
 func TestEnsurePodDisruptionBudgetIsIdempotent(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("pdb-idempotent", "default")
 	cluster.Spec.Replicas = 3

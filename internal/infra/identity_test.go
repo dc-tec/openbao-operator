@@ -19,7 +19,7 @@ const (
 
 func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-sa", "default")
 
@@ -52,7 +52,7 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 
 func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-sa-idempotent", "default")
 
@@ -102,7 +102,7 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 
 func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-rbac", "default")
 
@@ -191,7 +191,7 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 
 func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	cluster := newMinimalCluster("infra-rbac-idempotent", "default")
 
@@ -246,7 +246,7 @@ func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 // Cleanup() no longer manually deletes ServiceAccounts - GC handles this.
 func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
 	cluster := newMinimalCluster("infra-sa-gc", "default")
@@ -315,7 +315,7 @@ func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 // Cleanup() no longer manually deletes RBAC resources - GC handles this.
 func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
 	cluster := newMinimalCluster("infra-rbac-gc", "default")

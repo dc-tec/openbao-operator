@@ -38,8 +38,8 @@ func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger lo
 	clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.Clear()
 
-	infra := inframanager.NewManagerWithReader(r.Client, r.APIReader, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys)
-	if err := infra.Cleanup(ctx, logger, cluster, policy); err != nil {
+	infraMgr := inframanager.NewManagerWithReader(r.Client, r.APIReader, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys, r.Platform)
+	if err := infraMgr.Cleanup(ctx, logger, cluster, policy); err != nil {
 		return err
 	}
 

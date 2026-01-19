@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -172,7 +173,12 @@ func TestBuildBackupJob(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	jobName := testBackupJobName
 
-	job, err := BuildJob(cluster, JobOptions{JobName: jobName, JobType: JobTypeScheduled, BackupKey: "test-key-12345"})
+	job, err := BuildJob(cluster, JobOptions{
+		JobName:   jobName,
+		JobType:   JobTypeScheduled,
+		BackupKey: "test-key-12345",
+		Platform:  "",
+	})
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -277,9 +283,15 @@ func TestBuildBackupJob(t *testing.T) {
 func TestBuildBackupJob_UsesVerifiedExecutorDigest(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	jobName := testBackupJobName
-	verifiedDigest := "openbao/backup-executor@sha256:deadbeef"
+	verifiedDigest := "my-registry/backup:sha256:verified"
 
-	job, err := BuildJob(cluster, JobOptions{JobName: jobName, JobType: JobTypeScheduled, BackupKey: "test-key-12345", VerifiedExecutorDigest: verifiedDigest})
+	job, err := BuildJob(cluster, JobOptions{
+		JobName:                jobName,
+		JobType:                JobTypeScheduled,
+		BackupKey:              "test-key-12345",
+		VerifiedExecutorDigest: verifiedDigest,
+		Platform:               "",
+	})
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -301,7 +313,12 @@ func TestBuildBackupJob_WithCredentialsSecret(t *testing.T) {
 	}
 
 	jobName := testBackupJobName
-	job, err := BuildJob(cluster, JobOptions{JobName: jobName, JobType: JobTypeScheduled, BackupKey: "test-key"})
+	job, err := BuildJob(cluster, JobOptions{
+		JobName:   jobName,
+		JobType:   JobTypeScheduled,
+		BackupKey: "test-key",
+		Platform:  "",
+	})
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -361,7 +378,12 @@ func TestBuildBackupJob_WithJWTAuth(t *testing.T) {
 	cluster.Spec.Backup.JWTAuthRole = "backup-role"
 
 	jobName := testBackupJobName
-	job, err := BuildJob(cluster, JobOptions{JobName: jobName, JobType: JobTypeScheduled, BackupKey: "test"})
+	job, err := BuildJob(cluster, JobOptions{
+		JobName:   jobName,
+		JobType:   JobTypeScheduled,
+		BackupKey: "test",
+		Platform:  "",
+	})
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -423,7 +445,12 @@ func TestBuildBackupJob_WithRoleARN(t *testing.T) {
 	cluster.Spec.Backup.Target.RoleARN = "arn:aws:iam::123456789012:role/backup-role"
 
 	jobName := testBackupJobName
-	job, err := BuildJob(cluster, JobOptions{JobName: jobName, JobType: JobTypeScheduled, BackupKey: "test"})
+	job, err := BuildJob(cluster, JobOptions{
+		JobName:   jobName,
+		JobType:   JobTypeScheduled,
+		BackupKey: "test",
+		Platform:  "",
+	})
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -488,7 +515,12 @@ func TestBuildBackupJob_WithTokenSecret(t *testing.T) {
 	}
 
 	jobName := testBackupJobName
-	job, err := BuildJob(cluster, JobOptions{JobName: jobName, JobType: JobTypeScheduled, BackupKey: "test"})
+	job, err := BuildJob(cluster, JobOptions{
+		JobName:   jobName,
+		JobType:   JobTypeScheduled,
+		BackupKey: "test",
+		Platform:  "",
+	})
 	if err != nil {
 		t.Fatalf("buildBackupJob() error = %v", err)
 	}
@@ -527,7 +559,12 @@ func TestBuildBackupJob_UsesDefaultExecutorImage(t *testing.T) {
 	cluster.Spec.Backup.ExecutorImage = "" // Empty - should use default
 
 	jobName := testBackupJobName
-	job, err := BuildJob(cluster, JobOptions{JobName: jobName, JobType: JobTypeScheduled, BackupKey: "test"})
+	job, err := BuildJob(cluster, JobOptions{
+		JobName:   jobName,
+		JobType:   JobTypeScheduled,
+		BackupKey: "test",
+		Platform:  "",
+	})
 
 	if err != nil {
 		t.Fatalf("buildBackupJob() unexpected error = %v", err)
@@ -548,7 +585,7 @@ func TestEnsureBackupJob_CreatesJob(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
@@ -593,7 +630,7 @@ func TestEnsureBackupJob_JobAlreadyRunning(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, runningJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
@@ -623,7 +660,7 @@ func TestEnsureBackupJob_JobCompleted(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, completedJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
@@ -653,7 +690,7 @@ func TestEnsureBackupJob_JobFailed(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, failedJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
@@ -686,7 +723,7 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, succeededJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -734,7 +771,7 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, failedJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -777,7 +814,7 @@ func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, failedJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	// First call should update status
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
@@ -813,7 +850,7 @@ func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	// Should not error when job doesn't exist
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
@@ -844,7 +881,7 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, runningJob)
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil))
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 	manager.operatorImageVerifier = security.NewImageVerifier(log.Log.WithName("backup-image-verifier"), k8sClient, nil)
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
@@ -858,4 +895,85 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 	if statusUpdated {
 		t.Error("processBackupJobResult() should return false when job is still running")
 	}
+}
+
+func TestBuildBackupJob_SecurityContext(t *testing.T) {
+	cluster := newTestClusterWithBackup("test-cluster", "default")
+	jobName := testBackupJobName
+
+	tests := []struct {
+		name     string
+		platform string
+		wantUser *int64
+		wantGrp  *int64
+		wantFS   *int64
+	}{
+		{
+			name:     "kubernetes platform pins IDs",
+			platform: constants.PlatformKubernetes,
+			wantUser: ptr.To(constants.UserBackup),
+			wantGrp:  ptr.To(constants.GroupBackup),
+			wantFS:   ptr.To(constants.GroupBackup),
+		},
+		{
+			name:     "openshift platform omits IDs",
+			platform: constants.PlatformOpenShift,
+			wantUser: nil,
+			wantGrp:  nil,
+			wantFS:   nil,
+		},
+		{
+			name:     "empty platform defaults to pinning IDs",
+			platform: "",
+			wantUser: ptr.To(int64(constants.UserBackup)),
+			wantGrp:  ptr.To(int64(constants.GroupBackup)),
+			wantFS:   ptr.To(int64(constants.GroupBackup)),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			job, err := BuildJob(cluster, JobOptions{
+				JobName:   jobName,
+				JobType:   JobTypeScheduled,
+				BackupKey: "test-key",
+				Platform:  tt.platform,
+			})
+			if err != nil {
+				t.Fatalf("BuildJob() error = %v", err)
+			}
+
+			sc := job.Spec.Template.Spec.SecurityContext
+			if sc == nil {
+				t.Fatal("SecurityContext is nil")
+			}
+
+			if !ptrInt64Equal(sc.RunAsUser, tt.wantUser) {
+				t.Errorf("RunAsUser = %v, want %v", ptrInt64Value(sc.RunAsUser), ptrInt64Value(tt.wantUser))
+			}
+			if !ptrInt64Equal(sc.RunAsGroup, tt.wantGrp) {
+				t.Errorf("RunAsGroup = %v, want %v", ptrInt64Value(sc.RunAsGroup), ptrInt64Value(tt.wantGrp))
+			}
+			if !ptrInt64Equal(sc.FSGroup, tt.wantFS) {
+				t.Errorf("FSGroup = %v, want %v", ptrInt64Value(sc.FSGroup), ptrInt64Value(tt.wantFS))
+			}
+		})
+	}
+}
+
+func ptrInt64Equal(a, b *int64) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func ptrInt64Value(p *int64) int64 {
+	if p == nil {
+		return -1
+	}
+	return *p
 }
