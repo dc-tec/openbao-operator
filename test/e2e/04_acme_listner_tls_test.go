@@ -148,6 +148,8 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 	})
 
 	It("creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)", func() {
+		var err error
+
 		By("setting up ACME service and domain")
 		// Use HTTPS for ACME directory URL as OpenBao requires HTTPS for non-internal CAs
 		// Note: infra-bao is running in dev mode (HTTP), but for ACME tests we need HTTPS.
@@ -156,56 +158,11 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
 		acmeDirectoryURL := infraAddr + "/v1/pki/acme/directory"
 
-		// Create a dedicated service at port 443 to support standard ACME TLS-ALPN-01 validation.
-		// The service forwards 443 -> 8200 (OpenBao listener port).
+		// The operator creates a dedicated Service at ports 80/443 to support ACME validation
+		// while pods are not yet Ready (PublishNotReadyAddresses=true).
 		acmeServiceName := clusterName + "-acme"
 		acmeDomain := fmt.Sprintf("%s.%s.svc", acmeServiceName, f.Namespace)
 		_, _ = fmt.Fprintf(GinkgoWriter, "ACME directory URL: %q, domain: %q\n", acmeDirectoryURL, acmeDomain)
-
-		By(fmt.Sprintf("creating ACME service %q on ports 80 and 443", acmeServiceName))
-		acmeSvc := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      acmeServiceName,
-				Namespace: f.Namespace,
-				Labels: map[string]string{
-					"app.kubernetes.io/name": "openbao-acme",
-				},
-			},
-			Spec: corev1.ServiceSpec{
-				// Allow traffic to reach the pod while it is initializing/waiting for certs.
-				// This is required for ACME validation: the ACME server must be able to reach
-				// the OpenBao pod to complete the ACME challenges (HTTP-01 on port 80, TLS-ALPN-01 on port 443),
-				// but the pod cannot become Ready until it has a valid certificate, creating a circular dependency
-				// without this setting.
-				PublishNotReadyAddresses: true,
-				Selector: map[string]string{
-					"app.kubernetes.io/name":       "openbao",
-					"app.kubernetes.io/instance":   clusterName,
-					"openbao.org/cluster":          clusterName,
-					"app.kubernetes.io/managed-by": "openbao-operator",
-				},
-				Ports: []corev1.ServicePort{
-					{
-						Name:       "http-80",
-						Protocol:   corev1.ProtocolTCP,
-						Port:       80,
-						TargetPort: intstr.FromInt(8200),
-					},
-					{
-						Name:       "https-443",
-						Protocol:   corev1.ProtocolTCP,
-						Port:       443,
-						TargetPort: intstr.FromInt(8200),
-					},
-				},
-			},
-		}
-		err := c.Create(ctx, acmeSvc)
-		if err != nil && !apierrors.IsAlreadyExists(err) {
-			Expect(err).NotTo(HaveOccurred())
-		}
-		_, _ = fmt.Fprintf(GinkgoWriter, "Created ACME service %q\n", acmeServiceName)
-		DeferCleanup(func() { _ = c.Delete(ctx, acmeSvc) })
 
 		By("creating transit token secret for auto-unseal (include TLS CA for transit and PKI CA for ACME)")
 		tokenSecret := &corev1.Secret{
@@ -326,7 +283,6 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 					Mode:    openbaov1alpha1.TLSModeACME,
 					ACME: &openbaov1alpha1.ACMEConfig{
 						DirectoryURL: acmeDirectoryURL,
-						Domain:       acmeDomain,
 						Email:        "e2e@example.invalid",
 					},
 				},
@@ -484,7 +440,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)).To(Succeed())
 			_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet status: replicas=%d ready=%d updated=%d\n",
 				sts.Status.Replicas, sts.Status.ReadyReplicas, sts.Status.UpdatedReplicas)
-			g.Expect(sts.Status.ReadyReplicas).To(Equal(int32(1)))
+			g.Expect(sts.Status.ReadyReplicas).To(Equal(int32(3)))
 		}, 10*time.Minute, 5*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet %q pods are Ready\n", clusterName)
 
