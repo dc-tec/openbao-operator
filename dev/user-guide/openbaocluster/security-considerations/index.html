@@ -1411,6 +1411,34 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#workload-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workload Isolation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workload Isolation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#platform-compatibility-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform Compatibility &amp; Overrides
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3888,6 +3916,34 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#workload-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workload Isolation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workload Isolation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#platform-compatibility-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform Compatibility &amp; Overrides
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4075,6 +4131,30 @@
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="nt">imagePullSecrets</span><span class="p">:</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-registry-creds</span>
 </span></code></pre></div>
+<hr />
+<h2 id="workload-isolation">Workload Isolation<a class="headerlink" href="#workload-isolation" title="Permanent link">&para;</a></h2>
+<p>By default, the operator configures Pods with a strict security context:
+- <strong>UID/GID:</strong> <code>100:1000</code> (pinned to the <code>bao</code> user in official images)
+- <strong>Privileges:</strong> <code>runAsNonRoot: true</code>, <code>allowPrivilegeEscalation: false</code>
+- <strong>Capabilities:</strong> Drop <code>ALL</code></p>
+<h3 id="platform-compatibility-overrides">Platform Compatibility &amp; Overrides<a class="headerlink" href="#platform-compatibility-overrides" title="Permanent link">&para;</a></h3>
+<p>For platforms with strict admission controllers (e.g., OpenShift SCC) or custom requirements, you can override the Pod Security Context.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">securityContext</span><span class="p">:</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="c1"># Example: Run as a specific UID provided by your security team</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">runAsUser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1001</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="nt">runAsGroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1001</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="nt">fsGroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1001</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="c1"># Example: Explicitly unset IDs to let the platform assign them (OpenShift behavior)</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span><span class="c1"># Note: On OpenShift, prefer leaving these unset and rely on the operator&#39;s platform auto-detection (default).</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span><span class="c1"># To force OpenShift mode, set OPERATOR_PLATFORM=openshift (or --platform=openshift).</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span><span class="c1"># runAsUser: null </span>
+</span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">OpenShift Users</p>
+<p>On OpenShift, the operator defaults to platform auto-detection and will omit pinned IDs in generated Pods/Jobs. If needed, force OpenShift mode via <code>OPERATOR_PLATFORM=openshift</code> (or <code>--platform=openshift</code>).</p>
+</div>
 
 
 

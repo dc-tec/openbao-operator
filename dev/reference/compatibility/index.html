@@ -3700,10 +3700,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-openbao-versions" class="md-nav__link">
+  <a href="#2-platforms" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. OpenBao Versions
+        2. Platforms
       
     </span>
   </a>
@@ -3711,10 +3711,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-ci-validation-matrix" class="md-nav__link">
+  <a href="#3-openbao-versions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. CI Validation Matrix
+        3. OpenBao Versions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-ci-validation-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. CI Validation Matrix
       
     </span>
   </a>
@@ -3775,10 +3786,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-openbao-versions" class="md-nav__link">
+  <a href="#2-platforms" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. OpenBao Versions
+        2. Platforms
       
     </span>
   </a>
@@ -3786,10 +3797,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-ci-validation-matrix" class="md-nav__link">
+  <a href="#3-openbao-versions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. CI Validation Matrix
+        3. OpenBao Versions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-ci-validation-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. CI Validation Matrix
       
     </span>
   </a>
@@ -3855,7 +3877,29 @@
 </tr>
 </tbody>
 </table>
-<h2 id="2-openbao-versions">2. OpenBao Versions<a class="headerlink" href="#2-openbao-versions" title="Permanent link">&para;</a></h2>
+<h2 id="2-platforms">2. Platforms<a class="headerlink" href="#2-platforms" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Platform</th>
+<th style="text-align: left;">Status</th>
+<th style="text-align: left;">Configuration</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Kubernetes</strong></td>
+<td style="text-align: left;"><span style="color: #22c55e"><strong>Supported</strong></span></td>
+<td style="text-align: left;">Default (no flags required)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>OpenShift</strong></td>
+<td style="text-align: left;"><span style="color: #22c55e"><strong>Supported</strong></span></td>
+<td style="text-align: left;">Default (auto-detected), or force with <code>OPERATOR_PLATFORM=openshift</code> / <code>--platform=openshift</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-openbao-versions">3. OpenBao Versions<a class="headerlink" href="#3-openbao-versions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -3877,7 +3921,7 @@
 </tr>
 </tbody>
 </table>
-<h2 id="3-ci-validation-matrix">3. CI Validation Matrix<a class="headerlink" href="#3-ci-validation-matrix" title="Permanent link">&para;</a></h2>
+<h2 id="4-ci-validation-matrix">4. CI Validation Matrix<a class="headerlink" href="#4-ci-validation-matrix" title="Permanent link">&para;</a></h2>
 <p>We treat our CI configuration as the source of truth for compatibility.</p>
 <table>
 <thead>

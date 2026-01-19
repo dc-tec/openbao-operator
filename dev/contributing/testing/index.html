@@ -3526,6 +3526,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#openshift-local-existing-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenShift Local / Existing Cluster
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3838,6 +3849,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#openshift-local-existing-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenShift Local / Existing Cluster
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4020,6 +4042,27 @@
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Run only upgrade scenarios</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>make<span class="w"> </span>test-e2e<span class="w"> </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;upgrade&#39;</span>
 </span></code></pre></div>
+<h3 id="openshift-local-existing-cluster">OpenShift Local / Existing Cluster<a class="headerlink" href="#openshift-local-existing-cluster" title="Permanent link">&para;</a></h3>
+<p>To validate OpenShift compatibility, run a focused subset of E2E tests against an existing cluster
+(for example OpenShift Local / CRC).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">KUBECONFIG</span><span class="o">=</span>/path/to/your/kubeconfig
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Operator image must be pullable by the cluster (push it to a registry accessible from CRC).</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">export</span><span class="w"> </span><span class="nv">E2E_OPERATOR_IMAGE</span><span class="o">=</span>quay.io/your-org/openbao-operator:dev
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># For non-kind clusters, configure the API server CIDR used in NetworkPolicies.</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># A permissive value works for smoke testing if you don&#39;t know the exact CIDR:</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nb">export</span><span class="w"> </span><span class="nv">E2E_API_SERVER_CIDR</span><span class="o">=</span><span class="m">0</span>.0.0.0/0
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Run only OpenShift platform checks</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>make<span class="w"> </span>test-e2e-existing<span class="w"> </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;openshift&#39;</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Cleanup behavior</p>
+<p>When <code>E2E_USE_EXISTING_CLUSTER=true</code> (used by <code>make test-e2e-existing</code>), the suite does <strong>not</strong>
+uninstall CRDs or cert-manager by default. To enable full cleanup, set:
+<code>E2E_EXISTING_CLUSTER_FULL_CLEANUP=true</code>.</p>
+</div>
 </div>
 <div class="tabbed-block">
 <p>Some scenarios are difficult or impossible to automate reliably in CI. These must be tested manually before major releases (Minor/Major versions).</p>
