@@ -2,7 +2,7 @@
 
 This document defines the supported Kubernetes and OpenBao versions for the OpenBao Operator.
 
-!!! info "Support Policy"
+!!! note "Support Policy"
     We aim to support the **latest 3 minor versions** of Kubernetes and the **latest major** version of OpenBao.
 
 ## 1. Kubernetes Versions

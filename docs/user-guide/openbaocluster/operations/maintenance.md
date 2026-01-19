@@ -111,14 +111,30 @@ For planned maintenance, consider:
      paused: true
    ```
 
-2. **Monitor cluster health** before and after:
+2. **Enable maintenance mode** when your cluster enforces managed-resource mutation locks:
+   ```yaml
+   spec:
+     maintenance:
+       enabled: true
+   ```
+
+   When enabled, the operator annotates managed Pods/StatefulSet with `openbao.org/maintenance=true`
+   to support controlled deletes/restarts under strict admission policies.
+
+3. **Trigger a rolling restart** (for example, after rotating external dependencies):
+   ```yaml
+   spec:
+     maintenance:
+       restartAt: "2026-01-19T00:00:00Z"
+   ```
+
+4. **Monitor cluster health** before and after:
    ```sh
    kubectl get openbaocluster <name> -o jsonpath='{.status.phase}'
    kubectl get pods -l openbao.org/cluster=<name>
    ```
 
-3. **Check Raft peer status** if needed:
+5. **Check Raft peer status** if needed:
    ```sh
    kubectl exec -it <pod-name> -- bao operator raft list-peers
    ```
-

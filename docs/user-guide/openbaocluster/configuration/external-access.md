@@ -32,7 +32,7 @@ OpenBao clusters can be exposed using **Gateway API** (Recommended), **Ingress**
           nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     ```
 
-    !!! info "Traefik v3"
+    !!! note "Traefik v3"
         Traefik v3 requires a `ServersTransport` to trust the internal CA. See the [Traefik v3 Configuration](#traefik-v3-configuration) section below.
 
 === "Service (L4)"
@@ -60,9 +60,17 @@ Secure your cluster using one of the following TLS modes.
         mode: ACME
         acme:
           directoryURL: "https://acme-v02.api.letsencrypt.org/directory"
-          domain: "bao.example.com"
+          # Prefer domains (list) for multi-SAN certificates
+          domains:
+            - "bao.example.com"
           email: "admin@example.com"
     ```
+
+    !!! note "HA (Raft) + private ACME CA"
+        When using a private ACME CA (for example, an in-cluster PKI), peers must trust the **PKI CA**
+        that signs the issued leaf certificate. If `spec.configuration.acmeCARoot` is set to trust the
+        ACME directory server, place a `pki-ca.crt` file alongside it in the same volume; the operator
+        uses it for Raft `retry_join` and probe verification.
 
 === "External PKI"
     **BYO-Cert:** Integrate with `cert-manager` or corporate PKI. You provide the Secrets; the Operator uses them.

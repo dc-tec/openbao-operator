@@ -15,7 +15,7 @@ The `StatefulSet` creates pods with a hardened security context compliant with t
 | **Seccomp Profile** | `RuntimeDefault` | Restricts available syscalls to the kernel. |
 | **Privilege Escalation** | `false` | Prevents setuid binaries from gaining root. |
 
-!!! info "Volume Mounts"
+!!! note "Volume Mounts"
     Since the root filesystem is read-only, all mutable data (logs, storage, tmp) is written to explicit, size-limited volume mounts.
 
 ## Resource Guardrails

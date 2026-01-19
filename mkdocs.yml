@@ -5,182 +5,186 @@ repo_name: dc-tec/openbao-operator
 edit_uri: edit/main/docs/
 
 theme:
-  name: material
-  features:
-    - navigation.instant
-    - navigation.tracking
-    - navigation.expand
-    - navigation.sections
-    - content.code.copy
-    - content.code.annotation
-    - content.tabs.link
-    - navigation.top
-  palette:
-    - scheme: default
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - scheme: slate
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
-  font:
-    text: DM Sans
-    code: DM Mono
-  logo: assets/logo.svg
-  favicon: assets/favicon.png
+    name: material
+    features:
+        - navigation.instant
+        - navigation.tracking
+        - navigation.expand
+        - navigation.sections
+        - content.code.copy
+        - content.code.annotation
+        - content.tabs.link
+        - navigation.top
+    palette:
+        - scheme: default
+          primary: custom
+          accent: custom
+          toggle:
+              icon: material/brightness-7
+              name: Switch to dark mode
+        - scheme: slate
+          primary: custom
+          accent: custom
+          toggle:
+              icon: material/brightness-4
+              name: Switch to light mode
+    font:
+        text: DM Sans
+        code: DM Mono
+    logo: assets/logo.svg
+    favicon: assets/favicon.png
 
 extra_css:
-  - stylesheets/extra.css
+    - stylesheets/extra.css
 
 markdown_extensions:
-  - admonition
-  - abbr
-  - attr_list
-  - def_list
-  - footnotes
-  - md_in_html
-  - pymdownx.arithmatex:
-      generic: true
-  - pymdownx.details
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
-  - pymdownx.highlight:
-      anchor_linenums: true
-      line_spans: __span
-      pygments_lang_class: true
-  - pymdownx.inlinehilite
-  - pymdownx.keys
-  - pymdownx.mark
-  - pymdownx.smartsymbols
-  - pymdownx.snippets:
-      base_path: ["."]
-  - pymdownx.magiclink
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
-  - pymdownx.tabbed:
-      alternate_style: true
-  - pymdownx.tasklist:
-      custom_checkbox: true
-  - toc:
-      permalink: true
-  - tables
+    - admonition
+    - abbr
+    - attr_list
+    - def_list
+    - footnotes
+    - md_in_html
+    - pymdownx.arithmatex:
+          generic: true
+    - pymdownx.details
+    - pymdownx.emoji:
+          emoji_index: !!python/name:material.extensions.emoji.twemoji
+          emoji_generator: !!python/name:material.extensions.emoji.to_svg
+    - pymdownx.highlight:
+          anchor_linenums: true
+          line_spans: __span
+          pygments_lang_class: true
+    - pymdownx.inlinehilite
+    - pymdownx.keys
+    - pymdownx.mark
+    - pymdownx.smartsymbols
+    - pymdownx.snippets:
+          base_path: ["."]
+    - pymdownx.magiclink
+    - pymdownx.superfences:
+          custom_fences:
+              - name: mermaid
+                class: mermaid
+                format: !!python/name:pymdownx.superfences.fence_code_format
+    - pymdownx.tabbed:
+          alternate_style: true
+    - pymdownx.tasklist:
+          custom_checkbox: true
+    - toc:
+          permalink: true
+    - tables
 
 plugins:
-  - search
-  - mike:
-      canonical_version: latest
-      version_selector: true
+    - search
+    - mike:
+          canonical_version: latest
+          version_selector: true
 
 extra:
-  version:
-    provider: mike
-    default: latest
+    version:
+        provider: mike
+        default: latest
 
 nav:
-  - Home: index.md
-  - User Guide:
-      - Introduction: user-guide/index.md
-      - Operator:
-          - Installation: user-guide/operator/installation.md
-          - Single-Tenant Mode: user-guide/operator/single-tenant-mode.md
-      - OpenBaoTenant:
-          - Overview: user-guide/openbaotenant/overview.md
-          - Onboarding: user-guide/openbaotenant/onboarding.md
-          - Multi-Tenancy: user-guide/openbaotenant/multi-tenancy.md
-      - OpenBaoCluster:
-          - Overview: user-guide/openbaocluster/overview.md
-          - Getting Started: user-guide/openbaocluster/getting-started.md
-          - Next Steps: user-guide/openbaocluster/next-steps.md
-          - Configuration:
-              - Security Profiles: user-guide/openbaocluster/configuration/security-profiles.md
-              - Self-Initialization: user-guide/openbaocluster/configuration/self-init.md
-              - Server Configuration: user-guide/openbaocluster/configuration/server.md
-              - External Access: user-guide/openbaocluster/configuration/external-access.md
-              - Network: user-guide/openbaocluster/configuration/network.md
-              - Resources & Storage: user-guide/openbaocluster/configuration/resources-storage.md
-              - Gateway API: user-guide/openbaocluster/configuration/gateway-api.md
-              - Observability: user-guide/openbaocluster/configuration/observability.md
-          - Operations:
-              - Upgrades: user-guide/openbaocluster/operations/upgrades.md
-              - Backups: user-guide/openbaocluster/operations/backups.md
-              - Maintenance: user-guide/openbaocluster/operations/maintenance.md
-              - Pausing: user-guide/openbaocluster/operations/pausing.md
-              - Deletion: user-guide/openbaocluster/operations/deletion.md
-              - Production Checklist: user-guide/openbaocluster/operations/production-checklist.md
-          - Security Considerations: user-guide/openbaocluster/security-considerations.md
-          - Recovery:
-              - Break Glass / Safe Mode: user-guide/openbaocluster/recovery/safe-mode.md
-              - No Leader / No Quorum: user-guide/openbaocluster/recovery/no-leader.md
-              - Sealed Cluster: user-guide/openbaocluster/recovery/sealed-cluster.md
-              - Failed Rollback: user-guide/openbaocluster/recovery/failed-rollback.md
-      - OpenBaoRestore:
-          - Overview: user-guide/openbaorestore/overview.md
-          - Restore: user-guide/openbaorestore/restore.md
-          - Restore After Partial Upgrade: user-guide/openbaorestore/recovery-restore-after-upgrade.md
-  - Architecture:
-      - Overview: architecture/index.md
-      - Component Design: architecture/components.md
-      - Components:
-          - Certificates: architecture/cert-manager.md
-          - Infrastructure: architecture/infra-manager.md
-          - Cluster Initialization: architecture/init-manager.md
-          - Upgrade: architecture/upgrade-manager.md
-          - Backup: architecture/backup-manager.md
-          - Restore: architecture/restore-manager.md
-      - Lifecycle Management:
-          - Overview: architecture/lifecycle/index.md
-          - Day 0 (Provisioning): architecture/lifecycle/day0-provisioning.md
-          - Day 1 (Creation): architecture/lifecycle/day1-creation.md
-          - Day 2 (Operations): architecture/lifecycle/day2-operations.md
-          - Day N (Backups): architecture/lifecycle/dayN-backups.md
-  - Security:
-      - Overview: security/index.md
-      - Fundamentals:
-          - security/fundamentals/index.md
-          - Threat Model: security/fundamentals/threat-model.md
-          - Security Profiles: security/fundamentals/profiles.md
-          - Secrets Management: security/fundamentals/secrets-management.md
-      - Infrastructure:
-          - security/infrastructure/index.md
-          - RBAC: security/infrastructure/rbac.md
-          - Admission Policies: security/infrastructure/admission-policies.md
-          - Network Security: security/infrastructure/network-security.md
-      - Workload:
-          - security/workload/index.md
-          - Pod Security: security/workload/workload-security.md
-          - TLS: security/workload/tls.md
-          - Supply Chain: security/workload/supply-chain.md
-      - Multi-Tenancy:
-          - security/multi-tenancy/index.md
-          - Tenant Isolation: security/multi-tenancy/tenant-isolation.md
-  - Contributing:
-      - Overview: contributing/index.md
-      - Getting Started:
-          - contributing/getting-started/index.md
-          - Development Setup: contributing/getting-started/development.md
-      - Coding Standards:
-          - contributing/standards/index.md
-          - Go Style: contributing/standards/go-style.md
-          - Error Handling: contributing/standards/error-handling.md
-          - Generated Artifacts: contributing/standards/generated-artifacts.md
-          - Kubernetes Patterns: contributing/standards/kubernetes-patterns.md
-          - Security Practices: contributing/standards/security-practices.md
-          - Conventional Commits: contributing/standards/conventional-commits.md
-          - Project Conventions: contributing/standards/project-conventions.md
-      - Testing:
-          - Overview: contributing/testing.md
-      - CI/CD: contributing/ci.md
-      - Release Management: contributing/release-management.md
-      - SDLC: contributing/sdlc.md
-      - Documentation Style Guide: contributing/docs-style-guide.md
-  - Reference:
-      - Compatibility Matrix: reference/compatibility.md
+    - Home: index.md
+    - User Guide:
+          - Introduction: user-guide/index.md
+          - Operator:
+                - Installation: user-guide/operator/installation.md
+                - Single-Tenant Mode: user-guide/operator/single-tenant-mode.md
+          - OpenBaoTenant:
+                - Overview: user-guide/openbaotenant/overview.md
+                - Onboarding: user-guide/openbaotenant/onboarding.md
+                - Multi-Tenancy: user-guide/openbaotenant/multi-tenancy.md
+          - OpenBaoCluster:
+                - Overview: user-guide/openbaocluster/overview.md
+                - Getting Started: user-guide/openbaocluster/getting-started.md
+                - Next Steps: user-guide/openbaocluster/next-steps.md
+                - Recipes:
+                      - Hardened + Transit + External TLS: user-guide/openbaocluster/recipes/hardened-transit-external-tls.md
+                      - Hardened + Transit + ACME TLS: user-guide/openbaocluster/recipes/hardened-transit-acme-tls.md
+                - Configuration:
+                      - Security Profiles: user-guide/openbaocluster/configuration/security-profiles.md
+                      - Self-Initialization: user-guide/openbaocluster/configuration/self-init.md
+                      - Server Configuration: user-guide/openbaocluster/configuration/server.md
+                      - External Access: user-guide/openbaocluster/configuration/external-access.md
+                      - Network: user-guide/openbaocluster/configuration/network.md
+                      - Resources & Storage: user-guide/openbaocluster/configuration/resources-storage.md
+                      - Gateway API: user-guide/openbaocluster/configuration/gateway-api.md
+                      - Observability: user-guide/openbaocluster/configuration/observability.md
+                - Operations:
+                      - Upgrades: user-guide/openbaocluster/operations/upgrades.md
+                      - Backups: user-guide/openbaocluster/operations/backups.md
+                      - Maintenance: user-guide/openbaocluster/operations/maintenance.md
+                      - Pausing: user-guide/openbaocluster/operations/pausing.md
+                      - Deletion: user-guide/openbaocluster/operations/deletion.md
+                      - Troubleshooting: user-guide/openbaocluster/operations/troubleshooting.md
+                      - Production Checklist: user-guide/openbaocluster/operations/production-checklist.md
+                - Security Considerations: user-guide/openbaocluster/security-considerations.md
+                - Recovery:
+                      - Break Glass / Safe Mode: user-guide/openbaocluster/recovery/safe-mode.md
+                      - No Leader / No Quorum: user-guide/openbaocluster/recovery/no-leader.md
+                      - Sealed Cluster: user-guide/openbaocluster/recovery/sealed-cluster.md
+                      - Failed Rollback: user-guide/openbaocluster/recovery/failed-rollback.md
+          - OpenBaoRestore:
+                - Overview: user-guide/openbaorestore/overview.md
+                - Restore: user-guide/openbaorestore/restore.md
+                - Restore After Partial Upgrade: user-guide/openbaorestore/recovery-restore-after-upgrade.md
+    - Architecture:
+          - Overview: architecture/index.md
+          - Component Design: architecture/components.md
+          - Components:
+                - Certificates: architecture/cert-manager.md
+                - Infrastructure: architecture/infra-manager.md
+                - Cluster Initialization: architecture/init-manager.md
+                - Upgrade: architecture/upgrade-manager.md
+                - Backup: architecture/backup-manager.md
+                - Restore: architecture/restore-manager.md
+          - Lifecycle Management:
+                - Overview: architecture/lifecycle/index.md
+                - Day 0 (Provisioning): architecture/lifecycle/day0-provisioning.md
+                - Day 1 (Creation): architecture/lifecycle/day1-creation.md
+                - Day 2 (Operations): architecture/lifecycle/day2-operations.md
+                - Day N (Backups): architecture/lifecycle/dayN-backups.md
+    - Security:
+          - Overview: security/index.md
+          - Fundamentals:
+                - security/fundamentals/index.md
+                - Threat Model: security/fundamentals/threat-model.md
+                - Security Profiles: security/fundamentals/profiles.md
+                - Secrets Management: security/fundamentals/secrets-management.md
+          - Infrastructure:
+                - security/infrastructure/index.md
+                - RBAC: security/infrastructure/rbac.md
+                - Admission Policies: security/infrastructure/admission-policies.md
+                - Network Security: security/infrastructure/network-security.md
+          - Workload:
+                - security/workload/index.md
+                - Pod Security: security/workload/workload-security.md
+                - TLS: security/workload/tls.md
+                - Supply Chain: security/workload/supply-chain.md
+          - Multi-Tenancy:
+                - security/multi-tenancy/index.md
+                - Tenant Isolation: security/multi-tenancy/tenant-isolation.md
+    - Contributing:
+          - Overview: contributing/index.md
+          - Getting Started:
+                - contributing/getting-started/index.md
+                - Development Setup: contributing/getting-started/development.md
+          - Coding Standards:
+                - contributing/standards/index.md
+                - Go Style: contributing/standards/go-style.md
+                - Error Handling: contributing/standards/error-handling.md
+                - Generated Artifacts: contributing/standards/generated-artifacts.md
+                - Kubernetes Patterns: contributing/standards/kubernetes-patterns.md
+                - Security Practices: contributing/standards/security-practices.md
+                - Conventional Commits: contributing/standards/conventional-commits.md
+                - Project Conventions: contributing/standards/project-conventions.md
+          - Testing:
+                - Overview: contributing/testing.md
+          - CI/CD: contributing/ci.md
+          - Release Management: contributing/release-management.md
+          - SDLC: contributing/sdlc.md
+          - Documentation Style Guide: contributing/docs-style-guide.md
+    - Reference:
+          - Compatibility Matrix: reference/compatibility.md

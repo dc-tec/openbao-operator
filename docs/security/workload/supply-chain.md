@@ -70,7 +70,7 @@ By default, the Operator verifies signatures against the [Sigstore Rekor](https:
 - **Non-Repudiation:** Ensures that the signature was actually created by the signer at a specific time.
 - **Auditability:** Publicly meaningful event log of all signing activity.
 
-!!! info "Air-Gapped Environments"
+!!! note "Air-Gapped Environments"
     In disconnected environments where reaching the public Rekor log is impossible, you can disable this check:
     ```yaml
     spec:

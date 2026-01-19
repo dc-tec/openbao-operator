@@ -37,7 +37,7 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
 
 ## Day 2 Operations
 
-!!! info "Operational Readiness"
+!!! note "Operational Readiness"
     - [ ] **Backups**: Configure scheduled backups to S3/GCS. **Test a restore** before going live.
         - [Learn more](backups.md)
     - [ ] **Network Policy**: Verify `egressRules` allow access to necessary external services (Cloud KMS, S3, OIDC providers).
