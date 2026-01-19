@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"strings"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -37,6 +38,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,6 +66,26 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+func detectPlatform(cfg *rest.Config) string {
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return constants.PlatformKubernetes
+	}
+
+	groups, err := clientset.Discovery().ServerGroups()
+	if err != nil {
+		return constants.PlatformKubernetes
+	}
+
+	for _, g := range groups.Groups {
+		if g.Name == "security.openshift.io" {
+			return constants.PlatformOpenShift
+		}
+	}
+
+	return constants.PlatformKubernetes
+}
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(openbaov1alpha1.AddToScheme(scheme))
@@ -87,6 +109,7 @@ func Run(args []string) {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	var platform string
 
 	// Smart Client Limits
 	var clientQPS float64
@@ -107,6 +130,10 @@ func Run(args []string) {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics server")
+	flag.StringVar(&platform, "platform", "auto",
+		"The target platform (auto, kubernetes, openshift). Defaults to auto. "+
+			"This flag is deprecated and will be removed in a future release. "+
+			"Use the OPERATOR_PLATFORM environment variable instead.")
 
 	flag.Float64Var(&clientQPS, "openbao-client-qps", 50.0,
 		"The queries per second (QPS) limit for OpenBao API clients.")
@@ -122,6 +149,24 @@ func Run(args []string) {
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	platform = strings.ToLower(strings.TrimSpace(platform))
+
+	// Allow environment variable to override flag (useful for Helm charts).
+	if envPlatform := strings.TrimSpace(os.Getenv("OPERATOR_PLATFORM")); envPlatform != "" {
+		platform = strings.ToLower(envPlatform)
+	}
+
+	if platform == "" {
+		platform = constants.PlatformAuto
+	}
+
+	if platform == constants.PlatformAuto {
+		detected := detectPlatform(ctrl.GetConfigOrDie())
+		setupLog.Info("Auto-detected target platform", "platform", detected)
+		platform = detected
+	}
+	setupLog.Info("Target platform configured", "platform", platform)
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -347,6 +392,7 @@ func Run(args []string) {
 		Recorder:          mgr.GetEventRecorderFor(constants.ControllerNameOpenBaoCluster),
 		SingleTenantMode:  singleTenantMode,
 		SmartClientConfig: smartClientConfig,
+		Platform:          platform,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
 		os.Exit(1)
@@ -357,6 +403,7 @@ func Run(args []string) {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor(constants.ControllerNameOpenBaoRestore),
+		Platform: platform,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoRestore")
 		os.Exit(1)
