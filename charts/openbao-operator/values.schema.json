@@ -12,6 +12,16 @@
       "type": "string",
       "description": "Override the full name of resources"
     },
+    "platform": {
+      "type": "string",
+      "description": "Target platform configuration (auto, kubernetes, openshift)",
+      "enum": [
+        "auto",
+        "kubernetes",
+        "openshift"
+      ],
+      "default": "auto"
+    },
     "image": {
       "type": "object",
       "description": "Operator image configuration",

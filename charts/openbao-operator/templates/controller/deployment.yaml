@@ -1,3 +1,4 @@
+{{- $isOpenShift := or (eq .Values.platform "openshift") (and (eq .Values.platform "auto") (.Capabilities.APIVersions.Has "security.openshift.io/v1")) -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,7 +31,11 @@ spec:
       {{- end }}
       serviceAccountName: {{ include "openbao-operator.controllerServiceAccountName" . }}
       securityContext:
+        {{- if $isOpenShift }}
+        {{- omit .Values.controller.podSecurityContext "runAsUser" "runAsGroup" "fsGroup" | toYaml | nindent 8 }}
+        {{- else }}
         {{- toYaml .Values.controller.podSecurityContext | nindent 8 }}
+        {{- end }}
       terminationGracePeriodSeconds: 10
       containers:
         - name: manager
@@ -47,6 +52,7 @@ spec:
             {{- if .Values.metrics.enabled }}
             - --metrics-bind-address=:{{ .Values.metrics.port }}
             {{- end }}
+            - --platform={{ .Values.platform }}
           env:
             - name: POD_NAMESPACE
               valueFrom:
@@ -80,7 +86,11 @@ spec:
           resources:
             {{- toYaml .Values.controller.resources | nindent 12 }}
           securityContext:
+            {{- if $isOpenShift }}
+            {{- omit .Values.controller.securityContext "runAsUser" "runAsGroup" "fsGroup" | toYaml | nindent 12 }}
+            {{- else }}
             {{- toYaml .Values.controller.securityContext | nindent 12 }}
+            {{- end }}
       {{- with .Values.controller.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
