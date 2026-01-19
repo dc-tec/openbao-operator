@@ -1,0 +1,7 @@
+- op: add
+  path: /spec/template/spec/containers/0/securityContext/runAsUser
+  value: 65532
+- op: add
+  path: /spec/template/spec/containers/0/securityContext/runAsGroup
+  value: 65532
+
