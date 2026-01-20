@@ -14,7 +14,6 @@ import (
 	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	"github.com/dc-tec/openbao-operator/internal/revision"
 )
 
 const (
@@ -109,11 +108,9 @@ func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Sche
 //   - Rendering a config.hcl ConfigMap that injects TLS paths, storage configuration, retry_join, and seal configuration.
 //   - Reconciling a headless StatefulSet-backed Service, an optional external Service/Ingress, and the StatefulSet itself.
 //
-// verifiedImageDigest is the verified image digest (e.g., "openbao/openbao@sha256:abc...") from image verification.
-// If provided, it will be used instead of cluster.Spec.Image to prevent TOCTOU attacks.
-// If empty, cluster.Spec.Image will be used.
-// verifiedInitContainerDigest is the verified init container image digest (if provided).
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string, verifiedInitContainerDigest string) error {
+// spec contains all parameters needed for StatefulSet reconciliation, including revision, images, and skip logic.
+// This decouples the infrastructure layer from upgrade strategy knowledge.
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) error {
 	// Only create unseal secret if using static seal (default or explicit)
 	if usesStaticSeal(cluster) {
 		if err := m.ensureUnsealSecret(ctx, logger, cluster); err != nil {
@@ -143,13 +140,13 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return err
 	}
 
-	// Determine if we're in blue/green mode and need revision-based naming
-	revisionName, skipStatefulSet := statefulSetRevisionName(logger, cluster)
-	if skipStatefulSet {
+	// Skip StatefulSet reconciliation if requested (e.g., during BlueGreen cleanup phases)
+	if spec.SkipReconciliation {
+		logger.Info("Skipping StatefulSet reconciliation per spec", "reason", "skip flag set")
 		return nil
 	}
 
-	if err := m.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, verifiedImageDigest, verifiedInitContainerDigest, revisionName, false); err != nil {
+	if err := m.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, spec.Image, spec.InitContainerImage, spec.Revision, spec.DisableSelfInit); err != nil {
 		return err
 	}
 
@@ -227,32 +224,6 @@ func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logge
 	}
 
 	return nil
-}
-
-func statefulSetRevisionName(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, bool) {
-	if cluster.Spec.UpdateStrategy.Type != openbaov1alpha1.UpdateStrategyBlueGreen {
-		return "", false
-	}
-
-	// During blue/green deployments, the active ("Blue") StatefulSet is revisioned.
-	// Use the stored BlueRevision when available so infra continues to reconcile Blue
-	// after the user updates spec.version/spec.image to start an upgrade.
-	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
-		// Skip StatefulSet creation during DemotingBlue/Cleanup phases.
-		// The BlueGreenManager handles StatefulSet lifecycle during these phases.
-		// If we don't skip, we'll keep recreating the old Blue StatefulSet that's being deleted.
-		if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
-			cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
-			logger.Info("Skipping Blue StatefulSet reconciliation during cleanup phase",
-				"phase", cluster.Status.BlueGreen.Phase,
-				"blueRevision", cluster.Status.BlueGreen.BlueRevision)
-			return "", true
-		}
-		return cluster.Status.BlueGreen.BlueRevision, false
-	}
-
-	// Bootstrap revision for initial reconciliation before BlueGreen status is initialized.
-	return revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas), false
 }
 
 // applyResource uses Server-Side Apply to create or update a Kubernetes resource.
