@@ -4606,15 +4606,16 @@ spec:
   - expression: '!variables.is_managed || variables.is_operator_controller || (variables.is_kube_controller_manager
       && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
       (variables.is_system_controller && request.operation == "DELETE") || (variables.is_garbage_collector_sa
-      && request.operation == "DELETE") || (variables.is_system_controller && request.resource.resource
-      == "pods") || (variables.is_system_controller && variables.is_endpoints_controller_request)
-      || (variables.is_kube_system_controller && request.resource.resource == "pods"
-      && (request.operation == "CREATE" || request.operation == "DELETE")) || (variables.is_kube_system_controller
-      && variables.is_endpoints_controller_request) || variables.is_kube_system_service_metadata_update
-      || variables.is_cert_manager_secret_request || (variables.is_pod_request &&
-      variables.is_kubelet_node && request.operation == "DELETE") || variables.is_service_registration_label_update
-      || variables.is_kube_system_pod_finalizer_update || variables.is_kube_system_job_finalizer_update
-      || (variables.maintenance_enabled && variables.is_break_glass_admin)'
+      && (request.operation == "DELETE" || request.operation == "UPDATE")) || (variables.is_system_controller
+      && request.resource.resource == "pods") || (variables.is_system_controller &&
+      variables.is_endpoints_controller_request) || (variables.is_kube_system_controller
+      && request.resource.resource == "pods" && (request.operation == "CREATE" ||
+      request.operation == "DELETE")) || (variables.is_kube_system_controller && variables.is_endpoints_controller_request)
+      || variables.is_kube_system_service_metadata_update || variables.is_cert_manager_secret_request
+      || (variables.is_pod_request && variables.is_kubelet_node && request.operation
+      == "DELETE") || variables.is_service_registration_label_update || variables.is_kube_system_pod_finalizer_update
+      || variables.is_kube_system_job_finalizer_update || (variables.maintenance_enabled
+      && variables.is_break_glass_admin)'
     message: Direct modification of OpenBao-managed resources is prohibited; modify
       the parent OpenBaoCluster/OpenBaoTenant instead.
   variables:
