@@ -29,7 +29,8 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 

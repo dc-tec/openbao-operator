@@ -20,6 +20,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/infra"
 )
 
 func requireAdmissionDenied(t *testing.T, err error) {
@@ -166,4 +167,18 @@ func updateClusterStatus(t *testing.T, cluster *openbaov1alpha1.OpenBaoCluster, 
 
 func discardLogger() logr.Logger {
 	return logr.Discard()
+}
+
+// newTestStatefulSetSpec creates a minimal StatefulSetSpec for testing.
+func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) infra.StatefulSetSpec {
+	return infra.StatefulSetSpec{
+		Name:               cluster.Name,
+		Revision:           "",
+		Image:              cluster.Spec.Image,
+		InitContainerImage: "",
+		Replicas:           cluster.Spec.Replicas,
+		ConfigHash:         "",
+		DisableSelfInit:    false,
+		SkipReconciliation: false,
+	}
 }

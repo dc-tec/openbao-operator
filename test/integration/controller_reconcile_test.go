@@ -28,7 +28,8 @@ func TestOpenBaoClusterReconciler_InitialReconcile(t *testing.T) {
 
 	// Run infrastructure reconciliation to create resources
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("InfraManager.Reconcile error: %v", err)
 	}
 
@@ -108,7 +109,8 @@ func TestOpenBaoClusterReconciler_StatusConditions(t *testing.T) {
 
 	// Run infrastructure reconciliation
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("InfraManager.Reconcile error: %v", err)
 	}
 
@@ -307,7 +309,8 @@ func TestOpenBaoClusterReconciler_ResourceCleanup(t *testing.T) {
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
 
 	// Run initial reconciliation to create resources
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("InfraManager.Reconcile error: %v", err)
 	}
 
