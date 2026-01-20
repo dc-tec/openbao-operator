@@ -88,7 +88,7 @@ func TestBuildServerSANsIncludesDefaultsAndExtraSANs(t *testing.T) {
 		Host:    host,
 	}
 
-	dnsNames, ipAddresses, err := buildServerSANs(cluster)
+	dnsNames, ipAddresses, err := buildServerSANs(cluster, nil)
 	if err != nil {
 		t.Fatalf("buildServerSANs() error = %v", err)
 	}

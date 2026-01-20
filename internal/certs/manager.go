@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	clusterpkg "github.com/dc-tec/openbao-operator/internal/cluster"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
@@ -134,6 +135,16 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	// OperatorManaged mode: generate and rotate certificates
+	// Always compute DNS SANs to ensure upgrade-strategy-specific pod names are included
+	dnsSANs := clusterpkg.ComputeRequiredDNSSANs(cluster)
+	return m.reconcileOperatorManagedTLS(ctx, logger, cluster, metrics, dnsSANs)
+}
+
+// reconcileOperatorManagedTLS handles the OperatorManaged TLS mode reconciliation.
+// additionalDNSNames are DNS names computed by the controller layer (e.g., upgrade-strategy-specific pod names).
+//
+//nolint:gocyclo // This method handles multiple certificate lifecycle states; kept linear for readability.
+func (m *Manager) reconcileOperatorManagedTLS(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *tlsMetrics, additionalDNSNames []string) (recon.Result, error) {
 	now := time.Now()
 
 	caSecretName := caSecretName(cluster)
@@ -201,7 +212,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		// entries provided by the StatefulSet (pod-ordinal.service-name.namespace.svc) and
 		// the Service ClusterIP, which are already included in the certificate SANs.
 
-		serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now)
+		serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now, additionalDNSNames)
 		if issueErr != nil {
 			return recon.Result{}, fmt.Errorf("failed to issue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 		}
@@ -237,7 +248,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		// entries provided by the StatefulSet (pod-ordinal.service-name.namespace.svc) and
 		// the Service ClusterIP, which are already included in the certificate SANs.
 
-		serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now)
+		serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now, additionalDNSNames)
 		if issueErr != nil {
 			return recon.Result{}, fmt.Errorf("failed to reissue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 		}
@@ -269,7 +280,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// the Service ClusterIP, which are already included in the certificate SANs.
 
 	// Check if certificate SANs match expected SANs; regenerate if they don't
-	expectedDNS, expectedIPs, sansErr := buildServerSANs(cluster)
+	expectedDNS, expectedIPs, sansErr := buildServerSANs(cluster, additionalDNSNames)
 	if sansErr != nil {
 		return recon.Result{}, fmt.Errorf("failed to compute expected server certificate SANs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, sansErr)
 	}
@@ -292,7 +303,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			"certificate_ips", certIPs,
 			"expected_ips", expectedIPStrs)
 
-		serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now)
+		serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now, additionalDNSNames)
 		if issueErr != nil {
 			return recon.Result{}, fmt.Errorf("failed to reissue server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 		}
@@ -332,7 +343,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// entries provided by the StatefulSet (pod-ordinal.service-name.namespace.svc) and
 	// the Service ClusterIP, which are already included in the certificate SANs.
 
-	serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now)
+	serverCertPEM, serverKeyPEM, issueErr := issueServerCertificate(cluster, caCert, caKey, now, additionalDNSNames)
 	if issueErr != nil {
 		return recon.Result{}, fmt.Errorf("failed to rotate server certificate for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, issueErr)
 	}
@@ -508,7 +519,7 @@ func parseCAFromSecret(secret *corev1.Secret) (*x509.Certificate, *ecdsa.Private
 	return cert, privateKey, certPEM, nil
 }
 
-func issueServerCertificate(cluster *openbaov1alpha1.OpenBaoCluster, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, now time.Time) ([]byte, []byte, error) {
+func issueServerCertificate(cluster *openbaov1alpha1.OpenBaoCluster, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, now time.Time, additionalDNSNames []string) ([]byte, []byte, error) {
 	// Use ECDSA P-256 for better security and performance compared to RSA-2048
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -520,7 +531,7 @@ func issueServerCertificate(cluster *openbaov1alpha1.OpenBaoCluster, caCert *x50
 		return nil, nil, fmt.Errorf("failed to generate server certificate serial number: %w", err)
 	}
 
-	dnsNames, ipAddresses, sansErr := buildServerSANs(cluster)
+	dnsNames, ipAddresses, sansErr := buildServerSANs(cluster, additionalDNSNames)
 	if sansErr != nil {
 		return nil, nil, fmt.Errorf("failed to compute SANs for server certificate: %w", sansErr)
 	}
@@ -614,7 +625,8 @@ func parseECDSAPrivateKey(pemBytes []byte) (*ecdsa.PrivateKey, error) {
 // It includes DNS names based on the cluster configuration and user-provided ExtraSANs.
 // Pod IPs are intentionally excluded because they are ephemeral in Kubernetes and would
 // cause unnecessary certificate rotation when pods are recreated.
-func buildServerSANs(cluster *openbaov1alpha1.OpenBaoCluster) ([]string, []net.IP, error) {
+// additionalDNSNames are DNS names computed by the controller layer (e.g., upgrade-strategy-specific pod names).
+func buildServerSANs(cluster *openbaov1alpha1.OpenBaoCluster, additionalDNSNames []string) ([]string, []net.IP, error) {
 	dnsSet := map[string]struct{}{}
 	ipSet := map[string]struct{}{}
 
@@ -672,27 +684,11 @@ func buildServerSANs(cluster *openbaov1alpha1.OpenBaoCluster) ([]string, []net.I
 			addDNS(fmt.Sprintf("%s-%d.%s.%s.svc", clusterName, i, clusterName, namespace))
 			addDNS(fmt.Sprintf("%s-%d.%s.%s.svc.cluster.local", clusterName, i, clusterName, namespace))
 		}
+	}
 
-		// For Blue/Green upgrades, explicitly add SANs for the revision-specific pod names.
-		// Wildcards like *.bluegreen-cluster.svc work for standard pods, but for Green pods
-		// like bluegreen-cluster-hash-0, we want to be explicit to ensure TLS validation works.
-		if cluster.Status.BlueGreen != nil {
-			revisions := []string{}
-			if cluster.Status.BlueGreen.BlueRevision != "" {
-				revisions = append(revisions, cluster.Status.BlueGreen.BlueRevision)
-			}
-			if cluster.Status.BlueGreen.GreenRevision != "" {
-				revisions = append(revisions, cluster.Status.BlueGreen.GreenRevision)
-			}
-
-			for _, rev := range revisions {
-				for i := int32(0); i < replicas; i++ {
-					podName := fmt.Sprintf("%s-%s-%d", clusterName, rev, i)
-					addDNS(fmt.Sprintf("%s.%s.%s.svc", podName, clusterName, namespace))
-					addDNS(fmt.Sprintf("%s.%s.%s.svc.cluster.local", podName, clusterName, namespace))
-				}
-			}
-		}
+	// Add additional DNS names provided by the controller (e.g., upgrade-strategy-specific pod names)
+	for _, dnsName := range additionalDNSNames {
+		addDNS(dnsName)
 	}
 
 	// Add namespace-wide wildcards for both DNS suffixes
