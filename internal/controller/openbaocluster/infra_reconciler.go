@@ -173,12 +173,11 @@ func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, lo
 // computeStatefulSetSpec computes the StatefulSetSpec from the cluster and verified image digests.
 // This method encapsulates all upgrade strategy knowledge, removing it from the infrastructure layer.
 func (r *infraReconciler) computeStatefulSetSpec(
-	ctx context.Context,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	verifiedImageDigest string,
 	verifiedInitContainerDigest string,
-) (inframanager.StatefulSetSpec, error) {
+) inframanager.StatefulSetSpec {
 	spec := inframanager.StatefulSetSpec{
 		Image:              verifiedImageDigest,
 		InitContainerImage: verifiedInitContainerDigest,
@@ -201,7 +200,7 @@ func (r *infraReconciler) computeStatefulSetSpec(
 					"phase", cluster.Status.BlueGreen.Phase,
 					"blueRevision", cluster.Status.BlueGreen.BlueRevision)
 				spec.SkipReconciliation = true
-				return spec, nil
+				return spec
 			}
 		} else {
 			// Bootstrap revision for initial reconciliation before BlueGreen status is initialized.
@@ -222,7 +221,7 @@ func (r *infraReconciler) computeStatefulSetSpec(
 	// ConfigHash will be computed in the infra manager from the rendered config
 	// We leave it empty here and it will be set during reconciliation
 
-	return spec, nil
+	return spec
 }
 
 // Reconcile implements SubReconciler for infrastructure reconciliation.
@@ -269,10 +268,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	}
 
 	// Compute StatefulSetSpec with all upgrade strategy knowledge
-	spec, err := r.computeStatefulSetSpec(ctx, logger, cluster, verifiedImageDigest, verifiedInitContainerDigest)
-	if err != nil {
-		return recon.Result{}, err
-	}
+	spec := r.computeStatefulSetSpec(logger, cluster, verifiedImageDigest, verifiedInitContainerDigest)
 
 	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, r.platform)
 	if r.apiReader != nil {

@@ -155,7 +155,8 @@ func TestOpenBaoClusterReconciler_VersionUpgradeTrigger(t *testing.T) {
 
 	// Run initial reconciliation
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("initial InfraManager.Reconcile error: %v", err)
 	}
 
@@ -279,8 +280,9 @@ func TestOpenBaoClusterReconciler_IdempotentReconcile(t *testing.T) {
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
 
 	// Run reconciliation multiple times
+	spec := newTestStatefulSetSpec(cluster)
 	for i := 0; i < 3; i++ {
-		if err := manager.Reconcile(ctx, discardLogger(), cluster, "", ""); err != nil {
+		if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 			t.Fatalf("Reconcile iteration %d error: %v", i+1, err)
 		}
 	}

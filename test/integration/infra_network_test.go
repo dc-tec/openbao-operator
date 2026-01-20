@@ -103,7 +103,8 @@ func TestInfraNetwork_ExternalService_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec = newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after disabling external access error = %v", err)
 	}
 
@@ -143,7 +144,8 @@ func TestInfraNetwork_Ingress_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec = newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after disabling ingress error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, ing); err == nil {
@@ -192,7 +194,8 @@ func TestInfraNetwork_HTTPRoute_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec = newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after disabling gateway error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: routeName}, httpRoute); err == nil {
@@ -247,7 +250,8 @@ func TestInfraNetwork_GatewayCAConfigMap_CreatesUpdatesAndDeletes(t *testing.T) 
 	if err := k8sClient.Update(ctx, secret); err != nil {
 		t.Fatalf("update CA secret: %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec = newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after CA update error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cmName}, cm); err != nil {
@@ -262,7 +266,8 @@ func TestInfraNetwork_GatewayCAConfigMap_CreatesUpdatesAndDeletes(t *testing.T) 
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec = newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after disabling gateway error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cmName}, cm); err == nil {
@@ -369,7 +374,7 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 		status.BlueGreen.Phase = openbaov1alpha1.PhaseDemotingBlue
 	})
-	spec := newTestStatefulSetSpec(cluster)
+	spec = newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after cutover error = %v", err)
 	}
@@ -448,7 +453,7 @@ func TestInfraNetwork_TLSRoute_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	spec := newTestStatefulSetSpec(cluster)
+	spec = newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after disabling TLS passthrough error = %v", err)
 	}
@@ -507,7 +512,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	spec := newTestStatefulSetSpec(cluster)
+	spec = newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after disabling BackendTLS error = %v", err)
 	}
@@ -523,7 +528,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	spec := newTestStatefulSetSpec(cluster)
+	spec = newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after enabling BackendTLS error = %v", err)
 	}
@@ -536,7 +541,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	if err := k8sClient.Update(ctx, cluster); err != nil {
 		t.Fatalf("update cluster: %v", err)
 	}
-	spec := newTestStatefulSetSpec(cluster)
+	spec = newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after enabling TLS passthrough error = %v", err)
 	}
