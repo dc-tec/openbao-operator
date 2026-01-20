@@ -31,10 +31,6 @@ import (
 //go:embed trusted_root.json
 var embeddedTrustedRootJSON []byte
 
-// VerifyConfig is an alias for interfaces.VerifyConfig for backward compatibility.
-// New code should use interfaces.VerifyConfig directly.
-type VerifyConfig = interfaces.VerifyConfig
-
 // ImageVerifier verifies container image signatures using Cosign.
 // It implements two caches to minimize network I/O:
 //   - tagCache: TTL-based cache for tag→digest resolution (avoids HEAD requests)
@@ -77,7 +73,7 @@ func NewImageVerifier(logger logr.Logger, k8sClient client.Client, trustedRootCo
 //
 // Returns the resolved image digest (e.g., "openbao/openbao@sha256:abc...") and an error if verification fails.
 // The digest can be used to pin the image in StatefulSets to prevent TOCTOU attacks.
-func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config VerifyConfig) (string, error) {
+func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config interfaces.VerifyConfig) (string, error) {
 	// Validate that either PublicKey OR (Issuer and Subject) are provided
 	if config.PublicKey == "" && (config.Issuer == "" || config.Subject == "") {
 		return "", fmt.Errorf("either PublicKey OR (Issuer and Subject) must be provided for image verification")
@@ -119,7 +115,7 @@ func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config Veri
 // For digest references, it returns them directly without any network I/O.
 // For tag references, it first checks the TTL cache to avoid repeated HEAD requests,
 // only performing a network call on cache miss or expiration.
-func (v *ImageVerifier) resolveDigestWithCache(ctx context.Context, imageRef string, config VerifyConfig) (string, error) {
+func (v *ImageVerifier) resolveDigestWithCache(ctx context.Context, imageRef string, config interfaces.VerifyConfig) (string, error) {
 	// Parse the image reference
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
@@ -155,7 +151,7 @@ func (v *ImageVerifier) resolveDigestWithCache(ctx context.Context, imageRef str
 // For tag references, it performs a HEAD request to resolve the tag to a digest.
 // This is a cheap operation that only fetches manifest metadata, not the full image.
 // NOTE: Callers should prefer resolveDigestWithCache to benefit from TTL caching.
-func (v *ImageVerifier) resolveDigest(ctx context.Context, imageRef string, config VerifyConfig) (string, error) {
+func (v *ImageVerifier) resolveDigest(ctx context.Context, imageRef string, config interfaces.VerifyConfig) (string, error) {
 	// Parse the image reference
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
@@ -199,7 +195,7 @@ func (v *ImageVerifier) resolveDigest(ctx context.Context, imageRef string, conf
 
 // verifyImageSignature performs the actual Cosign signature verification on an already-resolved digest.
 // The digest resolution is handled separately by resolveDigest() to enable cache-first checking.
-func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef string, config VerifyConfig) error {
+func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef string, config interfaces.VerifyConfig) error {
 	// Parse the digest reference
 	ref, err := name.ParseReference(digestRef)
 	if err != nil {
@@ -494,7 +490,7 @@ func (c *tagResolutionCache) set(imageRef, digest string) {
 // cacheKey generates a cache key from image digest and verification config.
 // Uses digest (not tag) to prevent caching issues when tags change.
 // Supports both static key and keyless verification modes.
-func (v *ImageVerifier) cacheKey(digest string, config VerifyConfig) string {
+func (v *ImageVerifier) cacheKey(digest string, config interfaces.VerifyConfig) string {
 	if config.PublicKey != "" {
 		// Static key mode: use hash of public key
 		keyHash := []byte(config.PublicKey)
