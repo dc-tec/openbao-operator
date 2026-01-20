@@ -16,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 )
 
@@ -305,64 +304,13 @@ func accumulateTenantSecretNames(cluster *openbaov1alpha1.OpenBaoCluster, writer
 	if cluster == nil || cluster.Name == "" {
 		return
 	}
-
-	add := func(set map[string]struct{}, name string) {
-		if name == "" {
-			return
-		}
-		set[name] = struct{}{}
-	}
-
-	// Cluster-owned Secrets.
-	tlsCA := cluster.Name + constants.SuffixTLSCA
-	tlsServer := cluster.Name + constants.SuffixTLSServer
-
-	// Only OperatorManaged TLS implies the operator must write the TLS Secrets.
-	// External/ACME are read-only from the operator's perspective.
-	if cluster.Spec.TLS.Mode == "" || cluster.Spec.TLS.Mode == openbaov1alpha1.TLSModeOperatorManaged {
-		add(writer, tlsCA)
-		add(writer, tlsServer)
-	} else {
-		add(reader, tlsCA)
-		add(reader, tlsServer)
-	}
-
-	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
-	if !selfInitEnabled {
-		add(writer, cluster.Name+constants.SuffixRootToken)
-	}
-
-	if isStaticUnseal(cluster) {
-		add(writer, cluster.Name+constants.SuffixUnsealKey)
-	}
-
-	// Referenced Secrets in the OpenBaoCluster spec (read-only).
-	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.CredentialsSecretRef != nil {
-		add(reader, cluster.Spec.Unseal.CredentialsSecretRef.Name)
-	}
-
-	if cluster.Spec.Backup != nil {
-		if cluster.Spec.Backup.Target.CredentialsSecretRef != nil {
-			add(reader, cluster.Spec.Backup.Target.CredentialsSecretRef.Name)
-		}
-		if cluster.Spec.Backup.TokenSecretRef != nil {
-			add(reader, cluster.Spec.Backup.TokenSecretRef.Name)
+	for _, perm := range GetRequiredSecretPermissions(cluster) {
+		if perm.Permission == PermissionWrite {
+			writer[perm.Name] = struct{}{}
+		} else {
+			reader[perm.Name] = struct{}{}
 		}
 	}
-
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.TokenSecretRef != nil {
-		add(reader, cluster.Spec.Upgrade.TokenSecretRef.Name)
-	}
-}
-
-func isStaticUnseal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	if cluster == nil || cluster.Spec.Unseal == nil {
-		return true
-	}
-	if cluster.Spec.Unseal.Type == "" {
-		return true
-	}
-	return cluster.Spec.Unseal.Type == "static"
 }
 
 func sortedUniqueSecretNames(names map[string]struct{}) []string {
