@@ -8,31 +8,31 @@
       
       
       
-        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/contributing/ci/">
+        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recipes/hardened-transit-external-tls/">
       
       
-        <link rel="prev" href="../testing/">
+        <link rel="prev" href="../../next-steps/">
       
       
-        <link rel="next" href="../release-management/">
+        <link rel="next" href="../hardened-transit-acme-tls/">
       
       
         
       
       
-      <link rel="icon" href="../../assets/favicon.png">
+      <link rel="icon" href="../../../../assets/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
     
     
       
-        <title>CI/CD - OpenBao Operator</title>
+        <title>Hardened + Transit + External TLS - OpenBao Operator</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -51,9 +51,9 @@
       
     
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#continuous-integration" class="md-skip">
+        <a href="#recipe-hardened-transit-external-tls" class="md-skip">
           Skip to content
         </a>
       
@@ -98,9 +98,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="OpenBao Operator" class="md-header__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
+    <a href="../../../.." title="OpenBao Operator" class="md-header__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -117,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              CI/CD
+              Hardened + Transit + External TLS
             
           </span>
         </div>
@@ -233,9 +233,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="OpenBao Operator" class="md-nav__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
+    <a href="../../../.." title="OpenBao Operator" class="md-nav__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../../assets/logo.svg" alt="logo">
 
     </a>
     OpenBao Operator
@@ -262,7 +262,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../../.." class="md-nav__link">
         
   
   
@@ -286,8 +286,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -298,13 +300,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -325,7 +325,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -343,7 +343,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/" class="md-nav__link">
+      <a href="../../../" class="md-nav__link">
         
   
   
@@ -422,7 +422,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/operator/installation/" class="md-nav__link">
+      <a href="../../../operator/installation/" class="md-nav__link">
         
   
   
@@ -450,7 +450,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/operator/single-tenant-mode/" class="md-nav__link">
+      <a href="../../../operator/single-tenant-mode/" class="md-nav__link">
         
   
   
@@ -537,7 +537,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaotenant/overview/" class="md-nav__link">
+      <a href="../../../openbaotenant/overview/" class="md-nav__link">
         
   
   
@@ -565,7 +565,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaotenant/onboarding/" class="md-nav__link">
+      <a href="../../../openbaotenant/onboarding/" class="md-nav__link">
         
   
   
@@ -593,7 +593,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaotenant/multi-tenancy/" class="md-nav__link">
+      <a href="../../../openbaotenant/multi-tenancy/" class="md-nav__link">
         
   
   
@@ -626,6 +626,8 @@
                 
   
   
+    
+  
   
   
     
@@ -635,13 +637,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_4" checked>
         
           
           <label class="md-nav__link" for="__nav_2_4" id="__nav_2_4_label" tabindex="0">
@@ -662,7 +662,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -680,7 +680,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/overview/" class="md-nav__link">
+      <a href="../../overview/" class="md-nav__link">
         
   
   
@@ -708,7 +708,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/getting-started/" class="md-nav__link">
+      <a href="../../getting-started/" class="md-nav__link">
         
   
   
@@ -736,7 +736,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/next-steps/" class="md-nav__link">
+      <a href="../../next-steps/" class="md-nav__link">
         
   
   
@@ -761,6 +761,8 @@
                 
   
   
+    
+  
   
   
     
@@ -770,13 +772,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_4_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_4_4" checked>
         
           
           <label class="md-nav__link" for="__nav_2_4_4" id="__nav_2_4_4_label" tabindex="0">
@@ -797,7 +797,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_4_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_4_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2_4_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -812,10 +812,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recipes/hardened-transit-external-tls/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardened + Transit + External TLS
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -831,6 +858,59 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#introduction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Introduction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -843,7 +923,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recipes/hardened-transit-acme-tls/" class="md-nav__link">
+      <a href="../hardened-transit-acme-tls/" class="md-nav__link">
         
   
   
@@ -930,7 +1010,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/security-profiles/" class="md-nav__link">
+      <a href="../../configuration/security-profiles/" class="md-nav__link">
         
   
   
@@ -958,7 +1038,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/self-init/" class="md-nav__link">
+      <a href="../../configuration/self-init/" class="md-nav__link">
         
   
   
@@ -986,7 +1066,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/server/" class="md-nav__link">
+      <a href="../../configuration/server/" class="md-nav__link">
         
   
   
@@ -1014,7 +1094,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/external-access/" class="md-nav__link">
+      <a href="../../configuration/external-access/" class="md-nav__link">
         
   
   
@@ -1042,7 +1122,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/network/" class="md-nav__link">
+      <a href="../../configuration/network/" class="md-nav__link">
         
   
   
@@ -1070,7 +1150,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/resources-storage/" class="md-nav__link">
+      <a href="../../configuration/resources-storage/" class="md-nav__link">
         
   
   
@@ -1098,7 +1178,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/gateway-api/" class="md-nav__link">
+      <a href="../../configuration/gateway-api/" class="md-nav__link">
         
   
   
@@ -1126,7 +1206,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/observability/" class="md-nav__link">
+      <a href="../../configuration/observability/" class="md-nav__link">
         
   
   
@@ -1213,7 +1293,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/upgrades/" class="md-nav__link">
+      <a href="../../operations/upgrades/" class="md-nav__link">
         
   
   
@@ -1241,7 +1321,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/backups/" class="md-nav__link">
+      <a href="../../operations/backups/" class="md-nav__link">
         
   
   
@@ -1269,7 +1349,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/maintenance/" class="md-nav__link">
+      <a href="../../operations/maintenance/" class="md-nav__link">
         
   
   
@@ -1297,7 +1377,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/pausing/" class="md-nav__link">
+      <a href="../../operations/pausing/" class="md-nav__link">
         
   
   
@@ -1325,7 +1405,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/deletion/" class="md-nav__link">
+      <a href="../../operations/deletion/" class="md-nav__link">
         
   
   
@@ -1353,7 +1433,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/troubleshooting/" class="md-nav__link">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -1381,7 +1461,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/production-checklist/" class="md-nav__link">
+      <a href="../../operations/production-checklist/" class="md-nav__link">
         
   
   
@@ -1417,7 +1497,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/security-considerations/" class="md-nav__link">
+      <a href="../../security-considerations/" class="md-nav__link">
         
   
   
@@ -1496,7 +1576,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recovery/safe-mode/" class="md-nav__link">
+      <a href="../../recovery/safe-mode/" class="md-nav__link">
         
   
   
@@ -1524,7 +1604,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recovery/no-leader/" class="md-nav__link">
+      <a href="../../recovery/no-leader/" class="md-nav__link">
         
   
   
@@ -1552,7 +1632,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recovery/sealed-cluster/" class="md-nav__link">
+      <a href="../../recovery/sealed-cluster/" class="md-nav__link">
         
   
   
@@ -1580,7 +1660,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recovery/failed-rollback/" class="md-nav__link">
+      <a href="../../recovery/failed-rollback/" class="md-nav__link">
         
   
   
@@ -1675,7 +1755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaorestore/overview/" class="md-nav__link">
+      <a href="../../../openbaorestore/overview/" class="md-nav__link">
         
   
   
@@ -1703,7 +1783,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaorestore/restore/" class="md-nav__link">
+      <a href="../../../openbaorestore/restore/" class="md-nav__link">
         
   
   
@@ -1731,7 +1811,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaorestore/recovery-restore-after-upgrade/" class="md-nav__link">
+      <a href="../../../openbaorestore/recovery-restore-after-upgrade/" class="md-nav__link">
         
   
   
@@ -1828,7 +1908,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/" class="md-nav__link">
+      <a href="../../../../architecture/" class="md-nav__link">
         
   
   
@@ -1856,7 +1936,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/components/" class="md-nav__link">
+      <a href="../../../../architecture/components/" class="md-nav__link">
         
   
   
@@ -1935,7 +2015,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/cert-manager/" class="md-nav__link">
+      <a href="../../../../architecture/cert-manager/" class="md-nav__link">
         
   
   
@@ -1963,7 +2043,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/infra-manager/" class="md-nav__link">
+      <a href="../../../../architecture/infra-manager/" class="md-nav__link">
         
   
   
@@ -1991,7 +2071,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/init-manager/" class="md-nav__link">
+      <a href="../../../../architecture/init-manager/" class="md-nav__link">
         
   
   
@@ -2019,7 +2099,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/upgrade-manager/" class="md-nav__link">
+      <a href="../../../../architecture/upgrade-manager/" class="md-nav__link">
         
   
   
@@ -2047,7 +2127,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/backup-manager/" class="md-nav__link">
+      <a href="../../../../architecture/backup-manager/" class="md-nav__link">
         
   
   
@@ -2075,7 +2155,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/restore-manager/" class="md-nav__link">
+      <a href="../../../../architecture/restore-manager/" class="md-nav__link">
         
   
   
@@ -2162,7 +2242,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/lifecycle/" class="md-nav__link">
+      <a href="../../../../architecture/lifecycle/" class="md-nav__link">
         
   
   
@@ -2190,7 +2270,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/lifecycle/day0-provisioning/" class="md-nav__link">
+      <a href="../../../../architecture/lifecycle/day0-provisioning/" class="md-nav__link">
         
   
   
@@ -2218,7 +2298,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/lifecycle/day1-creation/" class="md-nav__link">
+      <a href="../../../../architecture/lifecycle/day1-creation/" class="md-nav__link">
         
   
   
@@ -2246,7 +2326,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/lifecycle/day2-operations/" class="md-nav__link">
+      <a href="../../../../architecture/lifecycle/day2-operations/" class="md-nav__link">
         
   
   
@@ -2274,7 +2354,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/lifecycle/dayN-backups/" class="md-nav__link">
+      <a href="../../../../architecture/lifecycle/dayN-backups/" class="md-nav__link">
         
   
   
@@ -2371,7 +2451,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/" class="md-nav__link">
+      <a href="../../../../security/" class="md-nav__link">
         
   
   
@@ -2450,7 +2530,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/fundamentals/" class="md-nav__link">
+      <a href="../../../../security/fundamentals/" class="md-nav__link">
         
   
   
@@ -2478,7 +2558,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/fundamentals/threat-model/" class="md-nav__link">
+      <a href="../../../../security/fundamentals/threat-model/" class="md-nav__link">
         
   
   
@@ -2506,7 +2586,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/fundamentals/profiles/" class="md-nav__link">
+      <a href="../../../../security/fundamentals/profiles/" class="md-nav__link">
         
   
   
@@ -2534,7 +2614,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/fundamentals/secrets-management/" class="md-nav__link">
+      <a href="../../../../security/fundamentals/secrets-management/" class="md-nav__link">
         
   
   
@@ -2621,7 +2701,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/infrastructure/" class="md-nav__link">
+      <a href="../../../../security/infrastructure/" class="md-nav__link">
         
   
   
@@ -2649,7 +2729,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/infrastructure/rbac/" class="md-nav__link">
+      <a href="../../../../security/infrastructure/rbac/" class="md-nav__link">
         
   
   
@@ -2677,7 +2757,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/infrastructure/admission-policies/" class="md-nav__link">
+      <a href="../../../../security/infrastructure/admission-policies/" class="md-nav__link">
         
   
   
@@ -2705,7 +2785,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/infrastructure/network-security/" class="md-nav__link">
+      <a href="../../../../security/infrastructure/network-security/" class="md-nav__link">
         
   
   
@@ -2792,7 +2872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/workload/" class="md-nav__link">
+      <a href="../../../../security/workload/" class="md-nav__link">
         
   
   
@@ -2820,7 +2900,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/workload/workload-security/" class="md-nav__link">
+      <a href="../../../../security/workload/workload-security/" class="md-nav__link">
         
   
   
@@ -2848,7 +2928,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/workload/tls/" class="md-nav__link">
+      <a href="../../../../security/workload/tls/" class="md-nav__link">
         
   
   
@@ -2876,7 +2956,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/workload/supply-chain/" class="md-nav__link">
+      <a href="../../../../security/workload/supply-chain/" class="md-nav__link">
         
   
   
@@ -2963,7 +3043,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/multi-tenancy/" class="md-nav__link">
+      <a href="../../../../security/multi-tenancy/" class="md-nav__link">
         
   
   
@@ -2991,7 +3071,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/multi-tenancy/tenant-isolation/" class="md-nav__link">
+      <a href="../../../../security/multi-tenancy/tenant-isolation/" class="md-nav__link">
         
   
   
@@ -3031,8 +3111,6 @@
       
   
   
-    
-  
   
   
     
@@ -3045,11 +3123,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -3070,7 +3150,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3088,7 +3168,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../../../contributing/" class="md-nav__link">
         
   
   
@@ -3167,7 +3247,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../getting-started/" class="md-nav__link">
+      <a href="../../../../contributing/getting-started/" class="md-nav__link">
         
   
   
@@ -3195,7 +3275,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../getting-started/development/" class="md-nav__link">
+      <a href="../../../../contributing/getting-started/development/" class="md-nav__link">
         
   
   
@@ -3282,7 +3362,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/" class="md-nav__link">
+      <a href="../../../../contributing/standards/" class="md-nav__link">
         
   
   
@@ -3310,7 +3390,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/go-style/" class="md-nav__link">
+      <a href="../../../../contributing/standards/go-style/" class="md-nav__link">
         
   
   
@@ -3338,7 +3418,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/error-handling/" class="md-nav__link">
+      <a href="../../../../contributing/standards/error-handling/" class="md-nav__link">
         
   
   
@@ -3366,7 +3446,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/generated-artifacts/" class="md-nav__link">
+      <a href="../../../../contributing/standards/generated-artifacts/" class="md-nav__link">
         
   
   
@@ -3394,7 +3474,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/kubernetes-patterns/" class="md-nav__link">
+      <a href="../../../../contributing/standards/kubernetes-patterns/" class="md-nav__link">
         
   
   
@@ -3422,7 +3502,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/security-practices/" class="md-nav__link">
+      <a href="../../../../contributing/standards/security-practices/" class="md-nav__link">
         
   
   
@@ -3450,7 +3530,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/conventional-commits/" class="md-nav__link">
+      <a href="../../../../contributing/standards/conventional-commits/" class="md-nav__link">
         
   
   
@@ -3478,7 +3558,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/project-conventions/" class="md-nav__link">
+      <a href="../../../../contributing/standards/project-conventions/" class="md-nav__link">
         
   
   
@@ -3565,7 +3645,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../testing/" class="md-nav__link">
+      <a href="../../../../contributing/testing/" class="md-nav__link">
         
   
   
@@ -3598,37 +3678,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CI/CD
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../../../contributing/ci/" class="md-nav__link">
         
   
   
@@ -3644,109 +3697,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#1-ci-pipeline" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. CI Pipeline
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-ci-vs-local-commands-the-rosetta-stone" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. CI vs Local Commands ("The Rosetta Stone")
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-end-to-end-testing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. End-to-End Testing
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="3. End-to-End Testing">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#running-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Running Tests
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-security-checks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Security Checks
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-documentation-build" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Documentation Build
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -3759,7 +3709,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../release-management/" class="md-nav__link">
+      <a href="../../../../contributing/release-management/" class="md-nav__link">
         
   
   
@@ -3787,7 +3737,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../sdlc/" class="md-nav__link">
+      <a href="../../../../contributing/sdlc/" class="md-nav__link">
         
   
   
@@ -3815,7 +3765,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../docs-style-guide/" class="md-nav__link">
+      <a href="../../../../contributing/docs-style-guide/" class="md-nav__link">
         
   
   
@@ -3904,7 +3854,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/compatibility/" class="md-nav__link">
+      <a href="../../../../reference/compatibility/" class="md-nav__link">
         
   
   
@@ -3959,10 +3909,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-ci-pipeline" class="md-nav__link">
+  <a href="#introduction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. CI Pipeline
+        Introduction
       
     </span>
   </a>
@@ -3970,29 +3920,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-ci-vs-local-commands-the-rosetta-stone" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. CI vs Local Commands ("The Rosetta Stone")
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-end-to-end-testing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. End-to-End Testing
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="3. End-to-End Testing">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
   <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4002,39 +3929,12 @@
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#running-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Running Tests
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
       
         <li class="md-nav__item">
-  <a href="#4-security-checks" class="md-nav__link">
+  <a href="#configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Security Checks
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-documentation-build" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Documentation Build
+        Configuration
       
     </span>
   </a>
@@ -4061,164 +3961,57 @@
   
 
 
-<h1 id="continuous-integration">Continuous Integration<a class="headerlink" href="#continuous-integration" title="Permanent link">&para;</a></h1>
-<p>We use GitHub Actions for all CI checks. The pipeline is designed to be deterministic and reproducible locally.</p>
-<h2 id="1-ci-pipeline">1. CI Pipeline<a class="headerlink" href="#1-ci-pipeline" title="Permanent link">&para;</a></h2>
-<p>The pipeline runs on every PR and <code>main</code> push.</p>
-<pre class="mermaid"><code>graph TD
-    PR([PR Created]) --&gt; Static
-    PR --&gt; Build
-    PR --&gt; Unit
-
-    subgraph Static [Static Analysis]
-        Lint[Lint &amp; Tidy]
-        Gen[Verify Generated]
-        Helm[Verify Helm]
-        Sec[Security Scan]
-    end
-
-    subgraph Build [Build Artifacts]
-        Docs[Build Docs]
-        Chart[Lint Chart]
-    end
-
-    subgraph Unit [Verification]
-        Sanity[Unit Tests]
-        Compat[OpenBao Compat]
-    end
-
-    Static --&gt; E2E{E2E Tests}
-    Build --&gt; E2E
-    Unit --&gt; E2E
-
-    E2E --&gt; Smoke["Smoke Tests"]
-    E2E --&gt; Full["Full Matrix (Nightly)"]
-
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px;
-    classDef check fill:transparent,stroke:#60a5fa,stroke-width:2px;
-
-    class PR process;
-    class Lint,Gen,Helm,Sec,Docs,Chart,Sanity,Compat,Smoke,Full check;</code></pre>
-<h2 id="2-ci-vs-local-commands-the-rosetta-stone">2. CI vs Local Commands ("The Rosetta Stone")<a class="headerlink" href="#2-ci-vs-local-commands-the-rosetta-stone" title="Permanent link">&para;</a></h2>
-<p>Run these locally to debug CI failures.</p>
-<table>
-<thead>
-<tr>
-<th style="text-align: left;">CI Job</th>
-<th style="text-align: left;">Local Command</th>
-<th style="text-align: left;">Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><strong>Lint Check</strong></td>
-<td style="text-align: left;"><code>make lint</code></td>
-<td style="text-align: left;">Runs <code>golangci-lint</code></td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Formatting</strong></td>
-<td style="text-align: left;"><code>make verify-fmt</code></td>
-<td style="text-align: left;">Checks <code>gofmt</code> compliance</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Dependencies</strong></td>
-<td style="text-align: left;"><code>make verify-tidy</code></td>
-<td style="text-align: left;">Ensures <code>go.mod</code> is clean</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Generators</strong></td>
-<td style="text-align: left;"><code>make verify-generated</code></td>
-<td style="text-align: left;">Checks for drift in CRDs/RBAC</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Helm Sync</strong></td>
-<td style="text-align: left;"><code>make verify-helm</code></td>
-<td style="text-align: left;">Checks drift in <code>charts/</code></td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Unit Tests</strong></td>
-<td style="text-align: left;"><code>make test-ci</code></td>
-<td style="text-align: left;">Runs unit + integration tests</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Compatibility</strong></td>
-<td style="text-align: left;"><code>make verify-openbao-config-compat</code></td>
-<td style="text-align: left;">Checks HCL against upstream OpenBao</td>
-</tr>
-</tbody>
-</table>
-<h2 id="3-end-to-end-testing">3. End-to-End Testing<a class="headerlink" href="#3-end-to-end-testing" title="Permanent link">&para;</a></h2>
-<p>We use <a href="https://kind.sigs.k8s.io/">Kind</a> for E2E tests.</p>
-<h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
-<ul class="task-list">
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Docker running</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <code>kubectl</code> installed</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> 4 CPU / 8GB RAM recommended</li>
+<h1 id="recipe-hardened-transit-external-tls">Recipe: Hardened + Transit + External TLS<a class="headerlink" href="#recipe-hardened-transit-external-tls" title="Permanent link">&para;</a></h1>
+<h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">&para;</a></h2>
+<p>This recipe shows a production-style configuration using:
+- <code>spec.profile: Hardened</code>
+- Transit auto-unseal
+- <code>tls.mode: External</code> (cert-manager/corporate PKI/CSI-managed secrets)</p>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<ul>
+<li>An external certificate issuer (cert-manager or equivalent) that produces the required Secrets.</li>
+<li>A Transit-capable OpenBao instance reachable from the cluster (for unseal).</li>
 </ul>
-<h3 id="running-tests">Running Tests<a class="headerlink" href="#running-tests" title="Permanent link">&para;</a></h3>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m13.13 22.19-1.63-3.83c1.57-.58 3.04-1.36 4.4-2.27zM5.64 12.5l-3.83-1.63 6.1-2.77C7 9.46 6.22 10.93 5.64 12.5M21.61 2.39S16.66.269 11 5.93c-2.19 2.19-3.5 4.6-4.35 6.71-.28.75-.09 1.57.46 2.13l2.13 2.12c.55.56 1.37.74 2.12.46A19.1 19.1 0 0 0 18.07 13c5.66-5.66 3.54-10.61 3.54-10.61m-7.07 7.07c-.78-.78-.78-2.05 0-2.83s2.05-.78 2.83 0c.77.78.78 2.05 0 2.83s-2.05.78-2.83 0m-5.66 7.07-1.41-1.41zM6.24 22l3.64-3.64c-.34-.09-.67-.24-.97-.45L4.83 22zM2 22h1.41l4.77-4.76-1.42-1.41L2 20.59zm0-2.83 4.09-4.08c-.21-.3-.36-.62-.45-.97L2 17.76z"/></svg></span> Smoke Test (Fast)</label><label for="__tabbed_1_2">🧪 Full Suite (Thorough)</label><label for="__tabbed_1_3">🐛 Debug Mode</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p>Runs a subset of critical tests. Best for quick feedback.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>test-e2e-ci<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nv">KIND_NODE_IMAGE</span><span class="o">=</span>kindest/node:v1.34.3<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span>smoke<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nv">E2E_PARALLEL_NODES</span><span class="o">=</span><span class="m">1</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Runs the entire test matrix (Upgrade, Backup, Restore, etc).</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>test-e2e-ci<span class="w"> </span><span class="nv">KIND_NODE_IMAGE</span><span class="o">=</span>kindest/node:v1.34.3
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Keeps the cluster alive after failure for inspection.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>test-e2e-ci<span class="w"> </span><span class="nv">E2E_SKIP_CLEANUP</span><span class="o">=</span><span class="nb">true</span>
-</span></code></pre></div>
-</div>
-</div>
-</div>
-<h2 id="4-security-checks">4. Security Checks<a class="headerlink" href="#4-security-checks" title="Permanent link">&para;</a></h2>
-<p>We run vulnerability scanning on every PR.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Govulncheck</label><label for="__tabbed_2_2">Trivy</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p>Detects known vulnerabilities in Go dependencies.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>go<span class="w"> </span>install<span class="w"> </span>golang.org/x/vuln/cmd/govulncheck@latest
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>govulncheck<span class="w"> </span>-test<span class="w"> </span>./...
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Scans the operator image for OS vulnerabilities.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>security-scan<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/dc-tec/openbao-operator:latest
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoCluster</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-external</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Hardened</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">External</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="c1"># Configure external access (pick one).</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span><span class="nt">gateway</span><span class="p">:</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span><span class="nt">hostname</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;bao.example.com&quot;</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span><span class="nt">gatewayRef</span><span class="p">:</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main-gateway</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway-system</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">  </span><span class="nt">unseal</span><span class="p">:</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">transit</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">    </span><span class="nt">credentialsSecretRef</span><span class="p">:</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">transit-token</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">    </span><span class="nt">transit</span><span class="p">:</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">      </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://infra-bao.infra.svc:8200&quot;</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">      </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;transit&quot;</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">      </span><span class="nt">keyName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;openbao-unseal&quot;</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">      </span><span class="nt">tlsCACert</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/etc/bao/seal-creds/ca.crt&quot;</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">  </span><span class="nt">selfInit</span><span class="p">:</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">    </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10Gi</span>
 </span></code></pre></div>
 <div class="admonition note">
-<p class="admonition-title">Expected RBAC findings (skipped in Trivy FS)</p>
-<p>Trivy's Kubernetes misconfiguration rules flag several <strong>intentionally privileged</strong> RBAC manifests/templates
-(e.g. tenant template roles, single-tenant mode, and provisioner cleanup permissions).
-We skip these specific files in CI and in <code>make security-scan</code> using Trivy's <code>--skip-files</code> flags.</p>
-<p>If you modify RBAC under <code>config/rbac/</code>, <code>dist/install.yaml</code>, or the chart RBAC templates, and Trivy starts failing,
-update the skip list in:</p>
-<ul>
-<li><code>.github/workflows/ci.yml</code> (Trivy FS step)</li>
-<li><code>.github/workflows/nightly.yml</code> (Trivy FS step)</li>
-<li><code>Makefile</code> (<code>security-scan</code> target)</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-<h2 id="5-documentation-build">5. Documentation Build<a class="headerlink" href="#5-documentation-build" title="Permanent link">&para;</a></h2>
-<p>Docs are built with MkDocs and Material.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Local preview</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>make<span class="w"> </span>docs-serve
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Build distribution (checks internal links)</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>make<span class="w"> </span>docs-build
-</span></code></pre></div>
-<div class="admonition tip">
-<p class="admonition-title">Preview Deployment</p>
-<p>Every PR deploys a temporary preview environment URL directly in the GitHub comment.</p>
+<p class="admonition-title">Note</p>
+<p>When your externally-managed certificate does not include an IP SAN for <code>127.0.0.1</code>, the OpenBao Operator sets probe SNI automatically based on the configured Gateway/Ingress/Service hostname.</p>
 </div>
 
 
@@ -4277,10 +4070,10 @@ update the skip list in:</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.expand", "navigation.sections", "content.code.copy", "content.code.annotation", "content.tabs.link", "navigation.top"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["navigation.instant", "navigation.tracking", "navigation.expand", "navigation.sections", "content.code.copy", "content.code.annotation", "content.tabs.link", "navigation.top"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>
