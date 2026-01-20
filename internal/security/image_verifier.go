@@ -25,21 +25,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 )
 
 //go:embed trusted_root.json
 var embeddedTrustedRootJSON []byte
 
-// VerifyConfig holds the configuration for image verification.
-// Provide PublicKey for static verification OR Issuer/Subject for keyless.
-type VerifyConfig struct {
-	PublicKey        string
-	Issuer           string
-	Subject          string
-	IgnoreTlog       bool
-	ImagePullSecrets []corev1.LocalObjectReference
-	Namespace        string
-}
+// VerifyConfig is an alias for interfaces.VerifyConfig for backward compatibility.
+// New code should use interfaces.VerifyConfig directly.
+type VerifyConfig = interfaces.VerifyConfig
 
 // ImageVerifier verifies container image signatures using Cosign.
 // It implements two caches to minimize network I/O:
