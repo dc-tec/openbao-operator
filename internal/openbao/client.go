@@ -63,12 +63,12 @@ type Client struct {
 	token      string
 	httpClient *http.Client
 
-	smart *smartClientState
+	state *clientState
 }
 
 // ClientConfig holds configuration for creating a new Client.
 type ClientConfig struct {
-	// ClusterKey is an optional per-cluster identifier used to share smart-client state
+	// ClusterKey is an optional per-cluster identifier used to share client state
 	// (rate limiting and circuit breakers) across multiple Client instances.
 	//
 	// Recommended format: "<namespace>/<name>".
@@ -167,23 +167,80 @@ func NewClient(config ClientConfig) (*Client, error) {
 		Timeout:   requestTimeout,
 	}
 
-	if config.ClusterKey == "" && parsedURL.Host != "" {
-		// Best-effort fallback for callers that don't provide a cluster identifier.
-		// Include the port to avoid sharing smart-client state across unrelated endpoints
-		// (e.g., multiple httptest servers in unit tests).
-		config.ClusterKey = parsedURL.Host
+	var state *clientState
+
+	return &Client{
+		baseURL:    config.BaseURL,
+		token:      config.Token,
+		httpClient: httpClient,
+		state:      state,
+	}, nil
+}
+
+// newClientWithState creates a Client with explicit client state.
+// This is used by ClientFactory when created via ClientManager.
+func newClientWithState(config ClientConfig, state *clientState) (*Client, error) {
+	if config.BaseURL == "" {
+		return nil, fmt.Errorf("baseURL is required")
 	}
 
-	var smart *smartClientState
-	if !config.SmartClientDisabled {
-		smart = getOrCreateSmartState(config)
+	if config.CACert == nil {
+		config.CACert = []byte{}
+	}
+
+	connectionTimeout := config.ConnectionTimeout
+	if connectionTimeout == 0 {
+		connectionTimeout = DefaultConnectionTimeout
+	}
+
+	requestTimeout := config.RequestTimeout
+	if requestTimeout == 0 {
+		requestTimeout = DefaultRequestTimeout
+	}
+
+	// Parse the base URL to extract the hostname for server name verification
+	parsedURL, err := url.Parse(config.BaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid baseURL %q: %w", config.BaseURL, err)
+	}
+
+	// Configure TLS with the provided CA certificate
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+
+	// Set ServerName to the hostname from the URL to ensure proper certificate verification.
+	if parsedURL.Hostname() != "" {
+		tlsConfig.ServerName = parsedURL.Hostname()
+	}
+
+	// If a per-cluster CA bundle is provided, trust only that bundle.
+	if len(config.CACert) > 0 {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(config.CACert) {
+			return nil, fmt.Errorf("failed to parse CA certificate")
+		}
+		tlsConfig.RootCAs = pool
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig:     tlsConfig,
+		TLSHandshakeTimeout: connectionTimeout,
+		DisableKeepAlives:   false,
+		MaxIdleConns:        10,
+		IdleConnTimeout:     90 * time.Second,
+	}
+
+	httpClient := &http.Client{
+		Transport: transport,
+		Timeout:   requestTimeout,
 	}
 
 	return &Client{
 		baseURL:    config.BaseURL,
 		token:      config.Token,
 		httpClient: httpClient,
-		smart:      smart,
+		state:      state,
 	}, nil
 }
 
@@ -359,22 +416,22 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 	// Check for non-success status codes
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		if c.smart != nil {
+		if c.state != nil {
 			if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-				c.smart.after(req, false)
+				c.state.after(req, false)
 				return operatorerrors.WrapTransientRemoteOverloaded(
 					fmt.Errorf("snapshot request failed due to remote overload (status %d): %s", resp.StatusCode, string(body)),
 				)
 			}
-			c.smart.after(req, true)
+			c.state.after(req, true)
 		}
 		return fmt.Errorf("snapshot request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Stream the snapshot data directly to the writer
 	if _, err := io.Copy(writer, resp.Body); err != nil {
-		if c.smart != nil {
-			c.smart.after(req, false)
+		if c.state != nil {
+			c.state.after(req, false)
 		}
 		if operatorerrors.IsTransientConnection(err) {
 			return operatorerrors.WrapTransientConnection(fmt.Errorf("failed to write snapshot data: %w", err))
@@ -382,8 +439,8 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 		return fmt.Errorf("failed to write snapshot data: %w", err)
 	}
 
-	if c.smart != nil {
-		c.smart.after(req, true)
+	if c.state != nil {
+		c.state.after(req, true)
 	}
 	return nil
 }

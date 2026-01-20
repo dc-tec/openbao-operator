@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	clusterpkg "github.com/dc-tec/openbao-operator/internal/cluster"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 )
 
@@ -304,8 +305,8 @@ func accumulateTenantSecretNames(cluster *openbaov1alpha1.OpenBaoCluster, writer
 	if cluster == nil || cluster.Name == "" {
 		return
 	}
-	for _, perm := range GetRequiredSecretPermissions(cluster) {
-		if perm.Permission == PermissionWrite {
+	for _, perm := range clusterpkg.GetRequiredSecretPermissions(cluster) {
+		if perm.Permission == clusterpkg.PermissionWrite {
 			writer[perm.Name] = struct{}{}
 		} else {
 			reader[perm.Name] = struct{}{}

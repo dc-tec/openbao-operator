@@ -14,7 +14,7 @@ type cachedToken struct {
 }
 
 // ClientFactory centralizes OpenBao client construction for a shared configuration template
-// (e.g., per-cluster CA bundle, smart client settings, timeouts).
+// (e.g., per-cluster CA bundle, client settings, timeouts).
 //
 // Callers remain responsible for sourcing CA material (mounted files, Kubernetes Secrets, etc.).
 type ClientFactory struct {
@@ -23,10 +23,16 @@ type ClientFactory struct {
 	mu         sync.RWMutex
 	clients    map[string]*http.Client
 	tokenCache map[string]cachedToken
+
+	// clientState is the shared client state for this factory.
+	clientState *clientState
 }
 
 // NewClientFactory returns a factory that creates clients based on the provided template.
 // The template's BaseURL and Token are ignored; per-request values are provided to New/NewWithToken.
+//
+// Deprecated: This function creates a factory without shared state management.
+// New code should use ClientManager.FactoryFor() for explicit state management.
 func NewClientFactory(template ClientConfig) *ClientFactory {
 	t := template
 	t.BaseURL = ""
@@ -35,6 +41,20 @@ func NewClientFactory(template ClientConfig) *ClientFactory {
 		template:   t,
 		clients:    make(map[string]*http.Client),
 		tokenCache: make(map[string]cachedToken),
+	}
+}
+
+// newClientFactoryWithState is the internal constructor used by ClientManager.
+// The factory will use the provided clientState.
+func newClientFactoryWithState(template ClientConfig, state *clientState) *ClientFactory {
+	t := template
+	t.BaseURL = ""
+	t.Token = ""
+	return &ClientFactory{
+		template:    t,
+		clients:     make(map[string]*http.Client),
+		tokenCache:  make(map[string]cachedToken),
+		clientState: state,
 	}
 }
 
@@ -54,7 +74,7 @@ func (f *ClientFactory) New(baseURL string) (*Client, error) {
 	if ok {
 		httpClient = cachedClient
 	} else {
-		// Create a new client (which creates a new transport and smart client state)
+		// Create a new client (which creates a new transport and client state)
 		cfg := f.template
 		cfg.BaseURL = baseURL
 		tempClient, err := NewClient(cfg)
@@ -74,8 +94,8 @@ func (f *ClientFactory) New(baseURL string) (*Client, error) {
 	cfg := f.template
 	cfg.BaseURL = baseURL
 
-	// Re-construct Client manually to inject the cached httpClient and avoid double-init
-	client, err := NewClient(cfg)
+	// Construct client with explicit client state if available
+	client, err := newClientWithState(cfg, f.clientState)
 	if err != nil {
 		return nil, err
 	}
