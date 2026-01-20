@@ -118,23 +118,23 @@ func TestReconcileMaintenanceAnnotationsForPods(t *testing.T) {
 				"pod-0": {constants.AnnotationMaintenance: "true"},
 			},
 		},
-			{
-				name:    "skips deleted pods",
-				cluster: baseCluster,
-				existingPods: []corev1.Pod{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              "pod-0",
-							Namespace:         namespace,
-							Labels:            podLabels,
-							DeletionTimestamp: &metav1.Time{Time: metav1.Now().Time},
-							// controller-runtime fake client refuses objects with DeletionTimestamp but no finalizers.
-							Finalizers: []string{"test.openbao.org/finalizer"},
-						},
+		{
+			name:    "skips deleted pods",
+			cluster: baseCluster,
+			existingPods: []corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "pod-0",
+						Namespace:         namespace,
+						Labels:            podLabels,
+						DeletionTimestamp: &metav1.Time{Time: metav1.Now().Time},
+						// controller-runtime fake client refuses objects with DeletionTimestamp but no finalizers.
+						Finalizers: []string{"test.openbao.org/finalizer"},
 					},
 				},
-				wantAnnotations: map[string]map[string]string{
-					"pod-0": nil, // Should not have annotation added
+			},
+			wantAnnotations: map[string]map[string]string{
+				"pod-0": nil, // Should not have annotation added
 			},
 		},
 	}
