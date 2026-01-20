@@ -17,6 +17,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 	security "github.com/dc-tec/openbao-operator/internal/security"
@@ -31,9 +32,9 @@ type infraReconciler struct {
 	operatorNamespace       string
 	oidcIssuer              string
 	oidcJWTKeys             []string
-	operatorImageVerifier   *security.ImageVerifier
+	operatorImageVerifier   interfaces.ImageVerifier
 	verifyImageFunc         func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error)
-	verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, verifier *security.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
+	verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, verifier interfaces.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
 	recorder                record.EventRecorder
 	admissionStatus         *admission.Status
 	platform                string
