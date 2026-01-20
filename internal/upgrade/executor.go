@@ -68,10 +68,11 @@ func runRollingStepDownLeader(ctx context.Context, logger logr.Logger, cfg *Exec
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
 
-	factory, err := newOpenBaoClientFactory(cfg)
+	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	client, err := factory.NewWithToken(leaderURL, token)
 	if err != nil {
@@ -99,10 +100,11 @@ func runBlueGreenJoinGreenNonVoters(ctx context.Context, logger logr.Logger, cfg
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
 
-	factory, err := newOpenBaoClientFactory(cfg)
+	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	for i := int32(0); i < cfg.ClusterReplicas; i++ {
 		greenPodURL := podURL(cfg, cfg.GreenRevision, i)
@@ -136,10 +138,11 @@ func runBlueGreenWaitGreenSynced(ctx context.Context, logger logr.Logger, cfg *E
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
 
-	factory, err := newOpenBaoClientFactory(cfg)
+	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	client, err := factory.NewWithToken(blueLeaderURL, token)
 	if err != nil {
@@ -365,10 +368,11 @@ func runBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 		return fmt.Errorf("failed to authenticate for consensus repair: %w", err)
 	}
 
-	factory, err := newOpenBaoClientFactory(cfg)
+	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	client, err := factory.NewWithToken(leaderURL, token)
 	if err != nil {
@@ -451,10 +455,11 @@ func runBlueGreenPromoteGreenVoters(ctx context.Context, logger logr.Logger, cfg
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
 
-	factory, err := newOpenBaoClientFactory(cfg)
+	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	client, err := factory.NewWithToken(blueLeaderURL, token)
 	if err != nil {
@@ -520,10 +525,11 @@ func runBlueGreenDemoteBlueNonVotersStepDown(ctx context.Context, logger logr.Lo
 	maxRetries := 10
 	greenLeaderElected := false
 
-	factory, err := newOpenBaoClientFactory(cfg)
+	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	// Loop to ensure we have a Green leader
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -647,10 +653,11 @@ func runBlueGreenRemoveBluePeers(ctx context.Context, logger logr.Logger, cfg *E
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
 
-	factory, err := newOpenBaoClientFactory(cfg)
+	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	client, err := factory.NewWithToken(leaderURL, token)
 	if err != nil {
@@ -679,19 +686,21 @@ func runBlueGreenRemoveBluePeers(ctx context.Context, logger logr.Logger, cfg *E
 }
 
 func loginJWT(ctx context.Context, cfg *ExecutorConfig, baseURL string) (string, error) {
-	factory, err := newOpenBaoClientFactory(cfg)
+	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return "", err
 	}
+	defer cleanup()
 
 	return factory.LoginJWT(ctx, baseURL, cfg.JWTAuthRole, cfg.JWTToken)
 }
 
 func findLeader(ctx context.Context, cfg *ExecutorConfig, revision string) (string, error) {
-	factory, err := newOpenBaoClientFactory(cfg)
+	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return "", err
 	}
+	defer cleanup()
 
 	for attempt := 0; attempt < 10; attempt++ {
 		for i := int32(0); i < cfg.ClusterReplicas; i++ {
@@ -737,17 +746,20 @@ func isBenignJoinError(err error) bool {
 	return strings.Contains(err.Error(), "already joined")
 }
 
-func newOpenBaoClientFactory(cfg *ExecutorConfig) (*openbao.ClientFactory, error) {
+func newOpenBaoClientFactory(cfg *ExecutorConfig) (*openbao.ClientFactory, func(), error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("config is required")
+		return nil, nil, fmt.Errorf("config is required")
 	}
 
-	return openbao.NewClientFactory(openbao.ClientConfig{
+	mgr := openbao.NewClientManager(openbao.ClientConfig{
 		ClusterKey:                     fmt.Sprintf("%s/%s", cfg.ClusterNamespace, cfg.ClusterName),
 		CACert:                         cfg.TLSCACert,
 		RateLimitQPS:                   cfg.ClientQPS,
 		RateLimitBurst:                 cfg.ClientBurst,
 		CircuitBreakerFailureThreshold: cfg.ClientCircuitBreakerFailureThreshold,
 		CircuitBreakerOpenDuration:     cfg.ClientCircuitBreakerOpenDuration,
-	}), nil
+	})
+
+	factory := mgr.FactoryFor(fmt.Sprintf("%s/%s", cfg.ClusterNamespace, cfg.ClusterName), cfg.TLSCACert)
+	return factory, mgr.Close, nil
 }

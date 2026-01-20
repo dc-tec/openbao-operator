@@ -324,8 +324,14 @@ func Run(args []string) {
 		CircuitBreakerOpenDuration:     clientCBOpenDuration,
 	}
 
+	// Create ClientManager for OpenBao client lifecycle with explicit state management.
+	// This replaces the global sync.Map with per-manager state for better test isolation.
+	clientMgr := openbao.NewClientManager(smartClientConfig)
+	// Note: clientMgr.Close() is not deferred here because the manager should live
+	// for the lifetime of the operator process.
+
 	// Create initialization manager
-	initMgr := initmanager.NewManager(config, clientset, smartClientConfig)
+	initMgr := initmanager.NewManager(config, clientset, clientMgr)
 
 	// Get operator namespace from POD_NAMESPACE environment variable (set by Kubernetes)
 	// Default to "openbao-operator-system" for backward compatibility

@@ -24,23 +24,24 @@ func TestSmartClient_CircuitBreaker_SharedAcrossClients(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := ClientConfig{
-		ClusterKey:                     "tenant-a/cluster-a",
-		BaseURL:                        server.URL,
-		Token:                          "s.valid-token",
+	// Use ClientManager for shared state
+	mgr := NewClientManager(ClientConfig{
 		RateLimitQPS:                   1000,
 		RateLimitBurst:                 1000,
 		CircuitBreakerFailureThreshold: 2,
 		CircuitBreakerOpenDuration:     30 * time.Second,
-	}
+	})
+	defer mgr.Close()
 
-	c1, err := NewClient(cfg)
+	factory := mgr.FactoryFor("tenant-a/cluster-a", nil)
+
+	c1, err := factory.NewWithToken(server.URL, "s.valid-token")
 	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
+		t.Fatalf("NewWithToken() error: %v", err)
 	}
-	c2, err := NewClient(cfg)
+	c2, err := factory.NewWithToken(server.URL, "s.valid-token")
 	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
+		t.Fatalf("NewWithToken() error: %v", err)
 	}
 
 	// Two overload failures should open the circuit.
@@ -55,7 +56,7 @@ func TestSmartClient_CircuitBreaker_SharedAcrossClients(t *testing.T) {
 		t.Fatalf("expected 2 requests before circuit open, got %d", got)
 	}
 
-	// Third attempt (via a different Client instance) should be blocked without hitting the server.
+	// Third attempt (via a different Client instance from matching factory) should be blocked without hitting the server.
 	err = c2.StepDown(context.Background())
 	if err == nil {
 		t.Fatalf("expected error")

@@ -39,7 +39,9 @@ type circuitBreaker struct {
 	halfOpenInFlight bool
 }
 
-type smartClientState struct {
+// clientState manages rate limiting and circuit breaking for a cluster.
+// It is owned by ClientManager for explicit lifecycle management.
+type clientState struct {
 	limiter *rate.Limiter
 
 	mu       sync.Mutex
@@ -49,25 +51,9 @@ type smartClientState struct {
 	openDuration     time.Duration
 }
 
-var smartClientStates sync.Map // map[string]*smartClientState
-
-func smartStateKey(clusterKey string) string {
-	if clusterKey == "" {
-		return ""
-	}
-	return clusterKey
-}
-
-func getOrCreateSmartState(cfg ClientConfig) *smartClientState {
-	key := smartStateKey(cfg.ClusterKey)
-	if key == "" {
-		return nil
-	}
-
-	if existing, ok := smartClientStates.Load(key); ok {
-		return existing.(*smartClientState)
-	}
-
+// newClientState creates a new clientState with the given configuration.
+// This is used by ClientManager for explicit state management.
+func newClientState(cfg ClientConfig) *clientState {
 	qps := cfg.RateLimitQPS
 	if qps <= 0 {
 		qps = defaultRateLimitQPS
@@ -86,19 +72,15 @@ func getOrCreateSmartState(cfg ClientConfig) *smartClientState {
 		openDuration = defaultCircuitBreakerOpenDuration
 	}
 
-	state := &smartClientState{
+	return &clientState{
 		limiter:          rate.NewLimiter(rate.Limit(qps), burst),
 		breakers:         make(map[string]*circuitBreaker),
 		failureThreshold: failureThreshold,
 		openDuration:     openDuration,
 	}
-
-	// Avoid overwriting if another goroutine won the race.
-	actual, _ := smartClientStates.LoadOrStore(key, state)
-	return actual.(*smartClientState)
 }
 
-func (s *smartClientState) requestKey(req *http.Request) string {
+func (s *clientState) requestKey(req *http.Request) string {
 	if req == nil || req.URL == nil {
 		return "unknown"
 	}
@@ -113,7 +95,7 @@ func (s *smartClientState) requestKey(req *http.Request) string {
 	return fmt.Sprintf("%s %s %s", host, req.Method, path)
 }
 
-func (s *smartClientState) allow(ctx context.Context, req *http.Request) error {
+func (s *clientState) allow(ctx context.Context, req *http.Request) error {
 	if s == nil {
 		return nil
 	}
@@ -168,7 +150,7 @@ func (s *smartClientState) allow(ctx context.Context, req *http.Request) error {
 	return nil
 }
 
-func (s *smartClientState) after(req *http.Request, success bool) {
+func (s *clientState) after(req *http.Request, success bool) {
 	if s == nil {
 		return
 	}
@@ -232,8 +214,8 @@ func (c *Client) doRequest(req *http.Request, httpClient *http.Client, op string
 		httpClient = c.httpClient
 	}
 
-	if c.smart != nil {
-		if err := c.smart.allow(req.Context(), req); err != nil {
+	if c.state != nil {
+		if err := c.state.allow(req.Context(), req); err != nil {
 			return nil, err
 		}
 	}
@@ -241,8 +223,8 @@ func (c *Client) doRequest(req *http.Request, httpClient *http.Client, op string
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		wrapped := fmt.Errorf("%s: %w", op, err)
-		if c.smart != nil {
-			c.smart.after(req, false)
+		if c.state != nil {
+			c.state.after(req, false)
 		}
 		if operatorerrors.IsTransientConnection(err) {
 			return nil, operatorerrors.WrapTransientConnection(wrapped)
@@ -270,8 +252,8 @@ func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op str
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		if c.smart != nil {
-			c.smart.after(req, false)
+		if c.state != nil {
+			c.state.after(req, false)
 		}
 		return nil, nil, fmt.Errorf("%s: failed to read response body: %w", op, err)
 	}
@@ -280,8 +262,8 @@ func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op str
 	// so we must not classify 429/5xx responses as overload.
 	if req.URL != nil && req.URL.Path != constants.APIPathSysHealth {
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-			if c.smart != nil {
-				c.smart.after(req, false)
+			if c.state != nil {
+				c.state.after(req, false)
 			}
 			return nil, nil, operatorerrors.WrapTransientRemoteOverloaded(
 				fmt.Errorf("%s: OpenBao API overloaded (status %d): %s", op, resp.StatusCode, string(body)),
@@ -289,8 +271,8 @@ func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op str
 		}
 	}
 
-	if c.smart != nil {
-		c.smart.after(req, true)
+	if c.state != nil {
+		c.state.after(req, true)
 	}
 	return resp, body, nil
 }

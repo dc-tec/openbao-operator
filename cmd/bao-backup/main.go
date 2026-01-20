@@ -30,13 +30,18 @@ const (
 // It retries with exponential backoff to handle cases where pods are still starting up
 // after scale-up operations.
 func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, error) {
-	factory := openbao.NewClientFactory(openbao.ClientConfig{
+	// Create a ClientManager for this operation
+	mgr := openbao.NewClientManager(openbao.ClientConfig{
 		CACert:                         cfg.TLSCACert,
 		RateLimitQPS:                   cfg.RateLimitQPS,
 		RateLimitBurst:                 cfg.RateLimitBurst,
 		CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
 		CircuitBreakerOpenDuration:     parseDuration(cfg.CircuitBreakerOpenDuration),
 	})
+	defer mgr.Close()
+
+	// Use a generic cluster key since we are scanning pods in the local cluster
+	factory := mgr.FactoryFor("leader-discovery", cfg.TLSCACert)
 
 	// Retry with exponential backoff: 1s, 2s, 4s, 8s, 16s
 	maxRetries := 5
@@ -105,13 +110,15 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 // authenticate authenticates to OpenBao and returns a token.
 func authenticate(ctx context.Context, cfg *backupconfig.ExecutorConfig, leaderURL string) (string, error) {
 	if cfg.AuthMethod == constants.BackupAuthMethodJWT {
-		factory := openbao.NewClientFactory(openbao.ClientConfig{
+		mgr := openbao.NewClientManager(openbao.ClientConfig{
 			CACert:                         cfg.TLSCACert,
 			RateLimitQPS:                   cfg.RateLimitQPS,
 			RateLimitBurst:                 cfg.RateLimitBurst,
 			CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
 			CircuitBreakerOpenDuration:     parseDuration(cfg.CircuitBreakerOpenDuration),
 		})
+		defer mgr.Close()
+		factory := mgr.FactoryFor("auth", cfg.TLSCACert)
 		return factory.LoginJWT(ctx, leaderURL, cfg.JWTAuthRole, cfg.JWTToken)
 	}
 
@@ -144,13 +151,16 @@ func run(ctx context.Context) error {
 	}
 
 	// Create OpenBao client for leader
-	factory := openbao.NewClientFactory(openbao.ClientConfig{
+	// Create OpenBao client for leader
+	clientMgr := openbao.NewClientManager(openbao.ClientConfig{
 		CACert:                         cfg.TLSCACert,
 		RateLimitQPS:                   cfg.RateLimitQPS,
 		RateLimitBurst:                 cfg.RateLimitBurst,
 		CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
 		CircuitBreakerOpenDuration:     parseDuration(cfg.CircuitBreakerOpenDuration),
 	})
+	defer clientMgr.Close()
+	factory := clientMgr.FactoryFor("backup", cfg.TLSCACert)
 	baoClient, err := factory.NewWithToken(leaderURL, token)
 	if err != nil {
 		return fmt.Errorf("failed to create OpenBao client: %w", err)
@@ -305,13 +315,16 @@ func runRestore(ctx context.Context) error {
 	fmt.Println("Authentication successful")
 
 	// Create OpenBao client for leader
-	factory := openbao.NewClientFactory(openbao.ClientConfig{
+	// Create OpenBao client for leader
+	clientMgr := openbao.NewClientManager(openbao.ClientConfig{
 		CACert:                         cfg.TLSCACert,
 		RateLimitQPS:                   cfg.RateLimitQPS,
 		RateLimitBurst:                 cfg.RateLimitBurst,
 		CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
 		CircuitBreakerOpenDuration:     parseDuration(cfg.CircuitBreakerOpenDuration),
 	})
+	defer clientMgr.Close()
+	factory := clientMgr.FactoryFor("restore", cfg.TLSCACert)
 	baoClient, err := factory.NewWithToken(leaderURL, token)
 	if err != nil {
 		return fmt.Errorf("failed to create OpenBao client: %w", err)

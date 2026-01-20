@@ -39,15 +39,16 @@ var errRetryLater = operatorerrors.ErrTransientConnection
 type Manager struct {
 	config    *rest.Config
 	clientset kubernetes.Interface
-	limits    openbao.ClientConfig
+	clientMgr *openbao.ClientManager
 }
 
 // NewManager creates a new initialization Manager.
-func NewManager(config *rest.Config, clientset kubernetes.Interface, limits openbao.ClientConfig) *Manager {
+// The clientMgr is used to create OpenBao clients with proper state isolation.
+func NewManager(config *rest.Config, clientset kubernetes.Interface, clientMgr *openbao.ClientManager) *Manager {
 	return &Manager{
 		config:    config,
 		clientset: clientset,
-		limits:    limits,
+		clientMgr: clientMgr,
 	}
 }
 
@@ -433,20 +434,14 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1
 		return nil, fmt.Errorf("TLS CA Secret %s/%s missing 'ca.crt' key", cluster.Namespace, caSecretName)
 	}
 
-	// Create OpenBao client with default timeouts. The client will be used for health checks
-	// and initialization. Default timeouts are sufficient now that NetworkPolicy is correctly
-	// configured to allow operator access.
-	factory := openbao.NewClientFactory(openbao.ClientConfig{
-		ClusterKey:                     fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
-		CACert:                         caCert,
-		RateLimitQPS:                   m.limits.RateLimitQPS,
-		RateLimitBurst:                 m.limits.RateLimitBurst,
-		CircuitBreakerFailureThreshold: m.limits.CircuitBreakerFailureThreshold,
-		CircuitBreakerOpenDuration:     m.limits.CircuitBreakerOpenDuration,
-		// Use default timeouts (5s connection, 10s request) which are sufficient for
-		// normal operation. The health check context timeout (10s) matches the default
-		// RequestTimeout, ensuring the client won't timeout before the context.
-	})
+	// Create OpenBao client using the ClientManager for proper state isolation.
+	// Default timeouts are sufficient for health checks and initialization.
+	clusterKey := fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)
+	factory := m.clientMgr.FactoryFor(clusterKey, caCert)
+	if factory == nil {
+		return nil, fmt.Errorf("client manager returned nil factory for cluster %s", clusterKey)
+	}
+
 	client, err := factory.New(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OpenBao client for %s: %w", baseURL, err)
@@ -539,16 +534,14 @@ func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openba
 		return nil, fmt.Errorf("TLS CA Secret %s/%s missing 'ca.crt' key", cluster.Namespace, caSecretName)
 	}
 
-	factory := openbao.NewClientFactory(openbao.ClientConfig{
-		ClusterKey:                     fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
-		Token:                          token,
-		CACert:                         caCert,
-		RateLimitQPS:                   m.limits.RateLimitQPS,
-		RateLimitBurst:                 m.limits.RateLimitBurst,
-		CircuitBreakerFailureThreshold: m.limits.CircuitBreakerFailureThreshold,
-		CircuitBreakerOpenDuration:     m.limits.CircuitBreakerOpenDuration,
-	})
-	client, err := factory.New(baseURL)
+	// Create OpenBao client using the ClientManager for proper state isolation.
+	clusterKey := fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)
+	factory := m.clientMgr.FactoryFor(clusterKey, caCert)
+	if factory == nil {
+		return nil, fmt.Errorf("client manager returned nil factory for cluster %s", clusterKey)
+	}
+
+	client, err := factory.NewWithToken(baseURL, token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OpenBao client for %s: %w", baseURL, err)
 	}
