@@ -110,6 +110,12 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 			}
 		}
 
+		// Compute StatefulSet name for Blue/Green awareness.
+		statefulSetName := cluster.Name
+		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+			statefulSetName = fmt.Sprintf("%s-%s", cluster.Name, cluster.Status.BlueGreen.BlueRevision)
+		}
+
 		job, buildErr := BuildJob(cluster, JobOptions{
 			JobName:                jobName,
 			JobType:                JobTypeScheduled,
@@ -117,7 +123,9 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 			VerifiedExecutorDigest: verifiedExecutorDigest,
 			ClientConfig:           m.clientConfig,
 			Platform:               m.Platform,
+			TargetStatefulSetName:  statefulSetName,
 		})
+
 		if buildErr != nil {
 			return false, fmt.Errorf("failed to build backup Job %s/%s: %w", cluster.Namespace, jobName, buildErr)
 		}

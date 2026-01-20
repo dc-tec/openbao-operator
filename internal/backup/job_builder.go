@@ -45,6 +45,9 @@ type JobOptions struct {
 	ClientConfig openbao.ClientConfig
 	// Platform indicates the target platform (e.g., "kubernetes", "openshift").
 	Platform string
+	// TargetStatefulSetName is the name of the StatefulSet to target for pod discovery.
+	// If empty, defaults to cluster.Name.
+	TargetStatefulSetName string
 }
 
 // BuildJob creates a Kubernetes Job for executing a backup.
@@ -190,10 +193,12 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 		region = constants.DefaultS3Region
 	}
 
-	// Compute StatefulSet name for pod discovery (Blue/Green aware)
-	statefulSetName := cluster.Name
-	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
-		statefulSetName = fmt.Sprintf("%s-%s", cluster.Name, cluster.Status.BlueGreen.BlueRevision)
+	// Use provided StatefulSet name or default to cluster.Name.
+	// This allows callers (e.g., upgrade managers) to specify the correct StatefulSet
+	// without embedding upgrade-strategy-specific logic in the backup builder.
+	statefulSetName := opts.TargetStatefulSetName
+	if statefulSetName == "" {
+		statefulSetName = cluster.Name
 	}
 
 	env := []corev1.EnvVar{
