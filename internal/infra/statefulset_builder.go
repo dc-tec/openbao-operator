@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -490,6 +491,12 @@ func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoClu
 		configHashAnnotation: configHash,
 	}
 
+	if cluster.Spec.Maintenance != nil {
+		if restartAt := strings.TrimSpace(cluster.Spec.Maintenance.RestartAt); restartAt != "" {
+			annotations[constants.AnnotationRestartAt] = restartAt
+		}
+	}
+
 	return podLabels, annotations
 }
 
@@ -498,11 +505,14 @@ func buildStatefulSetProbeExecActions(cluster *openbaov1alpha1.OpenBaoCluster) p
 	probeAddr := openBaoProbeAddr
 	probeCAFile := openBaoProbeCAFile
 	var probeServerName string
-	if usesACMEMode(cluster) && cluster.Spec.TLS.ACME != nil && cluster.Spec.TLS.ACME.Domain != "" {
+	if usesACMEMode(cluster) && cluster.Spec.TLS.ACME != nil {
 		// In ACME mode, keep probes on loopback but set SNI to the ACME domain.
 		// This prevents OpenBao from attempting ACME for "localhost" while avoiding
 		// DNS/service dependencies for probes.
-		probeServerName = cluster.Spec.TLS.ACME.Domain
+		domains := acmeDomains(cluster)
+		if len(domains) > 0 {
+			probeServerName = domains[0]
+		}
 		// In ACME mode, probes need to verify the ACME-obtained certificate, which is signed
 		// by the ACME CA (PKI CA), not the ACME directory server's TLS CA.
 		// If tls_acme_ca_root is configured, derive the PKI CA path from it (same directory,
@@ -516,6 +526,32 @@ func buildStatefulSetProbeExecActions(cluster *openbaov1alpha1.OpenBaoCluster) p
 		} else {
 			// No tls_acme_ca_root configured - use system roots for public ACME CAs
 			probeCAFile = ""
+		}
+	}
+
+	// For non-ACME TLS modes, the server certificate often contains DNS SANs (Service/Gateway/Ingress)
+	// but not the loopback IP. Probes connect via loopback for locality, so we must provide an SNI
+	// server name that matches a DNS SAN to avoid x509 "no IP SANs" failures.
+	//
+	// Only set this when an external-facing Service is expected to exist; otherwise, the
+	// operator-managed default certificate includes 127.0.0.1 and probes can rely on IP validation.
+	if probeServerName == "" && cluster.Spec.TLS.Enabled && !usesACMEMode(cluster) {
+		if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {
+			if hn := strings.TrimSpace(cluster.Spec.Gateway.Hostname); hn != "" {
+				probeServerName = hn
+			}
+		}
+		if probeServerName == "" && cluster.Spec.Ingress != nil && cluster.Spec.Ingress.Enabled {
+			if host := strings.TrimSpace(cluster.Spec.Ingress.Host); host != "" {
+				probeServerName = host
+			}
+		}
+
+		needsExternalService := cluster.Spec.Service != nil ||
+			(cluster.Spec.Ingress != nil && cluster.Spec.Ingress.Enabled) ||
+			(cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled)
+		if probeServerName == "" && needsExternalService {
+			probeServerName = fmt.Sprintf("%s.%s.svc", externalServiceName(cluster), cluster.Namespace)
 		}
 	}
 
@@ -573,6 +609,38 @@ func buildStatefulSetProbeExecActions(cluster *openbaov1alpha1.OpenBaoCluster) p
 		liveness:  livenessProbeExec,
 		readiness: readinessProbeExec,
 	}
+}
+
+func acmeDomains(cluster *openbaov1alpha1.OpenBaoCluster) []string {
+	if cluster == nil || cluster.Spec.TLS.ACME == nil {
+		return nil
+	}
+
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(cluster.Spec.TLS.ACME.Domains)+1)
+	for _, raw := range cluster.Spec.TLS.ACME.Domains {
+		d := strings.TrimSpace(raw)
+		if d == "" {
+			continue
+		}
+		if _, ok := seen[d]; ok {
+			continue
+		}
+		seen[d] = struct{}{}
+		out = append(out, d)
+	}
+
+	if len(out) == 0 {
+		if d := strings.TrimSpace(cluster.Spec.TLS.ACME.Domain); d != "" {
+			out = append(out, d)
+		}
+	}
+
+	if len(out) == 0 {
+		out = append(out, fmt.Sprintf("%s-acme.%s.svc", cluster.Name, cluster.Namespace))
+	}
+
+	return out
 }
 
 func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, revision string, disableSelfInit bool) []corev1.Volume {
@@ -715,11 +783,19 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 	}
 
 	statefulSetName := statefulSetNameWithRevision(cluster, revision)
+	var statefulSetAnnotations map[string]string
+	if cluster.Spec.Maintenance != nil && cluster.Spec.Maintenance.Enabled {
+		statefulSetAnnotations = map[string]string{
+			constants.AnnotationMaintenance: "true",
+		}
+	}
+
 	statefulSet := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      statefulSetName,
-			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Name:        statefulSetName,
+			Namespace:   cluster.Namespace,
+			Labels:      infraLabels(cluster),
+			Annotations: statefulSetAnnotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: headlessServiceName(cluster),

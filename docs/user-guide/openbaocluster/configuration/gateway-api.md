@@ -20,12 +20,13 @@ flowchart TB
         GW2 -- "Encrypted TLS" --> Bao2[OpenBao]
     end
 
-    style Term fill:transparent,stroke:#00e676,stroke-width:2px,color:#fff
-    style Pass fill:transparent,stroke:#2979ff,stroke-width:2px,color:#fff
-    style GW1 fill:transparent,stroke:#ffa726
-    style GW2 fill:transparent,stroke:#ffa726
-    style Bao1 fill:transparent,stroke:#ab47bc
-    style Bao2 fill:transparent,stroke:#ab47bc
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Ext1,Ext2 read;
+    class GW1,GW2 process;
+    class Bao1,Bao2 write;
 ```
 
 ## Configuration
@@ -51,7 +52,7 @@ Choose your deployment mode.
     1. Operator creates an `HTTPRoute` referencing the Gateway.
     2. Operator creates a `BackendTLSPolicy` to encrypt traffic between the Gateway and OpenBao (re-encryption).
 
-    ??? info "Generated BackendTLSPolicy"
+    ??? note "Generated BackendTLSPolicy"
         The operator automatically creates a policy to validate the OpenBao backend certificate:
 
         ```yaml
@@ -89,6 +90,31 @@ Choose your deployment mode.
     **Requirements:**
     - Gateway Listener must be in `Passthrough` mode.
     - `TLSRoute` CRD must be installed (often Experimental channel).
+    - If `tls.mode` is `ACME`, passthrough is required; TLS termination at the Gateway prevents OpenBao from completing ACME challenges.
+
+    ??? example "Gateway Listener (TLS Passthrough)"
+        The referenced Gateway must expose a `TLS` listener in `Passthrough` mode (controller support varies):
+
+        ```yaml
+        apiVersion: gateway.networking.k8s.io/v1
+        kind: Gateway
+        metadata:
+          name: main-gateway
+          namespace: gateway-system
+        spec:
+          gatewayClassName: traefik
+          listeners:
+            - name: websecure-passthrough
+              port: 443
+              protocol: TLS
+              tls:
+                mode: Passthrough
+        ```
+
+    !!! warning "Common conflict: existing HTTPS termination"
+        Many Gateway controllers expose an `HTTPS` termination listener on `:443` by default. Some
+        controllers cannot share the same port for both termination and passthrough. Use a dedicated
+        passthrough listener (or a separate port) when required by your controller.
 
 ## Comparison Reference
 

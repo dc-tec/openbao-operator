@@ -34,7 +34,7 @@ Welcome! We are glad you want to contribute to the OpenBao Operator. Whether you
 
 ## AI-Assisted Contributions
 
-!!! info "Policy on AI Tools"
+!!! note "Policy on AI Tools"
     We welcome contributions that leverage AI tools! However, you **must** verify all generated code.
 
     *   **Responsibility:** You are responsible for the code you submit. "The AI wrote it" is not a valid excuse for bugs or security issues.

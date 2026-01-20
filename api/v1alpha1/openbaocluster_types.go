@@ -85,6 +85,10 @@ const (
 	// ConditionOpenBaoLeader reflects whether a leader could be identified via
 	// Kubernetes service registration labels on Pods.
 	ConditionOpenBaoLeader ConditionType = "OpenBaoLeader"
+	// ConditionNodeSecurityCapabilityMismatch indicates the cluster is configured
+	// with workload hardening options that are not supported by the underlying
+	// node/Kubernetes environment (for example, AppArmor not available).
+	ConditionNodeSecurityCapabilityMismatch ConditionType = "NodeSecurityCapabilityMismatch"
 )
 
 // TLSMode controls who manages the certificate lifecycle.
@@ -115,13 +119,24 @@ const (
 
 // ACMEConfig configures ACME certificate management for OpenBao.
 // See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
+// +kubebuilder:validation:XValidation:rule="!(has(self.domain) && size(self.domains) > 0)",message="tls.acme.domain and tls.acme.domains are mutually exclusive; use only one"
 type ACMEConfig struct {
 	// DirectoryURL is the ACME directory URL (e.g., "https://acme-v02.api.letsencrypt.org/directory").
 	// +kubebuilder:validation:MinLength=1
 	DirectoryURL string `json:"directoryURL"`
 	// Domain is the domain name for which to obtain the certificate.
+	// Deprecated: use Domains to request a certificate with multiple SANs.
 	// +kubebuilder:validation:MinLength=1
-	Domain string `json:"domain"`
+	// +optional
+	Domain string `json:"domain,omitempty"`
+	// Domains is the list of domain names for which to obtain the certificate.
+	// This maps to OpenBao's listener `tls_acme_domains` field.
+	//
+	// When empty, the operator will default to an internal Service name suitable for
+	// private ACME CAs running inside the cluster (e.g., "<cluster>-acme.<namespace>.svc").
+	// +kubebuilder:validation:MinItems=1
+	// +optional
+	Domains []string `json:"domains,omitempty"`
 	// Email is the email address to use for ACME registration.
 	// +optional
 	Email string `json:"email,omitempty"`
@@ -191,6 +206,25 @@ type IngressConfig struct {
 	// Annotations are additional annotations to apply to the Ingress.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// MaintenanceConfig defines supported maintenance and restart operations.
+// This is intended to provide a first-class workflow for day-2 operations in
+// clusters that enforce managed-resource mutation locks via admission policy.
+type MaintenanceConfig struct {
+	// Enabled enables maintenance mode for this cluster.
+	// When true, the operator annotates managed resources (Pods/StatefulSet) with
+	// `openbao.org/maintenance=true` to allow controlled restarts/deletes where
+	// admission policies require an explicit maintenance signal.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+	// RestartAt triggers a rolling restart when changed.
+	// The operator propagates this value as a Pod template annotation; any change
+	// results in a new StatefulSet revision and a controlled restart.
+	// Recommended value is an RFC3339 timestamp string.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	RestartAt string `json:"restartAt,omitempty"`
 }
 
 // BackupSchedule defines when and where snapshots are stored.
@@ -536,7 +570,7 @@ type BackupTarget struct {
 }
 
 // SelfInitOperation defines valid operations for self-initialization requests.
-// +kubebuilder:validation:Enum=create;read;update;delete;list
+// +kubebuilder:validation:Enum=create;read;update;delete;list;patch
 type SelfInitOperation string
 
 const (
@@ -1395,6 +1429,9 @@ type OpenBaoClusterSpec struct {
 	// Paused, when true, pauses reconciliation for this OpenBaoCluster (except delete and finalizers).
 	// +optional
 	Paused bool `json:"paused,omitempty"`
+	// Maintenance configures supported maintenance and restart workflows.
+	// +optional
+	Maintenance *MaintenanceConfig `json:"maintenance,omitempty"`
 	// BreakGlassAck is an explicit acknowledgment token used to exit Break Glass / Safe Mode.
 	//
 	// When the operator enters break glass mode, it writes a nonce to status.breakGlass.nonce.

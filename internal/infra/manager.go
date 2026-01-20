@@ -34,6 +34,7 @@ const (
 	configTemplatePath       = "/etc/bao/config/config.hcl"
 	configInitTemplatePath   = "/etc/bao/config-init/config.hcl"
 	publicServiceSuffix      = "-public"
+	acmeServiceSuffix        = "-acme"
 	httpRouteSuffix          = "-httproute"
 	tlsRouteSuffix           = "-tlsroute"
 	backendTLSPolicySuffix   = "-backend-tls-policy"
@@ -120,6 +121,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		}
 	}
 
+	if err := m.runACMEPreflight(ctx, logger, cluster); err != nil {
+		return err
+	}
+
 	infraDetails := configbuilder.InfrastructureDetails{
 		HeadlessServiceName: headlessServiceName(cluster),
 		Namespace:           cluster.Namespace,
@@ -172,6 +177,10 @@ func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logge
 	}
 
 	if err := m.ensureExternalService(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	if err := m.ensureACMEChallengeService(ctx, logger, cluster); err != nil {
 		return err
 	}
 
@@ -378,6 +387,10 @@ func headlessServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 
 func externalServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + publicServiceSuffix
+}
+
+func acmeServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return cluster.Name + acmeServiceSuffix
 }
 
 func externalServiceNameBlue(cluster *openbaov1alpha1.OpenBaoCluster) string {

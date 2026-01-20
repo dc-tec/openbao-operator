@@ -11,7 +11,7 @@ kubectl -n security patch openbaocluster dev-cluster \
   --type merge -p '{"spec":{"paused":true}}'
 ```
 
-!!! info "Impact of Pausing"
+!!! note "Impact of Pausing"
     While the cluster is paused:
 
     - **No Mutation**: The Operator will NOT update StatefulSets, Secrets, ConfigMaps, or Services.

@@ -67,7 +67,7 @@ graph TD
 
 ## 4. Interaction with Other Managers
 
-!!! info "Conflict Prevention"
+!!! note "Conflict Prevention"
     The **Operation Lock** is the primary mechanism for safety.
 
     -   **Backups:** Will skip scheduled runs if a Restore is locked.

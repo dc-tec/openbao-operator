@@ -12,6 +12,8 @@ const (
 	AnnotationMaintenance = "openbao.org/maintenance"
 	// AnnotationMaintenanceAllowed is the annotation key used to check if maintenance is allowed.
 	AnnotationMaintenanceAllowed = "openbao.org/maintenance-allowed"
+	// AnnotationRestartAt is the annotation key used to trigger a rolling restart via Pod template updates.
+	AnnotationRestartAt = "openbao.org/restart-at"
 
 	// AnnotationLastDevelopmentWarning is the last time the operator emitted a Development profile warning event.
 	AnnotationLastDevelopmentWarning = "openbao.org/last-development-warning"

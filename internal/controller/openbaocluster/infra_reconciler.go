@@ -224,6 +224,12 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		if errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing) {
 			return recon.Result{}, operatorerrors.WithReason(ReasonPrerequisitesMissing, err)
 		}
+		if errors.Is(err, inframanager.ErrACMEDomainNotResolvable) {
+			return recon.Result{}, operatorerrors.WithReason(ReasonACMEDomainNotResolvable, err)
+		}
+		if errors.Is(err, inframanager.ErrACMEGatewayNotConfiguredForPassthrough) {
+			return recon.Result{}, operatorerrors.WithReason(ReasonACMEGatewayNotConfiguredForPassthrough, err)
+		}
 		return recon.Result{}, err
 	}
 

@@ -331,3 +331,34 @@ func TestReconcileOptionalResource_CRDMissingOnDelete_IsIgnored(t *testing.T) {
 		t.Fatalf("unexpected calls: get=%d delete=%d", getCalls, deleteCalls)
 	}
 }
+
+func TestReconcileOptionalResource_NotFoundOnApply_DegradesWhenConfigured(t *testing.T) {
+	t.Parallel()
+
+	notFoundErr := apierrors.NewNotFound(schema.GroupResource{Group: "gateway.networking.k8s.io", Resource: "httproutes"}, "x")
+
+	opts := optionalResourceOptions{
+		kind:                "HTTPRoute",
+		apiVersion:          "gateway.networking.k8s.io/v1",
+		enabled:             true,
+		name:                types.NamespacedName{Namespace: "default", Name: "x"},
+		logger:              logr.Discard(),
+		degradeOnCRDMissing: true,
+		newEmpty: func() client.Object {
+			return &corev1.ConfigMap{}
+		},
+		buildDesired: func() (client.Object, bool, error) {
+			return &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "default"},
+			}, true, nil
+		},
+		get:    func(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error { return nil },
+		delete: func(_ context.Context, _ client.Object) error { return nil },
+		apply:  func(_ context.Context, _ client.Object) error { return notFoundErr },
+	}
+
+	err := reconcileOptionalResource(context.Background(), opts)
+	if !errors.Is(err, ErrGatewayAPIMissing) {
+		t.Fatalf("expected ErrGatewayAPIMissing, got %T: %v", err, err)
+	}
+}

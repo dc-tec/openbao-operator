@@ -116,6 +116,10 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 		return fmt.Errorf("failed to ensure StatefulSet %s/%s: %w", cluster.Namespace, name, err)
 	}
 
+	if err := m.reconcileMaintenanceAnnotationsForPods(ctx, logger, cluster, revision); err != nil {
+		return fmt.Errorf("failed to reconcile maintenance annotations for OpenBaoCluster %s/%s pods: %w", cluster.Namespace, cluster.Name, err)
+	}
+
 	return nil
 }
 

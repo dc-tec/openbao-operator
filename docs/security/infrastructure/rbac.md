@@ -43,7 +43,7 @@ flowchart TB
 
     The **Provisioner** is responsible for "Day 1" setup. It provisions tenant RBAC by impersonating a dedicated **Delegate** ServiceAccount.
 
-    !!! info "Blind Write Pattern"
+    !!! note "Blind Write Pattern"
         The Provisioner creates Roles in tenant namespaces but does not grant *itself* permission to use them. It delegates these permissions to the Controller. This prevents the Provisioner from inspecting tenant data.
 
     | Resource | Verbs | Rationale |

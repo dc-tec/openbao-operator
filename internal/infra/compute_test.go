@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -326,7 +327,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://example.com/acme",
-		Domain:       "acme-probe.default.svc",
+		Domains:      []string{"acme-probe.default.svc"},
 		Email:        "e2e@example.invalid",
 	}
 	// Configure tls_acme_ca_root to use the ACME CA for certificate verification
@@ -440,6 +441,49 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 		// For public ACME, no CA file should be specified (uses system roots)
 		if strings.Contains(cmd, "-ca-file=") {
 			t.Fatalf("expected readiness probe to NOT specify CA file for public ACME, got %v", c.ReadinessProbe.Exec.Command)
+		}
+	}
+	if !probesFound {
+		t.Fatalf("expected to find openbao container probes")
+	}
+}
+
+func TestProbesSetSNIToExternalServiceWhenServiceEnabled_NonACME(t *testing.T) {
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+
+	cluster := newMinimalCluster("probe-sni", "default")
+	cluster.Status.Initialized = true
+	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{
+		Type: corev1.ServiceTypeClusterIP,
+	}
+
+	createTLSSecretForTest(t, k8sClient, cluster)
+
+	ctx := context.Background()
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	statefulSet := &appsv1.StatefulSet{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      statefulSetName(cluster),
+	}, statefulSet); err != nil {
+		t.Fatalf("expected StatefulSet to exist: %v", err)
+	}
+
+	wantServerName := fmt.Sprintf("-servername=%s-public.%s.svc", cluster.Name, cluster.Namespace)
+
+	var probesFound bool
+	for _, c := range statefulSet.Spec.Template.Spec.Containers {
+		if c.Name != constants.ContainerBao {
+			continue
+		}
+		probesFound = true
+		cmd := strings.Join(c.ReadinessProbe.Exec.Command, " ")
+		if !strings.Contains(cmd, wantServerName) {
+			t.Fatalf("expected readiness probe to set SNI to external service DNS (%s), got %v", wantServerName, c.ReadinessProbe.Exec.Command)
 		}
 	}
 	if !probesFound {

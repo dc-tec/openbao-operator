@@ -37,8 +37,10 @@ spec:
     acme:
       # ACME directory URL (Let's Encrypt production)
       directoryURL: "https://acme-v02.api.letsencrypt.org/directory"
-      # Domain name for which to obtain the certificate
-      domain: "openbao.example.com"
+      # Domain names for which to obtain the certificate (multi-SAN).
+      # Prefer `domains` (list) over `domain` (deprecated).
+      domains:
+        - "openbao.example.com"
       # Optional: Email address for CA notifications about certificate expiration
       email: "admin@example.com"
       # Note: For internal networks, you may need to use DNS challenges.
@@ -71,6 +73,15 @@ spec:
       rotateMaxFiles: 7
     # UI enabled
     ui: true
+  # External access for ACME mode must be TLS passthrough.
+  # TLS termination at an Ingress/Gateway prevents OpenBao from completing ACME challenges.
+  gateway:
+    enabled: true
+    tlsPassthrough: true
+    gatewayRef:
+      name: traefik-gateway
+      namespace: default
+    hostname: "openbao.example.com"
   # External KMS auto-unseal (required for Hardened profile)
   unseal:
     type: awskms
@@ -138,20 +149,10 @@ spec:
   upgrade:
     jwtAuthRole: upgrade
     preUpgradeSnapshot: true
-  # Optional: External access via Ingress or Gateway API
-  # The domain specified in tls.acme.domain will be used for routing
-  ingress:
-    enabled: true
-    host: "openbao.example.com"
-    path: "/"
-    annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"
-      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
 ---
 # Note: When using ACME mode:
 # - No TLS Secrets need to be created manually
 # - OpenBao handles certificate acquisition and rotation automatically
-# - The operator creates a CA Secret (<cluster-name>-tls-ca) for cluster TLS
-#   communication, but this is separate from the ACME-managed server certificate
-# - For external access, configure Ingress or Gateway API to route to the cluster
+# - The operator does not create or mount `<cluster>-tls-ca` / `<cluster>-tls-server` Secrets in ACME mode
+# - For external access, use TLS passthrough (Gateway `TLSRoute` or an L4 load balancer)
 # - Ensure DNS is properly configured to point to your ingress/gateway

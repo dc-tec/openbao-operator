@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2/gohcl"
@@ -298,8 +299,11 @@ func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Bloc
 		if cluster.Spec.TLS.ACME == nil {
 			return nil, fmt.Errorf("ACME configuration is required when tls.mode is ACME")
 		}
+		if strings.TrimSpace(cluster.Spec.TLS.ACME.Domain) != "" && len(cluster.Spec.TLS.ACME.Domains) > 0 {
+			return nil, fmt.Errorf("tls.acme.domain and tls.acme.domains are mutually exclusive; use only one")
+		}
 		listener.TLSACMECADir = stringPtr(cluster.Spec.TLS.ACME.DirectoryURL)
-		domains := []string{cluster.Spec.TLS.ACME.Domain}
+		domains := acmeDomains(cluster)
 		listener.TLSACMEDomains = &domains
 		listener.TLSACMEEmail = stringPtr(cluster.Spec.TLS.ACME.Email)
 		listener.TLSACMEDisableHTTPChallenge = boolPtrValue(true)
@@ -349,13 +353,20 @@ func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra Infrastruc
 
 	retryJoinAttrs := hclRetryJoin{
 		AutoJoin:            autoJoinExpr,
-		LeaderTLSServerName: fmt.Sprintf("openbao-cluster-%s.local", cluster.Name),
+		LeaderTLSServerName: leaderTLSServerName(cluster),
 	}
 
 	if cluster.Spec.TLS.Mode != openbaov1alpha1.TLSModeACME {
 		retryJoinAttrs.LeaderCACertFile = stringPtr(constants.PathTLSCACert)
 		retryJoinAttrs.LeaderClientCertFile = stringPtr(constants.PathTLSServerCert)
 		retryJoinAttrs.LeaderClientKeyFile = stringPtr(constants.PathTLSServerKey)
+	} else if cluster.Spec.Configuration != nil && strings.TrimSpace(cluster.Spec.Configuration.ACMECARoot) != "" {
+		// When using a private ACME CA (like infra-bao PKI), the issued leaf certificate is not
+		// trusted by system roots. If tls_acme_ca_root is configured (to trust the ACME directory
+		// server), we expect the PKI CA to be available alongside it as "pki-ca.crt" (same volume),
+		// and use it for retry_join leader certificate verification.
+		acmeCARootDir := path.Dir(strings.TrimSpace(cluster.Spec.Configuration.ACMECARoot))
+		retryJoinAttrs.LeaderCACertFile = stringPtr(path.Join(acmeCARootDir, "pki-ca.crt"))
 	}
 
 	storageBlock := hclwrite.NewBlock("storage", []string{storageAttrs.Type})
@@ -366,6 +377,78 @@ func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra Infrastruc
 	storageBlock.Body().AppendBlock(retryJoinBlock)
 
 	return storageBlock
+}
+
+func leaderTLSServerName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	tlsMode := cluster.Spec.TLS.Mode
+	if tlsMode == "" {
+		tlsMode = openbaov1alpha1.TLSModeOperatorManaged
+	}
+
+	// In ACME mode, OpenBao obtains certificates for the configured ACME domain(s).
+	// retry_join must verify leader certificates using a name that is present in those
+	// certificates; the default operator-managed "openbao-cluster-<name>.local" SAN is
+	// not guaranteed (and commonly not allowed by public ACME CAs).
+	if tlsMode == openbaov1alpha1.TLSModeACME && cluster.Spec.TLS.ACME != nil {
+		if d := acmeLeaderTLSServerName(acmeDomains(cluster)); d != "" {
+			return d
+		}
+	}
+
+	return fmt.Sprintf("openbao-cluster-%s.local", cluster.Name)
+}
+
+func acmeLeaderTLSServerName(domains []string) string {
+	for _, d := range domains {
+		d = strings.TrimSpace(d)
+		if d == "" {
+			continue
+		}
+		// Prefer a stable internal Service name when available.
+		if strings.Contains(d, ".svc") {
+			return d
+		}
+	}
+	for _, d := range domains {
+		d = strings.TrimSpace(d)
+		if d != "" {
+			return d
+		}
+	}
+	return ""
+}
+
+func acmeDomains(cluster *openbaov1alpha1.OpenBaoCluster) []string {
+	if cluster == nil || cluster.Spec.TLS.ACME == nil {
+		return nil
+	}
+
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(cluster.Spec.TLS.ACME.Domains)+1)
+
+	for _, raw := range cluster.Spec.TLS.ACME.Domains {
+		d := strings.TrimSpace(raw)
+		if d == "" {
+			continue
+		}
+		if _, ok := seen[d]; ok {
+			continue
+		}
+		seen[d] = struct{}{}
+		out = append(out, d)
+	}
+
+	if len(out) == 0 {
+		if d := strings.TrimSpace(cluster.Spec.TLS.ACME.Domain); d != "" {
+			out = append(out, d)
+		}
+	}
+
+	if len(out) == 0 {
+		out = append(out, fmt.Sprintf("%s-acme.%s.svc", cluster.Name, cluster.Namespace))
+	}
+
+	return out
 }
 
 func boolPtrValue(v bool) *bool {

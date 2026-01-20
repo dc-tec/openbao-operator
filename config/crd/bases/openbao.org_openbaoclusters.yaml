@@ -748,6 +748,26 @@ spec:
                       (default: "ghcr.io/dc-tec/openbao-config-init") and the tag matches OPERATOR_VERSION.
                     type: string
                 type: object
+              maintenance:
+                description: Maintenance configures supported maintenance and restart
+                  workflows.
+                properties:
+                  enabled:
+                    description: |-
+                      Enabled enables maintenance mode for this cluster.
+                      When true, the operator annotates managed resources (Pods/StatefulSet) with
+                      `openbao.org/maintenance=true` to allow controlled restarts/deletes where
+                      admission policies require an explicit maintenance signal.
+                    type: boolean
+                  restartAt:
+                    description: |-
+                      RestartAt triggers a rolling restart when changed.
+                      The operator propagates this value as a Pod template annotation; any change
+                      results in a new StatefulSet revision and a controlled restart.
+                      Recommended value is an RFC3339 timestamp string.
+                    minLength: 1
+                    type: string
+                type: object
               network:
                 description: Network configures network-related settings for the cluster.
                 properties:
@@ -1803,6 +1823,7 @@ spec:
                             - update
                             - delete
                             - list
+                            - patch
                           - enum:
                             - create
                             - read
@@ -2025,17 +2046,32 @@ spec:
                         minLength: 1
                         type: string
                       domain:
-                        description: Domain is the domain name for which to obtain
-                          the certificate.
+                        description: |-
+                          Domain is the domain name for which to obtain the certificate.
+                          Deprecated: use Domains to request a certificate with multiple SANs.
                         minLength: 1
                         type: string
+                      domains:
+                        description: |-
+                          Domains is the list of domain names for which to obtain the certificate.
+                          This maps to OpenBao's listener `tls_acme_domains` field.
+
+                          When empty, the operator will default to an internal Service name suitable for
+                          private ACME CAs running inside the cluster (e.g., "<cluster>-acme.<namespace>.svc").
+                        items:
+                          type: string
+                        minItems: 1
+                        type: array
                       email:
                         description: Email is the email address to use for ACME registration.
                         type: string
                     required:
                     - directoryURL
-                    - domain
                     type: object
+                    x-kubernetes-validations:
+                    - message: tls.acme.domain and tls.acme.domains are mutually exclusive;
+                        use only one
+                      rule: '!(has(self.domain) && size(self.domains) > 0)'
                   enabled:
                     description: Enabled controls whether TLS is enabled for the cluster.
                     type: boolean

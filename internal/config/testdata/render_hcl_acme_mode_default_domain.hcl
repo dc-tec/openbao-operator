@@ -9,8 +9,7 @@ listener "tcp" {
   tls_disable                     = 0
   max_request_duration            = "90s"
   tls_acme_ca_directory           = "https://acme-v02.api.letsencrypt.org/directory"
-  tls_acme_domains                = ["example.com"]
-  tls_acme_email                  = "admin@example.com"
+  tls_acme_domains                = ["acme-cluster-acme.default.svc"]
   tls_acme_disable_http_challenge = true
 }
 seal "static" {
@@ -22,7 +21,7 @@ storage "raft" {
   node_id = "$${HOSTNAME}"
   retry_join {
     auto_join             = "provider=k8s namespace=default label_selector=\"openbao.org/cluster=acme-cluster\""
-    leader_tls_servername = "example.com"
+    leader_tls_servername = "acme-cluster-acme.default.svc"
   }
 }
 service_registration "kubernetes" {

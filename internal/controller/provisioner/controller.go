@@ -149,7 +149,29 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	// Handle deletion
 	if !tenant.DeletionTimestamp.IsZero() {
 		if containsFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
-			logger.Info("OpenBaoTenant is being deleted; cleaning up tenant RBAC", "target_namespace", targetNS)
+			logger.Info("OpenBaoTenant is being deleted", "target_namespace", targetNS)
+
+			// 1. Check if any active OpenBaoCluster resources still exist in the target namespace.
+			// If they do, we must NOT remove the RBAC yet, because the OpenBaoCluster finalizers
+			// depend on these permissions (e.g. to delete PVCs or orphan secrets).
+			// If we remove RBAC too early, the OpenBaoCluster finalizers will fail with Forbidden errors
+			// and the cluster deletion will get stuck.
+			clusterList := &openbaov1alpha1.OpenBaoClusterList{}
+			if err := r.List(ctx, clusterList, client.InNamespace(targetNS)); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to list keys in namespace %s: %w", targetNS, err)
+			}
+
+			if len(clusterList.Items) > 0 {
+				logger.Info("Waiting for OpenBaoClusters to be deleted before cleaning up RBAC",
+					"target_namespace", targetNS,
+					"cluster_count", len(clusterList.Items))
+				// Requeue to check again later.
+				// We use a slightly longer requeue time to avoid spamming the API server while waiting.
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			}
+
+			// 2. All clusters are gone, now it is safe to clean up RBAC.
+			logger.Info("No OpenBaoClusters found; cleaning up tenant RBAC", "target_namespace", targetNS)
 			if err := r.Provisioner.CleanupTenantRBAC(ctx, targetNS); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to cleanup tenant RBAC for namespace %s: %w", targetNS, err)
 			}
