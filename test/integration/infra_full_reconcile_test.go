@@ -29,7 +29,8 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 
 	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -84,7 +85,8 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 		t.Fatalf("patch drifted StatefulSet: %v", err)
 	}
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec = newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after drift error = %v", err)
 	}
 
@@ -120,7 +122,7 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 	}
 
 	// One more pass should be safe/idempotent.
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() third call error = %v", err)
 	}
 }

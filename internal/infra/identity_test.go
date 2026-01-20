@@ -28,7 +28,8 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -62,7 +63,8 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 	ctx := context.Background()
 
 	// First reconcile creates the ServiceAccount
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -77,7 +79,8 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 	}
 
 	// Second reconcile with same cluster should be idempotent (SSA)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec = newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() second call error = %v", err)
 	}
 
@@ -111,7 +114,8 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -201,12 +205,14 @@ func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 	ctx := context.Background()
 
 	// First reconcile creates RBAC
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
 	// Second reconcile should be idempotent (SSA)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec = newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() second call error = %v", err)
 	}
 
@@ -270,7 +276,8 @@ func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 	createTLSSecretForTest(t, k8sClient, cluster)
 
 	// Create ServiceAccount via Reconcile
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -339,7 +346,8 @@ func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 	createTLSSecretForTest(t, k8sClient, cluster)
 
 	// Create RBAC via Reconcile
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 

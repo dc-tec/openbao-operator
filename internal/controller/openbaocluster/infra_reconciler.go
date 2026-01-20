@@ -170,6 +170,60 @@ func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, lo
 	return r.verifyOperatorImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Init container image verification failed")
 }
 
+// computeStatefulSetSpec computes the StatefulSetSpec from the cluster and verified image digests.
+// This method encapsulates all upgrade strategy knowledge, removing it from the infrastructure layer.
+func (r *infraReconciler) computeStatefulSetSpec(
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	verifiedImageDigest string,
+	verifiedInitContainerDigest string,
+) inframanager.StatefulSetSpec {
+	spec := inframanager.StatefulSetSpec{
+		Image:              verifiedImageDigest,
+		InitContainerImage: verifiedInitContainerDigest,
+		Replicas:           cluster.Spec.Replicas,
+		DisableSelfInit:    false,
+		SkipReconciliation: false,
+	}
+
+	// Determine revision and skip logic based on update strategy
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+		// For BlueGreen, use the BlueRevision from status
+		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+			spec.Revision = cluster.Status.BlueGreen.BlueRevision
+
+			// Skip StatefulSet creation during DemotingBlue/Cleanup phases.
+			// The BlueGreenManager handles StatefulSet lifecycle during these phases.
+			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
+				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
+				logger.Info("Skipping Blue StatefulSet reconciliation during cleanup phase",
+					"phase", cluster.Status.BlueGreen.Phase,
+					"blueRevision", cluster.Status.BlueGreen.BlueRevision)
+				spec.SkipReconciliation = true
+				return spec
+			}
+		} else {
+			// Bootstrap revision for initial reconciliation before BlueGreen status is initialized.
+			spec.Revision = revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+		}
+	} else {
+		// For RollingUpdate or default, use empty revision (cluster name)
+		spec.Revision = ""
+	}
+
+	// Compute StatefulSet name from cluster name and revision
+	if spec.Revision == "" {
+		spec.Name = cluster.Name
+	} else {
+		spec.Name = fmt.Sprintf("%s-%s", cluster.Name, spec.Revision)
+	}
+
+	// ConfigHash will be computed in the infra manager from the rendered config
+	// We leave it empty here and it will be set during reconciliation
+
+	return spec
+}
+
 // Reconcile implements SubReconciler for infrastructure reconciliation.
 func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	logger.Info("Reconciling infrastructure for OpenBaoCluster")
@@ -213,11 +267,14 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		}
 	}
 
+	// Compute StatefulSetSpec with all upgrade strategy knowledge
+	spec := r.computeStatefulSetSpec(logger, cluster, verifiedImageDigest, verifiedInitContainerDigest)
+
 	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, r.platform)
 	if r.apiReader != nil {
 		manager = inframanager.NewManagerWithReader(r.client, r.apiReader, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, r.platform)
 	}
-	if err := manager.Reconcile(ctx, logger, cluster, verifiedImageDigest, verifiedInitContainerDigest); err != nil {
+	if err := manager.Reconcile(ctx, logger, cluster, spec); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			return recon.Result{}, operatorerrors.WithReason(ReasonGatewayAPIMissing, err)
 		}

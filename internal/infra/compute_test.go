@@ -30,7 +30,8 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -66,7 +67,8 @@ func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -136,7 +138,8 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 
 			ctx := context.Background()
 
-			if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+			spec := newTestStatefulSetSpec(cluster)
+			if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 				t.Fatalf("Reconcile() error = %v", err)
 			}
 
@@ -176,7 +179,8 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -362,7 +366,8 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -412,7 +417,8 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 	// No Unseal config, so no seal-creds volume - this simulates public ACME
 
 	ctx := context.Background()
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -461,7 +467,8 @@ func TestProbesSetSNIToExternalServiceWhenServiceEnabled_NonACME(t *testing.T) {
 	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -506,7 +513,8 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -554,7 +562,8 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -583,7 +592,8 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, "", ""); err != nil {
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
