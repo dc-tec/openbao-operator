@@ -479,3 +479,119 @@ func TestNamespaceProvisionerReconcile_SelfService_Success(t *testing.T) {
 		t.Error("expected Status.Provisioned to be true for valid self-service")
 	}
 }
+
+func TestNamespaceProvisionerReconcile_DeletionWithExistingCluster(t *testing.T) {
+	// Create target namespace
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "tenant-ns",
+		},
+	}
+
+	// Create existing RBAC resources
+	existingRole := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      provisioner.TenantRoleName,
+			Namespace: "tenant-ns",
+		},
+	}
+
+	// Create an existing OpenBaoCluster in the tenant namespace
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "tenant-ns",
+		},
+	}
+
+	// Create OpenBaoTenant with deletion timestamp and finalizer
+	now := metav1.Now()
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-tenant",
+			Namespace:         "openbao-operator-system",
+			DeletionTimestamp: &now,
+			Finalizers:        []string{openbaov1alpha1.OpenBaoTenantFinalizer},
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: "tenant-ns",
+		},
+	}
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	// Be sure to include the cluster in the fake client so List works
+	k8sClient := newTestClient(t, namespace, tenant, existingRole, cluster)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
+	if err != nil {
+		t.Fatalf("failed to create provisioner manager: %v", err)
+	}
+
+	reconciler := &NamespaceProvisionerReconciler{
+		Client:            k8sClient,
+		Scheme:            testScheme,
+		Provisioner:       provisionerManager,
+		OperatorNamespace: "openbao-operator-system",
+	}
+
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "test-tenant",
+			Namespace: "openbao-operator-system",
+		},
+	}
+
+	// Reconcile 1: Should detect cluster and requeue, NOT deleting RBAC
+	result, err := reconciler.Reconcile(ctx, req)
+	if err != nil {
+		t.Fatalf("Reconcile() 1 error = %v", err)
+	}
+
+	if result.RequeueAfter == 0 {
+		t.Error("Reconcile() should requeue when cluster exists")
+	}
+
+	// Verify Role was NOT deleted
+	role := &rbacv1.Role{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: "tenant-ns",
+		Name:      provisioner.TenantRoleName,
+	}, role)
+	if err != nil {
+		t.Fatalf("expected Role to still exist: %v", err)
+	}
+
+	// Now delete the cluster from the fake client
+	if err := k8sClient.Delete(ctx, cluster); err != nil {
+		t.Fatalf("failed to delete cluster: %v", err)
+	}
+
+	// Reconcile 2: Should proceed with cleanup
+	result, err = reconciler.Reconcile(ctx, req)
+	if err != nil {
+		t.Fatalf("Reconcile() 2 error = %v", err)
+	}
+
+	if result.RequeueAfter > 0 {
+		t.Error("Reconcile() should not requeue after successful cleanup")
+	}
+
+	// Verify Role was deleted
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: "tenant-ns",
+		Name:      provisioner.TenantRoleName,
+	}, role)
+	if err == nil {
+		t.Error("expected Role to be deleted")
+	}
+
+	// Verify finalizer was removed
+	updatedTenant := &openbaov1alpha1.OpenBaoTenant{}
+	if err := k8sClient.Get(ctx, req.NamespacedName, updatedTenant); err == nil {
+		for _, f := range updatedTenant.Finalizers {
+			if f == openbaov1alpha1.OpenBaoTenantFinalizer {
+				t.Error("expected finalizer to be removed")
+			}
+		}
+	}
+}
