@@ -11,9 +11,9 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/security"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
@@ -33,12 +33,12 @@ type Manager struct {
 	scheme                *runtime.Scheme
 	clientFactory         upgrade.OpenBaoClientFactory
 	clientConfig          openbaoapi.ClientConfig
-	operatorImageVerifier *security.ImageVerifier
+	operatorImageVerifier interfaces.ImageVerifier
 	Platform              string
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
-func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbaoapi.ClientConfig, operatorImageVerifier *security.ImageVerifier, platform string) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbaoapi.ClientConfig, operatorImageVerifier interfaces.ImageVerifier, platform string) *Manager {
 	return &Manager{
 		client:                c,
 		scheme:                scheme,
@@ -51,7 +51,7 @@ func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbaoapi
 
 // NewManagerWithClientFactory constructs a Manager with a custom OpenBao client factory.
 // This is primarily used for testing.
-func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, operatorImageVerifier *security.ImageVerifier, platform string) *Manager {
+func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, factory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, operatorImageVerifier interfaces.ImageVerifier, platform string) *Manager {
 	if factory == nil {
 		factory = upgrade.DefaultOpenBaoClientFactory
 	}

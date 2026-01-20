@@ -14,7 +14,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	security "github.com/dc-tec/openbao-operator/internal/security"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 )
 
 func TestInfraReconcilerVerifyMainImageDigest_DisabledDoesNotCallVerifier(t *testing.T) {
@@ -127,7 +127,7 @@ func TestInfraReconcilerVerifyOperatorImageDigest_WarnEmitsEvent(t *testing.T) {
 
 	recorder := record.NewFakeRecorder(1)
 	r := &infraReconciler{
-		verifyOperatorImageFunc: func(ctx context.Context, logger logr.Logger, verifier *security.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
+		verifyOperatorImageFunc: func(ctx context.Context, logger logr.Logger, verifier interfaces.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 			return "", errors.New("verification failed")
 		},
 		recorder: recorder,

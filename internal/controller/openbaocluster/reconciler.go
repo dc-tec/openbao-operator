@@ -7,9 +7,8 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/admission"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
-	initmanager "github.com/dc-tec/openbao-operator/internal/init"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
-	security "github.com/dc-tec/openbao-operator/internal/security"
 )
 
 // OpenBaoClusterReconciler reconciles a OpenBaoCluster object.
@@ -18,7 +17,7 @@ type OpenBaoClusterReconciler struct {
 	APIReader         client.Reader
 	Scheme            *runtime.Scheme
 	TLSReload         certmanager.ReloadSignaler
-	InitManager       *initmanager.Manager
+	InitManager       interfaces.InitManager
 	OperatorNamespace string
 	OIDCIssuer        string // OIDC issuer URL discovered at startup
 	OIDCJWTKeys       []string
@@ -29,7 +28,7 @@ type OpenBaoClusterReconciler struct {
 	// and caching is enabled for the watched namespace.
 	SingleTenantMode      bool
 	SmartClientConfig     openbao.ClientConfig
-	ImageVerifier         *security.ImageVerifier
-	OperatorImageVerifier *security.ImageVerifier
+	ImageVerifier         interfaces.ImageVerifier
+	OperatorImageVerifier interfaces.ImageVerifier
 	Platform              string
 }

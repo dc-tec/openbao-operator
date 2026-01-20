@@ -5,13 +5,14 @@ import (
 	"fmt"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/go-logr/logr"
 )
 
 // VerifyImageForCluster verifies an image reference using the cluster's ImageVerification configuration.
 // It returns an image digest reference (e.g., "repo@sha256:...") when verification is enabled and succeeds.
 // When image verification is disabled, it returns an empty digest and a nil error.
-func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier *ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
+func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier interfaces.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	if cluster == nil {
 		return "", fmt.Errorf("cluster is required")
 	}
@@ -32,7 +33,7 @@ func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier *Im
 		return "", fmt.Errorf("image verification is enabled but neither public key nor keyless configuration (issuer and subject) is provided")
 	}
 
-	config := VerifyConfig{
+	config := interfaces.VerifyConfig{
 		PublicKey:        cluster.Spec.ImageVerification.PublicKey,
 		Issuer:           cluster.Spec.ImageVerification.Issuer,
 		Subject:          cluster.Spec.ImageVerification.Subject,
@@ -53,7 +54,7 @@ func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier *Im
 // backup/upgrade/restore executors) using the cluster's OperatorImageVerification config.
 // Unlike VerifyImageForCluster, this function does NOT fall back to ImageVerification.
 // If OperatorImageVerification is not configured, verification is skipped for helper images.
-func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, verifier *ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
+func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, verifier interfaces.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	if cluster == nil {
 		return "", fmt.Errorf("cluster is required")
 	}
@@ -78,7 +79,7 @@ func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, veri
 		return "", fmt.Errorf("operator image verification is enabled but neither public key nor keyless configuration (issuer and subject) is provided")
 	}
 
-	config := VerifyConfig{
+	config := interfaces.VerifyConfig{
 		PublicKey:        verificationConfig.PublicKey,
 		Issuer:           verificationConfig.Issuer,
 		Subject:          verificationConfig.Subject,

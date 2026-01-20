@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/restore"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
@@ -39,7 +40,7 @@ type OpenBaoRestoreReconciler struct {
 	Scheme                *runtime.Scheme
 	RestoreManager        *restore.Manager
 	Recorder              record.EventRecorder
-	OperatorImageVerifier *security.ImageVerifier
+	OperatorImageVerifier interfaces.ImageVerifier
 	Platform              string
 }
 

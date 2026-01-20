@@ -7,7 +7,7 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	security "github.com/dc-tec/openbao-operator/internal/security"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 )
 
 // verifyImage verifies the container image signature using the ImageVerifier.
@@ -26,7 +26,7 @@ func (r *OpenBaoClusterReconciler) verifyImage(ctx context.Context, logger logr.
 
 	// Use the singleton ImageVerifier (initialized in SetupWithManager)
 	// This ensures we benefit from the internal LRU and TTL caches.
-	config := security.VerifyConfig{
+	config := interfaces.VerifyConfig{
 		PublicKey:        cluster.Spec.ImageVerification.PublicKey,
 		Issuer:           cluster.Spec.ImageVerification.Issuer,
 		Subject:          cluster.Spec.ImageVerification.Subject,
