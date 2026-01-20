@@ -60,6 +60,13 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 
 // buildSnapshotJob creates a backup Job spec for upgrade snapshots.
 func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobName, phase string, verifiedExecutorDigest string) (*batchv1.Job, error) {
+	// For Blue/Green upgrades, target the Blue (current active) StatefulSet.
+	// The pre-upgrade snapshot must capture the data from the currently running pods.
+	statefulSetName := cluster.Name
+	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+		statefulSetName = fmt.Sprintf("%s-%s", cluster.Name, cluster.Status.BlueGreen.BlueRevision)
+	}
+
 	job, err := backup.BuildJob(cluster, backup.JobOptions{
 		JobName:                jobName,
 		JobType:                backup.JobTypePreUpgrade,
@@ -67,7 +74,9 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 		FilenamePrefix:         phase,
 		ClientConfig:           m.clientConfig,
 		Platform:               m.Platform,
+		TargetStatefulSetName:  statefulSetName,
 	})
+
 	if err != nil {
 		return nil, err
 	}

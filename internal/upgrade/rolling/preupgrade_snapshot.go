@@ -135,12 +135,16 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 		}
 	}
 
+	// For rolling upgrades, target the base StatefulSet (no revision suffix).
+	// TargetStatefulSetName defaults to cluster.Name when empty.
 	job, err := backup.BuildJob(cluster, backup.JobOptions{
 		JobName:                jobName,
 		JobType:                backup.JobTypePreUpgrade,
 		FilenamePrefix:         constants.BackupTypePreUpgrade,
 		VerifiedExecutorDigest: verifiedExecutorDigest,
+		// TargetStatefulSetName left empty - defaults to cluster.Name for rolling upgrades
 	})
+
 	if err != nil {
 		return false, fmt.Errorf("failed to build backup job: %w", err)
 	}
