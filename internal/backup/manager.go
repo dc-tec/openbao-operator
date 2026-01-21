@@ -581,7 +581,7 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 	}
 
 	// Load storage credentials
-	creds, err := storage.LoadCredentials(ctx, m.client, cluster.Spec.Backup.Target.CredentialsSecretRef, cluster.Namespace)
+	creds, err := kube.LoadStorageCredentials(ctx, m.client, cluster.Spec.Backup.Target.CredentialsSecretRef, cluster.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to load storage credentials for retention: %w", err)
 	}

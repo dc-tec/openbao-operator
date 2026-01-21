@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/dc-tec/openbao-operator/internal/storage"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 )
 
 // RetentionPolicy defines the retention policy for backups.
@@ -43,7 +43,7 @@ type RetentionResult struct {
 func ApplyRetention(
 	ctx context.Context,
 	logger logr.Logger,
-	storageClient *storage.Bucket,
+	storageClient interfaces.BlobStore,
 	prefix string,
 	policy RetentionPolicy,
 ) (*RetentionResult, error) {

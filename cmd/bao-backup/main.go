@@ -11,6 +11,7 @@ import (
 
 	backupconfig "github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/storage"
 )
@@ -183,26 +184,8 @@ func run(ctx context.Context) error {
 		}
 	}
 
-	// Ensure region is set (required by S3 client)
-	if cfg.StorageCredentials == nil {
-		cfg.StorageCredentials = &storage.Credentials{
-			Region: cfg.BackupRegion,
-		}
-	} else if cfg.StorageCredentials.Region == "" {
-		cfg.StorageCredentials.Region = cfg.BackupRegion
-	}
-
-	// Create storage client
-	storageClient, err := storage.OpenS3Bucket(ctx, storage.S3ClientConfig{
-		Endpoint:        cfg.BackupEndpoint,
-		Bucket:          cfg.BackupBucket,
-		Region:          cfg.StorageCredentials.Region,
-		AccessKeyID:     cfg.StorageCredentials.AccessKeyID,
-		SecretAccessKey: cfg.StorageCredentials.SecretAccessKey,
-		SessionToken:    cfg.StorageCredentials.SessionToken,
-		CACert:          cfg.StorageCredentials.CACert,
-		UsePathStyle:    cfg.BackupUsePathStyle,
-	})
+	// Create storage client based on provider
+	storageClient, err := openStorageClient(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create storage client: %w", err)
 	}
@@ -330,27 +313,34 @@ func runRestore(ctx context.Context) error {
 		return fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
 
-	// Ensure region is set
-	if cfg.StorageCredentials == nil {
-		cfg.StorageCredentials = &storage.Credentials{
-			Region: restoreRegion,
+	// Create a modified config for restore with restore-specific values
+	restoreCfg := *cfg
+	restoreCfg.BackupBucket = restoreBucket
+	restoreCfg.BackupEndpoint = restoreEndpoint
+	restoreCfg.BackupRegion = restoreRegion
+	restoreCfg.BackupUsePathStyle = usePathStyle
+
+	// Re-check emulator mode for GCS after setting restore endpoint
+	// (emulator detection in LoadExecutorConfig only checks BACKUP_ENDPOINT)
+	if restoreCfg.BackupProvider == constants.StorageProviderGCS {
+		endpointLower := strings.ToLower(restoreEndpoint)
+		if strings.Contains(endpointLower, "fake-gcs-server") || strings.HasPrefix(endpointLower, "http://") {
+			restoreCfg.GCSUseEmulator = true
 		}
-	} else if cfg.StorageCredentials.Region == "" {
-		cfg.StorageCredentials.Region = restoreRegion
 	}
 
-	// Create storage client for downloading
+	// Ensure region is set in credentials for S3
+	if restoreCfg.StorageCredentials == nil {
+		restoreCfg.StorageCredentials = &storage.Credentials{
+			Region: restoreRegion,
+		}
+	} else if restoreCfg.StorageCredentials.Region == "" {
+		restoreCfg.StorageCredentials.Region = restoreRegion
+	}
+
+	// Create storage client for downloading using cloud-agnostic API
 	fmt.Println("Creating storage client...")
-	storageClient, err := storage.OpenS3Bucket(ctx, storage.S3ClientConfig{
-		Endpoint:        restoreEndpoint,
-		Bucket:          restoreBucket,
-		Region:          cfg.StorageCredentials.Region,
-		AccessKeyID:     cfg.StorageCredentials.AccessKeyID,
-		SecretAccessKey: cfg.StorageCredentials.SecretAccessKey,
-		SessionToken:    cfg.StorageCredentials.SessionToken,
-		CACert:          cfg.StorageCredentials.CACert,
-		UsePathStyle:    usePathStyle,
-	})
+	storageClient, err := openStorageClient(ctx, &restoreCfg)
 	if err != nil {
 		return fmt.Errorf("failed to create storage client: %w", err)
 	}
@@ -453,4 +443,64 @@ func parseDuration(s string) time.Duration {
 		return 0
 	}
 	return d
+}
+
+// openStorageClient creates a storage client based on the configured provider.
+func openStorageClient(ctx context.Context, cfg *backupconfig.ExecutorConfig) (interfaces.BlobStore, error) {
+	storageConfig := storage.Config{
+		Provider: storage.ProviderType(cfg.BackupProvider),
+		Bucket:   cfg.BackupBucket,
+		Endpoint: cfg.BackupEndpoint,
+	}
+
+	switch cfg.BackupProvider {
+	case constants.StorageProviderS3, "":
+		storageConfig.Region = cfg.BackupRegion
+		if cfg.StorageCredentials != nil {
+			storageConfig.Credentials = cfg.StorageCredentials
+		} else {
+			storageConfig.Credentials = &storage.Credentials{
+				Region: cfg.BackupRegion,
+			}
+		}
+		storageConfig.S3 = &storage.S3Options{
+			UsePathStyle:       cfg.BackupUsePathStyle,
+			InsecureSkipVerify: cfg.InsecureSkipVerify,
+			EnsureExists:       true, // Always try to ensure bucket exists for backups
+		}
+
+		// Fallback: Infer InsecureSkipVerify if using HTTP endpoint and not explicitly set
+		if !cfg.InsecureSkipVerify && strings.HasPrefix(strings.ToLower(cfg.BackupEndpoint), "http://") {
+			storageConfig.S3.InsecureSkipVerify = true
+		}
+
+	case constants.StorageProviderGCS:
+		storageConfig.GCS = &storage.GCSOptions{
+			Project:            cfg.GCSProject,
+			CredentialsJSON:    cfg.GCSCredentialsJSON,
+			UseEmulator:        cfg.GCSUseEmulator,
+			InsecureSkipVerify: cfg.InsecureSkipVerify,
+		}
+		// Set InsecureSkipVerify for emulator mode with HTTP endpoints if not already set
+		if !cfg.InsecureSkipVerify && cfg.GCSUseEmulator && strings.HasPrefix(strings.ToLower(cfg.BackupEndpoint), "http://") {
+			storageConfig.GCS.InsecureSkipVerify = true
+		}
+
+	case constants.StorageProviderAzure:
+		storageConfig.Azure = &storage.AzureOptions{
+			StorageAccount:     cfg.AzureStorageAccount,
+			AccountKey:         cfg.AzureAccountKey,
+			ConnectionString:   cfg.AzureConnectionString,
+			InsecureSkipVerify: cfg.InsecureSkipVerify,
+		}
+		// Use Azure container if specified, otherwise fall back to bucket
+		if cfg.AzureContainer != "" {
+			storageConfig.Bucket = cfg.AzureContainer
+		}
+
+	default:
+		return nil, fmt.Errorf("unknown storage provider: %q", cfg.BackupProvider)
+	}
+
+	return storage.OpenBlobStore(ctx, storageConfig)
 }
