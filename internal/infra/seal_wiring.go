@@ -9,7 +9,7 @@ import (
 
 const (
 	sealCredsVolumeName      = "seal-creds"
-	sealCredsVolumeMountPath = "/etc/bao/seal-creds"
+	sealCredsVolumeMountPath = "/etc/bao/seal-creds" // #nosec G101 -- False positive: path, not a secret
 )
 
 type sealWiringProvider interface {
