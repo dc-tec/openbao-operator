@@ -247,7 +247,6 @@ func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.O
 
 	return m.client.Status().Patch(ctx, applyCluster, client.Apply,
 		client.FieldOwner("openbao-backup-controller"),
-		client.ForceOwnership,
 	)
 }
 

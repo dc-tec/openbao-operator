@@ -37,7 +37,6 @@ func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *
 
 	return r.Status().Patch(ctx, applyCluster, client.Apply,
 		client.FieldOwner("openbao-cluster-controller"),
-		client.ForceOwnership,
 	)
 }
 
