@@ -7,7 +7,10 @@ Day N operations ensure data durability through regular backups and disaster rec
 
 ## Backups
 
-1. User configures backup schedule (`spec.backup.schedule`) and target object storage in the `OpenBaoCluster` spec.
+1. User configures backup schedule (`spec.backup.schedule`) and target object storage in the `OpenBaoCluster` spec. Supported providers:
+   - **S3**: AWS S3 or S3-compatible storage (MinIO, Ceph, etc.)
+   - **GCS**: Google Cloud Storage
+   - **Azure**: Azure Blob Storage
 2. User configures authentication method:
    - **JWT Auth (Preferred):** Set `spec.backup.jwtAuthRole` and configure the role in OpenBao
    - **Static Token (Fallback):** For all clusters, set `spec.backup.tokenSecretRef` pointing to a backup token Secret (root tokens are not used)
@@ -41,7 +44,7 @@ sequenceDiagram
     participant Op as OpenBao Operator
     participant Job as Backup Job Pod
     participant Bao as OpenBao API
-    participant S3 as Object Storage
+    participant Storage as Object Storage
 
     U->>K: Configure backup schedule and target in OpenBaoCluster
     K-->>Op: Watch OpenBaoCluster (backup spec)
@@ -50,8 +53,8 @@ sequenceDiagram
     K-->>Job: Start backup executor Pod
     Job->>Bao: Authenticate (JWT or token)
     Job->>Bao: GET /v1/sys/storage/raft/snapshot
-    Job->>S3: Stream snapshot to object storage
+    Job->>Storage: Stream snapshot to object storage
     Job-->>Op: Exit status (success/failure)
     Op->>K: Update OpenBaoCluster.status.backup (last backup, failures)
-    Op->>S3: Apply retention policies (via backup manager, if configured)
+    Op->>Storage: Apply retention policies (via backup manager, if configured)
 ```

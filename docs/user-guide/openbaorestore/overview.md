@@ -10,12 +10,12 @@ The restore process involves downloading a specific snapshot from Cloud Storage 
 
 ```mermaid
 graph LR
-    Bucket[("fa:fa-bucket Cloud Storage\n(S3/GCS)")] -->|Download| Job[["fa:fa-file-arrow-down Restore Job"]]
+    Bucket[("fa:fa-bucket Cloud Storage\n(S3/GCS/Azure)")] -->|Download| Job[["fa:fa-file-arrow-down Restore Job"]]
     Job -->|Inject Snapshot| Cluster[("fa:fa-server OpenBao Cluster")]
     Cluster -->|Reset| Key["fa:fa-key New Unseal Key"]
     
-    classDef storage fill:transparent,stroke:#2563eb,stroke-width:2px,color:#000;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#000;
+    classDef storage fill:transparent,stroke:#2563eb,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
     
     class Bucket,Cluster,Key storage;
     class Job process;
@@ -56,11 +56,14 @@ spec:
   
   # The source of the backup
   source:
-    type: s3
-    s3:
+    target:
+      provider: s3  # s3, gcs, or azure
+      endpoint: https://s3.amazonaws.com
       bucket: my-backups
       region: us-east-1
-      key: backup-2024-01-01.snap
+      credentialsSecretRef:
+        name: s3-credentials
+    key: clusters/prod/backup-2024-01-01.snap
 ```
 
 ## Next Steps
