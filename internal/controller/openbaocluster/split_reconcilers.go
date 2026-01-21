@@ -66,7 +66,7 @@ func patchStatusIfChanged(ctx context.Context, c client.Client, logger logr.Logg
 		Status: cluster.Status,
 	}
 
-	if err := c.Status().Patch(ctx, applyCluster, client.Apply, client.FieldOwner("openbao-cluster-controller"), client.ForceOwnership); err != nil {
+	if err := c.Status().Patch(ctx, applyCluster, client.Apply, client.FieldOwner("openbao-cluster-controller")); err != nil {
 		return fmt.Errorf("failed to patch status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
 	logger.V(1).Info("Patched OpenBaoCluster status (SSA)", "reason", reason)
