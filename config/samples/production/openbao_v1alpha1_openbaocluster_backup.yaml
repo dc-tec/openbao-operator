@@ -1,12 +1,17 @@
 # OpenBaoCluster with Backup Configuration
 #
 # This example demonstrates scheduled backups of OpenBao Raft snapshots to
-# S3-compatible object storage. Backups are executed using Kubernetes Jobs
-# with a dedicated backup executor container.
+# object storage. Backups are executed using Kubernetes Jobs with a dedicated
+# backup executor container.
+#
+# Supported Storage Providers:
+# - S3: AWS S3 or S3-compatible storage (MinIO, Ceph, etc.)
+# - GCS: Google Cloud Storage
+# - Azure: Azure Blob Storage
 #
 # Prerequisites:
-# - S3-compatible object storage (AWS S3, MinIO, etc.)
-# - Credentials Secret containing accessKeyId and secretAccessKey
+# - Object storage bucket/container configured
+# - Credentials Secret (provider-specific keys)
 # - JWT authentication enabled in OpenBao (for JWT Auth method)
 #   OR a backup token Secret (for static token method)
 #
@@ -87,12 +92,18 @@ spec:
     schedule: "0 3 * * *" # Daily at 3 AM
     executorImage: "openbao/backup-executor:v0.1.0" # Default, can be omitted
     target:
+      # Storage provider: s3 (default), gcs, or azure
+      provider: s3
       endpoint: "https://s3.amazonaws.com"
       bucket: "openbao-backups"
       pathPrefix: "clusters/openbaocluster-backup"
+      # S3-specific options
+      region: "us-east-1"
+      usePathStyle: false  # Set true for MinIO/S3-compatible stores
+      # Optional: IAM Role ARN for Web Identity (IRSA) - no Secret needed
+      # roleArn: "arn:aws:iam::123456789012:role/openbao-backup"
       credentialsSecretRef:
         name: s3-backup-credentials
-        namespace: default
       # Optional: Tune multipart upload performance
       # partSize: 10485760  # 10MB (default) - larger values may improve performance on fast networks
       # concurrency: 3  # Default - higher values may improve throughput but increase memory usage
@@ -101,21 +112,97 @@ spec:
     # Alternative: Static token (for self-init clusters without JWT Auth)
     # tokenSecretRef:
     #   name: backup-token-secret
-    #   namespace: default
     # Retention policy: keep up to 7 backups and at most 7 days of history
     retention:
       maxCount: 7
       maxAge: "168h" # 7 days
 ---
-# Example: Create S3 credentials Secret
+# Example: S3 credentials Secret
 # apiVersion: v1
 # kind: Secret
 # metadata:
 #   name: s3-backup-credentials
-#   namespace: default
 # type: Opaque
 # stringData:
 #   accessKeyId: "YOUR_ACCESS_KEY_ID"
 #   secretAccessKey: "YOUR_SECRET_ACCESS_KEY"
-#   # Optional: region
+#   # Optional:
 #   # region: "us-east-1"
+#   # sessionToken: "YOUR_SESSION_TOKEN"  # For temporary credentials
+#   # caCert: |  # For self-signed certificates
+#   #   -----BEGIN CERTIFICATE-----
+#   #   ...
+#   #   -----END CERTIFICATE-----
+---
+# Example: GCS configuration
+# apiVersion: openbao.org/v1alpha1
+# kind: OpenBaoCluster
+# metadata:
+#   name: openbaocluster-backup-gcs
+# spec:
+#   # ... (same as above)
+#   backup:
+#     schedule: "0 3 * * *"
+#     jwtAuthRole: backup
+#     target:
+#       provider: gcs
+#       bucket: "openbao-backups"
+#       pathPrefix: "clusters/openbaocluster-backup-gcs"
+#       gcs:
+#         project: "my-gcp-project"  # Optional if using ADC
+#       credentialsSecretRef:
+#         name: gcs-backup-credentials
+#     retention:
+#       maxCount: 7
+#       maxAge: "168h"
+# ---
+# Example: GCS credentials Secret (service account JSON)
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: gcs-backup-credentials
+# type: Opaque
+# stringData:
+#   credentials.json: |
+#     {
+#       "type": "service_account",
+#       "project_id": "my-gcp-project",
+#       ...
+#     }
+# Note: For Workload Identity or GKE, omit credentialsSecretRef to use ADC
+---
+# Example: Azure configuration
+# apiVersion: openbao.org/v1alpha1
+# kind: OpenBaoCluster
+# metadata:
+#   name: openbaocluster-backup-azure
+# spec:
+#   # ... (same as above)
+#   backup:
+#     schedule: "0 3 * * *"
+#     jwtAuthRole: backup
+#     target:
+#       provider: azure
+#       bucket: "openbao-backups"  # Container name
+#       pathPrefix: "clusters/openbaocluster-backup-azure"
+#       azure:
+#         storageAccount: "mystorageaccount"
+#         container: "openbao-backups"  # Optional, uses bucket if omitted
+#       credentialsSecretRef:
+#         name: azure-backup-credentials
+#     retention:
+#       maxCount: 7
+#       maxAge: "168h"
+# ---
+# Example: Azure credentials Secret (use accountKey OR connectionString)
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: azure-backup-credentials
+# type: Opaque
+# stringData:
+#   # Option 1: Account Key
+#   accountKey: "YOUR_STORAGE_ACCOUNT_KEY"
+#   # Option 2: Connection String (alternative to accountKey)
+#   # connectionString: "DefaultEndpointsProtocol=https;AccountName=..."
+# Note: For AKS managed identity, omit credentialsSecretRef
