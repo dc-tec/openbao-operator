@@ -182,7 +182,8 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 			if statusErr := m.patchStatusSSA(ctx, restore); statusErr != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to patch restore status after lock contention: %w", statusErr)
 			}
-			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+			// Use RequeueShort to check more frequently when waiting for backup/upgrade to complete
+			return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to acquire cluster operation lock: %w", err)
 	}
