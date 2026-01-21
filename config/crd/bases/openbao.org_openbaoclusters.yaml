@@ -271,6 +271,11 @@ spec:
                               if the credentials JSON includes the project.
                             type: string
                         type: object
+                      insecureSkipVerify:
+                        description: |-
+                          InsecureSkipVerify allows skipping TLS verification (useful for MinIO/LocalStack/Azurite with self-signed certs).
+                          This applies to all providers that support TLS.
+                        type: boolean
                       partSize:
                         default: 10485760
                         description: |-

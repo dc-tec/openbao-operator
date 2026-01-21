@@ -203,6 +203,22 @@ spec:
                   target:
                     description: Target is the object storage configuration for backups.
                     properties:
+                      azure:
+                        description: |-
+                          Azure contains Azure Blob Storage specific configuration.
+                          Only used when Provider is "azure".
+                        properties:
+                          container:
+                            description: Container is the blob container name. If
+                              empty, uses the Bucket field value.
+                            type: string
+                          storageAccount:
+                            description: |-
+                              StorageAccount is the Azure storage account name.
+                              Required when using Azure provider.
+                            minLength: 1
+                            type: string
+                        type: object
                       bucket:
                         description: Bucket is the bucket or container name.
                         minLength: 1
@@ -222,6 +238,10 @@ spec:
                           CredentialsSecretRef optionally references a Secret containing credentials for the object store.
                           The Secret must exist in the same namespace as the OpenBaoCluster.
                           Cross-namespace references are not allowed for security reasons.
+
+                          For S3: Expected keys are "accessKeyId" and "secretAccessKey" (optional: "sessionToken", "region", "caCert").
+                          For GCS: Expected key is "credentials.json" containing a service account JSON key.
+                          For Azure: Expected keys are "accountKey" or "connectionString".
                         properties:
                           name:
                             default: ""
@@ -235,10 +255,28 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       endpoint:
-                        description: Endpoint is the HTTP(S) endpoint for the object
-                          storage service.
-                        minLength: 1
+                        description: |-
+                          Endpoint is the HTTP(S) endpoint for the object storage service.
+                          For S3: Required (e.g., "https://s3.amazonaws.com" or MinIO endpoint).
+                          For GCS: Optional (defaults to googleapis.com).
+                          For Azure: Optional (derived from StorageAccount if not specified).
                         type: string
+                      gcs:
+                        description: |-
+                          GCS contains Google Cloud Storage specific configuration.
+                          Only used when Provider is "gcs".
+                        properties:
+                          project:
+                            description: |-
+                              Project is the GCP project ID. Optional if using ADC with default project or
+                              if the credentials JSON includes the project.
+                            type: string
+                        type: object
+                      insecureSkipVerify:
+                        description: |-
+                          InsecureSkipVerify allows skipping TLS verification (useful for MinIO/LocalStack/Azurite with self-signed certs).
+                          This applies to all providers that support TLS.
+                        type: boolean
                       partSize:
                         default: 10485760
                         description: |-
@@ -252,18 +290,29 @@ spec:
                         description: PathPrefix is an optional prefix within the bucket
                           for this cluster's snapshots.
                         type: string
+                      provider:
+                        default: s3
+                        description: Provider selects the storage backend. Defaults
+                          to "s3" for backward compatibility.
+                        enum:
+                        - s3
+                        - gcs
+                        - azure
+                        type: string
                       region:
                         default: us-east-1
                         description: |-
                           Region is the AWS region to use for S3-compatible clients.
                           For AWS, this should match the bucket region (for example, "eu-west-1").
                           For many S3-compatible stores (MinIO/Ceph), this can be any non-empty value.
+                          Only used when Provider is "s3".
                         type: string
                       roleArn:
                         description: |-
                           RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
                           When set, the backup Job mounts a projected ServiceAccount token and relies on the
                           cloud provider SDK default credential chain (for example, AWS IRSA).
+                          Only used when Provider is "s3".
                         type: string
                       usePathStyle:
                         default: false
@@ -272,10 +321,10 @@ spec:
                           or virtual-hosted-style addressing (bucket.s3.amazonaws.com/object).
                           Set to true for MinIO and S3-compatible stores that require path-style.
                           Set to false for AWS S3 (default, as AWS is deprecating path-style).
+                          Only used when Provider is "s3".
                         type: boolean
                     required:
                     - bucket
-                    - endpoint
                     type: object
                   tokenSecretRef:
                     description: |-
