@@ -520,38 +520,32 @@ type NetworkConfig struct {
 
 // BackupTarget describes a generic, cloud-agnostic object storage destination.
 type BackupTarget struct {
+	// Provider selects the storage backend. Defaults to "s3" for backward compatibility.
+	// +optional
+	// +kubebuilder:default=s3
+	// +kubebuilder:validation:Enum=s3;gcs;azure
+	Provider string `json:"provider,omitempty"`
 	// Endpoint is the HTTP(S) endpoint for the object storage service.
-	// +kubebuilder:validation:MinLength=1
-	Endpoint string `json:"endpoint"`
+	// For S3: Required (e.g., "https://s3.amazonaws.com" or MinIO endpoint).
+	// For GCS: Optional (defaults to googleapis.com).
+	// For Azure: Optional (derived from StorageAccount if not specified).
+	// +optional
+	Endpoint string `json:"endpoint,omitempty"`
 	// Bucket is the bucket or container name.
 	// +kubebuilder:validation:MinLength=1
 	Bucket string `json:"bucket"`
-	// Region is the AWS region to use for S3-compatible clients.
-	// For AWS, this should match the bucket region (for example, "eu-west-1").
-	// For many S3-compatible stores (MinIO/Ceph), this can be any non-empty value.
-	// +optional
-	// +kubebuilder:default=us-east-1
-	Region string `json:"region,omitempty"`
 	// PathPrefix is an optional prefix within the bucket for this cluster's snapshots.
 	// +optional
 	PathPrefix string `json:"pathPrefix,omitempty"`
-	// RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
-	// When set, the backup Job mounts a projected ServiceAccount token and relies on the
-	// cloud provider SDK default credential chain (for example, AWS IRSA).
-	// +optional
-	RoleARN string `json:"roleArn,omitempty"`
 	// CredentialsSecretRef optionally references a Secret containing credentials for the object store.
 	// The Secret must exist in the same namespace as the OpenBaoCluster.
 	// Cross-namespace references are not allowed for security reasons.
+	//
+	// For S3: Expected keys are "accessKeyId" and "secretAccessKey" (optional: "sessionToken", "region", "caCert").
+	// For GCS: Expected key is "credentials.json" containing a service account JSON key.
+	// For Azure: Expected keys are "accountKey" or "connectionString".
 	// +optional
 	CredentialsSecretRef *corev1.LocalObjectReference `json:"credentialsSecretRef,omitempty"`
-	// UsePathStyle controls whether to use path-style addressing (bucket.s3.amazonaws.com/object)
-	// or virtual-hosted-style addressing (bucket.s3.amazonaws.com/object).
-	// Set to true for MinIO and S3-compatible stores that require path-style.
-	// Set to false for AWS S3 (default, as AWS is deprecating path-style).
-	// +optional
-	// +kubebuilder:default=false
-	UsePathStyle bool `json:"usePathStyle,omitempty"`
 	// PartSize is the size of each part in multipart uploads (in bytes).
 	// Defaults to 10MB (10485760 bytes). Larger values may improve performance for large snapshots
 	// on fast networks, while smaller values may be better for slow or unreliable networks.
@@ -567,6 +561,66 @@ type BackupTarget struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=10
 	Concurrency int32 `json:"concurrency,omitempty"`
+
+	// --- S3-specific configuration (only used when Provider=s3) ---
+
+	// Region is the AWS region to use for S3-compatible clients.
+	// For AWS, this should match the bucket region (for example, "eu-west-1").
+	// For many S3-compatible stores (MinIO/Ceph), this can be any non-empty value.
+	// Only used when Provider is "s3".
+	// +optional
+	// +kubebuilder:default=us-east-1
+	Region string `json:"region,omitempty"`
+	// RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
+	// When set, the backup Job mounts a projected ServiceAccount token and relies on the
+	// cloud provider SDK default credential chain (for example, AWS IRSA).
+	// Only used when Provider is "s3".
+	// +optional
+	RoleARN string `json:"roleArn,omitempty"`
+	// UsePathStyle controls whether to use path-style addressing (bucket.s3.amazonaws.com/object)
+	// or virtual-hosted-style addressing (bucket.s3.amazonaws.com/object).
+	// Set to true for MinIO and S3-compatible stores that require path-style.
+	// Set to false for AWS S3 (default, as AWS is deprecating path-style).
+	// Only used when Provider is "s3".
+	// +optional
+	// +kubebuilder:default=false
+	UsePathStyle bool `json:"usePathStyle,omitempty"`
+
+	// --- GCS-specific configuration (only used when Provider=gcs) ---
+
+	// GCS contains Google Cloud Storage specific configuration.
+	// Only used when Provider is "gcs".
+	// +optional
+	GCS *GCSTargetConfig `json:"gcs,omitempty"`
+
+	// Azure contains Azure Blob Storage specific configuration.
+	// Only used when Provider is "azure".
+	// +optional
+	Azure *AzureTargetConfig `json:"azure,omitempty"`
+
+	// InsecureSkipVerify allows skipping TLS verification (useful for MinIO/LocalStack/Azurite with self-signed certs).
+	// This applies to all providers that support TLS.
+	// +optional
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+}
+
+// GCSTargetConfig holds Google Cloud Storage specific configuration.
+type GCSTargetConfig struct {
+	// Project is the GCP project ID. Optional if using ADC with default project or
+	// if the credentials JSON includes the project.
+	// +optional
+	Project string `json:"project,omitempty"`
+}
+
+// AzureTargetConfig holds Azure Blob Storage specific configuration.
+type AzureTargetConfig struct {
+	// StorageAccount is the Azure storage account name.
+	// Required when using Azure provider.
+	// +kubebuilder:validation:MinLength=1
+	StorageAccount string `json:"storageAccount,omitempty"`
+	// Container is the blob container name. If empty, uses the Bucket field value.
+	// +optional
+	Container string `json:"container,omitempty"`
 }
 
 // SelfInitOperation defines valid operations for self-initialization requests.
