@@ -25,11 +25,8 @@ import (
 	"gocloud.dev/blob/s3blob"
 	"gocloud.dev/gcerrors"
 
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 )
 
 const (
@@ -51,17 +48,9 @@ const (
 	SecretKeyCACert = "caCert"
 )
 
-// ObjectInfo contains metadata about an object in storage.
-type ObjectInfo struct {
-	// Key is the full object key/path in the bucket.
-	Key string
-	// Size is the object size in bytes.
-	Size int64
-	// LastModified is when the object was last modified.
-	LastModified time.Time
-	// ETag is the entity tag for the object (typically an MD5 hash).
-	ETag string
-}
+// ObjectInfo is an alias for interfaces.ObjectInfo.
+// This type is provided for convenience; new code should use interfaces.ObjectInfo directly.
+type ObjectInfo = interfaces.ObjectInfo
 
 // Bucket wraps a Go CDK blob.Bucket with a simplified interface.
 // It implements the common operations needed for backup/restore functionality.
@@ -207,8 +196,8 @@ type Credentials struct {
 }
 
 // OpenS3Bucket opens an S3-compatible bucket using Go CDK.
-// It returns a Bucket wrapper that provides standardized blob operations.
-func OpenS3Bucket(ctx context.Context, cfg S3ClientConfig) (*Bucket, error) {
+// It returns a BlobStore interface that provides standardized blob operations.
+func OpenS3Bucket(ctx context.Context, cfg S3ClientConfig) (interfaces.BlobStore, error) {
 	if cfg.Bucket == "" {
 		return nil, fmt.Errorf("bucket is required")
 	}
@@ -234,55 +223,6 @@ func OpenS3Bucket(ctx context.Context, cfg S3ClientConfig) (*Bucket, error) {
 	}
 
 	return NewBucket(bucket), nil
-}
-
-// LoadCredentials loads storage credentials from a Kubernetes Secret.
-// If secretRef is nil, returns nil (indicating default credential chain should be used).
-// If the Secret does not contain the required keys, returns an error.
-// The namespace parameter specifies the namespace where the Secret must exist.
-// Cross-namespace references are not allowed for security reasons.
-func LoadCredentials(ctx context.Context, c client.Client, secretRef *corev1.LocalObjectReference, namespace string) (*Credentials, error) {
-	if secretRef == nil {
-		return nil, nil
-	}
-
-	secret := &corev1.Secret{}
-	if err := c.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      secretRef.Name,
-	}, secret); err != nil {
-		return nil, fmt.Errorf("failed to get credentials Secret %s/%s: %w", namespace, secretRef.Name, err)
-	}
-
-	creds := &Credentials{}
-
-	// Load required credentials (if present - they might use workload identity)
-	if v, ok := secret.Data[SecretKeyAccessKeyID]; ok {
-		creds.AccessKeyID = string(v)
-	}
-	if v, ok := secret.Data[SecretKeySecretAccessKey]; ok {
-		creds.SecretAccessKey = string(v)
-	}
-
-	// Validate that if one key is provided, both must be provided
-	if (creds.AccessKeyID != "" && creds.SecretAccessKey == "") ||
-		(creds.AccessKeyID == "" && creds.SecretAccessKey != "") {
-		return nil, fmt.Errorf("credentials Secret %s/%s must contain both %s and %s, or neither",
-			namespace, secretRef.Name, SecretKeyAccessKeyID, SecretKeySecretAccessKey)
-	}
-
-	// Load optional fields
-	if v, ok := secret.Data[SecretKeySessionToken]; ok {
-		creds.SessionToken = string(v)
-	}
-	if v, ok := secret.Data[SecretKeyRegion]; ok {
-		creds.Region = string(v)
-	}
-	if v, ok := secret.Data[SecretKeyCACert]; ok {
-		creds.CACert = v
-	}
-
-	return creds, nil
 }
 
 // buildAWSConfig constructs AWS SDK config with credentials and custom TLS settings.
