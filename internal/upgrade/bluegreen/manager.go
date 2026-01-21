@@ -244,7 +244,8 @@ func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logge
 				return true, recon.Result{}, fmt.Errorf("blue/green upgrade in progress but operation lock is held by another operation: %w", err)
 			}
 			logger.Info("Blue/green upgrade blocked by operation lock", "error", err.Error())
-			return true, requeueStandard(), nil
+			// Use RequeueShort to check more frequently when waiting for backup/restore to complete
+			return true, recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 		return true, recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 	}
