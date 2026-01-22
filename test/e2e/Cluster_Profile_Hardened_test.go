@@ -321,36 +321,17 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 					Image:   configInitImage,
 				},
 				SelfInit: &openbaov1alpha1.SelfInitConfig{
-					Enabled: true,
-					Requests: []openbaov1alpha1.SelfInitRequest{
-						{
-							Name:      "enable-userpass-auth",
-							Operation: openbaov1alpha1.SelfInitOperationUpdate,
-							Path:      "sys/auth/userpass",
-							AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
-								Type: "userpass",
-								Config: map[string]string{
-									"default_lease_ttl":  "0",
-									"max_lease_ttl":      "0",
-									"listing_visibility": "unauthenticated",
-								},
-							},
-						},
-						{
-							Name:      "create-admin-policy",
-							Operation: openbaov1alpha1.SelfInitOperationUpdate,
-							Path:      "sys/policies/acl/admin",
-							Policy: &openbaov1alpha1.SelfInitPolicy{
-								Policy: `path "*" {
-  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
-}`,
-							},
-						},
-					},
+					Enabled:          true,
+					BootstrapJWTAuth: true,
+					Requests:         e2ehelpers.CreateHardenedProfileRequests(f.Namespace),
 				},
 				TLS: openbaov1alpha1.TLSConfig{
 					Enabled: true,
 					Mode:    openbaov1alpha1.TLSModeExternal,
+				},
+				// Establish a stable ClusterIP Service for verification (DNS is more reliable than Headless in Kind)
+				Service: &openbaov1alpha1.ServiceConfig{
+					Type: "ClusterIP",
 				},
 				Unseal: &openbaov1alpha1.UnsealConfig{
 					Type: "transit",
@@ -393,6 +374,25 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 							},
 						},
 					},
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{
+						{
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"role": "test-verifier",
+										},
+									},
+								},
+							},
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
+									Port:     &[]intstr.IntOrString{intstr.FromInt(8200)}[0],
+								},
+							},
+						},
+					},
 				},
 				DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 			},
@@ -400,9 +400,6 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 		Expect(c.Create(ctx, cluster)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created OpenBaoCluster %q\n", clusterName)
-		DeferCleanup(func() {
-			_ = c.Delete(ctx, cluster)
-		})
 
 		By("waiting for OpenBaoCluster to be observed by the API server")
 		Eventually(func() error {
@@ -607,67 +604,36 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 	})
 
 	It("verifies Raft Autopilot is configured with cleanup_dead_servers enabled", func() {
+		By("ensuring public service exists before creating verification pod")
+		// Wait for the public service to be created by the operator
+		svc := &corev1.Service{}
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, types.NamespacedName{
+				Name:      clusterName + "-public",
+				Namespace: f.Namespace,
+			}, svc)).To(Succeed(), "public service should exist")
+			g.Expect(svc.Spec.ClusterIP).NotTo(BeEmpty())
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
 		By("reading autopilot configuration via JWT authenticated request")
 		// Self-init clusters have operator JWT auth configured, so we can verify autopilot config
 		// The openbao-operator policy has read/update on sys/storage/raft/autopilot/configuration
-		verifyAutopilotPod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "verify-autopilot",
-				Namespace: f.Namespace,
-			},
-			Spec: corev1.PodSpec{
-				RestartPolicy: corev1.RestartPolicyNever,
-				SecurityContext: &corev1.PodSecurityContext{
-					RunAsNonRoot: ptr.To(true),
-					RunAsUser:    ptr.To(int64(100)),
-					RunAsGroup:   ptr.To(int64(1000)),
-					FSGroup:      ptr.To(int64(1000)),
-					SeccompProfile: &corev1.SeccompProfile{
-						Type: corev1.SeccompProfileTypeRuntimeDefault,
-					},
-				},
-				Containers: []corev1.Container{
-					{
-						Name:  "bao",
-						Image: openBaoImage,
-						Env: []corev1.EnvVar{
-							{Name: "BAO_ADDR", Value: fmt.Sprintf("https://%s.%s.svc:%d", clusterName, f.Namespace, constants.PortAPI)},
-							// Skip TLS verification for self-signed certificates in test environment
-							{Name: "BAO_SKIP_VERIFY", Value: "true"},
-						},
-						Command: []string{"/bin/sh", "-c"},
-						Args: []string{
-							// Read autopilot config and verify cleanup_dead_servers is true
-							// The output should contain cleanup_dead_servers = true
-							`bao read sys/storage/raft/autopilot/configuration | grep -q "cleanup_dead_servers.*true" && echo "AUTOPILOT_CONFIGURED"`,
-						},
-						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: ptr.To(false),
-							Capabilities: &corev1.Capabilities{
-								Drop: []corev1.Capability{"ALL"},
-							},
-							RunAsNonRoot: ptr.To(true),
-						},
-					},
-				},
-			},
-		}
 
-		result, err := e2ehelpers.RunPodUntilCompletion(ctx, cfg, c, verifyAutopilotPod, 60*time.Second)
-		// Note: This test may fail if JWT auth is not properly configured or if autopilot
-		// config requires authenticated access. For now, we log the result and continue.
-		if err != nil {
-			_, _ = fmt.Fprintf(GinkgoWriter, "Autopilot verification pod failed to run: %v\n", err)
-			_, _ = fmt.Fprintf(GinkgoWriter, "This is expected if JWT auth is not configured for test pods\n")
-		} else {
-			_, _ = fmt.Fprintf(GinkgoWriter, "Autopilot verification pod completed with phase=%s\n", result.Phase)
-			_, _ = fmt.Fprintf(GinkgoWriter, "Autopilot verification logs:\n%s\n", result.Logs)
-			if result.Phase == corev1.PodSucceeded && strings.Contains(result.Logs, "AUTOPILOT_CONFIGURED") {
-				_, _ = fmt.Fprintf(GinkgoWriter, "✓ Raft Autopilot is configured with cleanup_dead_servers enabled\n")
-			}
-		}
+		// Use VerifyRaftAutopilotViaJWT helper to perform verification
+		// Use the ClusterIP for verification to avoid DNS flakes in Kind
+		err := e2ehelpers.VerifyRaftAutopilotViaJWT(
+			ctx,
+			cfg,
+			c,
+			f.Namespace,
+			openBaoImage,
+			fmt.Sprintf("https://%s:8200", svc.Spec.ClusterIP),
+			"default",
+			map[string]string{"role": "test-verifier"},
+		)
+		Expect(err).NotTo(HaveOccurred(), "Autopilot verification failed")
+		_, _ = fmt.Fprintf(GinkgoWriter, "✓ Raft Autopilot is configured with cleanup_dead_servers enabled\n")
 
-		// Cleanup
-		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyAutopilotPod.Name)
+		// Cleanup handled by helper (best effort)
 	})
 })

@@ -13,7 +13,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
+	nativev1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,7 +26,6 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
@@ -104,89 +103,6 @@ func createAzureCredentialsSecret(ctx context.Context, c client.Client, namespac
 	return nil
 }
 
-// createBackupSelfInitRequests creates SelfInit requests for backup operations.
-// For Development profile, JWT auth and backup JWT role must be manually configured
-// since bootstrap is not automatically provided. This matches the pattern used in upgrade tests.
-// Uses jwt_validation_pubkeys (same as operator bootstrap) because OpenBao pods run as
-// system:anonymous and cannot access the OIDC discovery endpoint. The test client
-// fetches JWKS keys using authenticated REST config, then provides them directly to OpenBao.
-func createBackupSelfInitRequests(ctx context.Context, clusterNamespace, clusterName string, restCfg *rest.Config) ([]openbaov1alpha1.SelfInitRequest, error) {
-	// Discover OIDC config using the REST config host (works from outside cluster)
-	// This gets us the issuer URL and JWKS keys
-	apiServerURL := restCfg.Host
-	if apiServerURL == "" {
-		return nil, fmt.Errorf("REST config host is empty")
-	}
-
-	oidcConfig, err := auth.DiscoverConfig(ctx, restCfg, apiServerURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to discover OIDC config: %w", err)
-	}
-
-	if oidcConfig.IssuerURL == "" {
-		return nil, fmt.Errorf("OIDC config missing issuer URL")
-	}
-
-	if len(oidcConfig.JWKSKeys) == 0 {
-		return nil, fmt.Errorf("no JWKS keys found in OIDC config")
-	}
-
-	jwtConfigData := map[string]interface{}{
-		// Use jwt_validation_pubkeys (same as operator bootstrap) because OpenBao pods
-		// run as system:anonymous and cannot fetch OIDC discovery document.
-		// The test client fetches the keys using authenticated REST config and provides
-		// them directly to OpenBao, matching the operator bootstrap pattern.
-		"jwt_validation_pubkeys": oidcConfig.JWKSKeys,
-		// bound_issuer is required and must match the issuer claim in the JWT
-		"bound_issuer": oidcConfig.IssuerURL,
-	}
-
-	return []openbaov1alpha1.SelfInitRequest{
-		{
-			Name:      "enable-jwt-auth",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "sys/auth/jwt",
-			AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
-				Type: "jwt",
-			},
-		},
-		{
-			Name:      "configure-jwt-auth",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "auth/jwt/config",
-			Data:      e2ehelpers.MustJSON(jwtConfigData),
-		},
-		{
-			Name:      "create-backup-policy",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "sys/policies/acl/backup",
-			Policy: &openbaov1alpha1.SelfInitPolicy{
-				Policy: `path "sys/storage/raft/snapshot" {
-  capabilities = ["read"]
-}`,
-			},
-		},
-		{
-			Name:      "create-backup-jwt-role",
-			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "auth/jwt/role/backup",
-			Data: e2ehelpers.MustJSON(map[string]interface{}{
-				"role_type":       "jwt",
-				"user_claim":      "sub", // Match operator bootstrap pattern
-				"bound_audiences": []string{"openbao-internal"},
-				// Use bound_subject to match the sub claim directly (more reliable than bound_claims
-				// for projected tokens which may not include kubernetes.io/* claims)
-				// The sub claim format is: system:serviceaccount:<namespace>:<serviceaccount-name>
-				// and is always present in ServiceAccount tokens
-				"bound_subject":  fmt.Sprintf("system:serviceaccount:%s:%s-backup-serviceaccount", clusterNamespace, clusterName),
-				"token_policies": []string{"backup"},
-				"policies":       []string{"backup"},
-				"ttl":            "1h",
-			}),
-		},
-	}, nil
-}
-
 // ensureRustFS ensures RustFS is deployed in the cluster.
 // It creates the namespace if needed and deploys RustFS using the helper.
 func ensureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, namespace string) error {
@@ -217,7 +133,25 @@ func ensureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, na
 	return nil
 }
 
-var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers", "nightly", "slow"), Ordered, func() {
+// createBackupSelfInitRequests creates SelfInit requests for backup operations.
+func createBackupSelfInitRequests(ctx context.Context, clusterNamespace, clusterName string, restCfg *rest.Config) ([]openbaov1alpha1.SelfInitRequest, error) {
+	return createSelfInitRequests(ctx, clusterNamespace, clusterName, restCfg, true, false)
+}
+
+// createRestoreSelfInitRequests creates SelfInit requests for restore operations (includes both backup and restore roles).
+func createRestoreSelfInitRequests(ctx context.Context, clusterNamespace, clusterName string, restCfg *rest.Config) ([]openbaov1alpha1.SelfInitRequest, error) {
+	return createSelfInitRequests(ctx, clusterNamespace, clusterName, restCfg, true, true)
+}
+
+// createSelfInitRequests creates SelfInit requests for backup and optionally restore operations.
+func createSelfInitRequests(ctx context.Context, clusterNamespace, clusterName string, restCfg *rest.Config, includeBackup, includeRestore bool) ([]openbaov1alpha1.SelfInitRequest, error) {
+	// BootstrapJWTAuth handles this
+	return []openbaov1alpha1.SelfInitRequest{}, nil
+}
+
+// createE2ERequests helper removed in favor of e2ehelpers.CreateE2ERequests
+
+var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup", "restore", "storage-providers", "nightly", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (
@@ -261,18 +195,19 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 		}
 	})
 
-	Context("S3 Backup with RustFS", func() {
+	Context("S3 Backup & Restore with RustFS", func() {
 		var (
 			tenantNamespace   string
 			tenantFW          *framework.Framework
-			backupCluster     *openbaov1alpha1.OpenBaoCluster
+			drCluster         *openbaov1alpha1.OpenBaoCluster
 			credentialsSecret *corev1.Secret
+			backupKey         string
 		)
 
 		BeforeAll(func() {
 			var err error
 
-			tenantFW, err = framework.New(ctx, admin, "tenant-s3-backup", operatorNamespace)
+			tenantFW, err = framework.New(ctx, admin, "tenant-s3-dr", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
 			tenantNamespace = tenantFW.Namespace
 
@@ -290,14 +225,11 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 			}
 			Expect(admin.Create(ctx, credentialsSecret)).To(Succeed())
 
-			// Create SelfInit requests
-			selfInitRequests, err := createBackupSelfInitRequests(ctx, tenantNamespace, "s3-backup-cluster", cfg)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create cluster with S3 backup configuration
-			backupCluster = &openbaov1alpha1.OpenBaoCluster{
+			// Create cluster with S3 backup/restore configuration
+			// Using BootstrapJWTAuth to auto-create backup and restore roles
+			drCluster = &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "s3-backup-cluster",
+					Name:      "s3-dr-cluster",
 					Namespace: tenantNamespace,
 				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -310,8 +242,9 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:  true,
-						Requests: selfInitRequests,
+						Enabled:          true,
+						BootstrapJWTAuth: true, // Operator will auto-create backup and restore roles
+						Requests:         e2ehelpers.CreateE2ERequests(tenantNamespace),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -327,7 +260,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 					Backup: &openbaov1alpha1.BackupSchedule{
 						Schedule:      "*/5 * * * *",
 						ExecutorImage: backupExecutorImage,
-						JWTAuthRole:   "backup",
+						JWTAuthRole:   "backup", // Triggers auto-creation of backup policy/role via bootstrap
 						Target: openbaov1alpha1.BackupTarget{
 							Provider:     constants.StorageProviderS3,
 							Endpoint:     rustfsEndpoint,
@@ -343,30 +276,39 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 							MaxAge:   "168h",
 						},
 					},
+					Restore: &openbaov1alpha1.RestoreConfig{
+						JWTAuthRole: "restore", // Triggers auto-creation of restore policy/role via bootstrap
+					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
 			}
-			Expect(admin.Create(ctx, backupCluster)).To(Succeed())
+			Expect(admin.Create(ctx, drCluster)).To(Succeed())
 
-			// Create NetworkPolicy for backup pods
-			backupNetworkPolicy := &networkingv1.NetworkPolicy{
+			// Create NetworkPolicy for backup/restore pods
+			backupNetworkPolicy := &nativev1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("%s-backup-network-policy", backupCluster.Name),
+					Name:      fmt.Sprintf("%s-dr-network-policy", drCluster.Name),
 					Namespace: tenantNamespace,
 				},
-				Spec: networkingv1.NetworkPolicySpec{
+				Spec: nativev1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"openbao.org/component": "backup",
-							"openbao.org/cluster":   backupCluster.Name,
+							"openbao.org/cluster": drCluster.Name,
+						},
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      "openbao.org/component",
+								Operator: metav1.LabelSelectorOpIn,
+								Values:   []string{"backup", "restore"},
+							},
 						},
 					},
-					PolicyTypes: []networkingv1.PolicyType{
-						networkingv1.PolicyTypeEgress,
+					PolicyTypes: []nativev1.PolicyType{
+						nativev1.PolicyTypeEgress,
 					},
-					Egress: []networkingv1.NetworkPolicyEgressRule{
+					Egress: []nativev1.NetworkPolicyEgressRule{
 						{
-							To: []networkingv1.NetworkPolicyPeer{
+							To: []nativev1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -375,7 +317,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 									},
 								},
 							},
-							Ports: []networkingv1.NetworkPolicyPort{
+							Ports: []nativev1.NetworkPolicyPort{
 								{
 									Protocol: func() *corev1.Protocol {
 										p := corev1.ProtocolUDP
@@ -389,7 +331,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 							},
 						},
 						{
-							To: []networkingv1.NetworkPolicyPeer{
+							To: []nativev1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -398,7 +340,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 									},
 								},
 							},
-							Ports: []networkingv1.NetworkPolicyPort{
+							Ports: []nativev1.NetworkPolicyPort{
 								{
 									Protocol: func() *corev1.Protocol {
 										p := corev1.ProtocolTCP
@@ -412,16 +354,16 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 							},
 						},
 						{
-							To: []networkingv1.NetworkPolicyPeer{
+							To: []nativev1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
-											"openbao.org/cluster": backupCluster.Name,
+											"openbao.org/cluster": drCluster.Name,
 										},
 									},
 								},
 							},
-							Ports: []networkingv1.NetworkPolicyPort{
+							Ports: []nativev1.NetworkPolicyPort{
 								{
 									Protocol: func() *corev1.Protocol {
 										p := corev1.ProtocolTCP
@@ -441,10 +383,10 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 
 			// Wait for cluster to be ready
 			Eventually(func(g Gomega) {
-				_ = tenantFW.TriggerReconcile(ctx, backupCluster.Name)
+				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
 
 				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: backupCluster.Name, Namespace: tenantNamespace}, updated)
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
 				g.Expect(err).NotTo(HaveOccurred())
 
 				g.Expect(updated.Status.Initialized).To(BeTrue())
@@ -455,7 +397,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			Expect(tenantFW.TriggerReconcile(ctx, backupCluster.Name)).To(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 		})
 
 		AfterAll(func() {
@@ -468,10 +410,23 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 		})
 
 		It("triggers manual backup to S3", func() {
+			By("Writing a secret before backup")
+			secretPath := "secret/backup-test"
+			secretData := map[string]string{"foo": "bar", "version": "v1"}
+			baoAddr := fmt.Sprintf("https://%s.%s.svc.cluster.local:8200", drCluster.Name, tenantNamespace)
+			bypassLabels := map[string]string{
+				constants.LabelOpenBaoCluster:   drCluster.Name,
+				constants.LabelOpenBaoComponent: "backup",
+			}
+
+			// Enable KV engine (idempotent)
+			err := e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
+			Expect(err).NotTo(HaveOccurred(), "Failed to write pre-backup secret")
+
 			triggerTimestamp := time.Now().Format(time.RFC3339Nano)
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: backupCluster.Name, Namespace: tenantNamespace}, updated)
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
 				g.Expect(err).NotTo(HaveOccurred())
 
 				original := updated.DeepCopy()
@@ -483,7 +438,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 				g.Expect(err).NotTo(HaveOccurred())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			Expect(tenantFW.TriggerReconcile(ctx, backupCluster.Name)).To(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 
 			Eventually(func(g Gomega) {
 				var jobs batchv1.JobList
@@ -507,46 +462,110 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 
 				foundSuccess := false
 				for i := range jobs.Items {
-					if jobSucceeded(&jobs.Items[i]) {
+					if jobs.Items[i].Status.Succeeded > 0 {
 						foundSuccess = true
 						break
 					}
 				}
 				g.Expect(foundSuccess).To(BeTrue())
 			}, 15*time.Minute, 30*time.Second).Should(Succeed())
+
+			// Capture backup key
+			Eventually(func(g Gomega) {
+				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.Backup).NotTo(BeNil())
+				g.Expect(updated.Status.Backup.LastBackupName).NotTo(BeEmpty())
+				backupKey = updated.Status.Backup.LastBackupName
+			}, 2*time.Minute, 5*time.Second).Should(Succeed())
+		})
+
+		It("restores from S3 backup using OpenBaoRestore CR", func() {
+			Expect(backupKey).NotTo(BeEmpty(), "backup key should have been set by previous test")
+
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "s3-restore",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+					Cluster: drCluster.Name,
+					Source: openbaov1alpha1.RestoreSource{
+						Target: openbaov1alpha1.BackupTarget{
+							Provider:     constants.StorageProviderS3,
+							Endpoint:     rustfsEndpoint,
+							Bucket:       rustfsBucket,
+							UsePathStyle: true,
+							CredentialsSecretRef: &corev1.LocalObjectReference{
+								Name: credentialsSecret.Name,
+							},
+						},
+						Key: backupKey,
+					},
+					JWTAuthRole:   "restore",
+					ExecutorImage: backupExecutorImage,
+					Force:         true,
+				},
+			}
+
+			_, _ = fmt.Fprintf(GinkgoWriter, "Creating OpenBaoRestore CR: %s\n", restore.Name)
+			Expect(admin.Create(ctx, restore)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoRestore{}
+				err := admin.Get(ctx, types.NamespacedName{Name: restore.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseCompleted))
+			}, 15*time.Minute, 30*time.Second).Should(Succeed())
+
+			By("Verifying secret persists after restore")
+			baoAddr := fmt.Sprintf("https://%s.%s.svc.cluster.local:8200", drCluster.Name, tenantNamespace)
+			secretPath := "secret/backup-test"
+			bypassLabels := map[string]string{
+				constants.LabelOpenBaoCluster:   drCluster.Name,
+				constants.LabelOpenBaoComponent: "backup",
+			}
+			// Note: Restore is destructive, it replaces the data.
+			// So after restore, the secret we wrote before backup should be there.
+			// Reuse the same JWT logic as before (roles are auto-created by bootstrap)
+			val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
+			Expect(err).NotTo(HaveOccurred(), "Failed to read post-restore secret")
+			Expect(val).To(Equal("bar"))
 		})
 	})
 
 	Context("GCS Backup with fake-gcs-server", func() {
 		var (
-			tenantNamespace string
-			tenantFW        *framework.Framework
-			backupCluster   *openbaov1alpha1.OpenBaoCluster
+			tenantNamespace   string
+			tenantFW          *framework.Framework
+			drCluster         *openbaov1alpha1.OpenBaoCluster
+			credentialsSecret *corev1.Secret
 		)
 
 		BeforeAll(func() {
 			var err error
 
-			tenantFW, err = framework.New(ctx, admin, "tenant-gcs-backup", operatorNamespace)
+			tenantFW, err = framework.New(ctx, admin, "tenant-gcs-dr", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
 			tenantNamespace = tenantFW.Namespace
 
 			// Create GCS credentials Secret
 			err = e2ehelpers.CreateGCSCredentialsSecret(ctx, admin, tenantNamespace, "gcs-credentials", fakeGCSProject)
 			Expect(err).NotTo(HaveOccurred())
+			credentialsSecret = &corev1.Secret{}
+			Expect(admin.Get(ctx, types.NamespacedName{Name: "gcs-credentials", Namespace: tenantNamespace}, credentialsSecret)).To(Succeed())
 
 			// Initialize the bucket in fake-gcs-server (required because emulator starts empty)
 			err = e2ehelpers.CreateFakeGCSBucket(ctx, cfg, admin, "gcs", fakeGCSEndpoint, fakeGCSBucket)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create bucket in fake-gcs-server")
 
-			// Create SelfInit requests
-			selfInitRequests, err := createBackupSelfInitRequests(ctx, tenantNamespace, "gcs-backup-cluster", cfg)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Create cluster with GCS backup configuration
-			backupCluster = &openbaov1alpha1.OpenBaoCluster{
+			// Using BootstrapJWTAuth to auto-create backup role (restore skipped due to fake-gcs-server limitations)
+			drCluster = &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "gcs-backup-cluster",
+					Name:      "gcs-dr-cluster",
 					Namespace: tenantNamespace,
 				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -559,8 +578,9 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:  true,
-						Requests: selfInitRequests,
+						Enabled:          true,
+						BootstrapJWTAuth: true, // Operator will auto-create backup role
+						Requests:         e2ehelpers.CreateE2ERequests(tenantNamespace),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -576,9 +596,9 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 					Backup: &openbaov1alpha1.BackupSchedule{
 						Schedule:      "*/5 * * * *",
 						ExecutorImage: backupExecutorImage,
-						JWTAuthRole:   "backup",
+						JWTAuthRole:   "backup", // Triggers auto-creation of backup policy/role via bootstrap
 						Target: openbaov1alpha1.BackupTarget{
-							Provider:   "gcs",
+							Provider:   constants.StorageProviderGCS,
 							Endpoint:   fakeGCSEndpoint,
 							Bucket:     fakeGCSBucket,
 							PathPrefix: "clusters",
@@ -586,7 +606,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 								Project: fakeGCSProject,
 							},
 							CredentialsSecretRef: &corev1.LocalObjectReference{
-								Name: "gcs-credentials",
+								Name: credentialsSecret.Name,
 							},
 						},
 						Retention: &openbaov1alpha1.BackupRetention{
@@ -597,27 +617,33 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
 			}
-			Expect(admin.Create(ctx, backupCluster)).To(Succeed())
+			Expect(admin.Create(ctx, drCluster)).To(Succeed())
 
 			// Create NetworkPolicy for backup pods
-			backupNetworkPolicy := &networkingv1.NetworkPolicy{
+			backupNetworkPolicy := &nativev1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("%s-backup-network-policy", backupCluster.Name),
+					Name:      fmt.Sprintf("%s-dr-network-policy", drCluster.Name),
 					Namespace: tenantNamespace,
 				},
-				Spec: networkingv1.NetworkPolicySpec{
+				Spec: nativev1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"openbao.org/component": "backup",
-							"openbao.org/cluster":   backupCluster.Name,
+							"openbao.org/cluster": drCluster.Name,
+						},
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      "openbao.org/component",
+								Operator: metav1.LabelSelectorOpIn,
+								Values:   []string{"backup"},
+							},
 						},
 					},
-					PolicyTypes: []networkingv1.PolicyType{
-						networkingv1.PolicyTypeEgress,
+					PolicyTypes: []nativev1.PolicyType{
+						nativev1.PolicyTypeEgress,
 					},
-					Egress: []networkingv1.NetworkPolicyEgressRule{
+					Egress: []nativev1.NetworkPolicyEgressRule{
 						{
-							To: []networkingv1.NetworkPolicyPeer{
+							To: []nativev1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -626,7 +652,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 									},
 								},
 							},
-							Ports: []networkingv1.NetworkPolicyPort{
+							Ports: []nativev1.NetworkPolicyPort{
 								{
 									Protocol: func() *corev1.Protocol {
 										p := corev1.ProtocolUDP
@@ -640,7 +666,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 							},
 						},
 						{
-							To: []networkingv1.NetworkPolicyPeer{
+							To: []nativev1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -649,7 +675,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 									},
 								},
 							},
-							Ports: []networkingv1.NetworkPolicyPort{
+							Ports: []nativev1.NetworkPolicyPort{
 								{
 									Protocol: func() *corev1.Protocol {
 										p := corev1.ProtocolTCP
@@ -663,16 +689,16 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 							},
 						},
 						{
-							To: []networkingv1.NetworkPolicyPeer{
+							To: []nativev1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
-											"openbao.org/cluster": backupCluster.Name,
+											"openbao.org/cluster": drCluster.Name,
 										},
 									},
 								},
 							},
-							Ports: []networkingv1.NetworkPolicyPort{
+							Ports: []nativev1.NetworkPolicyPort{
 								{
 									Protocol: func() *corev1.Protocol {
 										p := corev1.ProtocolTCP
@@ -692,10 +718,10 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 
 			// Wait for cluster to be ready
 			Eventually(func(g Gomega) {
-				_ = tenantFW.TriggerReconcile(ctx, backupCluster.Name)
+				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
 
 				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: backupCluster.Name, Namespace: tenantNamespace}, updated)
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
 				g.Expect(err).NotTo(HaveOccurred())
 
 				g.Expect(updated.Status.Initialized).To(BeTrue())
@@ -706,7 +732,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			Expect(tenantFW.TriggerReconcile(ctx, backupCluster.Name)).To(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 		})
 
 		AfterAll(func() {
@@ -722,7 +748,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 			triggerTimestamp := time.Now().Format(time.RFC3339Nano)
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: backupCluster.Name, Namespace: tenantNamespace}, updated)
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
 				g.Expect(err).NotTo(HaveOccurred())
 
 				original := updated.DeepCopy()
@@ -734,7 +760,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 				g.Expect(err).NotTo(HaveOccurred())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			Expect(tenantFW.TriggerReconcile(ctx, backupCluster.Name)).To(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 
 			Eventually(func(g Gomega) {
 				var jobs batchv1.JobList
@@ -758,7 +784,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 
 				foundSuccess := false
 				for i := range jobs.Items {
-					if jobSucceeded(&jobs.Items[i]) {
+					if jobs.Items[i].Status.Succeeded > 0 {
 						foundSuccess = true
 						break
 					}
@@ -766,38 +792,43 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 				g.Expect(foundSuccess).To(BeTrue())
 			}, 15*time.Minute, 30*time.Second).Should(Succeed())
 		})
+
+		It("restores from GCS backup using OpenBaoRestore CR", func() {
+			Skip("GCS restore test skipped due to limitations with fake-gcs-server")
+		})
 	})
 
-	Context("Azure Backup with Azurite", func() {
+	Context("Azure Backup & Restore with Azurite", func() {
 		var (
-			tenantNamespace string
-			tenantFW        *framework.Framework
-			backupCluster   *openbaov1alpha1.OpenBaoCluster
+			tenantNamespace   string
+			tenantFW          *framework.Framework
+			drCluster         *openbaov1alpha1.OpenBaoCluster
+			credentialsSecret *corev1.Secret
+			backupKey         string
 		)
 
 		BeforeAll(func() {
 			var err error
 
-			tenantFW, err = framework.New(ctx, admin, "tenant-azure-backup", operatorNamespace)
+			tenantFW, err = framework.New(ctx, admin, "tenant-azure-dr", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
 			tenantNamespace = tenantFW.Namespace
 
 			// Create Azure credentials Secret
 			err = createAzureCredentialsSecret(ctx, admin, tenantNamespace, "azure-credentials")
 			Expect(err).NotTo(HaveOccurred())
+			credentialsSecret = &corev1.Secret{}
+			Expect(admin.Get(ctx, types.NamespacedName{Name: "azure-credentials", Namespace: tenantNamespace}, credentialsSecret)).To(Succeed())
 
 			// Initialize the container in Azurite (required because emulator starts empty)
 			err = e2ehelpers.CreateAzuriteContainer(ctx, cfg, admin, "azure", azuriteEndpoint, azuriteContainer, azuriteKey)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create container in Azurite")
 
-			// Create SelfInit requests
-			selfInitRequests, err := createBackupSelfInitRequests(ctx, tenantNamespace, "azure-backup-cluster", cfg)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create cluster with Azure backup configuration
-			backupCluster = &openbaov1alpha1.OpenBaoCluster{
+			// Create cluster with Azure backup/restore configuration
+			// Using BootstrapJWTAuth to auto-create backup and restore roles
+			drCluster = &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "azure-backup-cluster",
+					Name:      "azure-dr-cluster",
 					Namespace: tenantNamespace,
 				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -810,8 +841,9 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:  true,
-						Requests: selfInitRequests,
+						Enabled:          true,
+						BootstrapJWTAuth: true, // Operator will auto-create backup and restore roles
+						Requests:         e2ehelpers.CreateE2ERequests(tenantNamespace),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -827,9 +859,9 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 					Backup: &openbaov1alpha1.BackupSchedule{
 						Schedule:      "*/5 * * * *",
 						ExecutorImage: backupExecutorImage,
-						JWTAuthRole:   "backup",
+						JWTAuthRole:   "backup", // Triggers auto-creation of backup policy/role via bootstrap
 						Target: openbaov1alpha1.BackupTarget{
-							Provider:   "azure",
+							Provider:   constants.StorageProviderAzure,
 							Endpoint:   azuriteEndpoint,
 							Bucket:     azuriteContainer,
 							PathPrefix: "clusters",
@@ -838,7 +870,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 								Container:      azuriteContainer,
 							},
 							CredentialsSecretRef: &corev1.LocalObjectReference{
-								Name: "azure-credentials",
+								Name: credentialsSecret.Name,
 							},
 						},
 						Retention: &openbaov1alpha1.BackupRetention{
@@ -846,30 +878,39 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 							MaxAge:   "168h",
 						},
 					},
+					Restore: &openbaov1alpha1.RestoreConfig{
+						JWTAuthRole: "restore", // Triggers auto-creation of restore policy/role via bootstrap
+					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
 			}
-			Expect(admin.Create(ctx, backupCluster)).To(Succeed())
+			Expect(admin.Create(ctx, drCluster)).To(Succeed())
 
-			// Create NetworkPolicy for backup pods
-			backupNetworkPolicy := &networkingv1.NetworkPolicy{
+			// Create NetworkPolicy for backup/restore pods
+			backupNetworkPolicy := &nativev1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("%s-backup-network-policy", backupCluster.Name),
+					Name:      fmt.Sprintf("%s-dr-network-policy", drCluster.Name),
 					Namespace: tenantNamespace,
 				},
-				Spec: networkingv1.NetworkPolicySpec{
+				Spec: nativev1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"openbao.org/component": "backup",
-							"openbao.org/cluster":   backupCluster.Name,
+							"openbao.org/cluster": drCluster.Name,
+						},
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      "openbao.org/component",
+								Operator: metav1.LabelSelectorOpIn,
+								Values:   []string{"backup", "restore"},
+							},
 						},
 					},
-					PolicyTypes: []networkingv1.PolicyType{
-						networkingv1.PolicyTypeEgress,
+					PolicyTypes: []nativev1.PolicyType{
+						nativev1.PolicyTypeEgress,
 					},
-					Egress: []networkingv1.NetworkPolicyEgressRule{
+					Egress: []nativev1.NetworkPolicyEgressRule{
 						{
-							To: []networkingv1.NetworkPolicyPeer{
+							To: []nativev1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -878,7 +919,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 									},
 								},
 							},
-							Ports: []networkingv1.NetworkPolicyPort{
+							Ports: []nativev1.NetworkPolicyPort{
 								{
 									Protocol: func() *corev1.Protocol {
 										p := corev1.ProtocolUDP
@@ -892,7 +933,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 							},
 						},
 						{
-							To: []networkingv1.NetworkPolicyPeer{
+							To: []nativev1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -901,7 +942,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 									},
 								},
 							},
-							Ports: []networkingv1.NetworkPolicyPort{
+							Ports: []nativev1.NetworkPolicyPort{
 								{
 									Protocol: func() *corev1.Protocol {
 										p := corev1.ProtocolTCP
@@ -915,16 +956,16 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 							},
 						},
 						{
-							To: []networkingv1.NetworkPolicyPeer{
+							To: []nativev1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
-											"openbao.org/cluster": backupCluster.Name,
+											"openbao.org/cluster": drCluster.Name,
 										},
 									},
 								},
 							},
-							Ports: []networkingv1.NetworkPolicyPort{
+							Ports: []nativev1.NetworkPolicyPort{
 								{
 									Protocol: func() *corev1.Protocol {
 										p := corev1.ProtocolTCP
@@ -944,10 +985,10 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 
 			// Wait for cluster to be ready
 			Eventually(func(g Gomega) {
-				_ = tenantFW.TriggerReconcile(ctx, backupCluster.Name)
+				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
 
 				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: backupCluster.Name, Namespace: tenantNamespace}, updated)
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
 				g.Expect(err).NotTo(HaveOccurred())
 
 				g.Expect(updated.Status.Initialized).To(BeTrue())
@@ -958,7 +999,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			Expect(tenantFW.TriggerReconcile(ctx, backupCluster.Name)).To(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 		})
 
 		AfterAll(func() {
@@ -974,7 +1015,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 			triggerTimestamp := time.Now().Format(time.RFC3339Nano)
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: backupCluster.Name, Namespace: tenantNamespace}, updated)
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
 				g.Expect(err).NotTo(HaveOccurred())
 
 				original := updated.DeepCopy()
@@ -986,7 +1027,7 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 				g.Expect(err).NotTo(HaveOccurred())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			Expect(tenantFW.TriggerReconcile(ctx, backupCluster.Name)).To(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 
 			Eventually(func(g Gomega) {
 				var jobs batchv1.JobList
@@ -1010,12 +1051,66 @@ var _ = Describe("Storage Providers Backup", Label("backup", "storage-providers"
 
 				foundSuccess := false
 				for i := range jobs.Items {
-					if jobSucceeded(&jobs.Items[i]) {
+					if jobs.Items[i].Status.Succeeded > 0 {
 						foundSuccess = true
 						break
 					}
 				}
 				g.Expect(foundSuccess).To(BeTrue())
+			}, 15*time.Minute, 30*time.Second).Should(Succeed())
+
+			// Capture backup key
+			Eventually(func(g Gomega) {
+				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.Backup).NotTo(BeNil())
+				g.Expect(updated.Status.Backup.LastBackupName).NotTo(BeEmpty())
+				backupKey = updated.Status.Backup.LastBackupName
+			}, 2*time.Minute, 5*time.Second).Should(Succeed())
+		})
+
+		It("restores from Azure backup using OpenBaoRestore CR", func() {
+			Expect(backupKey).NotTo(BeEmpty(), "backup key should have been set by previous test")
+
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "azure-restore",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+					Cluster: drCluster.Name,
+					Source: openbaov1alpha1.RestoreSource{
+						Target: openbaov1alpha1.BackupTarget{
+							Provider:   constants.StorageProviderAzure,
+							Endpoint:   azuriteEndpoint,
+							Bucket:     azuriteContainer,
+							PathPrefix: "clusters",
+							Azure: &openbaov1alpha1.AzureTargetConfig{
+								StorageAccount: azuriteAccount,
+								Container:      azuriteContainer,
+							},
+							CredentialsSecretRef: &corev1.LocalObjectReference{
+								Name: credentialsSecret.Name,
+							},
+						},
+						Key: backupKey,
+					},
+					JWTAuthRole:   "restore",
+					ExecutorImage: backupExecutorImage,
+					Force:         true,
+				},
+			}
+
+			_, _ = fmt.Fprintf(GinkgoWriter, "Creating OpenBaoRestore CR: %s\n", restore.Name)
+			Expect(admin.Create(ctx, restore)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoRestore{}
+				err := admin.Get(ctx, types.NamespacedName{Name: restore.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseCompleted))
 			}, 15*time.Minute, 30*time.Second).Should(Succeed())
 		})
 	})
