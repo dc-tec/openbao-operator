@@ -482,7 +482,8 @@ func openStorageClient(ctx context.Context, cfg *backupconfig.ExecutorConfig) (i
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 		}
 		// Set InsecureSkipVerify for emulator mode with HTTP endpoints if not already set
-		if !cfg.InsecureSkipVerify && cfg.GCSUseEmulator && strings.HasPrefix(strings.ToLower(cfg.BackupEndpoint), "http://") {
+		if !cfg.InsecureSkipVerify && cfg.GCSUseEmulator &&
+			strings.HasPrefix(strings.ToLower(cfg.BackupEndpoint), "http://") {
 			storageConfig.GCS.InsecureSkipVerify = true
 		}
 

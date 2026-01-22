@@ -13,6 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	gcsBucketPath = "/storage/v1/b/test-bucket"
+	gcsBucket     = "test-bucket"
+	s3Bucket      = "test-bucket"
+	azureBucket   = "test-container"
+)
+
 func TestOpenBlobStore_RequiresBucket(t *testing.T) {
 	ctx := context.Background()
 
@@ -30,7 +37,7 @@ func TestOpenBlobStore_UnknownProvider(t *testing.T) {
 
 	_, err := OpenBlobStore(ctx, Config{
 		Provider: "unknown",
-		Bucket:   "test-bucket",
+		Bucket:   gcsBucket,
 	})
 
 	require.Error(t, err)
@@ -44,7 +51,7 @@ func TestOpenBlobStore_S3DefaultProvider(t *testing.T) {
 	// This will fail because of missing credentials/config, but we're testing the provider routing
 	_, err := OpenBlobStore(ctx, Config{
 		Provider: "", // Empty should default to S3
-		Bucket:   "test-bucket",
+		Bucket:   gcsBucket,
 	})
 
 	// Should get an S3-specific error (missing region or config), not "unknown provider"
@@ -69,7 +76,7 @@ func TestOpenBlobStore_AzureMissingConfig(t *testing.T) {
 
 	_, err := OpenBlobStore(ctx, Config{
 		Provider: ProviderAzure,
-		Bucket:   "test-container",
+		Bucket:   azureBucket,
 		// Missing StorageAccount and ConnectionString
 		Azure: nil,
 	})
@@ -84,7 +91,7 @@ func TestOpenBlobStore_AzureWithConnectionString(t *testing.T) {
 	// This will fail to connect, but we're testing the config routing
 	_, err := OpenBlobStore(ctx, Config{
 		Provider: ProviderAzure,
-		Bucket:   "test-container",
+		Bucket:   azureBucket,
 		Azure: &AzureOptions{
 			ConnectionString: "DefaultEndpointsProtocol=https;AccountName=devstoreaccount1;AccountKey=key123;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1",
 		},
@@ -106,7 +113,7 @@ func TestOpenGCSBucket_EmulatorEndpointRequired(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := OpenGCSBucket(ctx, GCSClientConfig{
-		Bucket:      "test-bucket",
+		Bucket:      gcsBucket,
 		UseEmulator: true,
 	})
 
@@ -121,8 +128,8 @@ func TestOpenGCSBucket_EmulatorEnsureExistsHitsEndpoint(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt64(&seen, 1)
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/storage/v1/b/test-bucket":
-			_, _ = w.Write([]byte(`{"name":"test-bucket"}`))
+		case r.Method == http.MethodGet && r.URL.Path == gcsBucketPath:
+			_, _ = w.Write([]byte(`{"name":"` + gcsBucket + `"}`))
 			return
 		default:
 			http.Error(w, "unexpected", http.StatusNotFound)
@@ -131,7 +138,7 @@ func TestOpenGCSBucket_EmulatorEnsureExistsHitsEndpoint(t *testing.T) {
 	defer server.Close()
 
 	store, err := OpenGCSBucket(ctx, GCSClientConfig{
-		Bucket:             "test-bucket",
+		Bucket:             gcsBucket,
 		Project:            "proj",
 		Endpoint:           server.URL,
 		UseEmulator:        true,
@@ -178,7 +185,7 @@ func TestOpenAzureContainer_ConnectionStringEnsureExists(t *testing.T) {
 
 	accountKey := base64.StdEncoding.EncodeToString([]byte("testkey"))
 	cfg := AzureClientConfig{
-		Container:          "test-container",
+		Container:          azureBucket,
 		StorageAccount:     "devstoreaccount1",
 		ConnectionString:   fmt.Sprintf("DefaultEndpointsProtocol=https;AccountName=%s;AccountKey=%s;BlobEndpoint=%s", "devstoreaccount1", accountKey, server.URL),
 		InsecureSkipVerify: true,
