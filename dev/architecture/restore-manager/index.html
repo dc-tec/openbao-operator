@@ -4065,8 +4065,8 @@
 </ul>
 </li>
 <li><strong>Execution:</strong><ul>
-<li>A Kubernetes Job is spawned with the <code>bao-restore</code> binary.</li>
-<li>It downloads the snapshot from object storage (S3/GCS/Azure).</li>
+<li>A Kubernetes Job is spawned with the <code>bao-backup</code> binary in restore mode.</li>
+<li>It downloads the snapshot from object storage (S3, GCS, or Azure).</li>
 <li>It uses a temporary token (or valid credentials) to authenticate and hit the <code>sys/storage/raft/snapshot-force</code> endpoint.</li>
 </ul>
 </li>
