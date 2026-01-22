@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/s3blob"
@@ -179,6 +180,10 @@ type S3ClientConfig struct {
 	CACert []byte
 	// UsePathStyle forces path-style addressing (required for MinIO and some S3-compatible stores).
 	UsePathStyle bool
+	// InsecureSkipVerify allows skipping TLS verification (useful for MinIO/LocalStack with self-signed certs).
+	InsecureSkipVerify bool
+	// EnsureExists checks if the bucket exists and tries to create it if not.
+	EnsureExists bool
 }
 
 // Credentials holds the parsed credentials from a Kubernetes Secret.
@@ -222,7 +227,49 @@ func OpenS3Bucket(ctx context.Context, cfg S3ClientConfig) (interfaces.BlobStore
 		return nil, fmt.Errorf("failed to open S3 bucket: %w", err)
 	}
 
-	return NewBucket(bucket), nil
+	wrapped := NewBucket(bucket)
+
+	if cfg.EnsureExists {
+		if err := ensureS3Bucket(ctx, s3Client, cfg.Bucket, cfg.Region); err != nil {
+			_ = wrapped.Close()
+			return nil, fmt.Errorf("failed to ensure bucket exists: %w", err)
+		}
+	}
+
+	return wrapped, nil
+}
+
+func ensureS3Bucket(ctx context.Context, client *s3.Client, bucketName, region string) error {
+	_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err == nil {
+		return nil // Bucket exists/accessible
+	}
+
+	// Try to create if not found
+	// Note: We don't check specifically for NotFound error because HeadBucket behavior implies
+	// any error means we can't access it, so we try create. If create fails (e.g. permission),
+	// we'll return that error.
+	createInput := &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	}
+
+	if region != "us-east-1" && region != "" {
+		createInput.CreateBucketConfiguration = &types.CreateBucketConfiguration{
+			LocationConstraint: types.BucketLocationConstraint(region),
+		}
+	}
+
+	_, err = client.CreateBucket(ctx, createInput)
+	if err != nil {
+		// Ignore if it effectively exists now (race condition or owned by us)
+		// Usually BucketAlreadyOwnedByYou or similar
+		// But checking exact error types across AWS SDK v2 can be verbose.
+		// For now we assume if Create fails, it might be a real error.
+		return err
+	}
+	return nil
 }
 
 // buildAWSConfig constructs AWS SDK config with credentials and custom TLS settings.
@@ -246,7 +293,7 @@ func buildAWSConfig(ctx context.Context, cfg S3ClientConfig) (aws.Config, error)
 	}
 
 	// Configure custom HTTP client for TLS
-	httpClient, err := buildHTTPClient(cfg.CACert)
+	httpClient, err := buildHTTPClient(cfg.CACert, cfg.InsecureSkipVerify)
 	if err != nil {
 		if operatorerrors.IsTransientConnection(err) {
 			return aws.Config{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create HTTP client: %w", err))
@@ -268,7 +315,7 @@ func buildAWSConfig(ctx context.Context, cfg S3ClientConfig) (aws.Config, error)
 }
 
 // buildHTTPClient creates an HTTP client with optional custom CA certificate.
-func buildHTTPClient(caCert []byte) (*http.Client, error) {
+func buildHTTPClient(caCert []byte, insecureSkipVerify bool) (*http.Client, error) {
 	transport := &http.Transport{
 		TLSHandshakeTimeout: 10 * time.Second,
 		DisableKeepAlives:   false,
@@ -290,8 +337,9 @@ func buildHTTPClient(caCert []byte) (*http.Client, error) {
 	}
 
 	transport.TLSClientConfig = &tls.Config{
-		RootCAs:    certPool,
-		MinVersion: tls.VersionTLS12,
+		RootCAs:            certPool,
+		InsecureSkipVerify: insecureSkipVerify, // #nosec G402 -- Intentional for emulator support
+		MinVersion:         tls.VersionTLS12,
 	}
 
 	return &http.Client{

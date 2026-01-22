@@ -67,10 +67,14 @@ type Config struct {
 	Azure *AzureOptions
 }
 
-// S3Options holds S3-specific configuration options.
+// S3Options holds S3-specific options.
 type S3Options struct {
-	// UsePathStyle forces path-style addressing (required for MinIO and some S3-compatible stores).
+	// UsePathStyle forces path-style addressing.
 	UsePathStyle bool
+	// InsecureSkipVerify allows skipping TLS verification.
+	InsecureSkipVerify bool
+	// EnsureExists checks if the bucket exists and tries to create it if not.
+	EnsureExists bool
 }
 
 // GCSOptions holds GCS-specific configuration options.
@@ -126,24 +130,35 @@ func OpenBlobStore(ctx context.Context, cfg Config) (interfaces.BlobStore, error
 
 // openS3 opens an S3-compatible bucket using the unified Config.
 func openS3(ctx context.Context, cfg Config) (interfaces.BlobStore, error) {
-	s3Cfg := S3ClientConfig{
-		Endpoint: cfg.Endpoint,
-		Bucket:   cfg.Bucket,
-		Region:   cfg.Region,
-	}
+	var accessKeyID, secretAccessKey, sessionToken string
+	var caCert []byte
+	var usePathStyle, insecureSkipVerify, ensureExists bool
 
 	if cfg.Credentials != nil {
-		s3Cfg.AccessKeyID = cfg.Credentials.AccessKeyID
-		s3Cfg.SecretAccessKey = cfg.Credentials.SecretAccessKey
-		s3Cfg.SessionToken = cfg.Credentials.SessionToken
-		s3Cfg.CACert = cfg.Credentials.CACert
+		accessKeyID = cfg.Credentials.AccessKeyID
+		secretAccessKey = cfg.Credentials.SecretAccessKey
+		sessionToken = cfg.Credentials.SessionToken
+		caCert = cfg.Credentials.CACert
 	}
 
 	if cfg.S3 != nil {
-		s3Cfg.UsePathStyle = cfg.S3.UsePathStyle
+		usePathStyle = cfg.S3.UsePathStyle
+		insecureSkipVerify = cfg.S3.InsecureSkipVerify
+		ensureExists = cfg.S3.EnsureExists
 	}
 
-	return OpenS3Bucket(ctx, s3Cfg)
+	return OpenS3Bucket(ctx, S3ClientConfig{
+		Endpoint:           cfg.Endpoint,
+		Bucket:             cfg.Bucket,
+		Region:             cfg.Region,
+		AccessKeyID:        accessKeyID,
+		SecretAccessKey:    secretAccessKey,
+		SessionToken:       sessionToken,
+		CACert:             caCert,
+		UsePathStyle:       usePathStyle,
+		InsecureSkipVerify: insecureSkipVerify,
+		EnsureExists:       ensureExists,
+	})
 }
 
 // openGCS opens a GCS bucket using the unified Config.
