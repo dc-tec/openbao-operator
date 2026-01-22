@@ -137,6 +137,12 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 
 // buildRestoreEnvVars builds environment variables for the restore job.
 func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar {
+	// Determine provider (default to s3)
+	provider := restore.Spec.Source.Target.Provider
+	if provider == "" {
+		provider = constants.StorageProviderS3
+	}
+
 	envVars := []corev1.EnvVar{
 		// Set executor mode to restore
 		{
@@ -159,6 +165,10 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 		// BACKUP_* env vars are required by LoadExecutorConfig for validation.
 		// The executor will use RESTORE_* values when available.
 		{
+			Name:  constants.EnvBackupProvider,
+			Value: provider,
+		},
+		{
 			Name:  constants.EnvBackupEndpoint,
 			Value: restore.Spec.Source.Target.Endpoint,
 		},
@@ -166,35 +176,76 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 			Name:  constants.EnvBackupBucket,
 			Value: restore.Spec.Source.Target.Bucket,
 		},
-		{
-			Name:  constants.EnvBackupRegion,
-			Value: restore.Spec.Source.Target.Region,
-		},
-		{
-			Name:  constants.EnvBackupUsePathStyle,
-			Value: fmt.Sprintf("%t", restore.Spec.Source.Target.UsePathStyle),
-		},
 		// Restore-specific overrides (used by runRestore function)
 		{
-			Name:  "RESTORE_KEY",
+			Name:  constants.EnvRestoreKey,
 			Value: restore.Spec.Source.Key,
 		},
 		{
-			Name:  "RESTORE_BUCKET",
+			Name:  constants.EnvRestoreBucket,
 			Value: restore.Spec.Source.Target.Bucket,
 		},
 		{
-			Name:  "RESTORE_ENDPOINT",
+			Name:  constants.EnvRestoreEndpoint,
 			Value: restore.Spec.Source.Target.Endpoint,
 		},
-		{
-			Name:  "RESTORE_REGION",
-			Value: restore.Spec.Source.Target.Region,
-		},
-		{
-			Name:  "RESTORE_USE_PATH_STYLE",
+	}
+
+	// Provider-specific environment variables
+	if restore.Spec.Source.Target.InsecureSkipVerify {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  constants.EnvBackupInsecureSkipVerify,
+			Value: "true",
+		})
+	}
+
+	switch provider {
+	case constants.StorageProviderS3:
+		region := restore.Spec.Source.Target.Region
+		if region == "" {
+			region = constants.DefaultS3Region
+		}
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  constants.EnvBackupRegion,
+			Value: region,
+		})
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  constants.EnvBackupUsePathStyle,
 			Value: fmt.Sprintf("%t", restore.Spec.Source.Target.UsePathStyle),
-		},
+		})
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  constants.EnvRestoreRegion,
+			Value: region,
+		})
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  constants.EnvRestoreUsePathStyle,
+			Value: fmt.Sprintf("%t", restore.Spec.Source.Target.UsePathStyle),
+		})
+	case constants.StorageProviderGCS:
+		if restore.Spec.Source.Target.GCS != nil && restore.Spec.Source.Target.GCS.Project != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:  constants.EnvBackupGCSProject,
+				Value: restore.Spec.Source.Target.GCS.Project,
+			})
+		}
+
+	// Set STORAGE_EMULATOR_HOST for GCS emulator -- REVERTED: Does not fix fake-gcs-server interactions
+
+	case constants.StorageProviderAzure:
+		if restore.Spec.Source.Target.Azure != nil {
+			if restore.Spec.Source.Target.Azure.StorageAccount != "" {
+				envVars = append(envVars, corev1.EnvVar{
+					Name:  constants.EnvBackupAzureStorageAccount,
+					Value: restore.Spec.Source.Target.Azure.StorageAccount,
+				})
+			}
+			if restore.Spec.Source.Target.Azure.Container != "" {
+				envVars = append(envVars, corev1.EnvVar{
+					Name:  constants.EnvBackupAzureContainer,
+					Value: restore.Spec.Source.Target.Azure.Container,
+				})
+			}
+		}
 	}
 
 	// JWT auth configuration
@@ -214,31 +265,9 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 		})
 	}
 
-	// S3 credentials if using secret ref
-	if restore.Spec.Source.Target.CredentialsSecretRef != nil {
-		envVars = append(envVars, corev1.EnvVar{
-			Name: "AWS_ACCESS_KEY_ID",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: restore.Spec.Source.Target.CredentialsSecretRef.Name,
-					},
-					Key: "accessKeyId",
-				},
-			},
-		})
-		envVars = append(envVars, corev1.EnvVar{
-			Name: "AWS_SECRET_ACCESS_KEY",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: restore.Spec.Source.Target.CredentialsSecretRef.Name,
-					},
-					Key: "secretAccessKey",
-				},
-			},
-		})
-	}
+	// Note: Credentials are mounted as a volume and read by the executor based on provider.
+	// S3-specific env vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) are not needed
+	// as the executor reads credentials from the mounted secret.
 
 	return envVars
 }
@@ -353,5 +382,3 @@ func buildRestoreVolumeMounts(restore *openbaov1alpha1.OpenBaoRestore, cluster *
 
 	return mounts
 }
-
-// boolPtr returns a pointer to the given bool value.

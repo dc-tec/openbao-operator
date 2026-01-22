@@ -19,14 +19,27 @@ type ExecutorConfig struct {
 	StatefulSetName  string // StatefulSet name for pod discovery (may include revision for Blue/Green)
 	ClusterReplicas  int32
 
-	// Storage configuration
+	// Storage provider configuration
+	BackupProvider       string // s3, gcs, azure
 	BackupEndpoint       string
 	BackupBucket         string
 	BackupPathPrefix     string
 	BackupFilenamePrefix string // Added to support pre-upgrade prefixes
 	BackupKey            string // Deterministic key provided by controller
-	BackupUsePathStyle   bool
-	BackupRegion         string
+
+	// S3-specific configuration
+	BackupUsePathStyle bool
+	BackupRegion       string
+
+	// GCS-specific configuration
+	GCSProject string
+
+	// GCSUseEmulator forces unauthenticated emulator mode (no OAuth, custom endpoint).
+	GCSUseEmulator bool
+
+	// Azure-specific configuration
+	AzureStorageAccount string
+	AzureContainer      string
 
 	// Authentication
 	AuthMethod   string
@@ -35,12 +48,20 @@ type ExecutorConfig struct {
 	JWTToken     string
 
 	// TLS
-	TLSCACert []byte
+	TLSCACert          []byte
+	InsecureSkipVerify bool
 
-	// Storage credentials
+	// Storage credentials (provider-agnostic)
 	StorageCredentials *storage.Credentials
 
-	// S3 upload configuration
+	// GCS-specific credentials
+	GCSCredentialsJSON []byte
+
+	// Azure-specific credentials
+	AzureAccountKey       string
+	AzureConnectionString string
+
+	// Upload configuration
 	PartSize    int64
 	Concurrency int32
 
@@ -62,12 +83,28 @@ func (c *ExecutorConfig) Validate() error {
 	if c.ClusterReplicas <= 0 {
 		return fmt.Errorf("cluster replicas must be greater than 0")
 	}
-	if c.BackupEndpoint == "" {
-		return fmt.Errorf("backup endpoint is required")
-	}
 	if c.BackupBucket == "" {
 		return fmt.Errorf("backup bucket is required")
 	}
+
+	// Provider-specific validation
+	switch c.BackupProvider {
+	case constants.StorageProviderS3, "":
+		// S3 requires endpoint and region
+		if c.BackupEndpoint == "" {
+			return fmt.Errorf("backup endpoint is required for S3 provider")
+		}
+	case constants.StorageProviderGCS:
+		// GCS doesn't require endpoint (uses default googleapis.com)
+	case constants.StorageProviderAzure:
+		// Azure requires storage account
+		if c.AzureStorageAccount == "" && c.AzureConnectionString == "" {
+			return fmt.Errorf("azure storage account or connection string is required")
+		}
+	default:
+		return fmt.Errorf("invalid backup provider: %q", c.BackupProvider)
+	}
+
 	if len(c.TLSCACert) == 0 {
 		return fmt.Errorf("TLS CA certificate is required")
 	}
@@ -152,11 +189,14 @@ func loadClusterConfig(cfg *ExecutorConfig) error {
 
 // loadStorageConfig loads backup storage endpoint, bucket, and path configuration.
 func loadStorageConfig(cfg *ExecutorConfig) error {
-	cfg.BackupEndpoint = strings.TrimSpace(os.Getenv(constants.EnvBackupEndpoint))
-	if cfg.BackupEndpoint == "" {
-		return fmt.Errorf("%s environment variable is required", constants.EnvBackupEndpoint)
+	// Load provider first (defaults to s3)
+	cfg.BackupProvider = strings.TrimSpace(os.Getenv(constants.EnvBackupProvider))
+	if cfg.BackupProvider == "" {
+		cfg.BackupProvider = constants.StorageProviderS3
 	}
 
+	// Common configuration
+	cfg.BackupEndpoint = strings.TrimSpace(os.Getenv(constants.EnvBackupEndpoint))
 	cfg.BackupBucket = strings.TrimSpace(os.Getenv(constants.EnvBackupBucket))
 	if cfg.BackupBucket == "" {
 		return fmt.Errorf("%s environment variable is required", constants.EnvBackupBucket)
@@ -166,31 +206,78 @@ func loadStorageConfig(cfg *ExecutorConfig) error {
 	cfg.BackupFilenamePrefix = strings.TrimSpace(os.Getenv(constants.EnvBackupFilenamePrefix))
 	cfg.BackupKey = strings.TrimSpace(os.Getenv(constants.EnvBackupKey))
 
-	cfg.BackupRegion = strings.TrimSpace(os.Getenv(constants.EnvBackupRegion))
-	if cfg.BackupRegion == "" {
-		cfg.BackupRegion = constants.DefaultS3Region
-	}
-
-	usePathStyleStr := strings.TrimSpace(os.Getenv(constants.EnvBackupUsePathStyle))
-	if usePathStyleStr != "" {
-		usePathStyle, err := strconv.ParseBool(usePathStyleStr)
-		if err != nil {
-			return fmt.Errorf("invalid BACKUP_USE_PATH_STYLE value %q: %w", usePathStyleStr, err)
+	// Provider-specific configuration
+	switch cfg.BackupProvider {
+	case constants.StorageProviderS3:
+		cfg.BackupRegion = strings.TrimSpace(os.Getenv(constants.EnvBackupRegion))
+		if cfg.BackupRegion == "" {
+			cfg.BackupRegion = constants.DefaultS3Region
 		}
-		cfg.BackupUsePathStyle = usePathStyle
+
+		usePathStyleStr := strings.TrimSpace(os.Getenv(constants.EnvBackupUsePathStyle))
+		if usePathStyleStr != "" {
+			usePathStyle, err := strconv.ParseBool(usePathStyleStr)
+			if err != nil {
+				return fmt.Errorf("invalid BACKUP_USE_PATH_STYLE value %q: %w", usePathStyleStr, err)
+			}
+			cfg.BackupUsePathStyle = usePathStyle
+		}
+
+		// Load S3 credentials from mounted secret
+		credsPath := constants.PathBackupCredentials
+		if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupCredentialsPath)); envPath != "" {
+			credsPath = envPath
+		}
+		creds, err := loadStorageCredentials(credsPath)
+		if err != nil {
+			return fmt.Errorf("failed to load storage credentials: %w", err)
+		}
+		cfg.StorageCredentials = creds
+
+	case constants.StorageProviderGCS:
+		cfg.GCSProject = strings.TrimSpace(os.Getenv(constants.EnvBackupGCSProject))
+
+		// Load GCS credentials from mounted secret (credentials.json)
+		credsPath := constants.PathBackupCredentials
+		if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupCredentialsPath)); envPath != "" {
+			credsPath = envPath
+		}
+		gcsCredsPath := filepath.Clean(filepath.Join(credsPath, "credentials.json"))
+		if data, err := os.ReadFile(gcsCredsPath); err == nil { // #nosec G304
+			cfg.GCSCredentialsJSON = data
+		}
+
+		// Automatically use emulator mode when talking to a fake-gcs endpoint (unauthenticated).
+		endpoint := strings.TrimSpace(os.Getenv(constants.EnvBackupEndpoint))
+		if endpoint == "" {
+			endpoint = cfg.BackupEndpoint
+		}
+		// Minimal heuristic: if endpoint contains "fake-gcs-server" or is plain HTTP, treat it as emulator.
+		if strings.Contains(strings.ToLower(endpoint), "fake-gcs-server") || strings.HasPrefix(strings.ToLower(endpoint), "http://") {
+			cfg.GCSUseEmulator = true
+		}
+
+	case constants.StorageProviderAzure:
+		cfg.AzureStorageAccount = strings.TrimSpace(os.Getenv(constants.EnvBackupAzureStorageAccount))
+		cfg.AzureContainer = strings.TrimSpace(os.Getenv(constants.EnvBackupAzureContainer))
+
+		// Load Azure credentials from mounted secret
+		credsPath := constants.PathBackupCredentials
+		if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupCredentialsPath)); envPath != "" {
+			credsPath = envPath
+		}
+		// Account key
+		accountKeyPath := filepath.Clean(filepath.Join(credsPath, "accountKey"))
+		if data, err := os.ReadFile(accountKeyPath); err == nil { // #nosec G304
+			cfg.AzureAccountKey = strings.TrimSpace(string(data))
+		}
+		// Connection string
+		connStringPath := filepath.Clean(filepath.Join(credsPath, "connectionString"))
+		if data, err := os.ReadFile(connStringPath); err == nil { // #nosec G304
+			cfg.AzureConnectionString = strings.TrimSpace(string(data))
+		}
 	}
 
-	// Load storage credentials
-	credsPath := constants.PathBackupCredentials
-	if envPath := strings.TrimSpace(os.Getenv(constants.EnvBackupCredentialsPath)); envPath != "" {
-		credsPath = envPath
-	}
-
-	creds, err := loadStorageCredentials(credsPath)
-	if err != nil {
-		return fmt.Errorf("failed to load storage credentials: %w", err)
-	}
-	cfg.StorageCredentials = creds
 	return nil
 }
 
@@ -205,6 +292,14 @@ func loadTLSConfig(cfg *ExecutorConfig) error {
 		return fmt.Errorf("failed to read TLS CA certificate from %q: %w", caCertPath, err)
 	}
 	cfg.TLSCACert = caCert
+
+	if skipVerifyStr := strings.TrimSpace(os.Getenv(constants.EnvBackupInsecureSkipVerify)); skipVerifyStr != "" {
+		skipVerify, err := strconv.ParseBool(skipVerifyStr)
+		if err != nil {
+			return fmt.Errorf("invalid %s value %q: %w", constants.EnvBackupInsecureSkipVerify, skipVerifyStr, err)
+		}
+		cfg.InsecureSkipVerify = skipVerify
+	}
 	return nil
 }
 

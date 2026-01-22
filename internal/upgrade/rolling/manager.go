@@ -127,7 +127,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 				return recon.Result{}, fmt.Errorf("upgrade in progress but operation lock is held by another operation: %w", err)
 			}
 			logger.Info("Upgrade blocked by operation lock", "error", err.Error())
-			return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
+			// Use RequeueShort to check more frequently when waiting for backup/restore to complete
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 		return recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 	}

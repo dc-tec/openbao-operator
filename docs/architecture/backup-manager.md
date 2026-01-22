@@ -18,9 +18,9 @@ graph TD
     Prelight -- Pass --> Job[Create Backup Job]
     
     subgraph K8s_Job [Executor Pod]
-        Job --> Auth[Authenticate to Vault]
+        Job --> Auth[Authenticate to OpenBao]
         Auth --> Stream[Stream Snapshot]
-        Stream --> Upload[Upload to S3/GCS/Azure]
+        Stream --> Upload[Upload to Object Storage]
     end
     
     Upload --> Verify{Verify?}
@@ -54,47 +54,75 @@ The Operator creates a Kubernetes Job named `backup-<cluster>-<timestamp>`. This
 - Connects to the active Leader.
 - **Streams** the snapshot directly to object storage (no local disk buffering required).
 
-## 3. Configuration & Authentication
+## 3. Storage Providers
 
-The BackupManager supports multiple authentication methods for object storage.
+The BackupManager supports multiple object storage providers:
 
-=== "Static Credentials"
+=== "S3 (AWS, MinIO, etc.)"
 
-    **Best for:** On-prem S3, MinIO, or simple setups.
-
-    Mounts a Kubernetes Secret containing access keys.
-
+    **Configuration:**
     ```yaml
     spec:
       backup:
         target:
+          provider: s3
+          endpoint: "https://s3.amazonaws.com"
+          bucket: "openbao-backups"
+          region: "us-east-1"
           credentialsSecretRef:
-            name: my-s3-keys
+            name: s3-credentials
     ```
 
-    The Secret must contain keys appropriate for the provider (e.g., `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
+    **Authentication:**
+    - **Static Credentials:** Secret with `accessKeyId` and `secretAccessKey`
+    - **Web Identity (IRSA):** Set `roleArn` for AWS EKS (no Secret required)
 
-=== "Web Identity (IRSA)"
+=== "GCS (Google Cloud Storage)"
 
-    **Best for:** AWS EKS (Production).
-
-    Uses a ServiceAccount with an IAM Role annotation. No long-lived secrets are stored in the cluster.
-
+    **Configuration:**
     ```yaml
     spec:
       backup:
         target:
-          roleArn: arn:aws:iam::123456789012:role/openbao-backup
+          provider: gcs
+          bucket: "openbao-backups"
+          gcs:
+            project: "my-gcp-project"
+          credentialsSecretRef:
+            name: gcs-credentials
     ```
 
-    The Operator projects the ServiceAccount token into the backup Job, and the AWS SDK uses it to assume the role.
+    **Authentication:**
+    - **Service Account Key:** Secret with `credentials.json` (service account JSON)
+    - **Application Default Credentials (ADC):** Omit `credentialsSecretRef` when using Workload Identity or GKE
+
+=== "Azure Blob Storage"
+
+    **Configuration:**
+    ```yaml
+    spec:
+      backup:
+        target:
+          provider: azure
+          bucket: "openbao-backups"
+          azure:
+            storageAccount: "mystorageaccount"
+          credentialsSecretRef:
+            name: azure-credentials
+    ```
+
+    **Authentication:**
+    - **Account Key:** Secret with `accountKey`
+    - **Connection String:** Secret with `connectionString`
+    - **Managed Identity:** Omit `credentialsSecretRef` when using AKS pod identity
 
 ## 4. Scheduling & Retention
 
 - **Cron:** Uses standard cron syntax (e.g., `0 2 * * *` for daily at 2 AM).
-- **Retention:**
-  - If using **Static Credentials**, the Operator can enforce a `retentionPolicy` (e.g., "keep last 5").
-  - If using **Web Identity**, we recommend using bucket-native lifecycle policies (e.g., S3 Lifecycle Rules) for better efficiency.
+- **Retention:** The Operator enforces retention policies configured in `spec.backup.retention`:
+  - `maxCount`: Keep only the N most recent backups
+  - `maxAge`: Delete backups older than a specified duration
+  - Applies to all storage providers (S3, GCS, Azure)
 
 ## 5. Naming Convention
 

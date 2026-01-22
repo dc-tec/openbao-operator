@@ -20,16 +20,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/s3blob"
 	"gocloud.dev/gcerrors"
 
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
 )
 
 const (
@@ -51,17 +49,9 @@ const (
 	SecretKeyCACert = "caCert"
 )
 
-// ObjectInfo contains metadata about an object in storage.
-type ObjectInfo struct {
-	// Key is the full object key/path in the bucket.
-	Key string
-	// Size is the object size in bytes.
-	Size int64
-	// LastModified is when the object was last modified.
-	LastModified time.Time
-	// ETag is the entity tag for the object (typically an MD5 hash).
-	ETag string
-}
+// ObjectInfo is an alias for interfaces.ObjectInfo.
+// This type is provided for convenience; new code should use interfaces.ObjectInfo directly.
+type ObjectInfo = interfaces.ObjectInfo
 
 // Bucket wraps a Go CDK blob.Bucket with a simplified interface.
 // It implements the common operations needed for backup/restore functionality.
@@ -190,6 +180,10 @@ type S3ClientConfig struct {
 	CACert []byte
 	// UsePathStyle forces path-style addressing (required for MinIO and some S3-compatible stores).
 	UsePathStyle bool
+	// InsecureSkipVerify allows skipping TLS verification (useful for MinIO/LocalStack with self-signed certs).
+	InsecureSkipVerify bool
+	// EnsureExists checks if the bucket exists and tries to create it if not.
+	EnsureExists bool
 }
 
 // Credentials holds the parsed credentials from a Kubernetes Secret.
@@ -207,8 +201,8 @@ type Credentials struct {
 }
 
 // OpenS3Bucket opens an S3-compatible bucket using Go CDK.
-// It returns a Bucket wrapper that provides standardized blob operations.
-func OpenS3Bucket(ctx context.Context, cfg S3ClientConfig) (*Bucket, error) {
+// It returns a BlobStore interface that provides standardized blob operations.
+func OpenS3Bucket(ctx context.Context, cfg S3ClientConfig) (interfaces.BlobStore, error) {
 	if cfg.Bucket == "" {
 		return nil, fmt.Errorf("bucket is required")
 	}
@@ -233,56 +227,49 @@ func OpenS3Bucket(ctx context.Context, cfg S3ClientConfig) (*Bucket, error) {
 		return nil, fmt.Errorf("failed to open S3 bucket: %w", err)
 	}
 
-	return NewBucket(bucket), nil
+	wrapped := NewBucket(bucket)
+
+	if cfg.EnsureExists {
+		if err := ensureS3Bucket(ctx, s3Client, cfg.Bucket, cfg.Region); err != nil {
+			_ = wrapped.Close()
+			return nil, fmt.Errorf("failed to ensure bucket exists: %w", err)
+		}
+	}
+
+	return wrapped, nil
 }
 
-// LoadCredentials loads storage credentials from a Kubernetes Secret.
-// If secretRef is nil, returns nil (indicating default credential chain should be used).
-// If the Secret does not contain the required keys, returns an error.
-// The namespace parameter specifies the namespace where the Secret must exist.
-// Cross-namespace references are not allowed for security reasons.
-func LoadCredentials(ctx context.Context, c client.Client, secretRef *corev1.LocalObjectReference, namespace string) (*Credentials, error) {
-	if secretRef == nil {
-		return nil, nil
+func ensureS3Bucket(ctx context.Context, client *s3.Client, bucketName, region string) error {
+	_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err == nil {
+		return nil // Bucket exists/accessible
 	}
 
-	secret := &corev1.Secret{}
-	if err := c.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      secretRef.Name,
-	}, secret); err != nil {
-		return nil, fmt.Errorf("failed to get credentials Secret %s/%s: %w", namespace, secretRef.Name, err)
+	// Try to create if not found
+	// Note: We don't check specifically for NotFound error because HeadBucket behavior implies
+	// any error means we can't access it, so we try create. If create fails (e.g. permission),
+	// we'll return that error.
+	createInput := &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
 	}
 
-	creds := &Credentials{}
-
-	// Load required credentials (if present - they might use workload identity)
-	if v, ok := secret.Data[SecretKeyAccessKeyID]; ok {
-		creds.AccessKeyID = string(v)
-	}
-	if v, ok := secret.Data[SecretKeySecretAccessKey]; ok {
-		creds.SecretAccessKey = string(v)
+	if region != "us-east-1" && region != "" {
+		createInput.CreateBucketConfiguration = &types.CreateBucketConfiguration{
+			LocationConstraint: types.BucketLocationConstraint(region),
+		}
 	}
 
-	// Validate that if one key is provided, both must be provided
-	if (creds.AccessKeyID != "" && creds.SecretAccessKey == "") ||
-		(creds.AccessKeyID == "" && creds.SecretAccessKey != "") {
-		return nil, fmt.Errorf("credentials Secret %s/%s must contain both %s and %s, or neither",
-			namespace, secretRef.Name, SecretKeyAccessKeyID, SecretKeySecretAccessKey)
+	_, err = client.CreateBucket(ctx, createInput)
+	if err != nil {
+		// Ignore if it effectively exists now (race condition or owned by us)
+		// Usually BucketAlreadyOwnedByYou or similar
+		// But checking exact error types across AWS SDK v2 can be verbose.
+		// For now we assume if Create fails, it might be a real error.
+		return err
 	}
-
-	// Load optional fields
-	if v, ok := secret.Data[SecretKeySessionToken]; ok {
-		creds.SessionToken = string(v)
-	}
-	if v, ok := secret.Data[SecretKeyRegion]; ok {
-		creds.Region = string(v)
-	}
-	if v, ok := secret.Data[SecretKeyCACert]; ok {
-		creds.CACert = v
-	}
-
-	return creds, nil
+	return nil
 }
 
 // buildAWSConfig constructs AWS SDK config with credentials and custom TLS settings.
@@ -306,7 +293,7 @@ func buildAWSConfig(ctx context.Context, cfg S3ClientConfig) (aws.Config, error)
 	}
 
 	// Configure custom HTTP client for TLS
-	httpClient, err := buildHTTPClient(cfg.CACert)
+	httpClient, err := buildHTTPClient(cfg.CACert, cfg.InsecureSkipVerify)
 	if err != nil {
 		if operatorerrors.IsTransientConnection(err) {
 			return aws.Config{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create HTTP client: %w", err))
@@ -328,7 +315,7 @@ func buildAWSConfig(ctx context.Context, cfg S3ClientConfig) (aws.Config, error)
 }
 
 // buildHTTPClient creates an HTTP client with optional custom CA certificate.
-func buildHTTPClient(caCert []byte) (*http.Client, error) {
+func buildHTTPClient(caCert []byte, insecureSkipVerify bool) (*http.Client, error) {
 	transport := &http.Transport{
 		TLSHandshakeTimeout: 10 * time.Second,
 		DisableKeepAlives:   false,
@@ -350,8 +337,9 @@ func buildHTTPClient(caCert []byte) (*http.Client, error) {
 	}
 
 	transport.TLSClientConfig = &tls.Config{
-		RootCAs:    certPool,
-		MinVersion: tls.VersionTLS12,
+		RootCAs:            certPool,
+		InsecureSkipVerify: insecureSkipVerify, // #nosec G402 -- Intentional for emulator support
+		MinVersion:         tls.VersionTLS12,
 	}
 
 	return &http.Client{

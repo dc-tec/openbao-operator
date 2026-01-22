@@ -51,50 +51,85 @@ graph TD
 
 ### Source Configuration
 
-Define where your snapshot is located.
+Define where your snapshot is located. The `BackupTarget` structure supports S3, GCS, and Azure storage providers.
 
 === "S3 (AWS/MinIO)"
 
     ```yaml
     source:
       target:
-        type: s3
-        s3:
-          endpoint: https://s3.amazonaws.com
-          bucket: openbao-backups
-          region: us-east-1
-          credentialsSecretRef:
-            name: s3-credentials
+        provider: s3  # Optional, defaults to "s3"
+        endpoint: https://s3.amazonaws.com
+        bucket: openbao-backups
+        region: us-east-1
+        usePathStyle: false  # Set to true for MinIO
+        credentialsSecretRef:
+          name: s3-credentials
       key: clusters/prod/snapshot-latest.snap
     ```
 
-=== "GCS (Google Cloud)"
+    !!! note "Credentials Secret"
+        The Secret must contain:
+        - `accessKeyId`: AWS access key ID
+        - `secretAccessKey`: AWS secret access key
+        - `region`: (optional) AWS region
+        - `sessionToken`: (optional) For temporary credentials
+        - `caCert`: (optional) Custom CA certificate
+
+=== "GCS (Google Cloud Storage)"
 
     ```yaml
     source:
       target:
-        type: gcs
+        provider: gcs
+        endpoint: https://storage.googleapis.com  # Optional, defaults to googleapis.com
+        bucket: my-gcs-backups
         gcs:
-          bucket: my-gcs-backups
-          credentialsSecretRef:
-            name: gcs-credentials
+          project: my-gcp-project-id  # Optional if included in credentials JSON
+        credentialsSecretRef:
+          name: gcs-credentials
       key: clusters/prod/snapshot-latest.snap
     ```
+
+    !!! note "Credentials Secret"
+        The Secret must contain:
+        - `credentials.json`: GCS service account JSON key file
+
+    !!! tip "Emulator Support"
+        For local testing with `fake-gcs-server`, set the endpoint to your emulator URL:
+        ```yaml
+        endpoint: http://fake-gcs-server:4443
+        ```
 
 === "Azure Blob Storage"
 
     ```yaml
     source:
       target:
-        type: azure
+        provider: azure
+        endpoint: https://myaccount.blob.core.windows.net  # Optional, auto-derived from storageAccount
+        bucket: my-container  # Container name
         azure:
-          container: my-container
-          accountName: myaccount
-          accountKeySecretRef:
-            name: azure-credentials
-            key: account-key
+          storageAccount: myaccount
+          container: my-container  # Optional, uses bucket if not specified
+        credentialsSecretRef:
+          name: azure-credentials
       key: clusters/prod/snapshot-latest.snap
     ```
+
+    !!! note "Credentials Secret"
+        The Secret must contain one of:
+        - `accountKey`: Azure storage account access key
+        - `connectionString`: Full Azure Storage connection string
+
+    !!! tip "Azurite Emulator"
+        For local testing with Azurite, set the endpoint to your emulator URL:
+        ```yaml
+        endpoint: http://azurite:10000
+        provider: azure
+        azure:
+          storageAccount: devstoreaccount1
+        ```
 
 ### Authentication
 
@@ -145,30 +180,83 @@ How the Restore Job authenticates to the OpenBao cluster leader.
 
 ---
 
-## 4. Full Example
+## 4. Full Examples
 
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoRestore
-metadata:
-  name: dr-restore-001
-  namespace: security
-spec:
-  cluster: prod-cluster
-  force: true
-  
-  source:
-    target:
-      type: s3
-      s3:
-         bucket: openbao-backups
-         region: us-east-1
-         credentialsSecretRef:
-           name: s3-creds
-    key: clusters/prod/backup-2024.snap
-  
-  jwtAuthRole: restore
-```
+=== "S3 Example"
+
+    ```yaml
+    apiVersion: openbao.org/v1alpha1
+    kind: OpenBaoRestore
+    metadata:
+      name: dr-restore-001
+      namespace: security
+    spec:
+      cluster: prod-cluster
+      force: true
+      
+      source:
+        target:
+          provider: s3
+          endpoint: https://s3.amazonaws.com
+          bucket: openbao-backups
+          region: us-east-1
+          credentialsSecretRef:
+            name: s3-creds
+        key: clusters/prod/backup-2024.snap
+      
+      jwtAuthRole: restore
+    ```
+
+=== "GCS Example"
+
+    ```yaml
+    apiVersion: openbao.org/v1alpha1
+    kind: OpenBaoRestore
+    metadata:
+      name: dr-restore-001
+      namespace: security
+    spec:
+      cluster: prod-cluster
+      force: true
+      
+      source:
+        target:
+          provider: gcs
+          bucket: openbao-backups
+          gcs:
+            project: my-gcp-project
+          credentialsSecretRef:
+            name: gcs-creds
+        key: clusters/prod/backup-2024.snap
+      
+      jwtAuthRole: restore
+    ```
+
+=== "Azure Example"
+
+    ```yaml
+    apiVersion: openbao.org/v1alpha1
+    kind: OpenBaoRestore
+    metadata:
+      name: dr-restore-001
+      namespace: security
+    spec:
+      cluster: prod-cluster
+      force: true
+      
+      source:
+        target:
+          provider: azure
+          bucket: openbao-backups
+          azure:
+            storageAccount: myaccount
+            container: openbao-backups
+          credentialsSecretRef:
+            name: azure-creds
+        key: clusters/prod/backup-2024.snap
+      
+      jwtAuthRole: restore
+    ```
 
 ---
 
@@ -189,9 +277,13 @@ kubectl get OBrestore -w
 | Phase | Common Error | Resolution |
 | :--- | :--- | :--- |
 | `Validating` | `cluster not found` | Ensure `spec.cluster` matches a valid `OpenBaoCluster` in the same namespace. |
+| `Validating` | `snapshot not found` | Verify the `key` path is correct and the snapshot exists in the bucket/container. |
 | `Running` | `403 Forbidden` | The Authentication (JWT Role/Token) lacks permission to `sys/storage/raft/snapshot-force`. |
 | `Running` | `checksum mismatch` | The snapshot size/hash changed during download. Check network stability. |
-| `Failed` | `context deadline exceeded` | The restore operation timed out. Check `spec.network` rules. |
+| `Running` | `storage account is required` | For Azure, ensure `azure.storageAccount` is set in the target configuration. |
+| `Running` | `failed to create storage client` | Verify credentials Secret exists and contains the correct keys for your provider. |
+| `Failed` | `context deadline exceeded` | The restore operation timed out. Check `spec.network.egressRules` to ensure egress to storage endpoint is allowed. |
+| `Failed` | `No usable temporary directory` | Internal error in restore executor. Check executor image version and pod logs. |
 
 ---
 

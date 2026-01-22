@@ -58,8 +58,8 @@ graph TD
     - The controller sets `OpenBaoCluster.status.operationLock = "Restore"`.
     - This **blocks** the BackupManager and UpgradeManager from starting new operations.
 3. **Execution:**
-    - A Kubernetes Job is spawned with the `bao-restore` binary.
-    - It downloads the snapshot from object storage (S3/GCS/Azure).
+    - A Kubernetes Job is spawned with the `bao-backup` binary in restore mode.
+    - It downloads the snapshot from object storage (S3, GCS, or Azure).
     - It uses a temporary token (or valid credentials) to authenticate and hit the `sys/storage/raft/snapshot-force` endpoint.
 4. **Completion:**
     - On success, the lock is released.

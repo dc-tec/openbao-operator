@@ -32,13 +32,24 @@ const (
 	EnvClientCircuitBreakerOpenDuration     = "OPENBAO_CLIENT_CB_OPEN_DURATION"
 
 	// Backup executor (S3/object storage target)
+	EnvBackupProvider       = "BACKUP_PROVIDER" // Storage provider: s3, gcs, azure
 	EnvBackupEndpoint       = "BACKUP_ENDPOINT"
 	EnvBackupBucket         = "BACKUP_BUCKET"
 	EnvBackupPathPrefix     = "BACKUP_PATH_PREFIX"
 	EnvBackupFilenamePrefix = "BACKUP_FILENAME_PREFIX"
-	EnvBackupRegion         = "BACKUP_REGION"
-	EnvBackupUsePathStyle   = "BACKUP_USE_PATH_STYLE"
 	EnvBackupKey            = "BACKUP_KEY"
+
+	// S3-specific backup config
+	EnvBackupRegion             = "BACKUP_REGION"
+	EnvBackupUsePathStyle       = "BACKUP_USE_PATH_STYLE"
+	EnvBackupInsecureSkipVerify = "BACKUP_INSECURE_SKIP_VERIFY"
+
+	// GCS-specific backup config
+	EnvBackupGCSProject = "BACKUP_GCS_PROJECT"
+
+	// Azure-specific backup config
+	EnvBackupAzureStorageAccount = "BACKUP_AZURE_STORAGE_ACCOUNT"
+	EnvBackupAzureContainer      = "BACKUP_AZURE_CONTAINER"
 
 	EnvBackupPartSize    = "BACKUP_PART_SIZE"
 	EnvBackupConcurrency = "BACKUP_CONCURRENCY"
@@ -60,6 +71,14 @@ const (
 	EnvAWSRoleARN              = "AWS_ROLE_ARN"
 	EnvAWSWebIdentityTokenFile = "AWS_WEB_IDENTITY_TOKEN_FILE" // #nosec G101 -- This is an environment variable name constant, not a credential
 
+	// Restore executor
+	EnvRestoreKey          = "RESTORE_KEY"
+	EnvRestoreBucket       = "RESTORE_BUCKET"
+	EnvRestoreEndpoint     = "RESTORE_ENDPOINT"
+	EnvRestoreRegion       = "RESTORE_REGION"
+	EnvRestoreUsePathStyle = "RESTORE_USE_PATH_STYLE"
+
+	// Operator
 	EnvOperatorVersion    = "OPERATOR_VERSION"
 	EnvOpenBaoJWTAudience = "OPENBAO_JWT_AUDIENCE"
 
@@ -92,4 +111,11 @@ const (
 	PlatformAuto       = "auto"
 	PlatformKubernetes = "kubernetes"
 	PlatformOpenShift  = "openshift"
+)
+
+// Storage provider values.
+const (
+	StorageProviderS3    = "s3"
+	StorageProviderGCS   = "gcs"
+	StorageProviderAzure = "azure"
 )

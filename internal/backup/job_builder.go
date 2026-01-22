@@ -188,11 +188,6 @@ func BuildJob(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) (*batchv
 func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []corev1.EnvVar {
 	backupCfg := cluster.Spec.Backup
 
-	region := backupCfg.Target.Region
-	if region == "" {
-		region = constants.DefaultS3Region
-	}
-
 	// Use provided StatefulSet name or default to cluster.Name.
 	// This allows callers (e.g., upgrade managers) to specify the correct StatefulSet
 	// without embedding upgrade-strategy-specific logic in the backup builder.
@@ -201,16 +196,59 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 		statefulSetName = cluster.Name
 	}
 
+	// Determine provider (default to s3)
+	provider := backupCfg.Target.Provider
+	if provider == "" {
+		provider = constants.StorageProviderS3
+	}
+
 	env := []corev1.EnvVar{
 		{Name: constants.EnvClusterNamespace, Value: cluster.Namespace},
 		{Name: constants.EnvClusterName, Value: cluster.Name},
 		{Name: constants.EnvStatefulSetName, Value: statefulSetName},
 		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
+		{Name: constants.EnvBackupProvider, Value: provider},
 		{Name: constants.EnvBackupEndpoint, Value: backupCfg.Target.Endpoint},
 		{Name: constants.EnvBackupBucket, Value: backupCfg.Target.Bucket},
 		{Name: constants.EnvBackupPathPrefix, Value: backupCfg.Target.PathPrefix},
-		{Name: constants.EnvBackupRegion, Value: region},
-		{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", backupCfg.Target.UsePathStyle)},
+	}
+
+	// Provider-specific environment variables
+	if backupCfg.Target.InsecureSkipVerify {
+		env = append(env, corev1.EnvVar{
+			Name:  constants.EnvBackupInsecureSkipVerify,
+			Value: "true",
+		})
+	}
+
+	switch provider {
+	case constants.StorageProviderS3:
+		region := backupCfg.Target.Region
+		if region == "" {
+			region = constants.DefaultS3Region
+		}
+		env = append(env, corev1.EnvVar{Name: constants.EnvBackupRegion, Value: region})
+		env = append(env, corev1.EnvVar{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", backupCfg.Target.UsePathStyle)})
+
+		// AWS Role ARN for Web Identity (IRSA)
+		if backupCfg.Target.RoleARN != "" {
+			env = append(env, corev1.EnvVar{Name: constants.EnvAWSRoleARN, Value: backupCfg.Target.RoleARN})
+			env = append(env, corev1.EnvVar{Name: constants.EnvAWSWebIdentityTokenFile, Value: awsWebIdentityTokenFile})
+		}
+	case constants.StorageProviderGCS:
+		if backupCfg.Target.GCS != nil && backupCfg.Target.GCS.Project != "" {
+			env = append(env, corev1.EnvVar{Name: constants.EnvBackupGCSProject, Value: backupCfg.Target.GCS.Project})
+		}
+
+	case constants.StorageProviderAzure:
+		if backupCfg.Target.Azure != nil {
+			if backupCfg.Target.Azure.StorageAccount != "" {
+				env = append(env, corev1.EnvVar{Name: constants.EnvBackupAzureStorageAccount, Value: backupCfg.Target.Azure.StorageAccount})
+			}
+			if backupCfg.Target.Azure.Container != "" {
+				env = append(env, corev1.EnvVar{Name: constants.EnvBackupAzureContainer, Value: backupCfg.Target.Azure.Container})
+			}
+		}
 	}
 
 	// Add backup key if provided
@@ -223,19 +261,7 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 		env = append(env, corev1.EnvVar{Name: constants.EnvBackupFilenamePrefix, Value: opts.FilenamePrefix})
 	}
 
-	// AWS Role ARN for Web Identity (IRSA)
-	if backupCfg.Target.RoleARN != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvAWSRoleARN,
-			Value: backupCfg.Target.RoleARN,
-		})
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvAWSWebIdentityTokenFile,
-			Value: awsWebIdentityTokenFile,
-		})
-	}
-
-	// S3 upload configuration
+	// S3 upload configuration (PartSize and Concurrency apply to all providers)
 	if backupCfg.Target.PartSize > 0 {
 		env = append(env, corev1.EnvVar{
 			Name:  constants.EnvBackupPartSize,
