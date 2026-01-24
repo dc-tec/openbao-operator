@@ -214,6 +214,7 @@ func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger,
 		cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
 			Phase:        openbaov1alpha1.PhaseIdle,
 			BlueRevision: blueRevision,
+			BlueImage:    cluster.Spec.Image,
 		}
 		return
 	}
@@ -230,6 +231,10 @@ func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger,
 		if inferred != "" && inferred != cluster.Status.BlueGreen.BlueRevision {
 			logger.Info("Correcting BlueRevision from active pods", "from", cluster.Status.BlueGreen.BlueRevision, "to", inferred)
 			cluster.Status.BlueGreen.BlueRevision = inferred
+		}
+		// Also ensure BlueImage is set if missing (backfill for existing clusters)
+		if cluster.Status.BlueGreen.BlueImage == "" {
+			cluster.Status.BlueGreen.BlueImage = cluster.Spec.Image
 		}
 	}
 }
@@ -418,6 +423,9 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 			} else if jobStatus.Exists && jobStatus.Running {
 				logger.Info("Waiting for pre-upgrade snapshot to complete", "job", jobName)
 				return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait
+			} else if jobStatus.Exists && jobStatus.Failed {
+				logger.Info("Pre-upgrade snapshot failed", "job", jobName)
+				return phaseOutcome{}, fmt.Errorf("pre-upgrade snapshot job failed: %s", jobName) // Block
 			}
 			logger.Info("Pre-upgrade snapshot completed",
 				"job", jobName)
@@ -833,8 +841,13 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 	}
 
 	// Finalize upgrade
-	cluster.Status.CurrentVersion = cluster.Spec.Version
+	// NOTE: CurrentVersion is updated by the Status controller when it detects
+	// BlueGreen.Phase == Idle and version mismatch. This maintains clean SSA field ownership.
 	cluster.Status.BlueGreen.BlueRevision = cluster.Status.BlueGreen.GreenRevision
+	// Update BlueImage to the image that was verified and used for Green
+	if cluster.Spec.Image != "" {
+		cluster.Status.BlueGreen.BlueImage = cluster.Spec.Image
+	}
 	cluster.Status.BlueGreen.GreenRevision = ""
 	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
 
