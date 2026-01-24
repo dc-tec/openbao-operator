@@ -13,6 +13,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
@@ -88,10 +89,8 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 			}
 
 			clientset := kubernetesfake.NewClientset(pod)
-			manager := &Manager{
-				config:    &rest.Config{},
-				clientset: clientset,
-			}
+			clientMgr := openbao.NewClientManager(openbao.ClientConfig{})
+			manager := NewManager(&rest.Config{}, clientset, clientMgr)
 
 			if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 				t.Fatalf("Reconcile() error = %v, want no error", err)
@@ -150,10 +149,8 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 	}
 
 	clientset := kubernetesfake.NewClientset(pod)
-	manager := &Manager{
-		config:    &rest.Config{},
-		clientset: clientset,
-	}
+	clientMgr := openbao.NewClientManager(openbao.ClientConfig{})
+	manager := NewManager(&rest.Config{}, clientset, clientMgr)
 
 	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v, want no error", err)
@@ -200,10 +197,8 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clientset := kubernetesfake.NewClientset()
-			manager := &Manager{
-				config:    &rest.Config{},
-				clientset: clientset,
-			}
+			clientMgr := openbao.NewClientManager(openbao.ClientConfig{})
+			manager := NewManager(&rest.Config{}, clientset, clientMgr)
 
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				TypeMeta: metav1.TypeMeta{

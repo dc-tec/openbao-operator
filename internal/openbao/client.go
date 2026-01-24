@@ -843,6 +843,9 @@ type AutopilotConfig struct {
 	// LastContactThreshold is the limit on the amount of time a server can
 	// go without leader contact before being considered unhealthy.
 	LastContactThreshold string `json:"last_contact_threshold,omitempty"`
+	// MaxTrailingLogs is the amount of entries in the Raft Log that a server
+	// can be behind before being considered unhealthy. Default: 1000.
+	MaxTrailingLogs int `json:"max_trailing_logs,omitempty"`
 	// ServerStabilizationTime is the minimum amount of time a server must
 	// be in a stable, healthy state before it can be added to the cluster.
 	ServerStabilizationTime string `json:"server_stabilization_time,omitempty"`

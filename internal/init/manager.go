@@ -20,6 +20,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/raft"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
@@ -37,19 +38,36 @@ var errRetryLater = operatorerrors.ErrTransientConnection
 
 // Manager handles OpenBao cluster initialization.
 type Manager struct {
-	config    *rest.Config
-	clientset kubernetes.Interface
-	clientMgr *openbao.ClientManager
+	config      *rest.Config
+	clientset   kubernetes.Interface
+	clientMgr   *openbao.ClientManager
+	raftManager *raft.Manager
 }
 
 // NewManager creates a new initialization Manager.
 // The clientMgr is used to create OpenBao clients with proper state isolation.
 func NewManager(config *rest.Config, clientset kubernetes.Interface, clientMgr *openbao.ClientManager) *Manager {
 	return &Manager{
-		config:    config,
-		clientset: clientset,
-		clientMgr: clientMgr,
+		config:      config,
+		clientset:   clientset,
+		clientMgr:   clientMgr,
+		raftManager: raft.NewManager(clientset, clientMgr),
 	}
+}
+
+// RaftManager returns the Raft Manager for autopilot configuration.
+func (m *Manager) RaftManager() *raft.Manager {
+	return m.raftManager
+}
+
+// Clientset returns the Kubernetes clientset.
+func (m *Manager) Clientset() kubernetes.Interface {
+	return m.clientset
+}
+
+// ClientManager returns the OpenBao ClientManager.
+func (m *Manager) ClientManager() *openbao.ClientManager {
+	return m.clientMgr
 }
 
 // Reconcile checks if the OpenBao cluster is initialized and initializes it if needed.
@@ -134,6 +152,15 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			logger.Info("OpenBao service registration labels indicate initialized and unsealed; marking cluster as initialized", "pod", pod.Name)
 			cluster.Status.Initialized = true
 			cluster.Status.SelfInitialized = true
+
+			// Configure autopilot immediately after initialization for self-init clusters
+			// Use JWT auth via ClientManager (no root token available for self-init)
+			// This ensures autopilot is configured with correct Profile-based defaults from the start
+			if err := m.raftManager.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
+				// Non-fatal: log but don't fail initialization; reconciler will retry
+				logger.Error(err, "Failed to configure Raft Autopilot for self-init cluster; will retry via reconciler")
+			}
+
 			// Request requeue so InfraReconciler can run again to scale up StatefulSet
 			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
@@ -149,6 +176,15 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			logger.Info("OpenBao pod is Ready; marking cluster as initialized", "pod", pod.Name)
 			cluster.Status.Initialized = true
 			cluster.Status.SelfInitialized = true
+
+			// Configure autopilot immediately after initialization for self-init clusters
+			// Use JWT auth via ClientManager (no root token available for self-init)
+			// This ensures autopilot is configured with correct Profile-based defaults from the start
+			if err := m.raftManager.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
+				// Non-fatal: log but don't fail initialization; reconciler will retry
+				logger.Error(err, "Failed to configure Raft Autopilot for self-init cluster; will retry via reconciler")
+			}
+
 			// Request requeue so InfraReconciler can run again to scale up StatefulSet
 			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
@@ -355,10 +391,12 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 
 	// Configure Raft Autopilot for automatic dead server cleanup.
 	// This must be done after initialization when we have a valid root token.
-	if err := m.configureAutopilot(ctx, logger, cluster, initResp.RootToken); err != nil {
-		// Non-fatal: cluster still works, just won't auto-cleanup dead peers.
-		// Log the error but do not fail initialization.
-		logger.Error(err, "Failed to configure Raft Autopilot; dead server cleanup may not work automatically")
+	if m.raftManager != nil {
+		if err := m.raftManager.ConfigureAutopilot(ctx, logger, cluster, initResp.RootToken); err != nil {
+			// Non-fatal: cluster still works, just won't auto-cleanup dead peers.
+			// Log the error but do not fail initialization.
+			logger.Error(err, "Failed to configure Raft Autopilot; dead server cleanup may not work automatically")
+		}
 	}
 
 	logger.Info("OpenBao cluster initialized successfully via HTTP API")
@@ -448,113 +486,6 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1
 	}
 
 	return client, nil
-}
-
-// configureAutopilot configures Raft Autopilot for automatic dead server cleanup.
-// This is called after cluster initialization with the root token.
-func (m *Manager) configureAutopilot(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, rootToken string) error {
-	// Create authenticated client with root token
-	client, err := m.newOpenBaoClientWithToken(ctx, cluster, rootToken)
-	if err != nil {
-		return fmt.Errorf("failed to create authenticated OpenBao client: %w", err)
-	}
-
-	// Build Autopilot configuration from CRD or use defaults
-	config := m.buildAutopilotConfig(cluster)
-
-	logger.Info("Configuring Raft Autopilot",
-		"cleanup_dead_servers", config.CleanupDeadServers,
-		"dead_server_last_contact_threshold", config.DeadServerLastContactThreshold,
-		"min_quorum", config.MinQuorum,
-	)
-
-	autopilotCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	if err := client.ConfigureRaftAutopilot(autopilotCtx, config); err != nil {
-		return fmt.Errorf("failed to configure Raft Autopilot: %w", err)
-	}
-
-	logger.Info("Raft Autopilot configured successfully")
-	return nil
-}
-
-// buildAutopilotConfig constructs the Autopilot configuration from CRD settings or defaults.
-func (m *Manager) buildAutopilotConfig(cluster *openbaov1alpha1.OpenBaoCluster) openbao.AutopilotConfig {
-	config := openbao.AutopilotConfig{
-		CleanupDeadServers:             true, // Enable by default
-		DeadServerLastContactThreshold: "5m", // Shorter than OpenBao's 24h default
-		MinQuorum:                      maxInt(3, int(cluster.Spec.Replicas/2)+1),
-	}
-
-	// Override with CRD settings if provided
-	if cluster.Spec.Configuration != nil &&
-		cluster.Spec.Configuration.Raft != nil &&
-		cluster.Spec.Configuration.Raft.Autopilot != nil {
-		ap := cluster.Spec.Configuration.Raft.Autopilot
-
-		if ap.CleanupDeadServers != nil {
-			config.CleanupDeadServers = *ap.CleanupDeadServers
-		}
-		if ap.DeadServerLastContactThreshold != "" {
-			config.DeadServerLastContactThreshold = ap.DeadServerLastContactThreshold
-		}
-		if ap.MinQuorum != nil {
-			config.MinQuorum = int(*ap.MinQuorum)
-		}
-		if ap.ServerStabilizationTime != "" {
-			config.ServerStabilizationTime = ap.ServerStabilizationTime
-		}
-	}
-
-	return config
-}
-
-// newOpenBaoClientWithToken creates an authenticated OpenBao client with the given token.
-func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, token string) (*openbao.Client, error) {
-	if strings.TrimSpace(cluster.Name) == "" || strings.TrimSpace(cluster.Namespace) == "" {
-		return nil, fmt.Errorf("cluster name and namespace are required to build OpenBao client")
-	}
-
-	baseURL := fmt.Sprintf("https://%s-0.%s.%s.svc:%d", cluster.Name, cluster.Name, cluster.Namespace, constants.PortAPI)
-
-	caSecretName := cluster.Name + constants.SuffixTLSCA
-	secret, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, caSecretName, metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsForbidden(err) {
-			return nil, operatorerrors.WrapTransientKubernetesAPI(
-				fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err),
-			)
-		}
-		return nil, fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
-	}
-
-	caCert, ok := secret.Data["ca.crt"]
-	if !ok || len(caCert) == 0 {
-		return nil, fmt.Errorf("TLS CA Secret %s/%s missing 'ca.crt' key", cluster.Namespace, caSecretName)
-	}
-
-	// Create OpenBao client using the ClientManager for proper state isolation.
-	clusterKey := fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)
-	factory := m.clientMgr.FactoryFor(clusterKey, caCert)
-	if factory == nil {
-		return nil, fmt.Errorf("client manager returned nil factory for cluster %s", clusterKey)
-	}
-
-	client, err := factory.NewWithToken(baseURL, token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create OpenBao client for %s: %w", baseURL, err)
-	}
-
-	return client, nil
-}
-
-// maxInt returns the greater of two integers.
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, rootToken string) error {

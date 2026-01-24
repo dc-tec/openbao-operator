@@ -10,11 +10,13 @@ const (
 	SuffixUnsealKey      = "-unseal-key"
 	SuffixServiceAccount = "-serviceaccount"
 
-	SuffixBackupServiceAccount  = "-backup-serviceaccount"
-	SuffixUpgradeServiceAccount = "-upgrade-serviceaccount"
-	SuffixRestoreServiceAccount = "-restore-serviceaccount"
+	SuffixBackupServiceAccount    = "-backup-serviceaccount"
+	SuffixUpgradeServiceAccount   = "-upgrade-serviceaccount"
+	SuffixRestoreServiceAccount   = "-restore-serviceaccount"
+	SuffixAutopilotServiceAccount = "-autopilot-serviceaccount"
 
-	PrefixRestoreJob = "restore-"
+	PrefixRestoreJob   = "restore-"
+	PrefixAutopilotJob = "autopilot-config-"
 )
 
 // Component names used for labeling and observability.
@@ -23,6 +25,7 @@ const (
 	ComponentBackup          = "backup"
 	ComponentRestore         = "restore"
 	ComponentUpgradeSnapshot = "upgrade-snapshot"
+	ComponentAutopilot       = "autopilot"
 	ComponentProvisioner     = "provisioner"
 	ComponentController      = "controller"
 )
