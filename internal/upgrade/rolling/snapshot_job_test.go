@@ -231,7 +231,7 @@ func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
 	// Create a running backup job
 	runningJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pre-upgrade-backup-test-cluster-20251207-120000",
+			Name:      "pre-upgrade-backup-test-cluster-gen0",
 			Namespace: "test-ns",
 			Labels: map[string]string{
 				constants.LabelAppInstance:  "test-cluster",
@@ -296,7 +296,7 @@ func TestHandlePreUpgradeSnapshot_JobCompleted(t *testing.T) {
 	// Create a completed backup job
 	completedJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pre-upgrade-backup-test-cluster-20251207-120000",
+			Name:      "pre-upgrade-backup-test-cluster-gen0",
 			Namespace: "test-ns",
 			Labels: map[string]string{
 				constants.LabelAppInstance:  "test-cluster",
@@ -359,11 +359,19 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 	}
 
 	// Create failed backup jobs - need 3 to exceed max retries (DefaultMaxPreUpgradeBackupRetries=3)
+	// Note: In real operation, we delete and recreate with the same name, so we wouldn't see 3 at once
+	// unless some were left over (zombies) or we changed naming strategy.
+	// For this test to work with strict name lookup, one job must match the expected name.
 	var failedJobs []client.Object
 	for i := 0; i < upgrade.DefaultMaxPreUpgradeBackupRetries; i++ {
+		name := fmt.Sprintf("pre-upgrade-backup-test-cluster-attempt-%d", i)
+		if i == 0 {
+			// Make the first one match strict lookup so 'find' sees it
+			name = "pre-upgrade-backup-test-cluster-gen0"
+		}
 		failedJobs = append(failedJobs, &batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("pre-upgrade-backup-test-cluster-attempt-%d", i),
+				Name:      name,
 				Namespace: "test-ns",
 				Labels: map[string]string{
 					constants.LabelAppInstance:       "test-cluster",
@@ -434,7 +442,7 @@ func TestHandlePreUpgradeSnapshot_JobFailedRetriesOnFirstFailure(t *testing.T) {
 	// Create single failed backup job - should trigger retry, not error
 	failedJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pre-upgrade-backup-test-cluster-attempt-1",
+			Name:      "pre-upgrade-backup-test-cluster-gen0",
 			Namespace: "test-ns",
 			Labels: map[string]string{
 				constants.LabelAppInstance:       "test-cluster",
@@ -508,7 +516,9 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 	// Create a running backup job
 	runningJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pre-upgrade-backup-test-cluster-20251207-120000",
+			// Name must match the expected format: pre-upgrade-backup-<cluster>-gen<generation>
+			// Cluster generation defaults to 0 in tests unless specified
+			Name:      "pre-upgrade-backup-test-cluster-gen0",
 			Namespace: "test-ns",
 			Labels: map[string]string{
 				constants.LabelAppInstance:  "test-cluster",

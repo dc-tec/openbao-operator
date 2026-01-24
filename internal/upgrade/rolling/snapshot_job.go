@@ -211,55 +211,27 @@ func (m *Manager) validateBackupConfig(ctx context.Context, cluster *openbaov1al
 // findExistingPreUpgradeBackupJob finds an existing pre-upgrade backup job for this cluster.
 // Returns the job name and status ("running", "failed", "succeeded") if found, empty strings if not found.
 func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, string, error) {
-	jobList := &batchv1.JobList{}
-	labelSelector := labels.SelectorFromSet(map[string]string{
-		constants.LabelAppInstance:       cluster.Name,
-		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster:    cluster.Name,
-		constants.LabelOpenBaoComponent:  backup.ComponentBackup,
-		constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
-	})
+	expectedJobName := m.backupJobName(cluster)
+	job := &batchv1.Job{}
 
-	if err := m.client.List(ctx, jobList,
-		client.InNamespace(cluster.Namespace),
-		client.MatchingLabelsSelector{Selector: labelSelector},
-	); err != nil {
-		return "", "", fmt.Errorf("failed to list backup jobs: %w", err)
-	}
-
-	// Find the most recent job (prefer running, then failed, then succeeded)
-	var runningJob, failedJob, succeededJob *batchv1.Job
-	for i := range jobList.Items {
-		job := &jobList.Items[i]
-		if kube.JobSucceeded(job) {
-			if succeededJob == nil {
-				succeededJob = job
-			}
-		} else if kube.JobFailed(job) {
-			if failedJob == nil {
-				failedJob = job
-			}
-		} else {
-			// Job is still running or pending
-			if runningJob == nil {
-				runningJob = job
-			}
+	if err := m.client.Get(ctx, types.NamespacedName{
+		Name:      expectedJobName,
+		Namespace: cluster.Namespace,
+	}, job); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", "", nil
 		}
+		return "", "", fmt.Errorf("failed to get backup job %s: %w", expectedJobName, err)
 	}
 
-	// Return running job first, then failed, then succeeded
-	if runningJob != nil {
-		return runningJob.Name, "running", nil
+	// Determine status
+	if kube.JobSucceeded(job) {
+		return job.Name, "succeeded", nil
 	}
-	if failedJob != nil {
-		return failedJob.Name, "failed", nil
+	if kube.JobFailed(job) {
+		return job.Name, "failed", nil
 	}
-	if succeededJob != nil {
-		return succeededJob.Name, "succeeded", nil
-	}
-
-	// No job found
-	return "", "", nil
+	return job.Name, "running", nil
 }
 
 // backupJobName generates a deterministic name for a pre-upgrade backup job.
