@@ -541,6 +541,18 @@ spec:
                               is considered dead if it hasn't contacted the leader.
                               Minimum: "1m". Default: "5m" (operator default, shorter than OpenBao's 24h).
                             type: string
+                          lastContactThreshold:
+                            description: |-
+                              LastContactThreshold is the limit on the amount of time a server can
+                              go without leader contact before being considered unhealthy.
+                              Default: "10s".
+                            type: string
+                          maxTrailingLogs:
+                            description: |-
+                              MaxTrailingLogs is the amount of entries in the Raft Log that a server
+                              can be behind before being considered unhealthy. Default: 1000.
+                            format: int32
+                            type: integer
                           minQuorum:
                             description: |-
                               MinQuorum is the minimum number of servers before Autopilot can prune
@@ -2776,6 +2788,11 @@ spec:
                 description: BlueGreen tracks the state of blue/green upgrades (if
                   enabled).
                 properties:
+                  blueImage:
+                    description: |-
+                      BlueImage is the container image used by the Blue cluster.
+                      This ensures the Blue cluster is not actively upgraded when spec.image changes.
+                    type: string
                   blueRevision:
                     description: BlueRevision is the hash/name of the currently active
                       cluster.
@@ -3050,6 +3067,7 @@ spec:
               workload:
                 description: Workload holds signals owned by the workload controller
                   (infrastructure reconciliation).
+                nullable: true
                 properties:
                   lastError:
                     description: LastError is the last workload-controller error observed
