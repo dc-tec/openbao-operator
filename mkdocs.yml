@@ -91,6 +91,8 @@ nav:
           - Introduction: user-guide/index.md
           - Operator:
                 - Installation: user-guide/operator/installation.md
+                - Authentication: user-guide/operator/authn.md
+                - Authorization: user-guide/operator/authz.md
                 - Single-Tenant Mode: user-guide/operator/single-tenant-mode.md
           - OpenBaoTenant:
                 - Overview: user-guide/openbaotenant/overview.md
