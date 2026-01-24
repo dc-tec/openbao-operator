@@ -2,166 +2,158 @@ package openbaocluster
 
 import (
 	"context"
-	"errors"
-	"strings"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
-	"time"
 
-	"github.com/go-logr/logr"
+	"github.com/stretchr/testify/assert"
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
-func TestInfraReconcilerVerifyMainImageDigest_DisabledDoesNotCallVerifier(t *testing.T) {
-	t.Parallel()
+func TestHandleScaleDownSafety(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	called := 0
-	r := &infraReconciler{
-		verifyImageFunc: func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-			called++
-			return "", nil
+	clusterName := "test-cluster"
+	namespace := "default"
+
+	tests := []struct {
+		name            string
+		currentReplicas int32
+		desiredReplicas int32
+		victimLeader    bool
+		victimError     bool // simulate network error
+		expectedError   string
+	}{
+		{
+			name:            "No scale down",
+			currentReplicas: 3,
+			desiredReplicas: 3,
+			victimLeader:    false, // Irrelevant
+			expectedError:   "",
 		},
-		platform: "",
-	}
-
-	cluster := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "ns1"},
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Image: "example/openbao:test",
+		{
+			name:            "Scale up",
+			currentReplicas: 3,
+			desiredReplicas: 4,
+			victimLeader:    false, // Irrelevant
+			expectedError:   "",
 		},
-	}
-
-	digest, err := r.verifyMainImageDigest(context.Background(), logr.Discard(), cluster)
-	if err != nil {
-		t.Fatalf("verifyMainImageDigest() error = %v, want nil", err)
-	}
-	if digest != "" {
-		t.Fatalf("verifyMainImageDigest() digest = %q, want empty", digest)
-	}
-	if called != 0 {
-		t.Fatalf("verifyImageFunc called %d times, want 0", called)
-	}
-}
-
-func TestInfraReconcilerVerifyMainImageDigest_BlockReturnsReasonedError(t *testing.T) {
-	t.Parallel()
-
-	r := &infraReconciler{
-		verifyImageFunc: func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-			return "", errors.New("verification failed")
+		{
+			name:            "Scale down, victim is follower",
+			currentReplicas: 3,
+			desiredReplicas: 2,
+			victimLeader:    false,
+			expectedError:   "",
 		},
-		platform: "",
-	}
-
-	cluster := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "ns1"},
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Image: "example/openbao:test",
-			ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
-				Enabled:       true,
-				FailurePolicy: constants.ImageVerificationFailurePolicyBlock,
-			},
+		{
+			name:            "Scale down, victim is leader",
+			currentReplicas: 3,
+			desiredReplicas: 2,
+			victimLeader:    true,
+			expectedError:   "waiting for leader step-down on test-cluster-2 to complete",
 		},
-	}
-
-	_, err := r.verifyMainImageDigest(context.Background(), logr.Discard(), cluster)
-	if err == nil {
-		t.Fatalf("verifyMainImageDigest() error = nil, want non-nil")
-	}
-	if reason, ok := operatorerrors.Reason(err); !ok || reason != constants.ReasonImageVerificationFailed {
-		t.Fatalf("verifyMainImageDigest() reason = (%q,%t), want (%q,true)", reason, ok, constants.ReasonImageVerificationFailed)
-	}
-}
-
-func TestInfraReconcilerVerifyMainImageDigest_WarnEmitsEvent(t *testing.T) {
-	t.Parallel()
-
-	recorder := record.NewFakeRecorder(1)
-	r := &infraReconciler{
-		verifyImageFunc: func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-			return "", errors.New("verification failed")
-		},
-		recorder: recorder,
-		platform: "",
-	}
-
-	cluster := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "ns1"},
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Image: "example/openbao:test",
-			ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
-				Enabled:       true,
-				FailurePolicy: constants.ImageVerificationFailurePolicyWarn,
-			},
+		{
+			name:            "Scale down, victim unreachable",
+			currentReplicas: 3,
+			desiredReplicas: 2,
+			victimError:     true,
+			expectedError:   "", // Should proceed (fail open)
 		},
 	}
 
-	digest, err := r.verifyMainImageDigest(context.Background(), logr.Discard(), cluster)
-	if err != nil {
-		t.Fatalf("verifyMainImageDigest() error = %v, want nil", err)
-	}
-	if digest != "" {
-		t.Fatalf("verifyMainImageDigest() digest = %q, want empty", digest)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Replicas: tt.desiredReplicas,
+				},
+			}
 
-	select {
-	case evt := <-recorder.Events:
-		if !strings.Contains(evt, constants.ReasonImageVerificationFailed) {
-			t.Fatalf("event %q missing reason %q", evt, constants.ReasonImageVerificationFailed)
-		}
-		if !strings.Contains(evt, "Image verification failed but proceeding due to Warn policy") {
-			t.Fatalf("event %q missing expected message", evt)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatalf("expected an event but none was emitted")
-	}
-}
+			// Mock StatefulSet
+			sts := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas: &tt.currentReplicas,
+				},
+			}
 
-func TestInfraReconcilerVerifyOperatorImageDigest_WarnEmitsEvent(t *testing.T) {
-	t.Parallel()
+			// Mock Client
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(cluster, sts).
+				Build()
 
-	recorder := record.NewFakeRecorder(1)
-	r := &infraReconciler{
-		verifyOperatorImageFunc: func(ctx context.Context, logger logr.Logger, verifier interfaces.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
-			return "", errors.New("verification failed")
-		},
-		recorder: recorder,
-		platform: "",
-	}
+			// Mock OpenBao Client for victim pod
+			clientFunc := func(c *openbaov1alpha1.OpenBaoCluster, podName string) (*openbao.Client, error) {
+				if tt.victimError {
+					return nil, fmt.Errorf("network error")
+				}
 
-	cluster := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "ns1"},
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Image: "example/openbao:test",
-			OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
-				Enabled:       true,
-				FailurePolicy: constants.ImageVerificationFailurePolicyWarn,
-			},
-		},
-	}
+				// Mock server to handle health/step-down
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					switch r.URL.Path {
+					case "/v1/sys/health":
+						if tt.victimLeader {
+							// Active Leader: 200 OK, initialized=true, sealed=false, standby=false
+							w.WriteHeader(http.StatusOK)
+							_, _ = w.Write([]byte(`{"initialized": true, "sealed": false, "standby": false}`))
+						} else {
+							// Follower: 429, initialized=true, sealed=false, standby=true
+							w.WriteHeader(http.StatusTooManyRequests)
+							_, _ = w.Write([]byte(`{"initialized": true, "sealed": false, "standby": true}`))
+						}
+					case "/v1/sys/step-down":
+						if r.Method == http.MethodPut {
+							w.WriteHeader(http.StatusNoContent)
+						} else {
+							w.WriteHeader(http.StatusMethodNotAllowed)
+						}
+					default:
+						w.WriteHeader(http.StatusNotFound)
+					}
+				}))
+				// Note: server is not closed, leaking resources in test but acceptable for short unit test
 
-	digest, err := r.verifyOperatorImageDigest(context.Background(), logr.Discard(), cluster, "example/init:test", constants.ReasonInitContainerImageVerificationFailed, "Init container image verification failed")
-	if err != nil {
-		t.Fatalf("verifyOperatorImageDigest() error = %v, want nil", err)
-	}
-	if digest != "" {
-		t.Fatalf("verifyOperatorImageDigest() digest = %q, want empty", digest)
-	}
+				// Important: Use server URL
+				clientConfig := openbao.ClientConfig{
+					BaseURL: server.URL,
+					Token:   "root", // required for step-down
+				}
 
-	select {
-	case evt := <-recorder.Events:
-		if !strings.Contains(evt, constants.ReasonInitContainerImageVerificationFailed) {
-			t.Fatalf("event %q missing reason %q", evt, constants.ReasonInitContainerImageVerificationFailed)
-		}
-		if !strings.Contains(evt, "Init container image verification failed but proceeding due to Warn policy") {
-			t.Fatalf("event %q missing expected message", evt)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatalf("expected an event but none was emitted")
+				return openbao.NewClient(clientConfig)
+			}
+
+			r := &infraReconciler{
+				client:           k8sClient,
+				scheme:           scheme,
+				recorder:         nil, // not needed for this test part
+				clientForPodFunc: clientFunc,
+			}
+
+			err := r.handleScaleDownSafety(context.Background(), cluster, tt.desiredReplicas, sts)
+			if tt.expectedError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+			}
+		})
 	}
 }

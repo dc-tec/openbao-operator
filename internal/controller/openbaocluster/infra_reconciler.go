@@ -7,10 +7,12 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
@@ -18,6 +20,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 	security "github.com/dc-tec/openbao-operator/internal/security"
@@ -38,6 +41,8 @@ type infraReconciler struct {
 	recorder                record.EventRecorder
 	admissionStatus         *admission.Status
 	platform                string
+	smartClientConfig       openbao.ClientConfig
+	clientForPodFunc        func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (*openbao.Client, error)
 }
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -112,10 +117,10 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 	return "", nil
 }
 
-func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	opts := imageVerificationOptions{
 		enabled:              cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled,
-		imageRef:             cluster.Spec.Image,
+		imageRef:             imageRef,
 		failurePolicy:        imageVerificationFailurePolicy(cluster),
 		failureReason:        constants.ReasonImageVerificationFailed,
 		failureMessagePrefix: "Image verification failed",
@@ -229,7 +234,13 @@ func (r *infraReconciler) computeStatefulSetSpec(
 func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	logger.Info("Reconciling infrastructure for OpenBaoCluster")
 
-	verifiedImageDigest, err := r.verifyMainImageDigest(ctx, logger, cluster)
+	targetImage := cluster.Spec.Image
+	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen &&
+		cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueImage != "" {
+		targetImage = cluster.Status.BlueGreen.BlueImage
+	}
+
+	verifiedImageDigest, err := r.verifyMainImageDigest(ctx, logger, cluster, targetImage)
 	if err != nil {
 		return recon.Result{}, err
 	}
@@ -271,6 +282,21 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	// Compute StatefulSetSpec with all upgrade strategy knowledge
 	spec := r.computeStatefulSetSpec(logger, cluster, verifiedImageDigest, verifiedInitContainerDigest)
 
+	// SCALING SAFETY: Check for scale down operations and ensure leader step-down
+	// This must happen BEFORE passing the spec to the manager, as the manager updates the StatefulSet.
+	currentSTS := &appsv1.StatefulSet{}
+	currentSTSName := spec.Name
+
+	// We use r.client (cached) to fetch the StatefulSet.
+	// If it doesn't exist, we can't be scaling down, so we proceed.
+	if err := r.client.Get(ctx, client.ObjectKey{Name: currentSTSName, Namespace: cluster.Namespace}, currentSTS); err == nil {
+		if err := r.handleScaleDownSafety(ctx, cluster, spec.Replicas, currentSTS); err != nil {
+			logger.Info("Scale down safety check blocked reconciliation", "reason", err.Error())
+			// Return RequeueShort to check again soon (e.g. for leader step-down to complete)
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+		}
+	}
+
 	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, r.platform)
 	if r.apiReader != nil {
 		manager = inframanager.NewManagerWithReader(r.client, r.apiReader, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, r.platform)
@@ -292,4 +318,94 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	}
 
 	return recon.Result{}, nil
+}
+
+func (r *infraReconciler) handleScaleDownSafety(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, desiredReplicas int32, currentSTS *appsv1.StatefulSet) error {
+	// 1. Check if we are scaling down
+	if currentSTS.Spec.Replicas == nil {
+		return nil
+	}
+	currentReplicas := *currentSTS.Spec.Replicas
+
+	if desiredReplicas >= currentReplicas {
+		return nil // Not scaling down, nothing to do
+	}
+
+	// 2. Identify the victim pod (highest ordinal)
+	// Example: Current=3, Desired=2. Victim is pod-2.
+	victimOrdinal := currentReplicas - 1
+	// Determine POD name based on STS name logic
+	// If it's a blue/green revision, the pod name includes the revision hash
+	victimPodName := fmt.Sprintf("%s-%d", currentSTS.Name, victimOrdinal)
+
+	logger := log.FromContext(ctx).WithValues("victim", victimPodName, "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
+	logger.Info("Detected scale down operation; checking victim leadership")
+
+	// 3. Create a client specifically for the victim pod
+	victimClient, err := r.clientForPod(cluster, victimPodName)
+	if err != nil {
+		// If we can't create a client (e.g. config error), we probably can't talk to it.
+		// Log error and proceed? Or block?
+		// "Safe" is to block, but if we can't create a client, we might be stuck.
+		// However, failing here is usually a code/config issue.
+		logger.Error(err, "Failed to create client for victim pod; assuming safe to remove")
+		return nil
+	}
+
+	// 4. Check Leadership
+	isLeader, err := victimClient.IsLeader(ctx)
+	if err != nil {
+		logger.Error(err, "Failed to check leadership of victim pod; assuming safe to remove (pod might be down)")
+		// If we can't talk to the pod, it's likely not the leader (or won't be for long).
+		// Safe to proceed to let K8s terminate it.
+		return nil
+	}
+
+	// 5. If it IS the leader, Step Down
+	if isLeader {
+		logger.Info("Victim pod is the Active Leader. Attempting graceful step-down.")
+
+		// Call sys/step-down
+		if err := victimClient.StepDownLeader(ctx); err != nil {
+			return fmt.Errorf("failed to step down leader %s: %w", victimPodName, err)
+		}
+
+		// 6. Block Reconciliation
+		// We return an error to stop the InfraManager from updating the StatefulSet immediately.
+		// We want to wait for the next reconcile loop where the pod is hopefully a follower.
+		return fmt.Errorf("waiting for leader step-down on %s to complete", victimPodName)
+	}
+
+	logger.Info("Victim pod is a follower. Safe to scale down.")
+	return nil
+}
+
+func (r *infraReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (*openbao.Client, error) {
+	if r.clientForPodFunc != nil {
+		return r.clientForPodFunc(cluster, podName)
+	}
+
+	// Construct the Pod DNS name
+	// Format: <pod-name>.<service-name>.<namespace>.svc
+	// Use the headless service name
+	headlessServiceName := cluster.Name // Default headless service name matches cluster name
+
+	// Address: https://<pod-name>.<cluster-name>.<namespace>.svc:8200
+	podDNS := fmt.Sprintf("%s.%s.%s.svc:8200", podName, headlessServiceName, cluster.Namespace)
+	baseURL := "https://" + podDNS
+
+	// Clone the smart client config defaults
+	config := r.smartClientConfig
+	config.BaseURL = baseURL
+	// Ensure we use the proper CA cert. r.smartClientConfig should already have it if configured correctly in reconciler setup.
+	// If not, we might need to fetch it from the secret, but usually the parent reconciler handles this.
+	// For now assume smartClientConfig has the CA bundle if needed.
+
+	// Create client using openbao.NewClient (which creates a new client without shared state,
+	// or we could use ClientManager if we wanted shared state, but for this one-off check, NewClient is fine
+	// provided we don't need rate limiting persistence for the victim pod specifically).
+	// Actually, using NewClient is safer to avoid polluting variable shared state with ephemeral pod clients?
+	// But ClientConfig has "ClusterKey".
+
+	return openbao.NewClient(config)
 }

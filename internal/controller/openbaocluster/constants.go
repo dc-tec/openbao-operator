@@ -26,6 +26,7 @@ const (
 	ReasonTLSSecretInvalid                       = "TLSSecretInvalid"
 	ReasonACMEDomainNotResolvable                = "ACMEDomainNotResolvable"
 	ReasonACMEGatewayNotConfiguredForPassthrough = "ACMEGatewayNotConfiguredForPassthrough"
+	ReasonDisabled                               = "Disabled"
 	ReasonNotReady                               = "NotReady"
 	ReasonAllReplicasReady                       = "AllReplicasReady"
 	ReasonNoReplicasReady                        = "NoReplicasReady"
