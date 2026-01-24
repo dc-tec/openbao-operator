@@ -8,27 +8,31 @@
       
       
       
-        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/architecture/vap-hardening/">
+        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/authz/">
       
       
+        <link rel="prev" href="../authn/">
+      
+      
+        <link rel="next" href="../single-tenant-mode/">
       
       
         
       
       
-      <link rel="icon" href="../../assets/favicon.png">
+      <link rel="icon" href="../../../assets/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
     
     
       
-        <title>VAP Hardening (Drift Detector Removed) - OpenBao Operator</title>
+        <title>Authorization - OpenBao Operator</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -47,9 +51,9 @@
       
     
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -74,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#vap-hardening-drift-detector-removed" class="md-skip">
+        <a href="#operator-authorization" class="md-skip">
           Skip to content
         </a>
       
@@ -94,9 +98,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="OpenBao Operator" class="md-header__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
+    <a href="../../.." title="OpenBao Operator" class="md-header__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -113,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              VAP Hardening (Drift Detector Removed)
+              Authorization
             
           </span>
         </div>
@@ -229,9 +233,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="OpenBao Operator" class="md-nav__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
+    <a href="../../.." title="OpenBao Operator" class="md-nav__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     OpenBao Operator
@@ -258,7 +262,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -282,8 +286,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -294,13 +300,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -321,7 +325,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -339,7 +343,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/" class="md-nav__link">
+      <a href="../../" class="md-nav__link">
         
   
   
@@ -364,6 +368,8 @@
                 
   
   
+    
+  
   
   
     
@@ -373,13 +379,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2_2" id="__nav_2_2_label" tabindex="0">
@@ -400,7 +404,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -418,7 +422,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/operator/installation/" class="md-nav__link">
+      <a href="../installation/" class="md-nav__link">
         
   
   
@@ -446,7 +450,182 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/operator/single-tenant-mode/" class="md-nav__link">
+      <a href="../authn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authorization
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authorization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#default-policies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Policies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Default Policies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#openbao-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        openbao-operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        backup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        restore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        upgrade
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rbac-binding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RBAC Binding
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../single-tenant-mode/" class="md-nav__link">
         
   
   
@@ -533,7 +712,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaotenant/overview/" class="md-nav__link">
+      <a href="../../openbaotenant/overview/" class="md-nav__link">
         
   
   
@@ -561,7 +740,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaotenant/onboarding/" class="md-nav__link">
+      <a href="../../openbaotenant/onboarding/" class="md-nav__link">
         
   
   
@@ -589,7 +768,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaotenant/multi-tenancy/" class="md-nav__link">
+      <a href="../../openbaotenant/multi-tenancy/" class="md-nav__link">
         
   
   
@@ -676,7 +855,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/overview/" class="md-nav__link">
+      <a href="../../openbaocluster/overview/" class="md-nav__link">
         
   
   
@@ -704,7 +883,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/getting-started/" class="md-nav__link">
+      <a href="../../openbaocluster/getting-started/" class="md-nav__link">
         
   
   
@@ -732,7 +911,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/next-steps/" class="md-nav__link">
+      <a href="../../openbaocluster/next-steps/" class="md-nav__link">
         
   
   
@@ -811,7 +990,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recipes/hardened-transit-external-tls/" class="md-nav__link">
+      <a href="../../openbaocluster/recipes/hardened-transit-external-tls/" class="md-nav__link">
         
   
   
@@ -839,7 +1018,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recipes/hardened-transit-acme-tls/" class="md-nav__link">
+      <a href="../../openbaocluster/recipes/hardened-transit-acme-tls/" class="md-nav__link">
         
   
   
@@ -926,7 +1105,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/security-profiles/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/security-profiles/" class="md-nav__link">
         
   
   
@@ -954,7 +1133,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/self-init/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/self-init/" class="md-nav__link">
         
   
   
@@ -982,7 +1161,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/server/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/server/" class="md-nav__link">
         
   
   
@@ -1010,7 +1189,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/external-access/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/external-access/" class="md-nav__link">
         
   
   
@@ -1038,7 +1217,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/network/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/network/" class="md-nav__link">
         
   
   
@@ -1066,7 +1245,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/resources-storage/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/resources-storage/" class="md-nav__link">
         
   
   
@@ -1094,7 +1273,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/gateway-api/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/gateway-api/" class="md-nav__link">
         
   
   
@@ -1122,7 +1301,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/configuration/observability/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/observability/" class="md-nav__link">
         
   
   
@@ -1209,7 +1388,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/upgrades/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/upgrades/" class="md-nav__link">
         
   
   
@@ -1237,7 +1416,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/backups/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/backups/" class="md-nav__link">
         
   
   
@@ -1265,7 +1444,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/maintenance/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/maintenance/" class="md-nav__link">
         
   
   
@@ -1293,7 +1472,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/pausing/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/pausing/" class="md-nav__link">
         
   
   
@@ -1321,7 +1500,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/deletion/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/deletion/" class="md-nav__link">
         
   
   
@@ -1349,7 +1528,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/troubleshooting/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -1377,7 +1556,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/operations/production-checklist/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/production-checklist/" class="md-nav__link">
         
   
   
@@ -1413,7 +1592,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/security-considerations/" class="md-nav__link">
+      <a href="../../openbaocluster/security-considerations/" class="md-nav__link">
         
   
   
@@ -1492,7 +1671,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recovery/safe-mode/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/safe-mode/" class="md-nav__link">
         
   
   
@@ -1520,7 +1699,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recovery/no-leader/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/no-leader/" class="md-nav__link">
         
   
   
@@ -1548,7 +1727,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recovery/sealed-cluster/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/sealed-cluster/" class="md-nav__link">
         
   
   
@@ -1576,7 +1755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaocluster/recovery/failed-rollback/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/failed-rollback/" class="md-nav__link">
         
   
   
@@ -1671,7 +1850,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaorestore/overview/" class="md-nav__link">
+      <a href="../../openbaorestore/overview/" class="md-nav__link">
         
   
   
@@ -1699,7 +1878,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaorestore/restore/" class="md-nav__link">
+      <a href="../../openbaorestore/restore/" class="md-nav__link">
         
   
   
@@ -1727,7 +1906,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/openbaorestore/recovery-restore-after-upgrade/" class="md-nav__link">
+      <a href="../../openbaorestore/recovery-restore-after-upgrade/" class="md-nav__link">
         
   
   
@@ -1824,7 +2003,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../../architecture/" class="md-nav__link">
         
   
   
@@ -1852,7 +2031,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../components/" class="md-nav__link">
+      <a href="../../../architecture/components/" class="md-nav__link">
         
   
   
@@ -1931,7 +2110,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cert-manager/" class="md-nav__link">
+      <a href="../../../architecture/cert-manager/" class="md-nav__link">
         
   
   
@@ -1959,7 +2138,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../infra-manager/" class="md-nav__link">
+      <a href="../../../architecture/infra-manager/" class="md-nav__link">
         
   
   
@@ -1987,7 +2166,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../init-manager/" class="md-nav__link">
+      <a href="../../../architecture/init-manager/" class="md-nav__link">
         
   
   
@@ -2015,7 +2194,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../upgrade-manager/" class="md-nav__link">
+      <a href="../../../architecture/upgrade-manager/" class="md-nav__link">
         
   
   
@@ -2043,7 +2222,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backup-manager/" class="md-nav__link">
+      <a href="../../../architecture/backup-manager/" class="md-nav__link">
         
   
   
@@ -2071,7 +2250,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../restore-manager/" class="md-nav__link">
+      <a href="../../../architecture/restore-manager/" class="md-nav__link">
         
   
   
@@ -2158,7 +2337,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../lifecycle/" class="md-nav__link">
+      <a href="../../../architecture/lifecycle/" class="md-nav__link">
         
   
   
@@ -2186,7 +2365,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../lifecycle/day0-provisioning/" class="md-nav__link">
+      <a href="../../../architecture/lifecycle/day0-provisioning/" class="md-nav__link">
         
   
   
@@ -2214,7 +2393,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../lifecycle/day1-creation/" class="md-nav__link">
+      <a href="../../../architecture/lifecycle/day1-creation/" class="md-nav__link">
         
   
   
@@ -2242,7 +2421,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../lifecycle/day2-operations/" class="md-nav__link">
+      <a href="../../../architecture/lifecycle/day2-operations/" class="md-nav__link">
         
   
   
@@ -2270,7 +2449,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../lifecycle/dayN-backups/" class="md-nav__link">
+      <a href="../../../architecture/lifecycle/dayN-backups/" class="md-nav__link">
         
   
   
@@ -2367,7 +2546,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/" class="md-nav__link">
+      <a href="../../../security/" class="md-nav__link">
         
   
   
@@ -2446,7 +2625,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/fundamentals/" class="md-nav__link">
+      <a href="../../../security/fundamentals/" class="md-nav__link">
         
   
   
@@ -2474,7 +2653,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/fundamentals/threat-model/" class="md-nav__link">
+      <a href="../../../security/fundamentals/threat-model/" class="md-nav__link">
         
   
   
@@ -2502,7 +2681,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/fundamentals/profiles/" class="md-nav__link">
+      <a href="../../../security/fundamentals/profiles/" class="md-nav__link">
         
   
   
@@ -2530,7 +2709,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/fundamentals/secrets-management/" class="md-nav__link">
+      <a href="../../../security/fundamentals/secrets-management/" class="md-nav__link">
         
   
   
@@ -2617,7 +2796,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/infrastructure/" class="md-nav__link">
+      <a href="../../../security/infrastructure/" class="md-nav__link">
         
   
   
@@ -2645,7 +2824,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/infrastructure/rbac/" class="md-nav__link">
+      <a href="../../../security/infrastructure/rbac/" class="md-nav__link">
         
   
   
@@ -2673,7 +2852,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/infrastructure/admission-policies/" class="md-nav__link">
+      <a href="../../../security/infrastructure/admission-policies/" class="md-nav__link">
         
   
   
@@ -2701,7 +2880,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/infrastructure/network-security/" class="md-nav__link">
+      <a href="../../../security/infrastructure/network-security/" class="md-nav__link">
         
   
   
@@ -2788,7 +2967,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/workload/" class="md-nav__link">
+      <a href="../../../security/workload/" class="md-nav__link">
         
   
   
@@ -2816,7 +2995,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/workload/workload-security/" class="md-nav__link">
+      <a href="../../../security/workload/workload-security/" class="md-nav__link">
         
   
   
@@ -2844,7 +3023,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/workload/tls/" class="md-nav__link">
+      <a href="../../../security/workload/tls/" class="md-nav__link">
         
   
   
@@ -2872,7 +3051,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/workload/supply-chain/" class="md-nav__link">
+      <a href="../../../security/workload/supply-chain/" class="md-nav__link">
         
   
   
@@ -2959,7 +3138,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/multi-tenancy/" class="md-nav__link">
+      <a href="../../../security/multi-tenancy/" class="md-nav__link">
         
   
   
@@ -2987,7 +3166,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/multi-tenancy/tenant-isolation/" class="md-nav__link">
+      <a href="../../../security/multi-tenancy/tenant-isolation/" class="md-nav__link">
         
   
   
@@ -3084,7 +3263,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/" class="md-nav__link">
+      <a href="../../../contributing/" class="md-nav__link">
         
   
   
@@ -3163,7 +3342,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/getting-started/" class="md-nav__link">
+      <a href="../../../contributing/getting-started/" class="md-nav__link">
         
   
   
@@ -3191,7 +3370,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/getting-started/development/" class="md-nav__link">
+      <a href="../../../contributing/getting-started/development/" class="md-nav__link">
         
   
   
@@ -3278,7 +3457,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/standards/" class="md-nav__link">
+      <a href="../../../contributing/standards/" class="md-nav__link">
         
   
   
@@ -3306,7 +3485,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/standards/go-style/" class="md-nav__link">
+      <a href="../../../contributing/standards/go-style/" class="md-nav__link">
         
   
   
@@ -3334,7 +3513,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/standards/error-handling/" class="md-nav__link">
+      <a href="../../../contributing/standards/error-handling/" class="md-nav__link">
         
   
   
@@ -3362,7 +3541,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/standards/generated-artifacts/" class="md-nav__link">
+      <a href="../../../contributing/standards/generated-artifacts/" class="md-nav__link">
         
   
   
@@ -3390,7 +3569,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/standards/kubernetes-patterns/" class="md-nav__link">
+      <a href="../../../contributing/standards/kubernetes-patterns/" class="md-nav__link">
         
   
   
@@ -3418,7 +3597,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/standards/security-practices/" class="md-nav__link">
+      <a href="../../../contributing/standards/security-practices/" class="md-nav__link">
         
   
   
@@ -3446,7 +3625,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/standards/conventional-commits/" class="md-nav__link">
+      <a href="../../../contributing/standards/conventional-commits/" class="md-nav__link">
         
   
   
@@ -3474,7 +3653,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/standards/project-conventions/" class="md-nav__link">
+      <a href="../../../contributing/standards/project-conventions/" class="md-nav__link">
         
   
   
@@ -3561,7 +3740,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/testing/" class="md-nav__link">
+      <a href="../../../contributing/testing/" class="md-nav__link">
         
   
   
@@ -3597,7 +3776,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/ci/" class="md-nav__link">
+      <a href="../../../contributing/ci/" class="md-nav__link">
         
   
   
@@ -3625,7 +3804,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/release-management/" class="md-nav__link">
+      <a href="../../../contributing/release-management/" class="md-nav__link">
         
   
   
@@ -3653,7 +3832,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/sdlc/" class="md-nav__link">
+      <a href="../../../contributing/sdlc/" class="md-nav__link">
         
   
   
@@ -3681,7 +3860,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/docs-style-guide/" class="md-nav__link">
+      <a href="../../../contributing/docs-style-guide/" class="md-nav__link">
         
   
   
@@ -3770,7 +3949,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/compatibility/" class="md-nav__link">
+      <a href="../../../reference/compatibility/" class="md-nav__link">
         
   
   
@@ -3825,66 +4004,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#goals" class="md-nav__link">
+  <a href="#default-policies" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Goals
+        Default Policies
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#non-goals" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Non-Goals
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#current-state-summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Current State (Summary)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#compatibility-targets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Compatibility Targets
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#design-narrow-resource-specific-exceptions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Design: Narrow, Resource-Specific Exceptions
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Design: Narrow, Resource-Specific Exceptions">
+    <nav class="md-nav" aria-label="Default Policies">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#guiding-principle" class="md-nav__link">
+  <a href="#openbao-operator" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Guiding Principle
+        openbao-operator
       
     </span>
   </a>
@@ -3892,10 +4027,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#policy-changes-primary" class="md-nav__link">
+  <a href="#backup" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Policy Changes (Primary)
+        backup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        restore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        upgrade
       
     </span>
   </a>
@@ -3908,43 +4065,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#changes-implemented" class="md-nav__link">
+  <a href="#rbac-binding" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Changes Implemented
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rollout-strategy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rollout Strategy
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#acceptance-criteria" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Acceptance Criteria
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#local-verification-pr-equivalent" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Local Verification (PR-Equivalent)
+        RBAC Binding
       
     </span>
   </a>
@@ -3971,115 +4095,223 @@
   
 
 
-<h1 id="vap-hardening-drift-detector-removed">VAP Hardening (Drift Detector Removed)<a class="headerlink" href="#vap-hardening-drift-detector-removed" title="Permanent link">&para;</a></h1>
-<p>This document captures the rationale and the shipped changes to rely on Validating Admission Policies
-(VAPs) for drift prevention and remove the drift detector component.</p>
-<h2 id="goals">Goals<a class="headerlink" href="#goals" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Block meaningful drift of OpenBao Operator-managed resources at admission time (GitOps-safe).</li>
-<li>Preserve compatibility with common cluster add-ons (cloud load balancers, kube controllers, GC).</li>
-<li>Reduce maintenance burden by removing the drift detector component.</li>
-<li>Keep the operator usable in both single-tenant and multi-tenant modes.</li>
-</ul>
-<h2 id="non-goals">Non-Goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Guarantee drift correction latency of seconds (the drift detector's main value-add).</li>
-<li>Support every third-party controller mutating operator-managed objects; only Kubernetes-required
-  flows and widely deployed infrastructure controllers are in scope.</li>
-<li>Execute CEL expressions in unit tests (we rely on integration/e2e for behavioral validation).</li>
-</ul>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>The drift detector only triggers on <strong>successful</strong> mutations that reach etcd. When drift is blocked at admission
-time, it provides little practical value beyond faster reconciliation.</p>
+<h1 id="operator-authorization">Operator Authorization<a class="headerlink" href="#operator-authorization" title="Permanent link">&para;</a></h1>
+<p>The OpenBao Operator uses the <strong>Principle of Least Privilege</strong> when interacting with managed clusters. It creates distinct <strong>Policies</strong> and <strong>JWT Roles</strong> for different lifecycle capabilities, ensuring that identities (like the backup job or the operator controller itself) only have the permissions necessary to perform their specific tasks.</p>
+<h2 id="default-policies">Default Policies<a class="headerlink" href="#default-policies" title="Permanent link">&para;</a></h2>
+<p>When using <strong>Self-Initialization</strong> (<code>spec.selfInit.enabled: true</code>), the Operator automatically creates the following policies and roles.</p>
+<h3 id="openbao-operator"><code>openbao-operator</code><a class="headerlink" href="#openbao-operator" title="Permanent link">&para;</a></h3>
+<p>This policy is bound to the Operator Controller. It grants permission to perform cluster maintenance tasks.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Permissions</label><label for="__tabbed_1_2">Policy Definition</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Capability</th>
+<th style="text-align: left;">Path</th>
+<th style="text-align: left;">Permissions</th>
+<th style="text-align: left;">Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Health</strong></td>
+<td style="text-align: left;"><code>sys/health</code></td>
+<td style="text-align: left;"><code>read</code></td>
+<td style="text-align: left;">Check cluster seal status and leadership.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Step-Down</strong></td>
+<td style="text-align: left;"><code>sys/step-down</code></td>
+<td style="text-align: left;"><code>sudo</code>, <code>update</code></td>
+<td style="text-align: left;">Gracefully step down RS/Leader during upgrades or scale-down.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Autopilot</strong></td>
+<td style="text-align: left;"><code>sys/storage/raft/autopilot/configuration</code></td>
+<td style="text-align: left;"><code>read</code>, <code>update</code></td>
+<td style="text-align: left;">Configure Raft Autopilot rules (dead server cleanup, etc).</td>
+</tr>
+</tbody>
+</table>
 </div>
-<h2 id="current-state-summary">Current State (Summary)<a class="headerlink" href="#current-state-summary" title="Permanent link">&para;</a></h2>
-<ul>
-<li>The primary drift-blocking policy is <code>config/policy/lock-managed-resource-mutations.yaml</code>.</li>
-<li>This policy must be strict enough to deny meaningful drift while allowing required Kubernetes
-  controller behavior (e.g., Service finalizers/annotations for LoadBalancers).</li>
-</ul>
-<h2 id="compatibility-targets">Compatibility Targets<a class="headerlink" href="#compatibility-targets" title="Permanent link">&para;</a></h2>
-<p>The policy changes must keep these scenarios working:</p>
-<ol>
-<li><strong>Namespace deletion and garbage collection</strong></li>
-<li>Kubernetes controllers must be able to delete objects and remove finalizers.</li>
-<li><strong>Service and Ingress/Gateway status management</strong></li>
-<li>Infrastructure controllers must be able to update <code>*/status</code>.</li>
-<li><strong>LoadBalancer Service lifecycle</strong></li>
-<li>Cloud provider controllers may add/remove finalizers and set certain annotations.</li>
-<li><strong>Pod lifecycle and kubelet deletes</strong></li>
-<li>Kubelet and controllers must be able to create/delete/update Pods as required.</li>
-<li><strong>OpenBao self-observation via Pod labels</strong></li>
-<li>Pods update a small set of “service registration” labels used for status aggregation.</li>
-</ol>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>The most common compatibility pitfall is <code>Service</code> finalizers and controller-added annotations for
-<code>ServiceType=LoadBalancer</code>. These are not <code>/status</code> writes and will be blocked if not explicitly allowed.</p>
-</div>
-<h2 id="design-narrow-resource-specific-exceptions">Design: Narrow, Resource-Specific Exceptions<a class="headerlink" href="#design-narrow-resource-specific-exceptions" title="Permanent link">&para;</a></h2>
-<h3 id="guiding-principle">Guiding Principle<a class="headerlink" href="#guiding-principle" title="Permanent link">&para;</a></h3>
-<p>Replace broad identity-based bypasses with <strong>resource- and field-scoped</strong> allowances.</p>
-<p>At a high level, <code>lock-managed-resource-mutations</code> should enforce:</p>
-<ul>
-<li>Default: deny all <code>CREATE</code>/<code>UPDATE</code>/<code>DELETE</code> to operator-managed objects.</li>
-<li>Allow the OpenBao Operator controller identity to manage its objects.</li>
-<li>Allow Kubernetes system controllers only for operations they must perform (status, deletes, finalizers).</li>
-<li>Avoid allowing any non-operator actor to change <code>spec</code> (for resources where <code>spec</code> is meaningful).</li>
-</ul>
-<h3 id="policy-changes-primary">Policy Changes (Primary)<a class="headerlink" href="#policy-changes-primary" title="Permanent link">&para;</a></h3>
-<p>Target: <code>config/policy/lock-managed-resource-mutations.yaml</code>.</p>
-<ol>
-<li><strong>Remove blanket bypasses</strong></li>
-<li>Remove unconditional <code>variables.is_kube_system_controller</code> allow in the main validation.</li>
-<li>
-<p>Replace unconditional <code>variables.is_cert_manager</code> allow with a Secrets-only allowance.</p>
-</li>
-<li>
-<p><strong>Allow narrowly-scoped Service metadata updates</strong></p>
-</li>
-<li>
-<p>Permit kube-system identities to update <code>Service</code> metadata while enforcing:</p>
-<ul>
-<li><code>spec</code> is unchanged</li>
-<li>labels and ownerRefs are unchanged</li>
-<li><code>openbao.org/*</code> annotations are immutable (to avoid escaping operator intent)</li>
-</ul>
-</li>
-<li>
-<p><strong>Keep existing safe allowances</strong></p>
-</li>
-<li>Keep endpoint-related allowances (<code>is_endpoints_controller_request</code>) for system controllers.</li>
-<li>Keep Pod deletion allowance for kubelet nodes.</li>
-<li>Keep the pod “service registration label update” allowance for cluster pods, but validate it remains
-     strictly label-scoped.</li>
-</ol>
-<h2 id="changes-implemented">Changes Implemented<a class="headerlink" href="#changes-implemented" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Removed drift detector feature (code, CRD fields, manifests, and tests).</li>
-<li>Tightened <code>lock-managed-resource-mutations</code> to remove broad identity bypasses while allowing required
-  kube-system Service metadata updates and Secrets-only cert-manager writes.</li>
-</ul>
-<h2 id="rollout-strategy">Rollout Strategy<a class="headerlink" href="#rollout-strategy" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Prefer running integration/e2e in representative environments (cloud LB, bare metal, and local Kind)
-  to validate Service controller behavior.</li>
-</ul>
-<h2 id="acceptance-criteria">Acceptance Criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Drift attempts against operator-managed <code>StatefulSet</code>/<code>ConfigMap</code>/<code>Service</code> are denied at admission time.</li>
-<li>LoadBalancer and service discovery still function in common environments.</li>
-<li>No drift detector is required to maintain correctness.</li>
-</ul>
-<h2 id="local-verification-pr-equivalent">Local Verification (PR-Equivalent)<a class="headerlink" href="#local-verification-pr-equivalent" title="Permanent link">&para;</a></h2>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>lint-config<span class="w"> </span>lint
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>verify-fmt
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>make<span class="w"> </span>verify-tidy
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>make<span class="w"> </span>verify-generated
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>make<span class="w"> </span>verify-helm
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>make<span class="w"> </span>test-ci
+<div class="tabbed-block">
+<div class="language-hcl highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/health&quot; { capabilities = [&quot;read&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/step-down&quot; { capabilities = [&quot;sudo&quot;, &quot;update&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/autopilot/configuration&quot; { capabilities = [&quot;read&quot;, &quot;update&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="backup"><code>backup</code><a class="headerlink" href="#backup" title="Permanent link">&para;</a></h3>
+<p>This policy is created if <code>spec.backup</code> is configured with <code>jwtAuthRole</code>. It is bound to the Backup Job ServiceAccount.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Permissions</label><label for="__tabbed_2_2">Policy Definition</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Capability</th>
+<th style="text-align: left;">Path</th>
+<th style="text-align: left;">Permissions</th>
+<th style="text-align: left;">Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Snapshot</strong></td>
+<td style="text-align: left;"><code>sys/storage/raft/snapshot</code></td>
+<td style="text-align: left;"><code>read</code></td>
+<td style="text-align: left;">Stream Raft snapshots to external storage (S3/GCS/Azure).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="tabbed-block">
+<div class="language-hcl highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/snapshot&quot; { capabilities = [&quot;read&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="restore"><code>restore</code><a class="headerlink" href="#restore" title="Permanent link">&para;</a></h3>
+<p>This policy is created if <code>spec.restore</code> is configured with <code>jwtAuthRole</code>. It is bound to the Restore Job ServiceAccount.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Permissions</label><label for="__tabbed_3_2">Policy Definition</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Capability</th>
+<th style="text-align: left;">Path</th>
+<th style="text-align: left;">Permissions</th>
+<th style="text-align: left;">Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Force Restore</strong></td>
+<td style="text-align: left;"><code>sys/storage/raft/snapshot-force</code></td>
+<td style="text-align: left;"><code>update</code></td>
+<td style="text-align: left;">Overwrite the entire cluster state from a snapshot.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition danger">
+<p class="admonition-title">Security Risk</p>
+<p>This capability is extremely powerful and destructive. It replaces all data, keys, and policies in the cluster. Ensure the <code>restore</code> role is strictly bound to the restore job's identity.</p>
+</div>
+</div>
+<div class="tabbed-block">
+<div class="language-hcl highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/snapshot-force&quot; { capabilities = [&quot;update&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<h3 id="upgrade"><code>upgrade</code><a class="headerlink" href="#upgrade" title="Permanent link">&para;</a></h3>
+<p>This policy is created if <code>spec.upgrade</code> is configured with <code>jwtAuthRole</code>. It is bound to the Upgrade Job ServiceAccount (used for rolling or blue/green upgrades depending on strategy).</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:3"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><input id="__tabbed_4_3" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Permissions (Rolling)</label><label for="__tabbed_4_2">Permissions (Blue/Green)</label><label for="__tabbed_4_3">Policy Definition</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Used for standard semantic version updates.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Capability</th>
+<th style="text-align: left;">Path</th>
+<th style="text-align: left;">Permissions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Step-Down</strong></td>
+<td style="text-align: left;"><code>sys/step-down</code></td>
+<td style="text-align: left;"><code>sudo</code>, <code>update</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Autopilot</strong></td>
+<td style="text-align: left;"><code>sys/storage/raft/autopilot/state</code></td>
+<td style="text-align: left;"><code>read</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="tabbed-block">
+<p>Used for complex upgrades involving unseal key rotation or storage migration.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Capability</th>
+<th style="text-align: left;">Path</th>
+<th style="text-align: left;">Permissions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Join</strong></td>
+<td style="text-align: left;"><code>sys/storage/raft/join</code></td>
+<td style="text-align: left;"><code>update</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Configuration</strong></td>
+<td style="text-align: left;"><code>sys/storage/raft/configuration</code></td>
+<td style="text-align: left;"><code>read</code>, <code>update</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Peers</strong></td>
+<td style="text-align: left;">Remove/Promote/Demote Peers</td>
+<td style="text-align: left;"><code>update</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="tabbed-block">
+<p><strong>Rolling Strategy:</strong></p>
+<div class="language-hcl highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/health&quot; { capabilities = [&quot;read&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/step-down&quot; { capabilities = [&quot;sudo&quot;, &quot;update&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/snapshot&quot; { capabilities = [&quot;read&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/autopilot/state&quot; { capabilities = [&quot;read&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p><strong>Blue/Green Strategy:</strong></p>
+<div class="language-hcl highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/health&quot; { capabilities = [&quot;read&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/step-down&quot; { capabilities = [&quot;sudo&quot;, &quot;update&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/snapshot&quot; { capabilities = [&quot;read&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/autopilot/state&quot; { capabilities = [&quot;read&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/join&quot; { capabilities = [&quot;update&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/configuration&quot; { capabilities = [&quot;read&quot;, &quot;update&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/remove-peer&quot; { capabilities = [&quot;update&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/promote&quot; { capabilities = [&quot;update&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="err">path</span><span class="w"> </span><span class="s2">&quot;sys/storage/raft/demote&quot; { capabilities = [&quot;update&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<h2 id="rbac-binding">RBAC Binding<a class="headerlink" href="#rbac-binding" title="Permanent link">&para;</a></h2>
+<p>The Operator uses Kubernetes JWT Auth to bind these policies to Kubernetes ServiceAccounts.</p>
+<pre class="mermaid"><code>graph LR
+    subgraph K8s [Kubernetes]
+        SA_Op[SA: openbao-operator]
+        SA_Backup[SA: backup-job]
+    end
+
+    subgraph Bao [OpenBao]
+        Role_Op[Role: openbao-operator]
+        Role_Backup[Role: backup]
+
+        Pol_Op[Policy: openbao-operator]
+        Pol_Backup[Policy: backup]
+    end
+
+    SA_Op --&gt;|JWT| Role_Op
+    Role_Op --&gt;|token_policies| Pol_Op
+
+    SA_Backup --&gt;|JWT| Role_Backup
+    Role_Backup --&gt;|token_policies| Pol_Backup
+
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+
+    class SA_Op,SA_Backup read;
+    class Role_Op,Role_Backup,Pol_Op,Pol_Backup write;</code></pre>
 
 
 
@@ -4137,10 +4369,10 @@ time, it provides little practical value beyond faster reconciliation.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.expand", "navigation.sections", "content.code.copy", "content.code.annotation", "content.tabs.link", "navigation.top"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.instant", "navigation.tracking", "navigation.expand", "navigation.sections", "content.code.copy", "content.code.annotation", "content.tabs.link", "navigation.top"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>
