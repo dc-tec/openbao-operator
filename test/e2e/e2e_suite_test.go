@@ -384,7 +384,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	ExpectWithOffset(1, os.Setenv("KIND_CLUSTER", clusterName)).To(Succeed())
 	ExpectWithOffset(1, os.Setenv("KUBECONFIG", kubeconfigPath)).To(Succeed())
-	
+
 	proc := GinkgoParallelProcess()
 	_, _ = fmt.Fprintf(GinkgoWriter, "E2E parallel process=%d shared_cluster=%s kubeconfig=%s\n", proc, clusterName, kubeconfigPath)
 })
@@ -639,5 +639,3 @@ func removeFinalizersFromOpenBaoCustomResources(ctx context.Context, c client.Cl
 
 	return nil
 }
-
-

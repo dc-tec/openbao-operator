@@ -16,6 +16,63 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+// executePod creates a pod to execute a command with standard environment variables.
+func executePod(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	namespace string,
+	clientImage string,
+	env []corev1.EnvVar,
+	cmd string,
+) (string, error) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "exec-" + randString(5),
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: ptr.To(true),
+				RunAsUser:    ptr.To(int64(100)),
+				RunAsGroup:   ptr.To(int64(1000)),
+				FSGroup:      ptr.To(int64(1000)),
+				SeccompProfile: &corev1.SeccompProfile{
+					Type: corev1.SeccompProfileTypeRuntimeDefault,
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:    "bao",
+					Image:   clientImage,
+					Env:     env,
+					Command: []string{"/bin/sh", "-ec"},
+					Args:    []string{cmd},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: ptr.To(false),
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+						RunAsNonRoot: ptr.To(true),
+					},
+				},
+			},
+		},
+	}
+
+	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 1*time.Minute)
+	if err != nil {
+		return "", err
+	}
+	_ = DeletePodBestEffort(ctx, c, namespace, pod.Name)
+
+	if result.Phase != corev1.PodSucceeded {
+		return "", fmt.Errorf("pod failed, logs:\n%s", result.Logs)
+	}
+	return result.Logs, nil
+}
+
 // WriteSecret writes a KV secret to the specified path in OpenBao using a temporary pod.
 func WriteSecret(
 	ctx context.Context,
@@ -38,70 +95,21 @@ func WriteSecret(
 		return fmt.Errorf("secret path is required")
 	}
 
-	// efficient check if kv is enabled is hard without auth, assuming enabled or handled by test setup
-	// We'll try to write directly. If mount doesn't exist, we might need to enable it first.
-	// For simplicity, assume "secret/" mount exists or similar (kv-v2 typical).
-	// Actually, dev mode usually has "secret/".
-	// Test setup should ensure the mount exists if it's not default.
-
 	kvPairs := make([]string, 0, len(data))
 	for k, v := range data {
 		kvPairs = append(kvPairs, fmt.Sprintf("%s=%s", k, v))
 	}
 	dataStr := strings.Join(kvPairs, " ")
 
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "write-secret-" + randString(5),
-			Namespace: namespace,
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: ptr.To(true),
-				RunAsUser:    ptr.To(int64(100)),
-				RunAsGroup:   ptr.To(int64(1000)),
-				FSGroup:      ptr.To(int64(1000)),
-				SeccompProfile: &corev1.SeccompProfile{
-					Type: corev1.SeccompProfileTypeRuntimeDefault,
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "bao",
-					Image: clientImage,
-					Env: []corev1.EnvVar{
-						{Name: "BAO_ADDR", Value: baoAddr},
-						{Name: "BAO_TOKEN", Value: token},
-						{Name: "BAO_SKIP_VERIFY", Value: "true"},
-					},
-					Command: []string{"/bin/sh", "-ec"},
-					Args: []string{
-						fmt.Sprintf("bao kv put %s %s", path, dataStr),
-					},
-					SecurityContext: &corev1.SecurityContext{
-						AllowPrivilegeEscalation: ptr.To(false),
-						Capabilities: &corev1.Capabilities{
-							Drop: []corev1.Capability{"ALL"},
-						},
-						RunAsNonRoot: ptr.To(true),
-					},
-				},
-			},
-		},
+	env := []corev1.EnvVar{
+		{Name: "BAO_ADDR", Value: baoAddr},
+		{Name: "BAO_TOKEN", Value: token},
+		{Name: "BAO_SKIP_VERIFY", Value: "true"},
 	}
+	cmd := fmt.Sprintf("bao kv put %s %s", path, dataStr)
 
-	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 1*time.Minute)
-	if err != nil {
-		return err
-	}
-	_ = DeletePodBestEffort(ctx, c, namespace, pod.Name)
-
-	if result.Phase != corev1.PodSucceeded {
-		return fmt.Errorf("failed to write secret, logs:\n%s", result.Logs)
-	}
-
-	return nil
+	_, err := executePod(ctx, restCfg, c, namespace, clientImage, env, cmd)
+	return err
 }
 
 // ReadSecret reads a specific key from a KV secret at the specified path in OpenBao.
@@ -126,58 +134,18 @@ func ReadSecret(
 		return "", fmt.Errorf("secret path is required")
 	}
 
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "read-secret-" + randString(5),
-			Namespace: namespace,
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: ptr.To(true),
-				RunAsUser:    ptr.To(int64(100)),
-				RunAsGroup:   ptr.To(int64(1000)),
-				FSGroup:      ptr.To(int64(1000)),
-				SeccompProfile: &corev1.SeccompProfile{
-					Type: corev1.SeccompProfileTypeRuntimeDefault,
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "bao",
-					Image: clientImage,
-					Env: []corev1.EnvVar{
-						{Name: "BAO_ADDR", Value: baoAddr},
-						{Name: "BAO_TOKEN", Value: token},
-						{Name: "BAO_SKIP_VERIFY", Value: "true"},
-					},
-					Command: []string{"/bin/sh", "-ec"},
-					Args: []string{
-						fmt.Sprintf("bao kv get -field=%s %s", key, path),
-					},
-					SecurityContext: &corev1.SecurityContext{
-						AllowPrivilegeEscalation: ptr.To(false),
-						Capabilities: &corev1.Capabilities{
-							Drop: []corev1.Capability{"ALL"},
-						},
-						RunAsNonRoot: ptr.To(true),
-					},
-				},
-			},
-		},
+	env := []corev1.EnvVar{
+		{Name: "BAO_ADDR", Value: baoAddr},
+		{Name: "BAO_TOKEN", Value: token},
+		{Name: "BAO_SKIP_VERIFY", Value: "true"},
 	}
+	cmd := fmt.Sprintf("bao kv get -field=%s %s", key, path)
 
-	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 1*time.Minute)
+	logs, err := executePod(ctx, restCfg, c, namespace, clientImage, env, cmd)
 	if err != nil {
 		return "", err
 	}
-	_ = DeletePodBestEffort(ctx, c, namespace, pod.Name)
-
-	if result.Phase != corev1.PodSucceeded {
-		return "", fmt.Errorf("failed to read secret, logs:\n%s", result.Logs)
-	}
-
-	return strings.TrimSpace(result.Logs), nil
+	return strings.TrimSpace(logs), nil
 }
 
 // WriteSecretViaJWT performs a K8s JWT login and writes a secret.
@@ -213,76 +181,8 @@ export BAO_TOKEN=$TOKEN
 bao kv put %s %s
 `, baoAddr, roleName, path, dataStr)
 
-	expirationSeconds := int64(3600)
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "write-jwt-" + randString(5),
-			Namespace: namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy:      corev1.RestartPolicyNever,
-			ServiceAccountName: serviceAccountName,
-			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: ptr.To(true),
-				RunAsUser:    ptr.To(int64(100)),
-				RunAsGroup:   ptr.To(int64(1000)),
-				FSGroup:      ptr.To(int64(1000)),
-				SeccompProfile: &corev1.SeccompProfile{
-					Type: corev1.SeccompProfileTypeRuntimeDefault,
-				},
-			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "openbao-token",
-					VolumeSource: corev1.VolumeSource{
-						Projected: &corev1.ProjectedVolumeSource{
-							Sources: []corev1.VolumeProjection{
-								{
-									ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-										Audience:          "openbao-internal",
-										ExpirationSeconds: &expirationSeconds,
-										Path:              "token",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:    "bao",
-					Image:   clientImage,
-					Command: []string{"/bin/sh", "-c"},
-					Args:    []string{cmd},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "openbao-token",
-							MountPath: "/var/run/secrets/openbao",
-							ReadOnly:  true,
-						},
-					},
-					SecurityContext: &corev1.SecurityContext{
-						AllowPrivilegeEscalation: ptr.To(false),
-						Capabilities: &corev1.Capabilities{
-							Drop: []corev1.Capability{"ALL"},
-						},
-						RunAsNonRoot: ptr.To(true),
-					},
-				},
-			},
-		},
-	}
-
-	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 1*time.Minute)
-	if err != nil {
-		return err
-	}
-	_ = DeletePodBestEffort(ctx, c, namespace, pod.Name)
-
-	if result.Phase != corev1.PodSucceeded {
-		return fmt.Errorf("failed to write secret via JWT, logs:\n%s", result.Logs)
+	if _, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd); err != nil {
+		return fmt.Errorf("failed to write secret via JWT: %w", err)
 	}
 
 	return nil
@@ -311,87 +211,17 @@ export BAO_TOKEN=$TOKEN
 bao kv get -field=%s %s
 `, baoAddr, roleName, key, path)
 
-	expirationSeconds := int64(3600)
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "read-jwt-" + randString(5),
-			Namespace: namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy:      corev1.RestartPolicyNever,
-			ServiceAccountName: serviceAccountName,
-			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: ptr.To(true),
-				RunAsUser:    ptr.To(int64(100)),
-				RunAsGroup:   ptr.To(int64(1000)),
-				FSGroup:      ptr.To(int64(1000)),
-				SeccompProfile: &corev1.SeccompProfile{
-					Type: corev1.SeccompProfileTypeRuntimeDefault,
-				},
-			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "openbao-token",
-					VolumeSource: corev1.VolumeSource{
-						Projected: &corev1.ProjectedVolumeSource{
-							Sources: []corev1.VolumeProjection{
-								{
-									ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-										Audience:          "openbao-internal",
-										ExpirationSeconds: &expirationSeconds,
-										Path:              "token",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:    "bao",
-					Image:   clientImage,
-					Command: []string{"/bin/sh", "-c"},
-					Args:    []string{cmd},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "openbao-token",
-							MountPath: "/var/run/secrets/openbao",
-							ReadOnly:  true,
-						},
-					},
-					SecurityContext: &corev1.SecurityContext{
-						AllowPrivilegeEscalation: ptr.To(false),
-						Capabilities: &corev1.Capabilities{
-							Drop: []corev1.Capability{"ALL"},
-						},
-						RunAsNonRoot: ptr.To(true),
-					},
-				},
-			},
-		},
-	}
-
-	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 1*time.Minute)
+	logs, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd)
 	if err != nil {
-		return "", err
-	}
-	_ = DeletePodBestEffort(ctx, c, namespace, pod.Name)
-
-	if result.Phase != corev1.PodSucceeded {
-		return "", fmt.Errorf("failed to read secret via JWT, logs:\n%s", result.Logs)
+		return "", fmt.Errorf("failed to read secret via JWT: %w", err)
 	}
 
-	return strings.TrimSpace(result.Logs), nil
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
+	return strings.TrimSpace(logs), nil
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
+//nolint:unparam
 func randString(n int) string {
 	b := make([]rune, n)
 	for i := range b {
@@ -419,7 +249,8 @@ func CreateE2ERequests(namespace string) []openbaov1alpha1.SelfInitRequest {
 			Name:      "create-e2e-policy",
 			Operation: openbaov1alpha1.SelfInitOperationUpdate,
 			Path:      "sys/policies/acl/e2e-test",
-			Policy: &openbaov1alpha1.SelfInitPolicy{Policy: `path "secret/*" { capabilities = ["create", "read", "update", "delete", "list"] }
+			Policy: &openbaov1alpha1.SelfInitPolicy{
+				Policy: `path "secret/*" { capabilities = ["create", "read", "update", "delete", "list"] }
 path "secret/data/*" { capabilities = ["create", "read", "update", "delete", "list"] }
 path "secret/metadata/*" { capabilities = ["read", "list", "delete"] }`},
 		},
@@ -476,52 +307,21 @@ func CreateHardenedProfileRequests(namespace string) []openbaov1alpha1.SelfInitR
 	return CreateAutopilotVerificationRequests(namespace)
 }
 
-// VerifyRaftAutopilotViaJWT performs a K8s JWT login and verifies Raft Autopilot configuration.
-func VerifyRaftAutopilotViaJWT(
+// executeJWTPod creates a pod to execute a command with a projected service account token for JWT auth.
+func executeJWTPod(
 	ctx context.Context,
 	restCfg *rest.Config,
 	c client.Client,
 	namespace string,
 	clientImage string,
-	baoAddr string,
 	serviceAccountName string,
 	labels map[string]string,
-) error {
-	// Command sequence:
-	// 1. Login with JWT using the projected ServiceAccount token
-	// 2. Set BAO_TOKEN
-	// 3. Read autopilot config and verify cleanup_dead_servers is true
-	// retry loop is handled inside the pod script to handle network latency
-	cmd := fmt.Sprintf(`
-set -e
-export BAO_ADDR=%s
-export BAO_SKIP_VERIFY=true
-
-# Retry loop for login and verification
-for i in $(seq 1 10); do
-	echo "Attempt $i/10..."
-	TOKEN=$(bao write -field=token auth/jwt/login role=test-verifier jwt=@/var/run/secrets/openbao/token 2>/dev/null || true)
-	if [ -n "$TOKEN" ]; then
-		export BAO_TOKEN=$TOKEN
-		if bao read sys/storage/raft/autopilot/configuration 2>&1 | grep -q "cleanup_dead_servers.*true"; then
-			echo "AUTOPILOT_CONFIGURED"
-			exit 0
-		fi
-		echo "Autopilot config not yet propagated or incorrect"
-	else
-		echo "Login failed"
-	fi
-	sleep 2
-done
-
-echo "Failed to verify autopilot config after 10 attempts"
-exit 1
-`, baoAddr)
-
+	cmd string,
+) (string, error) {
 	expirationSeconds := int64(3600)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "verify-autopilot-" + randString(5),
+			Name:      "jwt-exec-" + randString(5),
 			Namespace: namespace,
 			Labels:    labels,
 		},
@@ -582,12 +382,61 @@ exit 1
 
 	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 2*time.Minute)
 	if err != nil {
-		return err
+		return "", err
 	}
-	_ = DeletePodBestEffort(ctx, c, namespace, pod.Name)
+	_ = DeletePodBestEffort(ctx, c, namespace, pod.Name) // cleanup immediately
 
 	if result.Phase != corev1.PodSucceeded {
-		return fmt.Errorf("failed to verify autopilot via JWT, logs:\n%s", result.Logs)
+		return "", fmt.Errorf("pod failed, logs:\n%s", result.Logs)
+	}
+	return result.Logs, nil
+}
+
+// VerifyRaftAutopilotViaJWT performs a K8s JWT login and verifies Raft Autopilot configuration.
+func VerifyRaftAutopilotViaJWT(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	namespace string,
+	clientImage string,
+	baoAddr string,
+	serviceAccountName string,
+	labels map[string]string,
+) error {
+	// Command sequence:
+	// 1. Login with JWT using the projected ServiceAccount token
+	// 2. Set BAO_TOKEN
+	// 3. Read autopilot config and verify cleanup_dead_servers is true
+	// retry loop is handled inside the pod script to handle network latency
+	cmd := fmt.Sprintf(`
+set -e
+export BAO_ADDR=%s
+export BAO_SKIP_VERIFY=true
+
+# Retry loop for login and verification
+for i in $(seq 1 10); do
+	echo "Attempt $i/10..."
+	TOKEN=$(bao write -field=token auth/jwt/login \
+		role=test-verifier jwt=@/var/run/secrets/openbao/token 2>/dev/null || true)
+	if [ -n "$TOKEN" ]; then
+		export BAO_TOKEN=$TOKEN
+		if bao read sys/storage/raft/autopilot/configuration 2>&1 | grep -q "cleanup_dead_servers.*true"; then
+			echo "AUTOPILOT_CONFIGURED"
+			exit 0
+		fi
+		echo "Autopilot config not yet propagated or incorrect"
+	else
+		echo "Login failed"
+	fi
+	sleep 2
+done
+
+echo "Failed to verify autopilot config after 10 attempts"
+exit 1
+`, baoAddr)
+
+	if _, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd); err != nil {
+		return fmt.Errorf("failed to verify autopilot via JWT: %w", err)
 	}
 
 	return nil
@@ -639,76 +488,8 @@ echo "Failed to verify min_quorum after 10 attempts"
 exit 1
 `, baoAddr, expectedMinQuorum)
 
-	expirationSeconds := int64(3600)
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "verify-autopilot-minquorum-" + randString(5),
-			Namespace: namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy:      corev1.RestartPolicyNever,
-			ServiceAccountName: serviceAccountName,
-			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: ptr.To(true),
-				RunAsUser:    ptr.To(int64(100)),
-				RunAsGroup:   ptr.To(int64(1000)),
-				FSGroup:      ptr.To(int64(1000)),
-				SeccompProfile: &corev1.SeccompProfile{
-					Type: corev1.SeccompProfileTypeRuntimeDefault,
-				},
-			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "openbao-token",
-					VolumeSource: corev1.VolumeSource{
-						Projected: &corev1.ProjectedVolumeSource{
-							Sources: []corev1.VolumeProjection{
-								{
-									ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-										Audience:          "openbao-internal",
-										ExpirationSeconds: &expirationSeconds,
-										Path:              "token",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:    "bao",
-					Image:   clientImage,
-					Command: []string{"/bin/sh", "-c"},
-					Args:    []string{cmd},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "openbao-token",
-							MountPath: "/var/run/secrets/openbao",
-							ReadOnly:  true,
-						},
-					},
-					SecurityContext: &corev1.SecurityContext{
-						AllowPrivilegeEscalation: ptr.To(false),
-						Capabilities: &corev1.Capabilities{
-							Drop: []corev1.Capability{"ALL"},
-						},
-						RunAsNonRoot: ptr.To(true),
-					},
-				},
-			},
-		},
-	}
-
-	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 2*time.Minute)
-	if err != nil {
-		return err
-	}
-	_ = DeletePodBestEffort(ctx, c, namespace, pod.Name)
-
-	if result.Phase != corev1.PodSucceeded {
-		return fmt.Errorf("failed to verify min_quorum via JWT, logs:\n%s", result.Logs)
+	if _, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd); err != nil {
+		return fmt.Errorf("failed to verify min_quorum via JWT: %w", err)
 	}
 
 	return nil
