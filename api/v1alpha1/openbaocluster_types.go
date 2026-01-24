@@ -1405,6 +1405,17 @@ type RaftAutopilotConfig struct {
 	// before being promoted to voter. Default: "10s".
 	// +optional
 	ServerStabilizationTime string `json:"serverStabilizationTime,omitempty"`
+
+	// LastContactThreshold is the limit on the amount of time a server can
+	// go without leader contact before being considered unhealthy.
+	// Default: "10s".
+	// +optional
+	LastContactThreshold string `json:"lastContactThreshold,omitempty"`
+
+	// MaxTrailingLogs is the amount of entries in the Raft Log that a server
+	// can be behind before being considered unhealthy. Default: 1000.
+	// +optional
+	MaxTrailingLogs *int32 `json:"maxTrailingLogs,omitempty"`
 }
 
 // LoggingConfig allows configuring logging behavior for OpenBao.
@@ -1684,6 +1695,9 @@ type BlueGreenStatus struct {
 	Phase BlueGreenPhase `json:"phase,omitempty"`
 	// BlueRevision is the hash/name of the currently active cluster.
 	BlueRevision string `json:"blueRevision,omitempty"`
+	// BlueImage is the container image used by the Blue cluster.
+	// This ensures the Blue cluster is not actively upgraded when spec.image changes.
+	BlueImage string `json:"blueImage,omitempty"`
 	// GreenRevision is the hash/name of the next cluster (if upgrade in progress).
 	GreenRevision string `json:"greenRevision,omitempty"`
 	// StartTime is when the current phase began.
@@ -1772,31 +1786,40 @@ type OpenBaoClusterStatus struct {
 	// LastBackupTime is the timestamp of the last successful backup, if configured.
 	// Deprecated: Use Backup.LastBackupTime instead.
 	// +optional
+	// +kubebuilder:validation:Nullable
 	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
 	// Upgrade tracks the state of an in-progress upgrade (if any).
 	// When non-nil, an upgrade is in progress and the UpgradeManager is orchestrating
 	// the pod-by-pod rolling update with leader step-down.
 	// +optional
+	// +kubebuilder:validation:Nullable
 	Upgrade *UpgradeProgress `json:"upgrade,omitempty"`
 	// Backup tracks the state of backups for this cluster.
 	// +optional
+	// +kubebuilder:validation:Nullable
 	Backup *BackupStatus `json:"backup,omitempty"`
 	// BlueGreen tracks the state of blue/green upgrades (if enabled).
 	// +optional
+	// +kubebuilder:validation:Nullable
 	BlueGreen *BlueGreenStatus `json:"blueGreen,omitempty"`
 	// OperationLock prevents concurrent long-running operations (upgrade/backup/restore)
 	// from acting on the same cluster at the same time.
 	// +optional
+	// +kubebuilder:validation:Nullable
 	OperationLock *OperationLockStatus `json:"operationLock,omitempty"`
 	// BreakGlass records when the operator has halted quorum-risk automation and requires
 	// explicit operator acknowledgment to continue.
 	// +optional
+	// +kubebuilder:validation:Nullable
 	BreakGlass *BreakGlassStatus `json:"breakGlass,omitempty"`
 	// Workload holds signals owned by the workload controller (infrastructure reconciliation).
 	// +optional
+	// +nullable
+	// +kubebuilder:validation:Nullable
 	Workload *WorkloadControllerStatus `json:"workload,omitempty"`
 	// AdminOps holds signals owned by the adminops controller (upgrade + backup).
 	// +optional
+	// +kubebuilder:validation:Nullable
 	AdminOps *AdminOpsControllerStatus `json:"adminOps,omitempty"`
 	// Conditions represent the current state of the OpenBaoCluster resource.
 	// +listType=map
