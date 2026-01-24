@@ -9,16 +9,24 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"os/exec"
 	"time"
 
+	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/test/utils"
 )
 
 const (
@@ -160,6 +168,101 @@ func New(ctx context.Context, c client.Client, baseName string, operatorNamespac
 	}
 
 	return f, nil
+}
+
+// NewSetup initializes a new Framework with a fresh client and scheme.
+// It acts as a "Batteries Included" setup for E2E tests.
+func NewSetup(ctx context.Context, baseName string, operatorNamespace string) (*Framework, error) {
+	cfg, err := ctrlconfig.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get kube config: %w", err)
+	}
+
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("failed to add client-go scheme: %w", err)
+	}
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("failed to add openbao scheme: %w", err)
+	}
+	if err := gatewayv1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("failed to add gateway scheme: %w", err)
+	}
+
+	c, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client: %w", err)
+	}
+
+	return New(ctx, c, baseName, operatorNamespace)
+}
+
+// RequireGatewayAPI ensures Gateway API CRDs are installed.
+// It returns a cleanup function that should be called in AfterAll.
+func (f *Framework) RequireGatewayAPI() (func(), error) {
+	if err := f.InstallGatewayAPI(); err != nil {
+		return nil, err
+	}
+	return func() {
+		_ = f.UninstallGatewayAPI()
+	}, nil
+}
+
+// InstallGatewayAPI installs the Gateway API CRDs.
+func (f *Framework) InstallGatewayAPI() error {
+	// Re-using the logic from utils, but making it a method of Framework for convenience
+	manifestPath := "test/manifests/gateway-api/v1.4.1/crds"
+	// In a real framework, we might want to check env vars or default paths here
+	// For now, we assume the test/manifests path is correct relative to where tests run
+
+	// Use server-side apply
+	cmd := exec.Command("kubectl", "apply", "--server-side", "--field-manager=openbao-e2e", "-f", manifestPath)
+	if _, err := utils.Run(cmd); err != nil {
+		return fmt.Errorf("failed to install Gateway API CRDs: %w", err)
+	}
+
+	// Wait for established
+	cmd = exec.Command("kubectl", "wait", "--for", "condition=Established",
+		"crd/gateways.gateway.networking.k8s.io",
+		"crd/httproutes.gateway.networking.k8s.io",
+		"--timeout", "5m")
+	if _, err := utils.Run(cmd); err != nil {
+		return fmt.Errorf("failed to wait for Gateway API CRDs: %w", err)
+	}
+	return nil
+}
+
+// UninstallGatewayAPI removes the Gateway API CRDs.
+func (f *Framework) UninstallGatewayAPI() error {
+	manifestPath := "test/manifests/gateway-api/v1.4.1/crds"
+	cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found")
+	if _, err := utils.Run(cmd); err != nil {
+		return fmt.Errorf("failed to uninstall Gateway API CRDs: %w", err)
+	}
+	return nil
+}
+
+// WaitForPhase waits for the cluster to reach the specified phase.
+func (f *Framework) WaitForPhase(clusterName string, phase openbaov1alpha1.ClusterPhase) {
+	Eventually(func(g Gomega) {
+		cluster := &openbaov1alpha1.OpenBaoCluster{}
+		err := f.Client.Get(f.Ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(cluster.Status.Phase).To(Equal(phase))
+	}, DefaultWaitTimeout, DefaultPollInterval).Should(Succeed(), "Cluster failed to reach phase %s", phase)
+}
+
+// WaitForCondition waits for the specified condition to have the expected status.
+func (f *Framework) WaitForCondition(clusterName string, conditionType openbaov1alpha1.ConditionType, status metav1.ConditionStatus) {
+	Eventually(func(g Gomega) {
+		cluster := &openbaov1alpha1.OpenBaoCluster{}
+		err := f.Client.Get(f.Ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(conditionType))
+		g.Expect(cond).NotTo(BeNil())
+		g.Expect(cond.Status).To(Equal(status))
+	}, DefaultWaitTimeout, DefaultPollInterval).Should(Succeed(), "Cluster failed to reach condition %s=%s", conditionType, status)
 }
 
 // Cleanup deletes the tenant namespace and OpenBaoTenant, ignoring NotFound.

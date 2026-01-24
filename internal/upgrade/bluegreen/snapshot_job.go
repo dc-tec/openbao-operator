@@ -6,11 +6,13 @@ import (
 
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 // ensurePreUpgradeSnapshotJob creates or checks the status of the pre-upgrade snapshot Job.
@@ -102,4 +104,30 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 	job.Annotations[AnnotationSnapshotPhase] = phase
 
 	return job, nil
+}
+
+func podSnapshotsFromPods(pods []corev1.Pod) ([]podSnapshot, error) {
+	snapshots := make([]podSnapshot, 0, len(pods))
+	for i := range pods {
+		pod := &pods[i]
+
+		sealed, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelSealed)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse sealed label on pod %s: %w", pod.Name, err)
+		}
+
+		active := false
+		isActive, isActivePresent, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+		if err == nil && isActivePresent && isActive {
+			active = true
+		}
+
+		snapshots = append(snapshots, podSnapshot{
+			Ready:    isPodReady(pod),
+			Unsealed: present && !sealed,
+			Active:   active,
+			Deleting: pod.DeletionTimestamp != nil,
+		})
+	}
+	return snapshots, nil
 }

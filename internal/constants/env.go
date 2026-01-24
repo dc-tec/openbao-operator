@@ -25,6 +25,15 @@ const (
 	EnvUpgradeSyncThreshold = "UPGRADE_SYNC_THRESHOLD"
 	EnvUpgradeTimeout       = "UPGRADE_TIMEOUT"
 
+	// Autopilot executor
+	EnvAutopilotJWTAuthRole             = "AUTOPILOT_JWT_AUTH_ROLE"
+	EnvAutopilotMinQuorum               = "AUTOPILOT_MIN_QUORUM"
+	EnvAutopilotCleanupDeadServers      = "AUTOPILOT_CLEANUP_DEAD_SERVERS"
+	EnvAutopilotDeadServerThreshold     = "AUTOPILOT_DEAD_SERVER_THRESHOLD"
+	EnvAutopilotServerStabilizationTime = "AUTOPILOT_SERVER_STABILIZATION_TIME"
+	EnvAutopilotLastContactThreshold    = "AUTOPILOT_LAST_CONTACT_THRESHOLD"
+	EnvAutopilotMaxTrailingLogs         = "AUTOPILOT_MAX_TRAILING_LOGS"
+
 	// Smart Client Limits
 	EnvClientQPS                            = "OPENBAO_CLIENT_QPS"
 	EnvClientBurst                          = "OPENBAO_CLIENT_BURST"

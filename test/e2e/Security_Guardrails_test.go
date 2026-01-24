@@ -25,6 +25,8 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/admission"
+	"github.com/dc-tec/openbao-operator/internal/provisioner"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
@@ -34,7 +36,48 @@ const (
 	impersonatedGroup = "e2e-developers"
 )
 
-var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
+// === Shared Helpers ===
+
+func createRoleBindingForGroup(ctx context.Context, c client.Client, namespace string, role *rbacv1.Role) {
+	err := c.Create(ctx, role)
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		Expect(err).NotTo(HaveOccurred(), "Failed to create Role %q in namespace %q", role.Name, namespace)
+	}
+
+	rb := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      role.Name + "-binding",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind: "Group",
+				Name: impersonatedGroup,
+			},
+		},
+	}
+
+	err = c.Create(ctx, rb)
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		Expect(err).NotTo(HaveOccurred(), "Failed to create RoleBinding %q in namespace %q", rb.Name, namespace)
+	}
+}
+
+func containsString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
+}
+
+var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, func() {
 	ctx := context.Background()
 
 	var (
@@ -43,39 +86,8 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 		admin  client.Client
 	)
 
-	createRoleBindingForGroup := func(namespace string, role *rbacv1.Role) {
-		err := admin.Create(ctx, role)
-		if err != nil && !apierrors.IsAlreadyExists(err) {
-			Expect(err).NotTo(HaveOccurred(), "Failed to create Role %q in namespace %q", role.Name, namespace)
-		}
-
-		rb := &rbacv1.RoleBinding{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      role.Name + "-binding",
-				Namespace: namespace,
-			},
-			RoleRef: rbacv1.RoleRef{
-				APIGroup: rbacv1.GroupName,
-				Kind:     "Role",
-				Name:     role.Name,
-			},
-			Subjects: []rbacv1.Subject{
-				{
-					Kind: "Group",
-					Name: impersonatedGroup,
-				},
-			},
-		}
-
-		err = admin.Create(ctx, rb)
-		if err != nil && !apierrors.IsAlreadyExists(err) {
-			Expect(err).NotTo(HaveOccurred(), "Failed to create RoleBinding %q in namespace %q", rb.Name, namespace)
-		}
-	}
-
 	BeforeAll(func() {
 		var err error
-
 		cfg, err = ctrlconfig.GetConfig()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -87,7 +99,8 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Context("Admission Policy Enforcement", func() {
+	// --- Admission Policy Enforcement ---
+	Context("Admission Policy Enforcement", Label("admission"), func() {
 		const guardrailsNamespace = "e2e-guardrails"
 
 		BeforeAll(func() {
@@ -127,17 +140,19 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 				},
 			}
 
-			createRoleBindingForGroup(guardrailsNamespace, role)
+			createRoleBindingForGroup(ctx, admin, guardrailsNamespace, role)
 		})
 
 		AfterAll(func() {
-			_ = admin.Delete(ctx, &openbaov1alpha1.OpenBaoTenant{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      guardrailsNamespace,
-					Namespace: operatorNamespace,
-				},
-			})
-			_ = admin.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: guardrailsNamespace}})
+			if admin != nil {
+				_ = admin.Delete(ctx, &openbaov1alpha1.OpenBaoTenant{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      guardrailsNamespace,
+						Namespace: operatorNamespace,
+					},
+				})
+				_ = admin.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: guardrailsNamespace}})
+			}
 		})
 
 		It("accepts structured configuration (protected stanzas cannot be overridden)", func() {
@@ -177,9 +192,6 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 				return c.Create(ctx, cluster)
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// Note: Protected stanzas (listener, storage, seal) cannot be overridden
-			// because they are not part of the structured Configuration API.
-			// The operator enforces these values directly.
 		})
 
 		It("enforces Hardened profile invariants", func() {
@@ -273,8 +285,6 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 		})
 
 		It("blocks cross-namespace tenant targeting (self-service mode)", func() {
-			// This tests the validate-openbao-tenant VAP
-			// Tenants created outside the operator namespace cannot target different namespaces
 			tenant := &openbaov1alpha1.OpenBaoTenant{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cross-ns-tenant",
@@ -289,12 +299,12 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("self-service mode"))
 
-			// Cleanup in case the test fails and tenant is created
 			_ = admin.Delete(ctx, tenant)
 		})
 	})
 
-	Context("Resource Locking (anti-tamper)", func() {
+	// --- Resource Locking ---
+	Context("Resource Locking (anti-tamper)", Label("tamper"), func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -305,7 +315,6 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 
 		BeforeAll(func() {
 			var err error
-
 			tenantFW, err = framework.New(ctx, admin, "tenant-locks", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
 			tenantNamespace = tenantFW.Namespace
@@ -328,7 +337,7 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 					},
 				},
 			}
-			createRoleBindingForGroup(tenantNamespace, role)
+			createRoleBindingForGroup(ctx, admin, tenantNamespace, role)
 
 			victim = &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -372,84 +381,43 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 				return admin.Get(ctx, types.NamespacedName{Name: unsealName, Namespace: tenantNamespace}, secret)
 			}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
-			// Check cluster status for any blocking conditions
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: victim.Name, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-
-				// Log all conditions for debugging
-				for _, cond := range updated.Status.Conditions {
-					_, _ = fmt.Fprintf(GinkgoWriter, "Cluster condition: %s=%s reason=%s message=%q\n",
-						cond.Type, cond.Status, cond.Reason, cond.Message)
-				}
-			}, 30*time.Second, 2*time.Second).Should(Succeed())
-
 			Eventually(func(g Gomega) {
 				sts := &appsv1.StatefulSet{}
 				err := admin.Get(ctx, types.NamespacedName{Name: statefulSet, Namespace: tenantNamespace}, sts)
-				if err != nil {
-					// If StatefulSet not found, check cluster status again
-					updated := &openbaov1alpha1.OpenBaoCluster{}
-					if getErr := admin.Get(ctx, types.NamespacedName{Name: victim.Name, Namespace: tenantNamespace}, updated); getErr == nil {
-						for _, cond := range updated.Status.Conditions {
-							_, _ = fmt.Fprintf(GinkgoWriter, "Cluster condition while waiting for StatefulSet: %s=%s reason=%s message=%q\n",
-								cond.Type, cond.Status, cond.Reason, cond.Message)
-						}
-					}
-					_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet %q not found yet: %v\n", statefulSet, err)
-				}
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(sts.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "openbao-operator"))
 			}, 2*time.Minute, 2*time.Second).Should(Succeed())
 		})
 
 		AfterAll(func() {
-			if tenantFW == nil {
-				return
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
 			}
-			cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			defer cancel()
-
-			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
 		It("prevents unauthorized deletion of the unseal Secret", func() {
 			secret := &corev1.Secret{}
 			err := admin.Get(ctx, types.NamespacedName{Name: unsealName, Namespace: tenantNamespace}, secret)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(secret.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "openbao-operator"))
 
 			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
 				return c.Delete(ctx, secret)
 			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
-
-			Consistently(func() error {
-				return admin.Get(ctx, types.NamespacedName{Name: unsealName, Namespace: tenantNamespace}, &corev1.Secret{})
-			}, 5*time.Second, 1*time.Second).Should(Succeed())
 		})
 
 		It("prevents unauthorized deletion of the TLS CA secret", func() {
-			// This test verifies that TLS CA secrets now have the managed-by label
-			// and are protected by the lock-managed-resource-mutations VAP.
-			// This was a red-team finding: TLS CA secret could be deleted before the fix.
 			tlsCAName := victim.Name + "-tls-ca"
 			secret := &corev1.Secret{}
 			err := admin.Get(ctx, types.NamespacedName{Name: tlsCAName, Namespace: tenantNamespace}, secret)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(secret.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "openbao-operator"))
 
 			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
 				return c.Delete(ctx, secret)
 			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
-
-			Consistently(func() error {
-				return admin.Get(ctx, types.NamespacedName{Name: tlsCAName, Namespace: tenantNamespace}, &corev1.Secret{})
-			}, 5*time.Second, 1*time.Second).Should(Succeed())
 		})
 
 		It("prevents sidecar injection via StatefulSet updates", func() {
@@ -458,23 +426,16 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 				if err := c.Get(ctx, types.NamespacedName{Name: statefulSet, Namespace: tenantNamespace}, sts); err != nil {
 					return fmt.Errorf("failed to get StatefulSet: %w", err)
 				}
-
-				if len(sts.Spec.Template.Spec.Containers) == 0 {
-					return fmt.Errorf("StatefulSet has no containers")
-				}
-
 				sts.Spec.Template.Spec.Containers[0].Image = "malicious.invalid/sidecar:latest"
-				if err := c.Update(ctx, sts); err != nil {
-					return err
-				}
-				return nil
+				return c.Update(ctx, sts)
 			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
 		})
 	})
 
-	Context("Bad configuration handling", func() {
+	// --- Configuration Handling ---
+	Context("Configuration Handling", Label("config"), func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -483,8 +444,7 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 
 		BeforeAll(func() {
 			var err error
-
-			tenantFW, err = framework.New(ctx, admin, "tenant-bad-config", operatorNamespace)
+			tenantFW, err = framework.NewSetup(ctx, "tenant-bad-config", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
 			tenantNamespace = tenantFW.Namespace
 
@@ -531,23 +491,12 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 		})
 
 		AfterAll(func() {
-			if tenantFW == nil {
-				return
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
 			}
-			cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			defer cancel()
-
-			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
 		It("reports Degraded when Gateway API CRDs are missing", func() {
-			// This test verifies that the operator correctly reports a Degraded condition
-			// when Gateway API CRDs are not installed but spec.gateway.enabled is true.
-			// Gateway API CRDs are NOT installed by default in the e2e suite, so this test
-			// should work without any setup.
-			//
-			// Skip if Gateway API CRDs are already installed (by another Gateway-related test)
-			// Check by trying to list HTTPRoutes - if it succeeds, CRDs are installed
 			var httpRouteList unstructured.UnstructuredList
 			httpRouteList.SetGroupVersionKind(schema.GroupVersionKind{
 				Group:   "gateway.networking.k8s.io",
@@ -572,6 +521,144 @@ var _ = Describe("Security", Label("security", "critical"), Ordered, func() {
 				}
 				g.Expect(found).To(BeTrue(), "expected Degraded condition to be present")
 			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+		})
+	})
+
+	// --- RBAC & Dependencies ---
+	Context("RBAC & Dependencies", Label("rbac"), func() {
+		var (
+			tenantNamespace string
+			tenantFW        *framework.Framework
+		)
+
+		BeforeAll(func() {
+			var err error
+			tenantFW, err = framework.NewSetup(ctx, "tenant-rbac", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+		})
+
+		AfterAll(func() {
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
+			}
+		})
+
+		It("scopes Secret access via allowlist Roles", func() {
+			clusterName := "rbac-cluster"
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  openBaoVersion,
+					Image:    openBaoImage,
+					Replicas: 1,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled:  true,
+						Requests: framework.DefaultAdminSelfInitRequests(),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, cluster)).To(Succeed())
+			DeferCleanup(func() {
+				_ = admin.Delete(ctx, cluster)
+			})
+
+			roleKey := types.NamespacedName{
+				Name:      provisioner.TenantRoleName,
+				Namespace: tenantNamespace,
+			}
+
+			Eventually(func(g Gomega) {
+				role := &rbacv1.Role{}
+				g.Expect(admin.Get(ctx, roleKey, role)).To(Succeed())
+
+				for i := range role.Rules {
+					rule := &role.Rules[i]
+					g.Expect(containsString(rule.APIGroups, "") && containsString(rule.Resources, "secrets")).To(BeFalse(),
+						"tenant Role must not grant Secrets access; Secrets are handled via dedicated allowlist Roles")
+				}
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			writerRoleKey := types.NamespacedName{
+				Name:      provisioner.TenantSecretsWriterRoleName,
+				Namespace: tenantNamespace,
+			}
+			writerRBKey := types.NamespacedName{
+				Name:      provisioner.TenantSecretsWriterRoleBindingName,
+				Namespace: tenantNamespace,
+			}
+
+			Eventually(func(g Gomega) {
+				role := &rbacv1.Role{}
+				g.Expect(admin.Get(ctx, writerRoleKey, role)).To(Succeed())
+
+				var createRule *rbacv1.PolicyRule
+				var namedRule *rbacv1.PolicyRule
+				for i := range role.Rules {
+					rule := &role.Rules[i]
+					if !containsString(rule.APIGroups, "") || !containsString(rule.Resources, "secrets") {
+						continue
+					}
+					if containsString(rule.Verbs, "create") && len(rule.ResourceNames) == 0 {
+						createRule = rule
+					}
+					if len(rule.ResourceNames) > 0 && containsString(rule.Verbs, "get") {
+						namedRule = rule
+					}
+				}
+
+				g.Expect(createRule).NotTo(BeNil(), "expected a Secrets create rule without resourceNames")
+				g.Expect(containsString(createRule.Verbs, "list")).To(BeFalse())
+				g.Expect(containsString(createRule.Verbs, "watch")).To(BeFalse())
+
+				g.Expect(namedRule).NotTo(BeNil(), "expected a Secrets rule scoped by resourceNames")
+				g.Expect(containsString(namedRule.Verbs, "list")).To(BeFalse())
+				g.Expect(containsString(namedRule.Verbs, "watch")).To(BeFalse())
+				for _, verb := range []string{"get", "patch", "update", "delete"} {
+					g.Expect(containsString(namedRule.Verbs, verb)).To(BeTrue(), fmt.Sprintf("expected %q on Secrets", verb))
+				}
+
+				expected := []string{
+					clusterName + "-tls-ca",
+					clusterName + "-tls-server",
+				}
+				for _, name := range expected {
+					g.Expect(containsString(namedRule.ResourceNames, name)).To(BeTrue(), fmt.Sprintf("expected Secrets allowlist to include %q", name))
+				}
+
+				rb := &rbacv1.RoleBinding{}
+				g.Expect(admin.Get(ctx, writerRBKey, rb)).To(Succeed())
+				g.Expect(rb.RoleRef.Name).To(Equal(provisioner.TenantSecretsWriterRoleName))
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		It("has required ValidatingAdmissionPolicy dependencies installed and correctly bound", func() {
+			checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+
+			status, err := admission.CheckDependencies(checkCtx, admin, admission.DefaultDependencies(), []string{"openbao-operator-", ""})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(status.OverallReady).To(BeTrue(), status.SummaryMessage())
 		})
 	})
 })

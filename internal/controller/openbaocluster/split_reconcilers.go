@@ -2,13 +2,16 @@ package openbaocluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -19,6 +22,9 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
+	initmanager "github.com/dc-tec/openbao-operator/internal/init"
+	"github.com/dc-tec/openbao-operator/internal/raft"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/upgrade/bluegreen"
 	rollingupgrade "github.com/dc-tec/openbao-operator/internal/upgrade/rolling"
 )
@@ -35,6 +41,55 @@ type openBaoClusterStatusReconciler struct {
 	parent *OpenBaoClusterReconciler
 }
 
+// autopilotConfigReconciler reconciles Raft Autopilot configuration for initialized clusters.
+// This handles Day 2 operations like scaling replicas or changing autopilot settings.
+type autopilotConfigReconciler struct {
+	raftManager *raft.Manager
+	recorder    record.EventRecorder
+}
+
+// Reconcile reconciles the Raft Autopilot configuration for an initialized cluster.
+func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	if err := r.raftManager.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
+		if operatorerrors.IsTransient(err) {
+			logger.V(1).Info("Transient error reconciling autopilot config; will retry", "error", err)
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+		}
+
+		// Check if this is a permanent prerequisites missing error
+		if operatorerrors.IsPermanent(err) &&
+			errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
+			// Emit Warning event with actionable guidance
+			// Note: SelfInit only works during initial startup, so if cluster is initialized,
+			// users must configure JWT manually via API/CLI or configure autopilot in CRD
+			var eventMsg string
+			if cluster.Status.Initialized {
+				eventMsg = "Autopilot configuration requires JWT authentication. " +
+					"Since the cluster is already initialized, SelfInit is no longer available. " +
+					"Manually configure JWT authentication via OpenBao API/CLI, " +
+					"or manually configure autopilot settings in spec.configuration.raft.autopilot. " +
+					"Error: %v"
+			} else {
+				eventMsg = "Autopilot configuration requires JWT authentication. " +
+					"Enable JWT auth via spec.selfInit.bootstrapJWTAuth: true or configure JWT via SelfInit requests during initialization. " +
+					"Alternatively, manually configure autopilot settings in spec.configuration.raft.autopilot. " +
+					"Error: %v"
+			}
+			r.recorder.Eventf(cluster, corev1.EventTypeWarning,
+				"AutopilotConfigJWTPrerequisitesMissing",
+				eventMsg, err)
+			logger.Error(err, "Failed to reconcile autopilot config (permanent error - requires user intervention)")
+			return recon.Result{}, nil
+		}
+
+		// Other non-transient errors
+		logger.Error(err, "Failed to reconcile autopilot config (non-transient)")
+		return recon.Result{}, nil
+	}
+
+	return recon.Result{}, nil
+}
+
 func (r *OpenBaoClusterReconciler) loggerFor(ctx context.Context, req ctrl.Request, controllerName string) logr.Logger {
 	baseLogger := log.FromContext(ctx)
 	return baseLogger.WithValues(
@@ -45,15 +100,27 @@ func (r *OpenBaoClusterReconciler) loggerFor(ctx context.Context, req ctrl.Reque
 	)
 }
 
-func patchStatusIfChanged(ctx context.Context, c client.Client, logger logr.Logger, original *openbaov1alpha1.OpenBaoCluster, cluster *openbaov1alpha1.OpenBaoCluster, reason string) error {
+// patchWorkloadOwnedFields patches only the status fields owned by the Workload controller.
+// This uses a controller-specific field owner to ensure proper SSA ownership tracking.
+// Owned fields: initialized, selfInitialized, workload
+func patchWorkloadOwnedFields(ctx context.Context, c client.Client, logger logr.Logger, original *openbaov1alpha1.OpenBaoCluster, cluster *openbaov1alpha1.OpenBaoCluster, reason string) error {
 	if original == nil || cluster == nil {
 		return nil
 	}
-	if reflect.DeepEqual(original.Status, cluster.Status) {
+
+	// Check if any owned field changed
+	if original.Status.Initialized == cluster.Status.Initialized &&
+		original.Status.SelfInitialized == cluster.Status.SelfInitialized &&
+		reflect.DeepEqual(original.Status.Workload, cluster.Status.Workload) {
 		return nil
 	}
 
-	// Create a minimal apply configuration with just the status fields we own
+	// Ensure Workload is not nil to avoid null serialization
+	workload := cluster.Status.Workload
+	if workload == nil {
+		workload = &openbaov1alpha1.WorkloadControllerStatus{}
+	}
+
 	applyCluster := &openbaov1alpha1.OpenBaoCluster{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: openbaov1alpha1.GroupVersion.String(),
@@ -63,13 +130,67 @@ func patchStatusIfChanged(ctx context.Context, c client.Client, logger logr.Logg
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 		},
-		Status: cluster.Status,
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:     cluster.Status.Initialized,
+			SelfInitialized: cluster.Status.SelfInitialized,
+			Workload:        workload,
+		},
 	}
 
-	if err := c.Status().Patch(ctx, applyCluster, client.Apply, client.FieldOwner("openbao-cluster-controller")); err != nil {
-		return fmt.Errorf("failed to patch status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
+	if err := c.Status().Patch(ctx, applyCluster, client.Apply, client.FieldOwner("openbao-workload-controller")); err != nil {
+		return fmt.Errorf("failed to patch workload status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
-	logger.V(1).Info("Patched OpenBaoCluster status (SSA)", "reason", reason)
+	logger.V(1).Info("Patched OpenBaoCluster workload status (SSA)", "reason", reason, "fieldOwner", "openbao-workload-controller")
+	return nil
+}
+
+// patchAdminOpsOwnedFields patches only the status fields owned by the AdminOps controller.
+// This uses a controller-specific field owner to ensure proper SSA ownership tracking.
+// Owned fields: upgrade, blueGreen, backup, operationLock, breakGlass, adminOps
+func patchAdminOpsOwnedFields(ctx context.Context, c client.Client, logger logr.Logger, original *openbaov1alpha1.OpenBaoCluster, cluster *openbaov1alpha1.OpenBaoCluster, reason string) error {
+	if original == nil || cluster == nil {
+		return nil
+	}
+
+	// Check if any owned field changed
+	if reflect.DeepEqual(original.Status.Upgrade, cluster.Status.Upgrade) &&
+		reflect.DeepEqual(original.Status.BlueGreen, cluster.Status.BlueGreen) &&
+		reflect.DeepEqual(original.Status.Backup, cluster.Status.Backup) &&
+		reflect.DeepEqual(original.Status.OperationLock, cluster.Status.OperationLock) &&
+		reflect.DeepEqual(original.Status.BreakGlass, cluster.Status.BreakGlass) &&
+		reflect.DeepEqual(original.Status.AdminOps, cluster.Status.AdminOps) {
+		return nil
+	}
+
+	// Ensure AdminOps is not nil to avoid null serialization
+	adminOps := cluster.Status.AdminOps
+	if adminOps == nil {
+		adminOps = &openbaov1alpha1.AdminOpsControllerStatus{}
+	}
+
+	applyCluster := &openbaov1alpha1.OpenBaoCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: openbaov1alpha1.GroupVersion.String(),
+			Kind:       "OpenBaoCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade:       cluster.Status.Upgrade,
+			BlueGreen:     cluster.Status.BlueGreen,
+			Backup:        cluster.Status.Backup,
+			OperationLock: cluster.Status.OperationLock,
+			BreakGlass:    cluster.Status.BreakGlass,
+			AdminOps:      adminOps,
+		},
+	}
+
+	if err := c.Status().Patch(ctx, applyCluster, client.Apply, client.FieldOwner("openbao-adminops-controller")); err != nil {
+		return fmt.Errorf("failed to patch adminops status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
+	}
+	logger.V(1).Info("Patched OpenBaoCluster adminops status (SSA)", "reason", reason, "fieldOwner", "openbao-adminops-controller")
 	return nil
 }
 
@@ -136,10 +257,23 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(ctx context.Context,
 			recorder:              r.parent.Recorder,
 			admissionStatus:       r.parent.AdmissionStatus,
 			platform:              r.parent.Platform,
+			smartClientConfig:     r.parent.SmartClientConfig,
 		},
 	}
 	if r.parent.InitManager != nil {
 		reconcilers = append(reconcilers, r.parent.InitManager)
+		// Add autopilot config reconciler for Day 2 operations
+		// Get raft manager from InitManager if it's the concrete type
+		var raftMgr *raft.Manager
+		if initMgr, ok := r.parent.InitManager.(*initmanager.Manager); ok {
+			raftMgr = initMgr.RaftManager()
+		}
+		if raftMgr != nil {
+			reconcilers = append(reconcilers, &autopilotConfigReconciler{
+				raftManager: raftMgr,
+				recorder:    r.parent.Recorder,
+			})
+		}
 	}
 
 	if result, err := r.runWorkloadReconcilers(ctx, logger, original, cluster, reconcilers); err != nil || result.RequeueAfter > 0 {
@@ -149,7 +283,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(ctx context.Context,
 	// Clear previous workload error after a successful reconcile.
 	cluster.Status.Workload.LastError = nil
 
-	if err := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "workload-complete"); err != nil {
+	if err := patchWorkloadOwnedFields(ctx, r.parent.Client, logger, original, cluster, "workload-complete"); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -168,7 +302,7 @@ func (r *openBaoClusterWorkloadReconciler) runWorkloadReconcilers(
 			cluster.Status.Workload.LastError = controllerErrorStatus(err)
 
 			// Persist status changes before returning to avoid losing in-memory updates.
-			if statusErr := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "workload-error"); statusErr != nil {
+			if statusErr := patchWorkloadOwnedFields(ctx, r.parent.Client, logger, original, cluster, "workload-error"); statusErr != nil {
 				return ctrl.Result{}, statusErr
 			}
 
@@ -180,7 +314,7 @@ func (r *openBaoClusterWorkloadReconciler) runWorkloadReconcilers(
 		}
 
 		if result.RequeueAfter > 0 {
-			if statusErr := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "workload-requeue"); statusErr != nil {
+			if statusErr := patchWorkloadOwnedFields(ctx, r.parent.Client, logger, original, cluster, "workload-requeue"); statusErr != nil {
 				return ctrl.Result{}, statusErr
 			}
 			return ctrl.Result{RequeueAfter: result.RequeueAfter}, nil
@@ -252,7 +386,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 		if err != nil {
 			cluster.Status.AdminOps.LastError = controllerErrorStatus(err)
 
-			if statusErr := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "adminops-error"); statusErr != nil {
+			if statusErr := patchAdminOpsOwnedFields(ctx, r.parent.Client, logger, original, cluster, "adminops-error"); statusErr != nil {
 				return ctrl.Result{}, statusErr
 			}
 
@@ -272,7 +406,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		if result.RequeueAfter > 0 {
-			if statusErr := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "adminops-requeue"); statusErr != nil {
+			if statusErr := patchAdminOpsOwnedFields(ctx, r.parent.Client, logger, original, cluster, "adminops-requeue"); statusErr != nil {
 				return ctrl.Result{}, statusErr
 			}
 			return ctrl.Result{RequeueAfter: result.RequeueAfter}, nil
@@ -282,7 +416,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	// Clear previous adminops error after a successful reconcile.
 	cluster.Status.AdminOps.LastError = nil
 
-	if err := patchStatusIfChanged(ctx, r.parent.Client, logger, original, cluster, "adminops-complete"); err != nil {
+	if err := patchAdminOpsOwnedFields(ctx, r.parent.Client, logger, original, cluster, "adminops-complete"); err != nil {
 		return ctrl.Result{}, err
 	}
 

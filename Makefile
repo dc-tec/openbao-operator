@@ -340,21 +340,17 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 		echo "Kind is not installed. Please install Kind manually."; \
 		exit 1; \
 	}
-	@i=1; \
-	while [ $$i -le "$(E2E_PARALLEL_NODES)" ]; do \
-		cluster_name="$(KIND_CLUSTER)-$$i"; \
-		if $(KIND) get clusters | grep -qx "$$cluster_name"; then \
-			echo "Kind cluster '$$cluster_name' already exists. Skipping creation."; \
+	@cluster_name="$(KIND_CLUSTER)"; \
+	if $(KIND) get clusters | grep -qx "$$cluster_name"; then \
+		echo "Kind cluster '$$cluster_name' already exists. Skipping creation."; \
+	else \
+		echo "Creating Kind cluster '$$cluster_name'..."; \
+		if [ -n "$(KIND_NODE_IMAGE)" ]; then \
+			$(KIND) create cluster --name "$$cluster_name" --image "$(KIND_NODE_IMAGE)" ; \
 		else \
-			echo "Creating Kind cluster '$$cluster_name'..."; \
-			if [ -n "$(KIND_NODE_IMAGE)" ]; then \
-				$(KIND) create cluster --name "$$cluster_name" --image "$(KIND_NODE_IMAGE)" ; \
-			else \
-				$(KIND) create cluster --name "$$cluster_name" ; \
-			fi; \
+			$(KIND) create cluster --name "$$cluster_name" ; \
 		fi; \
-		i=$$((i+1)); \
-	done
+	fi
 
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests. Expected an isolated environment using Kind. Use E2E_PARALLEL_NODES=N to run tests in parallel (default: 1). Use E2E_FOCUS="Backup" to run only specific tests. See Makefile for additional E2E_* variables.
@@ -469,29 +465,8 @@ cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 		echo "Kind is not installed. Please install Kind manually."; \
 		exit 1; \
 	}; \
-	base="$(KIND_CLUSTER)"; \
-	clusters="$$( $(KIND) get clusters 2>/dev/null || true )"; \
-	while IFS= read -r cluster; do \
-		[ -z "$$cluster" ] && continue; \
-		if [ "$$cluster" = "$$base" ]; then \
-			echo "Deleting Kind cluster '$$cluster'"; \
-			$(KIND) delete cluster --name "$$cluster" || true; \
-			continue; \
-		fi; \
-		prefix="$$base-"; \
-		case "$$cluster" in \
-			"$$prefix"*) ;; \
-			*) continue ;; \
-		esac; \
-		suffix="$${cluster#$$prefix}"; \
-		case "$$suffix" in \
-			''|*[!0-9]*) continue ;; \
-			*) \
-				echo "Deleting Kind cluster '$$cluster'"; \
-				$(KIND) delete cluster --name "$$cluster" || true; \
-				;; \
-		esac; \
-	done <<< "$$clusters"
+	echo "Deleting Kind cluster '$(KIND_CLUSTER)'"; \
+	$(KIND) delete cluster --name "$(KIND_CLUSTER)" || true
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter

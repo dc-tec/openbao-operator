@@ -1504,6 +1504,12 @@ func (m *Manager) ensureGatewayCAConfigMap(ctx context.Context, logger logr.Logg
 			logger.V(1).Info("CA Secret not found; skipping Gateway CA ConfigMap creation", "secret", caSecretName)
 			return nil
 		}
+		if apierrors.IsForbidden(err) || strings.Contains(strings.ToLower(err.Error()), "forbidden") {
+			// RBAC might not be ready yet (multi-tenant mode race condition)
+			// Log and return - this will be retried on next reconciliation execution
+			logger.V(1).Info("CA Secret access forbidden (likely waiting for RBAC); skipping Gateway CA ConfigMap creation", "secret", caSecretName)
+			return nil
+		}
 		return fmt.Errorf("failed to get CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
 	}
 

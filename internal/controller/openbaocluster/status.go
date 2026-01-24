@@ -16,13 +16,16 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
+	"github.com/dc-tec/openbao-operator/internal/revision"
 )
 
 // patchStatusSSA updates the cluster status using Server-Side Apply.
 // SSA eliminates race conditions by having the API server merge changes,
 // rather than requiring the client to refresh and merge manually.
+// This function patches only the fields owned by the Status controller:
+// phase, activeLeader, readyReplicas, currentVersion, conditions, lastBackupTime
 func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	// Create a minimal apply configuration with just the status fields we own
+	// Create an apply configuration with just the status fields owned by Status controller
 	applyCluster := &openbaov1alpha1.OpenBaoCluster{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: openbaov1alpha1.GroupVersion.String(),
@@ -32,11 +35,18 @@ func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 		},
-		Status: cluster.Status,
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Phase:          cluster.Status.Phase,
+			ActiveLeader:   cluster.Status.ActiveLeader,
+			ReadyReplicas:  cluster.Status.ReadyReplicas,
+			CurrentVersion: cluster.Status.CurrentVersion,
+			LastBackupTime: cluster.Status.LastBackupTime,
+			Conditions:     cluster.Status.Conditions,
+		},
 	}
 
 	return r.Status().Patch(ctx, applyCluster, client.Apply,
-		client.FieldOwner("openbao-cluster-controller"),
+		client.FieldOwner("openbao-status-controller"),
 	)
 }
 
@@ -161,6 +171,29 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		logger.Info("Set initial CurrentVersion", "version", cluster.Spec.Version)
 	}
 
+	// Detect BlueGreen upgrade completion: if BlueGreen is Idle and CurrentVersion
+	// doesn't match Spec.Version, the upgrade completed and we should update.
+	// This allows Status controller to own currentVersion while BlueGreen manager
+	// signals completion via phase transition.
+	if cluster.Status.BlueGreen != nil &&
+		cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
+		cluster.Status.CurrentVersion != "" &&
+		cluster.Status.CurrentVersion != cluster.Spec.Version &&
+		cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+
+		// CRITICAL CHECK: Verify that the upgrade actually happened.
+		// PhaseIdle can mean "Before Upgrade" OR "After Upgrade".
+		// We distinguish them by checking if the active BlueRevision matches the current Spec.
+		currentSpecRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+		if cluster.Status.BlueGreen.BlueRevision == currentSpecRevision {
+			cluster.Status.CurrentVersion = cluster.Spec.Version
+			logger.Info("Detected BlueGreen upgrade completion, updated CurrentVersion",
+				"fromVersion", cluster.Status.CurrentVersion,
+				"toVersion", cluster.Spec.Version,
+				"revision", currentSpecRevision)
+		}
+	}
+
 	// Update per-cluster metrics
 	clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.SetReadyReplicas(state.ReadyReplicas)
@@ -221,7 +254,7 @@ func (r *OpenBaoClusterReconciler) setTLSReadyCondition(ctx context.Context, clu
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             "Disabled",
+			Reason:             ReasonDisabled,
 			Message:            "TLS is disabled",
 		})
 		return
