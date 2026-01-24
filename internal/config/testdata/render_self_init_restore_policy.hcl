@@ -19,7 +19,7 @@ initialize "operator-bootstrap" {
     operation = "update"
     path      = "sys/policies/acl/openbao-operator"
     data {
-      policy = "path \"sys/health\" { capabilities = [\"read\"] }\npath \"sys/step-down\" { capabilities = [\"sudo\", \"update\"] }\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }\npath \"sys/storage/raft/autopilot/configuration\" { capabilities = [\"read\", \"update\"] }"
+      policy = "path \"sys/health\" { capabilities = [\"read\"] }\npath \"sys/step-down\" { capabilities = [\"sudo\", \"update\"] }\npath \"sys/storage/raft/autopilot/configuration\" { capabilities = [\"read\", \"update\"] }"
     }
   }
   request "create-operator-role" {
@@ -53,6 +53,18 @@ initialize "operator-bootstrap" {
       token_policies  = ["restore"]
       policies        = ["restore"]
       ttl             = "1h"
+    }
+  }
+}
+initialize "configure-autopilot" {
+  request "configure-autopilot-request" {
+    operation = "update"
+    path      = "sys/storage/raft/autopilot/configuration"
+    data {
+      cleanup_dead_servers               = true
+      dead_server_last_contact_threshold = "24h"
+      min_quorum                         = "3"
+      server_stabilization_time          = "10s"
     }
   }
 }

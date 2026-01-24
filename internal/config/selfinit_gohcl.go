@@ -93,7 +93,7 @@ func buildOperatorBootstrapInitializeBlock(config OperatorBootstrapConfig) *hclw
 	// 3. Create Policy
 	{
 		req := buildInitializeRequestBlock("create-operator-policy", "update", "sys/policies/acl/openbao-operator", false)
-		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: jwtPolicyHealthStepDownSnapshot}, "data"))
+		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: jwtPolicyHealthStepDownAutopilot}, "data"))
 		initBody.AppendBlock(req)
 	}
 
@@ -143,7 +143,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	// 3. Create Policy
 	{
 		req := buildInitializeRequestBlock("create-operator-policy", "update", "sys/policies/acl/openbao-operator", false)
-		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: jwtPolicyHealthStepDownSnapshot}, "data"))
+		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: jwtPolicyHealthStepDownAutopilot}, "data"))
 		initBody.AppendBlock(req)
 	}
 

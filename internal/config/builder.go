@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/zclconf/go-cty/cty"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
 const (
@@ -21,9 +22,8 @@ const (
 	configMaxRequestDuration  = "90s"
 	configNodeIDTemplate      = "${HOSTNAME}"
 
-	jwtPolicyHealthStepDownSnapshot = `path "sys/health" { capabilities = ["read"] }
+	jwtPolicyHealthStepDownAutopilot = `path "sys/health" { capabilities = ["read"] }
 path "sys/step-down" { capabilities = ["sudo", "update"] }
-path "sys/storage/raft/snapshot" { capabilities = ["read"] }
 path "sys/storage/raft/autopilot/configuration" { capabilities = ["read", "update"] }`
 
 	jwtPolicyUpgradeRolling = `path "sys/health" { capabilities = ["read"] }
@@ -287,12 +287,53 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 
 	// Render user self-init requests if enabled
 	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled {
-		if err := renderSelfInitStanzas(body, cluster.Spec.SelfInit.Requests); err != nil {
+		requests := cluster.Spec.SelfInit.Requests
+		if !hasRequest(requests, "configure-autopilot") {
+			req, err := defaultAutopilotRequest()
+			if err != nil {
+				return nil, fmt.Errorf("failed to create default autopilot request: %w", err)
+			}
+			requests = append(requests, req)
+		}
+
+		if err := renderSelfInitStanzas(body, requests); err != nil {
 			return nil, fmt.Errorf("failed to render self-init stanzas: %w", err)
 		}
 	}
 
 	return file.Bytes(), nil
+}
+
+func hasRequest(requests []openbaov1alpha1.SelfInitRequest, name string) bool {
+	for _, req := range requests {
+		if req.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func defaultAutopilotRequest() (openbaov1alpha1.SelfInitRequest, error) {
+	config := map[string]interface{}{
+		"cleanup_dead_servers":               true,
+		"dead_server_last_contact_threshold": "24h",
+		"min_quorum":                         3,
+		"server_stabilization_time":          "10s",
+	}
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		return openbaov1alpha1.SelfInitRequest{}, err
+	}
+
+	return openbaov1alpha1.SelfInitRequest{
+		Name:      "configure-autopilot",
+		Operation: openbaov1alpha1.SelfInitOperationUpdate,
+		Path:      "sys/storage/raft/autopilot/configuration",
+		Data: &apiextensionsv1.JSON{
+			Raw: data,
+		},
+	}, nil
 }
 
 // renderSelfInitStanzas generates HCL initialize stanzas for OpenBao's self-initialization feature.
