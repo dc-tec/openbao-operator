@@ -228,6 +228,85 @@ func IsCertManagerCRDsInstalled() bool {
 	return false
 }
 
+const (
+	csiHostPathVersion = "v1.9.0"
+	// Note: we intentionally apply upstream manifests from a pinned tag.
+	// The hostpath CSI driver is a test driver; we use it only for E2E fidelity.
+	csiHostPathPluginURLTmpl = "" +
+		"https://raw.githubusercontent.com/kubernetes-csi/csi-driver-host-path/%s/" +
+		"deploy/kubernetes-1.21/hostpath/csi-hostpath-plugin.yaml"
+	csiHostPathDriverInfoURLTmpl = "" +
+		"https://raw.githubusercontent.com/kubernetes-csi/csi-driver-host-path/%s/" +
+		"deploy/kubernetes-1.21/hostpath/csi-hostpath-driverinfo.yaml"
+
+	csiHostPathProvisionerRBACURL = "" +
+		"https://raw.githubusercontent.com/kubernetes-csi/external-provisioner/v3.2.0/" +
+		"deploy/kubernetes/rbac.yaml"
+	csiHostPathAttacherRBACURL = "" +
+		"https://raw.githubusercontent.com/kubernetes-csi/external-attacher/v3.5.0/" +
+		"deploy/kubernetes/rbac.yaml"
+	csiHostPathResizerRBACURL = "" +
+		"https://raw.githubusercontent.com/kubernetes-csi/external-resizer/v1.5.0/" +
+		"deploy/kubernetes/rbac.yaml"
+	csiHostPathSnapshotterRBACURL = "" +
+		"https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/v6.0.1/" +
+		"deploy/kubernetes/csi-snapshotter/rbac-csi-snapshotter.yaml"
+	csiHostPathHealthMonitorRBACURL = "" +
+		"https://raw.githubusercontent.com/kubernetes-csi/external-health-monitor/v0.5.0/" +
+		"deploy/kubernetes/external-health-monitor-controller/rbac.yaml"
+)
+
+// InstallCSIHostPathDriver installs the CSI hostpath driver (test driver) and waits for it to become ready.
+// This enables full-path PVC expansion testing in Kind.
+func InstallCSIHostPathDriver() error {
+	pluginURL := fmt.Sprintf(csiHostPathPluginURLTmpl, csiHostPathVersion)
+	driverInfoURL := fmt.Sprintf(csiHostPathDriverInfoURLTmpl, csiHostPathVersion)
+
+	// The upstream hostpath plugin manifest references RBAC roles that are shipped with CSI sidecars.
+	// Apply those RBAC manifests first so provisioning can work (cluster roles + namespaced roles).
+	for _, url := range []string{
+		csiHostPathProvisionerRBACURL,
+		csiHostPathAttacherRBACURL,
+		csiHostPathResizerRBACURL,
+		csiHostPathSnapshotterRBACURL,
+		csiHostPathHealthMonitorRBACURL,
+	} {
+		cmd := exec.Command("kubectl", "apply", "-n", "default", "-f", url) // #nosec G204 -- test harness
+		if _, err := Run(cmd); err != nil {
+			return err
+		}
+	}
+
+	cmd := exec.Command("kubectl", "apply", "-f", pluginURL) // #nosec G204 -- test harness
+	if _, err := Run(cmd); err != nil {
+		return err
+	}
+
+	cmd = exec.Command("kubectl", "apply", "-f", driverInfoURL) // #nosec G204 -- test harness
+	if _, err := Run(cmd); err != nil {
+		return err
+	}
+
+	// The upstream manifest deploys a single-replica StatefulSet in the "default" namespace.
+	cmd = exec.Command(
+		"kubectl", "-n", "default", "rollout", "status",
+		"statefulset/csi-hostpathplugin", "--timeout=5m",
+	) // #nosec G204 -- test harness
+	_, err := Run(cmd)
+	return err
+}
+
+// UninstallCSIHostPathDriver removes the CSI hostpath driver resources (best effort).
+func UninstallCSIHostPathDriver() {
+	pluginURL := fmt.Sprintf(csiHostPathPluginURLTmpl, csiHostPathVersion)
+	driverInfoURL := fmt.Sprintf(csiHostPathDriverInfoURLTmpl, csiHostPathVersion)
+
+	cmd := exec.Command("kubectl", "delete", "-f", driverInfoURL, "--ignore-not-found") // #nosec G204 -- test harness
+	_, _ = Run(cmd)
+	cmd = exec.Command("kubectl", "delete", "-f", pluginURL, "--ignore-not-found") // #nosec G204 -- test harness
+	_, _ = Run(cmd)
+}
+
 // LoadImageToKindClusterWithName loads a local docker image to the kind cluster
 func LoadImageToKindClusterWithName(name string) error {
 	cluster := defaultKindCluster

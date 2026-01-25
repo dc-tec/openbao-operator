@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -160,6 +161,55 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 				t.Fatalf("StatefulSet replicas = %d, want %d", *sts.Spec.Replicas, tt.wantReplicas)
 			}
 		})
+	}
+}
+
+func TestStatefulSetDoesNotUpdateVolumeClaimTemplatesOnStorageResize(t *testing.T) {
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+
+	cluster := newMinimalCluster("infra-storage-resize", "default")
+	cluster.Status.Initialized = true
+	cluster.Spec.Storage.Size = "10Gi"
+
+	createTLSSecretForTest(t, k8sClient, cluster)
+
+	ctx := context.Background()
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	statefulSet := &appsv1.StatefulSet{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: statefulSetName(cluster)}, statefulSet); err != nil {
+		t.Fatalf("expected StatefulSet to exist: %v", err)
+	}
+
+	if len(statefulSet.Spec.VolumeClaimTemplates) != 1 {
+		t.Fatalf("expected one VolumeClaimTemplate, got %d", len(statefulSet.Spec.VolumeClaimTemplates))
+	}
+	gotBefore := statefulSet.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage]
+	if gotBefore.Cmp(resource.MustParse("10Gi")) != 0 {
+		t.Fatalf("expected template size 10Gi before resize, got %s", gotBefore.String())
+	}
+
+	// Update desired storage size in the CR.
+	cluster.Spec.Storage.Size = "20Gi"
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+		t.Fatalf("Reconcile() after resize error = %v", err)
+	}
+
+	statefulSetAfter := &appsv1.StatefulSet{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: statefulSetName(cluster)}, statefulSetAfter); err != nil {
+		t.Fatalf("expected StatefulSet to exist: %v", err)
+	}
+
+	if len(statefulSetAfter.Spec.VolumeClaimTemplates) != 1 {
+		t.Fatalf("expected one VolumeClaimTemplate, got %d", len(statefulSetAfter.Spec.VolumeClaimTemplates))
+	}
+	gotAfter := statefulSetAfter.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage]
+	if gotAfter.Cmp(resource.MustParse("10Gi")) != 0 {
+		t.Fatalf("expected template size to remain 10Gi after resize, got %s", gotAfter.String())
 	}
 }
 

@@ -259,6 +259,16 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(ctx context.Context,
 			platform:              r.parent.Platform,
 			smartClientConfig:     r.parent.SmartClientConfig,
 		},
+		&storageReconciler{
+			client:   r.parent.Client,
+			recorder: r.parent.Recorder,
+		},
+		&storageResizeRestartReconciler{
+			client:            r.parent.Client,
+			apiReader:         r.parent.APIReader,
+			recorder:          r.parent.Recorder,
+			smartClientConfig: r.parent.SmartClientConfig,
+		},
 	}
 	if r.parent.InitManager != nil {
 		reconcilers = append(reconcilers, r.parent.InitManager)
@@ -333,6 +343,9 @@ func workloadResultForError(err error, lastError *openbaov1alpha1.ControllerErro
 			jitterNanos := time.Now().UnixNano() % int64(constants.RequeueSafetyNetJitter)
 			requeueAfter := constants.RequeueSafetyNetBase + time.Duration(jitterNanos)
 			return ctrl.Result{RequeueAfter: requeueAfter}, true
+		case ReasonStorageInvalidSize, ReasonStorageShrinkNotSupported, ReasonStorageResizeNotSupported, ReasonStorageClassChangeNotSupported, ReasonStorageRestartRequired:
+			// Permanent configuration issue; wait for user changes rather than hot-looping.
+			return ctrl.Result{}, true
 		}
 	}
 

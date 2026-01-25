@@ -6,6 +6,8 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -13,6 +15,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	storagev1 "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -28,7 +32,7 @@ import (
 var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, func() {
 	ctx := context.Background()
 
-	Context("Smoke: Tenant + Cluster lifecycle (Self-Init)", Label("smoke", "critical", "tenant"), func() {
+	Context("Tenant + Cluster lifecycle (Self-Init)", Label("critical", "tenant"), func() {
 		var (
 			f *framework.Framework
 			c client.Client
@@ -81,7 +85,10 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:  true,
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
 						Requests: framework.DefaultAdminSelfInitRequests(),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
@@ -92,11 +99,18 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 					Storage: openbaov1alpha1.StorageConfig{
 						Size: "1Gi",
 					},
+					Maintenance: &openbaov1alpha1.MaintenanceConfig{
+						Enabled: true,
+					},
 					Network: &openbaov1alpha1.NetworkConfig{
 						APIServerCIDR: apiServerCIDR,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
+			}
+			if sc := os.Getenv("E2E_STORAGE_CLASS"); strings.TrimSpace(sc) != "" {
+				sc = strings.TrimSpace(sc)
+				cluster.Spec.Storage.StorageClassName = &sc
 			}
 
 			Expect(c.Create(ctx, cluster)).To(Succeed())
@@ -117,6 +131,98 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			// (Simplified verification for smoke test)
 			cm := &corev1.ConfigMap{}
 			Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-config", Namespace: f.Namespace}, cm)).To(Succeed())
+		})
+
+		It("expands storage by increasing spec.storage.size (if supported)", func() {
+			pvcName := fmt.Sprintf("data-%s-0", clusterName)
+			podName := fmt.Sprintf("%s-0", clusterName)
+
+			By("waiting for the data PVC to exist")
+			pvc := &corev1.PersistentVolumeClaim{}
+			Eventually(func(g Gomega) {
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: f.Namespace}, pvc)).To(Succeed())
+				g.Expect(pvc.Spec.Resources.Requests).NotTo(BeNil())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			scName := ""
+			if pvc.Spec.StorageClassName != nil {
+				scName = *pvc.Spec.StorageClassName
+			} else {
+				var scList storagev1.StorageClassList
+				Expect(c.List(ctx, &scList)).To(Succeed())
+				for i := range scList.Items {
+					sc := &scList.Items[i]
+					if sc.Annotations != nil && sc.Annotations["storageclass.kubernetes.io/is-default-class"] == "true" {
+						scName = sc.Name
+						break
+					}
+				}
+			}
+
+			if scName == "" {
+				Skip("no StorageClass found for data PVC; cannot validate expansion support")
+			}
+
+			sc := &storagev1.StorageClass{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: scName}, sc)).To(Succeed())
+			if sc.AllowVolumeExpansion == nil || !*sc.AllowVolumeExpansion {
+				Skip(fmt.Sprintf("StorageClass %q does not support volume expansion (allowVolumeExpansion=false)", scName))
+			}
+
+			By("capturing the current pod UID (to detect potential restarts)")
+			pod := &corev1.Pod{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: podName, Namespace: f.Namespace}, pod)).To(Succeed())
+			oldUID := pod.UID
+
+			By("updating OpenBaoCluster spec.storage.size from 1Gi to 2Gi")
+			cluster := &openbaov1alpha1.OpenBaoCluster{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
+			cluster.Spec.Storage.Size = "2Gi"
+			if cluster.Spec.Maintenance == nil {
+				cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{Enabled: true}
+			} else {
+				cluster.Spec.Maintenance.Enabled = true
+			}
+			Expect(c.Update(ctx, cluster)).To(Succeed())
+
+			By("waiting for the PVC storage request to be updated by the operator")
+			sawFSResizePending := false
+			Eventually(func(g Gomega) {
+				updated := &corev1.PersistentVolumeClaim{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: f.Namespace}, updated)).To(Succeed())
+				g.Expect(updated.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("2Gi")))
+				for _, cond := range updated.Status.Conditions {
+					if cond.Type == corev1.PersistentVolumeClaimFileSystemResizePending && cond.Status == corev1.ConditionTrue {
+						sawFSResizePending = true
+					}
+				}
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("ensuring the cluster remains Available")
+			f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
+
+			if sawFSResizePending {
+				By("waiting for the pod to restart OR the filesystem resize to complete")
+				Eventually(func(g Gomega) bool {
+					// Check if pod restarted
+					updatedPod := &corev1.Pod{}
+					if err := c.Get(ctx, types.NamespacedName{Name: podName, Namespace: f.Namespace}, updatedPod); err == nil {
+						if updatedPod.UID != oldUID {
+							return true
+						}
+					}
+
+					// Check if PVC capacity is updated (online resize)
+					updatedPVC := &corev1.PersistentVolumeClaim{}
+					if err := c.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: f.Namespace}, updatedPVC); err == nil {
+						qty := updatedPVC.Status.Capacity[corev1.ResourceStorage]
+						if qty.Cmp(resource.MustParse("2Gi")) >= 0 {
+							return true
+						}
+					}
+					return false
+				}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(BeTrue())
+			}
 		})
 	})
 
@@ -181,7 +287,7 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 		})
 	})
 
-	Context("Development Profile: Scaling with Autopilot Reconciliation", Label("profile-development", "scaling", "autopilot"), func() {
+	Context("Development Profile: Scaling with Autopilot Reconciliation", Label("profile-development", "scaling", "autopilot", "smoke"), func() {
 		var (
 			f   *framework.Framework
 			c   client.Client

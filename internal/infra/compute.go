@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,6 +98,15 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 	desired, buildErr := buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, revision, disableSelfInit, m.Platform)
 	if buildErr != nil {
 		return fmt.Errorf("failed to build StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, buildErr)
+	}
+
+	// StatefulSet.spec.volumeClaimTemplates are effectively immutable once the StatefulSet exists.
+	// Keep them identical to the existing object; storage expansion is reconciled by patching the PVCs directly.
+	existingSTS := &appsv1.StatefulSet{}
+	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, existingSTS); err == nil {
+		desired.Spec.VolumeClaimTemplates = existingSTS.Spec.VolumeClaimTemplates
+	} else if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to get StatefulSet %s/%s: %w", cluster.Namespace, name, err)
 	}
 
 	// Set the desired replica count (SSA will handle create/update)

@@ -30,4 +30,10 @@ const (
 	ReasonNotReady                               = "NotReady"
 	ReasonAllReplicasReady                       = "AllReplicasReady"
 	ReasonNoReplicasReady                        = "NoReplicasReady"
+
+	ReasonStorageInvalidSize             = "StorageInvalidSize"
+	ReasonStorageShrinkNotSupported      = "StorageShrinkNotSupported"
+	ReasonStorageResizeNotSupported      = "StorageResizeNotSupported"
+	ReasonStorageClassChangeNotSupported = "StorageClassChangeNotSupported"
+	ReasonStorageRestartRequired         = "StorageRestartRequired"
 )

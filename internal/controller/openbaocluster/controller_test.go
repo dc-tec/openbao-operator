@@ -70,6 +70,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 		newReconciler := func() *testCompositeReconciler {
 			parent := &OpenBaoClusterReconciler{
 				Client:        k8sClient,
+				APIReader:     k8sClient,
 				Scheme:        k8sClient.Scheme(),
 				ImageVerifier: security.NewImageVerifier(logr.Discard(), k8sClient, nil),
 			}
@@ -780,8 +781,9 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 
 		newReconciler := func() *testCompositeReconciler {
 			parent := &OpenBaoClusterReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:    k8sClient,
+				APIReader: k8sClient,
+				Scheme:    k8sClient.Scheme(),
 			}
 			return &testCompositeReconciler{parent: parent}
 		}

@@ -114,3 +114,15 @@ spec:
         (!has(object.spec.upgrade) || !has(object.spec.upgrade.tokenSecretRef) ||
           !object.spec.upgrade.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
       message: "References to system secrets (unseal-key, root-token, tls-ca, tls-server) are prohibited in backup/upgrade configurations to prevent confused deputy attacks."
+    # Storage Immutability: Prevent storage class changes (immutable in StatefulSet)
+    - expression: >-
+        oldObject == null ||
+        !has(oldObject.spec.storage.storageClassName) ||
+        object.spec.storage.storageClassName == oldObject.spec.storage.storageClassName
+      message: "spec.storage.storageClassName is immutable."
+    # Storage Expansion: Prevent shrinking storage
+    - expression: >-
+        oldObject == null ||
+        !has(oldObject.spec.storage.size) ||
+        quantity(object.spec.storage.size).compareTo(quantity(oldObject.spec.storage.size)) >= 0
+      message: "spec.storage.size cannot be decreased."

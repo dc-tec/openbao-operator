@@ -30,6 +30,18 @@ graph TD
 | **Service** | `<cluster>-public` | (Optional) Created if `spec.service` or `spec.ingress` is enabled. |
 | **PVC** | `data-<cluster>-*` | Persistent volume for Raft storage, sized by `spec.storage.size`. |
 
+## Storage Resizing (Expansion)
+
+The operator supports **expanding** persistent storage by increasing `spec.storage.size`.
+
+- **Expansion only**: decreasing `spec.storage.size` is rejected.
+- **PVCs are the source of truth**: the operator patches existing PVCs to the new requested size.
+- **StatefulSet claim templates remain unchanged** after initial creation (Kubernetes treats them as immutable).
+  New replicas may be created with the old template size and will then be expanded by the operator.
+- **Filesystem resize completion**: some CSI drivers require a pod restart after volume expansion.
+  If a PVC reports `FileSystemResizePending`, the operator will perform a controlled pod restart **only when**
+  `spec.maintenance.enabled=true`. Otherwise it surfaces a `Degraded` signal asking for maintenance/manual restart.
+
 ## Security & Identity
 
 The Operator manages credentials, certificates, and tokens based on the cluster configuration.

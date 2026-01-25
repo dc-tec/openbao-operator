@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	. "github.com/onsi/gomega"
@@ -356,6 +357,10 @@ func (f *Framework) CreateDevelopmentCluster(ctx context.Context, cfg Developmen
 			},
 			DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 		},
+	}
+
+	if sc := strings.TrimSpace(os.Getenv("E2E_STORAGE_CLASS")); sc != "" {
+		cluster.Spec.Storage.StorageClassName = &sc
 	}
 
 	if err := f.Client.Create(ctx, cluster); err != nil {
