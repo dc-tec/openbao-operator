@@ -1247,6 +1247,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#storage-resizing-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage Resizing (Expansion)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#security-identity" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4104,6 +4115,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#storage-resizing-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage Resizing (Expansion)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#security-identity" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4254,6 +4276,17 @@
 </tr>
 </tbody>
 </table>
+<h2 id="storage-resizing-expansion">Storage Resizing (Expansion)<a class="headerlink" href="#storage-resizing-expansion" title="Permanent link">&para;</a></h2>
+<p>The operator supports <strong>expanding</strong> persistent storage by increasing <code>spec.storage.size</code>.</p>
+<ul>
+<li><strong>Expansion only</strong>: decreasing <code>spec.storage.size</code> is rejected.</li>
+<li><strong>PVCs are the source of truth</strong>: the operator patches existing PVCs to the new requested size.</li>
+<li><strong>StatefulSet claim templates remain unchanged</strong> after initial creation (Kubernetes treats them as immutable).
+  New replicas may be created with the old template size and will then be expanded by the operator.</li>
+<li><strong>Filesystem resize completion</strong>: some CSI drivers require a pod restart after volume expansion.
+  If a PVC reports <code>FileSystemResizePending</code>, the operator will perform a controlled pod restart <strong>only when</strong>
+  <code>spec.maintenance.enabled=true</code>. Otherwise it surfaces a <code>Degraded</code> signal asking for maintenance/manual restart.</li>
+</ul>
 <h2 id="security-identity">Security &amp; Identity<a class="headerlink" href="#security-identity" title="Permanent link">&para;</a></h2>
 <p>The Operator manages credentials, certificates, and tokens based on the cluster configuration.</p>
 <h3 id="tls-configuration">TLS Configuration<a class="headerlink" href="#tls-configuration" title="Permanent link">&para;</a></h3>

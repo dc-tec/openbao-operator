@@ -4326,7 +4326,9 @@ any pod failure results in complete unavailability.</p>
 </li>
 </ol>
 <p>When enabled, the operator annotates managed Pods/StatefulSet with <code>openbao.org/maintenance=true</code>
-   to support controlled deletes/restarts under strict admission policies.</p>
+   to support controlled deletes/restarts under strict admission policies.
+   This is also required for the operator to complete certain day-2 operations that may need pod restarts,
+   such as finishing filesystem expansion after increasing <code>spec.storage.size</code>.</p>
 <ol>
 <li>
 <p><strong>Trigger a rolling restart</strong> (for example, after rotating external dependencies):

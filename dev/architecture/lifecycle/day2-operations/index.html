@@ -2398,17 +2398,6 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#cluster-operations-upgrades_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cluster Operations / Upgrades
-      
-    </span>
-  </a>
-  
     <nav class="md-nav" aria-label="Cluster Operations / Upgrades">
       <ul class="md-nav__list">
         
@@ -4029,17 +4018,6 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#cluster-operations-upgrades_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cluster Operations / Upgrades
-      
-    </span>
-  </a>
-  
     <nav class="md-nav" aria-label="Cluster Operations / Upgrades">
       <ul class="md-nav__list">
         
@@ -4108,7 +4086,6 @@
 <p>See the <a href="../../../user-guide/openbaocluster/operations/upgrades/">Upgrade Guide</a> for detailed upgrade strategies (Rolling vs Blue/Green).</p>
 </div>
 <h2 id="cluster-operations-upgrades">Cluster Operations / Upgrades<a class="headerlink" href="#cluster-operations-upgrades" title="Permanent link">&para;</a></h2>
-<h2 id="cluster-operations-upgrades_1">Cluster Operations / Upgrades<a class="headerlink" href="#cluster-operations-upgrades_1" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Rolling Update (Default)</label><label for="__tabbed_1_2">Blue/Green Upgrade</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4188,11 +4165,21 @@
 </div>
 </div>
 <h2 id="maintenance-manual-recovery">Maintenance / Manual Recovery<a class="headerlink" href="#maintenance-manual-recovery" title="Permanent link">&para;</a></h2>
+<p>There are two related (but distinct) mechanisms:</p>
 <ol>
-<li>User sets <code>OpenBaoCluster.Spec.Paused = true</code> to enter maintenance mode.</li>
-<li>All reconcilers for that cluster short-circuit and stop mutating resources, allowing manual actions (e.g., manual restore from snapshot).</li>
-<li>If an upgrade was in progress, it is paused but state is preserved in <code>Status.Upgrade</code>.</li>
-<li>After maintenance, user sets <code>Paused = false</code> to resume normal reconciliation (including any paused upgrade).</li>
+<li><strong>Pause reconciliation</strong> (<code>spec.paused=true</code>): stops all controllers for the cluster from mutating resources.
+   This is intended for manual intervention or recovery workflows.</li>
+<li><strong>Maintenance annotation mode</strong> (<code>spec.maintenance.enabled=true</code>): keeps reconciliation running, but annotates
+   managed resources with <code>openbao.org/maintenance=true</code> so admission policies can allow controlled deletes/restarts.
+   The operator also uses this gate for disruptive-but-automatable operations (for example, completing filesystem
+   expansion when a PVC reports <code>FileSystemResizePending</code> after increasing <code>spec.storage.size</code>).</li>
+</ol>
+<p>For manual recovery:</p>
+<ol>
+<li>User sets <code>spec.paused=true</code>.</li>
+<li>Reconcilers short-circuit and stop mutating resources, allowing manual actions (e.g., manual restore from snapshot).</li>
+<li>If an upgrade was in progress, it is paused but state is preserved in <code>status.upgrade</code>.</li>
+<li>After maintenance, user sets <code>spec.paused=false</code> to resume normal reconciliation (including any paused upgrade).</li>
 </ol>
 
 

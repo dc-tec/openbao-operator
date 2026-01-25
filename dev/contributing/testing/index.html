@@ -4252,6 +4252,8 @@
 <li><strong>Kind Cluster</strong>: Runs actual Kubernetes nodes in Docker.</li>
 <li><strong>Real Images</strong>: Builds and loads the Operator and OpenBao images.</li>
 <li><strong>Helpers</strong>: automated <code>backup-executor</code>, <code>upgrade-executor</code>.</li>
+<li><strong>Storage</strong>: The suite installs the CSI hostpath test driver and applies an expandable StorageClass <code>openbao-e2e-hostpath</code>.
+  Tests may consume this via <code>E2E_STORAGE_CLASS</code> (set automatically in Kind mode).</li>
 </ul>
 <p><strong>Core Scenarios</strong>:</p>
 <ol>
@@ -4288,7 +4290,9 @@
 <p class="admonition-title">Cleanup behavior</p>
 <p>When <code>E2E_USE_EXISTING_CLUSTER=true</code> (used by <code>make test-e2e-existing</code>), the suite does <strong>not</strong>
 uninstall CRDs or cert-manager by default. To enable full cleanup, set:
-<code>E2E_EXISTING_CLUSTER_FULL_CLEANUP=true</code>.</p>
+<code>E2E_EXISTING_CLUSTER_FULL_CLEANUP=true</code>.
+In existing-cluster mode, you must also provide a suitable expandable StorageClass if you want storage-resize tests:
+set <code>E2E_STORAGE_CLASS=&lt;name&gt;</code> to a class with <code>allowVolumeExpansion: true</code>.</p>
 </div>
 </div>
 <div class="tabbed-block">
