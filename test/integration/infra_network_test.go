@@ -281,8 +281,8 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 	namespace := newTestNamespace(t)
 
 	cluster := newMinimalClusterObj(namespace, "infra-bluegreen-service-selector")
-	cluster.Spec.UpdateStrategy = openbaov1alpha1.UpdateStrategy{
-		Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+		Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
 	}
 	cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
 		Enabled: true,
