@@ -249,10 +249,15 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 	}
 
 	// JWT auth configuration
-	if restore.Spec.JWTAuthRole != "" {
+	jwtRole := restore.Spec.JWTAuthRole
+	if jwtRole == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
+		jwtRole = constants.RoleNameRestore
+	}
+
+	if jwtRole != "" {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  constants.EnvBackupJWTAuthRole,
-			Value: restore.Spec.JWTAuthRole,
+			Value: jwtRole,
 		})
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  constants.EnvBackupAuthMethod,
@@ -290,7 +295,12 @@ func buildRestoreVolumes(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 	}
 
 	// JWT token volume (if using JWT auth)
-	if restore.Spec.JWTAuthRole != "" {
+	jwtRole := restore.Spec.JWTAuthRole
+	if jwtRole == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
+		jwtRole = constants.RoleNameRestore
+	}
+
+	if jwtRole != "" {
 		audience := auth.OpenBaoJWTAudience()
 		expirationSeconds := int64(3600)
 		volumes = append(volumes, corev1.Volume{
@@ -354,7 +364,12 @@ func buildRestoreVolumeMounts(restore *openbaov1alpha1.OpenBaoRestore, cluster *
 	}
 
 	// JWT token mount
-	if restore.Spec.JWTAuthRole != "" {
+	jwtRole := restore.Spec.JWTAuthRole
+	if jwtRole == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
+		jwtRole = constants.RoleNameRestore
+	}
+
+	if jwtRole != "" {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      restoreJWTTokenVolumeName,
 			MountPath: restoreJWTTokenMountPath,

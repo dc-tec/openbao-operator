@@ -72,6 +72,9 @@ type OpenBaoRestoreSpec struct {
 	// The role must be configured in OpenBao and must grant the "update" capability on
 	// sys/storage/raft/snapshot-force. The role must bind to the restore ServiceAccount
 	// (<cluster-name>-restore-serviceaccount) in the cluster namespace.
+	//
+	// If this field is empty and the target OpenBaoCluster has OIDC enabled,
+	// the operator will default to using the "openbao-operator-restore" role.
 	// +optional
 	JWTAuthRole string `json:"jwtAuthRole,omitempty"`
 

@@ -94,8 +94,12 @@ func requeueAfter(duration time.Duration) recon.Result {
 // For Green resources (StatefulSet and snapshot Jobs), we verify and pin digests here to ensure the
 // target images are validated when ImageVerification is enabled.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	updateStrategy := "RollingUpdate"
+	if cluster.Spec.Upgrade != nil {
+		updateStrategy = string(cluster.Spec.Upgrade.Strategy)
+	}
 	logger.Info("Manager reconciling",
-		"updateStrategy", cluster.Spec.UpdateStrategy.Type,
+		"updateStrategy", updateStrategy,
 		"currentVersion", cluster.Status.CurrentVersion,
 		"specVersion", cluster.Spec.Version,
 		"initialized", cluster.Status.Initialized,
@@ -193,9 +197,13 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 }
 
 func (m *Manager) shouldReconcileBlueGreen(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	if cluster.Spec.UpdateStrategy.Type != openbaov1alpha1.UpdateStrategyBlueGreen {
+	if cluster.Spec.Upgrade == nil || cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen {
+		updateStrategy := "nil"
+		if cluster.Spec.Upgrade != nil {
+			updateStrategy = string(cluster.Spec.Upgrade.Strategy)
+		}
 		logger.V(1).Info("UpdateStrategy is not BlueGreen; skipping blue/green upgrade reconciliation",
-			"updateStrategy", cluster.Spec.UpdateStrategy.Type)
+			"updateStrategy", updateStrategy)
 		return false
 	}
 	return true
@@ -403,8 +411,8 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 		"targetVersion", cluster.Spec.Version)
 
 	// Pre-upgrade snapshot (if enabled)
-	if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
-		cluster.Spec.UpdateStrategy.BlueGreen.PreUpgradeSnapshot {
+	if cluster.Spec.Upgrade.BlueGreen != nil &&
+		cluster.Spec.Upgrade.BlueGreen.PreUpgradeSnapshot {
 		jobName := preUpgradeSnapshotJobName(cluster)
 		if cluster.Status.BlueGreen.PreUpgradeSnapshotJobName != jobName {
 			_, err := m.ensurePreUpgradeSnapshotJob(ctx, logger, cluster, jobName)
@@ -606,14 +614,14 @@ func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cl
 	}
 
 	// Check MinSyncDuration if configured
-	if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
-		cluster.Spec.UpdateStrategy.BlueGreen.Verification != nil &&
-		cluster.Spec.UpdateStrategy.BlueGreen.Verification.MinSyncDuration != "" {
+	if cluster.Spec.Upgrade.BlueGreen != nil &&
+		cluster.Spec.Upgrade.BlueGreen.Verification != nil &&
+		cluster.Spec.Upgrade.BlueGreen.Verification.MinSyncDuration != "" {
 		if cluster.Status.BlueGreen.StartTime == nil {
 			return phaseOutcome{}, fmt.Errorf("StartTime is nil in Syncing phase")
 		}
 
-		minDuration, err := time.ParseDuration(cluster.Spec.UpdateStrategy.BlueGreen.Verification.MinSyncDuration)
+		minDuration, err := time.ParseDuration(cluster.Spec.Upgrade.BlueGreen.Verification.MinSyncDuration)
 		if err != nil {
 			return phaseOutcome{}, fmt.Errorf("invalid MinSyncDuration: %w", err)
 		}
@@ -636,11 +644,11 @@ func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cl
 	}
 
 	// Check for pre-promotion hook
-	if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
-		cluster.Spec.UpdateStrategy.BlueGreen.Verification != nil &&
-		cluster.Spec.UpdateStrategy.BlueGreen.Verification.PrePromotionHook != nil {
+	if cluster.Spec.Upgrade.BlueGreen != nil &&
+		cluster.Spec.Upgrade.BlueGreen.Verification != nil &&
+		cluster.Spec.Upgrade.BlueGreen.Verification.PrePromotionHook != nil {
 
-		hook := cluster.Spec.UpdateStrategy.BlueGreen.Verification.PrePromotionHook
+		hook := cluster.Spec.Upgrade.BlueGreen.Verification.PrePromotionHook
 		hookResult, err := m.ensurePrePromotionHookJob(ctx, logger, cluster, hook)
 		if err != nil {
 			return phaseOutcome{}, fmt.Errorf("failed to ensure pre-promotion hook job: %w", err)
@@ -662,7 +670,7 @@ func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cl
 	}
 
 	// Check if AutoPromote is disabled
-	if cluster.Spec.UpdateStrategy.BlueGreen != nil && !cluster.Spec.UpdateStrategy.BlueGreen.AutoPromote {
+	if cluster.Spec.Upgrade.BlueGreen != nil && !cluster.Spec.Upgrade.BlueGreen.AutoPromote {
 		logger.Info("AutoPromote is disabled; waiting for manual approval")
 		// Stay in Syncing phase until manual approval (annotation or field update)
 		return hold(), nil
@@ -939,9 +947,9 @@ func (m *Manager) abortUpgrade(ctx context.Context, logger logr.Logger, cluster 
 
 // getMaxJobFailures returns the configured max job failures threshold or default (5).
 func (m *Manager) getMaxJobFailures(cluster *openbaov1alpha1.OpenBaoCluster) int32 {
-	if cluster.Spec.UpdateStrategy.BlueGreen != nil &&
-		cluster.Spec.UpdateStrategy.BlueGreen.MaxJobFailures != nil {
-		return *cluster.Spec.UpdateStrategy.BlueGreen.MaxJobFailures
+	if cluster.Spec.Upgrade.BlueGreen != nil &&
+		cluster.Spec.Upgrade.BlueGreen.MaxJobFailures != nil {
+		return *cluster.Spec.Upgrade.BlueGreen.MaxJobFailures
 	}
 	return 5 // Default
 }

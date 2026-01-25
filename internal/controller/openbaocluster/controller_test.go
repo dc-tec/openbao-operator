@@ -373,8 +373,8 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 					InitContainer: &openbaov1alpha1.InitContainerConfig{
 						Image: "openbao/openbao-config-init:latest",
 					},
-					UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-						Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
 					},
 					Gateway: &openbaov1alpha1.GatewayConfig{
 						Enabled: true,

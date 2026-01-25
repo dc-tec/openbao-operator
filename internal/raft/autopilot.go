@@ -252,7 +252,7 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, clus
 	}
 
 	// Create authenticated client
-	client, err := factory.NewWithJWT(ctx, baseURL, "openbao-operator", jwtToken)
+	client, err := factory.NewWithJWT(ctx, baseURL, constants.RoleNameOperator, jwtToken)
 	if err != nil {
 		return nil, m.handleJWTAuthError(cluster, err)
 	}
@@ -310,7 +310,7 @@ func (m *Manager) handleJWTAuthError(cluster *openbaov1alpha1.OpenBaoCluster, er
 		)
 	}
 	if strings.Contains(err.Error(), "status 400") {
-		guidance := "Ensure JWT role 'openbao-operator' is configured"
+		guidance := fmt.Sprintf("Ensure JWT role '%s' is configured", constants.RoleNameOperator)
 		if cluster.Status.Initialized {
 			guidance = "Manually configure JWT role via OpenBao API/CLI"
 		}

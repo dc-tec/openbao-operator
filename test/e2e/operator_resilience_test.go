@@ -127,12 +127,14 @@ var _ = Describe("Chaos", Label("chaos", "security", "cluster", "slow"), Ordered
 		})
 
 		It("prevents deletion of managed StatefulSet (policy enforcement)", func() {
+			// Wait for StatefulSet to be created by the operator
 			sts := &appsv1.StatefulSet{}
-			err := admin.Get(ctx, types.NamespacedName{Name: chaos.Name, Namespace: tenantNamespace}, sts)
-			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return admin.Get(ctx, types.NamespacedName{Name: chaos.Name, Namespace: tenantNamespace}, sts)
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			// Attempt to delete the StatefulSet - this should be blocked by the ValidatingAdmissionPolicy
-			err = admin.Delete(ctx, sts)
+			err := admin.Delete(ctx, sts)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
 			Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy"))

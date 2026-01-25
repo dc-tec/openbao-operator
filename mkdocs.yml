@@ -111,6 +111,7 @@ nav:
                       - Server Configuration: user-guide/openbaocluster/configuration/server.md
                       - External Access: user-guide/openbaocluster/configuration/external-access.md
                       - Network: user-guide/openbaocluster/configuration/network.md
+                      - Air-Gapped / Private Registries: user-guide/openbaocluster/configuration/air-gapped.md
                       - Resources & Storage: user-guide/openbaocluster/configuration/resources-storage.md
                       - Gateway API: user-guide/openbaocluster/configuration/gateway-api.md
                       - Observability: user-guide/openbaocluster/configuration/observability.md

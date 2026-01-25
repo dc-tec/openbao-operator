@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/infra"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/security"
@@ -21,6 +22,7 @@ import (
 )
 
 func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
+	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
 	scheme := runtime.NewScheme()
 	_ = openbaov1alpha1.AddToScheme(scheme)
 	_ = batchv1.AddToScheme(scheme)
@@ -35,15 +37,17 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version: "2.4.4",
-			UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-				Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
 				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 					MaxJobFailures: &maxFailures,
 				},
 			},
-			Upgrade: &openbaov1alpha1.UpgradeConfig{
-				ExecutorImage: "example.com/upgrade:latest",
-				JWTAuthRole:   "upgrade",
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
 			},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
@@ -110,6 +114,7 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 }
 
 func TestRunExecutorJob_FailedJob_DoesNotRetryWhenAutoRollbackDisabled(t *testing.T) {
+	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
 	scheme := runtime.NewScheme()
 	_ = openbaov1alpha1.AddToScheme(scheme)
 	_ = batchv1.AddToScheme(scheme)
@@ -123,13 +128,19 @@ func TestRunExecutorJob_FailedJob_DoesNotRetryWhenAutoRollbackDisabled(t *testin
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version: "2.4.4",
-			UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-				Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
 				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 					AutoRollback: &openbaov1alpha1.AutoRollbackConfig{
 						Enabled:      false,
 						OnJobFailure: true,
 					},
+				},
+			},
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
 				},
 			},
 		},
@@ -192,6 +203,7 @@ func TestRunExecutorJob_FailedJob_DoesNotRetryWhenAutoRollbackDisabled(t *testin
 }
 
 func TestRunExecutorJob_FailedJob_TriggersAbortWhenMaxFailuresReached(t *testing.T) {
+	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
 	scheme := runtime.NewScheme()
 	_ = openbaov1alpha1.AddToScheme(scheme)
 	_ = batchv1.AddToScheme(scheme)
@@ -206,10 +218,16 @@ func TestRunExecutorJob_FailedJob_TriggersAbortWhenMaxFailuresReached(t *testing
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version: "2.4.4",
-			UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-				Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
 				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 					MaxJobFailures: &maxFailures,
+				},
+			},
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
 				},
 			},
 		},

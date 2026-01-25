@@ -9,6 +9,18 @@ import (
 // DefaultBackupImage returns the default backup executor image.
 // If the cluster specifies an image, it should be used instead.
 // The tag is derived from OPERATOR_VERSION env var.
+// Default repositories
+const (
+	// DefaultOpenBaoImageRepository is the default image repository used for OpenBao.
+	DefaultOpenBaoImageRepository = "docker.io/openbao/openbao"
+
+	// EnvOpenBaoImageRepo is the environment variable to override the OpenBao image repository.
+	EnvOpenBaoImageRepo = "RELATED_IMAGE_OPENBAO"
+)
+
+// DefaultBackupImage returns the default backup executor image.
+// If the cluster specifies an image, it should be used instead.
+// The tag is derived from OPERATOR_VERSION env var.
 func DefaultBackupImage() (string, error) {
 	return defaultImage(EnvOperatorBackupImageRepo, DefaultBackupImageRepository)
 }
@@ -25,6 +37,23 @@ func DefaultUpgradeImage() (string, error) {
 // The tag is derived from OPERATOR_VERSION env var.
 func DefaultInitImage() (string, error) {
 	return defaultImage(EnvOperatorInitImageRepo, DefaultInitImageRepository)
+}
+
+// GetOpenBaoImage constructs the OpenBao image reference.
+// It uses specVersion for the tag.
+func GetOpenBaoImage(specVersion string) string {
+	repo := os.Getenv(EnvOpenBaoImageRepo)
+	if repo == "" {
+		repo = DefaultOpenBaoImageRepository
+	}
+
+	// Handle "v" prefix consistency
+	tag := specVersion
+	if !strings.HasPrefix(tag, "v") {
+		tag = "v" + tag
+	}
+
+	return fmt.Sprintf("%s:%s", repo, tag)
 }
 
 // defaultImage constructs an image reference from an env var override or default repo,

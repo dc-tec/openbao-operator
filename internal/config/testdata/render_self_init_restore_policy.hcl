@@ -1,7 +1,7 @@
 initialize "operator-bootstrap" {
   request "enable-jwt-auth" {
     operation = "update"
-    path      = "sys/auth/jwt"
+    path      = "sys/auth/jwt-operator"
     data {
       type        = "jwt"
       description = "Auth method for OpenBao Operator"
@@ -9,7 +9,7 @@ initialize "operator-bootstrap" {
   }
   request "config-jwt-auth" {
     operation = "update"
-    path      = "auth/jwt/config"
+    path      = "auth/jwt-operator/config"
     data {
       bound_issuer           = "https://kubernetes.default.svc"
       jwt_validation_pubkeys = ["-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"]
@@ -24,7 +24,7 @@ initialize "operator-bootstrap" {
   }
   request "create-operator-role" {
     operation = "update"
-    path      = "auth/jwt/role/openbao-operator"
+    path      = "auth/jwt-operator/role/openbao-operator"
     data {
       role_type       = "jwt"
       user_claim      = "sub"
@@ -37,21 +37,21 @@ initialize "operator-bootstrap" {
   }
   request "create-restore-policy" {
     operation = "update"
-    path      = "sys/policies/acl/restore"
+    path      = "sys/policies/acl/openbao-operator-restore"
     data {
       policy = "path \"sys/storage/raft/snapshot-force\" { capabilities = [\"update\"] }"
     }
   }
   request "create-restore-jwt-role" {
     operation = "update"
-    path      = "auth/jwt/role/restore"
+    path      = "auth/jwt-operator/role/restore"
     data {
       role_type       = "jwt"
       user_claim      = "sub"
       bound_audiences = ["openbao-internal"]
       bound_subject   = "system:serviceaccount:default:hardened-cluster-restore-serviceaccount"
-      token_policies  = ["restore"]
-      policies        = ["restore"]
+      token_policies  = ["openbao-operator-restore"]
+      policies        = ["openbao-operator-restore"]
       ttl             = "1h"
     }
   }

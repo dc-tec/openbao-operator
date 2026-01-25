@@ -321,9 +321,11 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 					Image:   configInitImage,
 				},
 				SelfInit: &openbaov1alpha1.SelfInitConfig{
-					Enabled:          true,
-					BootstrapJWTAuth: true,
-					Requests:         e2ehelpers.CreateHardenedProfileRequests(f.Namespace),
+					Enabled: true,
+					OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+						Enabled: true,
+					},
+					Requests: e2ehelpers.CreateHardenedProfileRequests(f.Namespace),
 				},
 				TLS: openbaov1alpha1.TLSConfig{
 					Enabled: true,

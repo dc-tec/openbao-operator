@@ -242,6 +242,9 @@ type BackupSchedule struct {
 	// The role must be configured in OpenBao and must grant the "read" capability on
 	// sys/storage/raft/snapshot. The role must bind to the backup ServiceAccount
 	// (<cluster-name>-backup-serviceaccount) in the cluster namespace.
+	//
+	// If OIDC is enabled in SelfInit and this field is empty, a default role
+	// named "openbao-operator-backup" will be assumed/created.
 	// +optional
 	JWTAuthRole string `json:"jwtAuthRole,omitempty"`
 	// TokenSecretRef optionally references a Secret containing an OpenBao API
@@ -355,17 +358,6 @@ type BlueGreenConfig struct {
 	AutoRollback *AutoRollbackConfig `json:"autoRollback,omitempty"`
 }
 
-// UpdateStrategy controls how the operator handles version changes.
-type UpdateStrategy struct {
-	// Type controls how the operator handles version changes.
-	// +kubebuilder:default="RollingUpdate"
-	Type UpdateStrategyType `json:"type,omitempty"`
-
-	// BlueGreen configures the behavior when Type is BlueGreen.
-	// +optional
-	BlueGreen *BlueGreenConfig `json:"blueGreen,omitempty"`
-}
-
 // UpgradeConfig defines configuration for upgrade operations.
 type UpgradeConfig struct {
 	// ExecutorImage is the container image to use for upgrade operations.
@@ -403,6 +395,9 @@ type UpgradeConfig struct {
 	// The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),
 	// which is automatically created by the operator.
 	//
+	// If OIDC is enabled in SelfInit and this field is empty, a default role
+	// named "openbao-operator-upgrade" will be assumed/created.
+	//
 	// Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
 	// +optional
 	JWTAuthRole string `json:"jwtAuthRole,omitempty"`
@@ -421,6 +416,14 @@ type UpgradeConfig struct {
 	// If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
 	// +optional
 	TokenSecretRef *corev1.LocalObjectReference `json:"tokenSecretRef,omitempty"`
+
+	// Strategy defines the update strategy to use.
+	// +kubebuilder:default="RollingUpdate"
+	Strategy UpdateStrategyType `json:"strategy,omitempty"`
+
+	// BlueGreen configures the behavior when Strategy is BlueGreen.
+	// +optional
+	BlueGreen *BlueGreenConfig `json:"blueGreen,omitempty"`
 }
 
 // RestoreConfig defines optional configuration for restore operations.
@@ -429,9 +432,12 @@ type UpgradeConfig struct {
 // that can be referenced by OpenBaoRestore resources.
 type RestoreConfig struct {
 	// JWTAuthRole is the name of the JWT Auth role configured in OpenBao
-	// for restore operations. When set, and when spec.selfInit.bootstrapJWTAuth is true,
+	// for restore operations. When set, and when spec.selfInit.oidc.enabled is true,
 	// the operator bootstraps a restore policy and JWT role bound to the restore ServiceAccount
 	// (<cluster-name>-restore-serviceaccount).
+	//
+	// If OIDC is enabled in SelfInit and this field is empty, a default role
+	// named "openbao-operator-restore" will be assumed/created.
 	//
 	// The role must grant "update" capability on sys/storage/raft/snapshot-force.
 	//
@@ -652,22 +658,11 @@ type SelfInitConfig struct {
 	// and does NOT create a root token Secret (root token is auto-revoked).
 	// +kubebuilder:default=false
 	Enabled bool `json:"enabled"`
-	// BootstrapJWTAuth, when true, enables automatic JWT authentication bootstrap
-	// for the operator. This configures JWT auth in OpenBao, sets up OIDC discovery,
-	// creates the operator policy and role, and optionally creates backup/upgrade
-	// policies and roles if those features are configured with JWTAuthRole.
-	//
-	// When false (default), JWT auth must be manually configured via SelfInit requests.
-	// This is the recommended approach for users who want full control over JWT auth setup.
-	//
-	// Bootstrap requires:
-	// - OIDC issuer URL to be discoverable at operator startup
-	// - OIDC JWKS public keys to be available at operator startup
-	// - Operator namespace and service account to be known
-	//
-	// +kubebuilder:default=false
+	// OIDC configures the identity provider integration.
+	// When enabled, this configures JWT auth in OpenBao, sets up OIDC discovery,
+	// and creates the operator policy and role.
 	// +optional
-	BootstrapJWTAuth bool `json:"bootstrapJWTAuth,omitempty"`
+	OIDC *SelfInitOIDCConfig `json:"oidc,omitempty"`
 	// Requests defines the API operations to execute during self-initialization.
 	// Each request becomes a named request block inside an initialize stanza.
 	// +optional
@@ -1485,8 +1480,21 @@ type OpenBaoClusterSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Version string `json:"version"`
 	// Image is the container image to run; defaults may be derived from Version.
-	// +kubebuilder:validation:MinLength=1
-	Image string `json:"image"`
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// ServiceAccount configures the Kubernetes ServiceAccount used by the OpenBao Pods.
+	// +optional
+	ServiceAccount *ServiceAccountConfig `json:"serviceAccount,omitempty"`
+
+	// ImagePullSecrets is a list of references to secrets in the same namespace
+	// to use for pulling any images used by this Cluster (server, init, sidecars).
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+
+	// Observability configures telemetry and metrics integration.
+	// +optional
+	Observability *ObservabilityConfig `json:"observability,omitempty"`
 	// Replicas is the desired number of OpenBao pods.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:default=3
@@ -1600,9 +1608,6 @@ type OpenBaoClusterSpec struct {
 	// +kubebuilder:validation:Enum=Hardened;Development
 	// +optional
 	Profile Profile `json:"profile,omitempty"`
-	// UpdateStrategy controls how the operator handles version changes.
-	// +optional
-	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty"`
 }
 
 // UpgradeProgress tracks the state of an in-progress upgrade.
@@ -2150,4 +2155,69 @@ type TelemetryConfig struct {
 
 func init() {
 	SchemeBuilder.Register(&OpenBaoCluster{}, &OpenBaoClusterList{})
+}
+
+// ServiceAccountConfig configures the ServiceAccount used by OpenBao pods.
+type ServiceAccountConfig struct {
+	// Name overrides the generated ServiceAccount name.
+	// If not specified, defaults to "<cluster-name>-serviceaccount".
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Annotations to add to the ServiceAccount.
+	// Useful for cloud provider Workload Identity (e.g. eks.amazonaws.com/role-arn).
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// ObservabilityConfig configures observability features.
+type ObservabilityConfig struct {
+	// Metrics configures integration with Prometheus/OpenMetrics.
+	// +optional
+	Metrics *MetricsConfig `json:"metrics,omitempty"`
+}
+
+// MetricsConfig configures metrics collection.
+type MetricsConfig struct {
+	// Enabled configures the OpenBao telemetry stanza and creates a ServiceMonitor.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// ServiceMonitor controls whether to create a Prometheus Operator ServiceMonitor.
+	// +optional
+	ServiceMonitor *ServiceMonitorConfig `json:"serviceMonitor,omitempty"`
+}
+
+// ServiceMonitorConfig configures the Prometheus ServiceMonitor.
+type ServiceMonitorConfig struct {
+	// Enabled controls whether to create the ServiceMonitor.
+	// Defaults to true if Metrics are enabled.
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled"`
+
+	// Interval is the scrape interval.
+	// +kubebuilder:default="30s"
+	// +optional
+	Interval string `json:"interval,omitempty"`
+
+	// ScrapeTimeout is the scrape timeout.
+	// +kubebuilder:default="10s"
+	// +optional
+	ScrapeTimeout string `json:"scrapeTimeout,omitempty"`
+}
+
+// SelfInitOIDCConfig configures OIDC identity for the cluster.
+type SelfInitOIDCConfig struct {
+	// Enabled triggers the bootstrap logic.
+	Enabled bool `json:"enabled"`
+
+	// Audience defaults to "openbao-internal" if unset.
+	// This value is written to the JWT auth role AND used in the TokenRequest.
+	// +optional
+	Audience string `json:"audience,omitempty"`
+
+	// Issuer overrides the auto-discovered K8s issuer URL.
+	// Critical for scenarios where OpenBao sees a different K8s URL than the Operator.
+	// +optional
+	Issuer string `json:"issuer,omitempty"`
 }

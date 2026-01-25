@@ -27,10 +27,8 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	namespace := newTestNamespace(t)
 
 	cluster := newMinimalClusterObj(namespace, "bluegreen")
-	cluster.Spec.UpdateStrategy = openbaov1alpha1.UpdateStrategy{
-		Type: openbaov1alpha1.UpdateStrategyBlueGreen,
-	}
 	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+		Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
 		ExecutorImage: "openbao/upgrade-executor:dev",
 		JWTAuthRole:   "upgrade",
 	}
@@ -173,10 +171,8 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 
 	cluster := newMinimalClusterObj(namespace, "bluegreen-leader-fallback")
 	cluster.Spec.Replicas = 1
-	cluster.Spec.UpdateStrategy = openbaov1alpha1.UpdateStrategy{
-		Type: openbaov1alpha1.UpdateStrategyBlueGreen,
-	}
 	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+		Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
 		ExecutorImage: "openbao/upgrade-executor:dev",
 		JWTAuthRole:   "upgrade",
 	}

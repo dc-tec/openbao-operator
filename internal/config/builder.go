@@ -139,8 +139,25 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 		body.AppendBlock(block)
 	}
 
-	// 10. Render telemetry if configured
-	if telemetryBlock := buildTelemetryBlock(cluster.Spec.Telemetry); telemetryBlock != nil {
+	// 10. Render telemetry if configured (via Spec.Telemetry OR Spec.Observability)
+	telemetryConfig := cluster.Spec.Telemetry
+	if cluster.Spec.Observability != nil && cluster.Spec.Observability.Metrics != nil && cluster.Spec.Observability.Metrics.Enabled {
+		if telemetryConfig == nil {
+			telemetryConfig = &openbaov1alpha1.TelemetryConfig{}
+		} else {
+			// Create a shallow copy to avoid mutating the cache
+			tc := *telemetryConfig
+			telemetryConfig = &tc
+		}
+
+		// Apply defaults for Prometheus integration
+		telemetryConfig.DisableHostname = true
+		if telemetryConfig.PrometheusRetentionTime == "" {
+			telemetryConfig.PrometheusRetentionTime = "30s"
+		}
+	}
+
+	if telemetryBlock := buildTelemetryBlock(telemetryConfig); telemetryBlock != nil {
 		body.AppendBlock(telemetryBlock)
 	}
 
@@ -229,7 +246,7 @@ func parseSemVer(version string) (semVer, error) {
 }
 
 func upgradePolicyForCluster(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		return jwtPolicyUpgradeBlueGreen
 	}
 	return jwtPolicyUpgradeRolling

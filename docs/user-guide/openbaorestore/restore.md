@@ -137,7 +137,7 @@ How the Restore Job authenticates to the OpenBao cluster leader.
 
 === "JWT Auth (Recommended)"
 
-    Uses a short-lived Kubernetes ServiceAccount token. Requires `sys/auth/jwt` to be enabled on the target.
+    Uses a short-lived Kubernetes ServiceAccount token. Requires `sys/auth/jwt-operator` to be enabled on the target.
 
     ```yaml
     spec:
@@ -147,11 +147,11 @@ How the Restore Job authenticates to the OpenBao cluster leader.
     ??? example "OpenBao Config for JWT Auth"
         Run this in OpenBao to configure the role:
         ```bash
-        bao write auth/jwt/role/restore \
+        bao write auth/jwt-operator/role/restore \
             role_type=jwt \
             bound_audiences=openbao-internal \
             bound_subject="system:serviceaccount:openbao:prod-cluster-restore-serviceaccount" \
-            token_policies=restore \
+            token_policies=openbao-operator-restore \
             ttl=1h
         ```
 

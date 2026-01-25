@@ -27,8 +27,10 @@ func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version:        "2.4.4",
-			UpdateStrategy: openbaov1alpha1.UpdateStrategy{Type: openbaov1alpha1.UpdateStrategyRollingUpdate},
+			Version: "2.4.4",
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Strategy: openbaov1alpha1.UpdateStrategyRollingUpdate,
+			},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Initialized:    true,

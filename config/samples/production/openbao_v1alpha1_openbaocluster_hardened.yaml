@@ -5,7 +5,7 @@
 # - External TLS management (cert-manager or CSI)
 # - External KMS for auto-unseal (no static keys in Kubernetes Secrets)
 # - Self-initialization enabled (no root token stored)
-# - JWT authentication (opt-in via spec.selfInit.bootstrapJWTAuth)
+# - JWT authentication (opt-in via spec.selfInit.oidc.enabled)
 #
 # IMPORTANT: The Hardened profile is REQUIRED for production deployments.
 # The Development profile stores root tokens in Kubernetes Secrets, which
@@ -83,6 +83,8 @@ spec:
   # Root token is automatically revoked after initialization - no root token Secret is created
   selfInit:
     enabled: true # Required for Hardened profile
+    oidc:
+      enabled: true
     requests:
       # Enable file audit logging
       - name: enable-file-audit
@@ -92,7 +94,7 @@ spec:
           type: file
           fileOptions:
             filePath: /var/log/openbao/audit.log
-      # JWT authentication is automatically bootstrapped by the Hardened profile
+      # JWT authentication is automatically bootstrapped by spec.selfInit.oidc.enabled
       # Backup and upgrade policies/roles are also automatically created when
       # spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are configured
       # You can still add additional configuration if needed

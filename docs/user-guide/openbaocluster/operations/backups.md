@@ -27,9 +27,9 @@ flowchart LR
 ## Prerequisites
 
 - [ ] **Object Storage**: Configured bucket or container in one of the supported providers:
-    - **S3**: AWS S3 or S3-compatible storage (MinIO, Ceph, etc.)
-    - **GCS**: Google Cloud Storage bucket
-    - **Azure**: Azure Blob Storage container
+  - **S3**: AWS S3 or S3-compatible storage (MinIO, Ceph, etc.)
+  - **GCS**: Google Cloud Storage bucket
+  - **Azure**: Azure Blob Storage container
 - [ ] **Credentials**: Write permissions for the bucket/container
 - [ ] **Network**: Egress allowed to the storage endpoint (Critical for `Hardened` profile)
 
@@ -41,46 +41,28 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
 
     This method uses a projected ServiceAccount token to authenticate with OpenBao.
 
-    ??? abstract "One-time Setup: Configure JWT Auth"
-        Before creating the cluster, ensure OpenBao is configured to accept the Kubernetes JWT token.
-        
-        **Using Self-Init:**
-        ```yaml
-        spec:
-          selfInit:
-            requests:
-              # 1. Enable JWT Auth
-              - name: enable-jwt-auth
-                operation: update
-                path: sys/auth/jwt
-                authMethod: { type: jwt }
-              # 2. Configure JWT Validation
-              - name: configure-jwt-auth
-                operation: update
-                path: auth/jwt/config
-                data:
-                  bound_issuer: "https://kubernetes.default.svc"
-                  jwt_validation_pubkeys: ["<K8S_JWT_PUBLIC_KEY>"]
-              # 3. Create Backup Policy
-              - name: create-backup-policy
-                operation: update
-                path: sys/policies/acl/backup
-                policy:
-                  policy: |
-                    path "sys/storage/raft/snapshot" { capabilities = ["read"] }
-              # 4. Create Role bound to ServiceAccount
-              - name: create-backup-jwt-role
-                operation: update
-                path: auth/jwt/role/backup
-                data:
-                  role_type: jwt
-                  bound_audiences: ["openbao-internal"]
-                  bound_claims:
-                    kubernetes.io/namespace: openbao
-                    kubernetes.io/serviceaccount/name: backup-cluster-backup-serviceaccount
-                  token_policies: backup
-                  ttl: 1h
-        ```
+    This method uses a projected ServiceAccount token to authenticate with OpenBao.
+
+    !!! success "Automated Setup"
+        When `spec.selfInit.oidc.enabled` is `true`, the Operator automatically configures:
+        1. JWT Auth Method (`auth/jwt-operator`)
+        2. OIDC Discovery
+        3. Backup Policy (`openbao-operator-backup`)
+        4. Backup Role (`openbao-operator-backup`)
+
+        No manual configuration is required.
+
+    **Cluster Configuration:**
+
+    Ensure OIDC is enabled in your cluster:
+
+    ```yaml
+    spec:
+      selfInit:
+        enabled: true
+        oidc:
+          enabled: true
+    ```
 
     !!! note "JWT audience"
         The backup Job uses the audience from `OPENBAO_JWT_AUDIENCE` (default: `openbao-internal`).
@@ -101,8 +83,8 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
         spec:
           backup:
             schedule: "0 3 * * *"  # Daily at 3 AM
-            executorImage: "openbao/backup-executor:v0.1.0"
-            jwtAuthRole: backup    # Matches the role name above
+            # executorImage: inferred from operator version
+            # jwtAuthRole: inferred from selfInit (openbao-operator-backup)
             
             target:
               provider: s3  # Default, can be omitted

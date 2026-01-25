@@ -229,9 +229,10 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:          true,
-						BootstrapJWTAuth: true,
-						// BootstrapJWTAuth already enables JWT auth, so we don't need DefaultAdminSelfInitRequests()
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
 						Requests: e2ehelpers.CreateAutopilotVerificationRequests(f.Namespace),
 					},
 					TLS: openbaov1alpha1.TLSConfig{

@@ -125,9 +125,11 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:          true,
-						BootstrapJWTAuth: true, // Operator will auto-create upgrade role
-						Requests:         e2ehelpers.CreateE2ERequests(tenantNamespace),
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						}, // Operator will auto-create upgrade role
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -142,7 +144,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						ExecutorImage: upgradeExecutorImage,
-						JWTAuthRole:   "upgrade",
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -323,8 +324,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					Version:  initialVersion,
 					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
 					Replicas: 3,
-					UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-						Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
+						ExecutorImage: upgradeExecutorImage,
 						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 							AutoPromote:        true,
 							PreUpgradeSnapshot: true, // Enable pre-upgrade snapshot
@@ -338,14 +340,16 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:          true,
-						Requests:         allRequests,
-						BootstrapJWTAuth: true, // Operator will auto-create upgrade and backup roles
+						Enabled:  true,
+						Requests: allRequests,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
 					},
 					Backup: &openbaov1alpha1.BackupSchedule{
 						Schedule:      "0 0 * * *",
 						ExecutorImage: backupExecutorImage,
-						JWTAuthRole:   "backup", // Triggers auto-creation of backup policy/role via bootstrap
+						// JWTAuthRole not set - operator will auto-create backup role when OIDC is enabled
 						Target: openbaov1alpha1.BackupTarget{
 							Endpoint:     rustfsEndpoint,
 							Bucket:       rustfsBucket,
@@ -366,10 +370,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
 						APIServerCIDR: apiServerCIDR,
-					},
-					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						ExecutorImage: upgradeExecutorImage,
-						JWTAuthRole:   "upgrade",
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -666,8 +666,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					Version:  initialVersion,
 					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
 					Replicas: 3,
-					UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-						Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
+						ExecutorImage: upgradeExecutorImage,
 						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 							AutoPromote:    true,
 							MaxJobFailures: &maxFailures,
@@ -682,8 +683,11 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:          true,
-						BootstrapJWTAuth: true, // Operator will auto-create upgrade role
+						Enabled:  true,
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -695,10 +699,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
 						APIServerCIDR: apiServerCIDR,
-					},
-					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						ExecutorImage: upgradeExecutorImage,
-						JWTAuthRole:   "upgrade",
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -763,7 +763,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			brokenPolicyRequest := openbaov1alpha1.SelfInitRequest{
 				Name:      "override-upgrade-policy-broken",
 				Operation: openbaov1alpha1.SelfInitOperationUpdate,
-				Path:      "sys/policies/acl/upgrade",
+				Path:      "sys/policies/acl/openbao-operator-upgrade",
 				Policy: &openbaov1alpha1.SelfInitPolicy{
 					Policy: `path "sys/health" {
   capabilities = ["read"]
@@ -784,8 +784,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					Version:  initialVersion,
 					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
 					Replicas: 3,
-					UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-						Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
+						ExecutorImage: upgradeExecutorImage,
 						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 							AutoPromote: autoPromote,
 							Verification: &openbaov1alpha1.VerificationConfig{
@@ -798,9 +799,11 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:          true,
-						BootstrapJWTAuth: true,
-						Requests:         append([]openbaov1alpha1.SelfInitRequest{brokenPolicyRequest}, e2eRequests...),
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: append([]openbaov1alpha1.SelfInitRequest{brokenPolicyRequest}, e2eRequests...),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -812,10 +815,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
 						APIServerCIDR: apiServerCIDR,
-					},
-					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						ExecutorImage: upgradeExecutorImage,
-						JWTAuthRole:   "upgrade",
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -1053,8 +1052,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					Version:  initialVersion,
 					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
 					Replicas: 3,
-					UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-						Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
+						ExecutorImage: upgradeExecutorImage,
 						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 							AutoPromote: true,
 							Verification: &openbaov1alpha1.VerificationConfig{
@@ -1067,8 +1067,11 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:          true,
-						BootstrapJWTAuth: true,
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -1080,10 +1083,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
 						APIServerCIDR: apiServerCIDR,
-					},
-					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						ExecutorImage: upgradeExecutorImage,
-						JWTAuthRole:   "upgrade",
 					},
 					Gateway: &openbaov1alpha1.GatewayConfig{
 						Enabled: true,

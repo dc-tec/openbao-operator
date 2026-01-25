@@ -285,10 +285,11 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 	}
 
 	// JWT Auth configuration (preferred method)
-	if backupCfg.JWTAuthRole != "" {
+	jwtRole := getEffectiveBackupJWTRole(cluster)
+	if jwtRole != "" {
 		env = append(env, corev1.EnvVar{
 			Name:  constants.EnvBackupJWTAuthRole,
-			Value: backupCfg.JWTAuthRole,
+			Value: jwtRole,
 		})
 		env = append(env, corev1.EnvVar{
 			Name:  constants.EnvBackupAuthMethod,
@@ -304,7 +305,7 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 			Value: backupCfg.TokenSecretRef.Name,
 		})
 		// Only set auth method to token if JWT Auth is not configured
-		if backupCfg.JWTAuthRole == "" {
+		if jwtRole == "" {
 			env = append(env, corev1.EnvVar{
 				Name:  constants.EnvBackupAuthMethod,
 				Value: constants.BackupAuthMethodToken,
@@ -370,7 +371,7 @@ func BuildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster) []corev
 	}
 
 	// Mount JWT token from projected volume (preferred method)
-	if cluster.Spec.Backup.JWTAuthRole != "" {
+	if getEffectiveBackupJWTRole(cluster) != "" {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      openBaoTokenVolumeName,
 			MountPath: openBaoTokenMountPath,
@@ -440,7 +441,7 @@ func BuildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 	}
 
 	// JWT token from projected volume (preferred method)
-	if cluster.Spec.Backup.JWTAuthRole != "" {
+	if getEffectiveBackupJWTRole(cluster) != "" {
 		audience := auth.OpenBaoJWTAudience()
 		volumes = append(volumes, corev1.Volume{
 			Name: openBaoTokenVolumeName,
@@ -486,4 +487,14 @@ func GetBackupExecutorImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, er
 		return cluster.Spec.Backup.ExecutorImage, nil
 	}
 	return constants.DefaultBackupImage()
+}
+
+// getEffectiveBackupJWTRole returns the configured JWT role or defaults it
+// if OIDC is enabled and the role is empty.
+func getEffectiveBackupJWTRole(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	role := cluster.Spec.Backup.JWTAuthRole
+	if role == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
+		return constants.RoleNameBackup
+	}
+	return role
 }

@@ -92,6 +92,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
 	}
 
+	// Skip rolling upgrade if strategy is BlueGreen
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
+		logger.V(1).Info("Skipping rolling upgrade reconciliation; BlueGreen strategy active")
+		return recon.Result{}, nil
+	}
+
 	if cluster.Status.BreakGlass != nil && cluster.Status.BreakGlass.Active && cluster.Spec.BreakGlassAck != cluster.Status.BreakGlass.Nonce {
 		logger.Info("Cluster is in break glass mode; halting upgrade reconciliation",
 			"breakGlassReason", cluster.Status.BreakGlass.Reason,

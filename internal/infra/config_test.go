@@ -364,8 +364,10 @@ func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
 	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
-		Enabled:          true,
-		BootstrapJWTAuth: true, // Opt-in to JWT bootstrap
+		Enabled: true,
+		OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+			Enabled: true,
+		}, // Opt-in to JWT bootstrap
 		Requests: []openbaov1alpha1.SelfInitRequest{
 			{
 				Name:      "enable-stdout-audit",
@@ -441,7 +443,6 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
 		ExecutorImage: "openbao/backup-executor:v0.1.0",
 		Schedule:      "0 3 * * *",
-		JWTAuthRole:   "backup",
 		Target: openbaov1alpha1.BackupTarget{
 			Endpoint:     "https://s3.amazonaws.com",
 			Bucket:       "test-bucket",
@@ -450,8 +451,10 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 		},
 	}
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
-		Enabled:          true,
-		BootstrapJWTAuth: true, // Opt-in to JWT bootstrap (required for backup JWT role creation)
+		Enabled: true,
+		OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+			Enabled: true,
+		}, // Opt-in to JWT bootstrap (required for backup JWT role creation)
 		Requests: []openbaov1alpha1.SelfInitRequest{
 			{
 				Name:      "create-admin-policy",
@@ -496,8 +499,8 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 		`initialize "operator-bootstrap"`,
 		`request "enable-jwt-auth"`,
 		`request "config-jwt-auth"`,
-		`auth/jwt/role/backup`,
-		`sys/policies/acl/backup`,
+		`auth/jwt-operator/role/openbao-operator-backup`,
+		`sys/policies/acl/openbao-operator-backup`,
 	}
 
 	for _, snippet := range expectedSnippets {

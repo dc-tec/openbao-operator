@@ -134,31 +134,98 @@ func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore
 
 // handleValidating validates preconditions and transitions to Running.
 func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
-	// Validate target cluster exists
+	// Validate and get target cluster
+	cluster, result, err := m.validateCluster(ctx, logger, restore)
+	if result != nil || err != nil {
+		if result != nil {
+			return *result, err
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Acquire operation lock
+	lockBefore, forceAcquired, result, err := m.acquireOperationLock(ctx, logger, restore, cluster)
+	if result != nil || err != nil {
+		if result != nil {
+			return *result, err
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Handle lock override event if needed
+	if forceAcquired && lockBefore != nil {
+		m.handleLockOverride(restore, lockBefore)
+	}
+
+	// Validate cluster state
+	if result, err := m.validateClusterState(ctx, logger, restore, cluster); result != nil || err != nil {
+		if result != nil {
+			return *result, err
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Validate authentication
+	if result, err := m.validateAuthentication(ctx, logger, restore, cluster); result != nil || err != nil {
+		if result != nil {
+			return *result, err
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Ensure restore resources (ServiceAccount and RBAC)
+	if err := m.ensureRestoreResources(ctx, logger, restore, cluster); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Transition to Running phase
+	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
+	restore.Status.Message = "Creating restore job"
+
+	if err := m.patchStatusSSA(ctx, restore); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
+	}
+
+	logger.Info("Restore validation passed, transitioning to Running phase")
+	return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
+}
+
+// validateCluster validates that the target cluster exists and checks hardened profile requirements.
+// Returns (cluster, result, error) where result is non-nil if validation failed and should return early.
+func (m *Manager) validateCluster(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (*openbaov1alpha1.OpenBaoCluster, *ctrl.Result, error) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := m.client.Get(ctx, types.NamespacedName{
 		Namespace: restore.Namespace,
 		Name:      restore.Spec.Cluster,
 	}, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			return m.failRestore(ctx, logger, restore, fmt.Sprintf("target cluster %q not found", restore.Spec.Cluster))
+			result, err := m.failRestore(ctx, logger, restore, fmt.Sprintf("target cluster %q not found", restore.Spec.Cluster))
+			return nil, &result, err
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to get target cluster: %w", err)
+		return nil, nil, fmt.Errorf("failed to get target cluster: %w", err)
 	}
 
 	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened &&
 		(cluster.Spec.Network == nil || len(cluster.Spec.Network.EgressRules) == 0) {
-		return m.failRestore(ctx, logger, restore,
+		result, err := m.failRestore(ctx, logger, restore,
 			"Hardened profile requires explicit spec.network.egressRules so restore Jobs can reach the object storage endpoint")
+		return nil, &result, err
 	}
 
+	return cluster, nil, nil
+}
+
+// acquireOperationLock acquires the cluster operation lock for the restore operation.
+// Returns (lockBefore, forceAcquired, result, error) where result is non-nil if lock acquisition failed and should return early.
+func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (*openbaov1alpha1.OperationLockStatus, bool, *ctrl.Result, error) {
 	lockHolder := fmt.Sprintf("%s/%s", constants.ControllerNameOpenBaoRestore, restore.Name)
 	lockMessage := fmt.Sprintf("restore %s/%s", restore.Namespace, restore.Name)
 	forceAcquire := false
 
 	if restore.Spec.OverrideOperationLock {
 		if !restore.Spec.Force {
-			return m.failRestore(ctx, logger, restore, "overrideOperationLock requires force: true")
+			result, err := m.failRestore(ctx, logger, restore, "overrideOperationLock requires force: true")
+			return nil, false, &result, err
 		}
 		if cluster.Status.OperationLock != nil && cluster.Status.OperationLock.Operation != openbaov1alpha1.ClusterOperationRestore {
 			forceAcquire = true
@@ -180,72 +247,84 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 				restore.Status.Message = "Waiting for cluster operation lock"
 			}
 			if statusErr := m.patchStatusSSA(ctx, restore); statusErr != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to patch restore status after lock contention: %w", statusErr)
+				return nil, false, nil, fmt.Errorf("failed to patch restore status after lock contention: %w", statusErr)
 			}
-			// Use RequeueShort to check more frequently when waiting for backup/upgrade to complete
-			return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+			result := ctrl.Result{RequeueAfter: constants.RequeueShort}
+			return nil, false, &result, nil
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to acquire cluster operation lock: %w", err)
+		return nil, false, nil, fmt.Errorf("failed to acquire cluster operation lock: %w", err)
 	}
 
-	if forceAcquire && lockBefore != nil {
-		if m.recorder != nil {
-			m.recorder.Eventf(restore, corev1.EventTypeWarning, "OperationLockOverride",
-				"OverrideOperationLock used; cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder)
-		}
-		meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
-			Type:               constants.ConditionTypeOperationLockOverride,
-			Status:             metav1.ConditionTrue,
-			LastTransitionTime: metav1.Now(),
-			Reason:             constants.ReasonOperationLockOverridden,
-			Message:            fmt.Sprintf("Cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder),
-		})
+	return lockBefore, forceAcquire, nil, nil
+}
+
+// handleLockOverride records an event and sets a condition when a lock override occurs.
+func (m *Manager) handleLockOverride(restore *openbaov1alpha1.OpenBaoRestore, lockBefore *openbaov1alpha1.OperationLockStatus) {
+	if m.recorder != nil {
+		m.recorder.Eventf(restore, corev1.EventTypeWarning, "OperationLockOverride",
+			"OverrideOperationLock used; cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder)
+	}
+	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
+		Type:               constants.ConditionTypeOperationLockOverride,
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             constants.ReasonOperationLockOverridden,
+		Message:            fmt.Sprintf("Cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder),
+	})
+}
+
+// validateClusterState validates that the cluster is in a valid state for restore.
+// Returns (result, error) where result is non-nil if validation failed and should return early.
+func (m *Manager) validateClusterState(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (*ctrl.Result, error) {
+	if restore.Spec.Force {
+		return nil, nil
 	}
 
-	// Check if cluster is in a valid state for restore (unless Force is set)
-	if !restore.Spec.Force {
-		// Check if cluster is initialized
-		if !cluster.Status.Initialized {
-			return m.failRestore(ctx, logger, restore, "target cluster is not initialized (use force: true to override)")
-		}
-
-		// Check if cluster is upgrading
-		upgradingCond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionUpgrading))
-		if upgradingCond != nil && upgradingCond.Status == metav1.ConditionTrue {
-			return m.failRestore(ctx, logger, restore, "cannot restore while cluster is upgrading")
-		}
+	if !cluster.Status.Initialized {
+		result, err := m.failRestore(ctx, logger, restore, "target cluster is not initialized (use force: true to override)")
+		return &result, err
 	}
 
-	// Validate authentication is configured.
-	// Restore jobs need to authenticate to OpenBao to perform the snapshot restore.
-	// This is especially critical for Hardened/SelfInit clusters where no root token is stored.
+	upgradingCond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionUpgrading))
+	if upgradingCond != nil && upgradingCond.Status == metav1.ConditionTrue {
+		result, err := m.failRestore(ctx, logger, restore, "cannot restore while cluster is upgrading")
+		return &result, err
+	}
+
+	return nil, nil
+}
+
+// validateAuthentication validates that authentication is configured for the restore operation.
+// Returns (result, error) where result is non-nil if validation failed and should return early.
+func (m *Manager) validateAuthentication(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (*ctrl.Result, error) {
 	hasJWTAuth := restore.Spec.JWTAuthRole != ""
+	// If jwtAuthRole is empty, check if OIDC is enabled (operator will auto-create the restore role)
+	if !hasJWTAuth && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
+		// Operator will auto-create the restore role with name constants.RoleNameRestore
+		hasJWTAuth = true
+	}
 	hasTokenSecret := restore.Spec.TokenSecretRef != nil && restore.Spec.TokenSecretRef.Name != ""
+
 	if !hasJWTAuth && !hasTokenSecret {
-		return m.failRestore(ctx, logger, restore,
+		result, err := m.failRestore(ctx, logger, restore,
 			"authentication is required: either jwtAuthRole or tokenSecretRef must be set in the restore spec")
+		return &result, err
 	}
 
-	// Ensure restore ServiceAccount exists
+	return nil, nil
+}
+
+// ensureRestoreResources ensures the ServiceAccount and RBAC resources exist for the restore operation.
+func (m *Manager) ensureRestoreResources(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if err := m.ensureRestoreServiceAccount(ctx, logger, restore, cluster); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to ensure restore service account: %w", err)
+		return fmt.Errorf("failed to ensure restore service account: %w", err)
 	}
 
-	// Ensure RBAC for restore
 	if err := m.ensureRestoreRBAC(ctx, logger, restore, cluster); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to ensure restore RBAC: %w", err)
+		return fmt.Errorf("failed to ensure restore RBAC: %w", err)
 	}
 
-	// Transition to Running phase
-	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
-	restore.Status.Message = "Creating restore job"
-
-	if err := m.patchStatusSSA(ctx, restore); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
-	}
-
-	logger.Info("Restore validation passed, transitioning to Running phase")
-	return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
+	return nil
 }
 
 // handleRunning manages the restore job and checks for completion.
@@ -375,6 +454,8 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 }
 
 // failRestore transitions the restore to Failed phase.
+//
+//nolint:unparam // ctrl.Result is always zero value but required by controller-runtime interface
 func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
 	now := metav1.Now()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseFailed

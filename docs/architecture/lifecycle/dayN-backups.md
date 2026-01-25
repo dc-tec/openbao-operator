@@ -12,8 +12,8 @@ Day N operations ensure data durability through regular backups and disaster rec
    - **GCS**: Google Cloud Storage
    - **Azure**: Azure Blob Storage
 2. User configures authentication method:
-   - **JWT Auth (Preferred):** Set `spec.backup.jwtAuthRole` and configure the role in OpenBao
-   - **Static Token (Fallback):** For all clusters, set `spec.backup.tokenSecretRef` pointing to a backup token Secret (root tokens are not used)
+   - **JWT Auth (Preferred):** Automatically configured via `spec.selfInit.oidc.enabled` (or manually via `spec.backup.jwtAuthRole`)
+   - **Static Token (Fallback):** For clusters without OIDC, set `spec.backup.tokenSecretRef` pointing to a backup token Secret
 3. Backup Manager (adminops controller) schedules backups using cron expressions (e.g., `"0 3 * * *"` for daily at 3 AM).
 4. On schedule, Backup Manager:
    - Creates a Kubernetes Job with the backup executor container
