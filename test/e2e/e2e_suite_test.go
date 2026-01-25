@@ -58,6 +58,7 @@ type suiteBootstrap struct {
 	Clusters                []string `json:"clusters"`
 	Kubeconfigs             []string `json:"kubeconfigs"`
 	CertManagerPreinstalled []bool   `json:"certManagerPreinstalled"`
+	StorageClass            string   `json:"storageClass,omitempty"`
 }
 
 var (
@@ -302,6 +303,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		Clusters:                []string{clusterName},
 		Kubeconfigs:             []string{kubeconfigPath},
 		CertManagerPreinstalled: []bool{},
+		StorageClass:            "",
 	}
 
 	By(fmt.Sprintf("exporting kubeconfig for Kind cluster %q", clusterName))
@@ -311,6 +313,25 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	withEnv("KUBECONFIG", kubeconfigPath, func() {
 		withEnv("KIND_CLUSTER", clusterName, func() {
+			By(fmt.Sprintf("installing CSI hostpath driver for storage expansion tests (cluster=%s)", clusterName))
+			ExpectWithOffset(1, utils.InstallCSIHostPathDriver()).To(Succeed(), "Failed to install CSI hostpath driver")
+			By("installing the expandable E2E StorageClass (openbao-e2e-hostpath)")
+			cmd = exec.Command("kubectl", "apply", "-f", "test/manifests/csi-hostpath/v1.9.0/storageclass-openbao-e2e-hostpath.yaml") // #nosec G204 -- test harness
+			_, err = utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to apply E2E StorageClass")
+			bootstrap.StorageClass = "openbao-e2e-hostpath"
+			ExpectWithOffset(1, os.Setenv("E2E_STORAGE_CLASS", bootstrap.StorageClass)).To(Succeed())
+			By("setting openbao-e2e-hostpath as the default StorageClass (best effort)")
+			// Prefer the hostpath CSI driver for all PVCs in Kind E2E to cover volume expansion.
+			cmd = exec.Command("kubectl", "patch", "storageclass", bootstrap.StorageClass, "--type=merge",
+				`-p={"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true","storageclass.beta.kubernetes.io/is-default-class":"true"}}}`) // #nosec G204 -- test harness
+			_, err = utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to set default StorageClass for E2E")
+			// Kind typically ships a "standard" default StorageClass. Best-effort flip it off to avoid ambiguity.
+			cmd = exec.Command("kubectl", "patch", "storageclass", "standard", "--type=merge",
+				`-p={"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false","storageclass.beta.kubernetes.io/is-default-class":"false"}}}`) // #nosec G204 -- test harness
+			_, _ = utils.Run(cmd)
+
 			By(fmt.Sprintf("loading the manager(Operator) image on Kind (cluster=%s)", clusterName))
 			err = utils.LoadImageToKindClusterWithName(projectImage)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the manager(Operator) image into Kind (cluster=%s)", clusterName))
@@ -384,6 +405,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	ExpectWithOffset(1, os.Setenv("KIND_CLUSTER", clusterName)).To(Succeed())
 	ExpectWithOffset(1, os.Setenv("KUBECONFIG", kubeconfigPath)).To(Succeed())
+	if strings.TrimSpace(bootstrap.StorageClass) != "" {
+		ExpectWithOffset(1, os.Setenv("E2E_STORAGE_CLASS", bootstrap.StorageClass)).To(Succeed())
+	}
 
 	proc := GinkgoParallelProcess()
 	_, _ = fmt.Fprintf(GinkgoWriter, "E2E parallel process=%d shared_cluster=%s kubeconfig=%s\n", proc, clusterName, kubeconfigPath)

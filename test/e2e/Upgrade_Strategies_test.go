@@ -982,9 +982,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			baoAddr = fmt.Sprintf("https://%s.%s.svc.cluster.local:8200", chaosCluster.Name, tenantNamespace)
 			secretPath = "secret/safemode-test"
 			// bypassLabels is in scope from the beginning of the It block
-			secretVal, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
-			Expect(err).NotTo(HaveOccurred(), "Failed to read secret in safe mode")
-			Expect(secretVal).To(Equal("bar"))
+			// bypassLabels is in scope from the beginning of the It block
+			Eventually(func(g Gomega) {
+				secretVal, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to read secret in safe mode")
+				g.Expect(secretVal).To(Equal("bar"))
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			By("Asserting safe mode is set on the cluster")
 			Eventually(func(g Gomega) {
