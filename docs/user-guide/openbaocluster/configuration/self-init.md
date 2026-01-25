@@ -35,8 +35,11 @@ flowchart LR
     Method -- No --> Standard
     Method -- Yes --> Self
 
-    style Self fill:transparent,stroke:#00e676,stroke-width:2px
-    style Standard fill:transparent,stroke:#ff5252,stroke-width:2px
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    
+    class Self write;
+    class Standard read;
 ```
 
 ## Configuration
@@ -69,7 +72,10 @@ To bootstrap a restore role, set `spec.restore.jwtAuthRole`.
 spec:
   selfInit:
     enabled: true
-    bootstrapJWTAuth: true
+    oidc:
+      enabled: true
+      # issuer: "https://..." (optional override)
+      # audience: "openbao-internal" (optional override)
 ```
 
 !!! note "OIDC prerequisites"
@@ -131,7 +137,7 @@ Each item in `requests[]` maps to an OpenBao API call.
     ```yaml
     - name: enable-jwt
       operation: update
-      path: sys/auth/jwt
+      path: sys/auth/jwt-operator
       authMethod:
         type: jwt
         description: "Kubernetes JWT Auth"
@@ -143,7 +149,7 @@ Each item in `requests[]` maps to an OpenBao API call.
     ```yaml
     - name: configure-jwt
       operation: update
-      path: auth/jwt/config  # Note: Config path is distinct from mount path
+      path: auth/jwt-operator/config  # Note: Config path depends on mount path
       data:
         bound_issuer: "https://kubernetes.default.svc"
         jwt_validation_pubkeys:

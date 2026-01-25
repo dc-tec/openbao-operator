@@ -26,9 +26,9 @@ This policy is bound to the Operator Controller. It grants permission to perform
     path "sys/storage/raft/autopilot/configuration" { capabilities = ["read", "update"] }
     ```
 
-### `backup`
+### `openbao-operator-backup`
 
-This policy is created if `spec.backup` is configured with `jwtAuthRole`. It is bound to the Backup Job ServiceAccount.
+This policy is created if `spec.backup` is configured. It is bound to the `openbao-operator-backup` role and the Backup Job ServiceAccount.
 
 === "Permissions"
 
@@ -42,9 +42,9 @@ This policy is created if `spec.backup` is configured with `jwtAuthRole`. It is 
     path "sys/storage/raft/snapshot" { capabilities = ["read"] }
     ```
 
-### `restore`
+### `openbao-operator-restore`
 
-This policy is created if `spec.restore` is configured with `jwtAuthRole`. It is bound to the Restore Job ServiceAccount.
+This policy is created if `spec.restore` is configured. It is bound to the `openbao-operator-restore` role and the Restore Job ServiceAccount.
 
 === "Permissions"
 
@@ -53,7 +53,7 @@ This policy is created if `spec.restore` is configured with `jwtAuthRole`. It is
     | **Force Restore** | `sys/storage/raft/snapshot-force` | `update` | Overwrite the entire cluster state from a snapshot. |
 
     !!! danger "Security Risk"
-        This capability is extremely powerful and destructive. It replaces all data, keys, and policies in the cluster. Ensure the `restore` role is strictly bound to the restore job's identity.
+        This capability is extremely powerful and destructive. It replaces all data, keys, and policies in the cluster. Ensure the `openbao-operator-restore` role is strictly bound to the restore job's identity.
 
 === "Policy Definition"
 
@@ -61,9 +61,9 @@ This policy is created if `spec.restore` is configured with `jwtAuthRole`. It is
     path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }
     ```
 
-### `upgrade`
+### `openbao-operator-upgrade`
 
-This policy is created if `spec.upgrade` is configured with `jwtAuthRole`. It is bound to the Upgrade Job ServiceAccount (used for rolling or blue/green upgrades depending on strategy).
+This policy is created if `spec.upgrade` is configured. It is bound to the `openbao-operator-upgrade` role and the Upgrade Job ServiceAccount (used for rolling or blue/green upgrades depending on strategy).
 
 === "Permissions (Rolling)"
 
@@ -122,10 +122,10 @@ graph LR
 
     subgraph Bao [OpenBao]
         Role_Op[Role: openbao-operator]
-        Role_Backup[Role: backup]
+        Role_Backup[Role: openbao-operator-backup]
         
         Pol_Op[Policy: openbao-operator]
-        Pol_Backup[Policy: backup]
+        Pol_Backup[Policy: openbao-operator-backup]
     end
 
     SA_Op -->|JWT| Role_Op

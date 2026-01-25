@@ -343,7 +343,7 @@ In addition to Operator metrics, OpenBao itself exposes telemetry.
 
 ### Enabling OpenBao Telemetry
 
-Configure telemetry in the cluster spec:
+Configure telemetry in the cluster spec using the simplified `observability` block:
 
 ```yaml
 apiVersion: openbao.org/v1alpha1
@@ -351,14 +351,16 @@ kind: OpenBaoCluster
 metadata:
   name: prod-cluster
 spec:
-  telemetry:
-    prometheusRetentionTime: "30s"
-    disableHostname: true
+  observability:
+    metrics:
+      enabled: true
 ```
+
+This automatically injects a `telemetry` stanza into the OpenBao configuration with safe defaults (prometheus retention, disabled hostname).
+You can still provide fine-grained overrides via `spec.telemetry` if needed.
 
 This exposes OpenBao metrics at `/v1/sys/metrics` on the OpenBao pods.
 
 !!! note "Separate Scrape Config"
     OpenBao server metrics require a separate scrape configuration targeting
     the OpenBao pods directly, not the Operator.
-

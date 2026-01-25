@@ -35,7 +35,7 @@ sequenceDiagram
 
 When using **Self-Initialization** (`spec.selfInit.enabled: true`), the relationship is bootstrapped automatically:
 
-1. **Bootstrap:** The operator uses `spec.selfInit.bootstrapJWTAuth: true` or manual requests to configure the JWT auth method.
+1. **Bootstrap:** The operator uses `spec.selfInit.oidc.enabled: true` or manual requests to configure the JWT auth method.
 2. **Role Creation:** It creates a policy and role named `openbao-operator`.
 3. **Binding:** This role is bound to the operator's ServiceAccount in the operator's namespace.
 
@@ -65,10 +65,10 @@ If you are **not** using Self-Initialization (e.g., Brownfield adoption), you mu
 
 ```bash
 # Enable JWT Auth
-bao auth enable jwt
+bao auth enable -path=auth/jwt-operator jwt
 
 # Configure OIDC Discovery (point to your K8s API)
-bao write auth/jwt/config \
+bao write auth/jwt-operator/config \
     oidc_discovery_url="https://kubernetes.default.svc.cluster.local" \
     oidc_discovery_ca_pem=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 
@@ -83,7 +83,7 @@ path "sys/health" {
 EOF
 
 # Create Operator Role
-bao write auth/jwt/role/openbao-operator \
+bao write auth/jwt-operator/role/openbao-operator \
     role_type="jwt" \
     bound_audiences="openbao-internal" \
     user_claim="sub" \

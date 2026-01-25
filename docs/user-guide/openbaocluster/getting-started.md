@@ -21,7 +21,7 @@ This guide walks you through creating your first OpenBaoCluster. Choose the path
       namespace: default
     spec:
       version: "2.4.4"
-      image: "openbao/openbao:2.4.4"
+      # image: "openbao/openbao:2.4.4" # Optional: inferred from version
       replicas: 3
       profile: Development
       tls:
@@ -49,7 +49,8 @@ This guide walks you through creating your first OpenBaoCluster. Choose the path
       namespace: openbao
     spec:
       version: "2.4.4"
-      image: "openbao/openbao:2.4.4"
+      version: "2.4.4"
+      # image: "openbao/openbao:2.4.4" # Optional: inferred from version
       replicas: 3
       profile: Hardened
       tls:

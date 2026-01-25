@@ -66,6 +66,9 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
 
     [:material-arrow-right: Full values.yaml](https://github.com/dc-tec/openbao-operator/blob/main/charts/openbao-operator/values.yaml)
 
+    !!! info "Air-Gapped Environments"
+        To use private registries for the operator and its sidecars (init, backup, upgrade), see the [Air-Gapped / Private Registries](../openbaocluster/configuration/air-gapped.md) guide.
+
 === ":material-redhat: OpenShift"
 
     For Red Hat OpenShift clusters, the operator defaults to platform auto-detection.

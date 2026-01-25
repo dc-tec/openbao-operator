@@ -12,8 +12,8 @@ Day 2 operations cover the ongoing management of the cluster, including version 
 === "Rolling Update (Default)"
 
     1. User configures upgrade executor:
-       - Set `spec.upgrade.executorImage` (container image used by upgrade Jobs)
-       - Set `spec.upgrade.jwtAuthRole` and configure the role in OpenBao (binds to `<cluster-name>-upgrade-serviceaccount`, automatically created by operator)
+       - Set `spec.upgrade.executorImage` (optional, can be inferred)
+       - Set `spec.upgrade.jwtAuthRole` (optional, inferred from `selfInit.oidc`) or configure manual role
     2. User updates `OpenBaoCluster.Spec.Version` and/or `Spec.Image`.
     3. Upgrade Manager (adminops controller) detects version drift and performs pre-upgrade validation:
        - Validates semantic versioning (blocks downgrades by default).

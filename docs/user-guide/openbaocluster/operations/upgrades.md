@@ -6,51 +6,30 @@ The Operator supports two powerful upgrade strategies: **Rolling Update** (defau
 
 To perform upgrades safely, the Operator uses a temporary "Upgrade Executor" job that requires permissions to talk to OpenBao.
 
-??? abstract "Prerequisite: Configure Upgrade Authentication"
-    The Upgrade Executor needs a JWT Auth Role to authenticate with the cluster during upgrades.
+### Prerequisite: Enable OIDC
 
-    **1. Configure OpenBao (via `selfInit`)**
+The Upgrade Executor uses JWT Auth to authenticate. Ensure OIDC is enabled in your cluster:
 
-    ```yaml
-    spec:
-      selfInit:
-        requests:
-          # Create policy for upgrade operations
-          - name: create-upgrade-policy
-            operation: update
-            path: sys/policies/acl/upgrade
-            policy:
-              policy: |
-                path "sys/health" { capabilities = ["read"] }
-                path "sys/step-down" { capabilities = ["update"] }
-                path "sys/storage/raft/snapshot" { capabilities = ["read"] }
-          # Create JWT role bound to the upgrade ServiceAccount
-          - name: create-upgrade-jwt-role
-            operation: update
-            path: auth/jwt/role/upgrade
-            data:
-              role_type: jwt
-              bound_audiences: ["openbao-internal"]
-              bound_claims:
-                kubernetes.io/namespace: openbao
-                kubernetes.io/serviceaccount/name: upgrade-cluster-upgrade-serviceaccount
-              token_policies: upgrade
-              ttl: 1h
-    ```
+```yaml
+spec:
+  selfInit:
+    enabled: true
+    oidc:
+      enabled: true
+```
 
-    !!! note "JWT audience"
-        The upgrade Job uses the audience from `OPENBAO_JWT_AUDIENCE` (default: `openbao-internal`).
-        Set the same value in the OpenBao role `bound_audiences` and pass the env var to the operator
-        (`controller.extraEnv` and `provisioner.extraEnv` in Helm).
+The Operator automatically creates the necessary `sys/step-down` policies and JWT roles (`openbao-operator-upgrade`).
 
-    **2. Configure the Operator to use this role**
+### Configure Executor
 
-    ```yaml
-    spec:
-      upgrade:
-        executorImage: openbao/upgrade-executor:v0.1.0
-        jwtAuthRole: upgrade
-    ```
+When OIDC is enabled, you can simply enable the upgrade strategy.
+
+```yaml
+spec:
+  upgrade:
+    # executorImage: inferred from operator version
+    # jwtAuthRole: inferred (openbao-operator-upgrade)
+```
 
 ## Executing Upgrades
 
