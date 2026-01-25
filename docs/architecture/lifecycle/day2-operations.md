@@ -7,8 +7,6 @@ Day 2 operations cover the ongoing management of the cluster, including version 
 
 ## Cluster Operations / Upgrades
 
-## Cluster Operations / Upgrades
-
 === "Rolling Update (Default)"
 
     1. User configures upgrade executor:
@@ -91,7 +89,18 @@ Day 2 operations cover the ongoing management of the cluster, including version 
 
 ## Maintenance / Manual Recovery
 
-1. User sets `OpenBaoCluster.Spec.Paused = true` to enter maintenance mode.
-2. All reconcilers for that cluster short-circuit and stop mutating resources, allowing manual actions (e.g., manual restore from snapshot).
-3. If an upgrade was in progress, it is paused but state is preserved in `Status.Upgrade`.
-4. After maintenance, user sets `Paused = false` to resume normal reconciliation (including any paused upgrade).
+There are two related (but distinct) mechanisms:
+
+1. **Pause reconciliation** (`spec.paused=true`): stops all controllers for the cluster from mutating resources.
+   This is intended for manual intervention or recovery workflows.
+2. **Maintenance annotation mode** (`spec.maintenance.enabled=true`): keeps reconciliation running, but annotates
+   managed resources with `openbao.org/maintenance=true` so admission policies can allow controlled deletes/restarts.
+   The operator also uses this gate for disruptive-but-automatable operations (for example, completing filesystem
+   expansion when a PVC reports `FileSystemResizePending` after increasing `spec.storage.size`).
+
+For manual recovery:
+
+1. User sets `spec.paused=true`.
+2. Reconcilers short-circuit and stop mutating resources, allowing manual actions (e.g., manual restore from snapshot).
+3. If an upgrade was in progress, it is paused but state is preserved in `status.upgrade`.
+4. After maintenance, user sets `spec.paused=false` to resume normal reconciliation (including any paused upgrade).

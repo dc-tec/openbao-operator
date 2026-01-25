@@ -120,6 +120,8 @@ For planned maintenance, consider:
 
    When enabled, the operator annotates managed Pods/StatefulSet with `openbao.org/maintenance=true`
    to support controlled deletes/restarts under strict admission policies.
+   This is also required for the operator to complete certain day-2 operations that may need pod restarts,
+   such as finishing filesystem expansion after increasing `spec.storage.size`.
 
 3. **Trigger a rolling restart** (for example, after rotating external dependencies):
    ```yaml
