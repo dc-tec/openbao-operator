@@ -207,9 +207,18 @@ func buildUpgradeExecutorJob(
 		}
 	}
 
+	// Get effective JWT role - use configured role or default to auto-created role if OIDC is enabled
 	jwtRole := strings.TrimSpace(cluster.Spec.Upgrade.JWTAuthRole)
+	if jwtRole == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
+		// Operator will auto-create the upgrade role with name constants.RoleNameUpgrade
+		jwtRole = constants.RoleNameUpgrade
+	}
 	if jwtRole == "" {
-		return nil, fmt.Errorf("spec.upgrade.jwtAuthRole is required for upgrade Jobs")
+		if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
+			jwtRole = constants.RoleNameUpgrade
+		} else {
+			return nil, fmt.Errorf("spec.upgrade.jwtAuthRole is required for upgrade Jobs (or enable spec.selfInit.oidc)")
+		}
 	}
 
 	env := []corev1.EnvVar{

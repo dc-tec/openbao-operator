@@ -176,12 +176,22 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 			operatorSA = "openbao-operator-controller"
 		}
 
+		// Allow overrides from Spec
+		issuer := m.oidcIssuer
+		audience := auth.OpenBaoJWTAudience()
+		if cluster.Spec.SelfInit.OIDC.Issuer != "" {
+			issuer = cluster.Spec.SelfInit.OIDC.Issuer
+		}
+		if cluster.Spec.SelfInit.OIDC.Audience != "" {
+			audience = cluster.Spec.SelfInit.OIDC.Audience
+		}
+
 		bootstrapConfig = &configbuilder.OperatorBootstrapConfig{
-			OIDCIssuerURL:   m.oidcIssuer,
+			OIDCIssuerURL:   issuer,
 			JWTKeysPEM:      m.oidcJWTKeys,
 			OperatorNS:      operatorNS,
 			OperatorSA:      operatorSA,
-			JWTAuthAudience: auth.OpenBaoJWTAudience(),
+			JWTAuthAudience: audience,
 		}
 	}
 
@@ -241,10 +251,10 @@ func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 		return false
 	}
 
-	// Bootstrap is opt-in via spec.selfInit.bootstrapJWTAuth
+	// Bootstrap is opt-in via spec.selfInit.oidc.enabled
 	// Users must explicitly enable bootstrap to have the operator automatically
 	// configure JWT auth, OIDC, and operator/backup/upgrade policies and roles.
-	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.BootstrapJWTAuth {
+	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
 		return true
 	}
 

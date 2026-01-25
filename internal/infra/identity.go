@@ -23,10 +23,15 @@ func (m *Manager) ensureServiceAccount(ctx context.Context, _ logr.Logger, clust
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      saName,
-			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Name:        saName,
+			Namespace:   cluster.Namespace,
+			Labels:      infraLabels(cluster),
+			Annotations: nil,
 		},
+	}
+
+	if cluster.Spec.ServiceAccount != nil && cluster.Spec.ServiceAccount.Annotations != nil {
+		sa.Annotations = cluster.Spec.ServiceAccount.Annotations
 	}
 
 	if err := m.applyResource(ctx, sa, cluster); err != nil {
@@ -102,5 +107,8 @@ func (m *Manager) ensureRBAC(ctx context.Context, _ logr.Logger, cluster *openba
 
 // serviceAccountName returns the name for the ServiceAccount resource.
 func serviceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	if cluster.Spec.ServiceAccount != nil && cluster.Spec.ServiceAccount.Name != "" {
+		return cluster.Spec.ServiceAccount.Name
+	}
 	return cluster.Name + constants.SuffixServiceAccount
 }

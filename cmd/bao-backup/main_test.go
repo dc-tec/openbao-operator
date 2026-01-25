@@ -29,7 +29,7 @@ func TestAuthenticate_JWT(t *testing.T) {
 	// Mock OpenBao server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request
-		assert.Equal(t, "/v1/auth/jwt/login", r.URL.Path)
+		assert.Equal(t, "/v1/auth/jwt-operator/login", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
 		var body map[string]string

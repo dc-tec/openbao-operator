@@ -512,7 +512,12 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 	}
 
 	// Check if JWT Auth is configured (preferred method)
+	// If jwtAuthRole is empty, check if OIDC is enabled (operator will auto-create the backup role)
 	hasJWTAuth := strings.TrimSpace(backupCfg.JWTAuthRole) != ""
+	if !hasJWTAuth && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
+		// Operator will auto-create the backup role with name constants.RoleNameBackup
+		hasJWTAuth = true
+	}
 
 	// Check if static token is configured (fallback method)
 	hasTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""

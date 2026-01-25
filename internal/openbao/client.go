@@ -52,6 +52,8 @@ type HealthResponse struct {
 	Version string `json:"version,omitempty"`
 	// ClusterName is the name of the Raft cluster.
 	ClusterName string `json:"cluster_name,omitempty"`
+	// LeaderAddress is the address of the leader node.
+	LeaderAddress string `json:"leader_address,omitempty"`
 	// ClusterID is the unique identifier for the cluster.
 	ClusterID string `json:"cluster_id,omitempty"`
 }
@@ -331,6 +333,35 @@ func (c *Client) StepDown(ctx context.Context) error {
 	return nil
 }
 
+// LeaderStatusResponse represents the response from GET /v1/sys/leader.
+type LeaderStatusResponse struct {
+	HAEnabled            bool   `json:"ha_enabled"`
+	IsSelf               bool   `json:"is_self"`
+	LeaderAddress        string `json:"leader_address"`
+	LeaderClusterAddress string `json:"leader_cluster_address"`
+}
+
+// LeaderStatus queries the OpenBao leader endpoint and returns the leader status.
+// This endpoint does not require authentication by default.
+func (c *Client) LeaderStatus(ctx context.Context) (*LeaderStatusResponse, error) {
+	req, err := c.newRequest(ctx, http.MethodGet, constants.APIPathSysLeader, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create leader status request: %w", err)
+	}
+
+	_, body, err := c.doAndReadAll(req, nil, "failed to query leader status endpoint")
+	if err != nil {
+		return nil, err
+	}
+
+	var leaderStatus LeaderStatusResponse
+	if err := json.Unmarshal(body, &leaderStatus); err != nil {
+		return nil, fmt.Errorf("failed to parse leader status response: %w", err)
+	}
+
+	return &leaderStatus, nil
+}
+
 // IsHealthy returns true if the node is initialized, unsealed, and reachable.
 func (c *Client) IsHealthy(ctx context.Context) (bool, error) {
 	health, err := c.Health(ctx)
@@ -338,7 +369,26 @@ func (c *Client) IsHealthy(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	return health.Initialized && !health.Sealed, nil
+	// Check that the node is willing to serve requests
+	if !health.Initialized || health.Sealed {
+		return false, nil
+	}
+
+	// Essential check: If I am a standby, I MUST know who the leader is to
+	// successfully forward write requests. If I don't know the leader, I am
+	// partition/rudderless and effectively unhealthy.
+	if health.Standby {
+		leaderStatus, err := c.LeaderStatus(ctx)
+		if err != nil {
+			// If we can't check leader status, assume unhealthy
+			return false, nil
+		}
+		if leaderStatus.LeaderAddress == "" {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 // IsSealed checks if the OpenBao cluster is sealed.
