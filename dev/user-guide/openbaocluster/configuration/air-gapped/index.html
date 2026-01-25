@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recovery/sealed-cluster/">
+        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/air-gapped/">
       
       
-        <link rel="prev" href="../no-leader/">
+        <link rel="prev" href="../network/">
       
       
-        <link rel="next" href="../failed-rollback/">
+        <link rel="next" href="../resources-storage/">
       
       
         
@@ -25,7 +25,7 @@
     
     
       
-        <title>Sealed Cluster - OpenBao Operator</title>
+        <title>Air-Gapped / Private Registries - OpenBao Operator</title>
       
     
     
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#recovering-from-a-sealed-cluster" class="md-skip">
+        <a href="#air-gapped-private-registries" class="md-skip">
           Skip to content
         </a>
       
@@ -117,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Sealed Cluster
+              Air-Gapped / Private Registries
             
           </span>
         </div>
@@ -932,6 +932,8 @@
                 
   
   
+    
+  
   
   
     
@@ -941,13 +943,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_4_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_4_5" checked>
         
           
           <label class="md-nav__link" for="__nav_2_4_5" id="__nav_2_4_5_label" tabindex="0">
@@ -968,7 +968,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_4_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_4_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2_4_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -986,7 +986,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/security-profiles/" class="md-nav__link">
+      <a href="../security-profiles/" class="md-nav__link">
         
   
   
@@ -1014,7 +1014,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/self-init/" class="md-nav__link">
+      <a href="../self-init/" class="md-nav__link">
         
   
   
@@ -1042,7 +1042,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/server/" class="md-nav__link">
+      <a href="../server/" class="md-nav__link">
         
   
   
@@ -1070,7 +1070,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/external-access/" class="md-nav__link">
+      <a href="../external-access/" class="md-nav__link">
         
   
   
@@ -1098,7 +1098,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/network/" class="md-nav__link">
+      <a href="../network/" class="md-nav__link">
         
   
   
@@ -1123,10 +1123,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../configuration/air-gapped/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-Gapped / Private Registries
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1142,6 +1169,126 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-configuring-the-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Configuring the Operator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Configuring the Operator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operator-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operator Image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sidecar-images-global-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sidecar Images (Global Defaults)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-configuring-openbao-clusters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Configuring OpenBao Clusters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Configuring OpenBao Clusters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#specifying-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Specifying Images
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#image-pull-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image Pull Secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-checklist-for-air-gap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary Checklist for Air-Gap
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1154,7 +1301,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/resources-storage/" class="md-nav__link">
+      <a href="../resources-storage/" class="md-nav__link">
         
   
   
@@ -1182,7 +1329,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/gateway-api/" class="md-nav__link">
+      <a href="../gateway-api/" class="md-nav__link">
         
   
   
@@ -1210,7 +1357,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/observability/" class="md-nav__link">
+      <a href="../observability/" class="md-nav__link">
         
   
   
@@ -1526,8 +1673,6 @@
                 
   
   
-    
-  
   
   
     
@@ -1537,11 +1682,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_4_8" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_4_8" >
         
           
           <label class="md-nav__link" for="__nav_2_4_8" id="__nav_2_4_8_label" tabindex="0">
@@ -1562,7 +1709,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_4_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_4_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2_4_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1580,7 +1727,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../safe-mode/" class="md-nav__link">
+      <a href="../../recovery/safe-mode/" class="md-nav__link">
         
   
   
@@ -1608,7 +1755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../no-leader/" class="md-nav__link">
+      <a href="../../recovery/no-leader/" class="md-nav__link">
         
   
   
@@ -1633,37 +1780,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sealed Cluster
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../recovery/sealed-cluster/" class="md-nav__link">
         
   
   
@@ -1679,59 +1799,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting Flow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#diagnostics-by-mode" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Diagnostics by Mode
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#post-recovery" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Post-Recovery
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1744,7 +1811,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../failed-rollback/" class="md-nav__link">
+      <a href="../../recovery/failed-rollback/" class="md-nav__link">
         
   
   
@@ -3993,10 +4060,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#troubleshooting-flow" class="md-nav__link">
+  <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Troubleshooting Flow
+        Overview
       
     </span>
   </a>
@@ -4004,21 +4071,88 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#diagnostics-by-mode" class="md-nav__link">
+  <a href="#1-configuring-the-operator" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Diagnostics by Mode
+        1. Configuring the Operator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Configuring the Operator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operator-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operator Image
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#post-recovery" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#sidecar-images-global-defaults" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Post-Recovery
+        Sidecar Images (Global Defaults)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-configuring-openbao-clusters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Configuring OpenBao Clusters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Configuring OpenBao Clusters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#specifying-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Specifying Images
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#image-pull-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image Pull Secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-checklist-for-air-gap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary Checklist for Air-Gap
       
     </span>
   </a>
@@ -4045,121 +4179,139 @@
   
 
 
-<h1 id="recovering-from-a-sealed-cluster">Recovering From a Sealed Cluster<a class="headerlink" href="#recovering-from-a-sealed-cluster" title="Permanent link">&para;</a></h1>
-<p>This runbook applies when OpenBao pods are running (<code>Running</code> state) but remain <strong>sealed</strong>, preventing the application from starting.</p>
-<div class="admonition failure">
-<p class="admonition-title">Symptoms</p>
-<ul>
-<li><code>kubectl get openbaocluster</code> reports <code>Sealed=True</code>.</li>
-<li>Pods are ready <code>0/1</code> in <code>kubectl get pods</code>.</li>
-<li><code>bao status</code> shows <code>Sealed: true</code>.</li>
-</ul>
-</div>
-<h2 id="troubleshooting-flow">Troubleshooting Flow<a class="headerlink" href="#troubleshooting-flow" title="Permanent link">&para;</a></h2>
-<pre class="mermaid"><code>graph TD
-    Start(["Start"]) --&gt; CheckStatus{"Sealed?"}
-    CheckStatus -- No --&gt; Done(["Healthy"])
-    CheckStatus -- Yes --&gt; IdentifyMode{"Unseal Mode?"}
-
-    IdentifyMode -- "Static" --&gt; CheckSecret["Check Secret"]
-    IdentifyMode -- "Auto-Unseal" --&gt; CheckLogs["Check Logs"]
-
-    CheckSecret -- "Missing" --&gt; CreateSecret["Create Secret"]
-    CheckLogs -- "403/Auth" --&gt; FixIAM["Fix IAM Permissions"]
-    CheckLogs -- "Timeout" --&gt; FixNet["Fix Network/DNS"]
-
-    FixIAM --&gt; ManualTry["Restart Pods"]
-    FixNet --&gt; ManualTry
-
-    ManualTry -- "Still Fails" --&gt; ManualUnseal["Manual Unseal (Emergency)"]</code></pre>
-<hr />
-<h2 id="diagnostics-by-mode">Diagnostics by Mode<a class="headerlink" href="#diagnostics-by-mode" title="Permanent link">&para;</a></h2>
-<p>Identify your unseal mode in the <code>OpenBaoCluster</code> configuration:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">unsealConfig</span><span class="p">:</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awskms</span><span class="w"> </span><span class="c1"># or static, gcpckms, etc.</span>
+<h1 id="air-gapped-private-registries">Air-Gapped &amp; Private Registries<a class="headerlink" href="#air-gapped-private-registries" title="Permanent link">&para;</a></h1>
+<p>The OpenBao Operator supports deployment in air-gapped environments and usage of private container registries. This guide covers how to configure the operator and your clusters to use custom image repositories.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>There are two categories of images to consider:</p>
+<ol>
+<li><strong>Operator Images</strong>: The controller and provisioner images.</li>
+<li><strong>Workload Images</strong>: The OpenBao image and helper sidecars (backup, upgrade, config-init) injected by the operator.</li>
+</ol>
+<h2 id="1-configuring-the-operator">1. Configuring the Operator<a class="headerlink" href="#1-configuring-the-operator" title="Permanent link">&para;</a></h2>
+<p>When installing the operator via Helm, you can update the operator's own image and provide global overrides for the sidecars it injects.</p>
+<h3 id="operator-image">Operator Image<a class="headerlink" href="#operator-image" title="Permanent link">&para;</a></h3>
+<p>Set the <code>image.repository</code> value in Helm:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>install<span class="w"> </span>openbao-operator<span class="w"> </span>oci://...<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--set<span class="w"> </span>image.repository<span class="o">=</span>my-registry.corp/openbao-operator
 </span></code></pre></div>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Static (Default)</label><label for="__tabbed_1_2">Auto-Unseal (Cloud KMS)</label><label for="__tabbed_1_3">Manual (Emergency)</label></div>
+<h3 id="sidecar-images-global-defaults">Sidecar Images (Global Defaults)<a class="headerlink" href="#sidecar-images-global-defaults" title="Permanent link">&para;</a></h3>
+<p>The operator injects helper containers for tasks like configuration (init), backups, and upgrades. By default, these pull from <code>ghcr.io/dc-tec</code>.</p>
+<p>To override these globally for all clusters, set the following environment variables.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">values.yaml</label><label for="__tabbed_1_2">Helm Command</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>In <strong>Static</strong> mode, the operator assumes a Kubernetes Secret named <code>&lt;cluster-name&gt;-unseal-key</code> contains the key.</p>
-<p><strong>Common Failure:</strong> The Secret is missing or has the wrong key name.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">controller</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">extraEnv</span><span class="p">:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RELATED_IMAGE_OPENBAO</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my-registry.corp/openbao/openbao&quot;</span><span class="w">             </span><span class="c1"># (1)!</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OPERATOR_INIT_IMAGE_REPOSITORY</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my-registry.corp/openbao-operator/config-init&quot;</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OPERATOR_BACKUP_IMAGE_REPOSITORY</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my-registry.corp/openbao-operator/backup&quot;</span>
+</span></code></pre></div>
 <ol>
-<li><strong>Verify Secret Existence</strong>:
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>prod-cluster-unseal-key
-</span></code></pre></div></li>
-<li><strong>Verify Key Format</strong>:
-    The Secret must have a key named <code>bao-root</code> (or as configured).
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>prod-cluster-unseal-key<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data}&#39;</span>
-</span></code></pre></div></li>
+<li>Default OpenBao image used if <code>spec.image</code> is empty.</li>
 </ol>
-<p><strong>Fix:</strong>
-If missing, you must provide the unseal key (e.g., from a backup).
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>prod-cluster-unseal-key<span class="w"> </span>--from-literal<span class="o">=</span>bao-root<span class="o">=</span>YOUR_UNSEAL_KEY
-</span></code></pre></div></p>
 </div>
 <div class="tabbed-block">
-<p>In <strong>Auto-Unseal</strong> mode, OpenBao connects to a remote KMS (AWS, GCP, Azure, OCI). failures are usually due to <strong>Identity</strong> or <strong>Network</strong>.</p>
-<p><strong>1. Check OpenBao Logs</strong></p>
-<p>Inspect the logs for "failed to unseal" messages.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>logs<span class="w"> </span>prod-cluster-0<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;unseal&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>helm<span class="w"> </span>install<span class="w"> </span>openbao-operator<span class="w"> </span>oci://...<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--set<span class="w"> </span><span class="s2">&quot;controller.extraEnv[0].name=RELATED_IMAGE_OPENBAO&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--set<span class="w"> </span><span class="s2">&quot;controller.extraEnv[0].value=my-registry.corp/openbao/openbao&quot;</span>
 </span></code></pre></div>
-<p><strong>Common Errors:</strong></p>
+</div>
+</div>
+</div>
 <table>
 <thead>
 <tr>
-<th style="text-align: left;">Log Message</th>
-<th style="text-align: left;">Root Cause</th>
-<th style="text-align: left;">Fix</th>
+<th style="text-align: left;">Environment Variable</th>
+<th style="text-align: left;">Description</th>
+<th style="text-align: left;">Default</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><code>403 Forbidden</code> / <code>AccessDeniedPath</code></td>
-<td style="text-align: left;">The IAM Role / ServiceAccount lacks permission to <code>Decrypt</code>.</td>
-<td style="text-align: left;">Grant <code>kms:Decrypt</code> (AWS) or <code>cloudkms.cryptoKeyVersions.useToDecrypt</code> (GCP) to the role.</td>
+<td style="text-align: left;"><code>RELATED_IMAGE_OPENBAO</code></td>
+<td style="text-align: left;">Default OpenBao image if <code>spec.image</code> is empty</td>
+<td style="text-align: left;"><code>docker.io/openbao/openbao</code></td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>context deadline exceeded</code></td>
-<td style="text-align: left;">Network connectivity to the KMS endpoint is blocked.</td>
-<td style="text-align: left;">Check NetworkPolicies (<code>egress</code>), Istio Sidecars, or Firewall rules blocking HTTPS (443).</td>
+<td style="text-align: left;"><code>OPERATOR_INIT_IMAGE_REPOSITORY</code></td>
+<td style="text-align: left;">Repository for config-init container</td>
+<td style="text-align: left;"><code>ghcr.io/dc-tec/openbao-config-init</code></td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>Internal (500)</code></td>
-<td style="text-align: left;">The Cloud Provider is experiencing an outage.</td>
-<td style="text-align: left;">Check configured Region status.</td>
+<td style="text-align: left;"><code>OPERATOR_BACKUP_IMAGE_REPOSITORY</code></td>
+<td style="text-align: left;">Repository for backup executor</td>
+<td style="text-align: left;"><code>ghcr.io/dc-tec/openbao-backup</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>OPERATOR_UPGRADE_IMAGE_REPOSITORY</code></td>
+<td style="text-align: left;">Repository for upgrade executor</td>
+<td style="text-align: left;"><code>ghcr.io/dc-tec/openbao-upgrade</code></td>
 </tr>
 </tbody>
 </table>
+<h2 id="2-configuring-openbao-clusters">2. Configuring OpenBao Clusters<a class="headerlink" href="#2-configuring-openbao-clusters" title="Permanent link">&para;</a></h2>
+<p>You can also override images and credentials at the <code>OpenBaoCluster</code> level.</p>
+<h3 id="specifying-images">Specifying Images<a class="headerlink" href="#specifying-images" title="Permanent link">&para;</a></h3>
+<p>You can specify the exact image for OpenBao and its sidecars in the CRD. This takes precedence over global defaults.</p>
+<div class="admonition note">
+<p class="admonition-title">Defaulting Logic</p>
+<p>If <code>spec.image</code> is omitted, the operator infers it from <code>spec.version</code>. For example, version <code>2.4.4</code> defaults to <code>docker.io/openbao/openbao:2.4.4</code> (or the value of <code>RELATED_IMAGE_OPENBAO</code> env var). You only need to set <code>spec.image</code> if you are using a custom registry or a different tag.</p>
 </div>
-<div class="tabbed-block">
-<div class="admonition danger">
-<p class="admonition-title">Emergency Only</p>
-<p>Use this only if automation is permanently broken and you need immediate access.</p>
-</div>
-<p>If the Operator cannot unseal the pods, you can manually unseal them using the <code>bao</code> CLI (if you have the unseal keys/shares).</p>
-<ol>
-<li><strong>Exec into Pod 0</strong>:
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-ti<span class="w"> </span>prod-cluster-0<span class="w"> </span>--<span class="w"> </span>sh
-</span></code></pre></div></li>
-<li><strong>Run Unseal</strong>:
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>bao<span class="w"> </span>operator<span class="w"> </span>unseal
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Paste Unseal Key 1</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Paste Unseal Key 2 (if shamir)</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>...
-</span></code></pre></div></li>
-<li><strong>Repeat</strong>:
-    You must perform this on <strong>every</strong> pod in the cluster (<code>prod-cluster-1</code>, <code>cluster-2</code>...).</li>
-</ol>
-</div>
-</div>
-</div>
-<hr />
-<h2 id="post-recovery">Post-Recovery<a class="headerlink" href="#post-recovery" title="Permanent link">&para;</a></h2>
-<p>Once unsealed, verify the cluster is initialized and active.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoCluster</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="c1"># Main OpenBao Image</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my-registry.corp/openbao/openbao:2.0.0&quot;</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="c1"># Config Init Image</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="nt">initContainer</span><span class="p">:</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my-registry.corp/openbao-operator/config-init:v0.4.0&quot;</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span><span class="c1"># Backup Sidecar</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span><span class="nt">backup</span><span class="p">:</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span><span class="nt">executorImage</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my-registry.corp/openbao-operator/backup:v0.4.0&quot;</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span><span class="c1"># Upgrade Sidecar</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">  </span><span class="nt">upgrade</span><span class="p">:</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span><span class="nt">executorImage</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my-registry.corp/openbao-operator/upgrade:v0.4.0&quot;</span>
 </span></code></pre></div>
-<p>If the cluster unsealed successfully but assumes a <strong>Standby</strong> role (no active leader), check the <a href="../no-leader/">No Leader</a> guide.</p>
+<h3 id="image-pull-secrets">Image Pull Secrets<a class="headerlink" href="#image-pull-secrets" title="Permanent link">&para;</a></h3>
+<p>If your registry requires authentication, create a Kubernetes Secret and reference it in <code>spec.imagePullSecrets</code>.</p>
+<ol>
+<li>
+<p><strong>Create the Secret:</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>docker-registry<span class="w"> </span>my-registry-creds<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--docker-server<span class="o">=</span>my-registry.corp<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--docker-username<span class="o">=</span>user<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--docker-password<span class="o">=</span>password
+</span></code></pre></div>
+</li>
+<li>
+<p><strong>Reference in Cluster:</strong></p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoCluster</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">imagePullSecrets</span><span class="p">:</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-registry-creds</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+</span></code></pre></div>
+</li>
+</ol>
+<p>The operator will attach these pull secrets to the StatefulSet, allowing Kubernetes to pull the images.</p>
+<h2 id="summary-checklist-for-air-gap">Summary Checklist for Air-Gap<a class="headerlink" href="#summary-checklist-for-air-gap" title="Permanent link">&para;</a></h2>
+<ul class="task-list">
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Mirror Images</strong>: Retag and push the following images to your private registry:</li>
+<li><code>openbao-operator</code></li>
+<li><code>openbao</code></li>
+<li><code>openbao-config-init</code></li>
+<li><code>openbao-backup</code></li>
+<li><code>openbao-upgrade</code></li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Install Operator</strong>: Use Helm with <code>controller.extraEnv</code> to point to your mirrored sidecar repos.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Configure Clusters</strong>: Use <code>spec.imagePullSecrets</code> if your registry is authenticated.</li>
+</ul>
 
 
 

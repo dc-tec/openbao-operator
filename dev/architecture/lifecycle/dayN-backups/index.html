@@ -1126,6 +1126,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../user-guide/openbaocluster/configuration/air-gapped/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-Gapped / Private Registries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../user-guide/openbaocluster/configuration/resources-storage/" class="md-nav__link">
         
   
@@ -4020,8 +4048,8 @@
 <li><strong>GCS</strong>: Google Cloud Storage</li>
 <li><strong>Azure</strong>: Azure Blob Storage</li>
 <li>User configures authentication method:</li>
-<li><strong>JWT Auth (Preferred):</strong> Set <code>spec.backup.jwtAuthRole</code> and configure the role in OpenBao</li>
-<li><strong>Static Token (Fallback):</strong> For all clusters, set <code>spec.backup.tokenSecretRef</code> pointing to a backup token Secret (root tokens are not used)</li>
+<li><strong>JWT Auth (Preferred):</strong> Automatically configured via <code>spec.selfInit.oidc.enabled</code> (or manually via <code>spec.backup.jwtAuthRole</code>)</li>
+<li><strong>Static Token (Fallback):</strong> For clusters without OIDC, set <code>spec.backup.tokenSecretRef</code> pointing to a backup token Secret</li>
 <li>Backup Manager (adminops controller) schedules backups using cron expressions (e.g., <code>"0 3 * * *"</code> for daily at 3 AM).</li>
 <li>On schedule, Backup Manager:</li>
 <li>Creates a Kubernetes Job with the backup executor container</li>

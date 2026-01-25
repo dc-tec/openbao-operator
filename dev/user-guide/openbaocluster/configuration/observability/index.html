@@ -1126,6 +1126,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../air-gapped/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-Gapped / Private Registries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../resources-storage/" class="md-nav__link">
         
   
@@ -5055,16 +5083,18 @@ Investigate the <code>resource_kind</code> label to identify the source.</p>
 <h2 id="openbao-server-metrics">OpenBao Server Metrics<a class="headerlink" href="#openbao-server-metrics" title="Permanent link">&para;</a></h2>
 <p>In addition to Operator metrics, OpenBao itself exposes telemetry.</p>
 <h3 id="enabling-openbao-telemetry">Enabling OpenBao Telemetry<a class="headerlink" href="#enabling-openbao-telemetry" title="Permanent link">&para;</a></h3>
-<p>Configure telemetry in the cluster spec:</p>
+<p>Configure telemetry in the cluster spec using the simplified <code>observability</code> block:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoCluster</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">metadata</span><span class="p">:</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span><span class="nt">telemetry</span><span class="p">:</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">prometheusRetentionTime</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30s&quot;</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">disableHostname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span><span class="nt">observability</span><span class="p">:</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">metrics</span><span class="p">:</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
+<p>This automatically injects a <code>telemetry</code> stanza into the OpenBao configuration with safe defaults (prometheus retention, disabled hostname).
+You can still provide fine-grained overrides via <code>spec.telemetry</code> if needed.</p>
 <p>This exposes OpenBao metrics at <code>/v1/sys/metrics</code> on the OpenBao pods.</p>
 <div class="admonition note">
 <p class="admonition-title">Separate Scrape Config</p>

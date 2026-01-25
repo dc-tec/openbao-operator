@@ -1126,6 +1126,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../openbaocluster/configuration/air-gapped/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-Gapped / Private Registries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../openbaocluster/configuration/resources-storage/" class="md-nav__link">
         
   
@@ -4379,18 +4407,18 @@
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">JWT Auth (Recommended)</label><label for="__tabbed_2_2">Static Token</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>Uses a short-lived Kubernetes ServiceAccount token. Requires <code>sys/auth/jwt</code> to be enabled on the target.</p>
+<p>Uses a short-lived Kubernetes ServiceAccount token. Requires <code>sys/auth/jwt-operator</code> to be enabled on the target.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">jwtAuthRole</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restore</span><span class="w">  </span><span class="c1"># Must match the role configured in OpenBao</span>
 </span></code></pre></div>
 <details class="example">
 <summary>OpenBao Config for JWT Auth</summary>
 <p>Run this in OpenBao to configure the role:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>bao<span class="w"> </span>write<span class="w"> </span>auth/jwt/role/restore<span class="w"> </span><span class="se">\</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>bao<span class="w"> </span>write<span class="w"> </span>auth/jwt-operator/role/restore<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">    </span><span class="nv">role_type</span><span class="o">=</span>jwt<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nv">bound_audiences</span><span class="o">=</span>openbao-internal<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nv">bound_subject</span><span class="o">=</span><span class="s2">&quot;system:serviceaccount:openbao:prod-cluster-restore-serviceaccount&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nv">token_policies</span><span class="o">=</span>restore<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nv">token_policies</span><span class="o">=</span>openbao-operator-restore<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nv">ttl</span><span class="o">=</span>1h
 </span></code></pre></div></p>
 </details>

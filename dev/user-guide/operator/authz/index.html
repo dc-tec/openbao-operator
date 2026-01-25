@@ -561,10 +561,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#backup" class="md-nav__link">
+  <a href="#openbao-operator-backup" class="md-nav__link">
     <span class="md-ellipsis">
       
-        backup
+        openbao-operator-backup
       
     </span>
   </a>
@@ -572,10 +572,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#restore" class="md-nav__link">
+  <a href="#openbao-operator-restore" class="md-nav__link">
     <span class="md-ellipsis">
       
-        restore
+        openbao-operator-restore
       
     </span>
   </a>
@@ -583,10 +583,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#upgrade" class="md-nav__link">
+  <a href="#openbao-operator-upgrade" class="md-nav__link">
     <span class="md-ellipsis">
       
-        upgrade
+        openbao-operator-upgrade
       
     </span>
   </a>
@@ -1225,6 +1225,34 @@
     
   
     Network
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openbaocluster/configuration/air-gapped/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-Gapped / Private Registries
   
 
     
@@ -4027,10 +4055,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#backup" class="md-nav__link">
+  <a href="#openbao-operator-backup" class="md-nav__link">
     <span class="md-ellipsis">
       
-        backup
+        openbao-operator-backup
       
     </span>
   </a>
@@ -4038,10 +4066,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#restore" class="md-nav__link">
+  <a href="#openbao-operator-restore" class="md-nav__link">
     <span class="md-ellipsis">
       
-        restore
+        openbao-operator-restore
       
     </span>
   </a>
@@ -4049,10 +4077,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#upgrade" class="md-nav__link">
+  <a href="#openbao-operator-upgrade" class="md-nav__link">
     <span class="md-ellipsis">
       
-        upgrade
+        openbao-operator-upgrade
       
     </span>
   </a>
@@ -4143,8 +4171,8 @@
 </div>
 </div>
 </div>
-<h3 id="backup"><code>backup</code><a class="headerlink" href="#backup" title="Permanent link">&para;</a></h3>
-<p>This policy is created if <code>spec.backup</code> is configured with <code>jwtAuthRole</code>. It is bound to the Backup Job ServiceAccount.</p>
+<h3 id="openbao-operator-backup"><code>openbao-operator-backup</code><a class="headerlink" href="#openbao-operator-backup" title="Permanent link">&para;</a></h3>
+<p>This policy is created if <code>spec.backup</code> is configured. It is bound to the <code>openbao-operator-backup</code> role and the Backup Job ServiceAccount.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Permissions</label><label for="__tabbed_2_2">Policy Definition</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4173,8 +4201,8 @@
 </div>
 </div>
 </div>
-<h3 id="restore"><code>restore</code><a class="headerlink" href="#restore" title="Permanent link">&para;</a></h3>
-<p>This policy is created if <code>spec.restore</code> is configured with <code>jwtAuthRole</code>. It is bound to the Restore Job ServiceAccount.</p>
+<h3 id="openbao-operator-restore"><code>openbao-operator-restore</code><a class="headerlink" href="#openbao-operator-restore" title="Permanent link">&para;</a></h3>
+<p>This policy is created if <code>spec.restore</code> is configured. It is bound to the <code>openbao-operator-restore</code> role and the Restore Job ServiceAccount.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Permissions</label><label for="__tabbed_3_2">Policy Definition</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4198,7 +4226,7 @@
 </table>
 <div class="admonition danger">
 <p class="admonition-title">Security Risk</p>
-<p>This capability is extremely powerful and destructive. It replaces all data, keys, and policies in the cluster. Ensure the <code>restore</code> role is strictly bound to the restore job's identity.</p>
+<p>This capability is extremely powerful and destructive. It replaces all data, keys, and policies in the cluster. Ensure the <code>openbao-operator-restore</code> role is strictly bound to the restore job's identity.</p>
 </div>
 </div>
 <div class="tabbed-block">
@@ -4207,8 +4235,8 @@
 </div>
 </div>
 </div>
-<h3 id="upgrade"><code>upgrade</code><a class="headerlink" href="#upgrade" title="Permanent link">&para;</a></h3>
-<p>This policy is created if <code>spec.upgrade</code> is configured with <code>jwtAuthRole</code>. It is bound to the Upgrade Job ServiceAccount (used for rolling or blue/green upgrades depending on strategy).</p>
+<h3 id="openbao-operator-upgrade"><code>openbao-operator-upgrade</code><a class="headerlink" href="#openbao-operator-upgrade" title="Permanent link">&para;</a></h3>
+<p>This policy is created if <code>spec.upgrade</code> is configured. It is bound to the <code>openbao-operator-upgrade</code> role and the Upgrade Job ServiceAccount (used for rolling or blue/green upgrades depending on strategy).</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="4:3"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><input id="__tabbed_4_3" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Permissions (Rolling)</label><label for="__tabbed_4_2">Permissions (Blue/Green)</label><label for="__tabbed_4_3">Policy Definition</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4295,10 +4323,10 @@
 
     subgraph Bao [OpenBao]
         Role_Op[Role: openbao-operator]
-        Role_Backup[Role: backup]
+        Role_Backup[Role: openbao-operator-backup]
 
         Pol_Op[Policy: openbao-operator]
-        Pol_Backup[Policy: backup]
+        Pol_Backup[Policy: openbao-operator-backup]
     end
 
     SA_Op --&gt;|JWT| Role_Op
