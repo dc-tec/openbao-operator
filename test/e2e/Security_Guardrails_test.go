@@ -126,19 +126,19 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				g.Expect(updated.Status.Provisioned).To(BeTrue(), "expected tenant to be provisioned before creating OpenBaoClusters")
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-				role := &rbacv1.Role{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "e2e-openbaocluster-writer",
-						Namespace: guardrailsNamespace,
+			role := &rbacv1.Role{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "e2e-openbaocluster-writer",
+					Namespace: guardrailsNamespace,
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{"openbao.org"},
+						Resources: []string{"openbaoclusters", "openbaorestores"},
+						Verbs:     []string{"create"},
 					},
-					Rules: []rbacv1.PolicyRule{
-						{
-							APIGroups: []string{"openbao.org"},
-							Resources: []string{"openbaoclusters", "openbaorestores"},
-							Verbs:     []string{"create"},
-						},
-					},
-				}
+				},
+			}
 
 			createRoleBindingForGroup(ctx, admin, guardrailsNamespace, role)
 		})
@@ -237,7 +237,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			Expect(err.Error()).To(ContainSubstring("Hardened profile requires"))
 		})
 
-			It("blocks decimal IP encoding in backup endpoint (SSRF protection)", func() {
+		It("blocks decimal IP encoding in backup endpoint (SSRF protection)", func() {
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "ssrf-decimal-ip",
@@ -280,73 +280,73 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
 				return c.Create(ctx, cluster)
 			})
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("numeric IP encoding"))
-			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("numeric IP encoding"))
+		})
 
-			It("blocks link-local endpoints in restore source (SSRF protection)", func() {
-				restore := &openbaov1alpha1.OpenBaoRestore{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "ssrf-restore-link-local",
-						Namespace: guardrailsNamespace,
-					},
-					Spec: openbaov1alpha1.OpenBaoRestoreSpec{
-						Cluster: "does-not-matter-for-admission",
-						Source: openbaov1alpha1.RestoreSource{
-							Target: openbaov1alpha1.BackupTarget{
-								Provider: "s3",
-								Endpoint: "http://169.254.169.254/latest/meta-data",
-								Bucket:   "test-bucket",
-								CredentialsSecretRef: &corev1.LocalObjectReference{
-									Name: "restore-creds",
-								},
+		It("blocks link-local endpoints in restore source (SSRF protection)", func() {
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ssrf-restore-link-local",
+					Namespace: guardrailsNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+					Cluster: "does-not-matter-for-admission",
+					Source: openbaov1alpha1.RestoreSource{
+						Target: openbaov1alpha1.BackupTarget{
+							Provider: "s3",
+							Endpoint: "http://169.254.169.254/latest/meta-data",
+							Bucket:   "test-bucket",
+							CredentialsSecretRef: &corev1.LocalObjectReference{
+								Name: "restore-creds",
 							},
-							Key: "clusters/prod/snapshot.snap",
 						},
-						JWTAuthRole:   "restore",
-						ExecutorImage: "ghcr.io/dc-tec/openbao-backup:v1.0.0",
-						Force:         true,
+						Key: "clusters/prod/snapshot.snap",
 					},
-				}
+					JWTAuthRole:   "restore",
+					ExecutorImage: "ghcr.io/dc-tec/openbao-backup:v1.0.0",
+					Force:         true,
+				},
+			}
 
-				err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
-					return c.Create(ctx, restore)
-				})
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("Restore endpoint cannot point to link-local addresses"))
+			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+				return c.Create(ctx, restore)
 			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Restore endpoint cannot point to link-local addresses"))
+		})
 
-			It("blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)", func() {
-				restore := &openbaov1alpha1.OpenBaoRestore{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "restore-require-https",
-						Namespace: guardrailsNamespace,
-					},
-					Spec: openbaov1alpha1.OpenBaoRestoreSpec{
-						Cluster: "does-not-matter-for-admission",
-						Source: openbaov1alpha1.RestoreSource{
-							Target: openbaov1alpha1.BackupTarget{
-								Provider: "s3",
-								Endpoint: "http://example.com",
-								Bucket:   "test-bucket",
-								CredentialsSecretRef: &corev1.LocalObjectReference{
-									Name: "restore-creds",
-								},
+		It("blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)", func() {
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "restore-require-https",
+					Namespace: guardrailsNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+					Cluster: "does-not-matter-for-admission",
+					Source: openbaov1alpha1.RestoreSource{
+						Target: openbaov1alpha1.BackupTarget{
+							Provider: "s3",
+							Endpoint: "http://example.com",
+							Bucket:   "test-bucket",
+							CredentialsSecretRef: &corev1.LocalObjectReference{
+								Name: "restore-creds",
 							},
-							Key: "clusters/prod/snapshot.snap",
 						},
-						JWTAuthRole:   "restore",
-						ExecutorImage: "ghcr.io/dc-tec/openbao-backup:v1.0.0",
-						Force:         true,
+						Key: "clusters/prod/snapshot.snap",
 					},
-				}
+					JWTAuthRole:   "restore",
+					ExecutorImage: "ghcr.io/dc-tec/openbao-backup:v1.0.0",
+					Force:         true,
+				},
+			}
 
-				err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
-					return c.Create(ctx, restore)
-				})
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("Restore endpoint must use HTTPS or S3 scheme"))
+			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+				return c.Create(ctx, restore)
 			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Restore endpoint must use HTTPS or S3 scheme"))
+		})
 
 		It("blocks cross-namespace tenant targeting (self-service mode)", func() {
 			tenant := &openbaov1alpha1.OpenBaoTenant{
