@@ -67,7 +67,7 @@ data:
 # - External TLS management (cert-manager)
 # - External KMS auto-unseal (AWS KMS)
 # - Self-initialization enabled (no root token)
-# - JWT authentication (opt-in via spec.selfInit.bootstrapJWTAuth)
+# - JWT authentication (opt-in via spec.selfInit.oidc.enabled)
 # - Gateway API for external access
 # - Scheduled backups to RustFS (S3-compatible storage)
 # - Backup and upgrade policies/roles automatically created
@@ -121,7 +121,7 @@ spec:
     raft:
       performanceMultiplier: 2
   version: "2.4.4"
-  image: "openbao/openbao:2.4.4"
+  # image: "openbao/openbao:2.4.4" # Optional: inferred from version
   # Image Verification (Supply Chain Security)
   # The operator verifies container image signatures using Cosign before deployment.
   # By default, signatures are verified against the Rekor transparency log for non-repudiation.
@@ -203,7 +203,8 @@ spec:
     # Opt-in to JWT bootstrap to automatically configure JWT auth, OIDC, and policies/roles
     # This enables the operator to authenticate via JWT and automatically creates
     # backup/upgrade policies and roles when spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are set
-    bootstrapJWTAuth: true
+    oidc:
+      enabled: true
     requests:
       # Enable stdout audit logging (useful for debugging)
       # - name: enable-stdout-audit
@@ -245,7 +246,7 @@ spec:
       bao-full.adfinis.localhost/backend-protocol: HTTPS
 
   upgrade:
-    jwtAuthRole: upgrade # JWT Auth (preferred - automatically rotated tokens)
+    #jwtAuthRole: upgrade
     # Take a snapshot before any version upgrade.
     preUpgradeSnapshot: true
 
@@ -285,7 +286,7 @@ spec:
     # Authentication method for backup operations.
     # JWT Auth (preferred - automatically rotated tokens, better security)
     # For Hardened profile, backup policy and role are automatically created
-    jwtAuthRole: backup
+    # jwtAuthRole: backup
     # Fallback: Static token (only used if jwtAuthRole is not set)
     # For self-init clusters without JWT Auth, configure a dedicated
     # backup token Secret with a token that has `read` access to

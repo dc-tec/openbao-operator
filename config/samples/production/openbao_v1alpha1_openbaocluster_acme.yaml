@@ -28,7 +28,6 @@ spec:
   # Hardened profile is compatible with ACME mode
   profile: Hardened
   version: "2.4.4"
-  image: "openbao/openbao:2.4.4"
   replicas: 3
   # ACME TLS mode - OpenBao manages certificates automatically
   tls:
