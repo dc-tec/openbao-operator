@@ -176,7 +176,7 @@ func WriteSecretViaJWT(
 set -e
 export BAO_ADDR=%s
 export BAO_SKIP_VERIFY=true
-TOKEN=$(bao write -field=token auth/jwt/login role=%s jwt=@/var/run/secrets/openbao/token)
+TOKEN=$(bao write -field=token auth/jwt-operator/login role=%s jwt=@/var/run/secrets/openbao/token)
 export BAO_TOKEN=$TOKEN
 bao kv put %s %s
 `, baoAddr, roleName, path, dataStr)
@@ -206,7 +206,7 @@ func ReadSecretViaJWT(
 set -e
 export BAO_ADDR=%s
 export BAO_SKIP_VERIFY=true
-TOKEN=$(bao write -field=token auth/jwt/login role=%s jwt=@/var/run/secrets/openbao/token)
+TOKEN=$(bao write -field=token auth/jwt-operator/login role=%s jwt=@/var/run/secrets/openbao/token)
 export BAO_TOKEN=$TOKEN
 bao kv get -field=%s %s
 `, baoAddr, roleName, key, path)
@@ -257,7 +257,7 @@ path "secret/metadata/*" { capabilities = ["read", "list", "delete"] }`},
 		{
 			Name:      "create-e2e-role",
 			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "auth/jwt/role/e2e-test",
+			Path:      "auth/jwt-operator/role/e2e-test",
 			Data: MustJSON(map[string]interface{}{
 				"role_type":       "jwt",
 				"user_claim":      "sub",
@@ -286,7 +286,7 @@ path "sys/health" { capabilities = ["read"] }`,
 		{
 			Name:      "create-jwt-auth-role",
 			Operation: openbaov1alpha1.SelfInitOperationUpdate,
-			Path:      "auth/jwt/role/test-verifier",
+			Path:      "auth/jwt-operator/role/test-verifier",
 			Data: MustJSON(map[string]interface{}{
 				"role_type":       "jwt",
 				"user_claim":      "sub",
@@ -416,7 +416,7 @@ export BAO_SKIP_VERIFY=true
 # Retry loop for login and verification
 for i in $(seq 1 10); do
 	echo "Attempt $i/10..."
-	TOKEN=$(bao write -field=token auth/jwt/login \
+	TOKEN=$(bao write -field=token auth/jwt-operator/login \
 		role=test-verifier jwt=@/var/run/secrets/openbao/token 2>/dev/null || true)
 	if [ -n "$TOKEN" ]; then
 		export BAO_TOKEN=$TOKEN
@@ -467,7 +467,8 @@ export BAO_SKIP_VERIFY=true
 # Retry loop for login and verification
 for i in $(seq 1 10); do
 	echo "Attempt $i/10..."
-	TOKEN=$(bao write -field=token auth/jwt/login role=test-verifier jwt=@/var/run/secrets/openbao/token 2>&1 || echo "")
+	TOKEN=$(bao write -field=token auth/jwt-operator/login role=test-verifier \
+		jwt=@/var/run/secrets/openbao/token 2>&1 || echo "")
 	if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
 		export BAO_TOKEN=$TOKEN
 		# Read config and check for min_quorum value

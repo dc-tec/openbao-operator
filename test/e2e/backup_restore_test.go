@@ -242,9 +242,9 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:          true,
-						BootstrapJWTAuth: true, // Operator will auto-create backup and restore roles
-						Requests:         e2ehelpers.CreateE2ERequests(tenantNamespace),
+						Enabled:  true,
+						OIDC:     &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}, // Operator will auto-create backup and restore roles
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -260,7 +260,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 					Backup: &openbaov1alpha1.BackupSchedule{
 						Schedule:      "*/5 * * * *",
 						ExecutorImage: backupExecutorImage,
-						JWTAuthRole:   "backup", // Triggers auto-creation of backup policy/role via bootstrap
+						// JWTAuthRole not set - operator will auto-create backup role when OIDC is enabled
 						Target: openbaov1alpha1.BackupTarget{
 							Provider:     constants.StorageProviderS3,
 							Endpoint:     rustfsEndpoint,
@@ -578,9 +578,11 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:          true,
-						BootstrapJWTAuth: true, // Operator will auto-create backup role
-						Requests:         e2ehelpers.CreateE2ERequests(tenantNamespace),
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						}, // Operator will auto-create backup role
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -596,7 +598,6 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 					Backup: &openbaov1alpha1.BackupSchedule{
 						Schedule:      "*/5 * * * *",
 						ExecutorImage: backupExecutorImage,
-						JWTAuthRole:   "backup", // Triggers auto-creation of backup policy/role via bootstrap
 						Target: openbaov1alpha1.BackupTarget{
 							Provider:   constants.StorageProviderGCS,
 							Endpoint:   fakeGCSEndpoint,
@@ -841,9 +842,9 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 						Image:   configInitImage,
 					},
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled:          true,
-						BootstrapJWTAuth: true, // Operator will auto-create backup and restore roles
-						Requests:         e2ehelpers.CreateE2ERequests(tenantNamespace),
+						Enabled:  true,
+						OIDC:     &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}, // Operator will auto-create backup and restore roles
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -859,7 +860,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 					Backup: &openbaov1alpha1.BackupSchedule{
 						Schedule:      "*/5 * * * *",
 						ExecutorImage: backupExecutorImage,
-						JWTAuthRole:   "backup", // Triggers auto-creation of backup policy/role via bootstrap
+						// JWTAuthRole not set - operator will auto-create backup role when OIDC is enabled
 						Target: openbaov1alpha1.BackupTarget{
 							Provider:   constants.StorageProviderAzure,
 							Endpoint:   azuriteEndpoint,
