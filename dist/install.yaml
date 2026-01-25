@@ -5288,6 +5288,12 @@ spec:
         !object.spec.upgrade.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
     message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
       are prohibited in backup/upgrade configurations to prevent confused deputy attacks.
+  - expression: '!has(oldObject.spec.storage.storageClassName) || object.spec.storage.storageClassName
+      == oldObject.spec.storage.storageClassName'
+    message: spec.storage.storageClassName is immutable.
+  - expression: '!has(oldObject.spec.storage.size) || quantity(object.spec.storage.size)
+      >= quantity(oldObject.spec.storage.size)'
+    message: spec.storage.size cannot be decreased.
   variables:
   - expression: has(object.spec.backup)
     name: has_backup

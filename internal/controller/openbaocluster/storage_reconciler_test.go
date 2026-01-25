@@ -158,8 +158,9 @@ func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, pvc, pod).Build()
 
 	r := &storageResizeRestartReconciler{
-		client:   c,
-		recorder: record.NewFakeRecorder(10),
+		client:    c,
+		apiReader: c,
+		recorder:  record.NewFakeRecorder(10),
 		clientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (openbao.ClusterActions, error) {
 			return &openbao.MockClusterActions{
 				IsLeaderFunc: func(ctx context.Context) (bool, error) { return false, nil },
@@ -226,8 +227,9 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 
 	stepDownCalled := 0
 	r := &storageResizeRestartReconciler{
-		client:   c,
-		recorder: record.NewFakeRecorder(10),
+		client:    c,
+		apiReader: c,
+		recorder:  record.NewFakeRecorder(10),
 		clientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (openbao.ClusterActions, error) {
 			return &openbao.MockClusterActions{
 				IsLeaderFunc: func(ctx context.Context) (bool, error) { return true, nil },
@@ -278,8 +280,9 @@ func TestStorageResizeRestartReconciler_RequiresMaintenance(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, pvc).Build()
 
 	r := &storageResizeRestartReconciler{
-		client:   c,
-		recorder: record.NewFakeRecorder(10),
+		client:    c,
+		apiReader: c,
+		recorder:  record.NewFakeRecorder(10),
 	}
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
