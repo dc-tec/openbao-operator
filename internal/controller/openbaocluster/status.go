@@ -179,7 +179,8 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
 		cluster.Status.CurrentVersion != "" &&
 		cluster.Status.CurrentVersion != cluster.Spec.Version &&
-		cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+		cluster.Spec.Upgrade != nil &&
+		cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 
 		// CRITICAL CHECK: Verify that the upgrade actually happened.
 		// PhaseIdle can mean "Before Upgrade" OR "After Upgrade".

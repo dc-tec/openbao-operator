@@ -193,7 +193,7 @@ func (r *infraReconciler) computeStatefulSetSpec(
 	}
 
 	// Determine revision and skip logic based on update strategy
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		// For BlueGreen, use the BlueRevision from status
 		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
 			spec.Revision = cluster.Status.BlueGreen.BlueRevision
@@ -210,7 +210,12 @@ func (r *infraReconciler) computeStatefulSetSpec(
 			}
 		} else {
 			// Bootstrap revision for initial reconciliation before BlueGreen status is initialized.
-			spec.Revision = revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+			// Use resolved image if spec.Image is empty
+			resolvedImage := cluster.Spec.Image
+			if resolvedImage == "" {
+				resolvedImage = constants.GetOpenBaoImage(cluster.Spec.Version)
+			}
+			spec.Revision = revision.OpenBaoClusterRevision(cluster.Spec.Version, resolvedImage, cluster.Spec.Replicas)
 		}
 	} else {
 		// For RollingUpdate or default, use empty revision (cluster name)
@@ -235,7 +240,10 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	logger.Info("Reconciling infrastructure for OpenBaoCluster")
 
 	targetImage := cluster.Spec.Image
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen &&
+	if targetImage == "" {
+		targetImage = constants.GetOpenBaoImage(cluster.Spec.Version)
+	}
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen &&
 		cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueImage != "" {
 		targetImage = cluster.Status.BlueGreen.BlueImage
 	}
@@ -253,7 +261,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	// Bootstrap/correct BlueGreen status before infra reconciliation so the infra manager can
 	// keep reconciling the active ("Blue") revision even when spec.version/spec.image has been
 	// updated to start an upgrade.
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		if cluster.Status.BlueGreen == nil {
 			inferred, inferErr := inframanager.InferActiveRevisionFromPods(ctx, r.client, cluster)
 			if inferErr != nil {
@@ -261,7 +269,11 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 			}
 			blueRevision := inferred
 			if blueRevision == "" {
-				blueRevision = revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+				resolvedImage := cluster.Spec.Image
+				if resolvedImage == "" {
+					resolvedImage = constants.GetOpenBaoImage(cluster.Spec.Version)
+				}
+				blueRevision = revision.OpenBaoClusterRevision(cluster.Spec.Version, resolvedImage, cluster.Spec.Replicas)
 			}
 			cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
 				Phase:        openbaov1alpha1.PhaseIdle,

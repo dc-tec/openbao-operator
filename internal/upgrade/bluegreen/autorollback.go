@@ -16,11 +16,11 @@ func autoRollbackSettings(cluster *openbaov1alpha1.OpenBaoCluster) autoRollbackC
 		OnValidationFailure: true,
 	}
 
-	if cluster == nil || cluster.Spec.UpdateStrategy.BlueGreen == nil || cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback == nil {
+	if cluster == nil || cluster.Spec.Upgrade.BlueGreen == nil || cluster.Spec.Upgrade.BlueGreen.AutoRollback == nil {
 		return cfg
 	}
 
-	ar := cluster.Spec.UpdateStrategy.BlueGreen.AutoRollback
+	ar := cluster.Spec.Upgrade.BlueGreen.AutoRollback
 	cfg.Enabled = ar.Enabled
 	cfg.OnJobFailure = ar.OnJobFailure
 	cfg.OnValidationFailure = ar.OnValidationFailure

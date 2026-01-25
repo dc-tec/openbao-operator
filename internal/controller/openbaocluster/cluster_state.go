@@ -128,7 +128,7 @@ func (r *OpenBaoClusterReconciler) gatherStatefulSetState(
 	}
 
 	// Compute active revision for blue/green deployments
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		state.ActiveRevision = revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
 		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
 			state.ActiveRevision = cluster.Status.BlueGreen.BlueRevision
@@ -192,7 +192,7 @@ func (r *OpenBaoClusterReconciler) gatherPodState(
 		constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
 		constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 	}
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen && state.ActiveRevision != "" {
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen && state.ActiveRevision != "" {
 		podSelector[constants.LabelOpenBaoRevision] = state.ActiveRevision
 	}
 
@@ -208,7 +208,7 @@ func (r *OpenBaoClusterReconciler) gatherPodState(
 
 	// Find pod0 and leader
 	pod0Name := fmt.Sprintf("%s-0", cluster.Name)
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen && state.ActiveRevision != "" {
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen && state.ActiveRevision != "" {
 		pod0Name = fmt.Sprintf("%s-%s-0", cluster.Name, state.ActiveRevision)
 	}
 

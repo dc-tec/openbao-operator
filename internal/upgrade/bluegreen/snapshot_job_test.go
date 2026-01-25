@@ -96,8 +96,8 @@ func TestHandlePhaseIdle_BlocksOnFailedSnapshot(t *testing.T) {
 			Version:  "2.5.0",
 			Replicas: 3,
 			Image:    "openbao:2.5.0",
-			UpdateStrategy: openbaov1alpha1.UpdateStrategy{
-				Type: openbaov1alpha1.UpdateStrategyBlueGreen,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
 				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 					PreUpgradeSnapshot: true,
 				},

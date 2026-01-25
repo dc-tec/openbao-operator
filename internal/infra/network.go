@@ -106,7 +106,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 	}
 
 	selectorLabels := podSelectorLabels(cluster)
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
 			// During blue/green upgrades, select the active revision (Blue by default,
 			// Green after cutover, which happens at DemotingBlue/Cleanup).
@@ -182,7 +182,7 @@ func (m *Manager) ensureACMEChallengeService(ctx context.Context, _ logr.Logger,
 	}
 
 	selectorLabels := podSelectorLabels(cluster)
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
 			activeRevision := cluster.Status.BlueGreen.BlueRevision
 			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||

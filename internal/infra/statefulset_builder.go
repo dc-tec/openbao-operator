@@ -54,7 +54,11 @@ func getContainerImage(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDig
 	if verifiedImageDigest != "" {
 		return verifiedImageDigest
 	}
-	return cluster.Spec.Image
+	if cluster.Spec.Image != "" {
+		return cluster.Spec.Image
+	}
+	// Intelligent Default based on Version
+	return constants.GetOpenBaoImage(cluster.Spec.Version)
 }
 
 // getOpenBaoConfigPath returns the path to the OpenBao configuration file.
@@ -438,7 +442,7 @@ func buildStatefulSetUpdateStrategy(cluster *openbaov1alpha1.OpenBaoCluster) app
 	// For blue/green deployments, use OnDelete update strategy to preventing
 	// automatic rolling updates. The BlueGreenManager controls when pods are created/updated.
 	// For standard rolling upgrades, use RollingUpdate (default behavior).
-	if cluster.Spec.UpdateStrategy.Type == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		return appsv1.StatefulSetUpdateStrategy{
 			Type: appsv1.OnDeleteStatefulSetStrategyType,
 		}
@@ -822,6 +826,7 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 					SecurityContext:              buildStatefulSetPodSecurityContext(cluster, platform),
 					InitContainers:               initContainers,
 					Containers:                   buildContainers(cluster, verifiedImageDigest, renderedConfigDir, probes),
+					ImagePullSecrets:             cluster.Spec.ImagePullSecrets,
 					Volumes:                      volumes,
 				},
 			},
