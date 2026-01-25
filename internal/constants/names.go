@@ -47,3 +47,24 @@ const (
 	ControllerNameOpenBaoRestore         = "openbaorestore"
 	ControllerNameNamespaceProvisioner   = "namespace-provisioner"
 )
+
+// JWT Auth Role names.
+const (
+	// RoleNameOperator is the JWT auth role used by the operator itself (e.g. for autopilot).
+	RoleNameOperator = "openbao-operator"
+	// RoleNameBackup is the default JWT auth role suffix for backup operations.
+	RoleNameBackup = "openbao-operator-backup"
+	// RoleNameUpgrade is the default JWT auth role suffix for upgrade operations.
+	RoleNameUpgrade = "openbao-operator-upgrade"
+	// RoleNameRestore is the default JWT auth role suffix for restore operations.
+	RoleNameRestore = "openbao-operator-restore"
+
+	// PolicyNameOperator is the policy name used by the operator itself.
+	PolicyNameOperator = "openbao-operator"
+	// PolicyNameBackup is the policy name used for backup operations.
+	PolicyNameBackup = "openbao-operator-backup"
+	// PolicyNameUpgrade is the policy name used for upgrade operations.
+	PolicyNameUpgrade = "openbao-operator-upgrade"
+	// PolicyNameRestore is the policy name used for restore operations.
+	PolicyNameRestore = "openbao-operator-restore"
+)

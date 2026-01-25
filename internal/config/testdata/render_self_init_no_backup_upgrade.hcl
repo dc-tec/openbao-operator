@@ -1,7 +1,7 @@
 initialize "operator-bootstrap" {
   request "enable-jwt-auth" {
     operation = "update"
-    path      = "sys/auth/jwt"
+    path      = "sys/auth/jwt-operator"
     data {
       type        = "jwt"
       description = "Auth method for OpenBao Operator"
@@ -9,7 +9,7 @@ initialize "operator-bootstrap" {
   }
   request "config-jwt-auth" {
     operation = "update"
-    path      = "auth/jwt/config"
+    path      = "auth/jwt-operator/config"
     data {
       bound_issuer           = "https://kubernetes.default.svc"
       jwt_validation_pubkeys = ["-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"]
@@ -24,7 +24,7 @@ initialize "operator-bootstrap" {
   }
   request "create-operator-role" {
     operation = "update"
-    path      = "auth/jwt/role/openbao-operator"
+    path      = "auth/jwt-operator/role/openbao-operator"
     data {
       role_type       = "jwt"
       user_claim      = "sub"

@@ -4,6 +4,7 @@ package constants
 const (
 	APIPathSysHealth                = "/v1/sys/health"
 	APIPathSysInit                  = "/v1/sys/init"
+	APIPathSysLeader                = "/v1/sys/leader"
 	APIPathSysStepDown              = "/v1/sys/step-down"
 	APIPathRaftSnapshot             = "/v1/sys/storage/raft/snapshot"
 	APIPathRaftJoin                 = "/v1/sys/storage/raft/join"
@@ -16,5 +17,5 @@ const (
 	APIPathRaftAutopilotConfig      = "/v1/sys/storage/raft/autopilot/configuration"
 	APIPathRaftAutopilotState       = "/v1/sys/storage/raft/autopilot/state"
 	APIPathRaftUpdateConfig         = "/v1/sys/storage/raft/configuration"
-	APIPathAuthJWTLogin             = "/v1/auth/jwt/login"
+	APIPathAuthJWTLogin             = "/v1/auth/jwt-operator/login"
 )
