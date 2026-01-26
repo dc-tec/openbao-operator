@@ -4277,22 +4277,35 @@
 <pre class="mermaid"><code>graph TD
     User([User]) --&gt;|CRD| API[Kubernetes API]
 
-    subgraph "Operator Controller Manager"
+    subgraph ControllerMgr ["Controller Manager Pod"]
         Workload[Workload Ctrl]
         AdminOps[AdminOps Ctrl]
         Status[Status Ctrl]
+        Restore[OpenBaoRestore Ctrl]
+    end
+
+    subgraph ProvisionerMgr ["Provisioner Pod"]
         Provisioner[Provisioner Ctrl]
     end
 
     API --&gt;|Watch| Operator[Operator Manager]
-    Operator --&gt; Workload &amp; AdminOps &amp; Status &amp; Provisioner
+    Operator --&gt; Workload &amp; AdminOps &amp; Status &amp; Restore
+    API --&gt;|Watch| ProvisionerMgr
 
     Workload --&gt;|Reconcile| STS[StatefulSet]
     Workload --&gt;|Reconcile| Svc[Services]
     AdminOps --&gt;|Backup| ObjStore[Object Storage]
 
     STS --&gt;|Run| Pods[OpenBao Pods]
-    Pods --&gt;|Data| PVC[Persistent Volumes]</code></pre>
+    Pods --&gt;|Data| PVC[Persistent Volumes]
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class User,API read;
+    class Operator,Workload,AdminOps,Status,Restore,Provisioner,ProvisionerMgr process;
+    class STS,Svc,ObjStore,Pods,PVC write;</code></pre>
 <h3 id="13-component-interaction">1.3 Component Interaction<a class="headerlink" href="#13-component-interaction" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>sequenceDiagram
     autonumber

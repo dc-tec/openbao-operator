@@ -4084,18 +4084,18 @@
 <tbody>
 <tr>
 <td style="text-align: left;"><strong>Root Token</strong></td>
-<td style="text-align: left;"><strong>Never Generated</strong></td>
-<td style="text-align: left;">Stored in Secret</td>
+<td style="text-align: left;">Auto-revoked (not stored in a Secret)</td>
+<td style="text-align: left;">Stored in a Secret when self-init is disabled</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Unseal Keys</strong></td>
-<td style="text-align: left;">External KMS Required</td>
-<td style="text-align: left;">Stored in Secret</td>
+<td style="text-align: left;">External KMS required</td>
+<td style="text-align: left;">Defaults to static key stored in a Secret</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>TLS</strong></td>
-<td style="text-align: left;">External / ACME Required</td>
-<td style="text-align: left;">Operator Managed Allowed</td>
+<td style="text-align: left;">External / ACME required</td>
+<td style="text-align: left;">Operator-managed allowed</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Replicas</strong></td>
@@ -4125,26 +4125,29 @@
 <div class="tabbed-block">
 <div class="admonition success">
 <p class="admonition-title">Production Ready</p>
-<p>The <code>hardened</code> profile is <strong>MANDATORY</strong> for all production deployments. It enforces a "Secure by Default" posture that eliminates Root Tokens and ensures strong encryption.</p>
+<p>The <code>Hardened</code> profile is <strong>MANDATORY</strong> for production deployments. It enforces a "secure by default" posture that prevents root-token Secret creation and requires strong encryption.</p>
 </div>
 <p>To use this profile, your <code>OpenBaoCluster</code> must meet these requirements:</p>
 <ol>
 <li><strong>High Availability:</strong> You must set <code>spec.replicas</code> to at least <code>3</code> for Raft quorum.</li>
 <li><strong>External KMS:</strong> You must provide a KMS key (AWS, GCP, Azure, or Vault Transit) for auto-unseal.</li>
-<li><strong>Valid TLS:</strong> You must provide valid TLS certificates (via <code>cert-manager</code> or external secret); <code>tlsSkipVerify</code> is rejected.</li>
-<li><strong>Self-Initialization:</strong> The Operator must drive the initialization process to ensure no humans handle initial secrets.</li>
+<li><strong>Valid TLS:</strong> You must provide valid TLS certificates; insecure TLS verification skips are rejected.</li>
+<li><strong>Self-Initialization:</strong> You must enable self-init to avoid persisting a root token Secret.</li>
 </ol>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoCluster</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production-cluster</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hardened</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w">  </span><span class="c1"># Minimum 3 for HA</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">selfInit</span><span class="p">:</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Hardened</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w"> </span><span class="c1"># Minimum 3 for HA</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span><span class="nt">unseal</span><span class="p">:</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awskms</span><span class="w"> </span><span class="c1"># or gcpckms, azurekeyvault</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">External</span><span class="w"> </span><span class="c1"># or ACME</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span><span class="nt">selfInit</span><span class="p">:</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="nt">unseal</span><span class="p">:</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awskms</span><span class="w"> </span><span class="c1"># or gcpckms, azurekeyvault, transit</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -4160,17 +4163,21 @@
 </ul>
 <p><strong>Key Behaviors:</strong></p>
 <ul>
-<li><strong>Root Token:</strong> Generated and stored in <code>&lt;cluster-name&gt;-root-token</code>.</li>
-<li><strong>Unseal Keys:</strong> Generated and stored in <code>&lt;cluster-name&gt;-unseal-key</code> (unless KMS is configured).</li>
+<li><strong>Root Token:</strong> Stored in <code>&lt;cluster-name&gt;-root-token</code> when self-init is disabled.</li>
+<li><strong>Unseal Keys:</strong> Stored in <code>&lt;cluster-name&gt;-unseal-key</code> when <code>spec.unseal.type</code> is <code>static</code> (default).</li>
 <li><strong>Status Warning:</strong> The Operator sets <code>ConditionSecurityRisk=True</code> on the cluster status.</li>
 </ul>
+<div class="admonition tip">
+<p class="admonition-title">Prefer Self-Init</p>
+<p>Even in Development, enabling <code>spec.selfInit.enabled: true</code> avoids root token Secret creation. Do not store raw secrets in Git.</p>
+</div>
 </div>
 </div>
 </div>
 <h2 id="guidance">Guidance<a class="headerlink" href="#guidance" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
 <p class="admonition-title">Migration Path</p>
-<p>Teams often start with <strong>Development</strong> for initial exploration. When moving to <strong>Staging</strong> or <strong>Production</strong>, you should create a <em>new</em> cluster with the <strong>Hardened</strong> profile rather than trying to converting an existing Development cluster. Trust roots established in Development are typically not secure enough for Production.</p>
+<p>Teams often start with <strong>Development</strong> for initial exploration. When moving to <strong>Staging</strong> or <strong>Production</strong>, create a <em>new</em> cluster with the <strong>Hardened</strong> profile rather than trying to convert an existing Development cluster. Trust roots established in Development are typically not secure enough for Production.</p>
 </div>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>

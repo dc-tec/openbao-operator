@@ -4127,7 +4127,7 @@
 <p>Configure the security posture of your OpenBao cluster.</p>
 <div class="admonition danger">
 <p class="admonition-title">Production Readiness</p>
-<p><strong>Always</strong> use the <code>Hardened</code> profile for production deployments. The <code>Development</code> profile creates root tokens and stores them in Kubernetes Secrets, which is a critical security risk.</p>
+<p><strong>Always</strong> use the <code>Hardened</code> profile for production deployments. The <code>Development</code> profile can store a root token in a Kubernetes Secret when self-init is disabled, which is a critical security risk.</p>
 </div>
 <h2 id="profile-comparison">Profile Comparison<a class="headerlink" href="#profile-comparison" title="Permanent link">&para;</a></h2>
 <p>The Operator supports two distinct security profiles via <code>spec.profile</code>.</p>
@@ -4147,8 +4147,8 @@
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Root Token</strong></td>
-<td style="text-align: left;">Created &amp; Stored in Secret</td>
-<td style="text-align: left;"><strong>Never Created</strong></td>
+<td style="text-align: left;">Stored in a Secret when self-init is disabled</td>
+<td style="text-align: left;">Auto-revoked (not stored in a Secret)</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Unseal</strong></td>
@@ -4175,10 +4175,19 @@
     Cluster --&gt;|spec.profile| Dev
     Cluster --&gt;|spec.profile| Hard
 
-    Dev -.-&gt;|Risk| RootToken[Root Token Created]
-    Hard -.-&gt;|Secure| NoRoot[No Root Token]
+    Dev -.-&gt;|Risk| RootToken["Root Token Secret (if self-init disabled)"]
+    Hard -.-&gt;|Secure| NoRoot[No Root Token Secret]
     Hard -.-&gt;|Secure| KMS[External KMS Unseal]
-    Hard -.-&gt;|Secure| EXT_TLS[Verified TLS]</code></pre>
+    Hard -.-&gt;|Secure| EXT_TLS[Verified TLS]
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+
+    class Cluster read;
+    class Dev,Hard write;
+    class RootToken,KMS,EXT_TLS security;
+    class NoRoot write;</code></pre>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Hardened (Production)</label><label for="__tabbed_1_2">Development</label></div>
 <div class="tabbed-content">
@@ -4221,8 +4230,8 @@
 </ul>
 <h3 id="benefits">Benefits<a class="headerlink" href="#benefits" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Zero Trust</strong>: No root tokens are ever generated.</li>
-<li><strong>Identity</strong>: Automatic JWT identity bootstrapping when <code>spec.selfInit.bootstrapJWTAuth</code> is enabled.</li>
+<li><strong>Zero Trust</strong>: No root token Secret is created; initialization credentials are auto-revoked.</li>
+<li><strong>Identity</strong>: When <code>spec.selfInit.oidc.enabled</code> is <code>true</code>, the operator bootstraps JWT auth and roles for operator jobs (backup/upgrade/restore).</li>
 <li><strong>Encryption</strong>: Root of trust is delegated to a hardware-backed KMS, not Kubernetes etcd.</li>
 </ul>
 </div>

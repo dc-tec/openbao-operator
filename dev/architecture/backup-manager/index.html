@@ -4157,10 +4157,10 @@
 <h2 id="1-backup-workflow">1. Backup Workflow<a class="headerlink" href="#1-backup-workflow" title="Permanent link">&para;</a></h2>
 <p>The Manager uses a <strong>stateless executor pattern</strong>: the Operator only schedules Kubernetes Jobs; it does not handle data itself.</p>
 <pre class="mermaid"><code>graph TD
-    Trigger[Trigger: Cron or Manual] --&gt; Prelight{Pre-flight Checks}
+    Trigger[Trigger: Cron or Manual] --&gt; Preflight{Pre-flight Checks}
 
-    Prelight -- Fail --&gt; Retry[Retry Later]
-    Prelight -- Pass --&gt; Job[Create Backup Job]
+    Preflight -- Fail --&gt; Retry[Retry Later]
+    Preflight -- Pass --&gt; Job[Create Backup Job]
 
     subgraph K8s_Job [Executor Pod]
         Job --&gt; Auth[Authenticate to OpenBao]
@@ -4177,16 +4177,18 @@
     classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
 
     class Job,Auth,Stream,Upload process;
-    class Trigger,Prelight read;
+    class Trigger,Preflight read;
     class Status,StatusFail write;</code></pre>
 <h2 id="2-execution-phases">2. Execution Phases<a class="headerlink" href="#2-execution-phases" title="Permanent link">&para;</a></h2>
 <h3 id="phase-1-pre-flight-checks">Phase 1: Pre-flight Checks<a class="headerlink" href="#phase-1-pre-flight-checks" title="Permanent link">&para;</a></h3>
 <p>Before spawning a Job, the Operator verifies the cluster is stable:</p>
 <ol>
 <li><strong>Healthy:</strong> Cluster Phase must be <code>Running</code>.</li>
-<li><strong>Stable:</strong> No Upgrade (<code>Status.Upgrade == nil</code>) or Restore (<code>Status.Restore == nil</code>) in progress.</li>
-<li><strong>Exclusive:</strong> No other backup is currently running.</li>
+<li><strong>Not Upgrading:</strong> No upgrade is in progress (<code>status.upgrade != nil</code>) and no upgrade is pending (for example, <code>spec.version != status.currentVersion</code>).</li>
+<li><strong>Not Restoring:</strong> No <code>OpenBaoRestore</code> is in progress for this cluster (restore resources targeting this cluster that are not <code>Completed</code> or <code>Failed</code>).</li>
+<li><strong>Exclusive:</strong> No other backup Job is currently running.</li>
 </ol>
+<p>When a backup starts, the BackupManager acquires the cluster operation lock by setting <code>status.operationLock.operation=Backup</code> and releases it when the Job completes.</p>
 <h3 id="phase-2-the-executor-job">Phase 2: The Executor Job<a class="headerlink" href="#phase-2-the-executor-job" title="Permanent link">&para;</a></h3>
 <p>The Operator creates a Kubernetes Job named <code>backup-&lt;cluster&gt;-&lt;timestamp&gt;</code>. This Job:</p>
 <ul>

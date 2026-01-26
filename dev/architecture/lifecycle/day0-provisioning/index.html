@@ -4075,8 +4075,9 @@
 </div>
 <h2 id="1-namespace-rbac-creation">1. Namespace &amp; RBAC Creation<a class="headerlink" href="#1-namespace-rbac-creation" title="Permanent link">&para;</a></h2>
 <ul>
-<li>The cluster admin creates a <code>Provisioner</code> CR (or manually configures a Namespace with appropriate RoleBindings).</li>
-<li>The Provisioner Controller reconciles these resources, granting limited permissions to the tenant's ServiceAccount (e.g., ability to manage <code>OpenBaoCluster</code>, <code>Secret</code>, and <code>ConfigMap</code> within their namespace).</li>
+<li>A cluster admin (or a namespace owner in self-service mode) creates an <code>OpenBaoTenant</code> resource.</li>
+<li>The Provisioner Controller reconciles <code>OpenBaoTenant</code> and provisions the target namespace with the required tenant-scoped RBAC so the operator can manage OpenBao resources there.
+  This includes creating namespaced <code>Role</code> and <code>RoleBinding</code> resources that delegate permissions to the operator's ServiceAccount.</li>
 </ul>
 <h2 id="2-resource-quotas">2. Resource Quotas<a class="headerlink" href="#2-resource-quotas" title="Permanent link">&para;</a></h2>
 <ul>
@@ -4096,9 +4097,9 @@
     participant Prov as Provisioner Controller
     participant Tenant
 
-    Admin-&gt;&gt;K: Create Namespace + RoleBinding
-    K--&gt;&gt;Prov: Watch RoleBinding
-    Prov-&gt;&gt;K: Reconcile Permissions (Day 0)
+    Admin-&gt;&gt;K: Create OpenBaoTenant (targetNamespace)
+    K--&gt;&gt;Prov: Watch OpenBaoTenant
+    Prov-&gt;&gt;K: Provision tenant RBAC (Day 0)
     Prov-&gt;&gt;K: Apply ResourceQuotas (optional)
     Admin-&gt;&gt;Tenant: Hand over credentials
     Tenant-&gt;&gt;K: Create OpenBaoCluster</code></pre>

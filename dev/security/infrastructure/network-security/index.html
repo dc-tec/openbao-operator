@@ -4095,13 +4095,11 @@
     Yield --"Egress (53)"--&gt; DNS
     Yield --"Egress (8201)"--&gt; Peer
 
-    %% Styling
-    classDef external fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef secure fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef blocked fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
 
-    class Operator,K8sAPI,DNS,Peer external;
-    class Yield secure;</code></pre>
+    class Operator,K8sAPI,DNS,Peer read;
+    class Yield write;</code></pre>
 <h2 id="traffic-rules">Traffic Rules<a class="headerlink" href="#traffic-rules" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 7 9.6 8.4l2.6 2.6H2v2h10.2l-2.6 2.6L11 17l5-5zm9 12h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-8v2h8z"/></svg></span> Ingress (Incoming)</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17 7-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5M4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4z"/></svg></span> Egress (Outgoing)</label></div>
 <div class="tabbed-content">

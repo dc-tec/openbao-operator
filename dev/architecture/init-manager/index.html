@@ -4170,11 +4170,10 @@
     end
 
     Note over Op, Secret: Phase 2: Initialize
-    Op-&gt;&gt;Bao: PUT /sys/init
-    Bao--&gt;&gt;Op: Returns {root_token, keys}
+    Op-&gt;&gt;Bao: PUT /v1/sys/init
+    Bao--&gt;&gt;Op: Returns {root_token, unseal_keys_b64}
 
     Op-&gt;&gt;Secret: Store Root Token
-    Op-&gt;&gt;Secret: Store Unseal Key (if Static)
 
     Note over Op, SS: Phase 3: Scale
     Op-&gt;&gt;SS: Service now Initialized
@@ -4195,10 +4194,10 @@
 <p>Once <code>pod-0</code> is running, the InitManager takes over:</p>
 <ol>
 <li><strong>Detection:</strong> Checks internal status. If it finds <code>openbao-initialized=true</code> label or receives <code>200 OK</code> from <code>/sys/health</code>, it assumes adoption of an existing cluster and skips to Phase 3.</li>
-<li><strong>Execution:</strong> If uninitialized, it calls <code>sys/init</code>.</li>
+<li><strong>Execution:</strong> If uninitialized, it calls <code>PUT /v1/sys/init</code>.</li>
 <li><strong>Security:</strong><ul>
-<li>The Root Token is <strong>encrypted</strong> and stored immediately in a Secret.</li>
-<li>The Unseal Key (if using Static mode) is stored in a separate Secret.</li>
+<li>The root token is stored immediately in a Secret (<code>&lt;cluster&gt;-root-token</code>) and is never written to logs.</li>
+<li>The auto-unseal key is handled separately by the InfrastructureManager (for <code>spec.unseal.type=static</code>).</li>
 <li>
 <div class="admonition warning">
 <p class="admonition-title">Security</p>
@@ -4212,7 +4211,8 @@ The initialization response is held in memory only for the duration of the reque
 <p><strong>Goal:</strong> Expand to High Availability.</p>
 <p>Once initialization is confirmed (and the root token is safely stored):</p>
 <ol>
-<li>The Operator sets <code>status.initialized = true</code>.</li>
+<li>The Operator sets <code>status.initialized = true</code>.
+    When self-init is enabled, it also sets <code>status.selfInitialized = true</code> and no root token Secret exists (the root token was auto-revoked).</li>
 <li>The InfrastructureManager observes this and updates the StatefulSet to the full <code>spec.replicas</code>.</li>
 <li>New pods join the existing leader (Pod-0) via the <code>retry_join</code> configuration.</li>
 </ol>

@@ -4430,9 +4430,9 @@ Set the same value in the OpenBao role <code>bound_audiences</code> and pass the
 </div>
 <div class="admonition note">
 <p class="admonition-title">JWT bootstrap</p>
-<p>When <code>spec.selfInit.bootstrapJWTAuth</code> is enabled, the OpenBao Operator can create a restore role
+<p>When <code>spec.selfInit.oidc.enabled</code> is <code>true</code>, the OpenBao Operator can create a restore role
 bound to the restore ServiceAccount. Enable it on the cluster with <code>spec.restore.jwtAuthRole</code>,
-then set <code>spec.jwtAuthRole</code> on the <code>OpenBaoRestore</code> to the same role name.</p>
+then set <code>OpenBaoRestore.spec.jwtAuthRole</code> to the same role name.</p>
 </div>
 </div>
 <div class="tabbed-block">

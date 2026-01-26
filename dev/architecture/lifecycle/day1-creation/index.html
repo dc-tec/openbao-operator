@@ -4021,10 +4021,11 @@
 <li>The init container appends the self-init <code>initialize</code> stanzas (rendered from <code>spec.selfInit.requests[]</code>) to the rendered config for pod-0 only.</li>
 <li>Infrastructure Manager creates the StatefulSet with <strong>1 replica initially</strong>.</li>
 <li>OpenBao automatically initializes itself on first start using the <code>initialize</code> stanzas:</li>
-<li>Auto-unseals using the static key.</li>
+<li>Auto-unseals using the configured seal (static or external KMS).</li>
 <li>Executes all configured <code>initialize</code> requests (audit, auth, secrets, policies).</li>
 <li><strong>The root token is NOT returned and is automatically revoked after use.</strong></li>
-<li>Init Manager detects initialization via Kubernetes service registration labels (preferred) and sets <code>Status.Initialized = true</code>.</li>
+<li>Init Manager detects initialization via Kubernetes service registration labels (preferred) and sets <code>status.initialized = true</code>.
+   It also sets <code>status.selfInitialized = true</code>.</li>
 <li>Infrastructure Manager scales the StatefulSet to the desired <code>spec.replicas</code>.</li>
 <li>Additional OpenBao pods start, auto-unseal, and join the Raft cluster.</li>
 </ol>
@@ -4074,7 +4075,7 @@
 <li>Falls back to the HTTP health endpoint (<code>GET /v1/sys/health</code>) when labels are not yet available.</li>
 <li>If not, calls the HTTP initialization endpoint (<code>PUT /v1/sys/init</code>) against pod-0 to initialize the cluster.</li>
 <li>Stores the root token in a per-cluster Secret (<code>&lt;cluster&gt;-root-token</code>).</li>
-<li>Sets <code>Status.Initialized = true</code>.</li>
+<li>Sets <code>status.initialized = true</code>.</li>
 <li>Once initialized, Infrastructure Manager scales the StatefulSet to the desired <code>spec.replicas</code>.</li>
 <li>Additional OpenBao pods start, auto-unseal using the static key, join the Raft cluster via <code>retry_join</code>, and become Ready.</li>
 </ol>

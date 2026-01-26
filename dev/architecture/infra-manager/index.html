@@ -4113,6 +4113,7 @@
     class Spec read;
     class Config,Resources process;
     class UpdateCM,UpdateSS,Rollout write;</code></pre>
+<p>Config changes are tracked via the <code>openbao.org/config-hash</code> annotation on the StatefulSet Pod template, which triggers a safe rollout.</p>
 <h2 id="2-configuration-generation">2. Configuration Generation<a class="headerlink" href="#2-configuration-generation" title="Permanent link">&para;</a></h2>
 <p>We do not use a static ConfigMap. We generate it dynamically from the Spec.</p>
 <div class="language-hcl highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="na">ui</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">true</span>
@@ -4215,7 +4216,7 @@
 <h2 id="5-reconciliation-semantics">5. Reconciliation Semantics<a class="headerlink" href="#5-reconciliation-semantics" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>OwnerReferences</strong>: All resources (ConfigMaps, Services, StatefulSets) are owned by the <code>OpenBaoCluster</code> CR. Deleting the CR deletes the cluster.</li>
-<li><strong>Least Privilege</strong>: The controller only watches <code>OpenBaoCluster</code>. It does not watch child resources (except via OwnerReference garbage collection) to reduce API load.</li>
+<li><strong>Least Privilege</strong>: In multi-tenant mode, the controller avoids list/watch on tenant resources and uses direct API reads plus requeue-based polling for child objects.</li>
 <li><strong>Discovery</strong>: Uses <code>leader_tls_servername</code> to support strict mTLS verification between peers.</li>
 </ul>
 

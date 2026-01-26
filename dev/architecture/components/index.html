@@ -4103,6 +4103,11 @@
 
 <h1 id="component-design">Component Design<a class="headerlink" href="#component-design" title="Permanent link">&para;</a></h1>
 <p>The OpenBao Operator uses a <strong>Split-Controller Architecture</strong>. Instead of a single monolithic reconciliation loop, we divide responsibilities across three specialized controllers per <code>OpenBaoCluster</code>.</p>
+<p>In addition:</p>
+<ul>
+<li>Multi-tenant deployments run a separate <strong>Provisioner</strong> controller that reconciles <code>OpenBaoTenant</code>.</li>
+<li>The controller manager also runs the <strong>OpenBaoRestore</strong> controller that reconciles <code>OpenBaoRestore</code>.</li>
+</ul>
 <h2 id="1-controller-hierarchy">1. Controller Hierarchy<a class="headerlink" href="#1-controller-hierarchy" title="Permanent link">&para;</a></h2>
 <p>We separate <strong>Workload</strong> (Pod churn), <strong>Operations</strong> (Upgrades/Backups), and <strong>Status</strong> (Updates) to prevent head-of-line blocking and status write contention.</p>
 <pre class="mermaid"><code>graph TD
@@ -4145,7 +4150,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><strong>AdminOps</strong></td>
-<td style="text-align: left;">Handles Upgrades, Backups, and Restores.</td>
+<td style="text-align: left;">Handles Upgrades and Backups.</td>
 <td style="text-align: left;">Long-running operations. Should not block Pod recovery.</td>
 </tr>
 <tr>
@@ -4155,6 +4160,10 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Restore Controller</p>
+<p>Restores are reconciled via the separate <code>OpenBaoRestore</code> controller, which orchestrates restore Jobs and acquires the cluster operation lock.</p>
+</div>
 <hr />
 <h2 id="3-internal-managers">3. Internal Managers<a class="headerlink" href="#3-internal-managers" title="Permanent link">&para;</a></h2>
 <p>Controllers delegate complex business logic to specialized <strong>Internal Managers</strong>.</p>
@@ -4189,7 +4198,7 @@
 <ul>
 <li><strong><a href="../infra-manager/">Infrastructure Manager</a></strong>: The "heart" of the operator. Generates <code>config.hcl</code> and manages the <code>StatefulSet</code>.</li>
 <li><strong><a href="../cert-manager/">Cert Manager</a></strong>: Handles TLS interactions. Supports <code>OperatorManaged</code> (internal CA), <code>ACME</code> (LetsEncrypt), and <code>External</code> (Bring your own).</li>
-<li><strong><a href="../init-manager/">Init Manager</a></strong>: Auto-initializes new clusters, handling the <code>sys/init</code> call and root token encryption.</li>
+<li><strong><a href="../init-manager/">Init Manager</a></strong>: Initializes new clusters (when self-init is disabled), handling <code>PUT /v1/sys/init</code> and storing the root token in a Secret.</li>
 <li><strong><a href="../upgrade-manager/">Upgrade Manager</a></strong>: Powering both <strong>Rolling</strong> and <strong>Blue/Green</strong> upgrades. Manages the state machine for complex transitions.</li>
 <li><strong><a href="../backup-manager/">Backup Manager</a></strong>: Runs snapshot jobs on a Cron schedule.</li>
 </ul>

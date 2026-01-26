@@ -4062,12 +4062,12 @@
 <li>Verifies upload completion</li>
 </ul>
 </li>
-<li>Backup status is recorded in <code>Status.Backup</code>:</li>
-<li><code>LastBackupTime</code>, <code>NextScheduledBackup</code> for visibility</li>
-<li><code>ConsecutiveFailures</code> for alerting</li>
+<li>Backup status is recorded in <code>status.backup</code>:</li>
+<li><code>lastBackupTime</code>, <code>nextScheduledBackup</code> for visibility</li>
+<li><code>consecutiveFailures</code> for alerting</li>
 <li>Optional retention policies (<code>spec.backup.retention</code>) automatically delete old backups:</li>
-<li><code>MaxCount</code>: Keep only the N most recent backups</li>
-<li><code>MaxAge</code>: Delete backups older than a specified duration</li>
+<li><code>maxCount</code>: Keep only the N most recent backups</li>
+<li><code>maxAge</code>: Delete backups older than a specified duration</li>
 </ol>
 <div class="admonition warning">
 <p class="admonition-title">Backup Limitations</p>

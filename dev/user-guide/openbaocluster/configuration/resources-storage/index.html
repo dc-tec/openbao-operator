@@ -4238,7 +4238,13 @@
     CR --&gt;|Owns| NP[NetworkPolicy]
     SS --&gt;|Mounts| PVC[PVC: data]
     SS --&gt;|Mounts| CM
-    SS --&gt;|Mounts| SEC</code></pre>
+    SS --&gt;|Mounts| SEC
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+
+    class CR read;
+    class SS,SVC,CM,SEC,NP,PVC write;</code></pre>
 <h2 id="core-workload">Core Workload<a class="headerlink" href="#core-workload" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

@@ -4092,8 +4092,8 @@
 <ol>
 <li>User configures upgrade executor:</li>
 <li>Set <code>spec.upgrade.executorImage</code> (optional, can be inferred)</li>
-<li>Set <code>spec.upgrade.jwtAuthRole</code> (optional, inferred from <code>selfInit.oidc</code>) or configure manual role</li>
-<li>User updates <code>OpenBaoCluster.Spec.Version</code> and/or <code>Spec.Image</code>.</li>
+<li>Set <code>spec.upgrade.jwtAuthRole</code> (optional, inferred from <code>spec.selfInit.oidc.enabled</code>) or configure manual role</li>
+<li>User updates <code>spec.version</code> and/or <code>spec.image</code> (strategy is configured via <code>spec.upgrade.strategy</code>).</li>
 <li>Upgrade Manager (adminops controller) detects version drift and performs pre-upgrade validation:</li>
 <li>Validates semantic versioning (blocks downgrades by default).</li>
 <li>Verifies all pods are Ready and quorum is healthy.</li>
@@ -4103,8 +4103,8 @@
 <li>Iterates pods in reverse ordinal order.</li>
 <li>Runs an upgrade Job to perform leader step-down before updating the leader pod.</li>
 <li>Waits for pod Ready, OpenBao health, and Raft sync after each update.</li>
-<li>Upgrade progress is persisted in <code>Status.Upgrade</code>, allowing resumption after Operator restart.</li>
-<li>On completion, <code>Status.CurrentVersion</code> is updated and <code>Status.Upgrade</code> is cleared.</li>
+<li>Upgrade progress is persisted in <code>status.upgrade</code> (rolling) or <code>status.blueGreen</code> (blue/green), allowing resumption after Operator restart.</li>
+<li>On completion, <code>status.currentVersion</code> is updated and <code>status.upgrade</code> is cleared (rolling), or <code>status.blueGreen.phase</code> returns to <code>Idle</code> (blue/green).</li>
 </ol>
 <div class="admonition note">
 <p class="admonition-title">Upgrade Policy</p>

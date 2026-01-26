@@ -4119,7 +4119,7 @@
     subgraph Execution [Restore Job]
         Running --&gt; Job[Launch Job]
         Job --&gt; Pull[Pull Snapshot]
-        Pull --&gt; Restore[Restore to Vault]
+        Pull --&gt; Restore[Restore to OpenBao]
     end
 
     Restore -- Success --&gt; Completed[Phase: Completed]
@@ -4128,23 +4128,28 @@
     Retrying -- Yes --&gt; Job
     Retrying -- No --&gt; Failed
 
-    classDef phase fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    classDef terminal fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef error fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
 
-    class Pending,Validating,Running,Execution phase;
-    class Completed terminal;
-    class Failed error;</code></pre>
+    class Start read;
+    class Pending,Validating,Lock,Running,Execution,Retrying process;
+    class Completed write;
+    class Failed security;</code></pre>
 <h2 id="3-workflow-steps">3. Workflow Steps<a class="headerlink" href="#3-workflow-steps" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Validation:</strong><ul>
 <li>Target Cluster exists.</li>
 <li>Snapshot source is accessible.</li>
-<li>No conflicting operations (unless <code>spec.force</code> is used).</li>
+<li>No conflicting operations (unless <code>OpenBaoRestore.spec.overrideOperationLock</code> is used with <code>OpenBaoRestore.spec.force: true</code>).</li>
 </ul>
 </li>
 <li><strong>Operation Lock:</strong><ul>
-<li>The controller sets <code>OpenBaoCluster.status.operationLock = "Restore"</code>.</li>
+<li>The controller acquires the cluster operation lock by updating <code>OpenBaoCluster.status.operationLock</code>:</li>
+<li><code>operation: Restore</code></li>
+<li><code>holder: &lt;controller&gt;/&lt;restore-name&gt;</code></li>
+<li><code>message: restore &lt;namespace&gt;/&lt;name&gt;</code></li>
 <li>This <strong>blocks</strong> the BackupManager and UpgradeManager from starting new operations.</li>
 </ul>
 </li>
@@ -4169,7 +4174,8 @@
 <li><strong>Upgrades:</strong> Will pause reconciliation if a Restore is locked.</li>
 </ul>
 </div>
-<p>To override this check during emergencies (e.g., restoring a broken cluster where the lock is stuck), use <code>spec.overrideOperationLock</code>.</p>
+<p>To override this check during emergencies (e.g., restoring a broken cluster where the lock is stuck), use <code>OpenBaoRestore.spec.overrideOperationLock</code>.
+This requires <code>OpenBaoRestore.spec.force: true</code>.</p>
 <h2 id="5-see-also">5. See Also<a class="headerlink" href="#5-see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../backup-manager/">Backup Manager</a></li>

@@ -4222,7 +4222,17 @@
 
     CheckRaft -- "Stale Peer" --&gt; RemovePeer["Prune Dead Peer"]
     CheckRaft -- "Split Brain" --&gt; ManualRec["Manual Recovery"]
-    CheckRaft -- "Unknown" --&gt; Logs["Inspect Logs"]</code></pre>
+    CheckRaft -- "Unknown" --&gt; Logs["Inspect Logs"]
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Start read;
+    class CheckPods,CheckNet,CheckRaft process;
+    class FixPods,FixNet,Logs process;
+    class RemovePeer,ManualRec security;</code></pre>
 <hr />
 <h2 id="phase-1-diagnosis">Phase 1: Diagnosis<a class="headerlink" href="#phase-1-diagnosis" title="Permanent link">&para;</a></h2>
 <p>First, identify if the pods are healthy enough to communicate.</p>

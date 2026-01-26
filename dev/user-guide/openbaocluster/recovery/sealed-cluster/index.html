@@ -4071,12 +4071,22 @@
     FixIAM --&gt; ManualTry["Restart Pods"]
     FixNet --&gt; ManualTry
 
-    ManualTry -- "Still Fails" --&gt; ManualUnseal["Manual Unseal (Emergency)"]</code></pre>
+    ManualTry -- "Still Fails" --&gt; ManualUnseal["Manual Unseal (Emergency)"]
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Start,Done read;
+    class CheckStatus,IdentifyMode process;
+    class CheckSecret,CheckLogs,FixIAM,FixNet,ManualTry process;
+    class CreateSecret,ManualUnseal security;</code></pre>
 <hr />
 <h2 id="diagnostics-by-mode">Diagnostics by Mode<a class="headerlink" href="#diagnostics-by-mode" title="Permanent link">&para;</a></h2>
 <p>Identify your unseal mode in the <code>OpenBaoCluster</code> configuration:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">unsealConfig</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">unseal</span><span class="p">:</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awskms</span><span class="w"> </span><span class="c1"># or static, gcpckms, etc.</span>
 </span></code></pre></div>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Static (Default)</label><label for="__tabbed_1_2">Auto-Unseal (Cloud KMS)</label><label for="__tabbed_1_3">Manual (Emergency)</label></div>

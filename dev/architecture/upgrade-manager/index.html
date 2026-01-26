@@ -4108,7 +4108,7 @@
 </div>
 <p><strong>Responsibility:</strong> Orchestrate safe version updates while maintaining Raft consensus.</p>
 <h2 id="1-upgrade-strategies">1. Upgrade Strategies<a class="headerlink" href="#1-upgrade-strategies" title="Permanent link">&para;</a></h2>
-<p>The Manager supports two distinct strategies, controlled by <code>spec.updateStrategy</code>.</p>
+<p>The Manager supports two distinct strategies, controlled by <code>spec.upgrade.strategy</code>.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Rolling Update (Default)</label><label for="__tabbed_1_2">Blue/Green</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4126,7 +4126,7 @@
     WaitTransfer --&gt; Update
 
     Update --&gt; WaitReady[Wait for Pod Ready]
-    WaitReady --&gt; WaitHealth[Wait for Vault Health]
+    WaitReady --&gt; WaitHealth[Wait for OpenBao Health]
     WaitHealth --&gt; Loop
 
     Loop -- No --&gt; Done[Upgrade Complete]
@@ -4223,8 +4223,8 @@
 <h3 id="resumability">Resumability<a class="headerlink" href="#resumability" title="Permanent link">&para;</a></h3>
 <p>Upgrades are designed to survive Operator restarts. All state is stored in <code>Status</code>:</p>
 <ul>
-<li><strong>Rolling:</strong> Tracks <code>Status.Upgrade.CurrentPartition</code> and <code>CompletedPods</code>.</li>
-<li><strong>Blue/Green:</strong> Tracks <code>Status.BlueGreen.Phase</code> and <code>JobFailureCount</code>.</li>
+<li><strong>Rolling:</strong> Tracks <code>status.upgrade.currentPartition</code> and <code>status.upgrade.completedPods</code>.</li>
+<li><strong>Blue/Green:</strong> Tracks <code>status.blueGreen.phase</code> and <code>status.blueGreen.jobFailureCount</code>.</li>
 </ul>
 <p>If the Operator crashes, it reads the Status on startup and <strong>resumes</strong> exactly where it left off.</p>
 <h3 id="image-verification">Image Verification<a class="headerlink" href="#image-verification" title="Permanent link">&para;</a></h3>

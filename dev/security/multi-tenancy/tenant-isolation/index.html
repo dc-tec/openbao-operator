@@ -4083,7 +4083,7 @@
 <li><strong>Constraint:</strong> <code>spec.targetNamespace</code> <strong>MUST</strong> match <code>metadata.namespace</code>.</li>
 <li><strong>Security:</strong> Prevents users from provisioning RBAC in namespaces they do not own.</li>
 </ul>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">operator.openbao.org/v1alpha1</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoTenant</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-tenant</span>
@@ -4099,7 +4099,7 @@
 <li><strong>Capability:</strong> Can target <em>any</em> namespace.</li>
 <li><strong>Security:</strong> Rely on Kubernetes RBAC to prevent normal users from creating CRs in the operator namespace.</li>
 </ul>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">operator.openbao.org/v1alpha1</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoTenant</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-onboarding</span>
@@ -4128,13 +4128,22 @@
     end
 
     %% Flow
-    %% Flow
     User -- 1. Request --&gt; OBT
     OBT -- 2. Trigger --&gt; Prov
     Prov -- 3. Create --&gt; TRole
     Prov -- 4. Bind --&gt; TRB
     TRB -.-&gt;|5. Grant Access| Ctrl
-    Ctrl ==&gt;|6. Reconcile| Workload</code></pre>
+    Ctrl ==&gt;|6. Reconcile| Workload
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class User,OBT read;
+    class Prov process;
+    class Ctrl,TRole,TRB security;
+    class Workload write;</code></pre>
 <ol>
 <li><strong>Request:</strong> User creates <code>OpenBaoTenant</code>.</li>
 <li><strong>Verify:</strong> Provisioner checks if the request is valid (Self-Service constraint).</li>

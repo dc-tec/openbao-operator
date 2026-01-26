@@ -4178,11 +4178,13 @@
     E2E --&gt; Smoke["Smoke Tests"]
     E2E --&gt; Full["Full Matrix (Nightly)"]
 
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px;
-    classDef check fill:transparent,stroke:#60a5fa,stroke-width:2px;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
 
     class PR process;
-    class Lint,Gen,Helm,Sec,Docs,Chart,Sanity,Compat,Smoke,Full check;</code></pre>
+    class Static,Build,Unit,E2E process;
+    class Lint,Gen,Helm,Sec,Docs,Chart,Sanity,Compat,Smoke,Full read;</code></pre>
 <h2 id="2-ci-vs-local-commands-the-rosetta-stone">2. CI vs Local Commands ("The Rosetta Stone")<a class="headerlink" href="#2-ci-vs-local-commands-the-rosetta-stone" title="Permanent link">&para;</a></h2>
 <p>Run these locally to debug CI failures.</p>
 <table>

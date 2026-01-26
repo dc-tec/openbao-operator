@@ -4265,7 +4265,16 @@
 
         RBAC_A -.-&gt;|Block| Secret_A
         RBAC_B -.-&gt;|Block| Secret_B
-    end</code></pre>
+    end
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Admin,UserA,UserB process;
+    class Pod_A,Pod_B read;
+    class RBAC_A,RBAC_B,NetPol_A,NetPol_B,Secret_A,Secret_B security;</code></pre>
 <h2 id="security-layers">Security Layers<a class="headerlink" href="#security-layers" title="Permanent link">&para;</a></h2>
 <p>Configure isolation across four key layers:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 12h7c-.53 4.11-3.28 7.78-7 8.92zH5V6.3l7-3.11M12 1 3 5v6c0 5.55 3.84 10.73 9 12 5.16-1.27 9-6.45 9-12V5z"/></svg></span> 1. Identity (<abbr title="Role-Based Access Control">RBAC</abbr>)</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 13v2h1c.6 0 1 .4 1 1h7v2h-7c0 .6-.4 1-1 1h-4c-.6 0-1-.4-1-1H2v-2h7c0-.6.4-1 1-1h1v-2H3.2c-.7 0-1.2-.7-1.2-1.6V6.6C2 5.7 2.5 5 3.2 5h17.6c.7 0 1.2.7 1.2 1.6v4.8c0 .9-.5 1.6-1.2 1.6zm-4-3V8h1v2zM5 8h2v2H5zm15-1H4v4h16z"/></svg></span> 2. Network</label><label for="__tabbed_1_3"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m6 2a6 6 0 0 0-6 6c0 3.31 2.69 6 6.1 6l-.88-2.23a1.01 1.01 0 0 1 .37-1.37l.86-.5a1.01 1.01 0 0 1 1.37.37l1.92 2.42A5.98 5.98 0 0 0 18 10a6 6 0 0 0-6-6m0 5a1 1 0 0 1 1 1 1 1 0 0 1-1 1 1 1 0 0 1-1-1 1 1 0 0 1 1-1m-5 9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m5.09-4.73 2.49 6.31 2.59-1.5-4.22-5.31z"/></svg></span> 3. Storage &amp; Quota</label><label for="__tabbed_1_4"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7.5 5C9.43 5 11 6.57 11 8.5S9.43 12 7.5 12 4 10.43 4 8.5 5.57 5 7.5 5M1 19v-2.5C1 14.57 4.46 13 7.5 13c1.18 0 2.42.24 3.5.64V19zm21 0h-8c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h5l4 4v9c0 .55-.45 1-1 1m-4-9h3v-.17L18.17 7H18zm-3 2v1.5h6V12zm0 3v1.5h6V15z"/></svg></span> 4. Compliance</label></div>
