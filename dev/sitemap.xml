@@ -2,334 +2,334 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/backup-manager/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/cert-manager/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/components/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/infra-manager/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/init-manager/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/restore-manager/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/upgrade-manager/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/lifecycle/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/lifecycle/day0-provisioning/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/lifecycle/day1-creation/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/lifecycle/day2-operations/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/architecture/lifecycle/dayN-backups/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/ci/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/docs-style-guide/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/release-management/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/sdlc/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/testing/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/getting-started/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/getting-started/development/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/standards/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/standards/conventional-commits/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/standards/error-handling/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/standards/generated-artifacts/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/standards/go-style/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/standards/kubernetes-patterns/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/standards/project-conventions/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/contributing/standards/security-practices/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/reference/compatibility/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/fundamentals/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/fundamentals/profiles/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/fundamentals/secrets-management/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/fundamentals/threat-model/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/infrastructure/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/infrastructure/admission-policies/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/infrastructure/network-security/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/infrastructure/rbac/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/multi-tenancy/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/multi-tenancy/tenant-isolation/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/workload/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/workload/supply-chain/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/workload/tls/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/security/workload/workload-security/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/getting-started/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/next-steps/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/overview/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/security-considerations/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/air-gapped/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/external-access/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/gateway-api/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/network/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/observability/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/resources-storage/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/security-profiles/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/self-init/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/server/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/backups/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/deletion/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/maintenance/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/pausing/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/production-checklist/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/troubleshooting/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/upgrades/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recipes/hardened-transit-acme-tls/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recipes/hardened-transit-external-tls/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recovery/failed-rollback/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recovery/no-leader/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recovery/safe-mode/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recovery/sealed-cluster/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaorestore/overview/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaorestore/recovery-restore-after-upgrade/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaorestore/restore/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaotenant/multi-tenancy/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaotenant/onboarding/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaotenant/overview/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/authn/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/authz/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/installation/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/single-tenant-mode/</loc>
-         <lastmod>2026-01-25</lastmod>
+         <lastmod>2026-01-26</lastmod>
     </url>
 </urlset>
