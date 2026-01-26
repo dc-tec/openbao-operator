@@ -94,24 +94,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, restore *op
 	}
 }
 
-// patchStatusSSA updates the restore status using Server-Side Apply.
-func (m *Manager) patchStatusSSA(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore) error {
-	applyRestore := &openbaov1alpha1.OpenBaoRestore{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: openbaov1alpha1.GroupVersion.String(),
-			Kind:       "OpenBaoRestore",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      restore.Name,
-			Namespace: restore.Namespace,
-		},
-		Status: restore.Status,
-	}
-
-	return m.client.Status().Patch(ctx, applyRestore, client.Apply,
-		client.FieldOwner("openbao-restore-controller"),
-		client.ForceOwnership,
-	)
+func (m *Manager) patchStatus(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore, original *openbaov1alpha1.OpenBaoRestore) error {
+	return m.client.Status().Patch(ctx, restore, client.MergeFrom(original))
 }
 
 // handlePending transitions from Pending to Validating phase.
@@ -119,13 +103,14 @@ func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore
 	logger.Info("Starting restore validation", "cluster", restore.Spec.Cluster)
 
 	// Record start time
+	original := restore.DeepCopy()
 	now := metav1.Now()
 	restore.Status.StartTime = &now
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseValidating
 	restore.Status.SnapshotKey = restore.Spec.Source.Key
 	restore.Status.Message = "Validating restore preconditions"
 
-	if err := m.patchStatusSSA(ctx, restore); err != nil {
+	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
 	}
 
@@ -179,10 +164,11 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 	}
 
 	// Transition to Running phase
+	original := restore.DeepCopy()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
 	restore.Status.Message = "Creating restore job"
 
-	if err := m.patchStatusSSA(ctx, restore); err != nil {
+	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
 	}
 
@@ -240,13 +226,14 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 		Force:     forceAcquire,
 	}); err != nil {
 		if errors.Is(err, operationlock.ErrLockHeld) {
+			original := restore.DeepCopy()
 			var held *operationlock.HeldError
 			if errors.As(err, &held) {
 				restore.Status.Message = fmt.Sprintf("Waiting for cluster operation lock: operation=%s holder=%s", held.Operation, held.Holder)
 			} else {
 				restore.Status.Message = "Waiting for cluster operation lock"
 			}
-			if statusErr := m.patchStatusSSA(ctx, restore); statusErr != nil {
+			if statusErr := m.patchStatus(ctx, restore, original); statusErr != nil {
 				return nil, false, nil, fmt.Errorf("failed to patch restore status after lock contention: %w", statusErr)
 			}
 			result := ctrl.Result{RequeueAfter: constants.RequeueShort}
@@ -381,8 +368,9 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 				}
 				if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
 					if operatorerrors.IsTransient(err) {
+						original := restore.DeepCopy()
 						restore.Status.Message = fmt.Sprintf("Waiting for restore executor image verification: %v", err)
-						if statusErr := m.patchStatusSSA(ctx, restore); statusErr != nil {
+						if statusErr := m.patchStatus(ctx, restore, original); statusErr != nil {
 							return ctrl.Result{}, fmt.Errorf("failed to patch restore status after transient image verification failure: %w", statusErr)
 						}
 						return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
@@ -411,8 +399,9 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 		}
 
 		logger.Info("Created restore job", "job", jobName)
+		original := restore.DeepCopy()
 		restore.Status.Message = "Restore job running"
-		if err := m.patchStatusSSA(ctx, restore); err != nil {
+		if err := m.patchStatus(ctx, restore, original); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to patch restore status after job creation: %w", err)
 		}
 
@@ -445,8 +434,9 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 	}
 
 	// Job still running
+	original := restore.DeepCopy()
 	restore.Status.Message = "Restore job in progress"
-	if err := m.patchStatusSSA(ctx, restore); err != nil {
+	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status while job is running: %w", err)
 	}
 
@@ -457,6 +447,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 //
 //nolint:unparam // ctrl.Result is always zero value but required by controller-runtime interface
 func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
+	original := restore.DeepCopy()
 	now := metav1.Now()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseFailed
 	restore.Status.CompletionTime = &now
@@ -470,7 +461,7 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 		LastTransitionTime: now,
 	})
 
-	if err := m.patchStatusSSA(ctx, restore); err != nil {
+	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
 	}
 
@@ -483,6 +474,7 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 
 // completeRestore transitions the restore to Completed phase.
 func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) error {
+	original := restore.DeepCopy()
 	now := metav1.Now()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseCompleted
 	restore.Status.CompletionTime = &now
@@ -496,7 +488,7 @@ func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, resto
 		LastTransitionTime: now,
 	})
 
-	if err := m.patchStatusSSA(ctx, restore); err != nil {
+	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return fmt.Errorf("failed to patch restore status: %w", err)
 	}
 

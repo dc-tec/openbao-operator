@@ -65,8 +65,9 @@ func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
 	// Create OpenBaoTenant CR
 	tenant := &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-tenant",
-			Namespace: "openbao-operator-system",
+			Name:            "test-tenant",
+			Namespace:       "openbao-operator-system",
+			ResourceVersion: "1", // Set initial ResourceVersion for fake client SSA compatibility
 		},
 		Spec: openbaov1alpha1.OpenBaoTenantSpec{
 			TargetNamespace: "tenant-ns",
@@ -150,8 +151,9 @@ func TestNamespaceProvisionerReconcile_TargetNamespaceNotFound(t *testing.T) {
 	// Create OpenBaoTenant CR with non-existent target namespace
 	tenant := &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-tenant",
-			Namespace: "openbao-operator-system",
+			Name:            "test-tenant",
+			Namespace:       "openbao-operator-system",
+			ResourceVersion: "1", // Set initial ResourceVersion for fake client SSA compatibility
 		},
 		Spec: openbaov1alpha1.OpenBaoTenantSpec{
 			TargetNamespace: "non-existent-ns",
@@ -353,8 +355,9 @@ func TestNamespaceProvisionerReconcile_SecurityViolation(t *testing.T) {
 	// Create OpenBaoTenant in user namespace targeting a different namespace
 	tenant := &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "malicious-tenant",
-			Namespace: "user-ns",
+			Name:            "malicious-tenant",
+			Namespace:       "user-ns",
+			ResourceVersion: "1", // Set initial ResourceVersion for fake client SSA compatibility
 		},
 		Spec: openbaov1alpha1.OpenBaoTenantSpec{
 			TargetNamespace: "victim-ns",
@@ -420,8 +423,9 @@ func TestNamespaceProvisionerReconcile_SelfService_Success(t *testing.T) {
 	// Create OpenBaoTenant in user namespace targeting SAME namespace
 	tenant := &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "my-tenant",
-			Namespace: "user-ns",
+			Name:            "my-tenant",
+			Namespace:       "user-ns",
+			ResourceVersion: "1", // Set initial ResourceVersion for fake client SSA compatibility
 		},
 		Spec: openbaov1alpha1.OpenBaoTenantSpec{
 			TargetNamespace: "user-ns",

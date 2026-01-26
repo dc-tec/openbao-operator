@@ -30,8 +30,9 @@ func TestOpenBaoRestoreReconciler_Reconcile(t *testing.T) {
 			name: "New restore starts validation",
 			restore: &openbaov1alpha1.OpenBaoRestore{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-restore",
-					Namespace: "default",
+					Name:            "test-restore",
+					Namespace:       "default",
+					ResourceVersion: "1", // Set initial ResourceVersion for fake client SSA compatibility
 				},
 				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
 					Cluster: "test-cluster",
@@ -46,7 +47,11 @@ func TestOpenBaoRestoreReconciler_Reconcile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).WithObjects(tt.restore).Build()
+			c := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
+				WithObjects(tt.restore).
+				Build()
 
 			r := &OpenBaoRestoreReconciler{
 				Client: c,
