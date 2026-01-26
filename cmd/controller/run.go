@@ -395,7 +395,7 @@ func Run(args []string) {
 		OIDCIssuer:        oidcConfig.IssuerURL,
 		OIDCJWTKeys:       oidcConfig.JWKSKeys,
 		AdmissionStatus:   &admissionStatus,
-		Recorder:          mgr.GetEventRecorderFor(constants.ControllerNameOpenBaoCluster),
+		Recorder:          mgr.GetEventRecorder(constants.ControllerNameOpenBaoCluster),
 		SingleTenantMode:  singleTenantMode,
 		SmartClientConfig: smartClientConfig,
 		Platform:          platform,
@@ -408,7 +408,7 @@ func Run(args []string) {
 	if err := (&openbaorestorecontroller.OpenBaoRestoreReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor(constants.ControllerNameOpenBaoRestore),
+		Recorder: mgr.GetEventRecorder(constants.ControllerNameOpenBaoRestore),
 		Platform: platform,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoRestore")

@@ -119,7 +119,7 @@ const (
 
 // ACMEConfig configures ACME certificate management for OpenBao.
 // See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
-// +kubebuilder:validation:XValidation:rule="!(has(self.domain) && size(self.domains) > 0)",message="tls.acme.domain and tls.acme.domains are mutually exclusive; use only one"
+// +kubebuilder:validation:XValidation:rule="!(has(self.domain) && has(self.domains) && size(self.domains) > 0)",message="tls.acme.domain and tls.acme.domains are mutually exclusive; use only one"
 type ACMEConfig struct {
 	// DirectoryURL is the ACME directory URL (e.g., "https://acme-v02.api.letsencrypt.org/directory").
 	// +kubebuilder:validation:MinLength=1

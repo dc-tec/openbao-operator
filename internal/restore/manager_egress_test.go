@@ -18,7 +18,11 @@ import (
 
 func TestRestoreHandleValidating_HardenedRequiresEgressRules(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test",
+			Namespace:       "default",
+			ResourceVersion: "1", // Set initial ResourceVersion for fake client SSA compatibility
+		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile: openbaov1alpha1.ProfileHardened,
 		},
@@ -28,7 +32,11 @@ func TestRestoreHandleValidating_HardenedRequiresEgressRules(t *testing.T) {
 	}
 
 	restore := &openbaov1alpha1.OpenBaoRestore{
-		ObjectMeta: metav1.ObjectMeta{Name: "restore", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "restore",
+			Namespace:       "default",
+			ResourceVersion: "1", // Set initial ResourceVersion for fake client SSA compatibility
+		},
 		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
 			Cluster: "test",
 			Source: openbaov1alpha1.RestoreSource{
@@ -52,6 +60,7 @@ func TestRestoreHandleValidating_HardenedRequiresEgressRules(t *testing.T) {
 		WithScheme(scheme).
 		WithObjects(cluster, restore).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
 		Build()
 
 	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")

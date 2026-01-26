@@ -66,24 +66,8 @@ type NamespaceProvisionerReconciler struct {
 // 4. All create/update/delete operations on Roles/RoleBindings are performed via impersonation
 //    of the delegate ServiceAccount, which enforces least privilege at the API server level.
 
-// patchStatusSSA updates the tenant status using Server-Side Apply.
-func (r *NamespaceProvisionerReconciler) patchStatusSSA(ctx context.Context, tenant *openbaov1alpha1.OpenBaoTenant) error {
-	applyTenant := &openbaov1alpha1.OpenBaoTenant{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: openbaov1alpha1.GroupVersion.String(),
-			Kind:       "OpenBaoTenant",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      tenant.Name,
-			Namespace: tenant.Namespace,
-		},
-		Status: tenant.Status,
-	}
-
-	return r.Status().Patch(ctx, applyTenant, client.Apply,
-		client.FieldOwner("openbao-provisioner-controller"),
-		client.ForceOwnership,
-	)
+func (r *NamespaceProvisionerReconciler) patchStatus(ctx context.Context, tenant *openbaov1alpha1.OpenBaoTenant, original *openbaov1alpha1.OpenBaoTenant) error {
+	return r.Status().Patch(ctx, tenant, client.MergeFrom(original))
 }
 
 // Reconcile is part of the main Kubernetes reconciliation loop which watches
@@ -125,6 +109,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		logger.Error(err, "Blocking provisioning attempt")
 
 		// Update status to reflect failure
+		original := tenant.DeepCopy()
 		tenant.Status.Provisioned = false
 		tenant.Status.LastError = err.Error()
 
@@ -135,7 +120,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 			Message: err.Error(),
 		})
 
-		if patchErr := r.patchStatusSSA(ctx, tenant); patchErr != nil {
+		if patchErr := r.patchStatus(ctx, tenant, original); patchErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to patch status for security violation: %w", patchErr)
 		}
 
@@ -200,9 +185,10 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	if err := r.Get(ctx, types.NamespacedName{Name: targetNS}, ns); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Namespace not found - update status and requeue
+			original := tenant.DeepCopy()
 			tenant.Status.Provisioned = false
 			tenant.Status.LastError = fmt.Sprintf("target namespace %s not found", targetNS)
-			if err := r.patchStatusSSA(ctx, tenant); err != nil {
+			if err := r.patchStatus(ctx, tenant, original); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
 			}
 			logger.Info("Target namespace not found; will retry", "target_namespace", targetNS)
@@ -214,18 +200,20 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	// Provision RBAC
 	logger.Info("Provisioning tenant RBAC", "target_namespace", targetNS)
 	if err := r.Provisioner.EnsureTenantRBAC(ctx, tenant); err != nil {
+		original := tenant.DeepCopy()
 		tenant.Status.Provisioned = false
 		tenant.Status.LastError = err.Error()
-		if statusErr := r.patchStatusSSA(ctx, tenant); statusErr != nil {
+		if statusErr := r.patchStatus(ctx, tenant, original); statusErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w (original error: %w)", statusErr, err)
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to ensure tenant RBAC for namespace %s: %w", targetNS, err)
 	}
 
 	// Update status to success
+	original := tenant.DeepCopy()
 	tenant.Status.Provisioned = true
 	tenant.Status.LastError = ""
-	if err := r.patchStatusSSA(ctx, tenant); err != nil {
+	if err := r.patchStatus(ctx, tenant, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
 	}
 

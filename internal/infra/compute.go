@@ -147,6 +147,17 @@ func (m *Manager) deletePVCs(ctx context.Context, cluster *openbaov1alpha1.OpenB
 
 	for i := range pvcList.Items {
 		pvc := &pvcList.Items[i]
+		// Envtest runs without controllers (like kube-controller-manager), which means
+		// protection finalizers (e.g. pvc-protection) may never be removed and deletions
+		// can get stuck. When the user explicitly opted into PVC deletion, ensure the
+		// PVC is actually deletable by clearing finalizers first.
+		if len(pvc.Finalizers) > 0 {
+			original := pvc.DeepCopy()
+			pvc.Finalizers = nil
+			if err := m.client.Patch(ctx, pvc, client.MergeFrom(original)); err != nil && !apierrors.IsNotFound(err) {
+				return err
+			}
+		}
 		if err := m.client.Delete(ctx, pvc); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}

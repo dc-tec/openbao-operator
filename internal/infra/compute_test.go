@@ -19,12 +19,14 @@ import (
 )
 
 func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-init", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-init", ns)
 	cluster.Status.Initialized = false
 	cluster.Spec.Replicas = 3
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -56,12 +58,14 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 }
 
 func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-scaled", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-scaled", ns)
 	cluster.Status.Initialized = true
 	cluster.Spec.Replicas = 3
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -127,12 +131,14 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			k8sClient := newTestClient(t)
-			manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+			k8sClient, scheme := envtestClientForPackage(t)
+			manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-			cluster := newMinimalCluster("test-replica", "default")
+			ns := testNamespace(t)
+			cluster := newMinimalCluster("test-replica", ns)
 			cluster.Spec.Replicas = tt.specReplicas
 			cluster.Status.Initialized = tt.initialized
+			createClusterCRForTest(t, k8sClient, cluster)
 
 			// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 			createTLSSecretForTest(t, k8sClient, cluster)
@@ -165,12 +171,14 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 }
 
 func TestStatefulSetDoesNotUpdateVolumeClaimTemplatesOnStorageResize(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-storage-resize", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-storage-resize", ns)
 	cluster.Status.Initialized = true
 	cluster.Spec.Storage.Size = "10Gi"
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	createTLSSecretForTest(t, k8sClient, cluster)
 
@@ -215,14 +223,16 @@ func TestStatefulSetDoesNotUpdateVolumeClaimTemplatesOnStorageResize(t *testing.
 
 //nolint:gocyclo // This is a comprehensive, table-free assertion test for container configuration.
 func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-container", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-container", ns)
 	uiEnabled := true
 	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
 		UI: &uiEnabled,
 	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -374,14 +384,16 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 }
 
 func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("acme-probe", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("acme-probe", ns)
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	acmeDomain := fmt.Sprintf("%s.%s.svc", cluster.Name, cluster.Namespace)
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://example.com/acme",
-		Domains:      []string{"acme-probe.default.svc"},
+		Domains:      []string{acmeDomain},
 		Email:        "e2e@example.invalid",
 	}
 	// Configure tls_acme_ca_root to use the ACME CA for certificate verification
@@ -399,6 +411,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 			Name: "infra-bao-token",
 		},
 	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Provide the seal-creds secret so the CA file path exists.
 	secret := &corev1.Secret{
@@ -440,7 +453,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 		if !strings.Contains(cmd, "-addr="+openBaoProbeAddr) {
 			t.Fatalf("expected readiness probe to use loopback address %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
 		}
-		if !strings.Contains(cmd, "-servername=acme-probe.default.svc") {
+		if !strings.Contains(cmd, "-servername="+acmeDomain) {
 			t.Fatalf("expected readiness probe to set SNI to ACME domain, got %v", c.ReadinessProbe.Exec.Command)
 		}
 		// In ACME mode with tls_acme_ca_root configured, probes should use the PKI CA file derived from it.
@@ -454,10 +467,11 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 }
 
 func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("acme-public", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("acme-public", ns)
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
@@ -465,6 +479,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 		Email:        "admin@example.com",
 	}
 	// No Unseal config, so no seal-creds volume - this simulates public ACME
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
@@ -505,14 +520,16 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 }
 
 func TestProbesSetSNIToExternalServiceWhenServiceEnabled_NonACME(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("probe-sni", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("probe-sni", ns)
 	cluster.Status.Initialized = true
 	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{
 		Type: corev1.ServiceTypeClusterIP,
 	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	createTLSSecretForTest(t, k8sClient, cluster)
 
@@ -549,14 +566,16 @@ func TestProbesSetSNIToExternalServiceWhenServiceEnabled_NonACME(t *testing.T) {
 }
 
 func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-init-container", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-init-container", ns)
 	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
 		Enabled: true,
 		Image:   "openbao/openbao-config-init:latest",
 	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -599,13 +618,15 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 	// Set OPERATOR_VERSION to avoid panic from fail-fast logic in DefaultInitImage
 	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
 
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-no-init-container", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-no-init-container", ns)
 	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
 		Enabled: false,
 	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -632,10 +653,12 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 }
 
 func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-volumes", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-volumes", ns)
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -686,10 +709,12 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 }
 
 func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-delete-pvcs", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-delete-pvcs", ns)
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 
@@ -702,6 +727,14 @@ func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
 				constants.LabelOpenBaoCluster: cluster.Name,
 			},
 		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
 	}
 	pvc2 := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
@@ -709,6 +742,14 @@ func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
 				constants.LabelOpenBaoCluster: cluster.Name,
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
 			},
 		},
 	}

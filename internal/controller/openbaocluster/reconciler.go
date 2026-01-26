@@ -2,7 +2,7 @@ package openbaocluster
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/dc-tec/openbao-operator/internal/admission"
@@ -22,7 +22,7 @@ type OpenBaoClusterReconciler struct {
 	OIDCIssuer        string // OIDC issuer URL discovered at startup
 	OIDCJWTKeys       []string
 	AdmissionStatus   *admission.Status
-	Recorder          record.EventRecorder
+	Recorder          events.EventRecorder
 	// SingleTenantMode indicates the controller is running in single-tenant mode.
 	// When true, the controller uses Owns() watches for event-driven reconciliation
 	// and caching is enabled for the watched namespace.

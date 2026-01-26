@@ -38,6 +38,7 @@ func TestAcquireRelease(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
+		WithReturnManagedFields().
 		Build()
 
 	err := Acquire(ctx, c, cluster, AcquireOptions{
@@ -113,6 +114,7 @@ func TestAcquireForce(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
+		WithReturnManagedFields().
 		Build()
 
 	err := Acquire(ctx, c, cluster, AcquireOptions{

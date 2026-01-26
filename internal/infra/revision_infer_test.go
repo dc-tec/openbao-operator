@@ -98,7 +98,11 @@ func TestInferActiveRevisionFromPods(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 			}
 			objects := append([]runtime.Object{cluster}, tt.pods...)
-			c := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objects...).Build()
+			c := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithRuntimeObjects(objects...).
+				WithReturnManagedFields().
+				Build()
 
 			got, err := InferActiveRevisionFromPods(context.Background(), c, cluster)
 			if tt.wantE && err == nil {

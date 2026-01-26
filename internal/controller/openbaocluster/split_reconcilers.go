@@ -11,7 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -23,6 +23,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	initmanager "github.com/dc-tec/openbao-operator/internal/init"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/raft"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/upgrade/bluegreen"
@@ -45,7 +46,7 @@ type openBaoClusterStatusReconciler struct {
 // This handles Day 2 operations like scaling replicas or changing autopilot settings.
 type autopilotConfigReconciler struct {
 	raftManager *raft.Manager
-	recorder    record.EventRecorder
+	recorder    events.EventRecorder
 }
 
 // Reconcile reconciles the Raft Autopilot configuration for an initialized cluster.
@@ -75,8 +76,8 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 					"Alternatively, manually configure autopilot settings in spec.configuration.raft.autopilot. " +
 					"Error: %v"
 			}
-			r.recorder.Eventf(cluster, corev1.EventTypeWarning,
-				"AutopilotConfigJWTPrerequisitesMissing",
+			r.recorder.Eventf(cluster, nil, corev1.EventTypeWarning,
+				"AutopilotConfigJWTPrerequisitesMissing", "",
 				eventMsg, err)
 			logger.Error(err, "Failed to reconcile autopilot config (permanent error - requires user intervention)")
 			return recon.Result{}, nil
@@ -137,7 +138,12 @@ func patchWorkloadOwnedFields(ctx context.Context, c client.Client, logger logr.
 		},
 	}
 
-	if err := c.Status().Patch(ctx, applyCluster, client.Apply, client.FieldOwner("openbao-workload-controller")); err != nil {
+	applyConfig, err := kube.ToApplyConfiguration(applyCluster, c)
+	if err != nil {
+		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
+	}
+
+	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner("openbao-workload-controller")); err != nil {
 		return fmt.Errorf("failed to patch workload status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
 	logger.V(1).Info("Patched OpenBaoCluster workload status (SSA)", "reason", reason, "fieldOwner", "openbao-workload-controller")
@@ -187,7 +193,12 @@ func patchAdminOpsOwnedFields(ctx context.Context, c client.Client, logger logr.
 		},
 	}
 
-	if err := c.Status().Patch(ctx, applyCluster, client.Apply, client.FieldOwner("openbao-adminops-controller")); err != nil {
+	applyConfig, err := kube.ToApplyConfiguration(applyCluster, c)
+	if err != nil {
+		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
+	}
+
+	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner("openbao-adminops-controller")); err != nil {
 		return fmt.Errorf("failed to patch adminops status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
 	logger.V(1).Info("Patched OpenBaoCluster adminops status (SSA)", "reason", reason, "fieldOwner", "openbao-adminops-controller")

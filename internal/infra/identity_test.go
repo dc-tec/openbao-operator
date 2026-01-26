@@ -18,10 +18,12 @@ const (
 )
 
 func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-sa", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-sa", ns)
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -52,10 +54,12 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 }
 
 func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-sa-idempotent", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-sa-idempotent", ns)
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -104,10 +108,12 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 }
 
 func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-rbac", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-rbac", ns)
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -194,10 +200,12 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 }
 
 func TestEnsureRBAC_IsIdempotent(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-rbac-idempotent", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-rbac-idempotent", ns)
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -251,27 +259,17 @@ func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 // to the OpenBaoCluster, ensuring Kubernetes GC will delete it when the cluster is deleted.
 // Cleanup() no longer manually deletes ServiceAccounts - GC handles this.
 func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
-	cluster := newMinimalCluster("infra-sa-gc", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-sa-gc", ns)
 	cluster.APIVersion = apiVersion
 	cluster.Kind = kind
 
 	ctx := context.Background()
-
-	if err := k8sClient.Create(ctx, cluster); err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
-	}
-
-	// Re-fetch to get the UID
-	if err := k8sClient.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      cluster.Name,
-	}, cluster); err != nil {
-		t.Fatalf("failed to get cluster: %v", err)
-	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	createTLSSecretForTest(t, k8sClient, cluster)
 
@@ -321,27 +319,17 @@ func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 // to the OpenBaoCluster, ensuring Kubernetes GC will delete them when the cluster is deleted.
 // Cleanup() no longer manually deletes RBAC resources - GC handles this.
 func TestRBACHasOwnerReferenceForGC(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
-	cluster := newMinimalCluster("infra-rbac-gc", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-rbac-gc", ns)
 	cluster.APIVersion = apiVersion
 	cluster.Kind = kind
 
 	ctx := context.Background()
-
-	if err := k8sClient.Create(ctx, cluster); err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
-	}
-
-	// Re-fetch to get the UID
-	if err := k8sClient.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      cluster.Name,
-	}, cluster); err != nil {
-		t.Fatalf("failed to get cluster: %v", err)
-	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	createTLSSecretForTest(t, k8sClient, cluster)
 

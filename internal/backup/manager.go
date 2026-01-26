@@ -245,7 +245,12 @@ func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.O
 		},
 	}
 
-	return m.client.Status().Patch(ctx, applyCluster, client.Apply,
+	applyConfig, err := kube.ToApplyConfiguration(applyCluster, m.client)
+	if err != nil {
+		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
+	}
+
+	return m.client.Status().Apply(ctx, applyConfig,
 		client.FieldOwner("openbao-backup-controller"),
 	)
 }

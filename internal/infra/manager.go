@@ -14,6 +14,7 @@ import (
 	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 )
 
 const (
@@ -238,12 +239,17 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 	}
 
 	// Use Server-Side Apply with ForceOwnership to ensure the operator manages this resource
-	patchOpts := []client.PatchOption{
+	applyConfig, err := kube.ToApplyConfiguration(obj, m.client)
+	if err != nil {
+		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
+	}
+
+	applyOpts := []client.ApplyOption{
 		client.ForceOwnership,
 		client.FieldOwner("openbao-operator"),
 	}
 
-	if err := m.client.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
+	if err := m.client.Apply(ctx, applyConfig, applyOpts...); err != nil {
 		// Wrap transient Kubernetes API errors (rate limiting, temporary failures)
 		if operatorerrors.IsTransientKubernetesAPI(err) {
 			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))

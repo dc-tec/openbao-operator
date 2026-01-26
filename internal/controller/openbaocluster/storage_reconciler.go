@@ -11,7 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -24,7 +24,7 @@ import (
 
 type storageReconciler struct {
 	client   client.Client
-	recorder record.EventRecorder
+	recorder events.EventRecorder
 }
 
 func (r *storageReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
@@ -162,7 +162,7 @@ func (r *storageReconciler) expandPVCs(ctx context.Context, cluster *openbaov1al
 
 		patched++
 		if r.recorder != nil {
-			r.recorder.Eventf(cluster, corev1.EventTypeNormal, "PVCResize", "Resizing PVC %s from %s to %s", pvc.Name, currentQty.String(), desiredQty.String())
+			r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResize", "", "Resizing PVC %s from %s to %s", pvc.Name, currentQty.String(), desiredQty.String())
 		}
 	}
 
@@ -174,7 +174,7 @@ type podClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName stri
 type storageResizeRestartReconciler struct {
 	client            client.Client
 	apiReader         client.Reader
-	recorder          record.EventRecorder
+	recorder          events.EventRecorder
 	smartClientConfig openbao.ClientConfig
 	clientForPodFunc  podClientFactory
 }
@@ -247,7 +247,7 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 				return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to step down leader %s before restart: %w", targetPod.Name, err))
 			}
 			if r.recorder != nil {
-				r.recorder.Eventf(cluster, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
+				r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
 			}
 			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
@@ -263,7 +263,7 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 	}
 
 	if r.recorder != nil {
-		r.recorder.Eventf(cluster, corev1.EventTypeNormal, "PVCResizePodRestart", "Restarted pod %s to complete filesystem resize", targetPod.Name)
+		r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizePodRestart", "", "Restarted pod %s to complete filesystem resize", targetPod.Name)
 	}
 
 	return recon.Result{RequeueAfter: constants.RequeueShort}, nil

@@ -16,6 +16,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 )
 
@@ -45,7 +46,12 @@ func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *
 		},
 	}
 
-	return r.Status().Patch(ctx, applyCluster, client.Apply,
+	applyConfig, err := kube.ToApplyConfiguration(applyCluster, r.Client)
+	if err != nil {
+		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
+	}
+
+	return r.Status().Apply(ctx, applyConfig,
 		client.FieldOwner("openbao-status-controller"),
 	)
 }
