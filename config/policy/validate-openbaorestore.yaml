@@ -1,0 +1,52 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: validate-openbaorestore
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["openbaorestores"]
+  validations:
+    # Safety: overrideOperationLock requires force=true (break-glass is explicit).
+    - expression: >-
+        !has(object.spec.overrideOperationLock) ||
+        object.spec.overrideOperationLock == false ||
+        object.spec.force == true
+      message: "spec.overrideOperationLock requires spec.force=true."
+    # SSRF Protection: Block localhost endpoints (all profiles - localhost is never a valid snapshot source)
+    - expression: >-
+        !has(object.spec.source.target.endpoint) ||
+        object.spec.source.target.endpoint == "" ||
+        !(
+          object.spec.source.target.endpoint.contains("localhost") ||
+          object.spec.source.target.endpoint.contains("127.0.0.1") ||
+          object.spec.source.target.endpoint.contains("::1") ||
+          object.spec.source.target.endpoint.matches("^https?://[0-9]+[:/].*")
+        )
+      message: "Restore endpoint cannot point to localhost or use numeric IP encoding (SSRF protection)."
+    # SSRF Protection: Block link-local addresses (all profiles - cloud metadata is always dangerous)
+    - expression: >-
+        !has(object.spec.source.target.endpoint) ||
+        object.spec.source.target.endpoint == "" ||
+        !object.spec.source.target.endpoint.matches("^https?://169\\.254\\..*")
+      message: "Restore endpoint cannot point to link-local addresses (SSRF protection against cloud metadata services)."
+    # Safety: Require HTTPS for non-cluster endpoints.
+    # We allow http:// only for in-cluster Service DNS names (useful for local dev emulators).
+    - expression: >-
+        !has(object.spec.source.target.endpoint) ||
+        object.spec.source.target.endpoint == "" ||
+        object.spec.source.target.endpoint.startsWith("https://") ||
+        object.spec.source.target.endpoint.startsWith("s3://") ||
+        object.spec.source.target.endpoint.matches("^http://[^/]+\\.svc(\\.|:|/|$).*")
+      message: "Restore endpoint must use HTTPS or S3 scheme, unless it targets an in-cluster Service (*.svc)."
+    # Confused-deputy protection: Block references to system secrets (restore auth + object store credentials)
+    - expression: >-
+        (!has(object.spec.source.target.credentialsSecretRef) ||
+          !object.spec.source.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
+        (!has(object.spec.tokenSecretRef) ||
+          !object.spec.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
+      message: "References to system secrets (unseal-key, root-token, tls-ca, tls-server) are prohibited in restore configuration to prevent confused deputy attacks."

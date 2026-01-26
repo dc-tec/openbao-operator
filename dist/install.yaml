@@ -4687,6 +4687,57 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  name: openbao-operator-validate-openbaorestore
+  namespace: openbao-operator-system
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - openbao.org
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - openbaorestores
+  validations:
+  - expression: '!has(object.spec.overrideOperationLock) || object.spec.overrideOperationLock
+      == false || object.spec.force == true'
+    message: spec.overrideOperationLock requires spec.force=true.
+  - expression: |-
+      !has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint == "" || !(
+
+        object.spec.source.target.endpoint.contains("localhost") ||
+        object.spec.source.target.endpoint.contains("127.0.0.1") ||
+        object.spec.source.target.endpoint.contains("::1") ||
+        object.spec.source.target.endpoint.matches("^https?://[0-9]+[:/].*")
+      )
+    message: Restore endpoint cannot point to localhost or use numeric IP encoding
+      (SSRF protection).
+  - expression: '!has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint
+      == "" || !object.spec.source.target.endpoint.matches("^https?://169\\.254\\..*")'
+    message: Restore endpoint cannot point to link-local addresses (SSRF protection
+      against cloud metadata services).
+  - expression: '!has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint
+      == "" || object.spec.source.target.endpoint.startsWith("https://") || object.spec.source.target.endpoint.startsWith("s3://")
+      || object.spec.source.target.endpoint.matches("^http://[^/]+\\.svc(\\.|:|/|$).*")'
+    message: Restore endpoint must use HTTPS or S3 scheme, unless it targets an in-cluster
+      Service (*.svc).
+  - expression: |-
+      (!has(object.spec.source.target.credentialsSecretRef) ||
+
+        !object.spec.source.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
+      (!has(object.spec.tokenSecretRef) ||
+
+        !object.spec.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
+    message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
+      are prohibited in restore configuration to prevent confused deputy attacks.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
   name: openbao-operator-lock-controller-statefulset-mutations
 spec:
   failurePolicy: Fail
@@ -5239,14 +5290,13 @@ spec:
   - expression: |-
       !variables.has_backup || (object.spec.backup.schedule != "" &&
 
-        object.spec.backup.executorImage != "" &&
         ((has(object.spec.backup.jwtAuthRole) && object.spec.backup.jwtAuthRole != "") || has(object.spec.backup.tokenSecretRef) || ((!has(object.spec.backup.jwtAuthRole) || object.spec.backup.jwtAuthRole == "") && has(object.spec.selfInit) && has(object.spec.selfInit.oidc) && object.spec.selfInit.oidc.enabled == true)) &&
         (object.spec.backup.target.roleArn != "" || has(object.spec.backup.target.credentialsSecretRef)) &&
         object.spec.backup.schedule.matches("^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$"))
-    message: spec.backup requires schedule, executorImage, OpenBao auth (jwtAuthRole
-      or tokenSecretRef, or OIDC enabled when jwtAuthRole is empty/unset for auto-creation
-      of "openbao-operator-backup" role), storage auth (target.roleArn or target.credentialsSecretRef),
-      and a 5-field cron expression.
+    message: spec.backup requires schedule, OpenBao auth (jwtAuthRole or tokenSecretRef,
+      or OIDC enabled when jwtAuthRole is empty/unset for auto-creation of "openbao-operator-backup"
+      role), storage auth (target.roleArn or target.credentialsSecretRef), and a 5-field
+      cron expression.
   - expression: |-
       !has(object.spec.profile) || object.spec.profile != "Hardened" || !(variables.has_backup || variables.has_pre_upgrade_snapshot || variables.has_bluegreen_pre_upgrade_snapshot) || (has(object.spec.network) &&
 
@@ -5288,11 +5338,11 @@ spec:
         !object.spec.upgrade.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
     message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
       are prohibited in backup/upgrade configurations to prevent confused deputy attacks.
-  - expression: '!has(oldObject.spec.storage.storageClassName) || object.spec.storage.storageClassName
-      == oldObject.spec.storage.storageClassName'
+  - expression: oldObject == null || !has(oldObject.spec.storage.storageClassName)
+      || object.spec.storage.storageClassName == oldObject.spec.storage.storageClassName
     message: spec.storage.storageClassName is immutable.
-  - expression: '!has(oldObject.spec.storage.size) || quantity(object.spec.storage.size)
-      >= quantity(oldObject.spec.storage.size)'
+  - expression: oldObject == null || !has(oldObject.spec.storage.size) || quantity(object.spec.storage.size).compareTo(quantity(oldObject.spec.storage.size))
+      >= 0
     message: spec.storage.size cannot be decreased.
   variables:
   - expression: has(object.spec.backup)
@@ -5311,6 +5361,16 @@ metadata:
   namespace: openbao-operator-system
 spec:
   policyName: openbao-operator-validate-openbao-tenant
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-validate-openbaorestore
+  namespace: openbao-operator-system
+spec:
+  policyName: openbao-operator-validate-openbaorestore
   validationActions:
   - Deny
 ---
