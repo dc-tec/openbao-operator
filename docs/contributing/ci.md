@@ -36,11 +36,13 @@ graph TD
     E2E --> Smoke["Smoke Tests"]
     E2E --> Full["Full Matrix (Nightly)"]
 
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px;
-    classDef check fill:transparent,stroke:#60a5fa,stroke-width:2px;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
     
     class PR process;
-    class Lint,Gen,Helm,Sec,Docs,Chart,Sanity,Compat,Smoke,Full check;
+    class Static,Build,Unit,E2E process;
+    class Lint,Gen,Helm,Sec,Docs,Chart,Sanity,Compat,Smoke,Full read;
 ```
 
 ## 2. CI vs Local Commands ("The Rosetta Stone")

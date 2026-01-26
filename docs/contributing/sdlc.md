@@ -15,8 +15,10 @@ graph TD
     Deploy --> Operate
     Operate --> Plan
 
-    classDef phase fill:transparent,stroke:#9333ea,stroke-width:2px;
-    class Plan,Design,Code,Secure,Verify,Release,Deploy,Operate phase;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    class Plan,Design,Code,Secure,Verify,Release,Deploy,Operate process;
 ```
 
 ## 2. Phase Detail

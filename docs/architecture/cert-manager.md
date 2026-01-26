@@ -29,17 +29,15 @@ graph TD
     Generate -->|Update| Secret[("fa:fa-key TLS Secret")]
     
     Secret -.->|Watch| Operator
-    Operator -->|Compute Hash| Annotation["Pod Annotation\n(openbao.org/tls-hash)"]
-    Annotation -->|Update| StatefulSet
-    
-    StatefulSet -->|Reconcile| Pods[OpenBao Pods]
+    Operator -->|Compute Hash| Annotation["Pod Annotation\n(openbao.org/tls-cert-hash)"]
+    Annotation -->|Update| Pods[OpenBao Pods]
     
     classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
     classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
     
     class Check,Generate process;
-    class Secret,Annotation,StatefulSet write;
+    class Secret,Annotation write;
     class Operator,Pods read;
 ```
 
@@ -55,7 +53,7 @@ sequenceDiagram
     participant Bao as OpenBao (PID 2)
 
     Op->>K8s: Update Secret (New Cert)
-    K8s->>Pod: Update Volume Mount (/vault/tls/server.crt)
+    K8s->>Pod: Update Volume Mount (/etc/bao/tls/tls.crt)
     Pod->>Pod: Detect File Change (fsnotify)
     Pod->>Bao: Send SIGHUP
     Bao->>Bao: Reload Certificate

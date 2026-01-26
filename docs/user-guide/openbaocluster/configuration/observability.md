@@ -325,7 +325,7 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "OpenBao operator experiencing high reconciliation error rate"
+            summary: "OpenBao Operator experiencing high reconciliation error rate"
 
         # Drift detection
         - alert: OpenBaoExcessiveDrift

@@ -21,6 +21,16 @@ graph TD
     CheckRaft -- "Stale Peer" --> RemovePeer["Prune Dead Peer"]
     CheckRaft -- "Split Brain" --> ManualRec["Manual Recovery"]
     CheckRaft -- "Unknown" --> Logs["Inspect Logs"]
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Start read;
+    class CheckPods,CheckNet,CheckRaft process;
+    class FixPods,FixNet,Logs process;
+    class RemovePeer,ManualRec security;
 ```
 
 ---

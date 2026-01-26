@@ -44,7 +44,8 @@ The OpenBao Operator leverages native Kubernetes security primitives to create a
 ## Prerequisites
 
 !!! note "Cluster Requirements"
-    -   **Kubernetes v1.30+**: Required for `ValidatingAdmissionPolicy` (GA in 1.30).
+    -   **Kubernetes v1.33+**: Minimum supported by the OpenBao Operator (see [Compatibility](../../reference/compatibility.md)).
+        `ValidatingAdmissionPolicy` is GA since Kubernetes v1.30 and is available on all supported versions.
     -   **CNI Plugin**: A CNI that enforces `NetworkPolicy` (e.g., Cilium, Calico, Antrea) is required for isolation features to work.
 
 ## See Also

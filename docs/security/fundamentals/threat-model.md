@@ -31,7 +31,18 @@ graph TD
     Bao -- Streams Snapshots --> S3
     
     linkStyle 0 stroke:#22c55e,stroke-width:2px;
-    linkStyle 2 stroke:#ef4444,stroke-width:2px;
+    linkStyle 2 stroke:#dc2626,stroke-width:2px;
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Op process;
+    class OpSA security;
+    class Bao write;
+    class Secret,PVC security;
+    class S3,K8sAPI read;
 ```
 
 ## 2. Asset Identification

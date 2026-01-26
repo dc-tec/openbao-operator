@@ -14,11 +14,15 @@ graph LR
     Job -->|Inject Snapshot| Cluster[("fa:fa-server OpenBao Cluster")]
     Cluster -->|Reset| Key["fa:fa-key New Unseal Key"]
     
-    classDef storage fill:transparent,stroke:#2563eb,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
     classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
     
-    class Bucket,Cluster,Key storage;
+    class Bucket read;
     class Job process;
+    class Cluster write;
+    class Key security;
 ```
 
 ## Use Cases

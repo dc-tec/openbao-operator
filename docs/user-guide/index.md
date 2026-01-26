@@ -47,4 +47,4 @@ This guide covers everything you need to know to successfully operate OpenBao on
 
 - [**Architecture**](../architecture/index.md) – Understand the internal controller design.
 - [**Security Model**](../security/index.md) – Learn about the zero-trust security model.
-- [**Troubleshooting**](openbaocluster/operations/production-checklist.md) – Production readiness and common issues.
+- [**Troubleshooting**](openbaocluster/operations/troubleshooting.md) – Common issues and remediation steps.

@@ -24,12 +24,12 @@ Day N operations ensure data durability through regular backups and disaster rec
      - Streams `GET /v1/sys/storage/raft/snapshot` directly to object storage (no disk buffering)
      - Names backups predictably: `<prefix>/<namespace>/<cluster>/<timestamp>-<uuid>.snap`
      - Verifies upload completion
-5. Backup status is recorded in `Status.Backup`:
-   - `LastBackupTime`, `NextScheduledBackup` for visibility
-   - `ConsecutiveFailures` for alerting
+5. Backup status is recorded in `status.backup`:
+   - `lastBackupTime`, `nextScheduledBackup` for visibility
+   - `consecutiveFailures` for alerting
 6. Optional retention policies (`spec.backup.retention`) automatically delete old backups:
-   - `MaxCount`: Keep only the N most recent backups
-   - `MaxAge`: Delete backups older than a specified duration
+   - `maxCount`: Keep only the N most recent backups
+   - `maxAge`: Delete backups older than a specified duration
 
 !!! warning "Backup Limitations"
     Backups are skipped during upgrades to avoid inconsistent snapshots. Backups are optional for all clusters. If backups are enabled, either `jwtAuthRole` or `tokenSecretRef` must be configured. Root tokens are not used for backup operations.

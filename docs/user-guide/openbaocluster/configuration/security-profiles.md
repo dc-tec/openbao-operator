@@ -3,7 +3,7 @@
 Configure the security posture of your OpenBao cluster.
 
 !!! danger "Production Readiness"
-    **Always** use the `Hardened` profile for production deployments. The `Development` profile creates root tokens and stores them in Kubernetes Secrets, which is a critical security risk.
+    **Always** use the `Hardened` profile for production deployments. The `Development` profile can store a root token in a Kubernetes Secret when self-init is disabled, which is a critical security risk.
 
 ## Profile Comparison
 
@@ -12,7 +12,7 @@ The Operator supports two distinct security profiles via `spec.profile`.
 | Feature | Development | Hardened (Production) |
 | :--- | :--- | :--- |
 | **Use Case** | Local Testing, POC | **Production Workloads** |
-| **Root Token** | Created & Stored in Secret | **Never Created** |
+| **Root Token** | Stored in a Secret when self-init is disabled | Auto-revoked (not stored in a Secret) |
 | **Unseal** | Static (Kubernetes Secret) | **External KMS** (AWS, GCP, Azure, etc.) |
 | **TLS** | Optional / Self-Signed | **Mandatory** (External or ACME) |
 | **Status** | `ConditionSecurityRisk=True` | Secure by Default |
@@ -26,10 +26,19 @@ flowchart LR
     Cluster -->|spec.profile| Dev
     Cluster -->|spec.profile| Hard
 
-    Dev -.->|Risk| RootToken[Root Token Created]
-    Hard -.->|Secure| NoRoot[No Root Token]
+    Dev -.->|Risk| RootToken["Root Token Secret (if self-init disabled)"]
+    Hard -.->|Secure| NoRoot[No Root Token Secret]
     Hard -.->|Secure| KMS[External KMS Unseal]
     Hard -.->|Secure| EXT_TLS[Verified TLS]
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+
+    class Cluster read;
+    class Dev,Hard write;
+    class RootToken,KMS,EXT_TLS security;
+    class NoRoot write;
 ```
 
 ## Configuration
@@ -76,8 +85,8 @@ flowchart LR
 
     ### Benefits
 
-    - **Zero Trust**: No root tokens are ever generated.
-    - **Identity**: Automatic JWT identity bootstrapping when `spec.selfInit.bootstrapJWTAuth` is enabled.
+    - **Zero Trust**: No root token Secret is created; initialization credentials are auto-revoked.
+    - **Identity**: When `spec.selfInit.oidc.enabled` is `true`, the operator bootstraps JWT auth and roles for operator jobs (backup/upgrade/restore).
     - **Encryption**: Root of trust is delegated to a hardware-backed KMS, not Kubernetes etcd.
 
 === "Development"

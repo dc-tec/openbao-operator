@@ -2,6 +2,11 @@
 
 The OpenBao Operator uses a **Split-Controller Architecture**. Instead of a single monolithic reconciliation loop, we divide responsibilities across three specialized controllers per `OpenBaoCluster`.
 
+In addition:
+
+- Multi-tenant deployments run a separate **Provisioner** controller that reconciles `OpenBaoTenant`.
+- The controller manager also runs the **OpenBaoRestore** controller that reconciles `OpenBaoRestore`.
+
 ## 1. Controller Hierarchy
 
 We separate **Workload** (Pod churn), **Operations** (Upgrades/Backups), and **Status** (Updates) to prevent head-of-line blocking and status write contention.
@@ -38,8 +43,11 @@ graph TD
 | Controller | Role | Why Separate? |
 | :--- | :--- | :--- |
 | **Workload** | Reconciles StatefulSet, Services, ConfigMaps, and Secrets. | High churn. Needs to react fast to Pod failures. |
-| **AdminOps** | Handles Upgrades, Backups, and Restores. | Long-running operations. Should not block Pod recovery. |
+| **AdminOps** | Handles Upgrades and Backups. | Long-running operations. Should not block Pod recovery. |
 | **Status** | Aggregates status from other controllers and writes to API. | Prevents `ResourceVersion` conflicts by serializing status updates. |
+
+!!! note "Restore Controller"
+    Restores are reconciled via the separate `OpenBaoRestore` controller, which orchestrates restore Jobs and acquires the cluster operation lock.
 
 ---
 
@@ -81,7 +89,7 @@ classDiagram
 
 - **[Infrastructure Manager](infra-manager.md)**: The "heart" of the operator. Generates `config.hcl` and manages the `StatefulSet`.
 - **[Cert Manager](cert-manager.md)**: Handles TLS interactions. Supports `OperatorManaged` (internal CA), `ACME` (LetsEncrypt), and `External` (Bring your own).
-- **[Init Manager](init-manager.md)**: Auto-initializes new clusters, handling the `sys/init` call and root token encryption.
+- **[Init Manager](init-manager.md)**: Initializes new clusters (when self-init is disabled), handling `PUT /v1/sys/init` and storing the root token in a Secret.
 - **[Upgrade Manager](upgrade-manager.md)**: Powering both **Rolling** and **Blue/Green** upgrades. Manages the state machine for complex transitions.
 - **[Backup Manager](backup-manager.md)**: Runs snapshot jobs on a Cron schedule.
 

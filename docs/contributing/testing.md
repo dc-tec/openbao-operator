@@ -13,15 +13,15 @@ graph BT
     Integration --> E2E
     E2E --> Manual
 
-    classDef manual fill:#f472b6,stroke:#831843,stroke-width:2px,color:white
-    classDef e2e fill:#a78bfa,stroke:#4c1d95,stroke-width:2px,color:white
-    classDef integration fill:#60a5fa,stroke:#1e3a8a,stroke-width:2px,color:white
-    classDef unit fill:#22c55e,stroke:#14532d,stroke-width:2px,color:white
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
 
-    class Manual manual
-    class E2E e2e
-    class Integration integration
-    class Unit unit
+    class Unit read;
+    class Integration process;
+    class E2E write;
+    class Manual git;
 ```
 
 ## Quick Start

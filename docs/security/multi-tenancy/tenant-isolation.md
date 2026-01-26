@@ -16,7 +16,7 @@ The Operator supports two distinct onboarding models depending on your organizat
     -   **Security:** Prevents users from provisioning RBAC in namespaces they do not own.
 
     ```yaml
-    apiVersion: operator.openbao.org/v1alpha1
+    apiVersion: openbao.org/v1alpha1
     kind: OpenBaoTenant
     metadata:
       name: my-tenant
@@ -34,7 +34,7 @@ The Operator supports two distinct onboarding models depending on your organizat
     -   **Security:** Rely on Kubernetes RBAC to prevent normal users from creating CRs in the operator namespace.
 
     ```yaml
-    apiVersion: operator.openbao.org/v1alpha1
+    apiVersion: openbao.org/v1alpha1
     kind: OpenBaoTenant
     metadata:
       name: team-a-onboarding
@@ -64,13 +64,22 @@ flowchart TD
     end
 
     %% Flow
-    %% Flow
     User -- 1. Request --> OBT
     OBT -- 2. Trigger --> Prov
     Prov -- 3. Create --> TRole
     Prov -- 4. Bind --> TRB
     TRB -.->|5. Grant Access| Ctrl
     Ctrl ==>|6. Reconcile| Workload
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class User,OBT read;
+    class Prov process;
+    class Ctrl,TRole,TRB security;
+    class Workload write;
 ```
 
 1. **Request:** User creates `OpenBaoTenant`.

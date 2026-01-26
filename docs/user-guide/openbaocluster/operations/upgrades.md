@@ -33,7 +33,7 @@ spec:
 
 ## Executing Upgrades
 
-To upgrade, simply update the `spec.version` field. The `updateStrategy` determines how this change is applied.
+To upgrade, update `spec.version`. The strategy configured in `spec.upgrade.strategy` determines how this change is applied.
 
 === "Rolling Update (Default)"
     **Best for:** Standard upgrades, Dev/Test environments, Minimizing resource usage.
@@ -43,8 +43,8 @@ To upgrade, simply update the `spec.version` field. The `updateStrategy` determi
     ```yaml
     spec:
       version: "2.4.4"
-      updateStrategy:
-        type: RollingUpdate
+      upgrade:
+        strategy: RollingUpdate
     ```
 
     **How it works:**
@@ -69,7 +69,7 @@ To upgrade, simply update the `spec.version` field. The `updateStrategy` determi
         subgraph Green["Green Revision (New)"]
             direction TB
             Deploy[1. Deploy Green Pods]
-            Sync[2. Sync Data form Blue]
+            Sync[2. Sync Data from Blue]
             Test[3. Run Verification]
         end
 
@@ -79,9 +79,13 @@ To upgrade, simply update the `spec.version` field. The `updateStrategy` determi
         Test -- "Success" --> Switch[4. Switch Traffic to Green]
         Switch --> Cleanup[5. Delete Blue Cluster]
 
-        style Blue fill:transparent,stroke:#2979ff,stroke-width:2px
-        style Green fill:transparent,stroke:#00e676,stroke-width:2px,color:#fff
-        style Switch fill:transparent,stroke:#ffa726,stroke-width:2px
+        classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+        classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+        classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+        class Start read;
+        class B write;
+        class Deploy,Sync,Test,Switch,Cleanup process;
     ```
 
     **Configuration:**
@@ -89,13 +93,13 @@ To upgrade, simply update the `spec.version` field. The `updateStrategy` determi
     ```yaml
     spec:
       version: "2.4.4"
-      updateStrategy:
-        type: BlueGreen
+      upgrade:
+        strategy: BlueGreen
+        preUpgradeSnapshot: true  # Optional: backup before starting (requires spec.backup)
         blueGreen:
-          autoPromote: true          # Automatically switch traffic if healthy
-          preUpgradeSnapshot: true   # Backup before starting
+          autoPromote: true  # Automatically switch traffic if healthy
           autoRollback:
-            enabled: true            # Revert if Green fails validation
+            enabled: true  # Revert if Green fails validation or early job failures
     ```
 
 ## Advanced Upgrade Options
@@ -106,7 +110,8 @@ Run a custom container to "smoke test" the Green cluster before cutover.
 
 ```yaml
 spec:
-  updateStrategy:
+  upgrade:
+    strategy: BlueGreen
     blueGreen:
       verification:
         prePromotionHook:
@@ -120,7 +125,8 @@ If the Green cluster fails validation or upgrade jobs fail during the early upgr
 
 ```yaml
 spec:
-  updateStrategy:
+  upgrade:
+    strategy: BlueGreen
     blueGreen:
       autoRollback:
         enabled: true
@@ -139,8 +145,8 @@ spec:
     hostname: bao.example.com
     gatewayRef:
       name: main-gateway
-  updateStrategy:
-    type: BlueGreen
+  upgrade:
+    strategy: BlueGreen
     blueGreen:
       autoPromote: true
 ```

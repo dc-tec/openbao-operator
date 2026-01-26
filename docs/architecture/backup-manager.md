@@ -12,10 +12,10 @@ The Manager uses a **stateless executor pattern**: the Operator only schedules K
 
 ```mermaid
 graph TD
-    Trigger[Trigger: Cron or Manual] --> Prelight{Pre-flight Checks}
+    Trigger[Trigger: Cron or Manual] --> Preflight{Pre-flight Checks}
     
-    Prelight -- Fail --> Retry[Retry Later]
-    Prelight -- Pass --> Job[Create Backup Job]
+    Preflight -- Fail --> Retry[Retry Later]
+    Preflight -- Pass --> Job[Create Backup Job]
     
     subgraph K8s_Job [Executor Pod]
         Job --> Auth[Authenticate to OpenBao]
@@ -32,7 +32,7 @@ graph TD
     classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
     
     class Job,Auth,Stream,Upload process;
-    class Trigger,Prelight read;
+    class Trigger,Preflight read;
     class Status,StatusFail write;
 ```
 
@@ -43,8 +43,11 @@ graph TD
 Before spawning a Job, the Operator verifies the cluster is stable:
 
 1. **Healthy:** Cluster Phase must be `Running`.
-2. **Stable:** No Upgrade (`Status.Upgrade == nil`) or Restore (`Status.Restore == nil`) in progress.
-3. **Exclusive:** No other backup is currently running.
+2. **Not Upgrading:** No upgrade is in progress (`status.upgrade != nil`) and no upgrade is pending (for example, `spec.version != status.currentVersion`).
+3. **Not Restoring:** No `OpenBaoRestore` is in progress for this cluster (restore resources targeting this cluster that are not `Completed` or `Failed`).
+4. **Exclusive:** No other backup Job is currently running.
+
+When a backup starts, the BackupManager acquires the cluster operation lock by setting `status.operationLock.operation=Backup` and releases it when the Job completes.
 
 ### Phase 2: The Executor Job
 

@@ -39,11 +39,14 @@ graph TD
     Gate --> Promote
     Promote --> Publish
 
-    classDef phase fill:transparent,stroke:#9333ea,stroke-width:2px;
-    classDef step fill:transparent,stroke:#60a5fa,stroke-width:2px;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
     
-    class Build,Promote,Publish phase;
-    class Img,Tag,Scan,Vuln,Test,Compat,Retag,Sign,Chart,SBOM,Git,GH,Asset step;
+    class Start,Build,Gate,Promote,Publish process;
+    class Img,Tag,Scan,Vuln,Test,Compat,Retag,Sign,Chart,SBOM,GH,Asset read;
+    class Git git;
 ```
 
 ## 2. Release Checklist

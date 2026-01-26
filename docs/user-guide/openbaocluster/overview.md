@@ -18,7 +18,7 @@ It acts as a high-level abstraction over complex stateful infrastructure, managi
 
     :material-arrow-right: [Security Profiles](configuration/security-profiles.md) for hardening
 
-- :material-server-network: **infrastructure**
+- :material-server-network: **Infrastructure**
 
     ---
 

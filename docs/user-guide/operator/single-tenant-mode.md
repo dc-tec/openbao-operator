@@ -212,9 +212,9 @@ openbao-operator-controller-xxxxxxxxxx-xxxxx      1/1     Running   0          1
         kind: OpenBaoTenant
         metadata:
           name: openbao-tenant
+          namespace: openbao-operator-system
         spec:
-          namespaces:
-            - openbao
+          targetNamespace: openbao
         ```
 
     3. **Cleanup manual RoleBindings**

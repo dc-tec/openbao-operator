@@ -41,8 +41,6 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
 
     This method uses a projected ServiceAccount token to authenticate with OpenBao.
 
-    This method uses a projected ServiceAccount token to authenticate with OpenBao.
-
     !!! success "Automated Setup"
         When `spec.selfInit.oidc.enabled` is `true`, the Operator automatically configures:
         1. JWT Auth Method (`auth/jwt-operator`)

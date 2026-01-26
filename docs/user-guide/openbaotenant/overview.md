@@ -25,7 +25,13 @@ graph TD
     
     Op["fa:fa-gears Operator"] -->|Provisions| Namespace
     
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#000;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Op process;
+    class App read;
     class RBAC,NetPol,Quota security;
 ```
 
@@ -35,7 +41,7 @@ graph TD
 
 - :material-account-key: **Identity & Access**
 
-    Automatically provisions Kubernetes **RoleBindings** to efficienty manage permissions for the Tenant.
+    Automatically provisions Kubernetes **RoleBindings** to efficiently manage permissions for the Tenant.
 
 - :material-network-off: **Network Isolation**
 
@@ -59,7 +65,7 @@ Choose the onboarding model that fits your organization.
 
      Developers create their own `OpenBaoTenant` in their own namespace.
 
-    *Best for: High-trash, low-friction environments.*
+    *Best for: High-trust, low-friction environments.*
 
     [:material-arrow-right: Self-Service Guide](onboarding.md#self-service-onboarding)
 

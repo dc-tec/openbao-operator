@@ -51,9 +51,9 @@ The Operator manages the lifecycle of several critical secrets, from the Root To
 The OpenBao Operator uses Kubernetes OIDC to authenticate **Backup** and **Upgrade** executor jobs without managing static long-lived tokens.
 
 !!! note "JWT bootstrap"
-    Enable automatic JWT auth bootstrap with `spec.selfInit.bootstrapJWTAuth: true`.
+    Enable automatic JWT auth bootstrap with `spec.selfInit.oidc.enabled: true`.
     This requires the OIDC issuer and JWKS keys to be discoverable at operator startup.
-    If you disable bootstrap, configure JWT auth manually via self-init requests.
+    If you disable it, configure JWT auth manually via self-init requests.
 
 ### Workflow
 
