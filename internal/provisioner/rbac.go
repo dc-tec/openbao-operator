@@ -81,6 +81,11 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			Verbs:     cloneStrings(verbsEventWrite),
 		},
 		{
+			APIGroups: []string{"events.k8s.io"},
+			Resources: []string{"events"},
+			Verbs:     cloneStrings(verbsEventWrite),
+		},
+		{
 			APIGroups: []string{""},
 			Resources: []string{"pods"},
 			Verbs:     cloneStrings(verbsPodManage),

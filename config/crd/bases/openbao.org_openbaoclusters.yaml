@@ -2217,7 +2217,8 @@ spec:
                     x-kubernetes-validations:
                     - message: tls.acme.domain and tls.acme.domains are mutually exclusive;
                         use only one
-                      rule: '!(has(self.domain) && size(self.domains) > 0)'
+                      rule: '!(has(self.domain) && has(self.domains) && size(self.domains)
+                        > 0)'
                   enabled:
                     description: Enabled controls whether TLS is enabled for the cluster.
                     type: boolean

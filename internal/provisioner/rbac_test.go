@@ -18,19 +18,19 @@ func TestGenerateTenantRole(t *testing.T) {
 			name:      "default namespace",
 			namespace: "default",
 			wantName:  TenantRoleName,
-			wantRules: 15, // Expected number of PolicyRules
+			wantRules: 16, // Expected number of PolicyRules
 		},
 		{
 			name:      "custom namespace",
 			namespace: "tenant-1",
 			wantName:  TenantRoleName,
-			wantRules: 15,
+			wantRules: 16,
 		},
 		{
 			name:      "namespace with special characters",
 			namespace: "my-namespace-123",
 			wantName:  TenantRoleName,
-			wantRules: 15,
+			wantRules: 16,
 		},
 	}
 
@@ -71,6 +71,7 @@ func TestGenerateTenantRole(t *testing.T) {
 			hasStatefulSetRule := false
 			hasDeploymentRule := false
 			hasPodRule := false
+			hasEventsK8sRule := false
 
 			for _, rule := range role.Rules {
 				// Check for OpenBaoCluster rule (uses commonVerbs, not "*")
@@ -107,6 +108,13 @@ func TestGenerateTenantRole(t *testing.T) {
 					hasPodRule = true
 				}
 
+				// controller-runtime v0.23 emits events via events.k8s.io.
+				if contains(rule.APIGroups, "events.k8s.io") &&
+					contains(rule.Resources, "events") &&
+					contains(rule.Verbs, "create") &&
+					contains(rule.Verbs, "patch") {
+					hasEventsK8sRule = true
+				}
 			}
 
 			if !hasOpenBaoClusterRule {
@@ -120,6 +128,9 @@ func TestGenerateTenantRole(t *testing.T) {
 			}
 			if !hasPodRule {
 				t.Error("GenerateTenantRole() missing Pod rule")
+			}
+			if !hasEventsK8sRule {
+				t.Error("GenerateTenantRole() missing events.k8s.io Events rule")
 			}
 		})
 	}
