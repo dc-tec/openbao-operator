@@ -48,6 +48,7 @@ func TestHandlePreUpgradeSnapshot_NotEnabled(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
+		WithReturnManagedFields().
 		Build()
 	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
@@ -81,6 +82,7 @@ func TestHandlePreUpgradeSnapshot_NoBackupConfig(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
+		WithReturnManagedFields().
 		Build()
 	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
@@ -139,6 +141,7 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster, secret).
+		WithReturnManagedFields().
 		Build()
 	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
@@ -192,6 +195,7 @@ func TestHandlePreUpgradeSnapshot_HardenedRequiresEgressRules(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
+		WithReturnManagedFields().
 		Build()
 	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
@@ -258,6 +262,7 @@ func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster, runningJob).
+		WithReturnManagedFields().
 		Build()
 	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
@@ -323,6 +328,7 @@ func TestHandlePreUpgradeSnapshot_JobCompleted(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster, completedJob).
+		WithReturnManagedFields().
 		Build()
 	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
@@ -402,6 +408,7 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(objs...).
+		WithReturnManagedFields().
 		Build()
 	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
@@ -469,6 +476,7 @@ func TestHandlePreUpgradeSnapshot_JobFailedRetriesOnFirstFailure(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster, failedJob).
+		WithReturnManagedFields().
 		Build()
 	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
@@ -594,6 +602,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(objs...).
+		WithReturnManagedFields().
 		Build()
 
 	// Mock Client Factory that uses MockClusterActions to avoid HTTP servers
