@@ -72,7 +72,7 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 					"Error: %v"
 			} else {
 				eventMsg = "Autopilot configuration requires JWT authentication. " +
-					"Enable JWT auth via spec.selfInit.bootstrapJWTAuth: true or configure JWT via SelfInit requests during initialization. " +
+					"Enable JWT auth via spec.selfInit.oidc.enabled: true or configure JWT via self-init requests during initialization. " +
 					"Alternatively, manually configure autopilot settings in spec.configuration.raft.autopilot. " +
 					"Error: %v"
 			}
