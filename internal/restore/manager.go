@@ -26,6 +26,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
@@ -664,12 +665,17 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 		return fmt.Errorf("failed to set owner reference: %w", err)
 	}
 
-	patchOpts := []client.PatchOption{
+	applyConfig, err := kube.ToApplyConfiguration(obj, m.client)
+	if err != nil {
+		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
+	}
+
+	applyOpts := []client.ApplyOption{
 		client.ForceOwnership,
 		client.FieldOwner(ssaFieldOwner),
 	}
 
-	if err := m.client.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
+	if err := m.client.Apply(ctx, applyConfig, applyOpts...); err != nil {
 		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
 	}
 

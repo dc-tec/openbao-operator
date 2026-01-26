@@ -23,6 +23,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	initmanager "github.com/dc-tec/openbao-operator/internal/init"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/raft"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/upgrade/bluegreen"
@@ -137,7 +138,12 @@ func patchWorkloadOwnedFields(ctx context.Context, c client.Client, logger logr.
 		},
 	}
 
-	if err := c.Status().Patch(ctx, applyCluster, client.Apply, client.FieldOwner("openbao-workload-controller")); err != nil {
+	applyConfig, err := kube.ToApplyConfiguration(applyCluster, c)
+	if err != nil {
+		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
+	}
+
+	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner("openbao-workload-controller")); err != nil {
 		return fmt.Errorf("failed to patch workload status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
 	logger.V(1).Info("Patched OpenBaoCluster workload status (SSA)", "reason", reason, "fieldOwner", "openbao-workload-controller")
@@ -187,7 +193,12 @@ func patchAdminOpsOwnedFields(ctx context.Context, c client.Client, logger logr.
 		},
 	}
 
-	if err := c.Status().Patch(ctx, applyCluster, client.Apply, client.FieldOwner("openbao-adminops-controller")); err != nil {
+	applyConfig, err := kube.ToApplyConfiguration(applyCluster, c)
+	if err != nil {
+		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
+	}
+
+	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner("openbao-adminops-controller")); err != nil {
 		return fmt.Errorf("failed to patch adminops status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
 	logger.V(1).Info("Patched OpenBaoCluster adminops status (SSA)", "reason", reason, "fieldOwner", "openbao-adminops-controller")

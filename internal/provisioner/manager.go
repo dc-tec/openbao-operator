@@ -18,6 +18,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	clusterpkg "github.com/dc-tec/openbao-operator/internal/cluster"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 )
 
 // Manager handles the provisioning of RBAC resources for tenant namespaces.
@@ -146,12 +147,17 @@ func createImpersonatedClient(baseConfig *rest.Config, scheme *runtime.Scheme, n
 // Unlike infra.applyResource, this does NOT set owner references since
 // tenant RBAC resources should not be garbage-collected with any single cluster.
 func (m *Manager) applyResource(ctx context.Context, obj client.Object) error {
-	patchOpts := []client.PatchOption{
+	applyConfig, err := kube.ToApplyConfiguration(obj, m.impersonatedClient)
+	if err != nil {
+		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
+	}
+
+	applyOpts := []client.ApplyOption{
 		client.ForceOwnership,
 		client.FieldOwner("openbao-provisioner"),
 	}
 
-	if err := m.impersonatedClient.Patch(ctx, obj, client.Apply, patchOpts...); err != nil {
+	if err := m.impersonatedClient.Apply(ctx, applyConfig, applyOpts...); err != nil {
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
 			return operatorerrors.WrapTransientKubernetesAPI(
 				fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))

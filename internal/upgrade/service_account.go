@@ -10,6 +10,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 )
 
 // EnsureUpgradeServiceAccount creates or updates the ServiceAccount for upgrade executor Jobs using
@@ -42,12 +43,17 @@ func EnsureUpgradeServiceAccount(ctx context.Context, c client.Client, cluster *
 		},
 	}
 
-	patchOpts := []client.PatchOption{
+	applyConfig, err := kube.ToApplyConfiguration(sa, c)
+	if err != nil {
+		return fmt.Errorf("failed to convert ServiceAccount to ApplyConfiguration: %w", err)
+	}
+
+	applyOpts := []client.ApplyOption{
 		client.ForceOwnership,
 		client.FieldOwner(fieldOwner),
 	}
 
-	if err := c.Patch(ctx, sa, client.Apply, patchOpts...); err != nil {
+	if err := c.Apply(ctx, applyConfig, applyOpts...); err != nil {
 		return fmt.Errorf("failed to ensure upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
 	}
 

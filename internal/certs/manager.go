@@ -28,6 +28,7 @@ import (
 	clusterpkg "github.com/dc-tec/openbao-operator/internal/cluster"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/kube"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
@@ -88,7 +89,13 @@ func (m *Manager) applySecret(ctx context.Context, secret *corev1.Secret) error 
 		APIVersion: "v1",
 		Kind:       "Secret",
 	}
-	return m.client.Patch(ctx, secret, client.Apply, client.FieldOwner("openbao-cert-manager"), client.ForceOwnership)
+
+	applyConfig, err := kube.ToApplyConfiguration(secret, m.client)
+	if err != nil {
+		return fmt.Errorf("failed to convert secret to ApplyConfiguration: %w", err)
+	}
+
+	return m.client.Apply(ctx, applyConfig, client.FieldOwner("openbao-cert-manager"), client.ForceOwnership)
 }
 
 // Reconcile ensures TLS assets are aligned with the desired state for the given OpenBaoCluster.
