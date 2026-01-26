@@ -145,7 +145,11 @@ func TestReconcileMaintenanceAnnotationsForPods(t *testing.T) {
 			for i := range tt.existingPods {
 				initObjs = append(initObjs, &tt.existingPods[i])
 			}
-			c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjs...).Build()
+			c := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(initObjs...).
+				WithReturnManagedFields().
+				Build()
 			mgr := &Manager{client: c}
 
 			err := mgr.reconcileMaintenanceAnnotationsForPods(context.Background(), logr.Discard(), tt.cluster, tt.revision)

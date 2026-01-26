@@ -35,6 +35,7 @@ func TestAPIServerDiscovery_DiscoverServiceNetworkCIDR(t *testing.T) {
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithObjects(kubernetesService).
+		WithReturnManagedFields().
 		Build()
 
 	discovery := newAPIServerDiscovery(k8sClient)
@@ -48,7 +49,10 @@ func TestAPIServerDiscovery_DiscoverServiceNetworkCIDR(t *testing.T) {
 }
 
 func TestDetectAPIServerInfo_ManualCIDRIsNormalized(t *testing.T) {
-	m := &Manager{client: fake.NewClientBuilder().WithScheme(testScheme).Build()}
+	m := &Manager{client: fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithReturnManagedFields().
+		Build()}
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Network: &openbaov1alpha1.NetworkConfig{
@@ -67,7 +71,10 @@ func TestDetectAPIServerInfo_ManualCIDRIsNormalized(t *testing.T) {
 }
 
 func TestDetectAPIServerInfo_InvalidManualCIDRErrors(t *testing.T) {
-	m := &Manager{client: fake.NewClientBuilder().WithScheme(testScheme).Build()}
+	m := &Manager{client: fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithReturnManagedFields().
+		Build()}
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Network: &openbaov1alpha1.NetworkConfig{
@@ -84,7 +91,10 @@ func TestDetectAPIServerInfo_InvalidManualCIDRErrors(t *testing.T) {
 
 func TestDetectAPIServerInfo_ManualEndpointIPsSkipDiscovery(t *testing.T) {
 	t.Setenv("KUBERNETES_SERVICE_HOST", ClusterIP)
-	m := &Manager{client: fake.NewClientBuilder().WithScheme(testScheme).Build()}
+	m := &Manager{client: fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithReturnManagedFields().
+		Build()}
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Network: &openbaov1alpha1.NetworkConfig{
@@ -103,7 +113,10 @@ func TestDetectAPIServerInfo_ManualEndpointIPsSkipDiscovery(t *testing.T) {
 }
 
 func TestDetectAPIServerInfo_ServiceGetNotFoundWithManualCIDRSucceeds(t *testing.T) {
-	m := &Manager{client: fake.NewClientBuilder().WithScheme(testScheme).Build()}
+	m := &Manager{client: fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithReturnManagedFields().
+		Build()}
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Network: &openbaov1alpha1.NetworkConfig{
@@ -122,7 +135,10 @@ func TestDetectAPIServerInfo_ServiceGetNotFoundWithManualCIDRSucceeds(t *testing
 }
 
 func TestDetectAPIServerInfo_ServiceGetNotFoundWithoutManualCIDRErrors(t *testing.T) {
-	m := &Manager{client: fake.NewClientBuilder().WithScheme(testScheme).Build()}
+	m := &Manager{client: fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithReturnManagedFields().
+		Build()}
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{},
 	}
@@ -141,7 +157,10 @@ func TestDetectAPIServerInfo_ServiceGetNotFoundWithoutManualCIDRErrors(t *testin
 }
 
 func TestDetectAPIServerInfo_InvalidManualEndpointIPEntryErrors(t *testing.T) {
-	k8sClient := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithReturnManagedFields().
+		Build()
 	m := &Manager{client: k8sClient}
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{

@@ -152,7 +152,9 @@ func TestEnsureUnsealSecret_CreatesSecret(t *testing.T) {
 
 func newTestClientWithObjects(t *testing.T, objs ...client.Object) client.Client {
 	t.Helper()
-	builder := fake.NewClientBuilder().WithScheme(testScheme)
+	builder := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithReturnManagedFields()
 	if len(objs) > 0 {
 		builder = builder.WithObjects(objs...)
 	}

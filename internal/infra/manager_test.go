@@ -3,6 +3,9 @@ package infra
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/dc-tec/openbao-operator/internal/constants"
@@ -10,6 +13,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,7 +45,25 @@ func newTestClient(t *testing.T) client.Client {
 	return fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithObjects(kubernetesService).
+		WithReturnManagedFields().
 		Build()
+}
+
+// getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
+func getFirstFoundEnvTestBinaryDir() string {
+	basePath := filepath.Join("..", "..", "bin", "k8s")
+	entries, err := filepath.Glob(filepath.Join(basePath, "*"))
+	if err != nil {
+		return ""
+	}
+	for _, entry := range entries {
+		if info, err := filepath.Abs(entry); err == nil {
+			if stat, err := os.Stat(info); err == nil && stat.IsDir() {
+				return info
+			}
+		}
+	}
+	return ""
 }
 
 // newTestStatefulSetSpec creates a minimal StatefulSetSpec for testing.
@@ -103,14 +125,44 @@ func createTLSSecretForTest(t *testing.T, k8sClient client.Client, cluster *open
 	}
 }
 
+func createClusterCRForTest(t *testing.T, k8sClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster) {
+	t.Helper()
+	ctx := context.Background()
+
+	// Envtest does not implicitly create namespaces.
+	nsName := cluster.GetNamespace()
+	if nsName != "" {
+		ns := &corev1.Namespace{}
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: nsName}, ns); err != nil {
+			if !apierrors.IsNotFound(err) {
+				t.Fatalf("failed to get namespace %q for test: %v", nsName, err)
+			}
+			if err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}); err != nil {
+				t.Fatalf("failed to create namespace %q for test: %v", nsName, err)
+			}
+		}
+	}
+
+	toCreate := cluster.DeepCopy()
+	toCreate.Status = openbaov1alpha1.OpenBaoClusterStatus{}
+	if err := k8sClient.Create(ctx, toCreate); err != nil {
+		t.Fatalf("failed to create OpenBaoCluster for test: %v", err)
+	}
+
+	cluster.SetUID(toCreate.GetUID())
+	cluster.SetResourceVersion(toCreate.GetResourceVersion())
+}
+
 // Integration tests that verify the full Reconcile and Cleanup flows
 
 func TestReconcileCreatesAllResources(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-full", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-full", ns)
 	cluster.Status.Initialized = true
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
 	createTLSSecretForTest(t, k8sClient, cluster)
@@ -178,16 +230,19 @@ func TestReconcileCreatesAllResources(t *testing.T) {
 }
 
 func TestReconcile_ACMEMode_CreatesChallengeService(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("infra-acme", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-acme", ns)
 	cluster.Status.Initialized = true
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	acmeDomain := fmt.Sprintf("%s-acme.%s.svc", cluster.Name, cluster.Namespace)
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://example.invalid/acme",
-		Domains:      []string{"infra-acme-acme.default.svc"},
+		Domains:      []string{acmeDomain},
 	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
@@ -216,16 +271,19 @@ func TestReconcile_ACMEMode_CreatesChallengeService(t *testing.T) {
 }
 
 func TestReconcile_ACMEMode_PreflightRejectsGatewayTermination(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("acme-gw", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("acme-gw", ns)
 	cluster.Status.Initialized = true
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	acmeDomain := fmt.Sprintf("%s-acme.%s.svc", cluster.Name, cluster.Namespace)
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://example.invalid/acme",
-		Domains:      []string{"acme-gw-acme.default.svc"},
+		Domains:      []string{acmeDomain},
 	}
+	createClusterCRForTest(t, k8sClient, cluster)
 	cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
 		Enabled:        true,
 		TLSPassthrough: false,
@@ -247,10 +305,11 @@ func TestReconcile_ACMEMode_PreflightRejectsGatewayTermination(t *testing.T) {
 }
 
 func TestReconcile_ACMEMode_PreflightRejectsUnresolvableDomainForPrivateCA(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-	cluster := newMinimalCluster("acme-dns", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("acme-dns", ns)
 	cluster.Status.Initialized = true
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
@@ -260,6 +319,7 @@ func TestReconcile_ACMEMode_PreflightRejectsUnresolvableDomainForPrivateCA(t *te
 	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
 		ACMECARoot: "/etc/bao/seal-creds/ca.crt",
 	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
@@ -297,12 +357,12 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			k8sClient, scheme := envtestClientForPackage(t)
+			manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
-			k8sClient := newTestClient(t)
-			manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
-
-			cluster := newMinimalCluster("infra-delete", "default")
+			ns := testNamespace(t)
+			cluster := newMinimalCluster("infra-delete", ns)
+			createClusterCRForTest(t, k8sClient, cluster)
 			createTLSSecretForTest(t, k8sClient, cluster)
 
 			ctx := context.Background()
@@ -318,6 +378,14 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 					Namespace: cluster.Namespace,
 					Labels: map[string]string{
 						constants.LabelOpenBaoCluster: cluster.Name,
+					},
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					Resources: corev1.VolumeResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceStorage: resource.MustParse("1Gi"),
+						},
 					},
 				},
 			}
@@ -355,28 +423,18 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 // they will be automatically deleted when the OpenBaoCluster is deleted.
 // Cleanup() only handles PVC deletion based on policy.
 func TestCleanupReliesOnGarbageCollection(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
-	cluster := newMinimalCluster("infra-gc-cleanup", "default")
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-gc-cleanup", ns)
 	cluster.Status.Initialized = true
 	cluster.APIVersion = apiVersion
 	cluster.Kind = kind
 
 	ctx := context.Background()
-
-	if err := k8sClient.Create(ctx, cluster); err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
-	}
-
-	// Re-fetch to get the UID
-	if err := k8sClient.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      cluster.Name,
-	}, cluster); err != nil {
-		t.Fatalf("failed to get cluster: %v", err)
-	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	createTLSSecretForTest(t, k8sClient, cluster)
 
@@ -476,8 +534,8 @@ func TestCleanupReliesOnGarbageCollection(t *testing.T) {
 // OpenBaoClusters are uniquely named using the cluster name prefix, preventing cross-tenant
 // sharing of Secrets, ConfigMaps, StatefulSets, and Services (FR-MT-05).
 func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 	ctx := context.Background()
 
 	// Create two clusters with different names in the same namespace
@@ -485,6 +543,8 @@ func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 	cluster1.Status.Initialized = true
 	cluster2 := newMinimalCluster("tenant-beta", "shared-ns")
 	cluster2.Status.Initialized = true
+	createClusterCRForTest(t, k8sClient, cluster1)
+	createClusterCRForTest(t, k8sClient, cluster2)
 	createTLSSecretForTest(t, k8sClient, cluster1)
 	createTLSSecretForTest(t, k8sClient, cluster2)
 
@@ -556,8 +616,8 @@ func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 // TestMultiTenancyNamespaceIsolation verifies that resources are created in the correct
 // namespace and that clusters in different namespaces are isolated (FR-MT-01, FR-MT-02).
 func TestMultiTenancyNamespaceIsolation(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 	ctx := context.Background()
 
 	// Create two clusters with the same name but in different namespaces
@@ -565,6 +625,8 @@ func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 	cluster1.Status.Initialized = true
 	cluster2 := newMinimalCluster("same-cluster-name", "namespace-b")
 	cluster2.Status.Initialized = true
+	createClusterCRForTest(t, k8sClient, cluster1)
+	createClusterCRForTest(t, k8sClient, cluster2)
 	createTLSSecretForTest(t, k8sClient, cluster1)
 	createTLSSecretForTest(t, k8sClient, cluster2)
 
@@ -621,12 +683,13 @@ func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 // TestMultiTenancyResourceLabeling verifies that all resources are labeled with the
 // cluster name to enable proper identification and deletion.
 func TestMultiTenancyResourceLabeling(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 	ctx := context.Background()
 
 	cluster := newMinimalCluster("labeled-cluster", "labeling-test")
 	cluster.Status.Initialized = true
+	createClusterCRForTest(t, k8sClient, cluster)
 	createTLSSecretForTest(t, k8sClient, cluster)
 
 	spec := newTestStatefulSetSpec(cluster)
@@ -673,8 +736,8 @@ func TestMultiTenancyResourceLabeling(t *testing.T) {
 }
 
 func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
-	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
 	ctx := context.Background()
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
@@ -685,18 +748,7 @@ func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 	cluster.APIVersion = apiVersion
 	cluster.Kind = kind
 
-	// Create the cluster resource first
-	if err := k8sClient.Create(ctx, cluster); err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
-	}
-
-	// Re-fetch to get the UID
-	if err := k8sClient.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      cluster.Name,
-	}, cluster); err != nil {
-		t.Fatalf("failed to get cluster: %v", err)
-	}
+	createClusterCRForTest(t, k8sClient, cluster)
 
 	createTLSSecretForTest(t, k8sClient, cluster)
 

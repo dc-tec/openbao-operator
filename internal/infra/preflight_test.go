@@ -195,7 +195,11 @@ func TestValidateGatewayPassthroughListener(t *testing.T) {
 			if tt.gateway != nil {
 				initObjs = append(initObjs, tt.gateway)
 			}
-			c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjs...).Build()
+			c := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(initObjs...).
+				WithReturnManagedFields().
+				Build()
 			mgr := NewManager(c, scheme, "op-ns", "", nil, "")
 
 			err := mgr.validateGatewayPassthroughListener(context.Background(), tt.cluster)
@@ -296,7 +300,11 @@ func TestRunACMEPreflight(t *testing.T) {
 			if tt.gateway != nil {
 				initObjs = append(initObjs, tt.gateway)
 			}
-			c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjs...).Build()
+			c := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(initObjs...).
+				WithReturnManagedFields().
+				Build()
 			mgr := NewManager(c, scheme, "op-ns", "", nil, "")
 
 			err := mgr.runACMEPreflight(context.Background(), logr.Discard(), tt.cluster)
