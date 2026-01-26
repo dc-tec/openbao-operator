@@ -17,7 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -48,13 +48,13 @@ const (
 type Manager struct {
 	client                client.Client
 	scheme                *runtime.Scheme
-	recorder              record.EventRecorder
+	recorder              events.EventRecorder
 	operatorImageVerifier interfaces.ImageVerifier
 	Platform              string
 }
 
 // NewManager creates a new restore Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme, recorder record.EventRecorder, operatorImageVerifier interfaces.ImageVerifier, platform string) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, recorder events.EventRecorder, operatorImageVerifier interfaces.ImageVerifier, platform string) *Manager {
 	return &Manager{
 		client:                c,
 		scheme:                scheme,
@@ -249,7 +249,7 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 // handleLockOverride records an event and sets a condition when a lock override occurs.
 func (m *Manager) handleLockOverride(restore *openbaov1alpha1.OpenBaoRestore, lockBefore *openbaov1alpha1.OperationLockStatus) {
 	if m.recorder != nil {
-		m.recorder.Eventf(restore, corev1.EventTypeWarning, "OperationLockOverride",
+		m.recorder.Eventf(restore, nil, corev1.EventTypeWarning, "OperationLockOverride", "",
 			"OverrideOperationLock used; cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder)
 	}
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{

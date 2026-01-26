@@ -23,7 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -39,7 +39,7 @@ type OpenBaoRestoreReconciler struct {
 	client.Client
 	Scheme                *runtime.Scheme
 	RestoreManager        *restore.Manager
-	Recorder              record.EventRecorder
+	Recorder              events.EventRecorder
 	OperatorImageVerifier interfaces.ImageVerifier
 	Platform              string
 }
@@ -99,7 +99,7 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Initialize the restore manager
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("openbaorestore")
+		r.Recorder = mgr.GetEventRecorder("openbaorestore")
 	}
 	if r.OperatorImageVerifier == nil {
 		r.OperatorImageVerifier = security.NewImageVerifier(log.Log.WithName("openbaorestore-image-verifier"), r.Client, nil)

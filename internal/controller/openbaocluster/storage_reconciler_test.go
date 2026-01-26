@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -57,7 +57,7 @@ func TestStorageReconciler_ExpandsPVCs(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
 	r := &storageReconciler{
 		client:   c,
-		recorder: record.NewFakeRecorder(10),
+		recorder: events.NewFakeRecorder(10),
 	}
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
@@ -105,7 +105,7 @@ func TestStorageReconciler_RejectsShrink(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
 	r := &storageReconciler{
 		client:   c,
-		recorder: record.NewFakeRecorder(10),
+		recorder: events.NewFakeRecorder(10),
 	}
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
@@ -160,7 +160,7 @@ func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 	r := &storageResizeRestartReconciler{
 		client:    c,
 		apiReader: c,
-		recorder:  record.NewFakeRecorder(10),
+		recorder:  events.NewFakeRecorder(10),
 		clientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (openbao.ClusterActions, error) {
 			return &openbao.MockClusterActions{
 				IsLeaderFunc: func(ctx context.Context) (bool, error) { return false, nil },
@@ -229,7 +229,7 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 	r := &storageResizeRestartReconciler{
 		client:    c,
 		apiReader: c,
-		recorder:  record.NewFakeRecorder(10),
+		recorder:  events.NewFakeRecorder(10),
 		clientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (openbao.ClusterActions, error) {
 			return &openbao.MockClusterActions{
 				IsLeaderFunc: func(ctx context.Context) (bool, error) { return true, nil },
@@ -282,7 +282,7 @@ func TestStorageResizeRestartReconciler_RequiresMaintenance(t *testing.T) {
 	r := &storageResizeRestartReconciler{
 		client:    c,
 		apiReader: c,
-		recorder:  record.NewFakeRecorder(10),
+		recorder:  events.NewFakeRecorder(10),
 	}
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)

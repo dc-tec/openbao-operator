@@ -29,7 +29,7 @@ func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context
 		if !shouldEmitSecurityWarning(cluster.Annotations, annotationKey, now) {
 			return
 		}
-		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, reason, "%s", message)
+		r.Recorder.Eventf(cluster, nil, corev1.EventTypeWarning, reason, "", "%s", message)
 		annotationUpdates[annotationKey] = now.Format(time.RFC3339Nano)
 	}
 

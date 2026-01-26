@@ -10,7 +10,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -38,7 +38,7 @@ type infraReconciler struct {
 	operatorImageVerifier   interfaces.ImageVerifier
 	verifyImageFunc         func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error)
 	verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, verifier interfaces.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
-	recorder                record.EventRecorder
+	recorder                events.EventRecorder
 	admissionStatus         *admission.Status
 	platform                string
 	smartClientConfig       openbao.ClientConfig
@@ -112,7 +112,7 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 
 	logger.Error(err, opts.failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
 	if opts.emitEventOnWarn && r.recorder != nil {
-		r.recorder.Eventf(cluster, corev1.EventTypeWarning, opts.failureReason, "%s but proceeding due to Warn policy: %v", opts.failureMessagePrefix, err)
+		r.recorder.Eventf(cluster, nil, corev1.EventTypeWarning, opts.failureReason, "", "%s but proceeding due to Warn policy: %v", opts.failureMessagePrefix, err)
 	}
 	return "", nil
 }
