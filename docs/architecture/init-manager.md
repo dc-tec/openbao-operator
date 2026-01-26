@@ -27,11 +27,10 @@ sequenceDiagram
     end
 
     Note over Op, Secret: Phase 2: Initialize
-    Op->>Bao: PUT /sys/init
-    Bao-->>Op: Returns {root_token, keys}
+    Op->>Bao: PUT /v1/sys/init
+    Bao-->>Op: Returns {root_token, unseal_keys_b64}
     
     Op->>Secret: Store Root Token
-    Op->>Secret: Store Unseal Key (if Static)
     
     Note over Op, SS: Phase 3: Scale
     Op->>SS: Service now Initialized
@@ -56,10 +55,10 @@ sequenceDiagram
     Once `pod-0` is running, the InitManager takes over:
 
     1.  **Detection:** Checks internal status. If it finds `openbao-initialized=true` label or receives `200 OK` from `/sys/health`, it assumes adoption of an existing cluster and skips to Phase 3.
-    2.  **Execution:** If uninitialized, it calls `sys/init`.
+    2.  **Execution:** If uninitialized, it calls `PUT /v1/sys/init`.
     3.  **Security:**
-        -   The Root Token is **encrypted** and stored immediately in a Secret.
-        -   The Unseal Key (if using Static mode) is stored in a separate Secret.
+        -   The root token is stored immediately in a Secret (`<cluster>-root-token`) and is never written to logs.
+        -   The auto-unseal key is handled separately by the InfrastructureManager (for `spec.unseal.type=static`).
         -   !!! warning "Security"
             The initialization response is held in memory only for the duration of the request and is **NEVER logged**.
 
@@ -70,6 +69,7 @@ sequenceDiagram
     Once initialization is confirmed (and the root token is safely stored):
 
     1.  The Operator sets `status.initialized = true`.
+        When self-init is enabled, it also sets `status.selfInitialized = true` and no root token Secret exists (the root token was auto-revoked).
     2.  The InfrastructureManager observes this and updates the StatefulSet to the full `spec.replicas`.
     3.  New pods join the existing leader (Pod-0) via the `retry_join` configuration.
 

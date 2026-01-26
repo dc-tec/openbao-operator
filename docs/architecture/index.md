@@ -55,15 +55,20 @@ The operator supports two architectural modes:
 graph TD
     User([User]) -->|CRD| API[Kubernetes API]
     
-    subgraph "Operator Controller Manager"
+    subgraph ControllerMgr ["Controller Manager Pod"]
         Workload[Workload Ctrl]
         AdminOps[AdminOps Ctrl]
         Status[Status Ctrl]
+        Restore[OpenBaoRestore Ctrl]
+    end
+
+    subgraph ProvisionerMgr ["Provisioner Pod"]
         Provisioner[Provisioner Ctrl]
     end
 
     API -->|Watch| Operator[Operator Manager]
-    Operator --> Workload & AdminOps & Status & Provisioner
+    Operator --> Workload & AdminOps & Status & Restore
+    API -->|Watch| ProvisionerMgr
     
     Workload -->|Reconcile| STS[StatefulSet]
     Workload -->|Reconcile| Svc[Services]
@@ -71,6 +76,14 @@ graph TD
     
     STS -->|Run| Pods[OpenBao Pods]
     Pods -->|Data| PVC[Persistent Volumes]
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class User,API read;
+    class Operator,Workload,AdminOps,Status,Restore,Provisioner,ProvisionerMgr process;
+    class STS,Svc,ObjStore,Pods,PVC write;
 ```
 
 ### 1.3 Component Interaction

@@ -29,13 +29,11 @@ flowchart TB
     Yield --"Egress (53)"--> DNS
     Yield --"Egress (8201)"--> Peer
 
-    %% Styling
-    classDef external fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef secure fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef blocked fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
 
-    class Operator,K8sAPI,DNS,Peer external;
-    class Yield secure;
+    class Operator,K8sAPI,DNS,Peer read;
+    class Yield write;
 ```
 
 ## Traffic Rules

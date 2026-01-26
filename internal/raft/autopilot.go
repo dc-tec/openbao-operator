@@ -300,7 +300,7 @@ func (m *Manager) getJWTToken(logger logr.Logger) (string, error) {
 // handleJWTAuthError provides helpful error messages for common JWT auth failures.
 func (m *Manager) handleJWTAuthError(cluster *openbaov1alpha1.OpenBaoCluster, err error) error {
 	if strings.Contains(err.Error(), "status 404") {
-		guidance := "Enable JWT auth via spec.selfInit.bootstrapJWTAuth: true or configure JWT via SelfInit requests"
+		guidance := "Enable JWT auth via spec.selfInit.oidc.enabled: true or configure JWT via self-init requests"
 		if cluster.Status.Initialized {
 			guidance = "Manually configure JWT authentication via OpenBao API/CLI"
 		}

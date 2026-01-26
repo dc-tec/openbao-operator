@@ -6,7 +6,7 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
 ## Prerequisites
 
 !!! tip "Requirements"
-    - **Kubernetes**: v1.29+ (see [Compatibility](../../reference/compatibility.md))
+    - **Kubernetes**: v1.33+ (see [Compatibility](../../reference/compatibility.md))
     - **kubectl**: Installed and configured
     - **Permissions**: Cluster-admin access for CRDs, RBAC, and ValidatingAdmissionPolicies
     - **Helm** (optional): v3.12+ for Helm-based installation
@@ -37,9 +37,9 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
     helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
       --namespace openbao-operator-system \
       --create-namespace \
-      --set image.tag=v1.0.0 \                          # (1)!
-      --set controller.replicas=2 \                     # (2)!
-      --set controller.resources.limits.memory=512Mi    # (3)!
+      --set image.tag=v1.0.0 \
+      --set controller.replicas=2 \
+      --set controller.resources.limits.memory=512Mi
     ```
 
     1. Pin to a specific version for production deployments.

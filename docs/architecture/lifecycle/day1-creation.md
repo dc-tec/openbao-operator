@@ -19,10 +19,11 @@ Day 1 involves the instantiation and initialization of the OpenBao cluster itsel
        - The init container appends the self-init `initialize` stanzas (rendered from `spec.selfInit.requests[]`) to the rendered config for pod-0 only.
     6. Infrastructure Manager creates the StatefulSet with **1 replica initially**.
     7. OpenBao automatically initializes itself on first start using the `initialize` stanzas:
-       - Auto-unseals using the static key.
+       - Auto-unseals using the configured seal (static or external KMS).
        - Executes all configured `initialize` requests (audit, auth, secrets, policies).
        - **The root token is NOT returned and is automatically revoked after use.**
-    8. Init Manager detects initialization via Kubernetes service registration labels (preferred) and sets `Status.Initialized = true`.
+    8. Init Manager detects initialization via Kubernetes service registration labels (preferred) and sets `status.initialized = true`.
+       It also sets `status.selfInitialized = true`.
     9. Infrastructure Manager scales the StatefulSet to the desired `spec.replicas`.
     10. Additional OpenBao pods start, auto-unseal, and join the Raft cluster.
 
@@ -73,7 +74,7 @@ Day 1 involves the instantiation and initialization of the OpenBao cluster itsel
        - Falls back to the HTTP health endpoint (`GET /v1/sys/health`) when labels are not yet available.
        - If not, calls the HTTP initialization endpoint (`PUT /v1/sys/init`) against pod-0 to initialize the cluster.
        - Stores the root token in a per-cluster Secret (`<cluster>-root-token`).
-       - Sets `Status.Initialized = true`.
+       - Sets `status.initialized = true`.
     8. Once initialized, Infrastructure Manager scales the StatefulSet to the desired `spec.replicas`.
     9. Additional OpenBao pods start, auto-unseal using the static key, join the Raft cluster via `retry_join`, and become Ready.
 

@@ -32,7 +32,7 @@ Welcome! We are excited that you are interested in contributing to the OpenBao O
     Create a new feature branch from `main` for your changes.
 
     ```bash
-    git checkour -b feature/my-awesome-feature
+    git checkout -b feature/my-awesome-feature
     ```
 
 - :material-test-tube: **4. Test & Submit**

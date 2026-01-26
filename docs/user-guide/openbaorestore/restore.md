@@ -161,9 +161,9 @@ How the Restore Job authenticates to the OpenBao cluster leader.
         (`controller.extraEnv` and `provisioner.extraEnv` in Helm).
 
     !!! note "JWT bootstrap"
-        When `spec.selfInit.bootstrapJWTAuth` is enabled, the OpenBao Operator can create a restore role
+        When `spec.selfInit.oidc.enabled` is `true`, the OpenBao Operator can create a restore role
         bound to the restore ServiceAccount. Enable it on the cluster with `spec.restore.jwtAuthRole`,
-        then set `spec.jwtAuthRole` on the `OpenBaoRestore` to the same role name.
+        then set `OpenBaoRestore.spec.jwtAuthRole` to the same role name.
 
 === "Static Token"
 

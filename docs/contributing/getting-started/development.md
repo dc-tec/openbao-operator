@@ -6,7 +6,7 @@ This guide covers everything you need to build, run, and test the OpenBao Operat
 
 Ensure you have the following installed before starting:
 
-!!! check "Required Tools"
+!!! tip "Required Tools"
     - [x] **Go** v1.25.5+ (`go version`)
     - [x] **Docker** v28.3.3+ (`docker version`)
     - [x] **kubectl** v1.33+ (`kubectl version --client`)

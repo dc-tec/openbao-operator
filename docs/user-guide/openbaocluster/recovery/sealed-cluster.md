@@ -26,6 +26,16 @@ graph TD
     FixNet --> ManualTry
     
     ManualTry -- "Still Fails" --> ManualUnseal["Manual Unseal (Emergency)"]
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Start,Done read;
+    class CheckStatus,IdentifyMode process;
+    class CheckSecret,CheckLogs,FixIAM,FixNet,ManualTry process;
+    class CreateSecret,ManualUnseal security;
 ```
 
 ---
@@ -36,7 +46,7 @@ Identify your unseal mode in the `OpenBaoCluster` configuration:
 
 ```yaml
 spec:
-  unsealConfig:
+  unseal:
     type: awskms # or static, gcpckms, etc.
 ```
 

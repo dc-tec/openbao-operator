@@ -35,6 +35,15 @@ graph TD
         RBAC_A -.->|Block| Secret_A
         RBAC_B -.->|Block| Secret_B
     end
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Admin,UserA,UserB process;
+    class Pod_A,Pod_B read;
+    class RBAC_A,RBAC_B,NetPol_A,NetPol_B,Secret_A,Secret_B security;
 ```
 
 ## Security Layers

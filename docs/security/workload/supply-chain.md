@@ -20,14 +20,13 @@ flowchart LR
     
     Operator --"4. Mutate to Digest"--> Cluster
     
-    %% Styling
-    classDef storage fill:transparent,stroke:#f59e0b,stroke-width:2px,color:#fff;
-    classDef logic fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    classDef external fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    
-    class Registry,Cluster storage;
-    class Operator logic;
-    class Rekor external;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Registry,Rekor read;
+    class Operator process;
+    class Cluster write;
 ```
 
 ## Configuration

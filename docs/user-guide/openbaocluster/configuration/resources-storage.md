@@ -18,6 +18,12 @@ graph TD
     SS -->|Mounts| PVC[PVC: data]
     SS -->|Mounts| CM
     SS -->|Mounts| SEC
+
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+
+    class CR read;
+    class SS,SVC,CM,SEC,NP,PVC write;
 ```
 
 ## Core Workload

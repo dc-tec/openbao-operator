@@ -37,11 +37,13 @@ flowchart TB
     Bao -->|"DNS (53)"| DNS
     Bao -->|"K8s (443/6443)"| API
 
-    %% Styling
-    style Bao fill:transparent,stroke:#00e676,stroke-width:2px
-    style Op fill:transparent,stroke:#2979ff,stroke-width:2px
-    style GW fill:transparent,stroke:#ffa726,stroke-width:2px
-    style API fill:transparent,stroke:#ab47bc,stroke-width:2px
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class Bao write;
+    class Op,GW process;
+    class Client,API,DNS read;
 ```
 
 ### Default Rules Reference

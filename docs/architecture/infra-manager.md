@@ -29,6 +29,8 @@ graph TD
     class UpdateCM,UpdateSS,Rollout write;
 ```
 
+Config changes are tracked via the `openbao.org/config-hash` annotation on the StatefulSet Pod template, which triggers a safe rollout.
+
 ## 2. Configuration Generation
 
 We do not use a static ConfigMap. We generate it dynamically from the Spec.
@@ -126,5 +128,5 @@ sequenceDiagram
 ## 5. Reconciliation Semantics
 
 - **OwnerReferences**: All resources (ConfigMaps, Services, StatefulSets) are owned by the `OpenBaoCluster` CR. Deleting the CR deletes the cluster.
-- **Least Privilege**: The controller only watches `OpenBaoCluster`. It does not watch child resources (except via OwnerReference garbage collection) to reduce API load.
+- **Least Privilege**: In multi-tenant mode, the controller avoids list/watch on tenant resources and uses direct API reads plus requeue-based polling for child objects.
 - **Discovery**: Uses `leader_tls_servername` to support strict mTLS verification between peers.

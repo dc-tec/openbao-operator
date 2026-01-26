@@ -11,8 +11,8 @@ Day 2 operations cover the ongoing management of the cluster, including version 
 
     1. User configures upgrade executor:
        - Set `spec.upgrade.executorImage` (optional, can be inferred)
-       - Set `spec.upgrade.jwtAuthRole` (optional, inferred from `selfInit.oidc`) or configure manual role
-    2. User updates `OpenBaoCluster.Spec.Version` and/or `Spec.Image`.
+       - Set `spec.upgrade.jwtAuthRole` (optional, inferred from `spec.selfInit.oidc.enabled`) or configure manual role
+    2. User updates `spec.version` and/or `spec.image` (strategy is configured via `spec.upgrade.strategy`).
     3. Upgrade Manager (adminops controller) detects version drift and performs pre-upgrade validation:
        - Validates semantic versioning (blocks downgrades by default).
        - Verifies all pods are Ready and quorum is healthy.
@@ -22,8 +22,8 @@ Day 2 operations cover the ongoing management of the cluster, including version 
        - Iterates pods in reverse ordinal order.
        - Runs an upgrade Job to perform leader step-down before updating the leader pod.
        - Waits for pod Ready, OpenBao health, and Raft sync after each update.
-    5. Upgrade progress is persisted in `Status.Upgrade`, allowing resumption after Operator restart.
-    6. On completion, `Status.CurrentVersion` is updated and `Status.Upgrade` is cleared.
+    5. Upgrade progress is persisted in `status.upgrade` (rolling) or `status.blueGreen` (blue/green), allowing resumption after Operator restart.
+    6. On completion, `status.currentVersion` is updated and `status.upgrade` is cleared (rolling), or `status.blueGreen.phase` returns to `Idle` (blue/green).
 
     !!! note "Upgrade Policy"
         Upgrades are designed to be safe and resumable. Downgrades are blocked by default. If an upgrade fails, it halts and sets `Degraded=True`; automated rollback is not supported. Root tokens are not used for upgrade operations.

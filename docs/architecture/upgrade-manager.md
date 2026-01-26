@@ -7,7 +7,7 @@
 
 ## 1. Upgrade Strategies
 
-The Manager supports two distinct strategies, controlled by `spec.updateStrategy`.
+The Manager supports two distinct strategies, controlled by `spec.upgrade.strategy`.
 
 === "Rolling Update (Default)"
 
@@ -28,7 +28,7 @@ The Manager supports two distinct strategies, controlled by `spec.updateStrategy
         WaitTransfer --> Update
         
         Update --> WaitReady[Wait for Pod Ready]
-        WaitReady --> WaitHealth[Wait for Vault Health]
+        WaitReady --> WaitHealth[Wait for OpenBao Health]
         WaitHealth --> Loop
         
         Loop -- No --> Done[Upgrade Complete]
@@ -108,8 +108,8 @@ The Manager supports two distinct strategies, controlled by `spec.updateStrategy
 
 Upgrades are designed to survive Operator restarts. All state is stored in `Status`:
 
-- **Rolling:** Tracks `Status.Upgrade.CurrentPartition` and `CompletedPods`.
-- **Blue/Green:** Tracks `Status.BlueGreen.Phase` and `JobFailureCount`.
+- **Rolling:** Tracks `status.upgrade.currentPartition` and `status.upgrade.completedPods`.
+- **Blue/Green:** Tracks `status.blueGreen.phase` and `status.blueGreen.jobFailureCount`.
 
 If the Operator crashes, it reads the Status on startup and **resumes** exactly where it left off.
 

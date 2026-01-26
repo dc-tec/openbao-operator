@@ -7,7 +7,8 @@ Securing an OpenBao cluster involves careful management of initialization tokens
 During cluster initialization (bootstrap), OpenBao generates an initial **Root Token** with unlimited privileges. Handling this token securely is critical.
 
 !!! warning "Root Token Risk"
-    By default, the Operator stores the root token in a Kubernetes Secret named `<cluster>-root-token`. This is convenient for development but risky for production.
+    When self-init is disabled, the Operator stores the root token in a Kubernetes Secret named `<cluster>-root-token`.
+    This is convenient for development but risky for production.
 
 ### Recommended: Self-Initialization
 

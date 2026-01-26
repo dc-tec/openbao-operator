@@ -7,9 +7,9 @@
 
 | Feature | :material-shield-check: Hardened (Production) | :material-test-tube: Development (Testing) |
 | :--- | :--- | :--- |
-| **Root Token** | **Never Generated** | Stored in Secret |
-| **Unseal Keys** | External KMS Required | Stored in Secret |
-| **TLS** | External / ACME Required | Operator Managed Allowed |
+| **Root Token** | Auto-revoked (not stored in a Secret) | Stored in a Secret when self-init is disabled |
+| **Unseal Keys** | External KMS required | Defaults to static key stored in a Secret |
+| **TLS** | External / ACME required | Operator-managed allowed |
 | **Replicas** | Minimum 3 (HA Required) | Any (1+) |
 | **Self-Init** | Required (`enabled=true`) | Optional |
 | **Admission Check** | Strict Validation | Relaxed Validation |
@@ -20,14 +20,14 @@
 === ":material-shield-check: Hardened Profile"
 
     !!! success "Production Ready"
-        The `hardened` profile is **MANDATORY** for all production deployments. It enforces a "Secure by Default" posture that eliminates Root Tokens and ensures strong encryption.
+        The `Hardened` profile is **MANDATORY** for production deployments. It enforces a "secure by default" posture that prevents root-token Secret creation and requires strong encryption.
 
     To use this profile, your `OpenBaoCluster` must meet these requirements:
 
     1.  **High Availability:** You must set `spec.replicas` to at least `3` for Raft quorum.
     2.  **External KMS:** You must provide a KMS key (AWS, GCP, Azure, or Vault Transit) for auto-unseal.
-    3.  **Valid TLS:** You must provide valid TLS certificates (via `cert-manager` or external secret); `tlsSkipVerify` is rejected.
-    4.  **Self-Initialization:** The Operator must drive the initialization process to ensure no humans handle initial secrets.
+    3.  **Valid TLS:** You must provide valid TLS certificates; insecure TLS verification skips are rejected.
+    4.  **Self-Initialization:** You must enable self-init to avoid persisting a root token Secret.
 
     ```yaml
     apiVersion: openbao.org/v1alpha1
@@ -35,12 +35,15 @@
     metadata:
       name: production-cluster
     spec:
-      profile: hardened
-      replicas: 3  # Minimum 3 for HA
+      profile: Hardened
+      replicas: 3 # Minimum 3 for HA
+      tls:
+        enabled: true
+        mode: External # or ACME
       selfInit:
         enabled: true
       unseal:
-        mode: awskms # or gcpckms, azurekeyvault
+        type: awskms # or gcpckms, azurekeyvault, transit
     ```
 
 === ":material-test-tube: Development Profile"
@@ -56,14 +59,17 @@
 
     **Key Behaviors:**
     
-    -   **Root Token:** Generated and stored in `<cluster-name>-root-token`.
-    -   **Unseal Keys:** Generated and stored in `<cluster-name>-unseal-key` (unless KMS is configured).
+    -   **Root Token:** Stored in `<cluster-name>-root-token` when self-init is disabled.
+    -   **Unseal Keys:** Stored in `<cluster-name>-unseal-key` when `spec.unseal.type` is `static` (default).
     -   **Status Warning:** The Operator sets `ConditionSecurityRisk=True` on the cluster status.
+
+    !!! tip "Prefer Self-Init"
+        Even in Development, enabling `spec.selfInit.enabled: true` avoids root token Secret creation. Do not store raw secrets in Git.
 
 ## Guidance
 
 !!! tip "Migration Path"
-    Teams often start with **Development** for initial exploration. When moving to **Staging** or **Production**, you should create a *new* cluster with the **Hardened** profile rather than trying to converting an existing Development cluster. Trust roots established in Development are typically not secure enough for Production.
+    Teams often start with **Development** for initial exploration. When moving to **Staging** or **Production**, create a *new* cluster with the **Hardened** profile rather than trying to convert an existing Development cluster. Trust roots established in Development are typically not secure enough for Production.
 
 ## See Also
 
