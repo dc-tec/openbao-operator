@@ -193,8 +193,8 @@ spec:
   #   #   namespace: openbaocluster-full
 
   # Self-initialization configuration (required for Hardened profile)
-  # JWT authentication bootstrap (opt-in)
-  # Set bootstrapJWTAuth: true to have the operator automatically configure
+  # OIDC bootstrap (opt-in)
+  # Set spec.selfInit.oidc.enabled: true to have the operator automatically configure
   # JWT auth, OIDC discovery, operator policy/role, and backup/upgrade policies/roles.
   # Backup and upgrade policies/roles are also automatically created when
   # spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are configured

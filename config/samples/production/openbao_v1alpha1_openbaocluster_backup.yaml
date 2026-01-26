@@ -50,7 +50,7 @@ spec:
   selfInit:
     enabled: true
     requests:
-      # Enable JWT authentication (or opt-in to bootstrap via spec.selfInit.bootstrapJWTAuth: true)
+      # Enable JWT authentication (or opt-in to bootstrap via spec.selfInit.oidc.enabled: true)
       - name: enable-jwt-auth
         operation: update
         path: sys/auth/jwt

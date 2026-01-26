@@ -96,6 +96,8 @@ spec:
   # Self-initialization (required for Hardened profile)
   selfInit:
     enabled: true
+    oidc:
+      enabled: true
     requests:
       # Enable file audit logging
       - name: enable-file-audit
@@ -105,7 +107,7 @@ spec:
           type: file
           fileOptions:
             filePath: /var/log/openbao/audit.log
-      # JWT authentication bootstrap (opt-in via bootstrapJWTAuth: true)
+      # OIDC bootstrap (opt-in via spec.selfInit.oidc.enabled: true)
       # Backup and upgrade policies/roles are also automatically created when
       # spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are configured
       # Create an admin policy
