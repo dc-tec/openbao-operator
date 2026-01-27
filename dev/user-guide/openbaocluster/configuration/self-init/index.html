@@ -1097,10 +1097,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#jwt-bootstrap-optional" class="md-nav__link">
+  <a href="#jwt-bootstrap-for-operator-optional" class="md-nav__link">
     <span class="md-ellipsis">
       
-        JWT bootstrap (Optional)
+        JWT bootstrap for Operator (Optional)
       
     </span>
   </a>
@@ -4055,10 +4055,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#jwt-bootstrap-optional" class="md-nav__link">
+  <a href="#jwt-bootstrap-for-operator-optional" class="md-nav__link">
     <span class="md-ellipsis">
       
-        JWT bootstrap (Optional)
+        JWT bootstrap for Operator (Optional)
       
     </span>
   </a>
@@ -4125,6 +4125,12 @@
 
 <h1 id="self-initialization">Self-Initialization<a class="headerlink" href="#self-initialization" title="Permanent link">&para;</a></h1>
 <p>OpenBao supports <a href="https://openbao.org/docs/configuration/self-init/">self-initialization</a>, allowing declarative configuration of the cluster during first startup.</p>
+<div class="admonition danger">
+<p class="admonition-title">Lockout Risk</p>
+<p>When self-initialization is enabled, OpenBao <strong>auto-revokes the root token</strong> after initialization completes. You will have <strong>no root token</strong> and no way to access the cluster unless you configure at least one authentication method (e.g., JWT, Kubernetes auth, userpass) via <code>spec.selfInit.requests</code>.</p>
+<p><strong>OIDC bootstrap</strong> (<code>spec.selfInit.oidc.enabled: true</code>) only provides authentication for the <strong>Operator</strong> to perform cluster lifecycle tasks (backups, upgrades). It does NOT provide user authentication.</p>
+<p>Failure to configure user authentication in requests before enabling self-init results in <strong>permanent lockout</strong> requiring cluster recreation.</p>
+</div>
 <div class="admonition success">
 <p class="admonition-title">GitOps Ready</p>
 <p>Self-initialization eliminates the need for manual setup scripts or post-install hooks. The entire cluster state (Auth, Secrets, Policies) is defined in your CRD.</p>
@@ -4200,11 +4206,13 @@
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">          </span><span class="nt">fileOptions</span><span class="p">:</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">            </span><span class="nt">filePath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/tmp/audit.log</span>
 </span></code></pre></div>
-<h3 id="jwt-bootstrap-optional">JWT bootstrap (Optional)<a class="headerlink" href="#jwt-bootstrap-optional" title="Permanent link">&para;</a></h3>
-<p>Enable automatic JWT auth bootstrap during self-init.
-The OpenBao Operator configures JWT auth, OIDC settings, and the operator policy/role.
-It also creates backup and upgrade roles when <code>spec.backup.jwtAuthRole</code> or <code>spec.upgrade.jwtAuthRole</code> are set.</p>
-<p>To bootstrap a restore role, set <code>spec.restore.jwtAuthRole</code>.</p>
+<h3 id="jwt-bootstrap-for-operator-optional">JWT bootstrap for Operator (Optional)<a class="headerlink" href="#jwt-bootstrap-for-operator-optional" title="Permanent link">&para;</a></h3>
+<p>Enable automatic JWT auth bootstrap to allow the <strong>Operator</strong> to perform cluster lifecycle operations.
+This configures JWT auth (<code>jwt-operator</code> mount), OIDC settings, and creates default operator roles
+(<code>openbao-operator-backup</code>, <code>openbao-operator-upgrade</code>, <code>openbao-operator-restore</code>).
+This is <strong>Operator authentication only</strong> and does not provide user access to OpenBao.</p>
+<p>Use <code>spec.backup.jwtAuthRole</code>, <code>spec.upgrade.jwtAuthRole</code>, or <code>spec.restore.jwtAuthRole</code> to override
+the default role names with your own custom roles.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">selfInit</span><span class="p">:</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>

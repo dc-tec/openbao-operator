@@ -4088,6 +4088,8 @@
 </ul>
 </li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Self-Initialization</strong>: Enable <code>spec.selfInit</code> to prevent the initial root token from ever being surfaced to the operator or logs.<ul>
+<li><strong>CRITICAL</strong>: Configure <code>spec.selfInit.requests</code> with user authentication methods (e.g., userpass, JWT, Kubernetes auth) to prevent lockout.</li>
+<li>Enable <code>spec.selfInit.oidc.enabled: true</code> for Operator lifecycle authentication (backups, upgrades) - this does NOT provide user authentication.</li>
 <li><a href="../../configuration/self-init/">Learn more</a></li>
 </ul>
 </li>
