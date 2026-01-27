@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -40,16 +42,19 @@ func renderConfig(templatePath, outputPath, hostname, podIP, selfInitPath string
 	// POD_IP may not be available immediately when the init container runs.
 	// We'll wait a short time for it to become available, as it's needed for proper config rendering.
 	if strings.TrimSpace(podIP) == "" {
-		// Wait briefly for POD_IP to become available (up to 5 seconds)
-		for i := 0; i < 10; i++ {
-			time.Sleep(500 * time.Millisecond)
+		pollCtx := context.Background()
+		pollFn := func(ctx context.Context) (bool, error) {
 			podIP = strings.TrimSpace(os.Getenv(constants.EnvPodIP))
-			if podIP != "" {
-				break
-			}
+			return podIP != "", nil
 		}
-		// If still not available, fail - POD_IP is required for proper configuration
+		err := wait.PollUntilContextTimeout(pollCtx, 500*time.Millisecond, 5*time.Second, true, pollFn)
+		// If still not available, fail - POD_IP is required for proper configuration.
 		if strings.TrimSpace(podIP) == "" {
+			if err != nil {
+				return fmt.Errorf(
+					"POD_IP environment variable is required but not available after waiting (must be set from pod status.podIP): %w",
+					err)
+			}
 			return fmt.Errorf(
 				"POD_IP environment variable is required but not available after waiting (must be set from pod status.podIP)")
 		}
