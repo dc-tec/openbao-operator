@@ -29,3 +29,11 @@ rules:
       - validatingadmissionpolicybindings
     verbs:
       - get
+  # Allow OIDC discovery against the Kubernetes API server.
+  # This is required when spec.selfInit.oidc.enabled is used (JWT auth bootstrap).
+  - nonResourceURLs:
+      - "/.well-known/openid-configuration"
+      - "/openid/v1/jwks"
+      - "/.well-known/jwks.json"
+    verbs:
+      - get
