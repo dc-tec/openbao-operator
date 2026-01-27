@@ -60,12 +60,44 @@ This guide walks you through creating your first OpenBaoCluster. Choose the path
         size: "50Gi"
       selfInit:
         enabled: true
+        oidc:
+          enabled: true  # (1)!
+        requests:
+          # Configure user authentication FIRST to prevent lockout
+          - name: enable-userpass
+            operation: update
+            path: sys/auth/userpass
+            authMethod:
+              type: userpass
+              description: "Userpass authentication"
+          - name: create-admin-policy
+            operation: update
+            path: sys/policies/acl/admin
+            policy:
+              policy: |
+                path "*" {
+                  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+                }
+          # Then configure secret engines
+          - name: enable-kv-v2
+            operation: update
+            path: sys/mounts/secret
+            secretEngine:
+              type: kv
+              description: "General purpose KV store"
+              options:
+                version: "2"
       unseal:
         type: awskms
         awskms:
           region: us-east-1
           kmsKeyID: alias/openbao-unseal
     ```
+
+    1.  **OIDC bootstrap** enables the Operator to authenticate via JWT for cluster lifecycle operations (backups, upgrades). This is separate from user authentication.
+    
+    !!! danger "Lockout Prevention Required"
+        **CRITICAL**: The `requests` array **must** include user authentication configuration (e.g., userpass, JWT, Kubernetes auth) BEFORE enabling self-init. OIDC bootstrap only provides Operator authentication, not user access. Enabling `selfInit.enabled: true` without user authentication in requests results in **permanent lockout** with no recovery options. See [Self-Initialization](configuration/self-init.md) for details.
 
     !!! tip "Production Checklist"
         Before deploying to production, complete the [Production Checklist](operations/production-checklist.md)

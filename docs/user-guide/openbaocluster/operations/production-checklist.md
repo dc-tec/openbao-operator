@@ -15,6 +15,8 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
     - [ ] **TLS Mode**: Use `ACME` (Let's Encrypt) or `External` (Custom CA). Avoid `OperatorManaged` for public-facing endpoints.
         - [Learn more](../../../security/workload/tls.md)
     - [ ] **Self-Initialization**: Enable `spec.selfInit` to prevent the initial root token from ever being surfaced to the operator or logs.
+        - **CRITICAL**: Configure `spec.selfInit.requests` with user authentication methods (e.g., userpass, JWT, Kubernetes auth) to prevent lockout.
+        - Enable `spec.selfInit.oidc.enabled: true` for Operator lifecycle authentication (backups, upgrades) - this does NOT provide user authentication.
         - [Learn more](../configuration/self-init.md)
 
 !!! warning "Admission Control"
