@@ -37,9 +37,8 @@ spec:
     - expression: >-
         !has(object.spec.selfInit) ||
         object.spec.selfInit.enabled == false ||
-        (has(object.spec.selfInit.bootstrapJWTAuth) && object.spec.selfInit.bootstrapJWTAuth == true) ||
         (has(object.spec.selfInit.requests) && size(object.spec.selfInit.requests) > 0)
-      message: spec.selfInit.requests is required and must not be empty when spec.selfInit.enabled is true unless spec.selfInit.bootstrapJWTAuth is true.
+      message: spec.selfInit.requests is required and must not be empty when spec.selfInit.enabled is true.
     - expression: >-
         !has(object.spec.selfInit) ||
         object.spec.selfInit.enabled == false ||
