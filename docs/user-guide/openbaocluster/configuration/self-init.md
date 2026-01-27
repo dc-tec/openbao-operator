@@ -2,6 +2,13 @@
 
 OpenBao supports [self-initialization](https://openbao.org/docs/configuration/self-init/), allowing declarative configuration of the cluster during first startup.
 
+!!! danger "Lockout Risk"
+    When self-initialization is enabled, OpenBao **auto-revokes the root token** after initialization completes. You will have **no root token** and no way to access the cluster unless you configure at least one authentication method (e.g., JWT, Kubernetes auth, userpass) via `spec.selfInit.requests`.
+    
+    **OIDC bootstrap** (`spec.selfInit.oidc.enabled: true`) only provides authentication for the **Operator** to perform cluster lifecycle tasks (backups, upgrades). It does NOT provide user authentication.
+    
+    Failure to configure user authentication in requests before enabling self-init results in **permanent lockout** requiring cluster recreation.
+
 !!! success "GitOps Ready"
     Self-initialization eliminates the need for manual setup scripts or post-install hooks. The entire cluster state (Auth, Secrets, Policies) is defined in your CRD.
 
@@ -60,13 +67,15 @@ spec:
             filePath: /tmp/audit.log
 ```
 
-### JWT bootstrap (Optional)
+### JWT bootstrap for Operator (Optional)
 
-Enable automatic JWT auth bootstrap during self-init.
-The OpenBao Operator configures JWT auth, OIDC settings, and the operator policy/role.
-It also creates backup and upgrade roles when `spec.backup.jwtAuthRole` or `spec.upgrade.jwtAuthRole` are set.
+Enable automatic JWT auth bootstrap to allow the **Operator** to perform cluster lifecycle operations.
+This configures JWT auth (`jwt-operator` mount), OIDC settings, and creates default operator roles
+(`openbao-operator-backup`, `openbao-operator-upgrade`, `openbao-operator-restore`).
+This is **Operator authentication only** and does not provide user access to OpenBao.
 
-To bootstrap a restore role, set `spec.restore.jwtAuthRole`.
+Use `spec.backup.jwtAuthRole`, `spec.upgrade.jwtAuthRole`, or `spec.restore.jwtAuthRole` to override
+the default role names with your own custom roles.
 
 ```yaml
 spec:

@@ -1761,12 +1761,20 @@ spec:
                       Enabled activates OpenBao's self-initialization feature.
                       When true, the Operator injects initialize stanzas into config.hcl
                       and does NOT create a root token Secret (root token is auto-revoked).
+
+                      WARNING: The root token is auto-revoked during initialization. You MUST
+                      configure user authentication (e.g., userpass, JWT, Kubernetes auth) via
+                      spec.selfInit.requests before enabling this. spec.selfInit.oidc.enabled
+                      only provides Operator authentication for lifecycle tasks, NOT user access.
+                      Enabling without user authentication results in permanent lockout.
                     type: boolean
                   oidc:
                     description: |-
-                      OIDC configures the identity provider integration.
-                      When enabled, this configures JWT auth in OpenBao, sets up OIDC discovery,
-                      and creates the operator policy and role.
+                      OIDC configures JWT authentication for the Operator to perform cluster
+                      lifecycle operations (backups, upgrades, restores). When enabled, this
+                      sets up the jwt-operator auth method, OIDC discovery, and operator roles.
+                      This is for Operator authentication only - users must configure their own
+                      authentication methods via spec.selfInit.requests.
                     properties:
                       audience:
                         description: |-
