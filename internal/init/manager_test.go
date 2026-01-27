@@ -6,10 +6,13 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+	clienttesting "k8s.io/client-go/testing"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
@@ -167,15 +170,24 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 
 func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 	tests := []struct {
-		name              string
-		existingSecret    *corev1.Secret
-		rootToken         string
-		wantTokenInSecret string
+		name                       string
+		existingSecret             *corev1.Secret
+		rootToken                  string
+		wantTokenInSecret          string
+		transientCreateFailures    int
+		wantCreateFailuresObserved int
 	}{
 		{
 			name:              "creates new Secret when none exists",
 			rootToken:         "s.roottoken",
 			wantTokenInSecret: "s.roottoken",
+		},
+		{
+			name:                       "retries transient Secret create errors",
+			rootToken:                  "s.roottoken",
+			wantTokenInSecret:          "s.roottoken",
+			transientCreateFailures:    2,
+			wantCreateFailuresObserved: 2,
 		},
 		{
 			name: "does not overwrite existing Secret token",
@@ -200,6 +212,17 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 			clientMgr := openbao.NewClientManager(openbao.ClientConfig{})
 			manager := NewManager(&rest.Config{}, clientset, clientMgr)
 
+			createFailuresObserved := 0
+			if tt.transientCreateFailures > 0 {
+				clientset.PrependReactor("create", "secrets", func(action clienttesting.Action) (handled bool, ret runtime.Object, err error) {
+					if createFailuresObserved >= tt.transientCreateFailures {
+						return false, nil, nil
+					}
+					createFailuresObserved++
+					return true, nil, apierrors.NewTooManyRequests("too many requests", 0)
+				})
+			}
+
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "openbao.org/v1alpha1",
@@ -220,6 +243,10 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 
 			if err := manager.storeRootToken(context.Background(), logr.Discard(), cluster, tt.rootToken); err != nil {
 				t.Fatalf("storeRootToken() error = %v", err)
+			}
+
+			if createFailuresObserved != tt.wantCreateFailuresObserved {
+				t.Fatalf("createFailuresObserved = %d, want %d", createFailuresObserved, tt.wantCreateFailuresObserved)
 			}
 
 			secret, err := clientset.CoreV1().Secrets("default").Get(context.Background(), "cluster-root-token", metav1.GetOptions{})

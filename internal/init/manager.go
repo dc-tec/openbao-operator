@@ -12,6 +12,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -29,6 +30,10 @@ const (
 	openBaoInitTimeout = 30 * time.Second
 	// rootTokenSecretKey is the key used to store the root token in the Secret data.
 	rootTokenSecretKey = "token"
+	// rootTokenStoreTimeout is the maximum time we will spend trying to persist the root token Secret
+	// after receiving it from the init API call. The root token is only returned once; if we cannot
+	// persist it within the same reconcile, it is lost.
+	rootTokenStoreTimeout = 2 * time.Minute
 )
 
 // errRetryLater is a marker error indicating that initialization should be retried
@@ -414,18 +419,8 @@ func (m *Manager) preflightRootTokenStorage(ctx context.Context, cluster *openba
 		return fmt.Errorf("cluster is required")
 	}
 
-	secretName := cluster.Name + constants.SuffixRootToken
-
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: cluster.Namespace,
-		},
-		Type: corev1.SecretTypeOpaque,
-		Data: map[string][]byte{
-			rootTokenSecretKey: []byte("dry-run"),
-		},
-	}
+	secret := buildRootTokenSecret(cluster, "dry-run")
+	secretName := secret.Name
 
 	_, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Create(ctx, secret, metav1.CreateOptions{
 		DryRun: []string{metav1.DryRunAll},
@@ -493,59 +488,68 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 		return nil
 	}
 
+	secretsClient := m.clientset.CoreV1().Secrets(cluster.Namespace)
 	secretName := cluster.Name + constants.SuffixRootToken
 
-	secretsClient := m.clientset.CoreV1().Secrets(cluster.Namespace)
-
-	// Build labels for the secret
-	secretLabels := map[string]string{
-		constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
-		constants.LabelAppInstance:    cluster.Name,
-		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster: cluster.Name,
-	}
-
-	// Build OwnerReference for garbage collection when the OpenBaoCluster is deleted.
-	// Note: We use controller=true to mark this as the controlling owner.
-	blockOwnerDeletion := true
-	controller := true
-	ownerRef := metav1.OwnerReference{
-		APIVersion:         cluster.APIVersion,
-		Kind:               cluster.Kind,
-		Name:               cluster.Name,
-		UID:                cluster.UID,
-		BlockOwnerDeletion: &blockOwnerDeletion,
-		Controller:         &controller,
-	}
-
-	immutable := true
-	desired := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            secretName,
-			Namespace:       cluster.Namespace,
-			Labels:          secretLabels,
-			OwnerReferences: []metav1.OwnerReference{ownerRef},
-		},
-		Type: corev1.SecretTypeOpaque,
-		// Root tokens are high-value credentials. Treat the Secret as immutable once written.
-		Immutable: &immutable,
-		Data: map[string][]byte{
-			rootTokenSecretKey: []byte(rootToken),
-		},
-	}
+	desired := buildRootTokenSecret(cluster, rootToken)
 
 	// Create-first to avoid requiring "get" permissions for the Secret name.
 	// If tenant Secret allowlist RBAC is still converging, we want to persist the
 	// init-time root token as soon as we're allowed to create it.
-	if _, err := secretsClient.Create(ctx, desired, metav1.CreateOptions{}); err == nil {
-		return nil
-	} else if !apierrors.IsAlreadyExists(err) {
+	storeCtx, cancel := context.WithTimeout(ctx, rootTokenStoreTimeout)
+	defer cancel()
+
+	var (
+		createdOrExists bool
+		alreadyExists   bool
+		lastErr         error
+	)
+	backoff := wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   1.7,
+		Jitter:   0.2,
+		Steps:    1000, // bounded by storeCtx timeout
+	}
+	err := wait.ExponentialBackoffWithContext(storeCtx, backoff, func(ctx context.Context) (bool, error) {
+		_, err := secretsClient.Create(ctx, desired, metav1.CreateOptions{})
+		if err == nil {
+			createdOrExists = true
+			return true, nil
+		}
+		if apierrors.IsAlreadyExists(err) {
+			createdOrExists = true
+			alreadyExists = true
+			return true, nil
+		}
+		lastErr = err
+
 		if apierrors.IsForbidden(err) {
-			return operatorerrors.WrapTransientKubernetesAPI(
+			return false, operatorerrors.WrapTransientKubernetesAPI(
 				fmt.Errorf("failed to create root token Secret %s/%s: %w", cluster.Namespace, secretName, err),
 			)
 		}
-		return fmt.Errorf("failed to create root token Secret %s/%s: %w", cluster.Namespace, secretName, err)
+
+		if operatorerrors.IsTransientKubernetesAPI(err) || operatorerrors.IsTransientConnection(err) ||
+			apierrors.IsTimeout(err) || apierrors.IsServerTimeout(err) || apierrors.IsTooManyRequests(err) || apierrors.IsInternalError(err) {
+			// Losing the init-time root token is worse than blocking briefly: retry within this reconcile.
+			return false, nil
+		}
+
+		return false, fmt.Errorf("failed to create root token Secret %s/%s: %w", cluster.Namespace, secretName, err)
+	})
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			if lastErr == nil {
+				lastErr = err
+			}
+			return operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("timed out creating root token Secret %s/%s: %w", cluster.Namespace, secretName, lastErr),
+			)
+		}
+		return err
+	}
+	if createdOrExists && !alreadyExists {
+		return nil
 	}
 
 	// Never overwrite an existing root token Secret. If it exists, treat it as a
@@ -561,6 +565,10 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 		}
 		return fmt.Errorf("failed to get root token Secret %s/%s: %w", cluster.Namespace, secretName, err)
 	}
+
+	secretLabels := desired.Labels
+	ownerRef := desired.OwnerReferences[0]
+	immutable := desired.Immutable != nil && *desired.Immutable
 
 	if existing.Labels == nil {
 		existing.Labels = make(map[string]string)
@@ -594,6 +602,31 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 	}
 
 	return nil
+}
+
+func buildRootTokenSecret(cluster *openbaov1alpha1.OpenBaoCluster, token string) *corev1.Secret {
+	secretName := cluster.Name + constants.SuffixRootToken
+	ownerRef := metav1.NewControllerRef(cluster, openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"))
+
+	immutable := true
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:    cluster.Name,
+				constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster: cluster.Name,
+			},
+			OwnerReferences: []metav1.OwnerReference{*ownerRef},
+		},
+		Type:      corev1.SecretTypeOpaque,
+		Immutable: &immutable,
+		Data: map[string][]byte{
+			rootTokenSecretKey: []byte(token),
+		},
+	}
 }
 
 // isContainerRunning checks if the OpenBao container is running.
