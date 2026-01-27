@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
@@ -510,20 +511,10 @@ func runBlueGreenPromoteGreenVoters(ctx context.Context, logger logr.Logger, cfg
 }
 
 func runBlueGreenDemoteBlueNonVotersStepDown(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) error {
-	// Find initial leader (Green preferred, then Blue)
-	leaderURL, err := findLeader(ctx, cfg, cfg.GreenRevision)
+	leaderURL, err := findInitialLeader(ctx, logger, cfg)
 	if err != nil {
-		logger.Info("Failed to find leader among Green pods, checking Blue pods", "error", err)
-		leaderURL, err = findLeader(ctx, cfg, cfg.BlueRevision)
-		if err != nil {
-			return fmt.Errorf("failed to find initial leader: %w", err)
-		}
+		return err
 	}
-	logger.Info("Initial leader found", "leader_url", leaderURL)
-
-	var client *openbao.Client
-	maxRetries := 10
-	greenLeaderElected := false
 
 	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
@@ -531,98 +522,197 @@ func runBlueGreenDemoteBlueNonVotersStepDown(ctx context.Context, logger logr.Lo
 	}
 	defer cleanup()
 
-	// Loop to ensure we have a Green leader
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		token, err := loginJWT(ctx, cfg, leaderURL)
-		if err != nil {
-			return fmt.Errorf("failed to authenticate: %w", err)
-		}
+	client, err := ensureGreenLeaderBySteppingDownBlue(ctx, logger, cfg, factory, leaderURL)
+	if err != nil {
+		return err
+	}
 
-		client, err = factory.NewWithToken(leaderURL, token)
+	if err := demoteAllBluePods(ctx, logger, cfg, client); err != nil {
+		return err
+	}
+
+	logger.Info("Blue pods demoted to non-voters")
+	return nil
+}
+
+func findInitialLeader(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) (string, error) {
+	leaderURL, err := findLeader(ctx, cfg, cfg.GreenRevision)
+	if err != nil {
+		logger.Info("Failed to find leader among Green pods, checking Blue pods", "error", err)
+		leaderURL, err = findLeader(ctx, cfg, cfg.BlueRevision)
 		if err != nil {
-			return fmt.Errorf("failed to create OpenBao client: %w", err)
+			return "", fmt.Errorf("failed to find initial leader: %w", err)
+		}
+	}
+	logger.Info("Initial leader found", "leader_url", leaderURL)
+	return leaderURL, nil
+}
+
+func ensureGreenLeaderBySteppingDownBlue(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	factory *openbao.ClientFactory,
+	leaderURL string,
+) (*openbao.Client, error) {
+	const maxRetries = 10
+	bluePrefix := fmt.Sprintf("%s-%s-", cfg.ClusterName, cfg.BlueRevision)
+
+	var client *openbao.Client
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		var err error
+		client, err = clientForLeaderURL(ctx, cfg, factory, leaderURL)
+		if err != nil {
+			return nil, err
 		}
 
 		config, err := client.ReadRaftConfiguration(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to read Raft configuration: %w", err)
+			return nil, fmt.Errorf("failed to read Raft configuration: %w", err)
 		}
 
-		// Check if the current leader is from the Blue revision.
-		currentLeaderBlue := false
-		var currentLeaderID string
-
-		for _, server := range config.Config.Servers {
-			if server.Leader {
-				for i := int32(0); i < cfg.ClusterReplicas; i++ {
-					bluePodName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.BlueRevision, i)
-					if server.NodeID == bluePodName || strings.Contains(server.Address, bluePodName) {
-						currentLeaderBlue = true
-						currentLeaderID = server.NodeID
-						break
-					}
-				}
-			}
-		}
-
-		if !currentLeaderBlue {
+		leaderID, leaderIsBlue := raftLeaderInfo(config, bluePrefix)
+		if !leaderIsBlue {
 			logger.Info("Leader is not Blue (assumed Green), proceeding to demotion")
-			greenLeaderElected = true
-			break
+			return client, nil
 		}
 
-		logger.Info("Current leader is Blue", "leader_id", currentLeaderID, "attempt", attempt+1, "max_retries", maxRetries)
+		logger.Info("Current leader is Blue", "leader_id", leaderID, "attempt", attempt+1, "max_retries", maxRetries)
+		demoteBlueVotersExceptLeader(ctx, logger, cfg, client, config, leaderID, bluePrefix)
+		stepDownLeader(ctx, logger, client)
 
-		// Optimization: Demote other Blue voters to ensure Green wins the election after step-down
-		for _, server := range config.Config.Servers {
-			if server.Voter && server.NodeID != currentLeaderID {
-				isBluePeer := false
-				for i := int32(0); i < cfg.ClusterReplicas; i++ {
-					bluePodName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.BlueRevision, i)
-					if server.NodeID == bluePodName || strings.Contains(server.Address, bluePodName) {
-						isBluePeer = true
-						break
-					}
-				}
-
-				if isBluePeer {
-					logger.Info("Demoting Blue peer before step-down to bias election", "node_id", server.NodeID)
-					if err := client.DemoteRaftPeer(ctx, server.NodeID); err != nil {
-						// Log but continue - step-down is the main action
-						logger.Error(err, "Failed to demote Blue peer")
-					}
-				}
-			}
-		}
-
-		logger.Info("Stepping down Blue leader to transfer leadership to Green")
-		if err := client.StepDown(ctx); err != nil {
-			// If step down fails, maybe we lost connection? Just log and retry loop.
-			logger.Error(err, "Failed to step down leader")
-		}
-
-		// Wait for new leader to be elected
-		logger.Info("Waiting for new leader election...")
-		time.Sleep(leaderElectionWaitDuration)
-
-		// Re-find the new leader (should now be a Green node, but might be Blue)
-		logger.Info("Finding new leader...")
-		leaderURL, err = findLeader(ctx, cfg, cfg.GreenRevision)
+		newLeaderURL, err := waitForNewLeaderURL(ctx, logger, cfg, leaderURL)
 		if err != nil {
-			logger.Info("Failed to find leader among Green pods, checking Blue pods", "error", err)
-			leaderURL, err = findLeader(ctx, cfg, cfg.BlueRevision)
-			if err != nil {
-				return fmt.Errorf("failed to find new leader after step-down (checked Green and Blue): %w", err)
-			}
+			return nil, err
 		}
-		logger.Info("New leader found", "leader_url", leaderURL)
+		leaderURL = newLeaderURL
 	}
 
-	if !greenLeaderElected {
-		return fmt.Errorf("failed to transfer leadership to Green node after %d attempts", maxRetries)
+	return nil, fmt.Errorf("failed to transfer leadership to Green node after %d attempts", maxRetries)
+}
+
+func clientForLeaderURL(ctx context.Context, cfg *ExecutorConfig, factory *openbao.ClientFactory, leaderURL string) (*openbao.Client, error) {
+	token, err := loginJWT(ctx, cfg, leaderURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate: %w", err)
 	}
 
-	// Demote remaining Blue pods (e.g. the former leader) from voter to non-voter
+	client, err := factory.NewWithToken(leaderURL, token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OpenBao client: %w", err)
+	}
+	return client, nil
+}
+
+func raftLeaderInfo(config *openbao.RaftConfigurationResponse, bluePrefix string) (string, bool) {
+	if config == nil {
+		return "", false
+	}
+
+	for _, server := range config.Config.Servers {
+		if !server.Leader {
+			continue
+		}
+		leaderID := server.NodeID
+		return leaderID, isBlueRaftServer(server.NodeID, server.Address, bluePrefix)
+	}
+
+	return "", false
+}
+
+func isBlueRaftServer(nodeID string, address string, bluePrefix string) bool {
+	return strings.HasPrefix(nodeID, bluePrefix) || strings.Contains(address, bluePrefix)
+}
+
+func demoteBlueVotersExceptLeader(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	client *openbao.Client,
+	config *openbao.RaftConfigurationResponse,
+	leaderID string,
+	bluePrefix string,
+) {
+	if client == nil || config == nil {
+		return
+	}
+
+	for _, server := range config.Config.Servers {
+		if !server.Voter || server.NodeID == leaderID {
+			continue
+		}
+		if !isBlueRaftServer(server.NodeID, server.Address, bluePrefix) {
+			continue
+		}
+
+		logger.Info("Demoting Blue peer before step-down to bias election", "node_id", server.NodeID)
+		if err := client.DemoteRaftPeer(ctx, server.NodeID); err != nil {
+			// Log but continue - step-down is the main action
+			logger.Error(err, "Failed to demote Blue peer", "node_id", server.NodeID, "cluster_replicas", cfg.ClusterReplicas)
+		}
+	}
+}
+
+func stepDownLeader(ctx context.Context, logger logr.Logger, client *openbao.Client) {
+	logger.Info("Stepping down Blue leader to transfer leadership to Green")
+	if err := client.StepDown(ctx); err != nil {
+		// If step down fails, maybe we lost connection? Just log and retry loop.
+		logger.Error(err, "Failed to step down leader")
+	}
+}
+
+func waitForNewLeaderURL(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
+	logger.Info("Waiting for new leader election...")
+
+	newLeaderURL, err := waitForLeaderElection(ctx, cfg, previousLeaderURL)
+	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		return "", fmt.Errorf("failed while waiting for new leader election: %w", err)
+	}
+
+	logger.Info("Finding new leader...")
+	if strings.TrimSpace(newLeaderURL) != "" {
+		logger.Info("New leader found", "leader_url", newLeaderURL)
+		return newLeaderURL, nil
+	}
+
+	leaderURL, findErr := findLeader(ctx, cfg, cfg.GreenRevision)
+	if findErr != nil {
+		logger.Info("Failed to find leader among Green pods, checking Blue pods", "error", findErr)
+		leaderURL, findErr = findLeader(ctx, cfg, cfg.BlueRevision)
+		if findErr != nil {
+			return "", fmt.Errorf("failed to find new leader after step-down (checked Green and Blue): %w", findErr)
+		}
+	}
+	logger.Info("New leader found", "leader_url", leaderURL)
+	return leaderURL, nil
+}
+
+func waitForLeaderElection(ctx context.Context, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
+	var newLeaderURL string
+	err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, leaderElectionWaitDuration, true, func(ctx context.Context) (bool, error) {
+		if url, ok := findLeaderOnce(ctx, cfg, cfg.GreenRevision); ok {
+			newLeaderURL = url
+			return true, nil
+		}
+		if url, ok := findLeaderOnce(ctx, cfg, cfg.BlueRevision); ok {
+			// Only consider it "new" if leadership moved away from the pre-stepdown leader.
+			if url != previousLeaderURL {
+				newLeaderURL = url
+				return true, nil
+			}
+			// Keep the last observed leader as a fallback; the outer loop will step down again if needed.
+			newLeaderURL = url
+		}
+		return false, nil
+	})
+	return newLeaderURL, err
+}
+
+func demoteAllBluePods(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, client *openbao.Client) error {
+	if client == nil {
+		return fmt.Errorf("client is required to demote Blue pods")
+	}
+
 	for i := int32(0); i < cfg.ClusterReplicas; i++ {
 		bluePodName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.BlueRevision, i)
 		logger.V(1).Info("Demoting Blue pod to non-voter", "pod_name", bluePodName)
@@ -631,8 +721,6 @@ func runBlueGreenDemoteBlueNonVotersStepDown(ctx context.Context, logger logr.Lo
 			logger.Info("Failed to demote Blue pod (might already be non-voter)", "pod_name", bluePodName, "error", err)
 		}
 	}
-
-	logger.Info("Blue pods demoted to non-voters")
 	return nil
 }
 
@@ -728,6 +816,31 @@ func findLeader(ctx context.Context, cfg *ExecutorConfig, revision string) (stri
 	}
 
 	return "", fmt.Errorf("no leader found among %d pods", cfg.ClusterReplicas)
+}
+
+func findLeaderOnce(ctx context.Context, cfg *ExecutorConfig, revision string) (string, bool) {
+	factory, cleanup, err := newOpenBaoClientFactory(cfg)
+	if err != nil {
+		return "", false
+	}
+	defer cleanup()
+
+	for i := int32(0); i < cfg.ClusterReplicas; i++ {
+		url := podURL(cfg, revision, i)
+		client, err := factory.New(url)
+		if err != nil {
+			continue
+		}
+		isLeader, err := client.IsLeader(ctx)
+		if err != nil {
+			continue
+		}
+		if isLeader {
+			return url, true
+		}
+	}
+
+	return "", false
 }
 
 func podURL(cfg *ExecutorConfig, revision string, ordinal int32) string {
