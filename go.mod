@@ -1,6 +1,6 @@
 module github.com/dc-tec/openbao-operator
 
-go 1.25.5
+go 1.25.6
 
 require (
 	cloud.google.com/go/storage v1.59.1
