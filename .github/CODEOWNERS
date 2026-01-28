@@ -1,0 +1,9 @@
+# Release management
+/CHANGELOG.md @dc-tec
+/.release-please-manifest.json @dc-tec
+/release-please-config.json @dc-tec
+/charts/openbao-operator/Chart.yaml @dc-tec
+/.github/workflows/release-please.yml @dc-tec
+/.github/workflows/release.yml @dc-tec
+/.github/workflows/release-pr-gate.yml @dc-tec
+/docs/contributing/release-management.md @dc-tec
