@@ -27,10 +27,10 @@ type options struct {
 }
 
 type jsonSchema struct {
-	Ref                  string                `json:"$ref"`
-	Type                 string                `json:"type"`
+	Ref                  string                 `json:"$ref"`
+	Type                 string                 `json:"type"`
 	Properties           map[string]*jsonSchema `json:"properties"`
-	AdditionalProperties any                   `json:"additionalProperties"`
+	AdditionalProperties any                    `json:"additionalProperties"`
 	Defs                 map[string]*jsonSchema `json:"$defs"`
 }
 
