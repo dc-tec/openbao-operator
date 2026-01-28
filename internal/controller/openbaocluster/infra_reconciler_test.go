@@ -12,9 +12,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
@@ -156,4 +158,37 @@ func TestHandleScaleDownSafety(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInfraReconciler_ResolveOIDC_LazyDiscoveryForSelfInit(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
+			},
+		},
+	}
+
+	var called int
+	r := &infraReconciler{
+		restConfig:  &rest.Config{Host: "https://kubernetes.default.svc"},
+		oidcIssuer:  "",
+		oidcJWTKeys: nil,
+		discoverOIDCConfigFunc: func(ctx context.Context, cfg *rest.Config) (*auth.OIDCConfig, error) {
+			called++
+			return &auth.OIDCConfig{
+				IssuerURL: "https://issuer.example",
+				JWKSKeys:  []string{"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw==\n-----END PUBLIC KEY-----\n"},
+			}, nil
+		},
+	}
+
+	issuer, keys, err := r.resolveOIDC(context.Background(), cluster)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, called)
+	assert.Equal(t, "https://issuer.example", issuer)
+	assert.Len(t, keys, 1)
 }

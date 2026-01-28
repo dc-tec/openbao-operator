@@ -389,6 +389,7 @@ func Run(args []string) {
 		Client:            mgr.GetClient(),
 		APIReader:         mgr.GetAPIReader(),
 		Scheme:            mgr.GetScheme(),
+		RestConfig:        mgr.GetConfig(),
 		TLSReload:         reloadSignaler,
 		InitManager:       initMgr,
 		OperatorNamespace: operatorNamespace,

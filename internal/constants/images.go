@@ -12,7 +12,7 @@ import (
 // Default repositories
 const (
 	// DefaultOpenBaoImageRepository is the default image repository used for OpenBao.
-	DefaultOpenBaoImageRepository = "docker.io/openbao/openbao"
+	DefaultOpenBaoImageRepository = "openbao/openbao"
 
 	// EnvOpenBaoImageRepo is the environment variable to override the OpenBao image repository.
 	EnvOpenBaoImageRepo = "RELATED_IMAGE_OPENBAO"
@@ -47,13 +47,9 @@ func GetOpenBaoImage(specVersion string) string {
 		repo = DefaultOpenBaoImageRepository
 	}
 
-	// Handle "v" prefix consistency
-	tag := specVersion
-	if !strings.HasPrefix(tag, "v") {
-		tag = "v" + tag
-	}
-
-	return fmt.Sprintf("%s:%s", repo, tag)
+	// spec.version is expected to be a tag string (e.g. "2.4.4" or "v2.4.4").
+	// Do not force a "v" prefix: different registries/projects use different conventions.
+	return fmt.Sprintf("%s:%s", repo, strings.TrimSpace(specVersion))
 }
 
 // defaultImage constructs an image reference from an env var override or default repo,

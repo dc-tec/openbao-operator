@@ -124,3 +124,42 @@ spec:
         !has(oldObject.spec.storage.size) ||
         quantity(object.spec.storage.size).compareTo(quantity(oldObject.spec.storage.size)) >= 0
       message: "spec.storage.size cannot be decreased."
+    # OIDC issuer override hardening (not used as a fetch target by the operator)
+    - expression: >-
+        !has(object.spec.selfInit) ||
+        !has(object.spec.selfInit.oidc) ||
+        !has(object.spec.selfInit.oidc.issuer) ||
+        object.spec.selfInit.oidc.issuer == "" ||
+        (
+          object.spec.selfInit.oidc.issuer.startsWith("https://") &&
+          !object.spec.selfInit.oidc.issuer.contains("@") &&
+          !object.spec.selfInit.oidc.issuer.contains("?") &&
+          !object.spec.selfInit.oidc.issuer.contains("#") &&
+          !object.spec.selfInit.oidc.issuer.contains("localhost") &&
+          !object.spec.selfInit.oidc.issuer.contains("127.0.0.1") &&
+          !object.spec.selfInit.oidc.issuer.contains("::1") &&
+          !object.spec.selfInit.oidc.issuer.matches("^https?://169\\.254\\..*") &&
+          !object.spec.selfInit.oidc.issuer.contains("/.well-known/")
+        )
+      message: "spec.selfInit.oidc.issuer must be an https:// issuer URL (no userinfo/query/fragment; not localhost/link-local; must not include /.well-known/*)."
+    # Self-init request lint: if a request targets auth/jwt/*, ensure the mount is enabled via sys/auth/jwt.
+    - expression: >-
+        !has(object.spec.selfInit) ||
+        !has(object.spec.selfInit.requests) ||
+        size(object.spec.selfInit.requests) == 0 ||
+        !(
+          object.spec.selfInit.requests.filter(r, r.path.startsWith("auth/jwt/") || r.path == "auth/jwt/config").size() > 0
+        ) ||
+        object.spec.selfInit.requests.filter(r, r.path == "sys/auth/jwt").size() > 0
+      message: "spec.selfInit.requests contains auth/jwt/* paths but is missing a sys/auth/jwt request to enable that auth mount."
+    # Self-init request lint: if a request targets auth/jwt-operator/* without operator OIDC bootstrap, ensure sys/auth/jwt-operator is present.
+    - expression: >-
+        !has(object.spec.selfInit) ||
+        !has(object.spec.selfInit.requests) ||
+        size(object.spec.selfInit.requests) == 0 ||
+        !(
+          object.spec.selfInit.requests.filter(r, r.path.startsWith("auth/jwt-operator/") || r.path == "auth/jwt-operator/config").size() > 0
+        ) ||
+        (has(object.spec.selfInit.oidc) && object.spec.selfInit.oidc.enabled == true) ||
+        object.spec.selfInit.requests.filter(r, r.path == "sys/auth/jwt-operator").size() > 0
+      message: "spec.selfInit.requests contains auth/jwt-operator/* paths but is missing sys/auth/jwt-operator (or spec.selfInit.oidc.enabled: true) to enable that auth mount."

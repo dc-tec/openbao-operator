@@ -161,10 +161,10 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 	var bootstrapConfig *configbuilder.OperatorBootstrapConfig
 	if shouldBootstrapJWTAuth(cluster) {
 		if m.oidcIssuer == "" {
-			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC issuer could not be determined at operator startup")
+			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC issuer could not be determined. Ensure the operator ServiceAccount can GET %q and %q on the Kubernetes API server (nonResourceURLs RBAC); optionally set spec.selfInit.oidc.issuer to override the issuer string", "/.well-known/openid-configuration", "/openid/v1/jwks")
 		}
 		if len(m.oidcJWTKeys) == 0 {
-			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC JWKS public keys could not be determined at operator startup")
+			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC JWKS public keys could not be determined. Ensure the operator ServiceAccount can GET %q on the Kubernetes API server (nonResourceURLs RBAC)", "/openid/v1/jwks")
 		}
 
 		operatorNS := m.operatorNamespace

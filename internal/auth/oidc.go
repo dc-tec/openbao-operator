@@ -18,6 +18,23 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// HTTPStatusError represents a non-200 response when calling an HTTP endpoint.
+// It allows callers to make decisions (e.g. retry vs. fail-fast) based on status code.
+type HTTPStatusError struct {
+	URL        string
+	StatusCode int
+}
+
+func (e *HTTPStatusError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.URL == "" {
+		return fmt.Sprintf("endpoint returned status %d", e.StatusCode)
+	}
+	return fmt.Sprintf("%s returned status %d", e.URL, e.StatusCode)
+}
+
 // OIDCConfig holds the discovered OIDC configuration.
 type OIDCConfig struct {
 	IssuerURL string
@@ -25,7 +42,7 @@ type OIDCConfig struct {
 	JWKSKeys  []string
 }
 
-// DiscoverConfig fetches the Kubernetes OIDC issuer configuration at operator startup.
+// DiscoverConfig fetches the Kubernetes OIDC issuer configuration from the Kubernetes API server.
 // baseURL allows tests (or specialized environments) to override the default
 // Kubernetes API DNS name. When empty, it defaults to:
 //
@@ -61,7 +78,7 @@ func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*OID
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("OIDC well-known endpoint returned status %d", resp.StatusCode)
+		return nil, &HTTPStatusError{URL: wellKnownURL, StatusCode: resp.StatusCode}
 	}
 
 	var oidcConfig struct {
@@ -160,7 +177,7 @@ func FetchJWKSKeys(ctx context.Context, cfg *rest.Config, jwksURL string) ([]str
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("jwks endpoint returned status %d", resp.StatusCode)
+		return nil, &HTTPStatusError{URL: jwksURL, StatusCode: resp.StatusCode}
 	}
 
 	var jwks jwksDocument
