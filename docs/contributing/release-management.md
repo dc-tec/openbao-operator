@@ -116,7 +116,7 @@ graph TD
     The repository includes an optional gate (`.github/workflows/release-pr-gate.yml`) intended for the release-please PR:
 
     - Require a label (default: `release:ready`)
-    - Require an explicit approval from the designated release manager (default: `@roelc`)
+    - Require an explicit approval from the designated release manager (default: `@dc-tec`)
 
     To enforce this, enable branch protection on `main` and require the `Release PR Gate` status check,
     and enable "Require review from Code Owners".

@@ -31,7 +31,7 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REQUIRED_LABEL: release:ready
-          REQUIRED_APPROVER: roelc
+          REQUIRED_APPROVER: dc-tec
         run: |
           set -euo pipefail
 
