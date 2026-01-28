@@ -139,7 +139,7 @@ spec:
     # For official OpenBao images, use the OpenBao project's workflow:
     # subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4"
     # For development/testing with operator-signed images:
-    subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v2.4.4"
+    subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/2.4.4"
     # PEM-encoded Cosign public key for signature verification.
     # Download the official OpenBao public key from: https://openbao.org/docs/install/#cosign-and-rekor
     # publicKey: |
@@ -155,13 +155,13 @@ spec:
   # operatorImageVerification:
   #   enabled: true
   #   issuer: "https://token.actions.githubusercontent.com"
-  #   subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v1.2.4"
+  #   subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/1.2.4"
   #   failurePolicy: Block
   initContainer:
     enabled: true
-    # For k3d clusters, use the k3d registry path: k3d-registry.localhost:5000/openbao-config-init:dev
+    # For k3d clusters, use the k3d registry path: k3d-registry.localhost:5000/openbao-init:dev
     # For other environments, use a fully qualified image reference
-    image: "k3d-registry.localhost:5000/openbao-config-init:1.2.4"
+    image: "k3d-registry.localhost:5000/openbao-init:1.2.4"
   network:
     apiServerCIDR: "10.43.0.0/16"
     apiServerEndpointIPs:
@@ -254,10 +254,10 @@ spec:
   backup:
     # Run a backup every 15 minutes
     schedule: "*/15 * * * *"
-    # Backup executor image built from Dockerfile.backup in this repository.
+    # Backup image built from Dockerfile.backup in this repository.
     # For k3d clusters, push to the local registry; for other environments,
     # use a fully qualified image reference.
-    executorImage: "k3d-registry.localhost:5000/openbao-backup:1.1.0"
+    image: "k3d-registry.localhost:5000/openbao-backup:1.1.0"
     target:
       # RustFS S3 API endpoint inside the cluster.
       # Use the internal ClusterIP service for in-cluster access (recommended).

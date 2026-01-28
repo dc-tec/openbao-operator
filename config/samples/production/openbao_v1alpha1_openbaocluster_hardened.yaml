@@ -111,7 +111,7 @@ spec:
   imageVerification:
     enabled: true
     issuer: "https://token.actions.githubusercontent.com"
-    subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v2.4.4"
+    subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/2.4.4"
     # PEM-encoded Cosign public key for signature verification.
     # Download the official OpenBao public key from: https://openbao.org/docs/install/#cosign-and-rekor
     # publicKey: |
@@ -123,7 +123,7 @@ spec:
   # Scheduled backups with JWT Auth (preferred over static tokens)
   backup:
     schedule: "0 3 * * *" # Daily at 3 AM
-    executorImage: "openbao/bao-backup:latest"
+    image: "openbao-backup:latest"
     target:
       endpoint: "https://s3.amazonaws.com"
       bucket: "openbao-backups"

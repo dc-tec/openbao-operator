@@ -89,7 +89,7 @@ spec:
   # Scheduled backups configuration
   backup:
     schedule: "0 3 * * *" # Daily at 3 AM
-    executorImage: "openbao/backup-executor:v0.1.0" # Default, can be omitted
+    image: "openbao-backup:0.1.0" # Default, can be omitted
     target:
       # Storage provider: s3 (default), gcs, or azure
       provider: s3

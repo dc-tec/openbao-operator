@@ -264,12 +264,12 @@ type BackupSchedule struct {
 	// Retention defines optional backup retention policy.
 	// +optional
 	Retention *BackupRetention `json:"retention,omitempty"`
-	// ExecutorImage is the container image to use for backup operations.
-	// If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_BACKUP_IMAGE_REPOSITORY
+	// Image is the container image to use for backup operations.
+	// If not specified, defaults to "<repo>:X.Y.Z" where <repo> is derived from OPERATOR_BACKUP_IMAGE_REPOSITORY
 	// (default: "ghcr.io/dc-tec/openbao-backup") and the tag matches OPERATOR_VERSION.
 	// This allows users to override the image for air-gapped environments or custom registries.
 	// +optional
-	ExecutorImage string `json:"executorImage,omitempty"`
+	Image string `json:"image,omitempty"`
 }
 
 // UpdateStrategyType defines the type of update strategy to use.
@@ -360,26 +360,26 @@ type BlueGreenConfig struct {
 
 // UpgradeConfig defines configuration for upgrade operations.
 type UpgradeConfig struct {
-	// ExecutorImage is the container image to use for upgrade operations.
+	// Image is the container image to use for upgrade operations.
 	//
 	// This image is used by Kubernetes Jobs created during upgrades (for example, blue/green
 	// cluster orchestration actions). The executor runs inside the tenant namespace and
 	// authenticates to OpenBao using a projected ServiceAccount token (JWT auth).
 	//
-	// If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_UPGRADE_IMAGE_REPOSITORY
+	// If not specified, defaults to "<repo>:X.Y.Z" where <repo> is derived from OPERATOR_UPGRADE_IMAGE_REPOSITORY
 	// (default: "ghcr.io/dc-tec/openbao-upgrade") and the tag matches OPERATOR_VERSION.
 	// +optional
-	ExecutorImage string `json:"executorImage,omitempty"`
+	Image string `json:"image,omitempty"`
 
 	// PreUpgradeSnapshot, when true, triggers a backup before any upgrade.
 	// When enabled, the upgrade manager will create a backup using the backup
-	// configuration (spec.backup.target, spec.backup.executorImage, etc.) and
+	// configuration (spec.backup.target, spec.backup.image, etc.) and
 	// wait for it to complete before proceeding with the upgrade.
 	//
 	// If the backup fails, the upgrade will be blocked and a Degraded condition
 	// will be set with Reason=PreUpgradeBackupFailed.
 	//
-	// Requires spec.backup to be configured with target, executorImage, and
+	// Requires spec.backup to be configured with target, image, and
 	// authentication (jwtAuthRole or tokenSecretRef).
 	// +optional
 	PreUpgradeSnapshot bool `json:"preUpgradeSnapshot,omitempty"`
@@ -876,8 +876,8 @@ type InitContainerConfig struct {
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
 	// Image is the container image to use for the init container.
-	// If not specified, defaults to "<repo>:vX.Y.Z" where <repo> is derived from OPERATOR_INIT_IMAGE_REPOSITORY
-	// (default: "ghcr.io/dc-tec/openbao-config-init") and the tag matches OPERATOR_VERSION.
+	// If not specified, defaults to "<repo>:X.Y.Z" where <repo> is derived from OPERATOR_INIT_IMAGE_REPOSITORY
+	// (default: "ghcr.io/dc-tec/openbao-init") and the tag matches OPERATOR_VERSION.
 	// +optional
 	Image string `json:"image,omitempty"`
 }
@@ -1218,7 +1218,7 @@ type ImageVerificationConfig struct {
 
 	// Subject is the OIDC subject for keyless verification.
 	// Required for keyless verification when PublicKey is not provided.
-	// Example (GitHub Actions): https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v<VERSION>
+	// Example (GitHub Actions): https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/<VERSION>
 	// The version in the subject MUST match the image tag version.
 	// +optional
 	Subject string `json:"subject,omitempty"`

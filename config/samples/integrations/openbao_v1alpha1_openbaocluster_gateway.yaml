@@ -48,9 +48,9 @@ spec:
   profile: Development
   initContainer:
     enabled: true
-    # For k3d clusters, use the k3d registry path: k3d-registry.localhost:5000/openbao-config-init:dev
+    # For k3d clusters, use the k3d registry path: k3d-registry.localhost:5000/openbao-init:dev
     # For other environments, use a fully qualified image reference
-    image: "k3d-registry.localhost:5000/openbao-config-init:dev-0.0.1"
+    image: "k3d-registry.localhost:5000/openbao-init:dev-0.0.1"
   tls:
     enabled: true
     rotationPeriod: "720h"
