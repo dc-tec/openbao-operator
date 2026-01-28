@@ -6,7 +6,8 @@ description: Go coding standards for the OpenBao Operator
 
 # Go Coding Standards
 
-Follow the project coding standards in `docs/contributing/standards/`.
+- Follow the project coding standards in `docs/contributing/standards/`.
+- Use the [coding-guidelines skill](../skills/coding-guidelines/SKILL.md)
 
 ## References
 
