@@ -5,9 +5,6 @@ on:
     tags:
       - "[0-9]*.[0-9]*.[0-9]*"
       - "[0-9]*.[0-9]*.[0-9]*-*"
-      # Match SemVer build metadata tags (e.g. 1.2.3+build.1). Use a character class
-      # to avoid minimatch extglob parsing of '+'.
-      - "[0-9]*.[0-9]*.[0-9]*[+]*"
 
 permissions:
   contents: write
