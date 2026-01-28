@@ -39,3 +39,8 @@ site/*
 
 # MkDocs virtualenv (created by `make docs-*`)
 .venv-docs/
+
+# Release workflow outputs (generated locally during validation)
+dist/crds.yaml
+dist/checksums.txt
+dist/sbom-*.spdx.json
