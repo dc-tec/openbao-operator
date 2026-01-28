@@ -6,7 +6,7 @@
 # user, matching the PodSecurityContext used by the backup Job (UID 1000, GID 1000).
 #
 # Example build (from repo root):
-#   docker build -f Dockerfile.backup -t openbao/backup-executor:dev .
+#   docker build -f Dockerfile.backup -t openbao-backup:dev .
 
 FROM golang:1.25.5 AS builder
 ARG TARGETOS
@@ -37,4 +37,3 @@ COPY --from=builder /workspace/bao-backup /backup-executor
 HEALTHCHECK NONE
 
 ENTRYPOINT ["/backup-executor"]
-
