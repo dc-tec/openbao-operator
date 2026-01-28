@@ -1,9 +1,8 @@
 // Package main verifies that the Helm chart values, schema, and templates stay in sync.
 //
 // This tool is intentionally conservative:
-//   - Every `.Values.*` reference used by templates must exist in both `values.yaml` and `values.schema.json`.
-//   - `values.yaml` must not contain keys disallowed by the schema (respecting JSON schema
-//     additionalProperties semantics).
+// - Every `.Values.*` reference used by templates must exist in both `values.yaml` and `values.schema.json`.
+// - `values.yaml` must not contain keys disallowed by the schema (respecting JSON schema additionalPropertiess).
 //
 // This helps prevent Helm chart drift where templates reference keys that are undocumented or invalid.
 package main
@@ -28,10 +27,10 @@ type options struct {
 }
 
 type jsonSchema struct {
-	Ref                  string                 `json:"$ref"`
-	Type                 string                 `json:"type"`
+	Ref                  string                `json:"$ref"`
+	Type                 string                `json:"type"`
 	Properties           map[string]*jsonSchema `json:"properties"`
-	AdditionalProperties any                    `json:"additionalProperties"`
+	AdditionalProperties any                   `json:"additionalProperties"`
 	Defs                 map[string]*jsonSchema `json:"$defs"`
 }
 

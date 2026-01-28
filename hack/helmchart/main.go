@@ -203,8 +203,7 @@ func syncPolicies(opts options) error {
 		}
 		outName, ok := policyFileMapping[name]
 		if !ok {
-			fmt.Fprintf(os.Stderr, "warning: unknown policy file %q, skipping\n", name)
-			continue
+			return fmt.Errorf("unknown policy file %q (update policyFileMapping in hack/helmchart/main.go)", name)
 		}
 		outputGroups[outName] = append(outputGroups[outName], name)
 	}
@@ -222,8 +221,14 @@ func syncPolicies(opts options) error {
 		})
 	}
 
-	// Process each output group
-	for outName, inputFiles := range outputGroups {
+	// Process each output group (sorted for stable output).
+	outNames := make([]string, 0, len(outputGroups))
+	for outName := range outputGroups {
+		outNames = append(outNames, outName)
+	}
+	sort.Strings(outNames)
+	for _, outName := range outNames {
+		inputFiles := outputGroups[outName]
 		var parts []string
 		for _, inputFile := range inputFiles {
 			inPath := filepath.Join(opts.policyInputDir, inputFile)
