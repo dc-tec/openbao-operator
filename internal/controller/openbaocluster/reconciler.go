@@ -2,6 +2,7 @@ package openbaocluster
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -16,10 +17,11 @@ type OpenBaoClusterReconciler struct {
 	client.Client
 	APIReader         client.Reader
 	Scheme            *runtime.Scheme
+	RestConfig        *rest.Config
 	TLSReload         certmanager.ReloadSignaler
 	InitManager       interfaces.InitManager
 	OperatorNamespace string
-	OIDCIssuer        string // OIDC issuer URL discovered at startup
+	OIDCIssuer        string // OIDC issuer URL discovered at startup (best-effort warmup)
 	OIDCJWTKeys       []string
 	AdmissionStatus   *admission.Status
 	Recorder          events.EventRecorder

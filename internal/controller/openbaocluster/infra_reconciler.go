@@ -4,18 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
@@ -32,6 +36,7 @@ type infraReconciler struct {
 	client                  client.Client
 	apiReader               client.Reader
 	scheme                  *runtime.Scheme
+	restConfig              *rest.Config
 	operatorNamespace       string
 	oidcIssuer              string
 	oidcJWTKeys             []string
@@ -43,6 +48,83 @@ type infraReconciler struct {
 	platform                string
 	smartClientConfig       openbao.ClientConfig
 	clientForPodFunc        func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (*openbao.Client, error)
+	discoverOIDCConfigFunc  func(ctx context.Context, cfg *rest.Config) (*auth.OIDCConfig, error)
+}
+
+func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return cluster != nil &&
+		cluster.Spec.SelfInit != nil &&
+		cluster.Spec.SelfInit.OIDC != nil &&
+		cluster.Spec.SelfInit.OIDC.Enabled
+}
+
+func oidcDiscoveryError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var statusErr *auth.HTTPStatusError
+	if errors.As(err, &statusErr) {
+		switch statusErr.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return operatorerrors.WrapPermanentConfig(fmt.Errorf(
+				"OIDC discovery blocked by Kubernetes API RBAC (%d). Ensure the operator ServiceAccount can GET %q and %q on the Kubernetes API server (nonResourceURLs RBAC): %w",
+				statusErr.StatusCode,
+				"/.well-known/openid-configuration",
+				"/openid/v1/jwks",
+				err,
+			))
+		case http.StatusNotFound:
+			return operatorerrors.WrapPermanentConfig(fmt.Errorf(
+				"OIDC discovery endpoint not found (404). Ensure the Kubernetes API server exposes OIDC discovery and JWKS endpoints: %w",
+				err,
+			))
+		default:
+			if statusErr.StatusCode == http.StatusTooManyRequests || statusErr.StatusCode >= 500 {
+				return operatorerrors.WrapTransientKubernetesAPI(err)
+			}
+			return operatorerrors.WrapPermanentConfig(err)
+		}
+	}
+
+	return operatorerrors.WrapTransientKubernetesAPI(operatorerrors.WrapTransientConnection(err))
+}
+
+func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, []string, error) {
+	effectiveIssuer := r.oidcIssuer
+	effectiveKeys := r.oidcJWTKeys
+
+	if !shouldBootstrapJWTAuth(cluster) || (strings.TrimSpace(effectiveIssuer) != "" && len(effectiveKeys) > 0) {
+		return effectiveIssuer, effectiveKeys, nil
+	}
+
+	if r.restConfig == nil {
+		return "", nil, operatorerrors.WrapPermanentConfig(fmt.Errorf("OIDC discovery required but controller rest.Config is not available"))
+	}
+
+	discover := r.discoverOIDCConfigFunc
+	if discover == nil {
+		discover = func(ctx context.Context, cfg *rest.Config) (*auth.OIDCConfig, error) {
+			// Security: never use any CR-provided URL as the discovery target.
+			return auth.DiscoverConfig(ctx, cfg, "")
+		}
+	}
+
+	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	discovered, err := discover(discoveryCtx, r.restConfig)
+	if err != nil {
+		return "", nil, oidcDiscoveryError(err)
+	}
+	if discovered == nil || strings.TrimSpace(discovered.IssuerURL) == "" {
+		return "", nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned empty issuer"))
+	}
+	if len(discovered.JWKSKeys) == 0 {
+		return "", nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned no JWKS keys"))
+	}
+
+	return discovered.IssuerURL, discovered.JWKSKeys, nil
 }
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -309,9 +391,14 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		}
 	}
 
-	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, r.platform)
+	effectiveIssuer, effectiveKeys, err := r.resolveOIDC(ctx, cluster)
+	if err != nil {
+		return recon.Result{}, err
+	}
+
+	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, effectiveIssuer, effectiveKeys, r.platform)
 	if r.apiReader != nil {
-		manager = inframanager.NewManagerWithReader(r.client, r.apiReader, r.scheme, r.operatorNamespace, r.oidcIssuer, r.oidcJWTKeys, r.platform)
+		manager = inframanager.NewManagerWithReader(r.client, r.apiReader, r.scheme, r.operatorNamespace, effectiveIssuer, effectiveKeys, r.platform)
 	}
 	if err := manager.Reconcile(ctx, logger, cluster, spec); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
