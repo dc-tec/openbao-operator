@@ -4233,7 +4233,7 @@
 <tr>
 <td style="text-align: left;"><code>RELATED_IMAGE_OPENBAO</code></td>
 <td style="text-align: left;">Default OpenBao image if <code>spec.image</code> is empty</td>
-<td style="text-align: left;"><code>docker.io/openbao/openbao</code></td>
+<td style="text-align: left;"><code>openbao/openbao</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>OPERATOR_INIT_IMAGE_REPOSITORY</code></td>
@@ -4258,7 +4258,7 @@
 <p>You can specify the exact image for OpenBao and its sidecars in the CRD. This takes precedence over global defaults.</p>
 <div class="admonition note">
 <p class="admonition-title">Defaulting Logic</p>
-<p>If <code>spec.image</code> is omitted, the operator infers it from <code>spec.version</code>. For example, version <code>2.4.4</code> defaults to <code>docker.io/openbao/openbao:2.4.4</code> (or the value of <code>RELATED_IMAGE_OPENBAO</code> env var). You only need to set <code>spec.image</code> if you are using a custom registry or a different tag.</p>
+<p>If <code>spec.image</code> is omitted, the operator infers it from <code>spec.version</code>. For example, version <code>2.4.4</code> defaults to <code>openbao/openbao:2.4.4</code> (or the value of <code>RELATED_IMAGE_OPENBAO</code> env var). You only need to set <code>spec.image</code> if you are using a custom registry or a different tag.</p>
 </div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoCluster</span>

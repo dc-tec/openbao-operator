@@ -4223,7 +4223,8 @@ the default role names with your own custom roles.</p>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">OIDC prerequisites</p>
-<p>The operator must discover the Kubernetes OIDC issuer and JWKS keys at startup.</p>
+<p>The operator must be able to discover the Kubernetes OIDC issuer and JWKS keys from the Kubernetes API server.
+Ensure the operator ServiceAccount can GET <code>/.well-known/openid-configuration</code> and <code>/openid/v1/jwks</code> (RBAC <code>nonResourceURLs</code>).</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">JWT audience</p>
