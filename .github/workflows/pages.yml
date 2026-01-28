@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to deploy (e.g., v1.0.0 or 'dev')"
+        description: "Version to deploy (e.g., 1.0.0 or 'dev')"
         required: false
         default: dev
 

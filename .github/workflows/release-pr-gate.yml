@@ -1,0 +1,61 @@
+name: Release PR Gate
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+      - labeled
+      - unlabeled
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: release-pr-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Gate Release PR Merge
+    runs-on: ubuntu-24.04
+    if: ${{ !github.event.repository.fork }}
+    steps:
+      - name: Evaluate release PR gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REQUIRED_LABEL: release:ready
+          REQUIRED_APPROVER: roelc
+        run: |
+          set -euo pipefail
+
+          # Detect whether this PR is a release-please PR by checking the files it modifies.
+          # This avoids relying on PR author identity (release-please may run under a PAT/GitHub App).
+          files="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename')"
+          if ! (echo "${files}" | grep -qx "CHANGELOG.md" && echo "${files}" | grep -qx ".release-please-manifest.json"); then
+            echo "Not a release PR (missing CHANGELOG.md and/or .release-please-manifest.json); skipping gate."
+            exit 0
+          fi
+
+          labels="$(gh api "repos/${REPO}/issues/${PR_NUMBER}/labels" --paginate --jq '.[].name')"
+          if ! echo "${labels}" | grep -qx "${REQUIRED_LABEL}"; then
+            echo "Missing required label '${REQUIRED_LABEL}' on release PR." >&2
+            echo "Add it when the PR is ready to be merged." >&2
+            exit 1
+          fi
+
+          # Require an explicit approval from a designated release manager.
+          # Note: GitHub required-review settings usually ignore self-approvals.
+          approvers="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" --paginate --jq '.[] | select(.state=="APPROVED") | .user.login' | sort -u)"
+          if ! echo "${approvers}" | grep -qx "${REQUIRED_APPROVER}"; then
+            echo "Missing required approval from '${REQUIRED_APPROVER}' on release PR." >&2
+            exit 1
+          fi
+
+          echo "Release PR gate satisfied."

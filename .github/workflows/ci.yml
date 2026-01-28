@@ -14,6 +14,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-24.04
+    outputs:
+      chart: ${{ steps.diff.outputs.chart }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Detect chart changes
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          head_sha="${GITHUB_SHA}"
+          base_sha=""
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            head_sha="${{ github.event.pull_request.head.sha }}"
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            base_sha="${{ github.event.before }}"
+          else
+            echo "Unsupported event: ${{ github.event_name }}" >&2
+            exit 1
+          fi
+
+          # Ensure base exists locally (checkout may not contain it for PRs).
+          git fetch --no-tags --prune --depth=1 origin "${base_sha}" || true
+
+          changed="$(git diff --name-only "${base_sha}" "${head_sha}" || true)"
+          if echo "${changed}" | grep -qE '^(charts/openbao-operator/|config/(crd|policy|rbac)/|hack/helm(chart|values)/)'; then
+            echo "chart=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "chart=false" >> "${GITHUB_OUTPUT}"
+          fi
+
   security:
     name: Security (govulncheck + Trivy FS)
     runs-on: ubuntu-24.04
@@ -196,6 +236,34 @@ jobs:
       - name: Verify OpenShift templating (SCC-compatible)
         run: bash hack/ci/verify-openshift-helm.sh
 
+  helm-e2e-smoke:
+    name: Helm E2E Smoke (kind)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.chart == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Setup Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: Install kind (pinned)
+        uses: ./.github/actions/install-kind
+
+      - name: Run Helm E2E smoke
+        env:
+          GOFLAGS: -mod=readonly
+        run: make helm-e2e-smoke
+
   e2e-smoke:
     name: E2E Smoke (kind v1.34)
     runs-on: ubuntu-24.04
@@ -223,3 +291,15 @@ jobs:
           E2E_PARALLEL_NODES: "2"
           E2E_TIMEOUT: 40m
         run: make test-e2e-ci
+
+      - name: Collect E2E artifacts (failure)
+        if: failure()
+        run: bash hack/ci/collect-e2e-artifacts.sh
+
+      - name: Upload E2E artifacts (failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-artifacts
+          path: artifacts/
+          retention-days: 7
