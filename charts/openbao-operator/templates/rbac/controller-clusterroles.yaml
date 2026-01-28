@@ -56,6 +56,12 @@ rules:
       - validatingadmissionpolicybindings
     verbs:
       - get
+  - nonResourceURLs:
+      - "/.well-known/openid-configuration"
+      - "/openid/v1/jwks"
+      - "/.well-known/jwks.json"
+    verbs:
+      - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
