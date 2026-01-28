@@ -56,8 +56,8 @@ flowchart LR
 
     To prevent **TOCTOU** (Time-of-Check to Time-of-Use) attacks, the Operator mutates image tags to immutable digests.
 
-    -   **Attack Vector:** An attacker pushes a malicious image to `v1.2.3` *after* the admission controller checks it but *before* the Kubelet pulls it.
-    -   **Mitigation:** The Operator resolves `openbao:v1.2.3` to `openbao@sha256:abc...` during verification and forces the Pod to use the digest.
+    -   **Attack Vector:** An attacker pushes a malicious image to `1.2.3` *after* the admission controller checks it but *before* the Kubelet pulls it.
+    -   **Mitigation:** The Operator resolves `openbao:1.2.3` to `openbao@sha256:abc...` during verification and forces the Pod to use the digest.
 
     !!! success "Immutability"
         This ensures that the *exact* bits that were verified are the ones that run in your cluster.
@@ -113,16 +113,56 @@ spec:
   operatorImageVerification:
     enabled: true
     issuer: "https://token.actions.githubusercontent.com"
-    subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v1.2.4"
+    subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/1.2.4"
     failurePolicy: Block
 
   initContainer:
-    image: "ghcr.io/dc-tec/openbao-config-init:1.2.4"
+    image: "ghcr.io/dc-tec/openbao-init:1.2.4"
   backup:
-    executorImage: "ghcr.io/dc-tec/openbao-backup:1.1.0"
+    image: "ghcr.io/dc-tec/openbao-backup:1.1.0"
 ```
 
 !!! important "No Fallback Behavior"
     `operatorImageVerification` and `imageVerification` are completely independent configurations.
     If `operatorImageVerification` is not configured, helper images are **not verified** (even if `imageVerification` is set).
     This prevents confusing failures when the main image and helper images have different signers.
+
+## Release Supply Chain
+
+The operator project publishes release artifacts with a "build once, promote by digest" model:
+
+- Images are built and tested under a `build-<sha>` tag.
+- Stable/prerelease tags (for example `0.1.0`, `0.2.0-rc.1`) are promoted **by digest** (no rebuild).
+- Images and charts are signed keylessly with Sigstore.
+- SBOMs are generated and checksummed; the checksums file is signed as a blob.
+
+=== ":material-check-decagram: Verify Operator Images"
+
+    ```sh
+    cosign verify \
+      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+      ghcr.io/dc-tec/openbao-operator:0.1.0
+    ```
+
+=== ":material-chart-bubble: Verify Helm Chart (OCI)"
+
+    ```sh
+    crane digest ghcr.io/dc-tec/charts/openbao-operator:0.1.0
+
+    cosign verify \
+      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+      ghcr.io/dc-tec/charts/openbao-operator@sha256:...
+    ```
+
+=== ":material-file-lock: Verify Release Checksums"
+
+    ```sh
+    cosign verify-blob \
+      --certificate checksums.txt.crt \
+      --signature checksums.txt.sig \
+      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+      checksums.txt
+    ```

@@ -14,7 +14,7 @@
 </div>
 
 > [!WARNING]
-> **Pre-1.0 Status**: This operator is actively seeking feedback and may introduce breaking changes to APIs and defaults before `v1.0.0`. Validate thoroughly before production use.
+> **Pre-1.0 Status**: This operator is actively seeking feedback and may introduce breaking changes to APIs and defaults before `1.0.0`. Validate thoroughly before production use.
 
 ---
 

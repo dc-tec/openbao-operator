@@ -117,10 +117,10 @@ The `OpenBaoCluster` Custom Resource provides comprehensive configuration option
       
       initContainer:
         enabled: true
-        image: "internal-registry.example.com/openbao/openbao-config-init:v1.0.0"
+        image: "internal-registry.example.com/openbao-init:1.0.0"
 
       backup:
-        executorImage: "internal-registry.example.com/openbao/backup-executor:v0.1.0"
+        image: "internal-registry.example.com/openbao-backup:0.1.0"
         schedule: "0 3 * * *"
         retention:
           maxCount: 7

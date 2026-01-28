@@ -81,7 +81,7 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
         spec:
           backup:
             schedule: "0 3 * * *"  # Daily at 3 AM
-            # executorImage: inferred from operator version
+            # image: inferred from operator version
             # jwtAuthRole: inferred from selfInit (openbao-operator-backup)
             
             target:
@@ -113,7 +113,7 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
         spec:
           backup:
             schedule: "0 3 * * *"
-            executorImage: "openbao/backup-executor:v0.1.0"
+            image: "ghcr.io/dc-tec/openbao-backup:0.1.0"
             jwtAuthRole: backup
             
             target:
@@ -147,7 +147,7 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
         spec:
           backup:
             schedule: "0 3 * * *"
-            executorImage: "openbao/backup-executor:v0.1.0"
+            image: "ghcr.io/dc-tec/openbao-backup:0.1.0"
             jwtAuthRole: backup
             
             target:
@@ -195,7 +195,7 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
         spec:
           backup:
             schedule: "0 3 * * *"
-            executorImage: "openbao/backup-executor:v0.1.0"
+            image: "ghcr.io/dc-tec/openbao-backup:0.1.0"
             tokenSecretRef:
               name: backup-token
             target:
@@ -217,7 +217,7 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
         spec:
           backup:
             schedule: "0 3 * * *"
-            executorImage: "openbao/backup-executor:v0.1.0"
+            image: "ghcr.io/dc-tec/openbao-backup:0.1.0"
             tokenSecretRef:
               name: backup-token
             target:
@@ -239,7 +239,7 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
         spec:
           backup:
             schedule: "0 3 * * *"
-            executorImage: "openbao/backup-executor:v0.1.0"
+            image: "ghcr.io/dc-tec/openbao-backup:0.1.0"
             tokenSecretRef:
               name: backup-token
             target:

@@ -27,7 +27,7 @@ When OIDC is enabled, you can simply enable the upgrade strategy.
 ```yaml
 spec:
   upgrade:
-    # executorImage: inferred from operator version
+    # image: inferred from operator version
     # jwtAuthRole: inferred (openbao-operator-upgrade)
 ```
 

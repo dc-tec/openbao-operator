@@ -147,7 +147,7 @@ graph BT
     
     - **Kind Cluster**: Runs actual Kubernetes nodes in Docker.
     - **Real Images**: Builds and loads the Operator and OpenBao images.
-    - **Helpers**: automated `backup-executor`, `upgrade-executor`.
+    - **Helpers**: automated `openbao-backup`, `openbao-upgrade`.
     - **Storage**: The suite installs the CSI hostpath test driver and applies an expandable StorageClass `openbao-e2e-hostpath`.
       Tests may consume this via `E2E_STORAGE_CLASS` (set automatically in Kind mode).
     

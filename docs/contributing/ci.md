@@ -55,7 +55,7 @@ Run these locally to debug CI failures.
 | **Formatting** | `make verify-fmt` | Checks `gofmt` compliance |
 | **Dependencies** | `make verify-tidy` | Ensures `go.mod` is clean |
 | **Generators** | `make verify-generated` | Checks for drift in CRDs/RBAC |
-| **Helm Sync** | `make verify-helm` | Checks drift in `charts/` |
+| **Helm Sync** | `make verify-helm` | Checks drift in `charts/` (including values/schema validation) |
 | **Unit Tests** | `make test-ci` | Runs unit + integration tests |
 | **Compatibility** | `make verify-openbao-config-compat` | Checks HCL against upstream OpenBao |
 
@@ -81,14 +81,14 @@ We use [Kind](https://kind.sigs.k8s.io/) for E2E tests.
       E2E_PARALLEL_NODES=1
     ```
 
-=== "🧪 Full Suite (Thorough)"
+=== ":material-flask: Full Suite (Thorough)"
     Runs the entire test matrix (Upgrade, Backup, Restore, etc).
 
     ```sh
     make test-e2e-ci KIND_NODE_IMAGE=kindest/node:v1.34.3
     ```
 
-=== "🐛 Debug Mode"
+=== ":material-bug: Debug Mode"
     Keeps the cluster alive after failure for inspection.
 
     ```sh

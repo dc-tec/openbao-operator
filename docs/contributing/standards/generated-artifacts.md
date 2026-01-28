@@ -32,10 +32,11 @@ Standard Kubebuilder artifacts generated from Go types.
 
 We maintain a standalone Helm chart that must stay in sync with our core manifests.
 
-- **Source:** `config/crd/bases/` + `dist/install.yaml`
+- **Source:** `config/crd/bases/` + `config/policy/` + `config/rbac/`
 - **Output:**
   - `charts/openbao-operator/crds/` (Synced CRDs)
-  - `charts/openbao-operator/files/install.yaml.tpl` (Synced installer)
+  - `charts/openbao-operator/templates/admission/` (Synced admission policies)
+  - `charts/openbao-operator/templates/rbac/` (Synced RBAC templates)
 - **Command:** `make helm-sync`
 
 ### 3. Provisioner RBAC
