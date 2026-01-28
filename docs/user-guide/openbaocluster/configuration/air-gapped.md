@@ -53,7 +53,7 @@ To override these globally for all clusters, set the following environment varia
 
 | Environment Variable | Description | Default |
 | :--- | :--- | :--- |
-| `RELATED_IMAGE_OPENBAO` | Default OpenBao image if `spec.image` is empty | `docker.io/openbao/openbao` |
+| `RELATED_IMAGE_OPENBAO` | Default OpenBao image if `spec.image` is empty | `openbao/openbao` |
 | `OPERATOR_INIT_IMAGE_REPOSITORY` | Repository for config-init container | `ghcr.io/dc-tec/openbao-config-init` |
 | `OPERATOR_BACKUP_IMAGE_REPOSITORY` | Repository for backup executor | `ghcr.io/dc-tec/openbao-backup` |
 | `OPERATOR_UPGRADE_IMAGE_REPOSITORY` | Repository for upgrade executor | `ghcr.io/dc-tec/openbao-upgrade` |
@@ -67,7 +67,7 @@ You can also override images and credentials at the `OpenBaoCluster` level.
 You can specify the exact image for OpenBao and its sidecars in the CRD. This takes precedence over global defaults.
 
 !!! note "Defaulting Logic"
-    If `spec.image` is omitted, the operator infers it from `spec.version`. For example, version `2.4.4` defaults to `docker.io/openbao/openbao:2.4.4` (or the value of `RELATED_IMAGE_OPENBAO` env var). You only need to set `spec.image` if you are using a custom registry or a different tag.
+    If `spec.image` is omitted, the operator infers it from `spec.version`. For example, version `2.4.4` defaults to `  openbao/openbao:2.4.4` (or the value of `RELATED_IMAGE_OPENBAO` env var). You only need to set `spec.image` if you are using a custom registry or a different tag.
 
 ```yaml
 apiVersion: openbao.org/v1alpha1

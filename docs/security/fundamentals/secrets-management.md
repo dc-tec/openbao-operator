@@ -52,7 +52,7 @@ The OpenBao Operator uses Kubernetes OIDC to authenticate **Backup** and **Upgra
 
 !!! note "JWT bootstrap"
     Enable automatic JWT auth bootstrap with `spec.selfInit.oidc.enabled: true`.
-    This requires the OIDC issuer and JWKS keys to be discoverable at operator startup.
+    This requires the OIDC issuer and JWKS keys to be discoverable by the operator from the Kubernetes API server (OIDC discovery non-resource URLs).
     If you disable it, configure JWT auth manually via self-init requests.
 
 ### Workflow

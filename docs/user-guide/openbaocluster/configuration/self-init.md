@@ -88,7 +88,8 @@ spec:
 ```
 
 !!! note "OIDC prerequisites"
-    The operator must discover the Kubernetes OIDC issuer and JWKS keys at startup.
+    The operator must be able to discover the Kubernetes OIDC issuer and JWKS keys from the Kubernetes API server.
+    Ensure the operator ServiceAccount can GET `/.well-known/openid-configuration` and `/openid/v1/jwks` (RBAC `nonResourceURLs`).
 
 !!! note "JWT audience"
     The operator uses `OPENBAO_JWT_AUDIENCE` (default: `openbao-internal`) when creating JWT roles.
