@@ -28,9 +28,9 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 
 	cluster := newMinimalClusterObj(namespace, "bluegreen")
 	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
-		Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
-		ExecutorImage: "openbao/upgrade-executor:dev",
-		JWTAuthRole:   "upgrade",
+		Strategy:    openbaov1alpha1.UpdateStrategyBlueGreen,
+		Image:       "openbao-upgrade:dev",
+		JWTAuthRole: "upgrade",
 	}
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("create OpenBaoCluster: %v", err)
@@ -172,9 +172,9 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 	cluster := newMinimalClusterObj(namespace, "bluegreen-leader-fallback")
 	cluster.Spec.Replicas = 1
 	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
-		Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
-		ExecutorImage: "openbao/upgrade-executor:dev",
-		JWTAuthRole:   "upgrade",
+		Strategy:    openbaov1alpha1.UpdateStrategyBlueGreen,
+		Image:       "openbao-upgrade:dev",
+		JWTAuthRole: "upgrade",
 	}
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("create OpenBaoCluster: %v", err)

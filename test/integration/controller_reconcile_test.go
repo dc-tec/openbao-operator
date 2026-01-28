@@ -203,7 +203,7 @@ func TestOpenBaoClusterReconciler_DeletionWithRetainPolicy(t *testing.T) {
 				Size: "10Gi",
 			},
 			InitContainer: &openbaov1alpha1.InitContainerConfig{
-				Image: "openbao/openbao-config-init:latest",
+				Image: "openbao/openbao-init:latest",
 			},
 			DeletionPolicy: openbaov1alpha1.DeletionPolicyRetain,
 		},

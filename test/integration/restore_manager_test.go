@@ -46,8 +46,8 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 					Bucket:   "backups",
 				},
 			},
-			ExecutorImage: "openbao/backup-executor:dev",
-			JWTAuthRole:   "restore-role", // Required for auth validation
+			Image:       "openbao-backup:dev",
+			JWTAuthRole: "restore-role", // Required for auth validation
 		},
 	}
 	if err := k8sClient.Create(ctx, restoreObj); err != nil {
@@ -162,8 +162,8 @@ func TestRestoreManager_GCSProvider(t *testing.T) {
 					},
 				},
 			},
-			ExecutorImage: "openbao/backup-executor:dev",
-			JWTAuthRole:   "restore-role",
+			Image:       "openbao-backup:dev",
+			JWTAuthRole: "restore-role",
 		},
 	}
 	if err := k8sClient.Create(ctx, restoreObj); err != nil {
@@ -281,8 +281,8 @@ func TestRestoreManager_AzureProvider(t *testing.T) {
 					},
 				},
 			},
-			ExecutorImage: "openbao/backup-executor:dev",
-			JWTAuthRole:   "restore-role",
+			Image:       "openbao-backup:dev",
+			JWTAuthRole: "restore-role",
 		},
 	}
 	if err := k8sClient.Create(ctx, restoreObj); err != nil {

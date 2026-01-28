@@ -145,7 +145,7 @@ func newMinimalClusterObj(namespace, name string) *openbaov1alpha1.OpenBaoCluste
 				Size: "10Gi",
 			},
 			InitContainer: &openbaov1alpha1.InitContainerConfig{
-				Image: "openbao/openbao-config-init:latest",
+				Image: "openbao/openbao-init:latest",
 			},
 		},
 	}
