@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 // executePod creates a pod to execute a command with standard environment variables.
@@ -146,6 +149,113 @@ func ReadSecret(
 		return "", err
 	}
 	return strings.TrimSpace(logs), nil
+}
+
+// ResolveActiveOpenBaoAddress returns a deterministic in-cluster address that targets the active,
+// unsealed OpenBao pod when possible.
+//
+// Many E2E tests used the headless Service address (<cluster>.<ns>.svc...), which can resolve to
+// *any* pod (including not-yet-ready or sealed pods) and introduce flakes on slower CI runners.
+func ResolveActiveOpenBaoAddress(ctx context.Context, c client.Client, namespace, clusterName string) (string, error) {
+	if ctx == nil {
+		return "", fmt.Errorf("context is required")
+	}
+	if c == nil {
+		return "", fmt.Errorf("kubernetes client is required")
+	}
+	if namespace == "" {
+		return "", fmt.Errorf("namespace is required")
+	}
+	if clusterName == "" {
+		return "", fmt.Errorf("cluster name is required")
+	}
+
+	var pods corev1.PodList
+	if err := c.List(ctx, &pods,
+		client.InNamespace(namespace),
+		client.MatchingLabels(map[string]string{
+			constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
+			constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+			constants.LabelOpenBaoCluster: clusterName,
+		}),
+	); err != nil {
+		return "", fmt.Errorf("failed to list OpenBao pods (cluster=%s): %w", clusterName, err)
+	}
+
+	type candidate struct {
+		name        string
+		sealedKnown bool
+		sealedValue bool
+		activeKnown bool
+		activeValue bool
+		deleting    bool
+	}
+
+	candidates := make([]candidate, 0, len(pods.Items))
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		active, activePresent, activeErr := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelActive)
+		if activeErr != nil {
+			continue
+		}
+		if !activePresent || !active {
+			continue
+		}
+
+		sealed, sealedPresent, sealedErr := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelSealed)
+		if sealedErr != nil {
+			continue
+		}
+
+		candidates = append(candidates, candidate{
+			name:        pod.Name,
+			sealedKnown: sealedPresent,
+			sealedValue: sealed,
+			activeKnown: activePresent,
+			activeValue: active,
+			deleting:    pod.DeletionTimestamp != nil,
+		})
+	}
+
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("no active OpenBao pod found (cluster=%s)", clusterName)
+	}
+
+	// Prefer active + unsealed candidates when the sealed label is present.
+	unsealed := make([]candidate, 0, len(candidates))
+	unknown := make([]candidate, 0, len(candidates))
+	for _, c := range candidates {
+		if c.deleting {
+			continue
+		}
+		if c.sealedKnown {
+			if !c.sealedValue {
+				unsealed = append(unsealed, c)
+			}
+			continue
+		}
+		unknown = append(unknown, c)
+	}
+
+	pick := func(list []candidate) (string, bool) {
+		if len(list) == 0 {
+			return "", false
+		}
+		sort.Slice(list, func(i, j int) bool { return list[i].name < list[j].name })
+		return list[0].name, true
+	}
+
+	podName, ok := pick(unsealed)
+	if !ok {
+		podName, ok = pick(unknown)
+	}
+	if !ok {
+		return "", fmt.Errorf("no usable active OpenBao pod found (cluster=%s)", clusterName)
+	}
+
+	// Use the headless service name (<clusterName>) for stable in-cluster pod DNS:
+	// https://<podName>.<clusterName>.<namespace>.svc:8200
+	return fmt.Sprintf("https://%s.%s.%s.svc:8200", podName, clusterName, namespace), nil
 }
 
 // WriteSecretViaJWT performs a K8s JWT login and writes a secret.

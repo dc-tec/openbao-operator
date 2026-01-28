@@ -263,9 +263,9 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 						APIServerCIDR: apiServerCIDR,
 					},
 					Backup: &openbaov1alpha1.BackupSchedule{
-						Schedule:      "0 0 * * *",
-						ExecutorImage: "ghcr.io/dc-tec/openbao-backup:v1.0.0",
-						JWTAuthRole:   "backup-role",
+						Schedule:    "0 0 * * *",
+						Image:       "ghcr.io/dc-tec/openbao-backup:1.0.0",
+						JWTAuthRole: "backup-role",
 						Target: openbaov1alpha1.BackupTarget{
 							Endpoint: "http://2130706433:9000", // decimal for 127.0.0.1
 							Bucket:   "test-bucket",
@@ -303,9 +303,9 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 						},
 						Key: "clusters/prod/snapshot.snap",
 					},
-					JWTAuthRole:   "restore",
-					ExecutorImage: "ghcr.io/dc-tec/openbao-backup:v1.0.0",
-					Force:         true,
+					JWTAuthRole: "restore",
+					Image:       "ghcr.io/dc-tec/openbao-backup:1.0.0",
+					Force:       true,
 				},
 			}
 
@@ -335,9 +335,9 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 						},
 						Key: "clusters/prod/snapshot.snap",
 					},
-					JWTAuthRole:   "restore",
-					ExecutorImage: "ghcr.io/dc-tec/openbao-backup:v1.0.0",
-					Force:         true,
+					JWTAuthRole: "restore",
+					Image:       "ghcr.io/dc-tec/openbao-backup:1.0.0",
+					Force:       true,
 				},
 			}
 
