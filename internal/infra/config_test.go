@@ -443,8 +443,8 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 	cluster := newMinimalCluster("test-cluster", "default")
 	cluster.Spec.Profile = openbaov1alpha1.ProfileDevelopment
 	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
-		ExecutorImage: "openbao/backup-executor:v0.1.0",
-		Schedule:      "0 3 * * *",
+		Image:    "openbao-backup:0.1.0",
+		Schedule: "0 3 * * *",
 		Target: openbaov1alpha1.BackupTarget{
 			Endpoint:     "https://s3.amazonaws.com",
 			Bucket:       "test-bucket",

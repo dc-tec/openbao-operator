@@ -97,7 +97,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 						Size: "10Gi",
 					},
 					InitContainer: &openbaov1alpha1.InitContainerConfig{
-						Image: "openbao/openbao-config-init:latest",
+						Image: "openbao/openbao-init:latest",
 					},
 				},
 			}
@@ -372,7 +372,7 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 						Size: "10Gi",
 					},
 					InitContainer: &openbaov1alpha1.InitContainerConfig{
-						Image: "openbao/openbao-config-init:latest",
+						Image: "openbao/openbao-init:latest",
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
@@ -815,7 +815,7 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 						Size: "10Gi",
 					},
 					InitContainer: &openbaov1alpha1.InitContainerConfig{
-						Image: "openbao/openbao-config-init:latest",
+						Image: "openbao/openbao-init:latest",
 					},
 				},
 			}

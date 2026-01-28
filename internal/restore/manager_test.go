@@ -462,7 +462,7 @@ func TestValidatingNoAuthentication(t *testing.T) {
 	assert.Contains(t, updated.Status.Message, "authentication is required")
 }
 
-// TestGetRestoreExecutorImage tests executor image resolution.
+// TestGetRestoreExecutorImage tests restore image resolution.
 func TestGetRestoreExecutorImage(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -498,14 +498,14 @@ func TestGetRestoreExecutorImage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			restore := &openbaov1alpha1.OpenBaoRestore{
 				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
-					ExecutorImage: tt.restoreImage,
+					Image: tt.restoreImage,
 				},
 			}
 
 			var backupSchedule *openbaov1alpha1.BackupSchedule
 			if tt.clusterImage != "" {
 				backupSchedule = &openbaov1alpha1.BackupSchedule{
-					ExecutorImage: tt.clusterImage,
+					Image: tt.clusterImage,
 				}
 			}
 			cluster := &openbaov1alpha1.OpenBaoCluster{

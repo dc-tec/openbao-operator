@@ -27,13 +27,13 @@ const (
 )
 
 func getRestoreExecutorImage(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	if restore.Spec.ExecutorImage != "" {
-		return restore.Spec.ExecutorImage, nil
+	if restore.Spec.Image != "" {
+		return restore.Spec.Image, nil
 	}
-	if cluster.Spec.Backup != nil && cluster.Spec.Backup.ExecutorImage != "" {
-		return cluster.Spec.Backup.ExecutorImage, nil
+	if cluster.Spec.Backup != nil && cluster.Spec.Backup.Image != "" {
+		return cluster.Spec.Backup.Image, nil
 	}
-	return "", fmt.Errorf("no executor image specified in restore or cluster backup config")
+	return "", fmt.Errorf("no restore image specified in restore or cluster backup config")
 }
 
 // buildRestoreJob creates a Kubernetes Job for executing the restore.

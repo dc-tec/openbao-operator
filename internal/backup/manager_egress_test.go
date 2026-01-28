@@ -27,9 +27,9 @@ func TestBackupReconcile_HardenedRequiresEgressRules(t *testing.T) {
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile: openbaov1alpha1.ProfileHardened,
 			Backup: &openbaov1alpha1.BackupSchedule{
-				Schedule:      "0 0 * * *",
-				ExecutorImage: "test-image:latest",
-				JWTAuthRole:   "backup",
+				Schedule:    "0 0 * * *",
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "https://example.com",
 					Bucket:   "test-bucket",

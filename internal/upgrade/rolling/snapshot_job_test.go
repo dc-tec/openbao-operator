@@ -106,8 +106,8 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 				PreUpgradeSnapshot: true,
 			},
 			Backup: &openbaov1alpha1.BackupSchedule{
-				ExecutorImage: "test-image:latest",
-				JWTAuthRole:   "backup",
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://test-endpoint",
 					Bucket:   "test-bucket",
@@ -170,8 +170,8 @@ func TestHandlePreUpgradeSnapshot_HardenedRequiresEgressRules(t *testing.T) {
 				PreUpgradeSnapshot: true,
 			},
 			Backup: &openbaov1alpha1.BackupSchedule{
-				ExecutorImage: "test-image:latest",
-				JWTAuthRole:   "backup",
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "https://example.com",
 					Bucket:   "test-bucket",
@@ -218,8 +218,8 @@ func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
 				PreUpgradeSnapshot: true,
 			},
 			Backup: &openbaov1alpha1.BackupSchedule{
-				ExecutorImage: "test-image:latest",
-				JWTAuthRole:   "backup",
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://test-endpoint",
 					Bucket:   "test-bucket",
@@ -284,8 +284,8 @@ func TestHandlePreUpgradeSnapshot_JobCompleted(t *testing.T) {
 				PreUpgradeSnapshot: true,
 			},
 			Backup: &openbaov1alpha1.BackupSchedule{
-				ExecutorImage: "test-image:latest",
-				JWTAuthRole:   "backup",
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://test-endpoint",
 					Bucket:   "test-bucket",
@@ -350,8 +350,8 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 				PreUpgradeSnapshot: true,
 			},
 			Backup: &openbaov1alpha1.BackupSchedule{
-				ExecutorImage: "test-image:latest",
-				JWTAuthRole:   "backup",
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://test-endpoint",
 					Bucket:   "test-bucket",
@@ -432,8 +432,8 @@ func TestHandlePreUpgradeSnapshot_JobFailedRetriesOnFirstFailure(t *testing.T) {
 				PreUpgradeSnapshot: true,
 			},
 			Backup: &openbaov1alpha1.BackupSchedule{
-				ExecutorImage: "test-image:latest",
-				JWTAuthRole:   "backup",
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://test-endpoint",
 					Bucket:   "test-bucket",
@@ -506,8 +506,8 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 				PreUpgradeSnapshot: true,
 			},
 			Backup: &openbaov1alpha1.BackupSchedule{
-				ExecutorImage: "test-image:latest",
-				JWTAuthRole:   "backup",
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://test-endpoint",
 					Bucket:   "test-bucket",

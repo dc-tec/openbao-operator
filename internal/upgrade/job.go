@@ -118,7 +118,7 @@ func ensureUpgradeExecutorJob(
 
 		verifiedExecutorDigest := ""
 		if cluster.Spec.Upgrade != nil {
-			executorImage := strings.TrimSpace(cluster.Spec.Upgrade.ExecutorImage)
+			executorImage := strings.TrimSpace(cluster.Spec.Upgrade.Image)
 			if executorImage != "" && cluster.Spec.OperatorImageVerification != nil && cluster.Spec.OperatorImageVerification.Enabled {
 				verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 				defer cancel()
@@ -197,7 +197,7 @@ func buildUpgradeExecutorJob(
 
 	image := verifiedExecutorDigest
 	if image == "" {
-		image = strings.TrimSpace(cluster.Spec.Upgrade.ExecutorImage)
+		image = strings.TrimSpace(cluster.Spec.Upgrade.Image)
 	}
 	if image == "" {
 		var err error

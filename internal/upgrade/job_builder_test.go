@@ -19,8 +19,8 @@ func TestBuildUpgradeExecutorJob_SecurityContext(t *testing.T) {
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Upgrade: &openbaov1alpha1.UpgradeConfig{
-				ExecutorImage: "test-image",
-				JWTAuthRole:   "test-role",
+				Image:       "test-image",
+				JWTAuthRole: "test-role",
 			},
 		},
 	}

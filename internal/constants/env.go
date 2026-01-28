@@ -105,8 +105,8 @@ const (
 	// DefaultUpgradeImageRepository is the default image repository used for upgrade executor.
 	DefaultUpgradeImageRepository = "ghcr.io/dc-tec/openbao-upgrade"
 
-	// DefaultInitImageRepository is the default image repository used for the config-init container.
-	DefaultInitImageRepository = "ghcr.io/dc-tec/openbao-config-init"
+	// DefaultInitImageRepository is the default image repository used for the init (config rendering + wrapper) container.
+	DefaultInitImageRepository = "ghcr.io/dc-tec/openbao-init"
 )
 
 // Backup authentication method values.

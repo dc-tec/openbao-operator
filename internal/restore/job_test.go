@@ -30,7 +30,7 @@ func TestBuildRestoreJob_PodSecurityContext_Platform(t *testing.T) {
 					UsePathStyle: true,
 				},
 			},
-			ExecutorImage: "example.com/restore-executor:v1",
+			Image: "example.com/restore-executor:v1",
 		},
 	}
 
