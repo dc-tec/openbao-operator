@@ -1,0 +1,16 @@
+# Generic fast Dockerfile for CI
+# Expects binaries to be passed via build context or copied in.
+# usage: docker build -f hack/ci/Dockerfile.fast.manager --build-arg BINARY=bin/linux_amd64/manager -t ... .
+
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
+
+# The binary to copy (relative to build context)
+ARG BINARY
+# The target name inside the container (e.g. /manager)
+ARG TARGET
+
+COPY ${BINARY} ${TARGET}
+
+USER 65532:65532
+ENTRYPOINT ["/manager"]

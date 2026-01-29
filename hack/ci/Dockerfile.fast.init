@@ -1,0 +1,15 @@
+FROM gcr.io/distroless/static:nonroot
+
+ARG BIN_DIR=bin/linux_amd64
+
+# Copy pre-compiled binaries
+COPY ${BIN_DIR}/bao-init-config /bao-init-config
+COPY ${BIN_DIR}/bao-wrapper /bao-wrapper
+COPY ${BIN_DIR}/bao-probe /bao-probe
+
+# User 100:1000 (OpenBao)
+USER 100:1000
+WORKDIR /
+
+HEALTHCHECK NONE
+ENTRYPOINT ["/bao-init-config"]

@@ -1,0 +1,132 @@
+name: Reusable Build Images
+
+on:
+  workflow_call:
+    inputs:
+      build_tag:
+        description: "The technical tag to apply to the images (e.g., build-sha)"
+        required: true
+        type: string
+      ref:
+        description: "Git reference to checkout"
+        required: false
+        default: ${{ github.ref }}
+        type: string
+    outputs:
+      manager_digest:
+        description: "Digest of the manager image"
+        value: ${{ jobs.collect-digests.outputs.manager_digest }}
+      config_init_digest:
+        description: "Digest of the config-init image"
+        value: ${{ jobs.collect-digests.outputs.config_init_digest }}
+      backup_executor_digest:
+        description: "Digest of the backup-executor image"
+        value: ${{ jobs.collect-digests.outputs.backup_executor_digest }}
+      upgrade_executor_digest:
+        description: "Digest of the upgrade-executor image"
+        value: ${{ jobs.collect-digests.outputs.upgrade_executor_digest }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: openbao-operator
+            dockerfile: Dockerfile
+            output_key: manager
+          - image: openbao-init
+            dockerfile: Dockerfile.init
+            output_key: config_init
+          - image: openbao-backup
+            dockerfile: Dockerfile.backup
+            output_key: backup_executor
+          - image: openbao-upgrade
+            dockerfile: Dockerfile.upgrade
+            output_key: upgrade_executor
+    outputs:
+      manager_digest: ${{ steps.set-output.outputs.manager_digest }}
+      config_init_digest: ${{ steps.set-output.outputs.config_init_digest }}
+      backup_executor_digest: ${{ steps.set-output.outputs.backup_executor_digest }}
+      upgrade_executor_digest: ${{ steps.set-output.outputs.upgrade_executor_digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ inputs.build_tag }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      - name: Set digest output
+        id: set-output
+        run: |
+          echo "${{ matrix.output_key }}_digest=${{ steps.build.outputs.digest }}" >> "${GITHUB_OUTPUT}"
+
+  collect-digests:
+    name: Collect Image Digests
+    runs-on: ubuntu-24.04
+    needs: [build]
+    outputs:
+      manager_digest: ${{ steps.collect.outputs.manager_digest }}
+      config_init_digest: ${{ steps.collect.outputs.config_init_digest }}
+      backup_executor_digest: ${{ steps.collect.outputs.backup_executor_digest }}
+      upgrade_executor_digest: ${{ steps.collect.outputs.upgrade_executor_digest }}
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Collect digests from registry
+        id: collect
+        env:
+          BUILD_TAG: ${{ inputs.build_tag }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          manager_digest=$(docker buildx imagetools inspect "ghcr.io/${OWNER}/openbao-operator:${BUILD_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          config_init_digest=$(docker buildx imagetools inspect "ghcr.io/${OWNER}/openbao-init:${BUILD_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          backup_executor_digest=$(docker buildx imagetools inspect "ghcr.io/${OWNER}/openbao-backup:${BUILD_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          upgrade_executor_digest=$(docker buildx imagetools inspect "ghcr.io/${OWNER}/openbao-upgrade:${BUILD_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+
+          echo "manager_digest=${manager_digest}" >> "${GITHUB_OUTPUT}"
+          echo "config_init_digest=${config_init_digest}" >> "${GITHUB_OUTPUT}"
+          echo "backup_executor_digest=${backup_executor_digest}" >> "${GITHUB_OUTPUT}"
+          echo "upgrade_executor_digest=${upgrade_executor_digest}" >> "${GITHUB_OUTPUT}"

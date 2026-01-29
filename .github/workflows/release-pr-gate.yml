@@ -4,12 +4,12 @@ on:
   pull_request_target:
     types:
       - opened
-      - reopened
       - synchronize
-      - edited
       - labeled
-      - unlabeled
       - ready_for_review
+    paths:
+      - 'CHANGELOG.md'
+      - '.release-please-manifest.json'
 
 permissions:
   contents: read

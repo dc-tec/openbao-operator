@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package infra
 
 import (
@@ -9,22 +12,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
-
-// testScheme is a shared scheme used across tests.
-var testScheme = func() *runtime.Scheme {
-	scheme := runtime.NewScheme()
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = openbaov1alpha1.AddToScheme(scheme)
-	return scheme
-}()
 
 func TestUsesStaticSeal(t *testing.T) {
 	tests := []struct {
@@ -148,17 +139,6 @@ func TestEnsureUnsealSecret_CreatesSecret(t *testing.T) {
 	if len(secret.Data[unsealSecretKey]) != 32 {
 		t.Errorf("ensureUnsealSecret() key length = %v, want 32", len(secret.Data[unsealSecretKey]))
 	}
-}
-
-func newTestClientWithObjects(t *testing.T, objs ...client.Object) client.Client {
-	t.Helper()
-	builder := fake.NewClientBuilder().
-		WithScheme(testScheme).
-		WithReturnManagedFields()
-	if len(objs) > 0 {
-		builder = builder.WithObjects(objs...)
-	}
-	return builder.Build()
 }
 
 func TestEnsureUnsealSecret_HandlesAlreadyExists(t *testing.T) {
@@ -528,9 +508,9 @@ func TestDeleteConfigMap(t *testing.T) {
 
 	ctx := context.Background()
 	k8sClient := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
 
-	err := manager.deleteConfigMap(ctx, cluster)
+	// Verify deleteConfigMap
+	err := deleteConfigMap(ctx, k8sClient, cluster)
 	if err != nil {
 		t.Fatalf("deleteConfigMap() error = %v", err)
 	}
@@ -552,10 +532,8 @@ func TestDeleteConfigMap_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
-
-	// Should not error when ConfigMap doesn't exist
-	err := manager.deleteConfigMap(ctx, cluster)
+	// Should not	// Verify deleteConfigMap is idempotent
+	err := deleteConfigMap(ctx, k8sClient, cluster)
 	if err != nil {
 		t.Fatalf("deleteConfigMap() with missing ConfigMap should not error, got: %v", err)
 	}
@@ -587,9 +565,8 @@ func TestDeleteSecrets(t *testing.T) {
 
 	ctx := context.Background()
 	k8sClient := newTestClientWithObjects(t, unsealSecret, tlsCASecret, tlsServerSecret)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
-
-	err := manager.deleteSecrets(ctx, cluster)
+	// Verify deleteSecrets
+	err := deleteSecrets(ctx, k8sClient, cluster)
 	if err != nil {
 		t.Fatalf("deleteSecrets() error = %v", err)
 	}
@@ -627,10 +604,8 @@ func TestDeleteSecrets_PartialMissing(t *testing.T) {
 
 	ctx := context.Background()
 	k8sClient := newTestClientWithObjects(t, unsealSecret)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
-
-	// Should not error when some secrets are missing
-	err := manager.deleteSecrets(ctx, cluster)
+	// Should not error	// Verify deleteSecrets is idempotent
+	err := deleteSecrets(ctx, k8sClient, cluster)
 	if err != nil {
 		t.Fatalf("deleteSecrets() with missing secrets should not error, got: %v", err)
 	}

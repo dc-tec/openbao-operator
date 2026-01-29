@@ -404,24 +404,7 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 	if [ "$(E2E_KEEP_GOING)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --keep-going"; \
 	fi; \
-	if [ "$(E2E_PARALLEL_NODES)" -eq 1 ]; then \
-		GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
-		if [ -n "$(E2E_FOCUS)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=$(E2E_FOCUS)"; \
-		fi; \
-		if [ -n "$(E2E_LABEL_FILTER)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.label-filter=$(E2E_LABEL_FILTER)"; \
-		fi; \
-		if [ "$(E2E_TRACE)" = "true" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.trace"; \
-		fi; \
-		if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
-		fi; \
-		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test $$GO_TEST_FLAGS ./test/e2e/; \
-	else \
-		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/; \
-	fi
+	eval KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/
 	@if [ "$(E2E_SKIP_CLEANUP)" != "true" ]; then \
 		$(MAKE) cleanup-test-e2e; \
 	else \
@@ -432,10 +415,10 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests against an existing cluster (e.g. OpenShift Local/CRC). Requires KUBECONFIG set and E2E_OPERATOR_IMAGE pointing to a pullable image. Use E2E_LABEL_FILTER to run a subset (e.g. 'openshift').
 	@GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
-		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=$(E2E_FOCUS)"; \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=\"$(E2E_FOCUS)\""; \
 	fi; \
 	if [ -n "$(E2E_LABEL_FILTER)" ]; then \
-		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.label-filter=$(E2E_LABEL_FILTER)"; \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.label-filter=\"$(E2E_LABEL_FILTER)\""; \
 	fi; \
 	if [ "$(E2E_TRACE)" = "true" ]; then \
 		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.trace"; \
@@ -443,16 +426,16 @@ test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests agains
 	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
 		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
 	fi; \
-	E2E_USE_EXISTING_CLUSTER=true go test $$GO_TEST_FLAGS ./test/e2e/
+	eval E2E_USE_EXISTING_CLUSTER=true go test $$GO_TEST_FLAGS ./test/e2e/
 
 .PHONY: test-e2e-ci
 test-e2e-ci: setup-test-e2e manifests generate vet ginkgo ## Run the e2e tests in CI mode (does not modify files).
 	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
-		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=$(E2E_FOCUS)"; \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=\"$(E2E_FOCUS)\""; \
 	fi; \
 	if [ -n "$(E2E_LABEL_FILTER)" ]; then \
-		GINKGO_FLAGS="$$GINKGO_FLAGS --label-filter=$(E2E_LABEL_FILTER)"; \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --label-filter=\"$(E2E_LABEL_FILTER)\""; \
 	fi; \
 	if [ "$(E2E_TRACE)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --trace"; \
@@ -466,24 +449,7 @@ test-e2e-ci: setup-test-e2e manifests generate vet ginkgo ## Run the e2e tests i
 	if [ "$(E2E_KEEP_GOING)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --keep-going"; \
 	fi; \
-	if [ "$(E2E_PARALLEL_NODES)" -eq 1 ]; then \
-		GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
-		if [ -n "$(E2E_FOCUS)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=$(E2E_FOCUS)"; \
-		fi; \
-		if [ -n "$(E2E_LABEL_FILTER)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.label-filter=$(E2E_LABEL_FILTER)"; \
-		fi; \
-		if [ "$(E2E_TRACE)" = "true" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.trace"; \
-		fi; \
-		if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
-		fi; \
-		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test $$GO_TEST_FLAGS ./test/e2e/; \
-	else \
-		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/; \
-	fi
+	eval KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/
 	@if [ "$(E2E_SKIP_CLEANUP)" != "true" ]; then \
 		$(MAKE) cleanup-test-e2e; \
 	else \
@@ -525,6 +491,15 @@ update-trusted-root: ## Download/update the embedded trusted_root.json file for 
 .PHONY: build
 build: verify-trusted-root manifests generate fmt vet ## Build manager binary (dispatcher for provisioner and controller).
 	go build -o bin/manager cmd/main.go
+
+.PHONY: build-linux
+build-linux: verify-trusted-root manifests generate fmt vet ## Build all binaries for Linux/AMD64 (used by CI fast Dockerfiles).
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/linux_amd64/manager cmd/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/linux_amd64/bao-init-config ./cmd/bao-config-init
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/linux_amd64/bao-wrapper ./cmd/bao-wrapper
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/linux_amd64/bao-probe ./cmd/bao-probe
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/linux_amd64/bao-backup ./cmd/bao-backup
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/linux_amd64/bao-upgrade-executor ./cmd/bao-upgrade
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host. Usage: make run COMMAND=provisioner or make run COMMAND=controller

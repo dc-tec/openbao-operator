@@ -18,11 +18,20 @@ body:
       required: true
 
   - type: input
+    id: openbao_version
+    attributes:
+      label: OpenBao Version
+      description: The version of the OpenBao container you are running (e.g., 2.4.4)
+      placeholder: 2.4.4
+    validations:
+      required: true
+
+  - type: input
     id: kubernetes
     attributes:
       label: Kubernetes version
       description: Output of `kubectl version --short`
-      placeholder: Server Version: v1.30.x
+      placeholder: Server Version: v1.35.x
     validations:
       required: true
 

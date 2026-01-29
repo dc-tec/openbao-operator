@@ -1,11 +1,12 @@
+//go:build integration
+// +build integration
+
 package infra
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/dc-tec/openbao-operator/internal/constants"
@@ -16,142 +17,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
-
-func newTestClient(t *testing.T) client.Client {
-	t.Helper()
-
-	// Create the Kubernetes service that NetworkPolicy detection requires
-	kubernetesService := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kubernetes",
-			Namespace: "default",
-		},
-		Spec: corev1.ServiceSpec{
-			ClusterIP: "10.43.0.1", // Used to derive the kubernetes Service IP CIDR (10.43.0.1/32)
-			Ports: []corev1.ServicePort{
-				{
-					Name: "https",
-					Port: 443,
-				},
-			},
-		},
-	}
-
-	return fake.NewClientBuilder().
-		WithScheme(testScheme).
-		WithObjects(kubernetesService).
-		WithReturnManagedFields().
-		Build()
-}
-
-// getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
-func getFirstFoundEnvTestBinaryDir() string {
-	basePath := filepath.Join("..", "..", "bin", "k8s")
-	entries, err := filepath.Glob(filepath.Join(basePath, "*"))
-	if err != nil {
-		return ""
-	}
-	for _, entry := range entries {
-		if info, err := filepath.Abs(entry); err == nil {
-			if stat, err := os.Stat(info); err == nil && stat.IsDir() {
-				return info
-			}
-		}
-	}
-	return ""
-}
-
-// newTestStatefulSetSpec creates a minimal StatefulSetSpec for testing.
-func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) StatefulSetSpec {
-	return StatefulSetSpec{
-		Name:               cluster.Name,
-		Revision:           "",
-		Image:              cluster.Spec.Image,
-		InitContainerImage: "",
-		Replicas:           cluster.Spec.Replicas,
-		ConfigHash:         "",
-		DisableSelfInit:    false,
-		SkipReconciliation: false,
-	}
-}
-
-func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
-	return &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version:  "2.4.4",
-			Image:    "openbao/openbao:2.4.4",
-			Replicas: 3,
-			TLS: openbaov1alpha1.TLSConfig{
-				Enabled:        true,
-				RotationPeriod: "720h",
-			},
-			Storage: openbaov1alpha1.StorageConfig{
-				Size: "10Gi",
-			},
-			InitContainer: &openbaov1alpha1.InitContainerConfig{
-				Image: "openbao/openbao-init:latest",
-			},
-		},
-	}
-}
-
-// createTLSSecretForTest creates a minimal TLS server secret for testing.
-// This is needed because ensureStatefulSet now checks for prerequisite resources.
-func createTLSSecretForTest(t *testing.T, k8sClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster) {
-	t.Helper()
-	secretName := tlsServerSecretName(cluster)
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: cluster.Namespace,
-		},
-		Data: map[string][]byte{
-			"tls.crt": []byte("test-cert"),
-			"tls.key": []byte("test-key"),
-			"ca.crt":  []byte("test-ca"),
-		},
-	}
-	if err := k8sClient.Create(context.Background(), secret); err != nil {
-		t.Fatalf("failed to create TLS secret for test: %v", err)
-	}
-}
-
-func createClusterCRForTest(t *testing.T, k8sClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster) {
-	t.Helper()
-	ctx := context.Background()
-
-	// Envtest does not implicitly create namespaces.
-	nsName := cluster.GetNamespace()
-	if nsName != "" {
-		ns := &corev1.Namespace{}
-		if err := k8sClient.Get(ctx, types.NamespacedName{Name: nsName}, ns); err != nil {
-			if !apierrors.IsNotFound(err) {
-				t.Fatalf("failed to get namespace %q for test: %v", nsName, err)
-			}
-			if err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}); err != nil {
-				t.Fatalf("failed to create namespace %q for test: %v", nsName, err)
-			}
-		}
-	}
-
-	toCreate := cluster.DeepCopy()
-	toCreate.Status = openbaov1alpha1.OpenBaoClusterStatus{}
-	if err := k8sClient.Create(ctx, toCreate); err != nil {
-		t.Fatalf("failed to create OpenBaoCluster for test: %v", err)
-	}
-
-	cluster.SetUID(toCreate.GetUID())
-	cluster.SetResourceVersion(toCreate.GetResourceVersion())
-}
 
 // Integration tests that verify the full Reconcile and Cleanup flows
 

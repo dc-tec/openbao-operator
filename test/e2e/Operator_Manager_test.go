@@ -45,7 +45,7 @@ const metricsServiceName = "openbao-operator-openbao-operator-controller-metrics
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
 const metricsRoleBindingName = "openbao-operator-metrics-binding"
 
-var _ = Describe("Manager", Ordered, func() {
+var _ = Describe("Manager", Label("manager", "critical", "smoke"), Ordered, func() {
 	var controllerPodName string
 
 	// After each test, check for failures and collect logs, events,
