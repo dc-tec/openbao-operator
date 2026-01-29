@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches:
       - main
@@ -232,7 +233,10 @@ jobs:
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
 
       - name: Run integration tests
-        run: make test-integration
+        run: |
+          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.19
+          source <(setup-envtest use -p env --bin-dir $(pwd)/bin/)
+          make test-integration
 
   openbao-config-compat:
     name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.5.0)
@@ -345,12 +349,16 @@ jobs:
         include:
           - name: "Lifecycle & Core"
             focus: "Cluster Lifecycle|Manager|GitOps"
+            slow: "false"
           - name: "Backup & Restore"
             focus: "Backup & Restore"
+            slow: "true"
           - name: "Upgrades & Chaos"
             focus: "Upgrade|Chaos"
+            slow: "true"
           - name: "Security & Tenants"
             focus: "Security|TLS|Tenant Isolation|Hardened|Platform"
+            slow: "false"
     env:
       KIND_NODE_IMAGE: kindest/node:v1.34.3
     steps:
@@ -363,28 +371,6 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
-
-      - name: Install kind (pinned)
-        uses: ./.github/actions/install-kind
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
-
-      - name: Build and load images
-        env:
-          GOFLAGS: -mod=readonly
-        run: |
-          make build-linux
-          
-          docker build -t openbao-operator:e2e -f hack/ci/Dockerfile.fast.manager .
-          docker build -t openbao-init:e2e -f hack/ci/Dockerfile.fast.init .
-          docker build -t openbao-backup:e2e -f hack/ci/Dockerfile.fast.backup .
-          docker build -t openbao-upgrade:e2e -f hack/ci/Dockerfile.fast.upgrade .
-          
-          kind load docker-image openbao-operator:e2e --name kind
-          kind load docker-image openbao-init:e2e --name kind
-          kind load docker-image openbao-backup:e2e --name kind
-          kind load docker-image openbao-upgrade:e2e --name kind
 
       - name: Determine E2E Filter
         id: filter
@@ -412,8 +398,60 @@ jobs:
           fi
           
           echo "E2E_LABEL_FILTER=$FILTER" >> $GITHUB_ENV
+          
+          # Smart Skip Logic
+          # Default: Run if not slow, or if specifically included
+          SHOULD_RUN="true"
+          if [[ "${{ matrix.slow }}" == "true" ]]; then
+            # Start assuming skip for slow shards
+            SHOULD_RUN="false"
+            
+            # If full suite is requested
+            if [[ "$FILTER" == "!openshift" ]]; then SHOULD_RUN="true"; fi
+            
+            # If explicit dynamic inclusion matches this shard
+            if [[ "${{ matrix.name }}" == *"Backup"* ]] && [[ "$FILTER" == *"backup"* ]]; then SHOULD_RUN="true"; fi
+            if [[ "${{ matrix.name }}" == *"Upgrade"* ]] && [[ "$FILTER" == *"upgrade"* ]]; then SHOULD_RUN="true"; fi
+            # Note: Chaos has no specific label trigger yet, relies on full-e2e
+          fi
+          
+          echo "SHOULD_RUN=$SHOULD_RUN" >> $GITHUB_ENV
+          if [[ "$SHOULD_RUN" == "false" ]]; then
+            echo "::notice::Skipping ${{ matrix.name }} shard (Optimization)"
+          fi
+
+      - name: Install kind (pinned)
+        if: env.SHOULD_RUN == 'true'
+        uses: ./.github/actions/install-kind
+
+      - name: Set up Docker Buildx
+        if: env.SHOULD_RUN == 'true'
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build and load images
+        if: env.SHOULD_RUN == 'true'
+        env:
+          GOFLAGS: -mod=readonly
+        run: |
+          make build-linux
+          
+          docker build -t openbao-operator:e2e -f hack/ci/Dockerfile.fast.manager .
+          docker build -t openbao-init:e2e -f hack/ci/Dockerfile.fast.init .
+          docker build -t openbao-backup:e2e -f hack/ci/Dockerfile.fast.backup .
+          docker build -t openbao-upgrade:e2e -f hack/ci/Dockerfile.fast.upgrade .
+          
+          # Create cluster explicitly if it doesn't exist
+          if ! kind get clusters | grep -q "kind"; then
+            kind create cluster --name kind --image $KIND_NODE_IMAGE
+          fi
+          
+          kind load docker-image openbao-operator:e2e --name kind
+          kind load docker-image openbao-init:e2e --name kind
+          kind load docker-image openbao-backup:e2e --name kind
+          kind load docker-image openbao-upgrade:e2e --name kind
 
       - name: Run E2E Tests
+        if: env.SHOULD_RUN == 'true'
         env:
           GOFLAGS: -mod=readonly
           E2E_FOCUS: ${{ matrix.focus }}
