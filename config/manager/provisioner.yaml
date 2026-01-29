@@ -29,7 +29,7 @@ spec:
         - name: manager
           # [FIX] Replace :latest with a distinct placeholder or version.
           # Kustomize will overwrite this, but specific tags satisfy scanners.
-          image: controller:v0.0.0
+          image: controller:0.0.0
           command: ["/manager", "provisioner"]
           args:
             - --leader-elect
@@ -37,7 +37,7 @@ spec:
             - --metrics-bind-address=:8443
           env:
             - name: OPERATOR_VERSION
-              value: "v0.0.0" # [FIX] Set to actual version during release/build
+              value: "0.0.0" # [FIX] Set to actual version during release/build
           ports: []
           securityContext:
             readOnlyRootFilesystem: true

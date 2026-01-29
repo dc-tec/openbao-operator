@@ -22,7 +22,7 @@ import (
 )
 
 func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
-	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
+	t.Setenv(constants.EnvOperatorVersion, "1.0.0")
 	scheme := runtime.NewScheme()
 	_ = openbaov1alpha1.AddToScheme(scheme)
 	_ = batchv1.AddToScheme(scheme)
@@ -114,7 +114,7 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 }
 
 func TestRunExecutorJob_FailedJob_DoesNotRetryWhenAutoRollbackDisabled(t *testing.T) {
-	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
+	t.Setenv(constants.EnvOperatorVersion, "1.0.0")
 	scheme := runtime.NewScheme()
 	_ = openbaov1alpha1.AddToScheme(scheme)
 	_ = batchv1.AddToScheme(scheme)
@@ -203,7 +203,7 @@ func TestRunExecutorJob_FailedJob_DoesNotRetryWhenAutoRollbackDisabled(t *testin
 }
 
 func TestRunExecutorJob_FailedJob_TriggersAbortWhenMaxFailuresReached(t *testing.T) {
-	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
+	t.Setenv(constants.EnvOperatorVersion, "1.0.0")
 	scheme := runtime.NewScheme()
 	_ = openbaov1alpha1.AddToScheme(scheme)
 	_ = batchv1.AddToScheme(scheme)

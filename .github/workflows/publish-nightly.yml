@@ -1,0 +1,179 @@
+name: Publish Nightly (dev)
+
+on:
+  workflow_run:
+    workflows: ["Nightly"]
+    types: [completed]
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: publish-nightly
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish Nightly Images + Assets
+    runs-on: ubuntu-24.04
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        !github.event.workflow_run.repository.fork
+      }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Compute nightly variables
+        id: vars
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          date_utc="$(date -u +%Y%m%d)"
+          version="dev-${date_utc}-${short_sha}"
+          build_tag="nightly-build-${sha}"
+
+          owner="${GITHUB_REPOSITORY_OWNER}"
+          echo "owner=${owner}" >> "${GITHUB_OUTPUT}"
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+          echo "short_sha=${short_sha}" >> "${GITHUB_OUTPUT}"
+          echo "date_utc=${date_utc}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "build_tag=${build_tag}" >> "${GITHUB_OUTPUT}"
+          echo "manager_image=ghcr.io/${owner}/openbao-operator" >> "${GITHUB_OUTPUT}"
+          echo "config_init_image=ghcr.io/${owner}/openbao-init" >> "${GITHUB_OUTPUT}"
+          echo "backup_executor_image=ghcr.io/${owner}/openbao-backup" >> "${GITHUB_OUTPUT}"
+          echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade" >> "${GITHUB_OUTPUT}"
+
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build and push manager (build tag)
+        id: build_manager
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.vars.outputs.manager_image }}:${{ steps.vars.outputs.build_tag }}
+
+      - name: Build and push config-init (build tag)
+        id: build_config_init
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: Dockerfile.init
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.vars.outputs.config_init_image }}:${{ steps.vars.outputs.build_tag }}
+
+      - name: Build and push backup executor (build tag)
+        id: build_backup_executor
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: Dockerfile.backup
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.vars.outputs.backup_executor_image }}:${{ steps.vars.outputs.build_tag }}
+
+      - name: Build and push upgrade executor (build tag)
+        id: build_upgrade_executor
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: Dockerfile.upgrade
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.vars.outputs.upgrade_executor_image }}:${{ steps.vars.outputs.build_tag }}
+
+      - name: Promote nightly tags (no rebuild)
+        env:
+          BUILD_TAG: ${{ steps.vars.outputs.build_tag }}
+          VERSION: ${{ steps.vars.outputs.version }}
+          DATE_TAG: dev-${{ steps.vars.outputs.date_utc }}
+          MANAGER_IMAGE: ${{ steps.vars.outputs.manager_image }}
+          CONFIG_INIT_IMAGE: ${{ steps.vars.outputs.config_init_image }}
+          BACKUP_EXECUTOR_IMAGE: ${{ steps.vars.outputs.backup_executor_image }}
+          UPGRADE_EXECUTOR_IMAGE: ${{ steps.vars.outputs.upgrade_executor_image }}
+          MANAGER_DIGEST: ${{ steps.build_manager.outputs.digest }}
+          CONFIG_INIT_DIGEST: ${{ steps.build_config_init.outputs.digest }}
+          BACKUP_EXECUTOR_DIGEST: ${{ steps.build_backup_executor.outputs.digest }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ steps.build_upgrade_executor.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Immutable tag for this nightly build
+          docker buildx imagetools create -t "${MANAGER_IMAGE}:${VERSION}" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          docker buildx imagetools create -t "${CONFIG_INIT_IMAGE}:${VERSION}" "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:${VERSION}" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:${VERSION}" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+
+          # Date-stable tag (can be overwritten if re-run same day; acceptable for dev)
+          docker buildx imagetools create -t "${MANAGER_IMAGE}:${DATE_TAG}" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          docker buildx imagetools create -t "${CONFIG_INIT_IMAGE}:${DATE_TAG}" "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:${DATE_TAG}" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:${DATE_TAG}" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+
+          # Moving dev tag (latest nightly)
+          docker buildx imagetools create -t "${MANAGER_IMAGE}:dev" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          docker buildx imagetools create -t "${CONFIG_INIT_IMAGE}:dev" "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:dev" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:dev" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+
+      - name: Generate installer + CRDs assets (digest-pinned)
+        env:
+          MANAGER_IMAGE: ${{ steps.vars.outputs.manager_image }}
+          MANAGER_DIGEST: ${{ steps.build_manager.outputs.digest }}
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          set -euo pipefail
+          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${VERSION}"
+          make build-crds
+          sha256sum dist/install.yaml dist/crds.yaml > dist/checksums.txt
+
+      - name: Publish/update GitHub Release "nightly"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ steps.vars.outputs.sha }}
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Moving tag for the nightly release.
+          git tag -f nightly "${SHA}"
+          git push --force origin nightly
+
+          title="Nightly (${VERSION})"
+          notes="Automated nightly dev build from ${SHA}.\n\nImages are published to GHCR with tags:\n- dev (moving)\n- ${VERSION} (immutable)\n"
+
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly --title "${title}" --notes "${notes}" --prerelease
+            gh release upload nightly dist/install.yaml dist/crds.yaml dist/checksums.txt --clobber
+            exit 0
+          fi
+
+          gh release create nightly \
+            --title "${title}" \
+            --notes "${notes}" \
+            --prerelease \
+            dist/install.yaml dist/crds.yaml dist/checksums.txt

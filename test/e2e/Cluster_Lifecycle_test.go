@@ -283,7 +283,7 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			By("waiting for root token Secret (self-init disabled)")
 			Eventually(func(g Gomega) {
 				g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-root-token", Namespace: f.Namespace}, &corev1.Secret{})).To(Succeed())
-			}, framework.DefaultLongWaitTimeout, 3*time.Second).Should(Succeed(), "Root Token Secret missing")
+			}, 10*time.Minute, 3*time.Second).Should(Succeed(), "Root Token Secret missing")
 		})
 	})
 

@@ -48,10 +48,10 @@ import (
 )
 
 const (
-	defaultProjectImage         = "example.com/openbao-operator:v0.0.1"
-	defaultConfigInitImage      = "openbao-config-init:dev"
-	defaultBackupExecutorImage  = "openbao/backup-executor:dev"
-	defaultUpgradeExecutorImage = "openbao/upgrade-executor:dev"
+	defaultProjectImage         = "example.com/openbao-operator:0.0.1"
+	defaultConfigInitImage      = "openbao-init:dev"
+	defaultBackupExecutorImage  = "openbao-backup:dev"
+	defaultUpgradeExecutorImage = "openbao-upgrade:dev"
 )
 
 type suiteBootstrap struct {
@@ -164,6 +164,74 @@ func envOrDefault(key, defaultValue string) string {
 	return value
 }
 
+func waitForDeploymentsAvailable(namespace string, timeout time.Duration) error {
+	if strings.TrimSpace(namespace) == "" {
+		return fmt.Errorf("namespace is required")
+	}
+	if timeout <= 0 {
+		return fmt.Errorf("timeout must be > 0")
+	}
+
+	seconds := int(timeout.Seconds())
+	if seconds < 1 {
+		seconds = 1
+	}
+
+	cmd := exec.Command("kubectl",
+		"wait",
+		"--for=condition=Available",
+		"deployment",
+		"-l", "app.kubernetes.io/name=openbao-operator",
+		"-n", namespace,
+		"--timeout", fmt.Sprintf("%ds", seconds),
+	) // #nosec G204 -- test harness command
+	_, err := utils.Run(cmd)
+	return err
+}
+
+func waitForCRDsEstablished(timeout time.Duration) error {
+	if timeout <= 0 {
+		return fmt.Errorf("timeout must be > 0")
+	}
+
+	seconds := int(timeout.Seconds())
+	if seconds < 1 {
+		seconds = 1
+	}
+
+	cmd := exec.Command("kubectl",
+		"wait",
+		"--for=condition=Established",
+		"crd/openbaoclusters.openbao.org",
+		"crd/openbaotenants.openbao.org",
+		"crd/openbaorestores.openbao.org",
+		"--timeout", fmt.Sprintf("%ds", seconds),
+	) // #nosec G204 -- test harness command
+	_, err := utils.Run(cmd)
+	return err
+}
+
+func waitForCoreDNSAvailable(timeout time.Duration) error {
+	if timeout <= 0 {
+		return fmt.Errorf("timeout must be > 0")
+	}
+
+	seconds := int(timeout.Seconds())
+	if seconds < 1 {
+		seconds = 1
+	}
+
+	cmd := exec.Command("kubectl",
+		"wait",
+		"--for=condition=Available",
+		"deployment/coredns",
+		"-n", "kube-system",
+		"--timeout", fmt.Sprintf("%ds", seconds),
+	) // #nosec G204 -- test harness command
+	_, err := utils.Run(cmd)
+	return err
+}
+
 var _ = SynchronizedBeforeSuite(func() []byte {
 	// THIS BLOCK RUNS ONCE (on node 1)
 	var (
@@ -228,11 +296,16 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			cmd = exec.Command("make", "install")
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install CRDs")
+			ExpectWithOffset(1, waitForCRDsEstablished(2*time.Minute)).To(Succeed(), "CRDs did not become Established in time")
 
 			By("deploying the controller-manager and provisioner")
 			cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the operator")
+
+			By("waiting for operator deployments to become Available")
+			ExpectWithOffset(1, waitForDeploymentsAvailable(operatorNamespace, 5*time.Minute)).
+				To(Succeed(), "Operator deployments did not become Available in time")
 		})
 
 		suiteBootstrapState = &bootstrap
@@ -313,6 +386,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	withEnv("KUBECONFIG", kubeconfigPath, func() {
 		withEnv("KIND_CLUSTER", clusterName, func() {
+			By(fmt.Sprintf("waiting for CoreDNS to become Available (cluster=%s)", clusterName))
+			ExpectWithOffset(1, waitForCoreDNSAvailable(2*time.Minute)).To(Succeed(), "CoreDNS did not become Available in time")
+
 			By(fmt.Sprintf("installing CSI hostpath driver for storage expansion tests (cluster=%s)", clusterName))
 			ExpectWithOffset(1, utils.InstallCSIHostPathDriver()).To(Succeed(), "Failed to install CSI hostpath driver")
 			By("installing the expandable E2E StorageClass (openbao-e2e-hostpath)")
@@ -348,6 +424,33 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			err = utils.LoadImageToKindClusterWithName(upgradeExecutorImage)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the upgrade executor image into Kind (cluster=%s)", clusterName))
 
+			By(fmt.Sprintf("pre-loading OpenBao images on Kind to reduce flakiness (cluster=%s)", clusterName))
+			openBaoImages := []string{
+				openBaoImage,
+				fmt.Sprintf("openbao/openbao:%s", defaultUpgradeFromVersion),
+				fmt.Sprintf("openbao/openbao:%s", defaultUpgradeToVersion),
+			}
+			seen := make(map[string]struct{}, len(openBaoImages))
+			for _, img := range openBaoImages {
+				img = strings.TrimSpace(img)
+				if img == "" {
+					continue
+				}
+				if _, ok := seen[img]; ok {
+					continue
+				}
+				seen[img] = struct{}{}
+				_, _ = fmt.Fprintf(GinkgoWriter, "Loading OpenBao image %q into kind (cluster=%s)\n", img, clusterName)
+				// Ensure the image exists locally before kind load (fresh CI runners won't have it).
+				if _, err := utils.Run(exec.Command("docker", "image", "inspect", img)); err != nil { // #nosec G204 -- test harness command
+					_, _ = fmt.Fprintf(GinkgoWriter, "Pulling OpenBao image %q...\n", img)
+					_, err = utils.Run(exec.Command("docker", "pull", img)) // #nosec G204 -- test harness command
+					ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to pull OpenBao image %q (cluster=%s)", img, clusterName))
+				}
+				err = utils.LoadImageToKindClusterWithName(img)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load OpenBao image %q into Kind (cluster=%s)", img, clusterName))
+			}
+
 			certManagerPreinstalled := false
 			if !skipCertManagerInstall {
 				By(fmt.Sprintf("checking if cert manager is installed already (cluster=%s)", clusterName))
@@ -379,11 +482,16 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			cmd = exec.Command("make", "install")
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to install CRDs (cluster=%s)", clusterName))
+			ExpectWithOffset(1, waitForCRDsEstablished(2*time.Minute)).To(Succeed(), fmt.Sprintf("CRDs did not become Established in time (cluster=%s)", clusterName))
 
 			By(fmt.Sprintf("deploying the controller-manager and provisioner (cluster=%s)", clusterName))
 			cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to deploy the operator (cluster=%s)", clusterName))
+
+			By(fmt.Sprintf("waiting for operator deployments to become Available (cluster=%s)", clusterName))
+			ExpectWithOffset(1, waitForDeploymentsAvailable(operatorNamespace, 5*time.Minute)).
+				To(Succeed(), fmt.Sprintf("Operator deployments did not become Available in time (cluster=%s)", clusterName))
 		})
 	})
 

@@ -258,8 +258,8 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 						APIServerCIDR: apiServerCIDR,
 					},
 					Backup: &openbaov1alpha1.BackupSchedule{
-						Schedule:      "*/5 * * * *",
-						ExecutorImage: backupExecutorImage,
+						Schedule: "*/5 * * * *",
+						Image:    backupExecutorImage,
 						// JWTAuthRole not set - operator will auto-create backup role when OIDC is enabled
 						Target: openbaov1alpha1.BackupTarget{
 							Provider:     constants.StorageProviderS3,
@@ -413,15 +413,18 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			By("Writing a secret before backup")
 			secretPath := "secret/backup-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
-			baoAddr := fmt.Sprintf("https://%s.%s.svc.cluster.local:8200", drCluster.Name, tenantNamespace)
 			bypassLabels := map[string]string{
 				constants.LabelOpenBaoCluster:   drCluster.Name,
 				constants.LabelOpenBaoComponent: "backup",
 			}
 
 			// Enable KV engine (idempotent)
-			err := e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
-			Expect(err).NotTo(HaveOccurred(), "Failed to write pre-backup secret")
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, drCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				err = e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed(), "Failed to write pre-backup secret")
 
 			triggerTimestamp := time.Now().Format(time.RFC3339Nano)
 			Eventually(func(g Gomega) {
@@ -445,6 +448,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
 					"app.kubernetes.io/managed-by": "openbao-operator",
 					"openbao.org/component":        "backup",
+					constants.LabelOpenBaoCluster:  drCluster.Name,
 				})
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(len(jobs.Items)).To(BeNumerically(">", 0))
@@ -457,6 +461,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
 					"app.kubernetes.io/managed-by": "openbao-operator",
 					"openbao.org/component":        "backup",
+					constants.LabelOpenBaoCluster:  drCluster.Name,
 				})
 				g.Expect(err).NotTo(HaveOccurred())
 
@@ -479,7 +484,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(updated.Status.Backup).NotTo(BeNil())
 				g.Expect(updated.Status.Backup.LastBackupName).NotTo(BeEmpty())
 				backupKey = updated.Status.Backup.LastBackupName
-			}, 2*time.Minute, 5*time.Second).Should(Succeed())
+			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed())
 		})
 
 		It("restores from S3 backup using OpenBaoRestore CR", func() {
@@ -504,9 +509,9 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 						},
 						Key: backupKey,
 					},
-					JWTAuthRole:   "restore",
-					ExecutorImage: backupExecutorImage,
-					Force:         true,
+					JWTAuthRole: "restore",
+					Image:       backupExecutorImage,
+					Force:       true,
 				},
 			}
 
@@ -521,7 +526,6 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}, 15*time.Minute, 30*time.Second).Should(Succeed())
 
 			By("Verifying secret persists after restore")
-			baoAddr := fmt.Sprintf("https://%s.%s.svc.cluster.local:8200", drCluster.Name, tenantNamespace)
 			secretPath := "secret/backup-test"
 			bypassLabels := map[string]string{
 				constants.LabelOpenBaoCluster:   drCluster.Name,
@@ -530,9 +534,13 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			// Note: Restore is destructive, it replaces the data.
 			// So after restore, the secret we wrote before backup should be there.
 			// Reuse the same JWT logic as before (roles are auto-created by bootstrap)
-			val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
-			Expect(err).NotTo(HaveOccurred(), "Failed to read post-restore secret")
-			Expect(val).To(Equal("bar"))
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, drCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to read post-restore secret")
+				g.Expect(val).To(Equal("bar"))
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
 		})
 	})
 
@@ -596,8 +604,8 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 						APIServerCIDR: apiServerCIDR,
 					},
 					Backup: &openbaov1alpha1.BackupSchedule{
-						Schedule:      "*/5 * * * *",
-						ExecutorImage: backupExecutorImage,
+						Schedule: "*/5 * * * *",
+						Image:    backupExecutorImage,
 						Target: openbaov1alpha1.BackupTarget{
 							Provider:   constants.StorageProviderGCS,
 							Endpoint:   fakeGCSEndpoint,
@@ -768,6 +776,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
 					"app.kubernetes.io/managed-by": "openbao-operator",
 					"openbao.org/component":        "backup",
+					constants.LabelOpenBaoCluster:  drCluster.Name,
 				})
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(len(jobs.Items)).To(BeNumerically(">", 0))
@@ -780,6 +789,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
 					"app.kubernetes.io/managed-by": "openbao-operator",
 					"openbao.org/component":        "backup",
+					constants.LabelOpenBaoCluster:  drCluster.Name,
 				})
 				g.Expect(err).NotTo(HaveOccurred())
 
@@ -858,8 +868,8 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 						APIServerCIDR: apiServerCIDR,
 					},
 					Backup: &openbaov1alpha1.BackupSchedule{
-						Schedule:      "*/5 * * * *",
-						ExecutorImage: backupExecutorImage,
+						Schedule: "*/5 * * * *",
+						Image:    backupExecutorImage,
 						// JWTAuthRole not set - operator will auto-create backup role when OIDC is enabled
 						Target: openbaov1alpha1.BackupTarget{
 							Provider:   constants.StorageProviderAzure,
@@ -1035,6 +1045,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
 					"app.kubernetes.io/managed-by": "openbao-operator",
 					"openbao.org/component":        "backup",
+					constants.LabelOpenBaoCluster:  drCluster.Name,
 				})
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(len(jobs.Items)).To(BeNumerically(">", 0))
@@ -1047,6 +1058,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
 					"app.kubernetes.io/managed-by": "openbao-operator",
 					"openbao.org/component":        "backup",
+					constants.LabelOpenBaoCluster:  drCluster.Name,
 				})
 				g.Expect(err).NotTo(HaveOccurred())
 
@@ -1069,7 +1081,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(updated.Status.Backup).NotTo(BeNil())
 				g.Expect(updated.Status.Backup.LastBackupName).NotTo(BeEmpty())
 				backupKey = updated.Status.Backup.LastBackupName
-			}, 2*time.Minute, 5*time.Second).Should(Succeed())
+			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed())
 		})
 
 		It("restores from Azure backup using OpenBaoRestore CR", func() {
@@ -1098,9 +1110,9 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 						},
 						Key: backupKey,
 					},
-					JWTAuthRole:   "restore",
-					ExecutorImage: backupExecutorImage,
-					Force:         true,
+					JWTAuthRole: "restore",
+					Image:       backupExecutorImage,
+					Force:       true,
 				},
 			}
 

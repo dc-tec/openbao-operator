@@ -1,16 +1,10 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Release version tag (e.g., v0.1.0)
-        required: true
-        type: string
-      ref:
-        description: Git ref to release (defaults to the workflow ref)
-        required: false
-        type: string
+  push:
+    tags:
+      - "[0-9]*.[0-9]*.[0-9]*"
+      - "[0-9]*.[0-9]*.[0-9]*-*"
 
 permissions:
   contents: write
@@ -38,32 +32,48 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
           fetch-depth: 1
 
       - name: Compute release variables
         id: vars
         run: |
           set -euo pipefail
-          version="${{ inputs.version }}"
-          if ! [[ "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
-            echo "version must be a semver tag with leading v (e.g., v0.1.0)" >&2
+          version="${{ github.ref_name }}"
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
+            echo "version must be a semver tag (e.g., 0.1.0 or 0.1.0-rc.1)" >&2
             exit 1
           fi
 
-          chart_version="${version#v}"
           sha="$(git rev-parse HEAD)"
           build_tag="build-${sha}"
 
           owner="${GITHUB_REPOSITORY_OWNER}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "chart_version=${chart_version}" >> "${GITHUB_OUTPUT}"
+          echo "chart_version=${version}" >> "${GITHUB_OUTPUT}"
           echo "build_tag=${build_tag}" >> "${GITHUB_OUTPUT}"
 
           echo "manager_image=ghcr.io/${owner}/openbao-operator" >> "${GITHUB_OUTPUT}"
-          echo "config_init_image=ghcr.io/${owner}/openbao-config-init" >> "${GITHUB_OUTPUT}"
-          echo "backup_executor_image=ghcr.io/${owner}/openbao-backup-executor" >> "${GITHUB_OUTPUT}"
-          echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade-executor" >> "${GITHUB_OUTPUT}"
+          echo "config_init_image=ghcr.io/${owner}/openbao-init" >> "${GITHUB_OUTPUT}"
+          echo "backup_executor_image=ghcr.io/${owner}/openbao-backup" >> "${GITHUB_OUTPUT}"
+          echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade" >> "${GITHUB_OUTPUT}"
+
+      - name: Fail fast if draft GitHub Release is missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.vars.outputs.version }}"
+          for _ in $(seq 1 24); do
+            if gh release view "${version}" >/dev/null 2>&1; then
+              echo "Found GitHub Release ${version}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "GitHub Release '${version}' not found after waiting." >&2
+          echo "Merge the release-please PR to create the tag and draft release." >&2
+          exit 1
 
   build-images:
     name: Build Images (Build Tag)
@@ -78,7 +88,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
           fetch-depth: 0
 
       - name: Login to GHCR
@@ -102,6 +112,8 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: false
+          sbom: false
           tags: ${{ needs.prepare.outputs.manager_image }}:${{ needs.prepare.outputs.build_tag }}
 
       - name: Build and push config-init
@@ -112,6 +124,8 @@ jobs:
           file: Dockerfile.init
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: false
+          sbom: false
           tags: ${{ needs.prepare.outputs.config_init_image }}:${{ needs.prepare.outputs.build_tag }}
 
       - name: Build and push backup executor
@@ -122,6 +136,8 @@ jobs:
           file: Dockerfile.backup
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: false
+          sbom: false
           tags: ${{ needs.prepare.outputs.backup_executor_image }}:${{ needs.prepare.outputs.build_tag }}
 
       - name: Build and push upgrade executor
@@ -132,6 +148,8 @@ jobs:
           file: Dockerfile.upgrade
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: false
+          sbom: false
           tags: ${{ needs.prepare.outputs.upgrade_executor_image }}:${{ needs.prepare.outputs.build_tag }}
 
   security-govulncheck:
@@ -142,7 +160,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
 
       - name: Setup Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
@@ -210,7 +228,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
 
       - name: Setup Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
@@ -252,6 +270,18 @@ jobs:
           E2E_UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}:${{ needs.prepare.outputs.build_tag }}
         run: make test-e2e-ci
 
+      - name: Collect E2E artifacts (failure)
+        if: failure()
+        run: bash hack/ci/collect-e2e-artifacts.sh
+
+      - name: Upload E2E artifacts (failure)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-artifacts-kind-${{ matrix.k8s }}
+          path: artifacts/
+          retention-days: 7
+
   promote:
     name: Promote + Publish Release
     runs-on: ubuntu-24.04
@@ -260,7 +290,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
           fetch-depth: 0
 
       - name: Login to GHCR
@@ -348,23 +378,32 @@ jobs:
       - name: Package and push Helm chart (OCI)
         env:
           CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
-          VERSION: ${{ needs.prepare.outputs.version }}
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           helm registry login ghcr.io -u "${GITHUB_ACTOR}" -p "${{ secrets.GITHUB_TOKEN }}"
           helm package charts/openbao-operator \
             --version "${CHART_VERSION}" \
-            --app-version "${VERSION}"
+            --app-version "${CHART_VERSION}"
           helm push "openbao-operator-${CHART_VERSION}.tgz" "oci://ghcr.io/${OWNER}/charts"
 
-      - name: Sign Helm chart (OCI)
+      - name: Setup Go (for crane)
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Sign Helm chart by digest (OCI)
         env:
           CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          cosign sign --yes "ghcr.io/${OWNER}/charts/openbao-operator:${CHART_VERSION}"
+          go install github.com/google/go-containerregistry/cmd/crane@v0.20.7
+          chart_ref="ghcr.io/${OWNER}/charts/openbao-operator:${CHART_VERSION}"
+          chart_digest="$(crane digest "${chart_ref}")"
+          cosign sign --yes "ghcr.io/${OWNER}/charts/openbao-operator@${chart_digest}"
 
       - name: Generate digest-pinned installer manifest
         env:
@@ -376,6 +415,11 @@ jobs:
           make build-installer \
             IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" \
             OPERATOR_VERSION="${VERSION}"
+
+      - name: Generate CRDs manifest
+        run: |
+          set -euo pipefail
+          make build-crds
 
       - name: Generate SBOMs (SPDX JSON)
         uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
@@ -393,7 +437,7 @@ jobs:
         with:
           image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.build-images.outputs.config_init_digest }}
           format: spdx-json
-          output-file: dist/sbom-openbao-config-init.spdx.json
+          output-file: dist/sbom-openbao-init.spdx.json
           upload-artifact: "false"
           upload-release-assets: "false"
           registry-username: ${{ github.actor }}
@@ -404,7 +448,7 @@ jobs:
         with:
           image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.build-images.outputs.backup_executor_digest }}
           format: spdx-json
-          output-file: dist/sbom-openbao-backup-executor.spdx.json
+          output-file: dist/sbom-openbao-backup.spdx.json
           upload-artifact: "false"
           upload-release-assets: "false"
           registry-username: ${{ github.actor }}
@@ -415,7 +459,7 @@ jobs:
         with:
           image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.build-images.outputs.upgrade_executor_digest }}
           format: spdx-json
-          output-file: dist/sbom-openbao-upgrade-executor.spdx.json
+          output-file: dist/sbom-openbao-upgrade.spdx.json
           upload-artifact: "false"
           upload-release-assets: "false"
           registry-username: ${{ github.actor }}
@@ -424,34 +468,55 @@ jobs:
       - name: Generate checksums
         run: |
           set -euo pipefail
-          sha256sum dist/install.yaml dist/sbom-*.spdx.json > dist/checksums.txt
+          sha256sum dist/install.yaml dist/crds.yaml dist/sbom-*.spdx.json > dist/checksums.txt
 
-      - name: Create git tag
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
+      - name: Sign release checksums (keyless)
         run: |
           set -euo pipefail
-          if git rev-parse "${VERSION}" >/dev/null 2>&1; then
-            echo "Tag ${VERSION} already exists" >&2
+          cosign sign-blob \
+            --yes \
+            --output-signature dist/checksums.txt.sig \
+            --output-certificate dist/checksums.txt.crt \
+            dist/checksums.txt
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.prepare.outputs.version }}"
+
+          prerelease_flag=""
+          if [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+            prerelease_flag="--prerelease"
+          fi
+
+          # Source-of-truth for versioning and release notes is release-please.
+          # This workflow only uploads release assets and publishes the draft release.
+          if ! gh release view "${version}" >/dev/null 2>&1; then
+            echo "GitHub Release '${version}' not found." >&2
+            echo "Merge the release-please PR to create the tag and draft release." >&2
             exit 1
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${VERSION}" -m "Release ${VERSION}"
-          git push origin "${VERSION}"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
-        with:
-          tag_name: ${{ needs.prepare.outputs.version }}
-          generate_release_notes: true
-          files: |
-            dist/install.yaml
-            dist/sbom-openbao-operator.spdx.json
-            dist/sbom-openbao-config-init.spdx.json
-            dist/sbom-openbao-backup-executor.spdx.json
-            dist/sbom-openbao-upgrade-executor.spdx.json
-            dist/checksums.txt
+          gh release upload "${version}" \
+            dist/install.yaml \
+            dist/crds.yaml \
+            dist/checksums.txt \
+            dist/checksums.txt.sig \
+            dist/checksums.txt.crt \
+            dist/sbom-openbao-operator.spdx.json \
+            dist/sbom-openbao-init.spdx.json \
+            dist/sbom-openbao-backup.spdx.json \
+            dist/sbom-openbao-upgrade.spdx.json \
+            --clobber
+
+          # Ensure releases are published and marked correctly.
+          if [[ -n "${prerelease_flag}" ]]; then
+            gh release edit "${version}" --title "${version}" --draft=false --prerelease
+          else
+            gh release edit "${version}" --title "${version}" --draft=false --latest
+          fi
 
   deploy-docs:
     name: Deploy Versioned Docs
@@ -463,7 +528,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
           fetch-depth: 0
 
       - name: Setup Python
@@ -472,7 +537,7 @@ jobs:
           python-version: "3.x"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
 
       - name: Install dependencies
         run: uv pip install --system mkdocs-material mike
@@ -488,4 +553,10 @@ jobs:
       - name: Deploy versioned docs
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: mike deploy --push --update-aliases "${VERSION}" latest
+        run: |
+          set -euo pipefail
+          if [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+            mike deploy --push "${VERSION}"
+            exit 0
+          fi
+          mike deploy --push --update-aliases "${VERSION}" latest

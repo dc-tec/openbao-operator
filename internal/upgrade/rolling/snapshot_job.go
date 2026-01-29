@@ -113,7 +113,7 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 	}
 
 	verifiedExecutorDigest := ""
-	executorImage := strings.TrimSpace(cluster.Spec.Backup.ExecutorImage)
+	executorImage := strings.TrimSpace(cluster.Spec.Backup.Image)
 	if executorImage != "" && cluster.Spec.OperatorImageVerification != nil && cluster.Spec.OperatorImageVerification.Enabled {
 		verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 		defer cancel()

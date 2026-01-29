@@ -11,6 +11,7 @@ This guide covers everything you need to know to successfully operate OpenBao on
     Deploy the operator using Helm or manifests. Supports **Multi-Tenant** (Default) and **Single-Tenant** modes.
 
     [:material-arrow-right: Installation](operator/installation.md)
+    
     [:material-arrow-right: Single-Tenant Mode](operator/single-tenant-mode.md)
 
 - :material-account-multiple-plus: **2. Onboard Tenants**

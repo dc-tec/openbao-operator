@@ -66,13 +66,6 @@ spec:
                   Must exist in the same namespace as the OpenBaoRestore.
                 minLength: 1
                 type: string
-              executorImage:
-                description: |-
-                  ExecutorImage is the container image to use for restore operations.
-                  Defaults to the same image used for backup operations if not specified.
-                  If the target OpenBaoCluster has image verification enabled, the operator will verify this image and pin the restore Job to the verified digest.
-                minLength: 1
-                type: string
               force:
                 default: false
                 description: |-
@@ -80,6 +73,13 @@ spec:
                   This is required for disaster recovery scenarios where the cluster
                   may be in a degraded state.
                 type: boolean
+              image:
+                description: |-
+                  Image is the container image to use for restore operations.
+                  Defaults to the same image used for backup operations if not specified.
+                  If the target OpenBaoCluster has image verification enabled, the operator will verify this image and pin the restore Job to the verified digest.
+                minLength: 1
+                type: string
               jwtAuthRole:
                 description: |-
                   JWTAuthRole is the name of the JWT Auth role configured in OpenBao

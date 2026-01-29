@@ -37,7 +37,7 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
     helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
       --namespace openbao-operator-system \
       --create-namespace \
-      --set image.tag=v1.0.0 \
+      --set image.tag=1.0.0 \
       --set controller.replicas=2 \
       --set controller.resources.limits.memory=512Mi
     ```
@@ -135,7 +135,7 @@ openbao-operator-provisioner-xxxxxxxxxx-xxxxx     1/1     Running   0          1
 
     1. Apply CRDs from the release assets first:
         ```bash
-        kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/vX.Y.Z/crds.yaml
+        kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/crds.yaml
         ```
     2. Then upgrade the Helm release:
         ```bash
@@ -146,7 +146,7 @@ openbao-operator-provisioner-xxxxxxxxxx-xxxxx     1/1     Running   0          1
 ### YAML Manifest Upgrades
 
 ```bash
-kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/vX.Y.Z/install.yaml
+kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
 ```
 
 ## Uninstallation

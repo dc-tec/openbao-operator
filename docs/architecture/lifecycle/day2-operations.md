@@ -10,7 +10,7 @@ Day 2 operations cover the ongoing management of the cluster, including version 
 === "Rolling Update (Default)"
 
     1. User configures upgrade executor:
-       - Set `spec.upgrade.executorImage` (optional, can be inferred)
+       - Set `spec.upgrade.image` (optional, can be inferred)
        - Set `spec.upgrade.jwtAuthRole` (optional, inferred from `spec.selfInit.oidc.enabled`) or configure manual role
     2. User updates `spec.version` and/or `spec.image` (strategy is configured via `spec.upgrade.strategy`).
     3. Upgrade Manager (adminops controller) detects version drift and performs pre-upgrade validation:

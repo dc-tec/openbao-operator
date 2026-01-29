@@ -7,7 +7,7 @@ The OpenBao Operator supports deployment in air-gapped environments and usage of
 There are two categories of images to consider:
 
 1. **Operator Images**: The controller and provisioner images.
-2. **Workload Images**: The OpenBao image and helper sidecars (backup, upgrade, config-init) injected by the operator.
+2. **Workload Images**: The OpenBao image and helper sidecars (backup, upgrade, init) injected by the operator.
 
 ## 1. Configuring the Operator
 
@@ -36,9 +36,11 @@ To override these globally for all clusters, set the following environment varia
         - name: RELATED_IMAGE_OPENBAO
           value: "my-registry.corp/openbao/openbao"             # (1)!
         - name: OPERATOR_INIT_IMAGE_REPOSITORY
-          value: "my-registry.corp/openbao-operator/config-init"
+          value: "my-registry.corp/openbao-init"
         - name: OPERATOR_BACKUP_IMAGE_REPOSITORY
-          value: "my-registry.corp/openbao-operator/backup"
+          value: "my-registry.corp/openbao-backup"
+        - name: OPERATOR_UPGRADE_IMAGE_REPOSITORY
+          value: "my-registry.corp/openbao-upgrade"
     ```
 
     1. Default OpenBao image used if `spec.image` is empty.
@@ -54,7 +56,7 @@ To override these globally for all clusters, set the following environment varia
 | Environment Variable | Description | Default |
 | :--- | :--- | :--- |
 | `RELATED_IMAGE_OPENBAO` | Default OpenBao image if `spec.image` is empty | `openbao/openbao` |
-| `OPERATOR_INIT_IMAGE_REPOSITORY` | Repository for config-init container | `ghcr.io/dc-tec/openbao-config-init` |
+| `OPERATOR_INIT_IMAGE_REPOSITORY` | Repository for init container | `ghcr.io/dc-tec/openbao-init` |
 | `OPERATOR_BACKUP_IMAGE_REPOSITORY` | Repository for backup executor | `ghcr.io/dc-tec/openbao-backup` |
 | `OPERATOR_UPGRADE_IMAGE_REPOSITORY` | Repository for upgrade executor | `ghcr.io/dc-tec/openbao-upgrade` |
 
@@ -78,15 +80,15 @@ spec:
 
   # Config Init Image
   initContainer:
-    image: "my-registry.corp/openbao-operator/config-init:v0.4.0"
+    image: "my-registry.corp/openbao-init:0.4.0"
 
   # Backup Sidecar
   backup:
-    executorImage: "my-registry.corp/openbao-operator/backup:v0.4.0"
+    image: "my-registry.corp/openbao-backup:0.4.0"
   
   # Upgrade Sidecar
   upgrade:
-    executorImage: "my-registry.corp/openbao-operator/upgrade:v0.4.0"
+    image: "my-registry.corp/openbao-upgrade:0.4.0"
 ```
 
 ### Image Pull Secrets
@@ -120,7 +122,7 @@ The operator will attach these pull secrets to the StatefulSet, allowing Kuberne
 - [ ] **Mirror Images**: Retag and push the following images to your private registry:
   - `openbao-operator`
   - `openbao`
-  - `openbao-config-init`
+  - `openbao-init`
   - `openbao-backup`
   - `openbao-upgrade`
 - [ ] **Install Operator**: Use Helm with `controller.extraEnv` to point to your mirrored sidecar repos.

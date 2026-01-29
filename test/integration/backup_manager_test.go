@@ -33,8 +33,8 @@ func TestBackupManager_ManualTrigger_CreatesJobAndWiring(t *testing.T) {
 			Region:     "us-east-1",
 			PathPrefix: "openbao",
 		},
-		JWTAuthRole:   "backup",
-		ExecutorImage: "openbao/backup-executor:dev",
+		JWTAuthRole: "backup",
+		Image:       "openbao-backup:dev",
 	}
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("create OpenBaoCluster: %v", err)

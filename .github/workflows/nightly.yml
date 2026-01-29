@@ -105,6 +105,18 @@ jobs:
           E2E_PARALLEL_NODES: "2"
         run: make test-e2e-ci
 
+      - name: Collect E2E artifacts (failure)
+        if: failure()
+        run: bash hack/ci/collect-e2e-artifacts.sh
+
+      - name: Upload E2E artifacts (failure)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-artifacts-kind-${{ matrix.k8s }}
+          path: artifacts/
+          retention-days: 7
+
   docs:
     name: Docs Build
     runs-on: ubuntu-24.04

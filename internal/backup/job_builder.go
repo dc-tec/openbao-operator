@@ -483,8 +483,8 @@ func BuildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 // If not specified in the cluster spec, returns the default image derived from
 // OPERATOR_BACKUP_IMAGE_REPOSITORY and OPERATOR_VERSION environment variables.
 func GetBackupExecutorImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	if cluster.Spec.Backup != nil && strings.TrimSpace(cluster.Spec.Backup.ExecutorImage) != "" {
-		return cluster.Spec.Backup.ExecutorImage, nil
+	if cluster.Spec.Backup != nil && strings.TrimSpace(cluster.Spec.Backup.Image) != "" {
+		return cluster.Spec.Backup.Image, nil
 	}
 	return constants.DefaultBackupImage()
 }

@@ -18,5 +18,4 @@ spec:
   # jwtAuthRole: restore
   # tokenSecretRef:
   #   name: restore-token
-  # executorImage: openbao/backup-executor:v0.1.0
-
+  # image: openbao-backup:0.1.0

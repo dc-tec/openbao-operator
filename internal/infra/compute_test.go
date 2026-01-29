@@ -573,7 +573,7 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 	cluster := newMinimalCluster("infra-init-container", ns)
 	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
 		Enabled: true,
-		Image:   "openbao/openbao-config-init:latest",
+		Image:   "openbao/openbao-init:latest",
 	}
 	createClusterCRForTest(t, k8sClient, cluster)
 
@@ -604,8 +604,8 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 	for _, ic := range statefulSet.Spec.Template.Spec.InitContainers {
 		if ic.Name == "bao-config-init" {
 			initContainerFound = true
-			if ic.Image != "openbao/openbao-config-init:latest" {
-				t.Fatalf("expected init container image %q, got %q", "openbao/openbao-config-init:latest", ic.Image)
+			if ic.Image != "openbao/openbao-init:latest" {
+				t.Fatalf("expected init container image %q, got %q", "openbao/openbao-init:latest", ic.Image)
 			}
 		}
 	}
@@ -616,7 +616,7 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 
 func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 	// Set OPERATOR_VERSION to avoid panic from fail-fast logic in DefaultInitImage
-	t.Setenv(constants.EnvOperatorVersion, "v1.0.0")
+	t.Setenv(constants.EnvOperatorVersion, "1.0.0")
 
 	k8sClient, scheme := envtestClientForPackage(t)
 	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")

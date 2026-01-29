@@ -143,7 +143,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 						APIServerCIDR: apiServerCIDR,
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						ExecutorImage: upgradeExecutorImage,
+						Image: upgradeExecutorImage,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -178,7 +178,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			// Note: bao kv put/get automatically adds /data/ for KV v2, so use path without /data/
 			secretPath := "secret/rolling-upgrade-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
-			baoAddr := fmt.Sprintf("https://%s.%s.svc.cluster.local:8200", upgradeCluster.Name, tenantNamespace)
 			bypassLabels := map[string]string{
 				constants.LabelOpenBaoCluster:   upgradeCluster.Name,
 				constants.LabelOpenBaoComponent: "backup",
@@ -186,8 +185,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 
 			// Enable KV engine (idempotent) - dev mode usually has it enabled at secret/
 			// but we'll try to write directly first.
-			err = e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
-			Expect(err).NotTo(HaveOccurred(), "Failed to write pre-upgrade secret")
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, upgradeCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				err = e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed(), "Failed to write pre-upgrade secret")
 
 			By("Triggering upgrade")
 			Eventually(func(g Gomega) {
@@ -241,10 +244,13 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			}, 20*time.Minute, 10*time.Second).Should(Succeed())
 
 			By("Verifying secret persists after upgrade")
-			// Read secret back
-			val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
-			Expect(err).NotTo(HaveOccurred(), "Failed to read post-upgrade secret")
-			Expect(val).To(Equal("bar"))
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, upgradeCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to read post-upgrade secret")
+				g.Expect(val).To(Equal("bar"))
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
 		})
 	})
 
@@ -325,8 +331,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
 					Replicas: 3,
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
-						ExecutorImage: upgradeExecutorImage,
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+						Image:    upgradeExecutorImage,
 						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 							AutoPromote:        true,
 							PreUpgradeSnapshot: true, // Enable pre-upgrade snapshot
@@ -347,8 +353,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 						},
 					},
 					Backup: &openbaov1alpha1.BackupSchedule{
-						Schedule:      "0 0 * * *",
-						ExecutorImage: backupExecutorImage,
+						Schedule: "0 0 * * *",
+						Image:    backupExecutorImage,
 						// JWTAuthRole not set - operator will auto-create backup role when OIDC is enabled
 						Target: openbaov1alpha1.BackupTarget{
 							Endpoint:     rustfsEndpoint,
@@ -501,15 +507,18 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			By("Writing a secret before upgrade")
 			secretPath := "secret/bluegreen-upgrade-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
-			baoAddr := fmt.Sprintf("https://%s.%s.svc.cluster.local:8200", upgradeCluster.Name, tenantNamespace)
 			bypassLabels := map[string]string{
 				constants.LabelOpenBaoCluster:   upgradeCluster.Name,
 				constants.LabelOpenBaoComponent: "backup",
 			}
 
 			// Enable KV engine (idempotent)
-			err := e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
-			Expect(err).NotTo(HaveOccurred(), "Failed to write pre-upgrade secret")
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, upgradeCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				err = e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed(), "Failed to write pre-upgrade secret")
 
 			By("Triggering upgrade")
 			Eventually(func(g Gomega) {
@@ -626,10 +635,13 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			// Let's modify the "Waiting for upgrade to complete" block to include checks.
 
 			By("Verifying secret persists after upgrade")
-			// Read secret back
-			val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
-			Expect(err).NotTo(HaveOccurred(), "Failed to read post-upgrade secret")
-			Expect(val).To(Equal("bar"))
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, upgradeCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to read post-upgrade secret")
+				g.Expect(val).To(Equal("bar"))
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
 		})
 	})
 
@@ -667,8 +679,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
 					Replicas: 3,
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
-						ExecutorImage: upgradeExecutorImage,
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+						Image:    upgradeExecutorImage,
 						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 							AutoPromote:    true,
 							MaxJobFailures: &maxFailures,
@@ -785,8 +797,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
 					Replicas: 3,
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
-						ExecutorImage: upgradeExecutorImage,
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+						Image:    upgradeExecutorImage,
 						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 							AutoPromote: autoPromote,
 							Verification: &openbaov1alpha1.VerificationConfig{
@@ -841,15 +853,18 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			By("Writing a secret before upgrade")
 			secretPath := "secret/safemode-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
-			baoAddr := fmt.Sprintf("https://%s.%s.svc.cluster.local:8200", chaosCluster.Name, tenantNamespace)
 			bypassLabels := map[string]string{
 				constants.LabelOpenBaoCluster:   chaosCluster.Name,
 				constants.LabelOpenBaoComponent: "backup",
 			}
 
 			// Enable KV engine (idempotent)
-			err := e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
-			Expect(err).NotTo(HaveOccurred(), "Failed to write pre-upgrade secret")
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, chaosCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				err = e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed(), "Failed to write pre-upgrade secret")
 
 			By("Triggering a Blue/Green upgrade")
 			Eventually(func(g Gomega) {
@@ -979,11 +994,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			By("Verifying secret persists in safe mode")
 			// Secret should still be there as we are technically still on the Blue cluster (or the active one)
 			// even if we are in safe mode/break glass state.
-			baoAddr = fmt.Sprintf("https://%s.%s.svc.cluster.local:8200", chaosCluster.Name, tenantNamespace)
 			secretPath = "secret/safemode-test"
 			// bypassLabels is in scope from the beginning of the It block
 			// bypassLabels is in scope from the beginning of the It block
 			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, chaosCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
 				secretVal, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
 				g.Expect(err).NotTo(HaveOccurred(), "Failed to read secret in safe mode")
 				g.Expect(secretVal).To(Equal("bar"))
@@ -1056,8 +1072,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
 					Replicas: 3,
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						Strategy:      openbaov1alpha1.UpdateStrategyBlueGreen,
-						ExecutorImage: upgradeExecutorImage,
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+						Image:    upgradeExecutorImage,
 						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 							AutoPromote: true,
 							Verification: &openbaov1alpha1.VerificationConfig{

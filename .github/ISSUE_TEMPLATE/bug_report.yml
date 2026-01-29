@@ -12,8 +12,8 @@ body:
     id: version
     attributes:
       label: Operator version
-      description: The operator version/tag you are running (e.g., v0.1.0)
-      placeholder: vX.Y.Z
+      description: The operator version/tag you are running (e.g., 0.1.0)
+      placeholder: X.Y.Z
     validations:
       required: true
 

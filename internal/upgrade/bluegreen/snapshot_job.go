@@ -36,7 +36,7 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 		)
 	}
 
-	// ExecutorImage defaults to constants.DefaultBackupImage() when not specified
+	// Image defaults to constants.DefaultBackupImage() when not specified
 	if err := backup.EnsureBackupServiceAccount(ctx, m.client, m.scheme, cluster); err != nil {
 		return nil, fmt.Errorf("failed to ensure backup ServiceAccount for snapshot job: %w", err)
 	}
@@ -49,7 +49,7 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 			ctx,
 			logger,
 			cluster,
-			cluster.Spec.Backup.ExecutorImage,
+			cluster.Spec.Backup.Image,
 			constants.ReasonBlueGreenSnapshotImageVerificationFailed,
 			"Pre-upgrade snapshot executor image verification failed",
 		)

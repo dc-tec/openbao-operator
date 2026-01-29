@@ -29,7 +29,7 @@ spec:
         - name: manager
           # [FIX] Replace :latest with a distinct placeholder or version.
           # Kustomize will overwrite this, but specific tags satisfy scanners.
-          image: controller:v0.0.0
+          image: controller:0.0.0
           command: ["/manager", "controller"]
           args:
             - --leader-elect
@@ -43,7 +43,7 @@ spec:
             - name: OPERATOR_SERVICE_ACCOUNT_NAME
               value: openbao-operator-controller
             - name: OPERATOR_VERSION
-              value: "v0.0.0" # [FIX] Set to actual version during release/build
+              value: "0.0.0" # [FIX] Set to actual version during release/build
           ports: []
           securityContext:
             readOnlyRootFilesystem: true

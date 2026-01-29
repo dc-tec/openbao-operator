@@ -90,12 +90,12 @@ type OpenBaoRestoreSpec struct {
 	// +optional
 	TokenSecretRef *corev1.LocalObjectReference `json:"tokenSecretRef,omitempty"`
 
-	// ExecutorImage is the container image to use for restore operations.
+	// Image is the container image to use for restore operations.
 	// Defaults to the same image used for backup operations if not specified.
 	// If the target OpenBaoCluster has image verification enabled, the operator will verify this image and pin the restore Job to the verified digest.
 	// +kubebuilder:validation:MinLength=1
 	// +optional
-	ExecutorImage string `json:"executorImage,omitempty"`
+	Image string `json:"image,omitempty"`
 
 	// Force allows restore even if the cluster appears unhealthy.
 	// This is required for disaster recovery scenarios where the cluster

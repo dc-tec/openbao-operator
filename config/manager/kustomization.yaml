@@ -7,4 +7,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: example.com/openbao-operator
-  newTag: v0.0.1
+  newTag: 0.0.1

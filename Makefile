@@ -3,15 +3,15 @@ IMG ?= controller:latest
 
 # OPERATOR_VERSION is injected into the controller/provisioner Deployments.
 # This is used by the controller to derive version-matched helper images.
-OPERATOR_VERSION ?= v0.0.0
+OPERATOR_VERSION ?= 0.0.0
 
 # INIT_IMG is the image for the config-init helper used as an init container
 # in OpenBao pods to render the final config.hcl from the template.
 # When running init-image targets, you can either set INIT_IMG explicitly:
-#   make docker-build-init INIT_IMG=localhost:5000/openbao-config-init:dev
+#   make docker-build-init INIT_IMG=localhost:5000/openbao-init:dev
 # or reuse IMG:
-#   make docker-build-init IMG=localhost:5000/openbao-config-init:dev
-INIT_IMG ?= openbao-config-init:latest
+#   make docker-build-init IMG=localhost:5000/openbao-init:dev
+INIT_IMG ?= openbao-init:latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -25,6 +25,18 @@ endif
 # scaffolded by default. However, you might want to replace it to use other
 # tools. (i.e. podman)
 CONTAINER_TOOL ?= docker
+
+# REGISTRY and VERSION are used by docker-release to tag images consistently.
+# Default is a local registry for development. Override for production:
+#   make docker-release REGISTRY=ghcr.io/myorg VERSION=v1.2.3
+REGISTRY ?= localhost:5000
+VERSION ?= latest
+
+# Image names for docker-release target (all share the same VERSION)
+MANAGER_IMG ?= $(REGISTRY)/openbao-operator:$(VERSION)
+INIT_IMG_RELEASE ?= $(REGISTRY)/openbao-init:$(VERSION)
+BACKUP_IMG ?= $(REGISTRY)/openbao-backup:$(VERSION)
+UPGRADE_IMG ?= $(REGISTRY)/openbao-upgrade:$(VERSION)
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -50,6 +62,25 @@ all: build
 .PHONY: help
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ CI
+
+# CI_INCLUDE_E2E controls whether E2E tests are run as part of the ci target.
+# Set to "true" to include E2E tests (requires Kind cluster and takes ~15+ minutes).
+# Example: make ci CI_INCLUDE_E2E=true
+CI_INCLUDE_E2E ?= false
+
+.PHONY: ci
+ci: ## Run full CI pipeline locally (fail-fast). Set CI_INCLUDE_E2E=true to include E2E tests.
+ifeq ($(CI_INCLUDE_E2E),true)
+	$(MAKE) ci-core test-e2e-ci
+else
+	$(MAKE) ci-core
+endif
+	@echo "✅ All CI checks passed!"
+
+.PHONY: ci-core
+ci-core: security-scan lint-config lint verify-fmt verify-tidy verify-generated test-ci verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
 
 ##@ Development
 
@@ -140,25 +171,21 @@ report-openbao-config-schema-drift: ## Report upstream OpenBao config schema dri
 report-openbao-operator-schema-drift: ## Report operator-vs-upstream OpenBao config schema drift (non-failing).
 	@go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
 
-.PHONY: changelog
-changelog: ## Generate CHANGELOG.md from git history (local, non-CI).
-	@go run ./hack/changelog --out CHANGELOG.md
-
-.PHONY: changelog-all
-changelog-all: ## Generate CHANGELOG.md including all git tags (local, non-CI).
-	@go run ./hack/changelog --out CHANGELOG.md --all-tags
-
 .PHONY: helm-sync
 helm-sync: manifests ## Sync Helm chart from config/ (CRDs, admission policies).
 	@go run ./hack/helmchart
 
+.PHONY: verify-helm-values
+verify-helm-values: ## Verify Helm values.yaml and values.schema.json stay in sync with templates.
+	@go run ./hack/helmvalues
+
 .PHONY: verify-helm
-verify-helm: helm-sync ## Verify Helm chart is up-to-date (does not modify tracked files).
+verify-helm: helm-sync verify-helm-values ## Verify Helm chart is up-to-date (does not modify tracked files).
 	@{ \
-		git diff --exit-code -- charts/openbao-operator/crds charts/openbao-operator/templates/admission; \
+		git diff --exit-code -- charts/openbao-operator/crds charts/openbao-operator/templates/admission charts/openbao-operator/templates/rbac; \
 	} || { \
 		echo "Helm chart is out of date. Run 'make helm-sync' and commit the result."; \
-		git --no-pager diff -- charts/openbao-operator/crds charts/openbao-operator/templates/admission; \
+		git --no-pager diff -- charts/openbao-operator/crds charts/openbao-operator/templates/admission charts/openbao-operator/templates/rbac; \
 		exit 1; \
 	}
 
@@ -190,6 +217,10 @@ helm-test: helm-sync helm-lint ## Test the Helm chart (lint, template, and dry-r
 		--create-namespace \
 		--dry-run > /dev/null
 	@echo "Helm chart tests passed successfully!"
+
+.PHONY: helm-e2e-smoke
+helm-e2e-smoke: ## Helm chart smoke test against a Kind cluster (installs chart and waits for deployments).
+	@bash hack/ci/helm-e2e-smoke.sh
 
 .PHONY: helm-template
 helm-template: helm-sync ## Template the Helm chart with default values (useful for debugging).
@@ -523,24 +554,49 @@ docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
 .PHONY: docker-build-init
-docker-build-init: ## Build docker image with the bao-config-init helper.
+docker-build-init: ## Build docker image with the init helper (config rendering + wrapper).
 	$(CONTAINER_TOOL) build -f Dockerfile.init -t ${IMG} .
 
 .PHONY: docker-push-init
-docker-push-init: ## Push docker image with the bao-config-init helper.
+docker-push-init: ## Push docker image with the init helper (config rendering + wrapper).
 	$(CONTAINER_TOOL) push ${IMG}
 
 .PHONY: docker-build-backup
-docker-build-backup: ## Build docker image with the backup-executor helper.
+docker-build-backup: ## Build docker image with the backup helper.
 	$(CONTAINER_TOOL) build -f Dockerfile.backup -t ${IMG} .
 
+.PHONY: docker-push-backup
+docker-push-backup: ## Push docker image with the backup helper.
+	$(CONTAINER_TOOL) push ${IMG}
+
 .PHONY: docker-build-upgrade
-docker-build-upgrade: ## Build docker image with the upgrade executor helper.
+docker-build-upgrade: ## Build docker image with the upgrade helper.
 	$(CONTAINER_TOOL) build -f Dockerfile.upgrade -t ${IMG} .
 
-.PHONY: docker-push-backup
-docker-push-backup: ## Push docker image with the backup-executor helper.
+.PHONY: docker-push-upgrade
+docker-push-upgrade: ## Push docker image with the upgrade helper.
 	$(CONTAINER_TOOL) push ${IMG}
+
+.PHONY: docker-release
+docker-release: docker-release-build docker-release-push ## Build and push all images to registry with consistent VERSION.
+
+.PHONY: docker-release-build
+docker-release-build: ## Build all images with consistent VERSION (does not push).
+	@echo "Building images with VERSION=$(VERSION) to REGISTRY=$(REGISTRY)..."
+	$(CONTAINER_TOOL) build -t $(MANAGER_IMG) .
+	$(CONTAINER_TOOL) build -f Dockerfile.init -t $(INIT_IMG_RELEASE) .
+	$(CONTAINER_TOOL) build -f Dockerfile.backup -t $(BACKUP_IMG) .
+	$(CONTAINER_TOOL) build -f Dockerfile.upgrade -t $(UPGRADE_IMG) .
+	@echo "✅ All images built successfully"
+
+.PHONY: docker-release-push
+docker-release-push: ## Push all images to registry.
+	@echo "Pushing images to $(REGISTRY)..."
+	$(CONTAINER_TOOL) push $(MANAGER_IMG)
+	$(CONTAINER_TOOL) push $(INIT_IMG_RELEASE)
+	$(CONTAINER_TOOL) push $(BACKUP_IMG)
+	$(CONTAINER_TOOL) push $(UPGRADE_IMG)
+	@echo "✅ All images pushed successfully"
 
 .PHONY: docker-build-all
 
@@ -572,8 +628,14 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	for f in "$$tmp/config/manager/controller.yaml" "$$tmp/config/manager/provisioner.yaml"; do \
 		python3 -c 'import pathlib,re,sys; p=pathlib.Path(sys.argv[1]); v=sys.argv[2]; q=chr(34); s=p.read_text(encoding="utf-8"); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_VERSION\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+v+q, s, count=1); p.write_text(s, encoding="utf-8")' "$$f" "$(OPERATOR_VERSION)"; \
 	done; \
-	( cd "$$tmp/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
-	"$(KUSTOMIZE)" build "$$tmp/config/default" > "$$out"
+		( cd "$$tmp/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
+		"$(KUSTOMIZE)" build "$$tmp/config/default" > "$$out"
+
+.PHONY: build-crds
+build-crds: manifests kustomize ## Generate a consolidated YAML containing CRDs only.
+	@mkdir -p dist; \
+	out="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
+	if [ -n "$$out" ]; then echo "$$out" > dist/crds.yaml; else echo "No CRDs to export; skipping."; fi
 
 ##@ Deployment
 

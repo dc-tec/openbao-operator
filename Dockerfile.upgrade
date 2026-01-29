@@ -5,9 +5,9 @@
 # a multi-stage build. The image is configured to run as a non-root user.
 #
 # Example build (from repo root):
-#   docker build -f Dockerfile.upgrade-executor -t openbao/upgrade-executor:dev .
+#   docker build -f Dockerfile.upgrade -t openbao-upgrade:dev .
 
-FROM golang:1.25.5 AS builder
+FROM golang:1.25.6 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -31,4 +31,3 @@ COPY --from=builder /workspace/bao-upgrade-executor /upgrade-executor
 HEALTHCHECK NONE
 
 ENTRYPOINT ["/upgrade-executor"]
-
