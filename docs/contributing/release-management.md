@@ -24,10 +24,15 @@ We use **release-please** as the source of truth for:
 !!! important "Required token"
     `release-please` must use a non-default token, otherwise the resulting tag/release may not trigger downstream GitHub Actions workflows.
 
-    Configure a repository secret named `RELEASE_PLEASE_TOKEN` (GitHub App token or PAT for a dedicated bot user) with permissions to:
+    Recommended: configure a GitHub App (for example `openbao-operator-release`) and use its installation token (no server required; no webhook/callback needed). Store:
+
+    - `OPENBAO_OPERATOR_RELEASE_APP_ID`
+    - `OPENBAO_OPERATOR_RELEASE_PRIVATE_KEY`
+
+    Fallback: if you prefer a PAT, configure a repository secret named `RELEASE_PLEASE_TOKEN` with permissions to:
     - Create/update PRs
     - Create tags and releases
-    - Trigger workflows
+    and update `.github/workflows/release-please.yml` to use it.
 
 !!! tip "Keep release-please PRs mergable"
     If you enforce "required approval" rules, avoid using a PAT for your own user as `RELEASE_PLEASE_TOKEN`.
@@ -113,17 +118,14 @@ graph TD
     - Wait for the tag to be created and for the `Release` workflow to publish artifacts.
 
 !!! note "Policy: release only when ready"
-    The repository includes an optional gate (`.github/workflows/release-pr-gate.yml`) intended for the release-please PR:
+    The repository includes an gate (`.github/workflows/release-pr-gate.yml`) intended for the release-please PR:
 
     - Require a label (default: `release:ready`)
     - Require an explicit approval from the designated release manager (default: `@dc-tec`)
 
-    To enforce this, enable branch protection on `main` and require the `Release PR Gate` status check,
-    and enable "Require review from Code Owners".
-
 !!! note "Manual releases"
     Stable/prerelease releases should be created by merging the release-please PR.
-    If you need an out-of-band release, prefer cutting a dedicated PR on `main` and letting release-please generate the tag/release.
+    For out-of-band release, prefer cutting a dedicated PR on `main` and letting release-please generate the tag/release.
 
 !!! note "Prereleases"
     For `-alpha.*`, `-beta.*`, and `-rc.*` tags, the GitHub Release is marked as a prerelease and docs are published without moving the `latest` alias.
@@ -136,7 +138,7 @@ By default, `release-please` determines the next version bump from Conventional 
 - `feat:` -> minor bump
 - `feat!:` (or `BREAKING CHANGE:`) -> major bump
 
-When you need an ad-hoc prerelease (for example `0.2.0-beta.1` or `0.2.0-rc.1`), override the target version using `Release-As:` in a commit that lands on `main`. `release-please` will update the Release PR to that exact version; merge it when you are ready to publish the prerelease.
+When a ad-hoc prerelease is needed (for example `0.2.0-beta.1` or `0.2.0-rc.1`), override the target version using `Release-As:` in a commit that lands on `main`. `release-please` will update the Release PR to that exact version; merge it when you are ready to publish the prerelease.
 
 === "Override via empty commit"
 
@@ -247,28 +249,3 @@ All artifacts are signed using Sigstore (Keyless).
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       dist/checksums.txt
     ```
-
-## 6. Helm Chart Maintenance
-
-The Helm chart is a first-class citizen but heavily automated.
-
-!!! note "Generated Sources"
-    The chart lives in `charts/openbao-operator`.
-    However, **CRDs** and the **Installer Template** are generated from source.
-
-### Updating the Chart
-
-If you change `api/`, `config/`, or `dist/install.yaml`, you **must** sync the chart.
-
-```sh
-# Syncs CRDs and templates from upstream sources
-make helm-sync
-```
-
-### Validation
-
-CI ensures the chart is always in sync.
-
-```sh
-make verify-helm
-```
