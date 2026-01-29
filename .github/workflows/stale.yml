@@ -1,0 +1,59 @@
+name: Stale Issues and PRs
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Run daily at 3 AM UTC
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    name: Mark stale issues and PRs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark and close stale items
+        uses: actions/stale@5bef64f19d7facfb25b37b414482c7164d639639 # v9.0.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Issue settings
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has not had recent activity. 
+            It will be closed in 30 days if no further activity occurs.
+            
+            If this issue is still relevant, please comment with updates or add the `pinned` label to prevent closure.
+          close-issue-message: |
+            This issue has been automatically closed due to inactivity. 
+            If you believe this was done in error, please comment and we'll reopen it.
+          stale-issue-label: 'stale'
+          
+          # PR settings
+          stale-pr-message: |
+            This pull request has been automatically marked as stale because it has not had recent activity.
+            It will be closed in 30 days if no further activity occurs.
+            
+            If you're still working on this PR, please comment to keep it open or add the `pinned` label.
+          close-pr-message: |
+            This pull request has been automatically closed due to inactivity.
+            If you're still working on this, please comment and we'll reopen it.
+          stale-pr-label: 'stale'
+          
+          # Timing settings
+          days-before-stale: 60
+          days-before-close: 30
+          
+          # Exemptions
+          exempt-issue-labels: 'pinned,security,help wanted,good first issue,wontfix,bug,enhancement'
+          exempt-pr-labels: 'pinned,security,wip,autorelease:pending'
+          exempt-all-milestones: true
+          
+          # Additional settings
+          remove-stale-when-updated: true
+          delete-branch: false
+          operations-per-run: 100
+          
+          # Enable debug logging
+          debug-only: false

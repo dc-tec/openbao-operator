@@ -1,0 +1,265 @@
+# PR Labeler Configuration
+# Maps file patterns to labels for automatic PR labeling
+
+# Documentation changes
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**/*'
+          - 'README.md'
+          - 'CONTRIBUTING.md'
+          - 'LICENSE'
+          - '**/*.md'
+          - 'mkdocs.yml'
+
+# Helm chart changes
+helm:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'charts/openbao-operator/**/*'
+          - 'hack/helm*/**/*'
+          - 'hack/helmvalues/**/*'
+
+# Test changes
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*_test.go'
+          - 'tests/**/*'
+          - 'test/**/*'
+          - 'hack/ci/**/*'
+
+# Security related changes
+security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'config/policy/**/*'
+          - '**/security/**/*'
+          - '.trivy*'
+          - '.github/workflows/dependency-review.yml'
+          - 'internal/security/**/*'
+
+# RBAC changes
+rbac:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'config/rbac/**/*'
+      - '**/rbac/**/*'
+      - '*role*.yaml'
+      - 'hack/gen-rbac/**/*'
+
+# Dependencies
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'go.mod'
+      - 'go.sum'
+      - 'vendor/**/*'
+      - 'Dockerfile*'
+      - '.github/dependabot.yml'
+
+# API / CRD changes
+api:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'api/**/*'
+      - 'config/crd/**/*'
+
+# Controller changes
+controller:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/controller/**/*'
+      - 'cmd/controller/**/*'
+      - 'controllers/**/*'
+
+# Provisioner changes
+provisioner:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/provisioner/**/*'
+      - 'cmd/provisioner/**/*'
+      - '**/provisioner*'
+
+# Cluster management changes
+cluster:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/cluster/**/*'
+
+# Storage backend changes (S3, GCS, Azure)
+storage:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/storage/**/*'
+      - '**/storage*'
+
+# Admission controller changes
+admission:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/admission/**/*'
+      - '**/admission*'
+
+# Authentication changes
+auth:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/auth/**/*'
+      - '**/auth*'
+
+# Certificate management changes
+certs:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/certs/**/*'
+      - '**/cert*'
+
+# Raft consensus changes
+raft:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/raft/**/*'
+      - '**/raft*'
+
+# Logging changes
+logging:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/logging/**/*'
+
+# Networking changes
+networking:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'config/network-policy/**/*'
+      - 'internal/infra/network*'
+
+# Observability / monitoring changes
+observability:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'config/prometheus/**/*'
+      - 'config/grafana/**/*'
+
+# DevOps / CI-CD changes
+devops:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/workflows/**/*'
+      - '.github/actions/**/*'
+      - 'Makefile'
+      - '**/Makefile'
+      - 'hack/build*'
+      - 'hack/release*'
+      - '.golangci.yml'
+      - '.devcontainer/**/*'
+      - '.vscode/**/*'
+      - 'release-please-*.json'
+      - 'hack/tools/**/*'
+      - 'hack/boilerplate.go.txt'
+
+# Infrastructure changes
+infra:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/infra/**/*'
+      - 'config/manager/**/*'
+      - 'config/default/**/*'
+      - 'config/overlays/**/*'
+      - 'config/samples/**/*'
+
+# OpenBao specific changes
+openbao:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/openbao/**/*'
+      - 'cmd/bao*/**/*'
+
+# Backup changes
+backup:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/backup/**/*'
+      - 'cmd/bao-backup/**/*'
+      - 'Dockerfile.backup'
+
+# Restore changes
+restore:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'internal/restore/**/*'
+
+# VAP (Validating Admission Policy) changes
+vap:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/vap*/**/*'
+          - '**/validating*'
+
+# Operations
+operations:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/operationlock/**/*'
+          - 'internal/reconcile/**/*'
+          - 'cmd/bao-wrapper/**/*'
+
+# Upgrades related
+upgrades:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/upgrade/**/*'
+          - 'cmd/bao-upgrade/**/*'
+          - 'Dockerfile.upgrade'
+
+# Config/init related
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/config/**/*'
+          - 'cmd/bao-config-init/**/*'
+          - 'Dockerfile.init'
+
+# Constants
+constants:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/constants/**/*'
+
+# Errors package
+errors:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/errors/**/*'
+
+# Initialization
+init:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/init/**/*'
+
+# Interfaces
+interfaces:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/interfaces/**/*'
+
+# Kubernetes utilities
+kube:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/kube/**/*'
+
+# Probes
+probe:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/probe/**/*'
+          - 'cmd/bao-probe/**/*'
+
+# Revision management
+revision:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/revision/**/*'
