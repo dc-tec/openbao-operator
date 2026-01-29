@@ -12,7 +12,7 @@ permissions:
 jobs:
   stale:
     name: Mark stale issues and PRs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Mark and close stale items
         uses: actions/stale@5bef64f19d7facfb25b37b414482c7164d639639 # v9.0.0

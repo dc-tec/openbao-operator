@@ -19,7 +19,7 @@ concurrency:
 jobs:
   prepare:
     name: Prepare
-    runs-on: ubuntu-24.04
+    runs-on: &runner ubuntu-24.04
     outputs:
       version: ${{ steps.vars.outputs.version }}
       chart_version: ${{ steps.vars.outputs.chart_version }}
@@ -86,7 +86,7 @@ jobs:
 
   security-govulncheck:
     name: Security Gate (govulncheck)
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     needs: prepare
     steps:
       - name: Checkout
@@ -115,7 +115,7 @@ jobs:
 
   security-images:
     name: Security Gate (Trivy image ${{ matrix.image_name }})
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     needs: [prepare, build]
     strategy:
       fail-fast: false
@@ -148,7 +148,7 @@ jobs:
 
   e2e:
     name: E2E Gate (kind ${{ matrix.k8s }})
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     needs: [prepare, build]
     timeout-minutes: 90
     strategy:
@@ -227,7 +227,7 @@ jobs:
 
   promote:
     name: Promote + Publish Release
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     needs: [prepare, build, security-govulncheck, security-images, e2e]
     steps:
       - name: Checkout
@@ -463,7 +463,7 @@ jobs:
 
   deploy-docs:
     name: Deploy Versioned Docs
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     needs: [prepare, promote]
     permissions:
       contents: write
