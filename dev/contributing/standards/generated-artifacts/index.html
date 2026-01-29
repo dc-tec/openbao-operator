@@ -4236,10 +4236,11 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <h3 id="2-helm-chart-sync">2. Helm Chart Sync<a class="headerlink" href="#2-helm-chart-sync" title="Permanent link">&para;</a></h3>
 <p>We maintain a standalone Helm chart that must stay in sync with our core manifests.</p>
 <ul>
-<li><strong>Source:</strong> <code>config/crd/bases/</code> + <code>dist/install.yaml</code></li>
+<li><strong>Source:</strong> <code>config/crd/bases/</code> + <code>config/policy/</code> + <code>config/rbac/</code></li>
 <li><strong>Output:</strong></li>
 <li><code>charts/openbao-operator/crds/</code> (Synced CRDs)</li>
-<li><code>charts/openbao-operator/files/install.yaml.tpl</code> (Synced installer)</li>
+<li><code>charts/openbao-operator/templates/admission/</code> (Synced admission policies)</li>
+<li><code>charts/openbao-operator/templates/rbac/</code> (Synced RBAC templates)</li>
 <li><strong>Command:</strong> <code>make helm-sync</code></li>
 </ul>
 <h3 id="3-provisioner-rbac">3. Provisioner RBAC<a class="headerlink" href="#3-provisioner-rbac" title="Permanent link">&para;</a></h3>

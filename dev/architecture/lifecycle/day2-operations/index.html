@@ -4091,7 +4091,7 @@
 <div class="tabbed-block">
 <ol>
 <li>User configures upgrade executor:</li>
-<li>Set <code>spec.upgrade.executorImage</code> (optional, can be inferred)</li>
+<li>Set <code>spec.upgrade.image</code> (optional, can be inferred)</li>
 <li>Set <code>spec.upgrade.jwtAuthRole</code> (optional, inferred from <code>spec.selfInit.oidc.enabled</code>) or configure manual role</li>
 <li>User updates <code>spec.version</code> and/or <code>spec.image</code> (strategy is configured via <code>spec.upgrade.strategy</code>).</li>
 <li>Upgrade Manager (adminops controller) detects version drift and performs pre-upgrade validation:</li>
