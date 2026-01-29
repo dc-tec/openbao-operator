@@ -1,9 +1,11 @@
 apiVersion: v2
 name: openbao-operator
-description: OpenBao Operator installs the OpenBao Kubernetes operator and its required cluster-scoped resources.
+description: >-
+  OpenBao Operator installs the OpenBao Kubernetes operator and its required
+  cluster-scoped resources.
 type: application
-version: 0.0.0
-appVersion: 0.0.0
+version: 0.1.0
+appVersion: 0.1.0
 icon: https://openbao.org/img/logo.svg
 home: https://github.com/dc-tec/openbao-operator
 sources:
@@ -17,4 +19,4 @@ keywords:
 maintainers:
   - name: dc-tec
     url: https://github.com/dc-tec
-kubeVersion: ">=1.33.0-0"
+kubeVersion: '>=1.33.0-0'
