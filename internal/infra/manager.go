@@ -354,10 +354,6 @@ func tlsServerSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + constants.SuffixTLSServer
 }
 
-func tlsCASecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixTLSCA
-}
-
 func headlessServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name
 }
@@ -376,10 +372,6 @@ func externalServiceNameBlue(cluster *openbaov1alpha1.OpenBaoCluster) string {
 
 func externalServiceNameGreen(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return externalServiceName(cluster) + "-green"
-}
-
-func statefulSetName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return statefulSetNameWithRevision(cluster, "")
 }
 
 // statefulSetNameWithRevision returns the StatefulSet name for a given revision.

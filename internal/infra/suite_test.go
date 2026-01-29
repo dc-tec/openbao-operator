@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package infra
 
 import (
@@ -18,10 +21,12 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
 )
 
 var (
@@ -140,4 +145,190 @@ func testNamespace(t *testing.T) string {
 		ns = ns[:63]
 	}
 	return ns
+}
+
+// -----------------------------------------------------------------------------
+// Test Helpers (Naming)
+// -----------------------------------------------------------------------------
+
+func tlsCASecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return cluster.Name + "-tls-ca" // matches constants.SuffixTLSCA
+}
+
+// -----------------------------------------------------------------------------
+// Integration Test Helpers (formerly helpers_integration_test.go)
+// -----------------------------------------------------------------------------
+
+func newTestClientWithObjects(t *testing.T, objs ...client.Object) client.Client {
+	t.Helper()
+	builder := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithReturnManagedFields()
+	if len(objs) > 0 {
+		builder = builder.WithObjects(objs...)
+	}
+	return builder.Build()
+}
+
+// getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
+func getFirstFoundEnvTestBinaryDir() string {
+	basePath := filepath.Join("..", "..", "bin", "k8s")
+	entries, err := filepath.Glob(filepath.Join(basePath, "*"))
+	if err != nil {
+		return ""
+	}
+	for _, entry := range entries {
+		if info, err := filepath.Abs(entry); err == nil {
+			if stat, err := os.Stat(info); err == nil && stat.IsDir() {
+				return info
+			}
+		}
+	}
+	return ""
+}
+
+// newTestStatefulSetSpec creates a minimal StatefulSetSpec for testing.
+func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) StatefulSetSpec {
+	return StatefulSetSpec{
+		Name:               cluster.Name,
+		Revision:           "",
+		Image:              cluster.Spec.Image,
+		InitContainerImage: "",
+		Replicas:           cluster.Spec.Replicas,
+		ConfigHash:         "",
+		DisableSelfInit:    false,
+		SkipReconciliation: false,
+	}
+}
+
+// createTLSSecretForTest creates a minimal TLS server secret for testing.
+// This is needed because ensureStatefulSet now checks for prerequisite resources.
+func createTLSSecretForTest(t *testing.T, k8sClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster) {
+	t.Helper()
+	secretName := tlsServerSecretName(cluster)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{
+			"tls.crt": []byte("test-cert"),
+			"tls.key": []byte("test-key"),
+			"ca.crt":  []byte("test-ca"),
+		},
+	}
+	if err := k8sClient.Create(context.Background(), secret); err != nil {
+		t.Fatalf("failed to create TLS secret for test: %v", err)
+	}
+}
+
+func createClusterCRForTest(t *testing.T, k8sClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster) {
+	t.Helper()
+	ctx := context.Background()
+
+	// Envtest does not implicitly create namespaces.
+	nsName := cluster.GetNamespace()
+	if nsName != "" {
+		ns := &corev1.Namespace{}
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: nsName}, ns); err != nil {
+			if !apierrors.IsNotFound(err) {
+				t.Fatalf("failed to get namespace %q for test: %v", nsName, err)
+			}
+			if err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}); err != nil {
+				t.Fatalf("failed to create namespace %q for test: %v", nsName, err)
+			}
+		}
+	}
+
+	toCreate := cluster.DeepCopy()
+	toCreate.Status = openbaov1alpha1.OpenBaoClusterStatus{}
+	if err := k8sClient.Create(ctx, toCreate); err != nil {
+		t.Fatalf("failed to create OpenBaoCluster for test: %v", err)
+	}
+
+	cluster.SetUID(toCreate.GetUID())
+	cluster.SetResourceVersion(toCreate.GetResourceVersion())
+}
+
+func statefulSetName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return statefulSetNameWithRevision(cluster, "")
+}
+
+//nolint:unparam // configContent varies in production with actual config values
+func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, platform string) (*appsv1.StatefulSet, error) {
+	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, "", false, platform)
+}
+
+// -----------------------------------------------------------------------------
+// Deprecated / Test-Only Cleanup Functions (moved from config.go)
+// -----------------------------------------------------------------------------
+
+// deleteConfigMap finds and deletes the config map for the cluster.
+// Used only in integration tests.
+func deleteConfigMap(ctx context.Context, k8sClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	configMap := &corev1.ConfigMap{}
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      configMapName(cluster),
+	}, configMap)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	if err := k8sClient.Delete(ctx, configMap); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	return nil
+}
+
+// deleteSecrets removes all Secrets associated with the OpenBaoCluster.
+// Used only in integration tests.
+func deleteSecrets(ctx context.Context, k8sClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster == nil {
+		return nil
+	}
+
+	secretNames := []string{}
+
+	// Only delete operator-owned Secrets.
+	{
+		mode := cluster.Spec.TLS.Mode
+		if mode == "" {
+			mode = openbaov1alpha1.TLSModeOperatorManaged
+		}
+
+		if cluster.Spec.TLS.Enabled && mode == openbaov1alpha1.TLSModeOperatorManaged {
+			secretNames = append(secretNames, tlsServerSecretName(cluster), tlsCASecretName(cluster))
+		}
+	}
+
+	// Only delete the unseal key Secret when using static unseal (operator-owned).
+	{
+		staticUnseal := cluster.Spec.Unseal == nil || cluster.Spec.Unseal.Type == "" || cluster.Spec.Unseal.Type == "static"
+		if staticUnseal {
+			secretNames = append(secretNames, unsealSecretName(cluster))
+		}
+	}
+
+	// Delete by name without reading Secret contents
+	for _, name := range secretNames {
+		if name == "" {
+			continue
+		}
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: cluster.Namespace,
+			},
+		}
+		if err := k8sClient.Delete(ctx, secret); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+
+	return nil
 }

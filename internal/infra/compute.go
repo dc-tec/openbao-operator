@@ -105,7 +105,7 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 	existingSTS := &appsv1.StatefulSet{}
 	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, existingSTS); err == nil {
 		desired.Spec.VolumeClaimTemplates = existingSTS.Spec.VolumeClaimTemplates
-	} else if err != nil && !apierrors.IsNotFound(err) {
+	} else if !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to get StatefulSet %s/%s: %w", cluster.Namespace, name, err)
 	}
 

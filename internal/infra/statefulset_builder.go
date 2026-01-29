@@ -755,10 +755,6 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, revision s
 // buildStatefulSet constructs a StatefulSet for the given OpenBaoCluster.
 // This is a convenience wrapper that calls buildStatefulSetWithRevision with an empty revision.
 //
-//nolint:unparam // configContent varies in production with actual config values
-func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, platform string) (*appsv1.StatefulSet, error) {
-	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, "", false, platform)
-}
 
 // buildStatefulSetWithRevision constructs a StatefulSet for the given OpenBaoCluster.
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).

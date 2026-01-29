@@ -113,7 +113,7 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet ## Run unit tests (fast, no envtest).
-	go test $$(go list ./... | grep -v /e2e | grep -v internal/infra) -coverprofile cover.out
+	go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 .PHONY: test-ci
 test-ci: manifests generate vet setup-envtest ## Run unit + integration tests in CI mode (does not modify tracked files).
@@ -404,24 +404,7 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 	if [ "$(E2E_KEEP_GOING)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --keep-going"; \
 	fi; \
-	if [ "$(E2E_PARALLEL_NODES)" -eq 1 ]; then \
-		GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
-		if [ -n "$(E2E_FOCUS)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=\"$(E2E_FOCUS)\""; \
-		fi; \
-		if [ -n "$(E2E_LABEL_FILTER)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.label-filter=\"$(E2E_LABEL_FILTER)\""; \
-		fi; \
-		if [ "$(E2E_TRACE)" = "true" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.trace"; \
-		fi; \
-		if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
-		fi; \
-		eval KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test $$GO_TEST_FLAGS ./test/e2e/; \
-	else \
-		eval KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/; \
-	fi
+	eval KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/
 	@if [ "$(E2E_SKIP_CLEANUP)" != "true" ]; then \
 		$(MAKE) cleanup-test-e2e; \
 	else \
@@ -466,24 +449,7 @@ test-e2e-ci: setup-test-e2e manifests generate vet ginkgo ## Run the e2e tests i
 	if [ "$(E2E_KEEP_GOING)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --keep-going"; \
 	fi; \
-	if [ "$(E2E_PARALLEL_NODES)" -eq 1 ]; then \
-		GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
-		if [ -n "$(E2E_FOCUS)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=\"$(E2E_FOCUS)\""; \
-		fi; \
-		if [ -n "$(E2E_LABEL_FILTER)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.label-filter=\"$(E2E_LABEL_FILTER)\""; \
-		fi; \
-		if [ "$(E2E_TRACE)" = "true" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.trace"; \
-		fi; \
-		if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
-			GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
-		fi; \
-		eval KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test $$GO_TEST_FLAGS ./test/e2e/; \
-	else \
-		eval KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/; \
-	fi
+	eval KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) "$(GINKGO)" $$GINKGO_FLAGS --procs=$(E2E_PARALLEL_NODES) ./test/e2e/
 	@if [ "$(E2E_SKIP_CLEANUP)" != "true" ]; then \
 		$(MAKE) cleanup-test-e2e; \
 	else \
