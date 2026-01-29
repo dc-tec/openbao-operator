@@ -19,7 +19,7 @@ import (
 	"github.com/dc-tec/openbao-operator/test/utils"
 )
 
-var _ = Describe("OpenShift Platform", Label("openshift", "platform", "smoke"), Ordered, func() {
+var _ = Describe("OpenShift Platform", Label("openshift", "platform"), Ordered, func() {
 	var (
 		k8sClient client.Client
 		f         *framework.Framework
