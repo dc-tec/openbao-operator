@@ -1,0 +1,12 @@
+FROM gcr.io/distroless/static:nonroot
+
+ARG BIN_DIR=bin/linux_amd64
+
+COPY ${BIN_DIR}/bao-backup /backup-executor
+
+# User 1000:1000
+USER 1000:1000
+WORKDIR /
+
+HEALTHCHECK NONE
+ENTRYPOINT ["/backup-executor"]

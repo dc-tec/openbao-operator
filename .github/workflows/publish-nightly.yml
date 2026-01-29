@@ -3,6 +3,7 @@ name: Publish Nightly (dev)
 on:
   workflow_run:
     workflows: ["Nightly"]
+    branches: [main]
     types: [completed]
 
 permissions:
