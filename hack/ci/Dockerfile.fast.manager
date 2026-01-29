@@ -1,6 +1,6 @@
 # Generic fast Dockerfile for CI
 # Expects binaries to be passed via build context or copied in.
-# usage: docker build -f hack/ci/Dockerfile.fast --build-arg BINARY=bin/linux_amd64/manager -t ... .
+# usage: docker build -f hack/ci/Dockerfile.fast.manager --build-arg BINARY=bin/linux_amd64/manager -t ... .
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
@@ -12,26 +12,5 @@ ARG TARGET
 
 COPY ${BINARY} ${TARGET}
 
-# Set user to match what we use in production Dockerfiles
-# Manager: 65532:65532 (nonroot)
-# Others: 1000:1000 or 100:1000
-# We can override this with --build-arg if needed, but for now we'll imply it's set by the runtime or ignore strict user check for smoke tests if possible. 
-# Actually, distroless nonroot user is 65532.
-# Let's keep it simple. The official Dockerfiles set specific users.
-# We might need specific Dockerfiles or build args for permissions/USER.
-# Let's try to keep it generic.
-
 USER 65532:65532
 ENTRYPOINT ["/manager"]
-# NOTE: The entrypoint is hardcoded here, which is annoying for a generic file.
-# We can't use ARG in ENTRYPOINT (exec form).
-# Shell form `ENTRYPOINT $TARGET` works but signals might be weird.
-# maybe we create specific fast dockerfiles? 
-# OR we rely on the fact that we can just overwrite ENTRYPOINT in `docker run`?
-# K8s command/args will overwrite it.
-# Let's look at how `make test-e2e` runs. It likely just needs the image to exist.
-# The manager needs /manager.
-# Init needs /bao-init-config, /bao-wrapper, /bao-probe. -> This is 3 binaries!
-# The generic approach is tricky for multi-binary images like init.
-
-# Let's create specific fast files for simplicity and correctness.
