@@ -75,82 +75,14 @@ jobs:
           echo "Merge the release-please PR to create the tag and draft release." >&2
           exit 1
 
-  build-images:
-    name: Build Images (Build Tag)
-    runs-on: ubuntu-24.04
+  build:
+    name: Build Images
     needs: prepare
-    outputs:
-      manager_digest: ${{ steps.build_manager.outputs.digest }}
-      config_init_digest: ${{ steps.build_config_init.outputs.digest }}
-      backup_executor_digest: ${{ steps.build_backup_executor.outputs.digest }}
-      upgrade_executor_digest: ${{ steps.build_upgrade_executor.outputs.digest }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: 0
-
-      - name: Login to GHCR
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
-
-      - name: Build and push manager
-        id: build_manager
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          sbom: false
-          tags: ${{ needs.prepare.outputs.manager_image }}:${{ needs.prepare.outputs.build_tag }}
-
-      - name: Build and push config-init
-        id: build_config_init
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile.init
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          sbom: false
-          tags: ${{ needs.prepare.outputs.config_init_image }}:${{ needs.prepare.outputs.build_tag }}
-
-      - name: Build and push backup executor
-        id: build_backup_executor
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile.backup
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          sbom: false
-          tags: ${{ needs.prepare.outputs.backup_executor_image }}:${{ needs.prepare.outputs.build_tag }}
-
-      - name: Build and push upgrade executor
-        id: build_upgrade_executor
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile.upgrade
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          sbom: false
-          tags: ${{ needs.prepare.outputs.upgrade_executor_image }}:${{ needs.prepare.outputs.build_tag }}
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      build_tag: ${{ needs.prepare.outputs.build_tag }}
+      ref: ${{ github.ref }}
+    secrets: inherit
 
   security-govulncheck:
     name: Security Gate (govulncheck)
@@ -169,18 +101,22 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: bin/
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+
       - name: Run govulncheck
         env:
           GOFLAGS: -mod=readonly
-        run: |
-          set -euo pipefail
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-          govulncheck -test ./...
+        run: make govulncheck
 
   security-images:
     name: Security Gate (Trivy image ${{ matrix.image_name }})
     runs-on: ubuntu-24.04
-    needs: [prepare, build-images]
+    needs: [prepare, build]
     strategy:
       fail-fast: false
       matrix:
@@ -213,7 +149,7 @@ jobs:
   e2e:
     name: E2E Gate (kind ${{ matrix.k8s }})
     runs-on: ubuntu-24.04
-    needs: [prepare, build-images]
+    needs: [prepare, build]
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -236,6 +172,13 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: bin/
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
 
       - name: Login to GHCR (pull)
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
@@ -285,7 +228,7 @@ jobs:
   promote:
     name: Promote + Publish Release
     runs-on: ubuntu-24.04
-    needs: [prepare, build-images, security-govulncheck, security-images, e2e]
+    needs: [prepare, build, security-govulncheck, security-images, e2e]
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -311,10 +254,10 @@ jobs:
           CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
           BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
           UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
-          MANAGER_DIGEST: ${{ needs.build-images.outputs.manager_digest }}
-          CONFIG_INIT_DIGEST: ${{ needs.build-images.outputs.config_init_digest }}
-          BACKUP_EXECUTOR_DIGEST: ${{ needs.build-images.outputs.backup_executor_digest }}
-          UPGRADE_EXECUTOR_DIGEST: ${{ needs.build-images.outputs.upgrade_executor_digest }}
+          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
+          CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
         run: |
           set -euo pipefail
           docker buildx imagetools create -t "${MANAGER_IMAGE}:${VERSION}" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
@@ -333,10 +276,10 @@ jobs:
           CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
           BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
           UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
-          MANAGER_DIGEST: ${{ needs.build-images.outputs.manager_digest }}
-          CONFIG_INIT_DIGEST: ${{ needs.build-images.outputs.config_init_digest }}
-          BACKUP_EXECUTOR_DIGEST: ${{ needs.build-images.outputs.backup_executor_digest }}
-          UPGRADE_EXECUTOR_DIGEST: ${{ needs.build-images.outputs.upgrade_executor_digest }}
+          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
+          CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
         run: |
           set -euo pipefail
           cosign sign --yes "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
@@ -348,28 +291,28 @@ jobs:
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-name: ${{ needs.prepare.outputs.manager_image }}
-          subject-digest: ${{ needs.build-images.outputs.manager_digest }}
+          subject-digest: ${{ needs.build.outputs.manager_digest }}
           push-to-registry: true
 
       - name: Attest build provenance (GitHub) - config-init
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-name: ${{ needs.prepare.outputs.config_init_image }}
-          subject-digest: ${{ needs.build-images.outputs.config_init_digest }}
+          subject-digest: ${{ needs.build.outputs.config_init_digest }}
           push-to-registry: true
 
       - name: Attest build provenance (GitHub) - backup executor
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-name: ${{ needs.prepare.outputs.backup_executor_image }}
-          subject-digest: ${{ needs.build-images.outputs.backup_executor_digest }}
+          subject-digest: ${{ needs.build.outputs.backup_executor_digest }}
           push-to-registry: true
 
       - name: Attest build provenance (GitHub) - upgrade executor
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-name: ${{ needs.prepare.outputs.upgrade_executor_image }}
-          subject-digest: ${{ needs.build-images.outputs.upgrade_executor_digest }}
+          subject-digest: ${{ needs.build.outputs.upgrade_executor_digest }}
           push-to-registry: true
 
       - name: Setup Helm
@@ -408,7 +351,7 @@ jobs:
       - name: Generate digest-pinned installer manifest
         env:
           MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          MANAGER_DIGEST: ${{ needs.build-images.outputs.manager_digest }}
+          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
@@ -424,7 +367,7 @@ jobs:
       - name: Generate SBOMs (SPDX JSON)
         uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
         with:
-          image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.build-images.outputs.manager_digest }}
+          image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.build.outputs.manager_digest }}
           format: spdx-json
           output-file: dist/sbom-openbao-operator.spdx.json
           upload-artifact: "false"
@@ -435,7 +378,7 @@ jobs:
       - name: Generate SBOMs (SPDX JSON) - config-init
         uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
         with:
-          image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.build-images.outputs.config_init_digest }}
+          image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.build.outputs.config_init_digest }}
           format: spdx-json
           output-file: dist/sbom-openbao-init.spdx.json
           upload-artifact: "false"
@@ -446,7 +389,7 @@ jobs:
       - name: Generate SBOMs (SPDX JSON) - backup executor
         uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
         with:
-          image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.build-images.outputs.backup_executor_digest }}
+          image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.build.outputs.backup_executor_digest }}
           format: spdx-json
           output-file: dist/sbom-openbao-backup.spdx.json
           upload-artifact: "false"
@@ -457,7 +400,7 @@ jobs:
       - name: Generate SBOMs (SPDX JSON) - upgrade executor
         uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
         with:
-          image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.build-images.outputs.upgrade_executor_digest }}
+          image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.build.outputs.upgrade_executor_digest }}
           format: spdx-json
           output-file: dist/sbom-openbao-upgrade.spdx.json
           upload-artifact: "false"

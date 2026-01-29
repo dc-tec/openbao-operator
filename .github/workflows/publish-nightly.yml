@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  publish:
-    name: Publish Nightly Images + Assets
+  prepare:
+    name: Prepare Variables
     runs-on: ubuntu-24.04
     if: >-
       ${{
@@ -23,6 +23,15 @@ jobs:
         github.event.workflow_run.head_branch == 'main' &&
         !github.event.workflow_run.repository.fork
       }}
+    outputs:
+      sha: ${{ steps.vars.outputs.sha }}
+      version: ${{ steps.vars.outputs.version }}
+      build_tag: ${{ steps.vars.outputs.build_tag }}
+      date_utc: ${{ steps.vars.outputs.date_utc }}
+      manager_image: ${{ steps.vars.outputs.manager_image }}
+      config_init_image: ${{ steps.vars.outputs.config_init_image }}
+      backup_executor_image: ${{ steps.vars.outputs.backup_executor_image }}
+      upgrade_executor_image: ${{ steps.vars.outputs.upgrade_executor_image }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -52,6 +61,32 @@ jobs:
           echo "backup_executor_image=ghcr.io/${owner}/openbao-backup" >> "${GITHUB_OUTPUT}"
           echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade" >> "${GITHUB_OUTPUT}"
 
+  build:
+    name: Build Images
+    needs: prepare
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      build_tag: ${{ needs.prepare.outputs.build_tag }}
+      ref: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit
+
+  promote:
+    name: Promote Nightly Tags
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    env:
+      BUILD_TAG: ${{ needs.prepare.outputs.build_tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      DATE_TAG: dev-${{ needs.prepare.outputs.date_utc }}
+      MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+      CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
+      BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
+      UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
+      MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
+      CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
+      BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
+      UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
+    steps:
       - name: Login to GHCR
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
@@ -59,65 +94,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
-      - name: Build and push manager (build tag)
-        id: build_manager
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.vars.outputs.manager_image }}:${{ steps.vars.outputs.build_tag }}
-
-      - name: Build and push config-init (build tag)
-        id: build_config_init
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile.init
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.vars.outputs.config_init_image }}:${{ steps.vars.outputs.build_tag }}
-
-      - name: Build and push backup executor (build tag)
-        id: build_backup_executor
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile.backup
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.vars.outputs.backup_executor_image }}:${{ steps.vars.outputs.build_tag }}
-
-      - name: Build and push upgrade executor (build tag)
-        id: build_upgrade_executor
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile.upgrade
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.vars.outputs.upgrade_executor_image }}:${{ steps.vars.outputs.build_tag }}
-
       - name: Promote nightly tags (no rebuild)
-        env:
-          BUILD_TAG: ${{ steps.vars.outputs.build_tag }}
-          VERSION: ${{ steps.vars.outputs.version }}
-          DATE_TAG: dev-${{ steps.vars.outputs.date_utc }}
-          MANAGER_IMAGE: ${{ steps.vars.outputs.manager_image }}
-          CONFIG_INIT_IMAGE: ${{ steps.vars.outputs.config_init_image }}
-          BACKUP_EXECUTOR_IMAGE: ${{ steps.vars.outputs.backup_executor_image }}
-          UPGRADE_EXECUTOR_IMAGE: ${{ steps.vars.outputs.upgrade_executor_image }}
-          MANAGER_DIGEST: ${{ steps.build_manager.outputs.digest }}
-          CONFIG_INIT_DIGEST: ${{ steps.build_config_init.outputs.digest }}
-          BACKUP_EXECUTOR_DIGEST: ${{ steps.build_backup_executor.outputs.digest }}
-          UPGRADE_EXECUTOR_DIGEST: ${{ steps.build_upgrade_executor.outputs.digest }}
         run: |
           set -euo pipefail
           # Immutable tag for this nightly build
@@ -138,11 +118,29 @@ jobs:
           docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:dev" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:dev" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-24.04
+    needs: [prepare, build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate installer + CRDs assets (digest-pinned)
         env:
-          MANAGER_IMAGE: ${{ steps.vars.outputs.manager_image }}
-          MANAGER_DIGEST: ${{ steps.build_manager.outputs.digest }}
-          VERSION: ${{ steps.vars.outputs.version }}
+          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
           make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${VERSION}"
@@ -152,8 +150,8 @@ jobs:
       - name: Publish/update GitHub Release "nightly"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SHA: ${{ steps.vars.outputs.sha }}
-          VERSION: ${{ steps.vars.outputs.version }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"

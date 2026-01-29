@@ -10,12 +10,12 @@ permissions:
   packages: write
 
 concurrency:
-  group: publish-edge
+  group: publish-edge-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 jobs:
-  publish:
-    name: Publish Edge Images
+  prepare:
+    name: Prepare Variables
     runs-on: ubuntu-24.04
     if: >-
       ${{
@@ -24,6 +24,13 @@ jobs:
         github.event.workflow_run.head_branch == 'main' &&
         !github.event.workflow_run.repository.fork
       }}
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
+      build_tag: ${{ steps.vars.outputs.build_tag }}
+      manager_image: ${{ steps.vars.outputs.manager_image }}
+      config_init_image: ${{ steps.vars.outputs.config_init_image }}
+      backup_executor_image: ${{ steps.vars.outputs.backup_executor_image }}
+      upgrade_executor_image: ${{ steps.vars.outputs.upgrade_executor_image }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -48,6 +55,31 @@ jobs:
           echo "backup_executor_image=ghcr.io/${owner}/openbao-backup" >> "${GITHUB_OUTPUT}"
           echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade" >> "${GITHUB_OUTPUT}"
 
+  build:
+    name: Build Images
+    needs: prepare
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      build_tag: ${{ needs.prepare.outputs.build_tag }}
+      ref: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit
+
+  promote:
+    name: Promote Edge Tags
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      BUILD_TAG: ${{ needs.prepare.outputs.build_tag }}
+      MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+      CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
+      BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
+      UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
+      MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
+      CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
+      BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
+      UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
+    steps:
       - name: Login to GHCR
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
@@ -55,63 +87,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
-      - name: Build and push manager (build tag)
-        id: build_manager
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.vars.outputs.manager_image }}:${{ steps.vars.outputs.build_tag }}
-
-      - name: Build and push config-init (build tag)
-        id: build_config_init
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile.init
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.vars.outputs.config_init_image }}:${{ steps.vars.outputs.build_tag }}
-
-      - name: Build and push backup executor (build tag)
-        id: build_backup_executor
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile.backup
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.vars.outputs.backup_executor_image }}:${{ steps.vars.outputs.build_tag }}
-
-      - name: Build and push upgrade executor (build tag)
-        id: build_upgrade_executor
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          file: Dockerfile.upgrade
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.vars.outputs.upgrade_executor_image }}:${{ steps.vars.outputs.build_tag }}
-
-      - name: Promote edge tags (no rebuild)
-        env:
-          VERSION: ${{ steps.vars.outputs.version }}
-          MANAGER_IMAGE: ${{ steps.vars.outputs.manager_image }}
-          CONFIG_INIT_IMAGE: ${{ steps.vars.outputs.config_init_image }}
-          BACKUP_EXECUTOR_IMAGE: ${{ steps.vars.outputs.backup_executor_image }}
-          UPGRADE_EXECUTOR_IMAGE: ${{ steps.vars.outputs.upgrade_executor_image }}
-          MANAGER_DIGEST: ${{ steps.build_manager.outputs.digest }}
-          CONFIG_INIT_DIGEST: ${{ steps.build_config_init.outputs.digest }}
-          BACKUP_EXECUTOR_DIGEST: ${{ steps.build_backup_executor.outputs.digest }}
-          UPGRADE_EXECUTOR_DIGEST: ${{ steps.build_upgrade_executor.outputs.digest }}
+      - name: Promote tags (no rebuild)
         run: |
           set -euo pipefail
           docker buildx imagetools create -t "${MANAGER_IMAGE}:${VERSION}" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
@@ -119,7 +98,29 @@ jobs:
           docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:${VERSION}" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:${VERSION}" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
-          docker buildx imagetools create -t "${MANAGER_IMAGE}:edge" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
-          docker buildx imagetools create -t "${CONFIG_INIT_IMAGE}:edge" "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
-          docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:edge" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:edge" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+
+      - name: Generate digest-pinned installer manifest
+        env:
+          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          make build-installer \
+            IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" \
+            OPERATOR_VERSION="${VERSION}"
+
+      - name: Generate CRDs manifest
+        run: |
+          set -euo pipefail
+          make build-crds
+
+      - name: Upload manifests as artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: manifests-edge
+          path: |
+            dist/install.yaml
+            dist/crds.yaml
+          retention-days: 5
