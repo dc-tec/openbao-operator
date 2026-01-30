@@ -235,8 +235,6 @@ jobs:
 
       - name: Run integration tests
         run: |
-          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.19
-          source <(setup-envtest use -p env --bin-dir $(pwd)/bin/)
           make test-integration
 
   openbao-config-compat:
@@ -322,18 +320,20 @@ jobs:
           check-latest: true
           cache: true
 
-      - name: Setup Helm
-        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
-
-      - name: Install kind (pinned)
-        uses: ./.github/actions/install-kind
-
       - name: Cache Tools
         id: cache-tools
         uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: bin/
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: Install kind (pinned)
+        uses: ./.github/actions/install-kind
+        with:
+          install-dir: bin/
 
       - name: Run Helm E2E smoke
         env:
@@ -449,10 +449,6 @@ jobs:
             echo "::notice::Skipping ${{ matrix.name }} shard (Optimization)"
           fi
 
-      - name: Install kind (pinned)
-        if: env.SHOULD_RUN == 'true'
-        uses: ./.github/actions/install-kind
-
       - name: Cache Tools
         if: env.SHOULD_RUN == 'true'
         id: cache-tools
@@ -460,6 +456,12 @@ jobs:
         with:
           path: bin/
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+
+      - name: Install kind (pinned)
+        if: env.SHOULD_RUN == 'true'
+        uses: ./.github/actions/install-kind
+        with:
+          install-dir: bin/
 
       - name: Set up Docker Buildx
         if: env.SHOULD_RUN == 'true'
@@ -546,6 +548,7 @@ jobs:
         if: env.SHOULD_RUN == 'true'
         env:
           GOFLAGS: -mod=readonly
+          OPENBAO_REQUEUE_STANDARD: 10s
           E2E_FOCUS: ${{ matrix.focus }}
           # E2E_LABEL_FILTER is set by previous step
           E2E_PARALLEL_NODES: "1"

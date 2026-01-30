@@ -189,6 +189,8 @@ jobs:
 
       - name: Install kind (pinned)
         uses: ./.github/actions/install-kind
+        with:
+          install-dir: bin/
 
       - name: Pull images (amd64) for kind load
         run: |
@@ -201,6 +203,7 @@ jobs:
       - name: Run full E2E
         env:
           GOFLAGS: -mod=readonly
+          OPENBAO_REQUEUE_STANDARD: 10s
           E2E_TIMEOUT: 90m
           E2E_PARALLEL_NODES: "2"
           E2E_SKIP_IMAGE_BUILD: "true"
