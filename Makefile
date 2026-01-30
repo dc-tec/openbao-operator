@@ -429,7 +429,7 @@ test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests agains
 	eval E2E_USE_EXISTING_CLUSTER=true go test $$GO_TEST_FLAGS ./test/e2e/
 
 .PHONY: test-e2e-ci
-test-e2e-ci: setup-test-e2e manifests generate vet ginkgo ## Run the e2e tests in CI mode (does not modify files).
+test-e2e-ci: ginkgo ## Run the e2e tests in CI mode (does not modify files).
 	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=\"$(E2E_FOCUS)\""; \
