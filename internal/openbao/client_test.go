@@ -147,6 +147,19 @@ func TestClient_Health(t *testing.T) {
 			wantSealed:     false,
 			wantStandby:    false,
 		},
+		{
+			name:       "forbidden (safe mode)",
+			statusCode: http.StatusForbidden,
+			response:   HealthResponse{
+				// The body is usually an error struct, but here we just simulate
+				// that we don't get a valid health response.
+				// We expect an error, NOT a zero-value struct.
+			},
+			wantErr:        true,
+			wantInitalized: false,
+			wantSealed:     false, // correctly uninitialized/empty struct would have false here
+			wantStandby:    false,
+		},
 	}
 
 	for _, tt := range tests {

@@ -269,9 +269,13 @@ func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
 		req.Header.Set("X-Vault-Token", c.token)
 	}
 
-	_, body, err := c.doAndReadAll(req, nil, "failed to query health endpoint")
+	resp, body, err := c.doAndReadAll(req, nil, "failed to query health endpoint")
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusForbidden {
+		return nil, fmt.Errorf("health check forbidden (403): check operator permissions")
 	}
 
 	var health HealthResponse
