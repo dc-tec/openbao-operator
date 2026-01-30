@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
@@ -175,15 +176,19 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			oldUID := pod.UID
 
 			By("updating OpenBaoCluster spec.storage.size from 1Gi to 2Gi")
-			cluster := &openbaov1alpha1.OpenBaoCluster{}
-			Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
-			cluster.Spec.Storage.Size = "2Gi"
-			if cluster.Spec.Maintenance == nil {
-				cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{Enabled: true}
-			} else {
-				cluster.Spec.Maintenance.Enabled = true
-			}
-			Expect(c.Update(ctx, cluster)).To(Succeed())
+			Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				cluster := &openbaov1alpha1.OpenBaoCluster{}
+				if err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster); err != nil {
+					return err
+				}
+				cluster.Spec.Storage.Size = "2Gi"
+				if cluster.Spec.Maintenance == nil {
+					cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{Enabled: true}
+				} else {
+					cluster.Spec.Maintenance.Enabled = true
+				}
+				return c.Update(ctx, cluster)
+			})).To(Succeed())
 
 			By("waiting for the PVC storage request to be updated by the operator")
 			sawFSResizePending := false
@@ -432,12 +437,16 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 		})
 
 		It("scales up to 3 replicas and verifies autopilot min_quorum=3", func() {
-			By("updating cluster to 3 replicas")
-			cluster := &openbaov1alpha1.OpenBaoCluster{}
-			Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
 
-			cluster.Spec.Replicas = 3
-			Expect(c.Update(ctx, cluster)).To(Succeed())
+			By("updating cluster to 3 replicas")
+			Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				cluster := &openbaov1alpha1.OpenBaoCluster{}
+				if err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster); err != nil {
+					return err
+				}
+				cluster.Spec.Replicas = 3
+				return c.Update(ctx, cluster)
+			})).To(Succeed())
 
 			By("waiting for StatefulSet to scale to 3 replicas")
 			f.WaitForStatefulSetReady(ctx, clusterName, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
@@ -477,11 +486,14 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 		It("scales down to 2 replicas and verifies autopilot min_quorum=2", func() {
 
 			By("updating cluster to 2 replicas")
-			cluster := &openbaov1alpha1.OpenBaoCluster{}
-			Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)).To(Succeed())
-
-			cluster.Spec.Replicas = 2
-			Expect(c.Update(ctx, cluster)).To(Succeed())
+			Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				cluster := &openbaov1alpha1.OpenBaoCluster{}
+				if err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster); err != nil {
+					return err
+				}
+				cluster.Spec.Replicas = 2
+				return c.Update(ctx, cluster)
+			})).To(Succeed())
 
 			By("waiting for StatefulSet to scale down to 2 replicas")
 			f.WaitForStatefulSetReady(ctx, clusterName, 2, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)

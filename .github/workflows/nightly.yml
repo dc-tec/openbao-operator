@@ -15,7 +15,7 @@ concurrency:
 jobs:
   security:
     name: Security (govulncheck + Trivy FS)
-    runs-on: ubuntu-24.04
+    runs-on: &runner ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -46,11 +46,12 @@ jobs:
           exit-code: "1"
           trivyignores: .trivyignore
           skip-files: config/rbac/provisioner_delegate_clusterrole.yaml,config/rbac/provisioner_minimal_role.yaml,config/rbac/single_tenant_clusterrole.yaml,dist/install.yaml,charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml
+          skip-dirs: test/manifests
           trivy-config: .trivy.yaml
 
   openbao-config-compat:
     name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.5.0)
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     timeout-minutes: 40
     steps:
       - name: Checkout
@@ -73,7 +74,7 @@ jobs:
 
   e2e:
     name: E2E (kind ${{ matrix.k8s }})
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -98,20 +99,65 @@ jobs:
       - name: Install kind (pinned)
         uses: ./.github/actions/install-kind
 
+      - name: Cache Tools
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: bin/
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
-      - name: Build and load images
-        env:
-          GOFLAGS: -mod=readonly
+      - name: Build operator image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: hack/ci/Dockerfile.fast.manager
+
+          build-args: |
+            BINARY=bin/linux_amd64/manager
+            TARGET=/manager
+          tags: openbao-operator:e2e
+          load: true
+          push: false
+          cache-from: type=gha,scope=openbao-operator
+          cache-to: type=gha,mode=max,scope=openbao-operator
+
+      - name: Build init image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: hack/ci/Dockerfile.fast.init
+          tags: openbao-init:e2e
+          load: true
+          push: false
+          cache-from: type=gha,scope=openbao-init
+          cache-to: type=gha,mode=max,scope=openbao-init
+
+      - name: Build backup image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: hack/ci/Dockerfile.fast.backup
+          tags: openbao-backup:e2e
+          load: true
+          push: false
+          cache-from: type=gha,scope=openbao-backup
+          cache-to: type=gha,mode=max,scope=openbao-backup
+
+      - name: Build upgrade image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: hack/ci/Dockerfile.fast.upgrade
+          tags: openbao-upgrade:e2e
+          load: true
+          push: false
+          cache-from: type=gha,scope=openbao-upgrade
+          cache-to: type=gha,mode=max,scope=openbao-upgrade
+
+      - name: Load Images into Kind
         run: |
-          make build-linux
-          
-          docker build -t openbao-operator:e2e -f hack/ci/Dockerfile.fast.manager .
-          docker build -t openbao-init:e2e -f hack/ci/Dockerfile.fast.init .
-          docker build -t openbao-backup:e2e -f hack/ci/Dockerfile.fast.backup .
-          docker build -t openbao-upgrade:e2e -f hack/ci/Dockerfile.fast.upgrade .
-          
           kind load docker-image openbao-operator:e2e --name kind
           kind load docker-image openbao-init:e2e --name kind
           kind load docker-image openbao-backup:e2e --name kind
@@ -120,7 +166,7 @@ jobs:
       - name: Run full E2E
         env:
           GOFLAGS: -mod=readonly
-          E2E_PARALLEL_NODES: "2"
+          E2E_PARALLEL_NODES: "1"
           E2E_TIMEOUT: 90m
           E2E_SKIP_IMAGE_BUILD: "true"
           E2E_OPERATOR_IMAGE: openbao-operator:e2e
@@ -143,7 +189,7 @@ jobs:
 
   docs:
     name: Docs Build
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -153,7 +199,7 @@ jobs:
 
   helm:
     name: Helm Chart
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

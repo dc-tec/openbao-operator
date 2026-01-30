@@ -17,7 +17,7 @@ concurrency:
 jobs:
   prepare:
     name: Prepare Variables
-    runs-on: ubuntu-24.04
+    runs-on: &runner ubuntu-24.04
     if: >-
       ${{
         github.event.workflow_run.conclusion == 'success' &&
@@ -68,7 +68,7 @@ jobs:
   promote:
     name: Promote Edge Tags
     needs: [prepare, build]
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       BUILD_TAG: ${{ needs.prepare.outputs.build_tag }}

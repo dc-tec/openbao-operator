@@ -17,7 +17,7 @@ concurrency:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: ubuntu-24.04
+    runs-on: &runner ubuntu-24.04
     outputs:
       chart: ${{ steps.diff.outputs.chart }}
     steps:
@@ -57,7 +57,7 @@ jobs:
 
   security:
     name: Security (govulncheck + Trivy FS)
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -92,11 +92,12 @@ jobs:
           exit-code: "1"
           trivyignores: .trivyignore
           skip-files: config/rbac/provisioner_delegate_clusterrole.yaml,config/rbac/provisioner_minimal_role.yaml,config/rbac/single_tenant_clusterrole.yaml,dist/install.yaml,charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml
+          skip-dirs: test/manifests
           trivy-config: .trivy.yaml
 
   lint:
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -120,7 +121,7 @@ jobs:
 
   verify-fmt:
     name: Verify Formatting
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -144,7 +145,7 @@ jobs:
 
   tidy-check:
     name: Verify go.mod/go.sum
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -168,7 +169,7 @@ jobs:
 
   verify-generated:
     name: Verify Generated Artifacts
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -192,7 +193,7 @@ jobs:
 
   test-unit:
     name: Unit Tests
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     env:
       GOFLAGS: -mod=readonly
     steps:
@@ -211,7 +212,7 @@ jobs:
 
   test-integration:
     name: Envtest Integration
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     env:
       GOFLAGS: -mod=readonly
     steps:
@@ -240,7 +241,7 @@ jobs:
 
   openbao-config-compat:
     name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.5.0)
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     timeout-minutes: 25
     steps:
       - name: Checkout
@@ -258,7 +259,7 @@ jobs:
 
   docs:
     name: Docs Build
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -268,7 +269,7 @@ jobs:
 
   helm:
     name: Helm Chart
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -306,7 +307,7 @@ jobs:
 
   helm-e2e-smoke:
     name: Helm E2E Smoke (kind)
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     timeout-minutes: 20
     needs: changes
     if: needs.changes.outputs.chart == 'true'
@@ -341,7 +342,7 @@ jobs:
 
   build-artifacts:
     name: Build Artifacts
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -368,7 +369,7 @@ jobs:
   e2e:
     needs: build-artifacts
     name: E2E (${{ matrix.name }})
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -452,6 +453,14 @@ jobs:
         if: env.SHOULD_RUN == 'true'
         uses: ./.github/actions/install-kind
 
+      - name: Cache Tools
+        if: env.SHOULD_RUN == 'true'
+        id: cache-tools
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: bin/
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+
       - name: Set up Docker Buildx
         if: env.SHOULD_RUN == 'true'
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -467,26 +476,67 @@ jobs:
         if: env.SHOULD_RUN == 'true'
         run: chmod +x bin/linux_amd64/*
 
-      - name: Build and load images
+      - name: Build operator image
         if: env.SHOULD_RUN == 'true'
-        env:
-          GOFLAGS: -mod=readonly
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: hack/ci/Dockerfile.fast.manager
+          build-args: |
+            BINARY=bin/linux_amd64/manager
+            TARGET=/manager
+          tags: openbao-operator:e2e
+          load: true
+          push: false
+          cache-from: type=gha,scope=openbao-operator
+          cache-to: type=gha,mode=max,scope=openbao-operator
+
+      - name: Build init image
+        if: env.SHOULD_RUN == 'true'
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: hack/ci/Dockerfile.fast.init
+          tags: openbao-init:e2e
+          load: true
+          push: false
+          cache-from: type=gha,scope=openbao-init
+          cache-to: type=gha,mode=max,scope=openbao-init
+
+      - name: Build backup image
+        if: env.SHOULD_RUN == 'true'
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: hack/ci/Dockerfile.fast.backup
+          tags: openbao-backup:e2e
+          load: true
+          push: false
+          cache-from: type=gha,scope=openbao-backup
+          cache-to: type=gha,mode=max,scope=openbao-backup
+
+      - name: Build upgrade image
+        if: env.SHOULD_RUN == 'true'
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: hack/ci/Dockerfile.fast.upgrade
+          tags: openbao-upgrade:e2e
+          load: true
+          push: false
+          cache-from: type=gha,scope=openbao-upgrade
+          cache-to: type=gha,mode=max,scope=openbao-upgrade
+
+      - name: Create Kind Cluster
+        if: env.SHOULD_RUN == 'true'
         run: |
-          # make build-linux (skipped, using artifacts)
-          
-          docker build -t openbao-operator:e2e \
-            --build-arg BINARY=bin/linux_amd64/manager \
-            --build-arg TARGET=/manager \
-            -f hack/ci/Dockerfile.fast.manager .
-          docker build -t openbao-init:e2e -f hack/ci/Dockerfile.fast.init .
-          docker build -t openbao-backup:e2e -f hack/ci/Dockerfile.fast.backup .
-          docker build -t openbao-upgrade:e2e -f hack/ci/Dockerfile.fast.upgrade .
-          
-          # Create cluster explicitly if it doesn't exist
           if ! kind get clusters | grep -q "kind"; then
             kind create cluster --name kind --image $KIND_NODE_IMAGE
           fi
-          
+
+      - name: Load Images into Kind
+        if: env.SHOULD_RUN == 'true'
+        run: |
           kind load docker-image openbao-operator:e2e --name kind
           kind load docker-image openbao-init:e2e --name kind
           kind load docker-image openbao-backup:e2e --name kind

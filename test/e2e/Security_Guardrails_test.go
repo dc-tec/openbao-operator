@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
@@ -486,12 +487,14 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 
 		It("prevents sidecar injection via StatefulSet updates", func() {
 			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, "hacker", []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
-				sts := &appsv1.StatefulSet{}
-				if err := c.Get(ctx, types.NamespacedName{Name: statefulSet, Namespace: tenantNamespace}, sts); err != nil {
-					return fmt.Errorf("failed to get StatefulSet: %w", err)
-				}
-				sts.Spec.Template.Spec.Containers[0].Image = "malicious.invalid/sidecar:latest"
-				return c.Update(ctx, sts)
+				return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+					sts := &appsv1.StatefulSet{}
+					if err := c.Get(ctx, types.NamespacedName{Name: statefulSet, Namespace: tenantNamespace}, sts); err != nil {
+						return fmt.Errorf("failed to get StatefulSet: %w", err)
+					}
+					sts.Spec.Template.Spec.Containers[0].Image = "malicious.invalid/sidecar:latest"
+					return c.Update(ctx, sts)
+				})
 			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))

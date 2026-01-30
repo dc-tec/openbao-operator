@@ -33,7 +33,7 @@ permissions:
 jobs:
   build:
     name: Build ${{ matrix.image }}
-    runs-on: ubuntu-24.04
+    runs-on: &runner ubuntu-24.04 
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +96,7 @@ jobs:
 
   collect-digests:
     name: Collect Image Digests
-    runs-on: ubuntu-24.04
+    runs-on: *runner
     needs: [build]
     outputs:
       manager_digest: ${{ steps.collect.outputs.manager_digest }}
