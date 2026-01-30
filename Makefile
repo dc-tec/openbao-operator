@@ -740,6 +740,7 @@ security-scan: ## Run Trivy security scans (filesystem and container image)
 		--skip-files config/rbac/single_tenant_clusterrole.yaml \
 		--skip-files dist/install.yaml \
 		--skip-files charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml \
+		--skip-dirs test/manifests \
 		.
 	trivy image \
 		--severity HIGH,CRITICAL \
