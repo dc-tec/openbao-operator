@@ -37,7 +37,8 @@ func AllowEgressToOperatorNamespace(
 		// Check if rule already exists to avoid duplication in retry loop
 		for _, egress := range networkPolicy.Spec.Egress {
 			for _, to := range egress.To {
-				if to.NamespaceSelector != nil && to.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] == operatorNamespace {
+				if to.NamespaceSelector != nil &&
+					to.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] == operatorNamespace {
 					return nil // Already exists
 				}
 			}
