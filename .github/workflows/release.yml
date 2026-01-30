@@ -214,6 +214,7 @@ jobs:
           E2E_CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}:${{ needs.prepare.outputs.build_tag }}
           E2E_BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}:${{ needs.prepare.outputs.build_tag }}
           E2E_UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}:${{ needs.prepare.outputs.build_tag }}
+          KIND_CLUSTER: kind
         run: make test-e2e-ci
 
       - name: Collect E2E artifacts (failure)
