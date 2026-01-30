@@ -72,9 +72,36 @@ jobs:
       - name: Report operator-vs-upstream config schema drift (informational)
         run: go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
 
+  build-artifacts:
+    name: Build Artifacts
+    runs-on: *runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Build Linux Binaries
+        env:
+          GOFLAGS: -mod=readonly
+        run: make build-linux
+
+      - name: Upload Binaries
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: operator-binaries
+          path: bin/linux_amd64/
+          retention-days: 1
+
   e2e:
     name: E2E (kind ${{ matrix.k8s }})
     runs-on: *runner
+    needs: build-artifacts
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -104,6 +131,15 @@ jobs:
         with:
           path: bin/
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+
+      - name: Download Binaries
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: operator-binaries
+          path: bin/linux_amd64
+
+      - name: Prepare Binaries
+        run: chmod +x bin/linux_amd64/*
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -155,6 +191,12 @@ jobs:
           push: false
           cache-from: type=gha,scope=openbao-upgrade
           cache-to: type=gha,mode=max,scope=openbao-upgrade
+
+      - name: Create Kind Cluster
+        run: |
+          if ! kind get clusters | grep -q "kind"; then
+            kind create cluster --name kind --image $KIND_NODE_IMAGE
+          fi
 
       - name: Load Images into Kind
         run: |
