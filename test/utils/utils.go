@@ -238,22 +238,6 @@ const (
 	csiHostPathDriverInfoURLTmpl = "" +
 		"https://raw.githubusercontent.com/kubernetes-csi/csi-driver-host-path/%s/" +
 		"deploy/kubernetes-1.21/hostpath/csi-hostpath-driverinfo.yaml"
-
-	csiHostPathProvisionerRBACURL = "" +
-		"https://raw.githubusercontent.com/kubernetes-csi/external-provisioner/v3.2.0/" +
-		"deploy/kubernetes/rbac.yaml"
-	csiHostPathAttacherRBACURL = "" +
-		"https://raw.githubusercontent.com/kubernetes-csi/external-attacher/v3.5.0/" +
-		"deploy/kubernetes/rbac.yaml"
-	csiHostPathResizerRBACURL = "" +
-		"https://raw.githubusercontent.com/kubernetes-csi/external-resizer/v1.5.0/" +
-		"deploy/kubernetes/rbac.yaml"
-	csiHostPathSnapshotterRBACURL = "" +
-		"https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/v6.0.1/" +
-		"deploy/kubernetes/csi-snapshotter/rbac-csi-snapshotter.yaml"
-	csiHostPathHealthMonitorRBACURL = "" +
-		"https://raw.githubusercontent.com/kubernetes-csi/external-health-monitor/v0.5.0/" +
-		"deploy/kubernetes/external-health-monitor-controller/rbac.yaml"
 )
 
 // InstallCSIHostPathDriver installs the CSI hostpath driver (test driver) and waits for it to become ready.
