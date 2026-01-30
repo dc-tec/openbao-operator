@@ -88,6 +88,7 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 			ReconcileOnUpgradeStatus: true,
 			ReconcileOnBackupStatus:  true,
 		})).
+		Owns(&batchv1.Job{}). // Watch Jobs for backup completion
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
 			RateLimiter:             sharedOptions.RateLimiter,

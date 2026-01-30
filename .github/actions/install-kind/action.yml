@@ -27,6 +27,44 @@ runs:
         arch="$(go env GOARCH)"
         bin="kind-linux-${arch}"
 
+        if [[ -f "${install_dir}/kind" ]]; then
+          echo "Kind binary already exists at ${install_dir}/kind, checking version..."
+          if "${install_dir}/kind" version | grep -q "${version}"; then
+            echo "Kind version ${version} already installed. Skipping download."
+            echo "${install_dir}" >> "${GITHUB_PATH}"
+            kind_path="$(realpath "${install_dir}/kind")"
+            echo "KIND=${kind_path}" >> "${GITHUB_ENV}"
+            exit 0
+          else
+            echo "Kind version mismatch or unable to determine version. Re-installing."
+          fi
+        fi
+
+        install -d "${install_dir}"
+        
+        # Download if not present or version mismatch
+        # Check if kind binary already exists and is the correct version
+        if [[ -f "${install_dir}/kind" ]]; then
+          echo "Found existing kind binary at ${install_dir}/kind"
+          if "${install_dir}/kind" version | grep -q "${version}"; then
+            echo "Kind version ${version} already installed. Skipping download."
+            
+            # Setup environment for cached binary
+            echo "${install_dir}" >> "${GITHUB_PATH}"
+            kind_path="$(realpath "${install_dir}/kind")"
+            echo "KIND=${kind_path}" >> "${GITHUB_ENV}"
+            
+            # Verify version and exit
+            "${install_dir}/kind" version
+            exit 0
+          else
+            echo "Kind version mismatch or verify failed. Re-installing."
+          fi
+        fi
+
+        install -d "${install_dir}"
+        
+        echo "️Downloading kind ${version}..." 
         curl -fsSLo "${bin}" "https://github.com/kubernetes-sigs/kind/releases/download/${version}/${bin}"
         curl -fsSLo "${bin}.sha256sum" "https://github.com/kubernetes-sigs/kind/releases/download/${version}/${bin}.sha256sum"
         sha256sum -c "${bin}.sha256sum"
