@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRequeueStandardOverride(t *testing.T) {
@@ -41,8 +42,11 @@ func TestRequeueStandardOverride(t *testing.T) {
 			RequeueStandard = original
 
 			if tt.envVal != "" {
-				os.Setenv("OPENBAO_REQUEUE_STANDARD", tt.envVal)
-				defer os.Unsetenv("OPENBAO_REQUEUE_STANDARD")
+				err := os.Setenv("OPENBAO_REQUEUE_STANDARD", tt.envVal)
+				require.NoError(t, err)
+				defer func() {
+					_ = os.Unsetenv("OPENBAO_REQUEUE_STANDARD")
+				}()
 			}
 
 			// Re-simulate init logic
