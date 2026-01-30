@@ -259,32 +259,16 @@ const (
 // InstallCSIHostPathDriver installs the CSI hostpath driver (test driver) and waits for it to become ready.
 // This enables full-path PVC expansion testing in Kind.
 func InstallCSIHostPathDriver() error {
-	pluginURL := fmt.Sprintf(csiHostPathPluginURLTmpl, csiHostPathVersion)
-	driverInfoURL := fmt.Sprintf(csiHostPathDriverInfoURLTmpl, csiHostPathVersion)
-
-	// The upstream hostpath plugin manifest references RBAC roles that are shipped with CSI sidecars.
-	// Apply those RBAC manifests first so provisioning can work (cluster roles + namespaced roles).
-	for _, url := range []string{
-		csiHostPathProvisionerRBACURL,
-		csiHostPathAttacherRBACURL,
-		csiHostPathResizerRBACURL,
-		csiHostPathSnapshotterRBACURL,
-		csiHostPathHealthMonitorRBACURL,
-	} {
-		cmd := exec.Command("kubectl", "apply", "-n", "default", "-f", url) // #nosec G204 -- test harness
-		if _, err := Run(cmd); err != nil {
-			return err
-		}
+	// Apply vendored RBAC
+	cmd := exec.Command("kubectl", "apply", "-f", "test/manifests/csi-hostpath/rbac.yaml") // #nosec G204 -- test harness
+	if _, err := Run(cmd); err != nil {
+		return fmt.Errorf("failed to apply CSI hostpath RBAC: %w", err)
 	}
 
-	cmd := exec.Command("kubectl", "apply", "-f", pluginURL) // #nosec G204 -- test harness
+	// Apply vendored Plugin and Driver Info
+	cmd = exec.Command("kubectl", "apply", "-f", "test/manifests/csi-hostpath/driver.yaml") // #nosec G204 -- test harness
 	if _, err := Run(cmd); err != nil {
-		return err
-	}
-
-	cmd = exec.Command("kubectl", "apply", "-f", driverInfoURL) // #nosec G204 -- test harness
-	if _, err := Run(cmd); err != nil {
-		return err
+		return fmt.Errorf("failed to apply CSI hostpath driver: %w", err)
 	}
 
 	// The upstream manifest deploys a single-replica StatefulSet in the "default" namespace.
