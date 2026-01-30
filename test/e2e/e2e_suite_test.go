@@ -511,7 +511,16 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 			if val := os.Getenv("OPENBAO_REQUEUE_STANDARD"); val != "" {
 				By(fmt.Sprintf("injecting OPENBAO_REQUEUE_STANDARD=%s into controller (cluster=%s)", val, clusterName))
-				cmd = exec.Command("kubectl", "set", "env", "deployment/openbao-operator-controller",
+				// Find the controller deployment name dynamically (handles kustomize name prefixes)
+				cmd = exec.Command("kubectl", "get", "deployment",
+					"-l", "app.kubernetes.io/name=openbao-operator",
+					"-n", operatorNamespace,
+					"-o", "jsonpath={.items[0].metadata.name}")
+				out, err := utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to find controller deployment by label (cluster=%s)", clusterName))
+				controllerDeploymentName := strings.TrimSpace(out)
+
+				cmd = exec.Command("kubectl", "set", "env", fmt.Sprintf("deployment/%s", controllerDeploymentName),
 					"-n", operatorNamespace,
 					fmt.Sprintf("OPENBAO_REQUEUE_STANDARD=%s", val))
 				_, err = utils.Run(cmd)
@@ -519,7 +528,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 				// Wait for rollout to complete
 				By(fmt.Sprintf("waiting for controller rollout to complete (cluster=%s)", clusterName))
-				cmd = exec.Command("kubectl", "rollout", "status", "deployment/openbao-operator-controller",
+				cmd = exec.Command("kubectl", "rollout", "status", fmt.Sprintf("deployment/%s", controllerDeploymentName),
 					"-n", operatorNamespace, "--timeout=2m")
 				_, err = utils.Run(cmd)
 				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to wait for controller rollout (cluster=%s)", clusterName))
