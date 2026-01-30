@@ -1,9 +1,12 @@
 package constants
 
-import "time"
+import (
+	"os"
+	"time"
+)
 
 // Requeue intervals used by controllers.
-const (
+var (
 	RequeueShort    = 5 * time.Second
 	RequeueStandard = 1 * time.Minute
 
@@ -14,3 +17,11 @@ const (
 
 	ImageVerificationTimeout = 5 * time.Second
 )
+
+func init() {
+	if val := os.Getenv("OPENBAO_REQUEUE_STANDARD"); val != "" {
+		if d, err := time.ParseDuration(val); err == nil {
+			RequeueStandard = d
+		}
+	}
+}

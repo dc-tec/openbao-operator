@@ -306,6 +306,22 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			By("waiting for operator deployments to become Available")
 			ExpectWithOffset(1, waitForDeploymentsAvailable(operatorNamespace, 5*time.Minute)).
 				To(Succeed(), "Operator deployments did not become Available in time")
+
+			if val := os.Getenv("OPENBAO_REQUEUE_STANDARD"); val != "" {
+				By(fmt.Sprintf("injecting OPENBAO_REQUEUE_STANDARD=%s into controller", val))
+				cmd = exec.Command("kubectl", "set", "env", "deployment/openbao-operator-controller",
+					"-n", operatorNamespace,
+					fmt.Sprintf("OPENBAO_REQUEUE_STANDARD=%s", val))
+				_, err = utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to set OPENBAO_REQUEUE_STANDARD env var")
+
+				// Wait for rollout to complete
+				By("waiting for controller rollout to complete")
+				cmd = exec.Command("kubectl", "rollout", "status", "deployment/openbao-operator-controller",
+					"-n", operatorNamespace, "--timeout=2m")
+				_, err = utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to wait for controller rollout")
+			}
 		})
 
 		suiteBootstrapState = &bootstrap
@@ -492,6 +508,22 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			By(fmt.Sprintf("waiting for operator deployments to become Available (cluster=%s)", clusterName))
 			ExpectWithOffset(1, waitForDeploymentsAvailable(operatorNamespace, 5*time.Minute)).
 				To(Succeed(), fmt.Sprintf("Operator deployments did not become Available in time (cluster=%s)", clusterName))
+
+			if val := os.Getenv("OPENBAO_REQUEUE_STANDARD"); val != "" {
+				By(fmt.Sprintf("injecting OPENBAO_REQUEUE_STANDARD=%s into controller (cluster=%s)", val, clusterName))
+				cmd = exec.Command("kubectl", "set", "env", "deployment/openbao-operator-controller",
+					"-n", operatorNamespace,
+					fmt.Sprintf("OPENBAO_REQUEUE_STANDARD=%s", val))
+				_, err = utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to set OPENBAO_REQUEUE_STANDARD env var (cluster=%s)", clusterName))
+
+				// Wait for rollout to complete
+				By(fmt.Sprintf("waiting for controller rollout to complete (cluster=%s)", clusterName))
+				cmd = exec.Command("kubectl", "rollout", "status", "deployment/openbao-operator-controller",
+					"-n", operatorNamespace, "--timeout=2m")
+				_, err = utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to wait for controller rollout (cluster=%s)", clusterName))
+			}
 		})
 	})
 
