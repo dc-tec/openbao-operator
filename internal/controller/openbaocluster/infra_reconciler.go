@@ -410,7 +410,8 @@ func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger log
 }
 
 // Reconcile implements SubReconciler for infrastructure reconciliation.
-// nolint:gocyclo #TODO: split this function into smaller functions
+// TODO: split this function into smaller functions
+// nolint:gocyclo
 func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	logger.Info("Reconciling infrastructure for OpenBaoCluster")
 
