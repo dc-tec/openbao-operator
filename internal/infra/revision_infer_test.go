@@ -47,10 +47,11 @@ func TestInferActiveRevisionFromPods(t *testing.T) {
 	}
 
 	tests := []struct {
-		name  string
-		pods  []runtime.Object
-		want  string
-		wantE bool
+		name      string
+		pods      []runtime.Object
+		want      string
+		wantImage string
+		wantE     bool
 	}{
 		{
 			name: "returns empty when no revision-labeled pods exist",
@@ -69,7 +70,8 @@ func TestInferActiveRevisionFromPods(t *testing.T) {
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
 			},
-			want: "",
+			want:      "",
+			wantImage: "",
 		},
 		{
 			name: "picks revision with most ready pods",
@@ -78,7 +80,8 @@ func TestInferActiveRevisionFromPods(t *testing.T) {
 				readyPod("blue-1", "default", "blue"),
 				notReadyPod("green-0", "default", "green"),
 			},
-			want: "blue",
+			want:      "blue",
+			wantImage: "", // default pod helper doesn't set image, good enough for empty check or we update helper
 		},
 		{
 			name: "ties broken by total pods then lexicographically",
@@ -88,9 +91,34 @@ func TestInferActiveRevisionFromPods(t *testing.T) {
 				readyPod("b-0", "default", "b"),
 				notReadyPod("b-1", "default", "b"),
 			},
-			want: "a",
+			want:      "a",
+			wantImage: "",
 		},
 	}
+
+	// Update helper to set image
+	readyPodWithImage := func(name, ns, rev, image string) *corev1.Pod {
+		p := readyPod(name, ns, rev)
+		p.Spec.Containers = []corev1.Container{{Name: "openbao", Image: image}}
+		return p
+	}
+
+	// Add a specific test case for image extraction
+	tests = append(tests, struct {
+		name      string
+		pods      []runtime.Object
+		want      string
+		wantImage string
+		wantE     bool
+	}{
+		name: "extracts image from selected revision",
+		pods: []runtime.Object{
+			readyPodWithImage("blue-0", "default", "blue", "openbao:1.0.0"),
+		},
+		want:      "blue",
+		wantImage: "openbao:1.0.0",
+		wantE:     false,
+	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -104,7 +132,7 @@ func TestInferActiveRevisionFromPods(t *testing.T) {
 				WithReturnManagedFields().
 				Build()
 
-			got, err := InferActiveRevisionFromPods(context.Background(), c, cluster)
+			got, gotImage, err := InferActiveRevisionFromPods(context.Background(), c, cluster)
 			if tt.wantE && err == nil {
 				t.Fatalf("expected error, got nil")
 			}
@@ -112,7 +140,10 @@ func TestInferActiveRevisionFromPods(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if got != tt.want {
-				t.Fatalf("expected %q, got %q", tt.want, got)
+				t.Fatalf("expected revision %q, got %q", tt.want, got)
+			}
+			if gotImage != tt.wantImage {
+				t.Fatalf("expected image %q, got %q", tt.wantImage, gotImage)
 			}
 		})
 	}

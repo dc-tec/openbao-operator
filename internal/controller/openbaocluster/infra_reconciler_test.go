@@ -7,8 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -17,6 +19,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/auth"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
@@ -191,4 +194,75 @@ func TestInfraReconciler_ResolveOIDC_LazyDiscoveryForSelfInit(t *testing.T) {
 	assert.Equal(t, 1, called)
 	assert.Equal(t, "https://issuer.example", issuer)
 	assert.Len(t, keys, 1)
+}
+
+func TestInfraReconciler_ResolveTargetMainImage_BlueGreenPrefersActivePods(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Image:    "openbao/openbao:2.4.4",
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+					AutoPromote: false,
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.3", // upgrade pending
+			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+				Phase:        openbaov1alpha1.PhaseIdle,
+				BlueRevision: "rev-old",
+				BlueImage:    "", // missing in status; should be inferred
+			},
+		},
+	}
+
+	activePod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-rev-old-0",
+			Namespace: "default",
+			Labels: map[string]string{
+				constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:     "test-cluster",
+				constants.LabelAppManagedBy:    constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:  "test-cluster",
+				constants.LabelOpenBaoRevision: "rev-old",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "openbao", Image: "openbao/openbao:2.4.3"},
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, activePod).
+		Build()
+
+	r := &infraReconciler{
+		client: k8sClient,
+		scheme: scheme,
+	}
+
+	got := r.resolveTargetMainImage(context.Background(), logr.Discard(), cluster)
+	assert.Equal(t, "openbao/openbao:2.4.3", got)
+	assert.Equal(t, "openbao/openbao:2.4.3", cluster.Status.BlueGreen.BlueImage)
 }

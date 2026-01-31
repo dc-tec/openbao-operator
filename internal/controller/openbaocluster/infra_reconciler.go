@@ -317,60 +317,122 @@ func (r *infraReconciler) computeStatefulSetSpec(
 	return spec
 }
 
-// Reconcile implements SubReconciler for infrastructure reconciliation.
-func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
-	logger.Info("Reconciling infrastructure for OpenBaoCluster")
-
-	targetImage := cluster.Spec.Image
+// resolveTargetMainImage determines the image reference to use for infrastructure reconciliation.
+// For BlueGreen upgrades, this is the currently-active ("Blue") image, not necessarily spec.image
+// (which may already be set to the target upgrade image).
+//
+// Note: The workload controller does not own BlueGreen status, so any mutation of
+// cluster.Status.BlueGreen here is in-memory only, to avoid accidental upgrades of the active
+// cluster during upgrade start/restarts/cache staleness.
+func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) string {
+	targetImage := strings.TrimSpace(cluster.Spec.Image)
 	if targetImage == "" {
 		targetImage = constants.GetOpenBaoImage(cluster.Spec.Version)
 	}
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen &&
-		cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueImage != "" {
-		targetImage = cluster.Status.BlueGreen.BlueImage
+
+	if cluster.Spec.Upgrade == nil || cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen {
+		return targetImage
 	}
+
+	podReader := client.Reader(r.client)
+	if r.apiReader != nil {
+		podReader = r.apiReader
+	}
+
+	// Bootstrap/correct BlueGreen status before selecting the image. This ensures we keep
+	// reconciling the active ("Blue") revision even when spec.version/spec.image has been
+	// updated to start an upgrade.
+	if cluster.Status.BlueGreen == nil {
+		inferred, inferredImage, inferErr := inframanager.InferActiveRevisionFromPods(ctx, podReader, cluster)
+		if inferErr != nil {
+			logger.Error(inferErr, "Failed to infer active revision from pods; falling back to spec-derived revision")
+		}
+		blueRevision := inferred
+		blueImage := strings.TrimSpace(inferredImage)
+
+		if blueRevision == "" {
+			resolvedImage := strings.TrimSpace(cluster.Spec.Image)
+			if resolvedImage == "" {
+				resolvedImage = constants.GetOpenBaoImage(cluster.Spec.Version)
+			}
+			blueRevision = revision.OpenBaoClusterRevision(cluster.Spec.Version, resolvedImage, cluster.Spec.Replicas)
+		}
+
+		// Prefer the currently-running pod image; if we can't infer it, do NOT fall back to
+		// spec.image when an upgrade is pending (spec may already be the target image).
+		if blueImage == "" {
+			if cluster.Status.CurrentVersion != "" && cluster.Status.CurrentVersion != cluster.Spec.Version {
+				blueImage = constants.GetOpenBaoImage(cluster.Status.CurrentVersion)
+			} else {
+				blueImage = strings.TrimSpace(cluster.Spec.Image)
+				if blueImage == "" {
+					blueImage = constants.GetOpenBaoImage(cluster.Spec.Version)
+				}
+			}
+		}
+
+		cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+			Phase:        openbaov1alpha1.PhaseIdle,
+			BlueRevision: blueRevision,
+			BlueImage:    blueImage,
+		}
+	} else if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
+		(cluster.Status.BlueGreen.BlueRevision == "" || cluster.Status.CurrentVersion != cluster.Spec.Version) {
+		inferred, inferredImage, inferErr := inframanager.InferActiveRevisionFromPods(ctx, podReader, cluster)
+		if inferErr != nil {
+			logger.Error(inferErr, "Failed to infer active revision from pods; keeping existing BlueRevision", "blueRevision", cluster.Status.BlueGreen.BlueRevision)
+		} else if inferred != "" && inferred != cluster.Status.BlueGreen.BlueRevision {
+			logger.Info("Correcting BlueRevision from active pods", "from", cluster.Status.BlueGreen.BlueRevision, "to", inferred)
+			cluster.Status.BlueGreen.BlueRevision = inferred
+		}
+
+		inferredImage = strings.TrimSpace(inferredImage)
+		if inferredImage != "" && (cluster.Status.BlueGreen.BlueImage == "" || cluster.Status.BlueGreen.BlueImage != inferredImage) {
+			logger.Info("Correcting BlueImage from active pods", "from", cluster.Status.BlueGreen.BlueImage, "to", inferredImage)
+			cluster.Status.BlueGreen.BlueImage = inferredImage
+		} else if cluster.Status.BlueGreen.BlueImage == "" {
+			// Backfill BlueImage without accidentally "locking in" the target upgrade image.
+			if cluster.Status.CurrentVersion != "" && cluster.Status.CurrentVersion != cluster.Spec.Version {
+				cluster.Status.BlueGreen.BlueImage = constants.GetOpenBaoImage(cluster.Status.CurrentVersion)
+			} else {
+				cluster.Status.BlueGreen.BlueImage = strings.TrimSpace(cluster.Spec.Image)
+				if cluster.Status.BlueGreen.BlueImage == "" {
+					cluster.Status.BlueGreen.BlueImage = constants.GetOpenBaoImage(cluster.Spec.Version)
+				}
+			}
+		}
+	}
+
+	if cluster.Status.BlueGreen != nil && strings.TrimSpace(cluster.Status.BlueGreen.BlueImage) != "" {
+		return strings.TrimSpace(cluster.Status.BlueGreen.BlueImage)
+	}
+	return targetImage
+}
+
+// Reconcile implements SubReconciler for infrastructure reconciliation.
+// nolint:gocyclo #TODO: split this function into smaller functions
+func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	logger.Info("Reconciling infrastructure for OpenBaoCluster")
+
+	targetImage := r.resolveTargetMainImage(ctx, logger, cluster)
 
 	verifiedImageDigest, err := r.verifyMainImageDigest(ctx, logger, cluster, targetImage)
 	if err != nil {
 		return recon.Result{}, err
+	}
+	// The infra layer expects a non-empty image reference; when verification is disabled (or on Warn),
+	// keep using the selected tag/ref to avoid falling back to cluster.Spec.Image (which may already be
+	// the target upgrade image during BlueGreen).
+	if strings.TrimSpace(verifiedImageDigest) == "" {
+		verifiedImageDigest = targetImage
 	}
 
 	verifiedInitContainerDigest, err := r.verifyInitContainerImageDigest(ctx, logger, cluster)
 	if err != nil {
 		return recon.Result{}, err
 	}
-
-	// Bootstrap/correct BlueGreen status before infra reconciliation so the infra manager can
-	// keep reconciling the active ("Blue") revision even when spec.version/spec.image has been
-	// updated to start an upgrade.
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		if cluster.Status.BlueGreen == nil {
-			inferred, inferErr := inframanager.InferActiveRevisionFromPods(ctx, r.client, cluster)
-			if inferErr != nil {
-				logger.Error(inferErr, "Failed to infer active revision from pods; falling back to spec-derived revision")
-			}
-			blueRevision := inferred
-			if blueRevision == "" {
-				resolvedImage := cluster.Spec.Image
-				if resolvedImage == "" {
-					resolvedImage = constants.GetOpenBaoImage(cluster.Spec.Version)
-				}
-				blueRevision = revision.OpenBaoClusterRevision(cluster.Spec.Version, resolvedImage, cluster.Spec.Replicas)
-			}
-			cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
-				Phase:        openbaov1alpha1.PhaseIdle,
-				BlueRevision: blueRevision,
-			}
-		} else if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
-			(cluster.Status.BlueGreen.BlueRevision == "" || cluster.Status.CurrentVersion != cluster.Spec.Version) {
-			inferred, inferErr := inframanager.InferActiveRevisionFromPods(ctx, r.client, cluster)
-			if inferErr != nil {
-				logger.Error(inferErr, "Failed to infer active revision from pods; keeping existing BlueRevision", "blueRevision", cluster.Status.BlueGreen.BlueRevision)
-			} else if inferred != "" && inferred != cluster.Status.BlueGreen.BlueRevision {
-				logger.Info("Correcting BlueRevision from active pods", "from", cluster.Status.BlueGreen.BlueRevision, "to", inferred)
-				cluster.Status.BlueGreen.BlueRevision = inferred
-			}
-		}
+	if strings.TrimSpace(verifiedInitContainerDigest) == "" && cluster.Spec.InitContainer != nil {
+		verifiedInitContainerDigest = strings.TrimSpace(cluster.Spec.InitContainer.Image)
 	}
 
 	// Compute StatefulSetSpec with all upgrade strategy knowledge
@@ -496,15 +558,6 @@ func (r *infraReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, 
 	// Clone the smart client config defaults
 	config := r.smartClientConfig
 	config.BaseURL = baseURL
-	// Ensure we use the proper CA cert. r.smartClientConfig should already have it if configured correctly in reconciler setup.
-	// If not, we might need to fetch it from the secret, but usually the parent reconciler handles this.
-	// For now assume smartClientConfig has the CA bundle if needed.
-
-	// Create client using openbao.NewClient (which creates a new client without shared state,
-	// or we could use ClientManager if we wanted shared state, but for this one-off check, NewClient is fine
-	// provided we don't need rate limiting persistence for the victim pod specifically).
-	// Actually, using NewClient is safer to avoid polluting variable shared state with ephemeral pod clients?
-	// But ClientConfig has "ClusterKey".
 
 	return openbao.NewClient(config)
 }

@@ -211,7 +211,7 @@ func (m *Manager) shouldReconcileBlueGreen(logger logr.Logger, cluster *openbaov
 
 func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
 	if cluster.Status.BlueGreen == nil {
-		inferred, err := infra.InferActiveRevisionFromPods(ctx, m.client, cluster)
+		inferred, inferredImage, err := infra.InferActiveRevisionFromPods(ctx, m.client, cluster)
 		if err != nil {
 			logger.Error(err, "Failed to infer active revision from pods; falling back to spec-derived revision")
 		}
@@ -219,10 +219,16 @@ func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger,
 		if blueRevision == "" {
 			blueRevision = m.calculateRevision(cluster)
 		}
+
+		blueImage := cluster.Spec.Image
+		if inferredImage != "" {
+			blueImage = inferredImage
+		}
+
 		cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
 			Phase:        openbaov1alpha1.PhaseIdle,
 			BlueRevision: blueRevision,
-			BlueImage:    cluster.Spec.Image,
+			BlueImage:    blueImage,
 		}
 		return
 	}
@@ -231,7 +237,7 @@ func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger,
 	// currently running ("Blue") pods, correct it before starting a new upgrade or snapshot.
 	if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
 		(cluster.Status.BlueGreen.BlueRevision == "" || cluster.Status.CurrentVersion != cluster.Spec.Version) {
-		inferred, err := infra.InferActiveRevisionFromPods(ctx, m.client, cluster)
+		inferred, inferredImage, err := infra.InferActiveRevisionFromPods(ctx, m.client, cluster)
 		if err != nil {
 			logger.Error(err, "Failed to infer active revision from pods; keeping existing BlueRevision", "blueRevision", cluster.Status.BlueGreen.BlueRevision)
 			return
@@ -240,9 +246,15 @@ func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger,
 			logger.Info("Correcting BlueRevision from active pods", "from", cluster.Status.BlueGreen.BlueRevision, "to", inferred)
 			cluster.Status.BlueGreen.BlueRevision = inferred
 		}
-		// Also ensure BlueImage is set if missing (backfill for existing clusters)
+		// Also ensure BlueImage is set if missing (backfill for existing clusters) or incorrect
 		if cluster.Status.BlueGreen.BlueImage == "" {
 			cluster.Status.BlueGreen.BlueImage = cluster.Spec.Image
+			if inferredImage != "" {
+				cluster.Status.BlueGreen.BlueImage = inferredImage
+			}
+		} else if inferredImage != "" && cluster.Status.BlueGreen.BlueImage != inferredImage {
+			logger.Info("Correcting BlueImage from active pods", "from", cluster.Status.BlueGreen.BlueImage, "to", inferredImage)
+			cluster.Status.BlueGreen.BlueImage = inferredImage
 		}
 	}
 }
