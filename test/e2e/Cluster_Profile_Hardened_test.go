@@ -617,6 +617,55 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 			g.Expect(svc.Spec.ClusterIP).NotTo(BeEmpty())
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+		By("allowing verification pod egress to OpenBao cluster (NetworkPolicy)")
+		tcpProto := corev1.ProtocolTCP
+		udpProto := corev1.ProtocolUDP
+		port8200 := intstr.FromInt(8200)
+		port53 := intstr.FromInt(53)
+		verifierEgress := &networkingv1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterName + "-verifier-egress",
+				Namespace: f.Namespace,
+			},
+			Spec: networkingv1.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"role": "test-verifier"},
+				},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+				Egress: []networkingv1.NetworkPolicyEgressRule{
+					{
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								NamespaceSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"kubernetes.io/metadata.name": "kube-system"},
+								},
+							},
+						},
+						Ports: []networkingv1.NetworkPolicyPort{
+							{Protocol: &udpProto, Port: &port53},
+							{Protocol: &tcpProto, Port: &port53},
+						},
+					},
+					{
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										constants.LabelOpenBaoCluster: clusterName,
+									},
+								},
+							},
+						},
+						Ports: []networkingv1.NetworkPolicyPort{
+							{Protocol: &tcpProto, Port: &port8200},
+						},
+					},
+				},
+			},
+		}
+		Expect(c.Create(ctx, verifierEgress)).To(Succeed())
+		DeferCleanup(func() { _ = c.Delete(ctx, verifierEgress) })
+
 		By("reading autopilot configuration via JWT authenticated request")
 		// Self-init clusters have operator JWT auth configured, so we can verify autopilot config
 		// The openbao-operator policy has read/update on sys/storage/raft/autopilot/configuration
