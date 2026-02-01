@@ -48,6 +48,7 @@ func TestInferActiveRevisionFromPods(t *testing.T) {
 
 	tests := []struct {
 		name      string
+		setup     func(*openbaov1alpha1.OpenBaoCluster)
 		pods      []runtime.Object
 		want      string
 		wantImage string
@@ -106,6 +107,7 @@ func TestInferActiveRevisionFromPods(t *testing.T) {
 	// Add a specific test case for image extraction
 	tests = append(tests, struct {
 		name      string
+		setup     func(*openbaov1alpha1.OpenBaoCluster)
 		pods      []runtime.Object
 		want      string
 		wantImage string
@@ -120,10 +122,62 @@ func TestInferActiveRevisionFromPods(t *testing.T) {
 		wantE:     false,
 	})
 
+	tests = append(tests, struct {
+		name      string
+		setup     func(*openbaov1alpha1.OpenBaoCluster)
+		pods      []runtime.Object
+		want      string
+		wantImage string
+		wantE     bool
+	}{
+		name: "prefers image matching currentVersion during upgrades",
+		setup: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+			cluster.Spec.Version = "2.4.4"
+			cluster.Spec.Image = "openbao/openbao:2.4.4"
+			cluster.Status.CurrentVersion = "2.4.3"
+		},
+		pods: []runtime.Object{
+			readyPodWithImage("pod-new-0", "default", "a", "openbao/openbao:2.4.4"),
+			readyPodWithImage("pod-old-0", "default", "b", "openbao/openbao:2.4.3"),
+		},
+		want:      "b", // would be "a" by lexicographic tie-breaker without currentVersion hint
+		wantImage: "openbao/openbao:2.4.3",
+		wantE:     false,
+	})
+
+	tests = append(tests, struct {
+		name      string
+		setup     func(*openbaov1alpha1.OpenBaoCluster)
+		pods      []runtime.Object
+		want      string
+		wantImage string
+		wantE     bool
+	}{
+		name: "does not lock onto stale blueImage when currentVersion indicates otherwise",
+		setup: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+			cluster.Spec.Version = "2.4.4"
+			cluster.Spec.Image = "openbao/openbao:2.4.4"
+			cluster.Status.CurrentVersion = "2.4.3"
+			cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+				BlueImage: "openbao/openbao:2.4.4", // stale/incorrect hint
+			}
+		},
+		pods: []runtime.Object{
+			readyPodWithImage("pod-new-0", "default", "a", "openbao/openbao:2.4.4"),
+			readyPodWithImage("pod-old-0", "default", "b", "openbao/openbao:2.4.3"),
+		},
+		want:      "b",
+		wantImage: "openbao/openbao:2.4.3",
+		wantE:     false,
+	})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+			}
+			if tt.setup != nil {
+				tt.setup(cluster)
 			}
 			objects := append([]runtime.Object{cluster}, tt.pods...)
 			c := fake.NewClientBuilder().
