@@ -41,7 +41,7 @@ type infraReconciler struct {
 	oidcIssuer              string
 	oidcJWTKeys             []string
 	operatorImageVerifier   interfaces.ImageVerifier
-	verifyImageFunc         func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error)
+	verifyImageFunc         func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
 	verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, verifier interfaces.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
 	recorder                events.EventRecorder
 	admissionStatus         *admission.Status
@@ -214,7 +214,7 @@ func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr
 		if r.verifyImageFunc == nil {
 			return "", fmt.Errorf("verifyImageFunc is required")
 		}
-		return r.verifyImageFunc(ctx, logger, cluster)
+		return r.verifyImageFunc(ctx, logger, cluster, imageRef)
 	})
 }
 
