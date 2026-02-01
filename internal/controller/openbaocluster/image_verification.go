@@ -10,10 +10,10 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
 )
 
-// verifyImage verifies the container image signature using the ImageVerifier.
-// Returns the verified image digest that should be used in the StatefulSet.
-// Supports both static key verification (PublicKey) and keyless verification (Issuer + Subject).
-func (r *OpenBaoClusterReconciler) verifyImage(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+// verifyImageRef verifies the signature for the given image reference and returns a digest pin.
+// This must verify the same image ref that the infra layer will apply, otherwise we can pin the
+// wrong digest (e.g., verifying Green while reconciling Blue during blue/green upgrades).
+func (r *OpenBaoClusterReconciler) verifyImageRef(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	if cluster.Spec.ImageVerification == nil || !cluster.Spec.ImageVerification.Enabled {
 		return "", nil
 	}
@@ -34,7 +34,7 @@ func (r *OpenBaoClusterReconciler) verifyImage(ctx context.Context, logger logr.
 		ImagePullSecrets: cluster.Spec.ImageVerification.ImagePullSecrets,
 		Namespace:        cluster.Namespace,
 	}
-	digest, err := r.ImageVerifier.Verify(ctx, cluster.Spec.Image, config)
+	digest, err := r.ImageVerifier.Verify(ctx, imageRef, config)
 	if err != nil {
 		return "", err
 	}

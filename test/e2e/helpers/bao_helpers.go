@@ -526,10 +526,13 @@ export BAO_SKIP_VERIFY=true
 # Retry loop for login and verification
 for i in $(seq 1 10); do
 	echo "Attempt $i/10..."
-	TOKEN=$(bao write -field=token auth/jwt-operator/login \
-		role=test-verifier jwt=@/var/run/secrets/openbao/token 2>/dev/null || true)
-	if [ -n "$TOKEN" ]; then
-		export BAO_TOKEN=$TOKEN
+	set +e
+	LOGIN_OUTPUT=$(bao write -field=token auth/jwt-operator/login \
+		role=test-verifier jwt=@/var/run/secrets/openbao/token 2>&1)
+	LOGIN_EXIT=$?
+	set -e
+	if [ $LOGIN_EXIT -eq 0 ] && [ -n "$LOGIN_OUTPUT" ] && [ "$LOGIN_OUTPUT" != "null" ]; then
+		export BAO_TOKEN=$LOGIN_OUTPUT
 		if bao read sys/storage/raft/autopilot/configuration 2>&1 | grep -q "cleanup_dead_servers.*true"; then
 			echo "AUTOPILOT_CONFIGURED"
 			exit 0
@@ -537,6 +540,7 @@ for i in $(seq 1 10); do
 		echo "Autopilot config not yet propagated or incorrect"
 	else
 		echo "Login failed"
+		echo "Login command output: $LOGIN_OUTPUT"
 	fi
 	sleep 2
 done
