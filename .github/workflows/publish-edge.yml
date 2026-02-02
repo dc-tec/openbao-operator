@@ -111,6 +111,9 @@ jobs:
           docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:${VERSION}" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:${VERSION}" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
+          docker buildx imagetools create -t "${MANAGER_IMAGE}:edge" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          docker buildx imagetools create -t "${CONFIG_INIT_IMAGE}:edge" "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:edge" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:edge" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
       - name: Generate digest-pinned installer manifest
