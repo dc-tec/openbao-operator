@@ -11,7 +11,7 @@ We publish multiple channels:
 
 - **Stable / SemVer**: `MAJOR.MINOR.PATCH` (and prereleases like `X.Y.Z-rc.1`, `X.Y.Z-beta.1`, `X.Y.Z-alpha.1`).
 - **Edge** (main): published automatically after CI passes on `main` (tags: `edge`, `edge-<shortsha>`).
-- **Nightly dev**: published automatically after nightly E2E passes (tags: `dev`, `dev-YYYYMMDD`, `dev-YYYYMMDD-<shortsha>`), and a moving GitHub prerelease named `nightly`.
+- **Nightly dev**: published automatically after nightly E2E passes (tags: `dev`, `dev-YYYYMMDD`, `dev-YYYYMMDD-<shortsha>`), and published as mutable manifests on GitHub Pages under `/nightly/`.
 
 ## 0.1 Release-Please (Versioning + Release PRs)
 
@@ -54,7 +54,7 @@ We use **release-please** as the source of truth for:
 
     - After nightly E2E success, `.github/workflows/publish-nightly.yml` publishes:
         - Images: `:dev`, `:dev-YYYYMMDD`, `:dev-YYYYMMDD-<shortsha>`
-        - A moving GitHub prerelease named `nightly`
+        - Manifests to GitHub Pages: `/nightly/install.yaml`, `/nightly/crds.yaml` (+ checksums + metadata)
 
 ## 1. Stable/Prerelease Release Flow
 
