@@ -446,17 +446,55 @@ jobs:
             exit 1
           fi
 
-          gh release upload "${version}" \
-            dist/install.yaml \
-            dist/crds.yaml \
-            dist/checksums.txt \
-            dist/checksums.txt.sig \
-            dist/checksums.txt.crt \
-            dist/sbom-openbao-operator.spdx.json \
-            dist/sbom-openbao-init.spdx.json \
-            dist/sbom-openbao-backup.spdx.json \
-            dist/sbom-openbao-upgrade.spdx.json \
-            --clobber
+          assets=(
+            dist/install.yaml
+            dist/crds.yaml
+            dist/checksums.txt
+            dist/checksums.txt.sig
+            dist/checksums.txt.crt
+            dist/sbom-openbao-operator.spdx.json
+            dist/sbom-openbao-init.spdx.json
+            dist/sbom-openbao-backup.spdx.json
+            dist/sbom-openbao-upgrade.spdx.json
+          )
+
+          declare -A existing_asset_sizes=()
+          while IFS=$'\t' read -r name size; do
+            if [[ -n "${name}" ]]; then
+              existing_asset_sizes["${name}"]="${size}"
+            fi
+          done < <(gh release view "${version}" --json assets --jq '.assets[]? | [.name, (.size|tostring)] | @tsv')
+
+          tmp_existing="$(mktemp -d)"
+          trap 'rm -rf "${tmp_existing}"' EXIT
+
+          to_upload=()
+          for file in "${assets[@]}"; do
+            name="$(basename "${file}")"
+            if [[ -n "${existing_asset_sizes[${name}]-}" ]]; then
+              local_size="$(stat -c%s "${file}")"
+              if [[ "${local_size}" != "${existing_asset_sizes[${name}]}" ]]; then
+                echo "Release asset '${name}' already exists but size differs (local=${local_size}, release=${existing_asset_sizes[${name}]})" >&2
+                echo "Immutable releases cannot delete/replace assets; investigate the mismatch or create a new release." >&2
+                exit 1
+              fi
+
+              gh release download "${version}" --pattern "${name}" --dir "${tmp_existing}"
+              local_sha="$(sha256sum "${file}" | awk '{print $1}')"
+              release_sha="$(sha256sum "${tmp_existing}/${name}" | awk '{print $1}')"
+              if [[ "${local_sha}" != "${release_sha}" ]]; then
+                echo "Release asset '${name}' already exists but content differs (local_sha=${local_sha}, release_sha=${release_sha})" >&2
+                echo "Immutable releases cannot delete/replace assets; investigate the mismatch or create a new release." >&2
+                exit 1
+              fi
+              continue
+            fi
+            to_upload+=("${file}")
+          done
+
+          if (( ${#to_upload[@]} > 0 )); then
+            gh release upload "${version}" "${to_upload[@]}"
+          fi
 
           # Ensure releases are published and marked correctly.
           if [[ -n "${prerelease_flag}" ]]; then
@@ -469,6 +507,9 @@ jobs:
     name: Deploy Versioned Docs
     runs-on: *runner
     needs: [prepare, promote]
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
