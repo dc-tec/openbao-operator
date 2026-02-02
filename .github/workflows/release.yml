@@ -103,7 +103,7 @@ jobs:
 
       - name: Cache Tools
         id: cache-tools
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
@@ -131,7 +131,7 @@ jobs:
             image_ref: ${{ needs.prepare.outputs.upgrade_executor_image }}:${{ needs.prepare.outputs.build_tag }}
     steps:
       - name: Login to GHCR (pull)
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -175,13 +175,13 @@ jobs:
 
       - name: Cache Tools
         id: cache-tools
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
 
       - name: Login to GHCR (pull)
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -223,7 +223,7 @@ jobs:
 
       - name: Upload E2E artifacts (failure)
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: e2e-artifacts-kind-${{ matrix.k8s }}
           path: artifacts/
@@ -241,7 +241,7 @@ jobs:
           fetch-depth: 0
 
       - name: Login to GHCR
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -292,28 +292,28 @@ jobs:
           cosign sign --yes "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
       - name: Attest build provenance (GitHub) - manager
-        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-name: ${{ needs.prepare.outputs.manager_image }}
           subject-digest: ${{ needs.build.outputs.manager_digest }}
           push-to-registry: true
 
       - name: Attest build provenance (GitHub) - config-init
-        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-name: ${{ needs.prepare.outputs.config_init_image }}
           subject-digest: ${{ needs.build.outputs.config_init_digest }}
           push-to-registry: true
 
       - name: Attest build provenance (GitHub) - backup executor
-        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-name: ${{ needs.prepare.outputs.backup_executor_image }}
           subject-digest: ${{ needs.build.outputs.backup_executor_digest }}
           push-to-registry: true
 
       - name: Attest build provenance (GitHub) - upgrade executor
-        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-name: ${{ needs.prepare.outputs.upgrade_executor_image }}
           subject-digest: ${{ needs.build.outputs.upgrade_executor_digest }}
@@ -369,7 +369,7 @@ jobs:
           make build-crds
 
       - name: Generate SBOMs (SPDX JSON)
-        uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
+        uses: anchore/sbom-action@deef08a0db64bfad603422135db61477b16cef56 # v0.22.1
         with:
           image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.build.outputs.manager_digest }}
           format: spdx-json
@@ -380,7 +380,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOMs (SPDX JSON) - config-init
-        uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
+        uses: anchore/sbom-action@deef08a0db64bfad603422135db61477b16cef56 # v0.22.1
         with:
           image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.build.outputs.config_init_digest }}
           format: spdx-json
@@ -391,7 +391,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOMs (SPDX JSON) - backup executor
-        uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
+        uses: anchore/sbom-action@deef08a0db64bfad603422135db61477b16cef56 # v0.22.1
         with:
           image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.build.outputs.backup_executor_digest }}
           format: spdx-json
@@ -402,7 +402,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOMs (SPDX JSON) - upgrade executor
-        uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
+        uses: anchore/sbom-action@deef08a0db64bfad603422135db61477b16cef56 # v0.22.1
         with:
           image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.build.outputs.upgrade_executor_digest }}
           format: spdx-json
@@ -525,7 +525,7 @@ jobs:
           python-version: "3.x"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+        uses: astral-sh/setup-uv@803947b9bd8e9f986429fa0c5a41c367cd732b41 # v7.2.1
 
       - name: Install dependencies
         run: uv pip install --system mkdocs-material mike

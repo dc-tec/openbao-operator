@@ -92,7 +92,7 @@ jobs:
         run: make build-linux
 
       - name: Upload Binaries
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: operator-binaries
           path: bin/linux_amd64/
@@ -124,7 +124,7 @@ jobs:
           cache: true
 
       - name: Cache Tools
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
@@ -135,7 +135,7 @@ jobs:
           install-dir: bin/
 
       - name: Download Binaries
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: operator-binaries
           path: bin/linux_amd64
@@ -227,7 +227,7 @@ jobs:
 
       - name: Upload E2E artifacts (failure)
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: e2e-artifacts-kind-${{ matrix.k8s }}
           path: artifacts/
