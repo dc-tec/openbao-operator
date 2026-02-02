@@ -4244,7 +4244,7 @@
 <ul>
 <li><strong>Stable / SemVer</strong>: <code>MAJOR.MINOR.PATCH</code> (and prereleases like <code>X.Y.Z-rc.1</code>, <code>X.Y.Z-beta.1</code>, <code>X.Y.Z-alpha.1</code>).</li>
 <li><strong>Edge</strong> (main): published automatically after CI passes on <code>main</code> (tags: <code>edge</code>, <code>edge-&lt;shortsha&gt;</code>).</li>
-<li><strong>Nightly dev</strong>: published automatically after nightly E2E passes (tags: <code>dev</code>, <code>dev-YYYYMMDD</code>, <code>dev-YYYYMMDD-&lt;shortsha&gt;</code>), and a moving GitHub prerelease named <code>nightly</code>.</li>
+<li><strong>Nightly dev</strong>: published automatically after nightly E2E passes (tags: <code>dev</code>, <code>dev-YYYYMMDD</code>, <code>dev-YYYYMMDD-&lt;shortsha&gt;</code>), and published as mutable manifests on GitHub Pages under <code>/nightly/</code>.</li>
 </ul>
 <h2 id="01-release-please-versioning-release-prs">0.1 Release-Please (Versioning + Release PRs)<a class="headerlink" href="#01-release-please-versioning-release-prs" title="Permanent link">&para;</a></h2>
 <p>We use <strong>release-please</strong> as the source of truth for:</p>
@@ -4292,7 +4292,7 @@ GitHub often excludes self-approvals from required reviews. Prefer a bot account
 <ul>
 <li>After nightly E2E success, <code>.github/workflows/publish-nightly.yml</code> publishes:<ul>
 <li>Images: <code>:dev</code>, <code>:dev-YYYYMMDD</code>, <code>:dev-YYYYMMDD-&lt;shortsha&gt;</code></li>
-<li>A moving GitHub prerelease named <code>nightly</code></li>
+<li>Manifests to GitHub Pages: <code>/nightly/install.yaml</code>, <code>/nightly/crds.yaml</code> (+ checksums + metadata)</li>
 </ul>
 </li>
 </ul>
