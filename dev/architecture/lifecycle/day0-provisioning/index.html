@@ -4077,7 +4077,7 @@
 <ul>
 <li>A cluster admin (or a namespace owner in self-service mode) creates an <code>OpenBaoTenant</code> resource.</li>
 <li>The Provisioner Controller reconciles <code>OpenBaoTenant</code> and provisions the target namespace with the required tenant-scoped RBAC so the operator can manage OpenBao resources there.
-  This includes creating namespaced <code>Role</code> and <code>RoleBinding</code> resources that delegate permissions to the operator's ServiceAccount.</li>
+  This includes creating namespaced <code>Role</code> and <code>RoleBinding</code> resources that grant permissions to the operator's Controller ServiceAccount.</li>
 </ul>
 <h2 id="2-resource-quotas">2. Resource Quotas<a class="headerlink" href="#2-resource-quotas" title="Permanent link">&para;</a></h2>
 <ul>

@@ -3555,21 +3555,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-provisioner-rbac" class="md-nav__link">
+  <a href="#3-golden-test-files" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Provisioner RBAC
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-golden-test-files" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Golden Test Files
+        3. Golden Test Files
       
     </span>
   </a>
@@ -4105,21 +4094,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-provisioner-rbac" class="md-nav__link">
+  <a href="#3-golden-test-files" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Provisioner RBAC
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-golden-test-files" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Golden Test Files
+        3. Golden Test Files
       
     </span>
   </a>
@@ -4202,11 +4180,6 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <td style="text-align: left;"><code>verify-generated</code></td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>internal/provisioner</code></td>
-<td style="text-align: left;"><code>make rbac-sync</code></td>
-<td style="text-align: left;"><code>verify-rbac-sync</code></td>
-</tr>
-<tr>
 <td style="text-align: left;"><code>dist/install.yaml</code></td>
 <td style="text-align: left;"><code>make helm-sync</code></td>
 <td style="text-align: left;"><code>verify-helm</code></td>
@@ -4243,14 +4216,7 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <li><code>charts/openbao-operator/templates/rbac/</code> (Synced RBAC templates)</li>
 <li><strong>Command:</strong> <code>make helm-sync</code></li>
 </ul>
-<h3 id="3-provisioner-rbac">3. Provisioner RBAC<a class="headerlink" href="#3-provisioner-rbac" title="Permanent link">&para;</a></h3>
-<p>The Provisioner Delegate's permissions are strictly defined in Go code to ensure security.</p>
-<ul>
-<li><strong>Source:</strong> <code>internal/provisioner/rbac.go</code> (Go struct definitions)</li>
-<li><strong>Output:</strong> <code>config/rbac/provisioner_delegate_clusterrole.yaml</code></li>
-<li><strong>Command:</strong> <code>make rbac-sync</code></li>
-</ul>
-<h3 id="4-golden-test-files">4. Golden Test Files<a class="headerlink" href="#4-golden-test-files" title="Permanent link">&para;</a></h3>
+<h3 id="3-golden-test-files">3. Golden Test Files<a class="headerlink" href="#3-golden-test-files" title="Permanent link">&para;</a></h3>
 <p>We use "Golden Files" to verify complex HCL configuration generation reliability.</p>
 <ul>
 <li><strong>Source:</strong> <code>internal/config/builder.go</code> logic changes</li>

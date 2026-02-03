@@ -2843,10 +2843,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#provisioner-delegate-hardening" class="md-nav__link">
+  <a href="#provisioner-rbac-hardening" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provisioner Delegate Hardening
+        Provisioner RBAC Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#provisioner-namespace-mutation-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Provisioner Namespace Mutation Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controller-rbac-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controller RBAC Hardening
       
     </span>
   </a>
@@ -4037,10 +4059,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#provisioner-delegate-hardening" class="md-nav__link">
+  <a href="#provisioner-rbac-hardening" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provisioner Delegate Hardening
+        Provisioner RBAC Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#provisioner-namespace-mutation-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Provisioner Namespace Mutation Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controller-rbac-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controller RBAC Hardening
       
     </span>
   </a>
@@ -4133,9 +4177,9 @@
 <tbody>
 <tr>
 <td style="text-align: left;"><code>lock-managed-resource-mutations</code></td>
-<td style="text-align: left;"><code>StatefulSet</code>, <code>Service</code>, <code>Secret</code></td>
+<td style="text-align: left;">Operator-managed resources (e.g. <code>StatefulSet</code>, <code>Service</code>, <code>Secret</code>, <code>Pod</code>)</td>
 <td style="text-align: left;"><strong>Block</strong></td>
-<td style="text-align: left;">Prevents users/GitOps from modifying resources managed by the Operator (labeled <code>app.kubernetes.io/managed-by=openbao-operator</code>).</td>
+<td style="text-align: left;">Prevents users/GitOps from modifying resources managed by the Operator (labeled <code>app.kubernetes.io/managed-by=openbao-operator</code>). Allows controlled exceptions for Kubernetes controllers and OpenBao service registration label updates.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>lock-controller-statefulset-mutations</code></td>
@@ -4150,21 +4194,95 @@
 <td style="text-align: left;">Enforces spec invariants (e.g., Hardened profile requirements, TLS configs).</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>restrict-provisioner-delegate</code></td>
+<td style="text-align: left;"><code>validate-openbao-tenant</code></td>
+<td style="text-align: left;"><code>OpenBaoTenant</code></td>
+<td style="text-align: left;"><strong>Validate</strong></td>
+<td style="text-align: left;">Enforces tenant spec invariants and multi-tenant guardrails.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>validate-openbaorestore</code></td>
+<td style="text-align: left;"><code>OpenBaoRestore</code></td>
+<td style="text-align: left;"><strong>Validate</strong></td>
+<td style="text-align: left;">Enforces restore spec invariants and safety checks.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>openbao-restrict-provisioner-rbac</code></td>
 <td style="text-align: left;"><code>Role</code>, <code>RoleBinding</code></td>
 <td style="text-align: left;"><strong>Restrict</strong></td>
-<td style="text-align: left;">Limits the Provisioner Delegate to creating only specific, pre-approved RBAC roles.</td>
+<td style="text-align: left;">Restricts the Provisioner ServiceAccount to a fixed set of tenant RBAC objects and contents (CREATE/UPDATE/DELETE), and blocks system namespaces.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>openbao-restrict-provisioner-namespace-mutations</code></td>
+<td style="text-align: left;"><code>Namespace</code></td>
+<td style="text-align: left;"><strong>Restrict</strong></td>
+<td style="text-align: left;">Restricts Provisioner Namespace updates to Pod Security Standards label enforcement only (restricted), and blocks system namespaces.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>openbao-restrict-controller-rbac</code></td>
+<td style="text-align: left;"><code>Role</code>, <code>RoleBinding</code></td>
+<td style="text-align: left;"><strong>Restrict</strong></td>
+<td style="text-align: left;">Restricts Controller RBAC writes to the narrow per-cluster pod discovery/service registration Role/RoleBinding pattern (prevents RBAC self-escalation).</td>
 </tr>
 </tbody>
 </table>
-<h2 id="provisioner-delegate-hardening">Provisioner Delegate Hardening<a class="headerlink" href="#provisioner-delegate-hardening" title="Permanent link">&para;</a></h2>
-<p>The <code>restrict-provisioner-delegate</code> policy is a defense-in-depth control that applies to RBAC mutations performed by the impersonated Provisioner Delegate identity.</p>
+<h2 id="provisioner-rbac-hardening">Provisioner RBAC Hardening<a class="headerlink" href="#provisioner-rbac-hardening" title="Permanent link">&para;</a></h2>
+<p>The <code>openbao-restrict-provisioner-rbac</code> policy is a defense-in-depth control that applies to RBAC mutations performed by the Provisioner identity.</p>
 <p><strong>Key guarantees:</strong></p>
 <ul>
 <li>Only specific Role/RoleBinding names are allowed (tenant + secrets allowlist roles).</li>
 <li>RoleBindings are restricted to known ServiceAccount subjects (prevents backdoor bindings).</li>
 <li>Dangerous verbs and wildcards are denied (<code>impersonate</code>, <code>bind</code>, <code>escalate</code>, <code>*</code>).</li>
 <li>Secret permissions are only allowed via the dedicated secrets allowlist Roles, and those Roles must be name-scoped (<code>resourceNames</code>) and non-enumerating (no <code>list</code>/<code>watch</code>).</li>
+<li>Deletion is restricted to the fixed tenant template Role/RoleBinding objects.</li>
+<li>RBAC mutations are blocked in system namespaces (at minimum: the Operator namespace, <code>kube-*</code>, and commonly provider-reserved namespaces like <code>openshift*</code> and <code>gke-*</code>).</li>
+<li>Provider-reserved namespaces are cluster-dependent. The Helm defaults include best-effort prefixes for common managed offerings (<code>openshift-*</code>, <code>gke-*</code>, <code>eks-*</code>, <code>aws-*</code>, <code>aks-*</code>, <code>azure-*</code>); tune these to match your platform add-ons.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Helm: provider-reserved namespaces</p>
+<p>When installing via Helm, you can extend the system namespace deny set with:</p>
+<ul>
+<li><code>admissionPolicies.provisionerRBAC.deniedNamespaces</code></li>
+<li><code>admissionPolicies.provisionerRBAC.deniedNamespacePrefixes</code></li>
+</ul>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Startup enforcement</p>
+<p>The OpenBao Operator defaults to fail-closed startup (<code>--admission-enforcement=fail</code>), refusing to run unless required admission policies are installed and enforced.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Unsafe mode</p>
+<p>Disabling admission policies is treated as <strong>unsafe mode</strong>. When installing via Helm with <code>admissionPolicies.enabled=false</code>, the chart sets <code>OPENBAO_UNSAFE_ADMISSION_DISABLED=true</code> so the operator can start without fail-closed admission dependency enforcement. This is intended only for development/break-glass scenarios.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Optional runtime canary</p>
+<p>The Provisioner supports an optional enforcement canary (<code>--admission-canary</code>) that performs a dry-run RBAC request which must be denied by the Provisioner RBAC policy. This provides stronger assurance that policy <em>enforcement</em> is active (not just policy presence/bindings).</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">What This Does <em>Not</em> Do</p>
+<p>This policy constrains RBAC mutations by the Provisioner. It does not replace Kubernetes RBAC review or cluster-wide policy governance.</p>
+</div>
+<h2 id="provisioner-namespace-mutation-hardening">Provisioner Namespace Mutation Hardening<a class="headerlink" href="#provisioner-namespace-mutation-hardening" title="Permanent link">&para;</a></h2>
+<p>The <code>openbao-restrict-provisioner-namespace-mutations</code> policy constrains Namespace updates performed by the Provisioner.</p>
+<p><strong>Key guarantees:</strong></p>
+<ul>
+<li>The Provisioner may not mutate system namespaces.</li>
+<li>Namespace updates are limited to enforcing the three Pod Security Standards labels:</li>
+<li><code>pod-security.kubernetes.io/enforce=restricted</code></li>
+<li><code>pod-security.kubernetes.io/audit=restricted</code></li>
+<li><code>pod-security.kubernetes.io/warn=restricted</code></li>
+<li>No other changes are allowed (spec/status/annotations/finalizers/ownerReferences must remain unchanged).</li>
+</ul>
+<h2 id="controller-rbac-hardening">Controller RBAC Hardening<a class="headerlink" href="#controller-rbac-hardening" title="Permanent link">&para;</a></h2>
+<p>The <code>openbao-restrict-controller-rbac</code> policy constrains RBAC mutations performed by the Controller identity.</p>
+<p><strong>Why this exists:</strong></p>
+<ul>
+<li>Some tenant-scoped operations require per-cluster ServiceAccounts and minimal RBAC (pod discovery and OpenBao service registration label updates).</li>
+<li>Without an admission-level guard, any bug or compromise in the controller process could use RBAC writes to broaden privileges inside tenant namespaces.</li>
+</ul>
+<p><strong>Key guarantees:</strong></p>
+<ul>
+<li>Roles created/updated by the Controller are restricted to the <code>pods</code> resource and must match a narrow allowlist-style pattern.</li>
+<li>RoleBindings created/updated by the Controller must bind a ServiceAccount to its own <code>*-role</code> in the same namespace.</li>
 </ul>
 <h2 id="configuration-ownership">Configuration Ownership<a class="headerlink" href="#configuration-ownership" title="Permanent link">&para;</a></h2>
 <p>The Operator ensures that user intent (<code>spec.configuration</code>) is respected while enforcing mandatory platform settings.</p>
