@@ -51,8 +51,7 @@ func VerifyProvisionerRBACEnforcement(ctx context.Context, clientset kubernetes.
 			return nil
 		}
 		// Some clusters may deny via the namespace restriction rule when testing in a protected namespace.
-		if strings.Contains(err.Error(), "may not manage tenant RBAC in system namespaces") ||
-			strings.Contains(err.Error(), "may not manage tenant RBAC in system namespaces") {
+		if strings.Contains(err.Error(), "may not manage tenant RBAC in system namespaces") {
 			return nil
 		}
 		return fmt.Errorf("canary Role create was denied, but not by the expected VAP message: %w", err)

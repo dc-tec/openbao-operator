@@ -54,6 +54,23 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+const (
+	admissionEnforcementFail        = "fail"
+	admissionEnforcementWarn        = "warn"
+	admissionEnforcementExpectedMsg = "expected --admission-enforcement=fail or warn"
+)
+
+func normalizeAdmissionEnforcement(in string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(in))
+	if normalized == "" {
+		normalized = admissionEnforcementFail
+	}
+	if normalized != admissionEnforcementFail && normalized != admissionEnforcementWarn {
+		return "", fmt.Errorf("invalid admission enforcement mode %q", normalized)
+	}
+	return normalized, nil
+}
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(openbaov1alpha1.AddToScheme(scheme))
@@ -87,12 +104,15 @@ func Run(args []string) {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.StringVar(&admissionEnforcement, "admission-enforcement", "fail",
-		"Admission dependency enforcement mode: fail or warn. In fail mode the operator refuses to start unless required ValidatingAdmissionPolicies are present and enforced.")
+	flag.StringVar(&admissionEnforcement, "admission-enforcement", admissionEnforcementFail,
+		"Admission dependency enforcement mode: fail or warn. "+
+			"In fail mode the operator refuses to start unless required ValidatingAdmissionPolicies are present and enforced.")
 	flag.DurationVar(&admissionStartupTimeout, "admission-startup-timeout", 60*time.Second,
 		"Maximum time to wait for required admission policies at startup when --admission-enforcement=fail.")
 	flag.BoolVar(&admissionCanary, "admission-canary", false,
-		"If set, perform an admission canary (dry-run) that must be denied by the Provisioner RBAC ValidatingAdmissionPolicy. This provides stronger assurance that enforcement is active.")
+		"If set, perform an admission canary (dry-run) that must be denied "+
+			"by the Provisioner RBAC ValidatingAdmissionPolicy. "+
+			"This provides stronger assurance that enforcement is active.")
 
 	opts := zap.Options{
 		Development: true,
@@ -100,12 +120,9 @@ func Run(args []string) {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	admissionEnforcement = strings.ToLower(strings.TrimSpace(admissionEnforcement))
-	if admissionEnforcement == "" {
-		admissionEnforcement = "fail"
-	}
-	if admissionEnforcement != "fail" && admissionEnforcement != "warn" {
-		setupLog.Error(fmt.Errorf("invalid admission enforcement mode %q", admissionEnforcement), "expected --admission-enforcement=fail or warn")
+	admissionEnforcement, err := normalizeAdmissionEnforcement(admissionEnforcement)
+	if err != nil {
+		setupLog.Error(err, admissionEnforcementExpectedMsg)
 		os.Exit(2)
 	}
 
@@ -159,11 +176,14 @@ func Run(args []string) {
 
 	// Admission policy dependency check (release-critical security boundary).
 	if admission.UnsafeAdmissionDisabled() {
-		setupLog.Info("UNSAFE MODE: admission policy enforcement disabled; skipping dependency checks and allowing provisioning without guardrails")
+		setupLog.Info(
+			"UNSAFE MODE: admission policy enforcement disabled; " +
+				"skipping dependency checks and allowing provisioning without guardrails",
+		)
 		admission.SetAdmissionDependenciesReady(true)
 	} else {
 		switch admissionEnforcement {
-		case "fail":
+		case admissionEnforcementFail:
 			setupLog.Info("Waiting for admission policy dependencies", "timeout", admissionStartupTimeout)
 			status, err := admission.WaitForDependencies(
 				context.Background(),
@@ -178,7 +198,12 @@ func Run(args []string) {
 				if err == nil {
 					err = fmt.Errorf("admission policy dependencies not ready")
 				}
-				setupLog.Error(err, "Admission policy dependencies not ready; refusing to start", "summary", status.SummaryMessage())
+				setupLog.Error(
+					err,
+					"Admission policy dependencies not ready; refusing to start",
+					"summary",
+					status.SummaryMessage(),
+				)
 				os.Exit(1)
 			}
 			setupLog.Info("Admission policy dependencies ready")

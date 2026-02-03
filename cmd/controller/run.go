@@ -67,6 +67,12 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+const (
+	admissionEnforcementFail        = "fail"
+	admissionEnforcementWarn        = "warn"
+	admissionEnforcementExpectedMsg = "expected --admission-enforcement=fail or warn"
+)
+
 func detectPlatform(cfg *rest.Config) string {
 	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
@@ -85,6 +91,17 @@ func detectPlatform(cfg *rest.Config) string {
 	}
 
 	return constants.PlatformKubernetes
+}
+
+func normalizeAdmissionEnforcement(in string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(in))
+	if normalized == "" {
+		normalized = admissionEnforcementFail
+	}
+	if normalized != admissionEnforcementFail && normalized != admissionEnforcementWarn {
+		return "", fmt.Errorf("invalid admission enforcement mode %q", normalized)
+	}
+	return normalized, nil
 }
 
 func init() {
@@ -149,8 +166,9 @@ func Run(args []string) {
 	flag.DurationVar(&clientCBOpenDuration, "openbao-client-cb-open-duration", 30*time.Second,
 		"The duration the circuit breaker remains open before testing the connection.")
 
-	flag.StringVar(&admissionEnforcement, "admission-enforcement", "fail",
-		"Admission dependency enforcement mode: fail or warn. In fail mode the operator refuses to start unless required ValidatingAdmissionPolicies are present and enforced.")
+	flag.StringVar(&admissionEnforcement, "admission-enforcement", admissionEnforcementFail,
+		"Admission dependency enforcement mode: fail or warn. "+
+			"In fail mode the operator refuses to start unless required ValidatingAdmissionPolicies are present and enforced.")
 	flag.DurationVar(&admissionStartupTimeout, "admission-startup-timeout", 60*time.Second,
 		"Maximum time to wait for required admission policies at startup when --admission-enforcement=fail.")
 
@@ -160,13 +178,12 @@ func Run(args []string) {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
+	var err error
+
 	platform = strings.ToLower(strings.TrimSpace(platform))
-	admissionEnforcement = strings.ToLower(strings.TrimSpace(admissionEnforcement))
-	if admissionEnforcement == "" {
-		admissionEnforcement = "fail"
-	}
-	if admissionEnforcement != "fail" && admissionEnforcement != "warn" {
-		setupLog.Error(fmt.Errorf("invalid admission enforcement mode %q", admissionEnforcement), "expected --admission-enforcement=fail or warn")
+	admissionEnforcement, err = normalizeAdmissionEnforcement(admissionEnforcement)
+	if err != nil {
+		setupLog.Error(err, admissionEnforcementExpectedMsg)
 		os.Exit(2)
 	}
 
@@ -390,7 +407,7 @@ func Run(args []string) {
 		admission.SetAdmissionDependenciesReady(true)
 	} else {
 		switch admissionEnforcement {
-		case "fail":
+		case admissionEnforcementFail:
 			setupLog.Info("Waiting for admission policy dependencies", "timeout", admissionStartupTimeout)
 			status, err := admission.WaitForDependencies(
 				context.Background(),
@@ -405,7 +422,12 @@ func Run(args []string) {
 				if err == nil {
 					err = fmt.Errorf("admission policy dependencies not ready")
 				}
-				setupLog.Error(err, "Admission policy dependencies not ready; refusing to start", "summary", admissionStatus.SummaryMessage())
+				setupLog.Error(
+					err,
+					"Admission policy dependencies not ready; refusing to start",
+					"summary",
+					admissionStatus.SummaryMessage(),
+				)
 				os.Exit(1)
 			}
 		default: // warn
