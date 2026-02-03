@@ -29,12 +29,22 @@ spec:
     # - Kubernetes system namespaces (kube-*)
     # - OpenShift system namespaces (openshift, openshift-*)
     # - GKE system namespaces (gke-*)
+    # - EKS/AWS namespaces (eks-*, aws-*) [best-effort; tune for your cluster]
+    # - AKS/Azure namespaces (aks-*, azure-*) [best-effort; tune for your cluster]
     #
     # This is defense-in-depth against a compromised Provisioner or a future RBAC misconfiguration.
     - expression: >-
         !variables.is_provisioner ||
         !(
-          {{- include "openbao-operator.admission.provisionerRBACSystemNamespaceClauses" . | nindent 10 }}
+          request.namespace == '{{ .Release.Namespace }}' ||
+          request.namespace.startsWith('kube-') ||
+          request.namespace == 'openshift' ||
+          request.namespace.startsWith('openshift-') ||
+          request.namespace.startsWith('gke-') ||
+          request.namespace.startsWith('eks-') ||
+          request.namespace.startsWith('aws-') ||
+          request.namespace.startsWith('aks-') ||
+          request.namespace.startsWith('azure-')
         )
       message: "The Provisioner may not manage tenant RBAC in system namespaces."
 

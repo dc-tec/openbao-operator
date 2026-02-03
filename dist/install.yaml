@@ -4946,6 +4946,190 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  name: openbao-operator-openbao-restrict-controller-rbac
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - rbac.authorization.k8s.io
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - roles
+      - rolebindings
+  validations:
+  - expression: |-
+      !variables.is_controller || request.resource.resource != "roles" || request.operation == "DELETE" || (
+
+        object != null &&
+        has(object.metadata) &&
+        has(object.metadata.name) &&
+        object.metadata.name.endsWith("-role") &&
+        has(object.rules) &&
+        object.rules != null &&
+        object.rules.size() == 1 &&
+        object.rules[0].apiGroups == [""] &&
+        object.rules[0].resources == ["pods"] &&
+        has(object.rules[0].verbs) &&
+        object.rules[0].verbs != null &&
+        (
+          (
+            variables.component_label in ["backup", "restore"] &&
+            object.rules[0].verbs.all(v, v in ["get", "list", "watch"]) &&
+            object.rules[0].verbs.exists(v, v == "get") &&
+            object.rules[0].verbs.exists(v, v == "list") &&
+            object.rules[0].verbs.exists(v, v == "watch")
+          ) ||
+          (
+            variables.component_label == "" &&
+            object.rules[0].verbs.all(v, v in ["get", "list", "watch", "patch", "update"]) &&
+            object.rules[0].verbs.exists(v, v == "get") &&
+            object.rules[0].verbs.exists(v, v == "list") &&
+            object.rules[0].verbs.exists(v, v == "watch") &&
+            object.rules[0].verbs.exists(v, v == "update")
+          )
+        )
+      )
+    message: The controller can only create/update Roles for pod discovery (and service
+      registration label updates for the OpenBao service account).
+  - expression: |-
+      !variables.is_controller || request.resource.resource != "rolebindings" || request.operation == "DELETE" || (
+
+        object != null &&
+        has(object.metadata) &&
+        has(object.metadata.name) &&
+        object.metadata.name.endsWith("-rolebinding") &&
+        has(object.roleRef) &&
+        object.roleRef.apiGroup == "rbac.authorization.k8s.io" &&
+        object.roleRef.kind == "Role" &&
+        has(object.roleRef.name) &&
+        has(object.subjects) &&
+        object.subjects != null &&
+        object.subjects.size() == 1 &&
+        object.subjects[0].kind == "ServiceAccount" &&
+        (!has(object.subjects[0].apiGroup) || object.subjects[0].apiGroup == "") &&
+        object.subjects[0].namespace == request.namespace &&
+        object.metadata.name == object.subjects[0].name + "-rolebinding" &&
+        object.roleRef.name == object.subjects[0].name + "-role"
+      )
+    message: The controller can only create/update RoleBindings that bind a ServiceAccount
+      to its own pod-discovery Role.
+  - expression: |-
+      !variables.is_controller || request.operation != "DELETE" || request.resource.resource != "roles" || (
+
+        oldObject != null &&
+        has(oldObject.metadata) &&
+        has(oldObject.metadata.name) &&
+        oldObject.metadata.name.endsWith("-role")
+      )
+    message: The controller can only delete Roles for pod discovery.
+  - expression: |-
+      !variables.is_controller || request.operation != "DELETE" || request.resource.resource != "rolebindings" || (
+
+        oldObject != null &&
+        has(oldObject.metadata) &&
+        has(oldObject.metadata.name) &&
+        oldObject.metadata.name.endsWith("-rolebinding")
+      )
+    message: The controller can only delete RoleBindings for pod discovery.
+  variables:
+  - expression: |-
+      request.userInfo.username in [
+
+        "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
+      ]
+    name: is_controller
+  - expression: |-
+      request.operation == "DELETE" ?
+
+        (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels) && ("openbao.org/component" in oldObject.metadata.labels) ?
+          oldObject.metadata.labels["openbao.org/component"] : "") :
+        (object != null && has(object.metadata) && has(object.metadata.labels) && ("openbao.org/component" in object.metadata.labels) ?
+          object.metadata.labels["openbao.org/component"] :
+          (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels) && ("openbao.org/component" in oldObject.metadata.labels) ?
+            oldObject.metadata.labels["openbao.org/component"] : ""))
+    name: component_label
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - UPDATE
+      resources:
+      - namespaces
+  validations:
+  - expression: '!variables.is_provisioner || !variables.is_system_namespace'
+    message: The Provisioner may not mutate system namespaces.
+  - expression: |-
+      !variables.is_provisioner || request.operation != "UPDATE" || request.resource.resource != "namespaces" || (
+
+        oldObject != null &&
+        object != null &&
+        object.spec == oldObject.spec &&
+        object.status == oldObject.status &&
+        (has(object.metadata.annotations) == has(oldObject.metadata.annotations) &&
+          (!has(object.metadata.annotations) || object.metadata.annotations == oldObject.metadata.annotations)) &&
+        (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+          (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+        (has(object.metadata.finalizers) == has(oldObject.metadata.finalizers) &&
+          (!has(object.metadata.finalizers) || object.metadata.finalizers == oldObject.metadata.finalizers)) &&
+        ("pod-security.kubernetes.io/enforce" in variables.new_labels) &&
+        ("pod-security.kubernetes.io/audit" in variables.new_labels) &&
+        ("pod-security.kubernetes.io/warn" in variables.new_labels) &&
+        variables.new_labels["pod-security.kubernetes.io/enforce"] == "restricted" &&
+        variables.new_labels["pod-security.kubernetes.io/audit"] == "restricted" &&
+        variables.new_labels["pod-security.kubernetes.io/warn"] == "restricted" &&
+        (
+          variables.new_labels.all(k, v,
+            k in [
+              "pod-security.kubernetes.io/enforce",
+              "pod-security.kubernetes.io/audit",
+              "pod-security.kubernetes.io/warn"
+            ] || (k in variables.old_labels && variables.old_labels[k] == v)) &&
+          variables.old_labels.all(k, v,
+            k in [
+              "pod-security.kubernetes.io/enforce",
+              "pod-security.kubernetes.io/audit",
+              "pod-security.kubernetes.io/warn"
+            ] || (k in variables.new_labels && variables.new_labels[k] == v))
+        )
+      )
+    message: The Provisioner may only enforce Pod Security Standards labels (restricted)
+      on Namespaces.
+  variables:
+  - expression: |-
+      request.userInfo.username in [
+
+        "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner"
+      ]
+    name: is_provisioner
+  - expression: request.name == "openbao-operator-system" || request.name.startsWith("kube-")
+      || request.name == "openshift" || request.name.startsWith("openshift-") || request.name.startsWith("gke-")
+    name: is_system_namespace
+  - expression: '(object != null && has(object.metadata) && has(object.metadata.labels))
+      ? object.metadata.labels : {}'
+    name: new_labels
+  - expression: '(oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels))
+      ? oldObject.metadata.labels : {}'
+    name: old_labels
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
   name: openbao-operator-openbao-restrict-provisioner-rbac
 spec:
   failurePolicy: Fail
@@ -4964,13 +5148,18 @@ spec:
       - rolebindings
   validations:
   - expression: |-
-      !variables.is_provisioner || !(request.namespace in [
+      !variables.is_provisioner || !(
 
-        'openbao-operator-system',
-        'kube-system',
-        'kube-public',
-        'kube-node-lease'
-      ])
+        request.namespace == 'openbao-operator-system' ||
+        request.namespace.startsWith('kube-') ||
+        request.namespace == 'openshift' ||
+        request.namespace.startsWith('openshift-') ||
+        request.namespace.startsWith('gke-') ||
+        request.namespace.startsWith('eks-') ||
+        request.namespace.startsWith('aws-') ||
+        request.namespace.startsWith('aks-') ||
+        request.namespace.startsWith('azure-')
+      )
     message: The Provisioner may not manage tenant RBAC in system namespaces.
   - expression: |-
       !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'roles' || object.metadata.name in [
@@ -4981,6 +5170,146 @@ spec:
       ]
     message: The Provisioner can only create Roles for the operator tenant template
       (tenant + secrets allowlists).
+  - expression: |-
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'roles' || object.metadata.name != 'openbao-operator-tenant-role' || (
+
+        has(object.rules) &&
+        object.rules != null &&
+        !object.rules.exists(rule,
+          has(rule.nonResourceURLs) &&
+          rule.nonResourceURLs != null &&
+          rule.nonResourceURLs.size() > 0
+        ) &&
+        object.rules.all(rule,
+          (
+            # openbao.org (OpenBaoCluster + OpenBaoRestore)
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'openbao.org' &&
+            rule.resources != null &&
+            (
+              (rule.resources.size() == 3 && rule.resources.all(r, r in ['openbaoclusters', 'openbaoclusters/status', 'openbaoclusters/finalizers'])) ||
+              (rule.resources.size() == 3 && rule.resources.all(r, r in ['openbaorestores', 'openbaorestores/status', 'openbaorestores/finalizers']))
+            ) &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            # apps (StatefulSet + Deployment)
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'apps' &&
+            rule.resources != null &&
+            rule.resources.size() > 0 &&
+            rule.resources.all(r, r in ['statefulsets', 'deployments']) &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            # core (workload + infra)
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == '' &&
+            rule.resources != null &&
+            (
+              (
+                rule.resources.size() > 0 &&
+                rule.resources.all(r, r in ['services', 'configmaps', 'serviceaccounts', 'resourcequotas', 'limitranges', 'persistentvolumeclaims']) &&
+                rule.verbs != null &&
+                rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+              ) ||
+              (
+                rule.resources.size() == 1 &&
+                rule.resources[0] == 'pods' &&
+                rule.verbs != null &&
+                rule.verbs.all(v, v in ['delete', 'get', 'list', 'patch', 'update', 'watch'])
+              ) ||
+              (
+                rule.resources.size() == 1 &&
+                rule.resources[0] == 'endpoints' &&
+                rule.verbs != null &&
+                rule.verbs.all(v, v in ['get', 'list', 'watch'])
+              ) ||
+              (
+                rule.resources.size() == 1 &&
+                rule.resources[0] == 'events' &&
+                rule.verbs != null &&
+                rule.verbs.all(v, v in ['create', 'patch'])
+              )
+            )
+          ) ||
+          (
+            # events.k8s.io (Events)
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'events.k8s.io' &&
+            rule.resources != null &&
+            rule.resources.size() == 1 &&
+            rule.resources[0] == 'events' &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'patch'])
+          ) ||
+          (
+            # discovery.k8s.io (EndpointSlices)
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'discovery.k8s.io' &&
+            rule.resources != null &&
+            rule.resources.size() == 1 &&
+            rule.resources[0] == 'endpointslices' &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['get', 'list', 'watch'])
+          ) ||
+          (
+            # batch (Jobs)
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'batch' &&
+            rule.resources != null &&
+            rule.resources.size() == 1 &&
+            rule.resources[0] == 'jobs' &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            # policy (PodDisruptionBudget)
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'policy' &&
+            rule.resources != null &&
+            rule.resources.size() == 1 &&
+            rule.resources[0] == 'poddisruptionbudgets' &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            # networking.k8s.io (Ingress + NetworkPolicy)
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'networking.k8s.io' &&
+            rule.resources != null &&
+            rule.resources.size() > 0 &&
+            rule.resources.all(r, r in ['ingresses', 'networkpolicies']) &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            # gateway.networking.k8s.io (Gateway API)
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'gateway.networking.k8s.io' &&
+            rule.resources != null &&
+            rule.resources.size() > 0 &&
+            rule.resources.all(r, r in ['httproutes', 'tlsroutes', 'backendtlspolicies']) &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            # rbac.authorization.k8s.io (namespaced RBAC only)
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'rbac.authorization.k8s.io' &&
+            rule.resources != null &&
+            rule.resources.size() > 0 &&
+            rule.resources.all(r, r in ['roles', 'rolebindings']) &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          )
+        )
+      )
+    message: The Provisioner can only create the tenant Role with an allowlisted set
+      of API groups, resources, and verbs (no pods/exec, serviceaccounts/token, nonResourceURLs,
+      or other unexpected permissions).
   - expression: |-
       !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'rolebindings' || object.metadata.name in [
 
@@ -5350,6 +5679,47 @@ metadata:
   name: openbao-operator-lock-managed-resource-mutations
 spec:
   policyName: openbao-operator-lock-managed-resource-mutations
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-openbao-restrict-controller-rbac-binding
+spec:
+  matchResources:
+    resourceRules:
+    - apiGroups:
+      - rbac.authorization.k8s.io
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - roles
+      - rolebindings
+  policyName: openbao-operator-openbao-restrict-controller-rbac
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-openbao-restrict-provisioner-namespace-mutations-binding
+spec:
+  matchResources:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - UPDATE
+      resources:
+      - namespaces
+  policyName: openbao-operator-openbao-restrict-provisioner-namespace-mutations
   validationActions:
   - Deny
 ---

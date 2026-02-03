@@ -120,6 +120,7 @@ spec:
           oldObject.metadata.name.endsWith("-rolebinding")
         )
       message: "The controller can only delete RoleBindings for pod discovery."
+
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -140,5 +141,5 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["roles", "rolebindings"]
-{{- end }}
 
+{{- end }}

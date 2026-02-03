@@ -23,7 +23,11 @@ spec:
     - name: is_system_namespace
       # Use request.name for cluster-scoped Namespace objects.
       expression: >-
-        {{- include "openbao-operator.admission.provisionerSystemNamespaceNameClauses" . | nindent 8 }}
+        request.name == "{{ .Release.Namespace }}" ||
+        request.name.startsWith("kube-") ||
+        request.name == "openshift" ||
+        request.name.startsWith("openshift-") ||
+        request.name.startsWith("gke-")
     - name: new_labels
       expression: >-
         (object != null && has(object.metadata) && has(object.metadata.labels)) ? object.metadata.labels : {}
@@ -75,6 +79,7 @@ spec:
           )
         )
       message: "The Provisioner may only enforce Pod Security Standards labels (restricted) on Namespaces."
+
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -95,5 +100,5 @@ spec:
         apiVersions: ["v1"]
         operations: ["UPDATE"]
         resources: ["namespaces"]
-{{- end }}
 
+{{- end }}
