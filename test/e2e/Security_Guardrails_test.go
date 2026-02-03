@@ -272,6 +272,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			Expect(err.Error()).To(SatisfyAny(
 				ContainSubstring("wildcard permissions"),
 				ContainSubstring("wildcard apiGroups or resources"),
+				ContainSubstring("allowlisted set of API groups, resources, and verbs"),
 			))
 
 			By("denying updates that attempt to grant pods/exec on the tenant Role")
