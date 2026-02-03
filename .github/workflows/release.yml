@@ -85,7 +85,7 @@ jobs:
     secrets: inherit
 
   security-govulncheck:
-    name: Security Gate (govulncheck)
+    name: Security Gate (vulncheck)
     runs-on: *runner
     needs: prepare
     steps:
@@ -108,10 +108,10 @@ jobs:
           path: bin/
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
 
-      - name: Run govulncheck
+      - name: Run vulncheck
         env:
           GOFLAGS: -mod=readonly
-        run: make govulncheck
+        run: make vulncheck
 
   security-images:
     name: Security Gate (Trivy image ${{ matrix.image_name }})

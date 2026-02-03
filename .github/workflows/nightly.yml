@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   security:
-    name: Security (govulncheck + Trivy FS)
+    name: Security (vulncheck + Trivy FS)
     runs-on: &runner ubuntu-24.04
     steps:
       - name: Checkout
@@ -27,13 +27,17 @@ jobs:
           check-latest: true
           cache: true
 
-      - name: Run govulncheck
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: bin/
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+
+      - name: Run vulncheck
         env:
           GOFLAGS: -mod=readonly
-        run: |
-          set -euo pipefail
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-          govulncheck -test ./...
+        run: make vulncheck
 
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1

@@ -56,7 +56,7 @@ jobs:
           fi
 
   security:
-    name: Security (govulncheck + Trivy FS)
+    name: Security (vulncheck + Trivy FS)
     runs-on: *runner
     steps:
       - name: Checkout
@@ -76,10 +76,10 @@ jobs:
           path: bin/
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
 
-      - name: Run govulncheck
+      - name: Run vulncheck
         env:
           GOFLAGS: -mod=readonly
-        run: make govulncheck
+        run: make vulncheck
 
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
