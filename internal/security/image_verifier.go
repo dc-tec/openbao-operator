@@ -228,6 +228,15 @@ func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef stri
 		}
 		co.SigVerifier = verifier
 		co.IgnoreTlog = config.IgnoreTlog
+		if !config.IgnoreTlog {
+			// If Rekor verification is enabled, provide trusted root material explicitly
+			// so Cosign does not need to fetch/update roots via TUF at runtime.
+			trustedRoot, err := v.loadTrustedRoot(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to load trusted root material for transparency log verification: %w", err)
+			}
+			co.TrustedMaterial = trustedRoot
+		}
 	} else {
 		// Mode 2: Keyless / Identity (Official OpenBao Images)
 		// Load trusted root material (Fulcio root certificates, Rekor public keys, etc.)
