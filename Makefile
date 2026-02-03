@@ -134,23 +134,8 @@ verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
 		exit 1; \
 	}
 
-.PHONY: rbac-sync
-rbac-sync: ## Sync the provisioner delegate RBAC template from Go sources.
-	@go run ./hack/gen-rbac
-
-.PHONY: verify-rbac-sync
-verify-rbac-sync: ## Verify provisioner delegate RBAC template is in sync (does not modify tracked files).
-	@go run ./hack/gen-rbac
-	@{ \
-		git diff --exit-code -- config/rbac/provisioner_delegate_clusterrole.yaml; \
-	} || { \
-		echo "RBAC delegate template is out of date. Run 'make rbac-sync' and commit the result."; \
-		git --no-pager diff -- config/rbac/provisioner_delegate_clusterrole.yaml; \
-		exit 1; \
-	}
-
 .PHONY: verify-generated
-verify-generated: manifests generate verify-rbac-sync ## Verify generated artifacts are up-to-date (does not modify tracked files).
+verify-generated: manifests generate ## Verify generated artifacts are up-to-date (does not modify tracked files).
 	@{ \
 		git diff --exit-code -- api/v1alpha1 config/crd/bases; \
 	} || { \
@@ -735,11 +720,8 @@ security-scan: ## Run Trivy security scans (filesystem and container image)
 		--ignorefile .trivyignore \
 		--skip-version-check \
 		--helm-kube-version 1.34.0 \
-		--skip-files config/rbac/provisioner_delegate_clusterrole.yaml \
-		--skip-files config/rbac/provisioner_minimal_role.yaml \
 		--skip-files config/rbac/single_tenant_clusterrole.yaml \
 		--skip-files dist/install.yaml \
-		--skip-files charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml \
 		--skip-dirs test/manifests \
 		.
 	trivy image \

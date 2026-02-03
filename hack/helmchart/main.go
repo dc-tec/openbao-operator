@@ -171,8 +171,8 @@ var policyFileMapping = map[string]string{
 	"lock-managed-resource-mutations-binding.yaml":       "lock-managed-resources.yaml", // merged
 	"lock-controller-statefulset-mutations.yaml":         "validating-policies.yaml",
 	"lock-controller-statefulset-mutations-binding.yaml": "validating-policies.yaml", // merged
-	"restrict-provisioner-delegate.yaml":                 "provisioner-delegate.yaml",
-	"restrict-provisioner-delegate-binding.yaml":         "provisioner-delegate.yaml", // merged
+	"restrict-provisioner-rbac.yaml":                     "provisioner-rbac.yaml",
+	"restrict-provisioner-rbac-binding.yaml":             "provisioner-rbac.yaml", // merged
 	"validate-openbaocluster.yaml":                       "validate-openbaocluster.yaml",
 	"validate-openbaocluster-binding.yaml":               "validate-openbaocluster.yaml", // merged
 	"validate-openbaorestore.yaml":                       "validate-openbaorestore.yaml",
@@ -275,8 +275,9 @@ func transformPolicyToHelm(content string) string {
 		return fmt.Sprintf("%s{{ include \"openbao-operator.fullname\" . }}-%s%s", prefix, name, suffix)
 	})
 
-	// Replace policyName references - strip existing openbao-operator- prefix if present
-	policyNamePattern := regexp.MustCompile(`(policyName:\s*)(openbao-operator-)?(lock-|restrict-|validate-)([\w-]+)`)
+	// Replace policyName references - strip existing openbao-operator- prefix if present.
+	// Also supports "openbao-"-prefixed policy names (e.g. openbao-restrict-provisioner-rbac).
+	policyNamePattern := regexp.MustCompile(`(policyName:\s*)(openbao-operator-)?((?:openbao-)?(?:lock-|restrict-|validate-))([\w-]+)`)
 	content = policyNamePattern.ReplaceAllStringFunc(content, func(match string) string {
 		parts := policyNamePattern.FindStringSubmatch(match)
 		if len(parts) < 5 {
@@ -284,7 +285,7 @@ func transformPolicyToHelm(content string) string {
 		}
 		prefix := parts[1]
 		// parts[2] is the optional "openbao-operator-" which we strip
-		policyPrefix := parts[3] // lock-, restrict-, validate-
+		policyPrefix := parts[3] // (openbao-)?(lock-|restrict-|validate-)
 		policySuffix := parts[4]
 		return fmt.Sprintf("%s{{ include \"openbao-operator.fullname\" . }}-%s%s", prefix, policyPrefix, policySuffix)
 	})
@@ -297,6 +298,14 @@ func transformPolicyToHelm(content string) string {
 	content = strings.ReplaceAll(content,
 		`"system:serviceaccount:{{ .Release.Namespace }}:openbao-operator-controller"`,
 		`"system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.controllerServiceAccountName" . }}"`)
+	content = strings.ReplaceAll(content,
+		`"system:serviceaccount:{{ .Release.Namespace }}:openbao-operator-provisioner"`,
+		`"system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.provisionerServiceAccountName" . }}"`)
+
+	// Replace controller ServiceAccount name references in RoleBinding subject validation expressions.
+	content = strings.ReplaceAll(content,
+		`'openbao-operator-controller'`,
+		`'{{ include "openbao-operator.controllerServiceAccountName" . }}'`)
 
 	return content
 }
@@ -387,15 +396,7 @@ func syncProvisionerRBAC(opts options) error {
 	provisionerRole = transformRBACToHelm(provisionerRole, "provisioner", false)
 	parts = append(parts, provisionerRole)
 
-	// 2. Tenant template ClusterRole (delegate permissions)
-	tenantTemplate, err := readFile(filepath.Join(opts.rbacInputDir, "provisioner_delegate_clusterrole.yaml"))
-	if err != nil {
-		return fmt.Errorf("read provisioner_delegate_clusterrole.yaml: %w", err)
-	}
-	tenantTemplate = transformRBACToHelm(tenantTemplate, "tenant-template", true)
-	parts = append(parts, tenantTemplate)
-
-	// 3. Provisioner ClusterRoleBindings
+	// 2. Provisioner ClusterRoleBindings
 	provisionerMetricsBinding := generateBinding(
 		"provisioner-metrics-auth",
 		"metrics-auth",
@@ -411,10 +412,6 @@ func syncProvisionerRBAC(opts options) error {
 		"provisioner",
 	)
 	parts = append(parts, provisionerBinding)
-
-	// 4. Tenant delegate binding
-	delegateBinding := generateDelegateBinding()
-	parts = append(parts, delegateBinding)
 
 	// Wrap in multi-tenant conditional
 	output := fmt.Sprintf("{{- if eq .Values.tenancy.mode \"multi\" }}\n%s{{- end }}\n", strings.Join(parts, "---\n"))
@@ -618,7 +615,11 @@ func transformRBACToHelm(content, nameSuffix string, hasGatewayAPI bool) string 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "#") {
-			continue // Skip comments
+			// Preserve Trivy inline ignore directives so Helm templates carry them through.
+			if strings.Contains(trimmed, "trivy:ignore:") {
+				filtered = append(filtered, line)
+			}
+			continue // Skip other comments
 		}
 		filtered = append(filtered, line)
 	}
@@ -637,11 +638,6 @@ func transformRBACToHelm(content, nameSuffix string, hasGatewayAPI bool) string 
 	// Replace namespace references
 	content = strings.ReplaceAll(content, "openbao-operator-system", "{{ .Release.Namespace }}")
 
-	// Replace delegate SA reference
-	content = strings.ReplaceAll(content,
-		"openbao-operator-provisioner-delegate",
-		`{{ include "openbao-operator.provisionerDelegateServiceAccountName" . }}`)
-
 	// Add Helm labels after metadata.name
 	content = addHelmLabelsToRBAC(content)
 
@@ -655,50 +651,75 @@ func transformRBACToHelm(content, nameSuffix string, hasGatewayAPI bool) string 
 
 // addHelmLabelsToRBAC adds Helm labels to RBAC resources.
 func addHelmLabelsToRBAC(content string) string {
-	// Find metadata.name and add labels after it
+	// Ensure metadata.labels contains Helm labels (and keep any existing labels like component hints).
 	lines := strings.Split(content, "\n")
-	result := make([]string, 0, len(lines)+4) // Extra space for labels
+	result := make([]string, 0, len(lines)+4) // Extra space for Helm labels
 	inMetadata := false
-	labelsAdded := false
+	labelsSeen := false
+	labelsInjected := false
 
-	for i, line := range lines {
-		result = append(result, line)
+	metadataHasLabelsAhead := func(start int) bool {
+		for j := start; j < len(lines); j++ {
+			t := strings.TrimSpace(lines[j])
+			if t == rulesMarker || t == specMarker || t == "roleRef:" || t == "subjects:" {
+				return false
+			}
+			if t == "labels:" {
+				return true
+			}
+		}
+		return false
+	}
+
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
 
 		if strings.TrimSpace(line) == metadataMarker {
+			result = append(result, line)
 			inMetadata = true
-			labelsAdded = false
+			labelsSeen = false
+			labelsInjected = false
 			continue
 		}
 
-		if inMetadata && !labelsAdded && strings.HasPrefix(strings.TrimSpace(line), "name:") {
+		if !inMetadata {
+			result = append(result, line)
+			continue
+		}
+
+		trimmed := strings.TrimSpace(line)
+
+		// If there's an existing labels block, inject Helm labels into it as the first entry.
+		if trimmed == "labels:" {
+			labelsSeen = true
+			result = append(result, line)
+
+			childIndent := leadingWhitespace(line) + "  "
+			result = append(result, childIndent+`{{- include "openbao-operator.labels" . | nindent 4 }}`)
+			labelsInjected = true
+			continue
+		}
+
+		// If there's no labels block, add one immediately after metadata.name.
+		if strings.HasPrefix(trimmed, "name:") && !labelsSeen && !labelsInjected {
+			// If a labels block exists later in metadata, don't add a new one here.
+			if metadataHasLabelsAhead(i + 1) {
+				result = append(result, line)
+				continue
+			}
+			result = append(result, line)
 			indent := leadingWhitespace(line)
 			result = append(result, indent+"labels:")
 			result = append(result, indent+`  {{- include "openbao-operator.labels" . | nindent 4 }}`)
-			labelsAdded = true
-
-			// Check if next line starts a new section
-			if i+1 < len(lines) {
-				nextTrimmed := strings.TrimSpace(lines[i+1])
-				if nextTrimmed == rulesMarker || nextTrimmed == specMarker || strings.HasPrefix(nextTrimmed, "kind:") {
-					inMetadata = false
-				}
-			}
-		}
-
-		// Handle existing labels block - replace it
-		if inMetadata && strings.TrimSpace(line) == "labels:" && !labelsAdded {
-			// Skip the old labels block
-			for j := i + 1; j < len(lines); j++ {
-				nextLine := lines[j]
-				if !strings.HasPrefix(nextLine, "    ") && strings.TrimSpace(nextLine) != "" {
-					break
-				}
-			}
+			labelsInjected = true
+			continue
 		}
 
 		if inMetadata && (strings.TrimSpace(line) == rulesMarker || strings.TrimSpace(line) == specMarker) {
 			inMetadata = false
 		}
+
+		result = append(result, line)
 	}
 
 	return strings.Join(result, "\n")
@@ -790,24 +811,4 @@ subjects:
     name: {{ include "openbao-operator.%s" . }}
     namespace: {{ .Release.Namespace }}
 `, name, component, roleName, saHelper)
-}
-
-// generateDelegateBinding generates the tenant delegate ClusterRoleBinding.
-func generateDelegateBinding() string {
-	return `apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: {{ include "openbao-operator.fullname" . }}-tenant-delegate
-  labels:
-    {{- include "openbao-operator.labels" . | nindent 4 }}
-    app.kubernetes.io/component: provisioner
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ include "openbao-operator.fullname" . }}-tenant-template
-subjects:
-  - kind: ServiceAccount
-    name: {{ include "openbao-operator.provisionerDelegateServiceAccountName" . }}
-    namespace: {{ .Release.Namespace }}
-`
 }

@@ -21,7 +21,6 @@ See `docs/contributing/standards/generated-artifacts.md` for the canonical guide
 make verify-generated   # CI-equivalent check, no file modifications expected
 make manifests generate # CRDs + deepcopy (controller-gen)
 make helm-sync          # charts/openbao-operator (CRDs + install.yaml.tpl)
-make rbac-sync          # config/rbac/provisioner_delegate_clusterrole.yaml
 make test-update-golden # internal/config/testdata golden HCL
 ```
 
