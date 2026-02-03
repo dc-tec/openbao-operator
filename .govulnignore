@@ -1,0 +1,9 @@
+# Govulncheck ignore list: one vulnerability ID per line (e.g. GO-2026-4377).
+# Blank lines and lines starting with # are skipped.
+# See SECURITY.md "Known dependency caveats" for context on these entries.
+
+# go-tuf v0 (transitive via cosign/sigstore); no fix available upstream.
+# Our production code pins Sigstore trusted roots (trusted_root.json / ConfigMap) and does not fetch/update roots via TUF at runtime.
+GO-2026-4377
+GO-2026-4349
+GO-2026-4348

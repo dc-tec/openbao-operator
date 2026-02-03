@@ -478,8 +478,8 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	"$(GOLANGCI_LINT)" config verify
 
 .PHONY: vulncheck
-vulncheck: govulncheck ## Run govulncheck to scan for known vulnerabilities (production code only).
-	"$(GOVULNCHECK)" ./...
+vulncheck: govulncheck ## Run govulncheck to scan for known vulnerabilities (production code only). Findings listed in .govulnignore are ignored. Set VULNCHECK_SHOW_IGNORED=true to print traces even if all findings are ignored.
+	@go run ./hack/govulncheck_wrapper/ -govulncheck "$(GOVULNCHECK)" -ignore .govulnignore -show-ignored="$${VULNCHECK_SHOW_IGNORED:-false}" ./...
 
 ##@ Build
 
