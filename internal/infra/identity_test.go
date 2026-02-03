@@ -253,6 +253,71 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 	}
 }
 
+func TestEnsureRBAC_IncludesBlueGreenPodResourceNames(t *testing.T) {
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-rbac-bluegreen", ns)
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+		Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+	}
+	cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+		BlueRevision:  "rev-blue",
+		GreenRevision: "rev-green",
+	}
+	createClusterCRForTest(t, k8sClient, cluster)
+	createTLSSecretForTest(t, k8sClient, cluster)
+
+	ctx := context.Background()
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	role := &rbacv1.Role{}
+	roleName := serviceAccountName(cluster) + "-role"
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      roleName,
+	}, role)
+	if err != nil {
+		t.Fatalf("expected Role to exist: %v", err)
+	}
+
+	var mutationRule *rbacv1.PolicyRule
+	for i := range role.Rules {
+		rule := &role.Rules[i]
+		if len(rule.APIGroups) > 0 && rule.APIGroups[0] == "" &&
+			len(rule.Resources) > 0 && rule.Resources[0] == "pods" &&
+			contains(rule.Verbs, "patch") {
+			mutationRule = rule
+			break
+		}
+	}
+	if mutationRule == nil {
+		t.Fatalf("expected pod mutation rule to exist")
+	}
+
+	for _, expected := range []string{
+		cluster.Name + "-rev-blue-0",
+		cluster.Name + "-rev-green-0",
+	} {
+		if !contains(mutationRule.ResourceNames, expected) {
+			t.Fatalf("expected mutation rule to include %q, got %v", expected, mutationRule.ResourceNames)
+		}
+	}
+}
+
+func contains(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
+}
+
 func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
 	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
