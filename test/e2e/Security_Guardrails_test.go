@@ -1243,11 +1243,16 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				_ = admin.Delete(ctx, otherPod)
 			})
 
-			By("waiting for the first OpenBao pod to exist")
-			openBaoPodName := clusterName + "-0"
+			By("waiting for an OpenBao pod to exist")
+			openBaoPodName := ""
 			Eventually(func(g Gomega) {
-				pod := &corev1.Pod{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: openBaoPodName, Namespace: tenantNamespace}, pod)).To(Succeed())
+				podList := &corev1.PodList{}
+				g.Expect(admin.List(ctx, podList,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{"openbao.org/cluster": clusterName},
+				)).To(Succeed())
+				g.Expect(podList.Items).NotTo(BeEmpty())
+				openBaoPodName = podList.Items[0].Name
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			patch := []byte(`{"metadata":{"labels":{"openbao-active":"true"}}}`)
