@@ -4972,14 +4972,14 @@ spec:
         object.metadata.name.endsWith("-role") &&
         has(object.rules) &&
         object.rules != null &&
-        object.rules.size() == 1 &&
-        object.rules[0].apiGroups == [""] &&
-        object.rules[0].resources == ["pods"] &&
-        has(object.rules[0].verbs) &&
-        object.rules[0].verbs != null &&
         (
           (
             variables.component_label in ["backup", "restore"] &&
+            object.rules.size() == 1 &&
+            object.rules[0].apiGroups == [""] &&
+            object.rules[0].resources == ["pods"] &&
+            has(object.rules[0].verbs) &&
+            object.rules[0].verbs != null &&
             object.rules[0].verbs.all(v, v in ["get", "list", "watch"]) &&
             object.rules[0].verbs.exists(v, v == "get") &&
             object.rules[0].verbs.exists(v, v == "list") &&
@@ -4987,11 +4987,22 @@ spec:
           ) ||
           (
             variables.component_label == "" &&
-            object.rules[0].verbs.all(v, v in ["get", "list", "watch", "patch", "update"]) &&
-            object.rules[0].verbs.exists(v, v == "get") &&
-            object.rules[0].verbs.exists(v, v == "list") &&
-            object.rules[0].verbs.exists(v, v == "watch") &&
-            object.rules[0].verbs.exists(v, v == "update")
+            object.rules.size() == 2 &&
+            object.rules.all(r, r.apiGroups == [""] && r.resources == ["pods"] && has(r.verbs) && r.verbs != null) &&
+            object.rules.exists(r,
+              r.verbs.all(v, v in ["get", "list", "watch"]) &&
+              r.verbs.exists(v, v == "get") &&
+              r.verbs.exists(v, v == "list") &&
+              r.verbs.exists(v, v == "watch") &&
+              (!has(r.resourceNames) || r.resourceNames == null || r.resourceNames.size() == 0)
+            ) &&
+            object.rules.exists(r,
+              r.verbs.all(v, v in ["patch", "update"]) &&
+              (r.verbs.exists(v, v == "patch") || r.verbs.exists(v, v == "update")) &&
+              has(r.resourceNames) &&
+              r.resourceNames != null &&
+              r.resourceNames.size() > 0
+            )
           )
         )
       )
@@ -5182,7 +5193,6 @@ spec:
         ) &&
         object.rules.all(rule,
           (
-            # openbao.org (OpenBaoCluster + OpenBaoRestore)
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'openbao.org' &&
             rule.resources != null &&
@@ -5194,7 +5204,6 @@ spec:
             rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
           ) ||
           (
-            # apps (StatefulSet + Deployment)
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'apps' &&
             rule.resources != null &&
@@ -5204,7 +5213,6 @@ spec:
             rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
           ) ||
           (
-            # core (workload + infra)
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == '' &&
             rule.resources != null &&
@@ -5236,7 +5244,6 @@ spec:
             )
           ) ||
           (
-            # events.k8s.io (Events)
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'events.k8s.io' &&
             rule.resources != null &&
@@ -5246,7 +5253,6 @@ spec:
             rule.verbs.all(v, v in ['create', 'patch'])
           ) ||
           (
-            # discovery.k8s.io (EndpointSlices)
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'discovery.k8s.io' &&
             rule.resources != null &&
@@ -5256,7 +5262,6 @@ spec:
             rule.verbs.all(v, v in ['get', 'list', 'watch'])
           ) ||
           (
-            # batch (Jobs)
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'batch' &&
             rule.resources != null &&
@@ -5266,7 +5271,6 @@ spec:
             rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
           ) ||
           (
-            # policy (PodDisruptionBudget)
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'policy' &&
             rule.resources != null &&
@@ -5276,7 +5280,6 @@ spec:
             rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
           ) ||
           (
-            # networking.k8s.io (Ingress + NetworkPolicy)
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'networking.k8s.io' &&
             rule.resources != null &&
@@ -5286,7 +5289,6 @@ spec:
             rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
           ) ||
           (
-            # gateway.networking.k8s.io (Gateway API)
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'gateway.networking.k8s.io' &&
             rule.resources != null &&
@@ -5296,7 +5298,6 @@ spec:
             rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
           ) ||
           (
-            # rbac.authorization.k8s.io (namespaced RBAC only)
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'rbac.authorization.k8s.io' &&
             rule.resources != null &&
