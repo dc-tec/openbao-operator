@@ -125,8 +125,8 @@ func TestDistInstallOperatorDeployments_AreOpenShiftAdmittable(t *testing.T) {
 	objs := parseYAMLFile(t, path)
 
 	want := map[string]bool{
-		"openbao-operator-openbao-operator-controller":  false,
-		"openbao-operator-openbao-operator-provisioner": false,
+		"openbao-operator-controller":  false,
+		"openbao-operator-provisioner": false,
 	}
 
 	for _, u := range objs {
