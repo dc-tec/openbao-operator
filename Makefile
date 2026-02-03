@@ -712,18 +712,20 @@ security-scan: ## Run Trivy security scans (filesystem and container image)
 	# - Use "misconfig" (not deprecated "config")
 	# - Explicitly load ignore rules from .trivyignore
 	# - Render Helm charts against a modern Kubernetes version
-	trivy fs \
-		--scanners vuln,misconfig \
-		--severity HIGH,CRITICAL \
-		--ignore-unfixed \
-		--exit-code 1 \
-		--ignorefile .trivyignore \
-		--skip-version-check \
-		--helm-kube-version 1.34.0 \
-		--skip-files config/rbac/single_tenant_clusterrole.yaml \
-		--skip-files dist/install.yaml \
-		--skip-dirs test/manifests \
-		.
+		trivy fs \
+			--scanners vuln,misconfig \
+			--severity HIGH,CRITICAL \
+			--ignore-unfixed \
+			--exit-code 1 \
+			--ignorefile .trivyignore \
+			--skip-version-check \
+			--helm-kube-version 1.34.0 \
+			--skip-files config/rbac/provisioner_minimal_role.yaml \
+			--skip-files charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml \
+			--skip-files config/rbac/single_tenant_clusterrole.yaml \
+			--skip-files dist/install.yaml \
+			--skip-dirs test/manifests \
+			.
 	trivy image \
 		--severity HIGH,CRITICAL \
 		--ignore-unfixed \
