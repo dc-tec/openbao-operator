@@ -404,7 +404,8 @@ jobs:
         id: filter
         run: |
           # Default: Skip slow, nightly, and openshift tests
-          FILTER="!slow && !nightly && !openshift"
+          # Also skip pentest-labeled tests unless explicitly requested via PR labels.
+          FILTER="!slow && !nightly && !openshift && !pentest"
           
           # Dynamic inclusions based on PR labels (from labeler.yml)
           if [[ "${{ contains(github.event.pull_request.labels.*.name, 'upgrades') }}" == "true" ]]; then
@@ -415,6 +416,15 @@ jobs:
           if [[ "${{ contains(github.event.pull_request.labels.*.name, 'backup') }}" == "true" ]]; then
             FILTER="$FILTER || (backup)"
             echo "::notice::Including BACKUP tests (detected 'backup' label)"
+          fi
+
+          # Trigger pentest-labeled checks for hardening-related changes.
+          # Labels are applied via .github/labeler.yml and/or manually.
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'provisioner') }}" == "true" ]] || \
+             [[ "${{ contains(github.event.pull_request.labels.*.name, 'admission') }}" == "true" ]] || \
+             [[ "${{ contains(github.event.pull_request.labels.*.name, 'controller') }}" == "true" ]]; then
+            FILTER="$FILTER || (pentest)"
+            echo "::notice::Including PENTEST checks (detected one of: provisioner/admission/controller)"
           fi
           
           # Full override: If ci:full-e2e label is present, include everything except openshift
