@@ -41,14 +41,14 @@ spec:
           object.metadata.name.endsWith("-role") &&
           has(object.rules) &&
           object.rules != null &&
-          object.rules.size() == 1 &&
-          object.rules[0].apiGroups == [""] &&
-          object.rules[0].resources == ["pods"] &&
-          has(object.rules[0].verbs) &&
-          object.rules[0].verbs != null &&
           (
             (
               variables.component_label in ["backup", "restore"] &&
+              object.rules.size() == 1 &&
+              object.rules[0].apiGroups == [""] &&
+              object.rules[0].resources == ["pods"] &&
+              has(object.rules[0].verbs) &&
+              object.rules[0].verbs != null &&
               object.rules[0].verbs.all(v, v in ["get", "list", "watch"]) &&
               object.rules[0].verbs.exists(v, v == "get") &&
               object.rules[0].verbs.exists(v, v == "list") &&
@@ -56,11 +56,22 @@ spec:
             ) ||
             (
               variables.component_label == "" &&
-              object.rules[0].verbs.all(v, v in ["get", "list", "watch", "patch", "update"]) &&
-              object.rules[0].verbs.exists(v, v == "get") &&
-              object.rules[0].verbs.exists(v, v == "list") &&
-              object.rules[0].verbs.exists(v, v == "watch") &&
-              object.rules[0].verbs.exists(v, v == "update")
+              object.rules.size() == 2 &&
+              object.rules.all(r, r.apiGroups == [""] && r.resources == ["pods"] && has(r.verbs) && r.verbs != null) &&
+              object.rules.exists(r,
+                r.verbs.all(v, v in ["get", "list", "watch"]) &&
+                r.verbs.exists(v, v == "get") &&
+                r.verbs.exists(v, v == "list") &&
+                r.verbs.exists(v, v == "watch") &&
+                (!has(r.resourceNames) || r.resourceNames == null || r.resourceNames.size() == 0)
+              ) &&
+              object.rules.exists(r,
+                r.verbs.all(v, v in ["patch", "update"]) &&
+                (r.verbs.exists(v, v == "patch") || r.verbs.exists(v, v == "update")) &&
+                has(r.resourceNames) &&
+                r.resourceNames != null &&
+                r.resourceNames.size() > 0
+              )
             )
           )
         )
@@ -117,4 +128,3 @@ spec:
           oldObject.metadata.name.endsWith("-rolebinding")
         )
       message: "The controller can only delete RoleBindings for pod discovery."
-
