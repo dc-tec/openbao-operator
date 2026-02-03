@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -349,6 +350,22 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				ContainSubstring("may only enforce Pod Security Standards labels"),
 				ContainSubstring("only enforce Pod Security Standards labels"),
 			))
+
+			By("allowing Pod Security Standards enforce=restricted label enforcement")
+			original = &corev1.Namespace{}
+			Expect(admin.Get(ctx, nsKey, original)).To(Succeed())
+			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
+				current := &corev1.Namespace{}
+				if err := c.Get(ctx, nsKey, current); err != nil {
+					return err
+				}
+				if current.Labels == nil {
+					current.Labels = map[string]string{}
+				}
+				current.Labels["pod-security.kubernetes.io/enforce"] = "restricted"
+				return c.Patch(ctx, current, client.MergeFrom(original))
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("applies admission guardrails to controller RBAC writes", Label("rbac"), func() {
@@ -424,6 +441,70 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				ContainSubstring("can only create/update RoleBindings"),
 				ContainSubstring("only create/update RoleBindings"),
 			))
+		})
+
+		It("prevents operator identities from cluster-scoped RBAC writes", Label("rbac"), func() {
+			ctrl, err := getDeployment(controllerDeployment)
+			Expect(err).NotTo(HaveOccurred())
+
+			prov, err := getDeployment(provisionerDeployment)
+			if apierrors.IsNotFound(err) {
+				Skip("Provisioner Deployment not found; likely running in single-tenant mode")
+			}
+			Expect(err).NotTo(HaveOccurred())
+
+			controllerSA := ctrl.Spec.Template.Spec.ServiceAccountName
+			Expect(controllerSA).NotTo(BeEmpty())
+			controllerUser := serviceAccountUsername(operatorNamespace, controllerSA)
+
+			provisionerSA := prov.Spec.Template.Spec.ServiceAccountName
+			Expect(provisionerSA).NotTo(BeEmpty())
+			provisionerUser := serviceAccountUsername(operatorNamespace, provisionerSA)
+
+			checkCanI := func(user string, ra authorizationv1.ResourceAttributes) bool {
+				impCfg := rest.CopyConfig(cfg)
+				impCfg.Impersonate = rest.ImpersonationConfig{
+					UserName: user,
+					Groups: []string{
+						"system:serviceaccounts",
+						fmt.Sprintf("system:serviceaccounts:%s", operatorNamespace),
+						"system:authenticated",
+					},
+				}
+				clientset, err := kubernetes.NewForConfig(impCfg)
+				Expect(err).NotTo(HaveOccurred())
+				resp, err := clientset.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
+					Spec: authorizationv1.SelfSubjectAccessReviewSpec{
+						ResourceAttributes: &ra,
+					},
+				}, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				return resp.Status.Allowed
+			}
+
+			By("denying controller clusterrole/clusterrolebinding creation via RBAC")
+			Expect(checkCanI(controllerUser, authorizationv1.ResourceAttributes{
+				Group:    "rbac.authorization.k8s.io",
+				Resource: "clusterroles",
+				Verb:     "create",
+			})).To(BeFalse())
+			Expect(checkCanI(controllerUser, authorizationv1.ResourceAttributes{
+				Group:    "rbac.authorization.k8s.io",
+				Resource: "clusterrolebindings",
+				Verb:     "create",
+			})).To(BeFalse())
+
+			By("denying provisioner clusterrole/clusterrolebinding creation via RBAC")
+			Expect(checkCanI(provisionerUser, authorizationv1.ResourceAttributes{
+				Group:    "rbac.authorization.k8s.io",
+				Resource: "clusterroles",
+				Verb:     "create",
+			})).To(BeFalse())
+			Expect(checkCanI(provisionerUser, authorizationv1.ResourceAttributes{
+				Group:    "rbac.authorization.k8s.io",
+				Resource: "clusterrolebindings",
+				Verb:     "create",
+			})).To(BeFalse())
 		})
 	})
 
@@ -1046,7 +1127,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
-		It("restricts OpenBao pod ServiceAccount pod patching to cluster pods", func() {
+		It("restricts OpenBao pod ServiceAccount pod patching to cluster pods", Label("pentest"), func() {
 			clusterName := "rbac-pod-mutation"
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1116,10 +1197,40 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy: corev1.RestartPolicyNever,
+					AutomountServiceAccountToken: func() *bool {
+						v := false
+						return &v
+					}(),
+					SecurityContext: &corev1.PodSecurityContext{
+						RunAsNonRoot: func() *bool {
+							v := true
+							return &v
+						}(),
+						RunAsUser: func() *int64 {
+							v := int64(65532)
+							return &v
+						}(),
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:  "pause",
 							Image: "registry.k8s.io/pause:3.9",
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: func() *bool {
+									v := false
+									return &v
+								}(),
+								ReadOnlyRootFilesystem: func() *bool {
+									v := true
+									return &v
+								}(),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+							},
 						},
 					},
 				},
