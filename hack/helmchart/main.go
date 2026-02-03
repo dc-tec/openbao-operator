@@ -281,7 +281,11 @@ func transformPolicyToHelm(content string) string {
 
 	// Replace policyName references - strip existing openbao-operator- prefix if present.
 	// Also supports "openbao-"-prefixed policy names (e.g. openbao-restrict-provisioner-rbac).
-	policyNamePattern := regexp.MustCompile(`(policyName:\s*)(openbao-operator-)?((?:openbao-)?(?:lock-|restrict-|validate-))([\w-]+)`)
+	policyNamePattern := regexp.MustCompile(
+		"(policyName:\\s*)(openbao-operator-)?" +
+			"((?:openbao-)?(?:lock-|restrict-|validate-))" +
+			"([\\w-]+)",
+	)
 	content = policyNamePattern.ReplaceAllStringFunc(content, func(match string) string {
 		parts := policyNamePattern.FindStringSubmatch(match)
 		if len(parts) < 5 {
