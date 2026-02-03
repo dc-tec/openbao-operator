@@ -49,7 +49,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           trivyignores: .trivyignore
-          skip-files: config/rbac/provisioner_delegate_clusterrole.yaml,config/rbac/provisioner_minimal_role.yaml,config/rbac/single_tenant_clusterrole.yaml,dist/install.yaml,charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml
+          skip-files: config/rbac/provisioner_minimal_role.yaml,charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml,config/rbac/single_tenant_clusterrole.yaml,dist/install.yaml
           skip-dirs: test/manifests
           trivy-config: .trivy.yaml
 

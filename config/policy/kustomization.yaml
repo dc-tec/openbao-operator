@@ -3,11 +3,15 @@ resources:
   - lock-controller-statefulset-mutations-binding.yaml
   - lock-managed-resource-mutations.yaml
   - lock-managed-resource-mutations-binding.yaml
+  - restrict-controller-rbac.yaml
+  - restrict-controller-rbac-binding.yaml
   - validate-openbaocluster.yaml
   - validate-openbaocluster-binding.yaml
   - validate-openbaorestore.yaml
   - validate-openbaorestore-binding.yaml
   - validate-openbao-tenant.yaml
   - validate-openbao-tenant-binding.yaml
-  - restrict-provisioner-delegate.yaml
-  - restrict-provisioner-delegate-binding.yaml
+  - restrict-provisioner-rbac.yaml
+  - restrict-provisioner-rbac-binding.yaml
+  - restrict-provisioner-namespace-mutations.yaml
+  - restrict-provisioner-namespace-mutations-binding.yaml

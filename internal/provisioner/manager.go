@@ -10,9 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -23,131 +21,45 @@ import (
 
 // Manager handles the provisioning of RBAC resources for tenant namespaces.
 type Manager struct {
-	client             client.Client
-	impersonatedClient client.Client // Client configured for impersonation
-	operatorSA         OperatorServiceAccount
-	delegateSA         DelegateServiceAccount
-	logger             logr.Logger
-}
-
-// DelegateServiceAccount represents the delegate ServiceAccount used for impersonation.
-type DelegateServiceAccount struct {
-	Name      string
-	Namespace string
+	client     client.Client
+	operatorSA OperatorServiceAccount
+	logger     logr.Logger
 }
 
 // NewManager creates a new provisioner Manager.
-// It creates a separate client configured for impersonation to enforce least privilege.
-// restConfig is the REST config used to create the impersonated client.
-func NewManager(ctx context.Context, c client.Client, restConfig *rest.Config, logger logr.Logger) (*Manager, error) {
+func NewManager(ctx context.Context, c client.Client, logger logr.Logger) (*Manager, error) {
 	// Get operator namespace from environment or use default
-	saNamespace := os.Getenv("OPERATOR_NAMESPACE")
+	saNamespace := os.Getenv("POD_NAMESPACE")
+	if saNamespace == "" {
+		saNamespace = os.Getenv("OPERATOR_NAMESPACE")
+	}
 	if saNamespace == "" {
 		saNamespace = "openbao-operator-system"
 	}
 
 	// Discover the controller ServiceAccount name dynamically
 	// The base name is "controller", which becomes "openbao-operator-controller" after kustomize prefix
-	controllerSAName := "openbao-operator-controller"
+	controllerSAName := os.Getenv("OPERATOR_SERVICE_ACCOUNT_NAME")
+	if controllerSAName == "" {
+		controllerSAName = "openbao-operator-controller"
+	}
 	controllerSANamespace := saNamespace
 
-	// Verify the ServiceAccount exists
-	if restConfig != nil {
-		controllerSA := &corev1.ServiceAccount{}
-		if err := c.Get(ctx, types.NamespacedName{
-			Namespace: controllerSANamespace,
-			Name:      controllerSAName,
-		}, controllerSA); err != nil {
-			return nil, fmt.Errorf("failed to discover controller ServiceAccount %s/%s: %w", controllerSANamespace, controllerSAName, err)
-		}
-	}
-
-	// Delegate ServiceAccount for impersonation
-	// The base name is "provisioner-delegate", which becomes "openbao-operator-provisioner-delegate" after kustomize prefix
-	delegateName := "openbao-operator-provisioner-delegate"
-	delegateNamespace := saNamespace
-
-	// Verify the delegate ServiceAccount exists
-	if restConfig != nil {
-		delegateSA := &corev1.ServiceAccount{}
-		if err := c.Get(ctx, types.NamespacedName{
-			Namespace: delegateNamespace,
-			Name:      delegateName,
-		}, delegateSA); err != nil {
-			return nil, fmt.Errorf("failed to discover delegate ServiceAccount %s/%s: %w", delegateNamespace, delegateName, err)
-		}
-	}
-
-	// Create impersonated client for RBAC operations
-	// SECURITY: This client impersonates the delegate ServiceAccount, which is bound
-	// to the tenant-template ClusterRole. The API server enforces that the delegate
-	// can only create Roles/RoleBindings with permissions it possesses.
-	var impersonatedClient client.Client
-	if restConfig != nil {
-		var err error
-		impersonatedClient, err = createImpersonatedClient(restConfig, c.Scheme(), delegateNamespace, delegateName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create impersonated client: %w", err)
-		}
-	} else {
-		// For tests with fake clients, use the base client (impersonation not supported in fake clients)
-		impersonatedClient = c
-	}
-
 	return &Manager{
-		client:             c,
-		impersonatedClient: impersonatedClient,
+		client: c,
 		operatorSA: OperatorServiceAccount{
 			Name:      controllerSAName,
 			Namespace: controllerSANamespace,
-		},
-		delegateSA: DelegateServiceAccount{
-			Name:      delegateName,
-			Namespace: delegateNamespace,
 		},
 		logger: logger,
 	}, nil
 }
 
-// createImpersonatedClient creates a controller-runtime client configured to impersonate
-// the delegate ServiceAccount. This enforces least privilege by ensuring the Provisioner
-// can only create Roles/RoleBindings with permissions the delegate possesses.
-//
-// Client-side throttling is configured to prevent overwhelming the API server during
-// mass-provisioning events. The rate limits are conservative to ensure stability.
-func createImpersonatedClient(baseConfig *rest.Config, scheme *runtime.Scheme, namespace, name string) (client.Client, error) {
-	// Create a copy of the config to avoid modifying the original
-	config := rest.CopyConfig(baseConfig)
-
-	// Configure impersonation
-	config.Impersonate = rest.ImpersonationConfig{
-		UserName: fmt.Sprintf("system:serviceaccount:%s:%s", namespace, name),
-	}
-
-	// Configure client-side throttling to prevent overwhelming the API server
-	// during mass-provisioning events. These values are conservative to ensure
-	// stability while still allowing reasonable throughput.
-	if config.QPS == 0 {
-		config.QPS = 5.0 // 5 requests per second
-	}
-	if config.Burst == 0 {
-		config.Burst = 10 // Allow bursts up to 10 requests
-	}
-
-	// Create a new client with impersonation
-	impersonatedClient, err := client.New(config, client.Options{Scheme: scheme})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create impersonated client: %w", err)
-	}
-
-	return impersonatedClient, nil
-}
-
-// applyResource uses Server-Side Apply with the impersonated client.
+// applyResource uses Server-Side Apply.
 // Unlike infra.applyResource, this does NOT set owner references since
 // tenant RBAC resources should not be garbage-collected with any single cluster.
 func (m *Manager) applyResource(ctx context.Context, obj client.Object) error {
-	applyConfig, err := kube.ToApplyConfiguration(obj, m.impersonatedClient)
+	applyConfig, err := kube.ToApplyConfiguration(obj, m.client)
 	if err != nil {
 		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
 	}
@@ -157,7 +69,7 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object) error {
 		client.FieldOwner("openbao-provisioner"),
 	}
 
-	if err := m.impersonatedClient.Apply(ctx, applyConfig, applyOpts...); err != nil {
+	if err := m.client.Apply(ctx, applyConfig, applyOpts...); err != nil {
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
 			return operatorerrors.WrapTransientKubernetesAPI(
 				fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
@@ -174,16 +86,14 @@ func (m *Manager) EnsureTenantRBAC(ctx context.Context, tenant *openbaov1alpha1.
 
 	// Apply Role using Server-Side Apply
 	role := GenerateTenantRole(namespace)
-	m.logger.Info("Applying tenant Role", "namespace", namespace, "role", TenantRoleName,
-		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
+	m.logger.Info("Applying tenant Role", "namespace", namespace, "role", TenantRoleName)
 	if err := m.applyResource(ctx, role); err != nil {
 		return fmt.Errorf("failed to apply tenant Role %s/%s: %w", namespace, TenantRoleName, err)
 	}
 
 	// Apply RoleBinding using Server-Side Apply
 	roleBinding := GenerateTenantRoleBinding(namespace, m.operatorSA)
-	m.logger.Info("Applying tenant RoleBinding", "namespace", namespace, "rolebinding", TenantRoleBindingName,
-		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
+	m.logger.Info("Applying tenant RoleBinding", "namespace", namespace, "rolebinding", TenantRoleBindingName)
 	if err := m.applyResource(ctx, roleBinding); err != nil {
 		return fmt.Errorf("failed to apply tenant RoleBinding %s/%s: %w", namespace, TenantRoleBindingName, err)
 	}
@@ -244,7 +154,7 @@ func (m *Manager) EnsureTenantRBAC(ctx context.Context, tenant *openbaov1alpha1.
 
 // EnsureTenantSecretRBAC ensures tenant Secret access is reduced to explicit allowlists.
 //
-// This creates/updates two Roles in the tenant namespace (via delegate impersonation):
+// This creates/updates two Roles in the tenant namespace:
 // - TenantSecretsWriterRoleName: write access to operator-owned Secret names.
 // - TenantSecretsReaderRoleName: read-only access to user-provided Secret names referenced by specs.
 //
@@ -346,14 +256,14 @@ func (m *Manager) ensureSecretsRole(ctx context.Context, namespace string, roleN
 	// Handle deletion case: if no secrets, delete the role if it exists
 	if len(secretNames) == 0 {
 		existing := &rbacv1.Role{}
-		if err := m.impersonatedClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleName}, existing); err != nil {
+		if err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleName}, existing); err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
 			return fmt.Errorf("failed to get Role %s/%s: %w", namespace, roleName, err)
 		}
 		m.logger.Info("Deleting tenant secrets Role (no clusters reference Secrets)", "namespace", namespace, "role", roleName)
-		if err := m.impersonatedClient.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.client.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete Role %s/%s: %w", namespace, roleName, err)
 		}
 		return nil
@@ -367,8 +277,7 @@ func (m *Manager) ensureSecretsRole(ctx context.Context, namespace string, roleN
 	if role.GetName() != roleName || role.GetNamespace() != namespace {
 		return fmt.Errorf("failed to build Role %s/%s: factory returned %s/%s", namespace, roleName, role.GetNamespace(), role.GetName())
 	}
-	m.logger.Info("Applying tenant secrets Role", "namespace", namespace, "role", roleName,
-		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
+	m.logger.Info("Applying tenant secrets Role", "namespace", namespace, "role", roleName)
 	if err := m.applyResource(ctx, role); err != nil {
 		return fmt.Errorf("failed to apply secrets Role %s/%s: %w", namespace, roleName, err)
 	}
@@ -386,14 +295,14 @@ func (m *Manager) ensureSecretsRoleBinding(ctx context.Context, namespace string
 	// Handle deletion case: if shouldExist is false, delete the role binding if it exists
 	if !shouldExist {
 		existing := &rbacv1.RoleBinding{}
-		if err := m.impersonatedClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleBindingName}, existing); err != nil {
+		if err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleBindingName}, existing); err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
 			return fmt.Errorf("failed to get RoleBinding %s/%s: %w", namespace, roleBindingName, err)
 		}
 		m.logger.Info("Deleting tenant secrets RoleBinding (no clusters reference Secrets)", "namespace", namespace, "rolebinding", roleBindingName)
-		if err := m.impersonatedClient.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.client.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete RoleBinding %s/%s: %w", namespace, roleBindingName, err)
 		}
 		return nil
@@ -410,8 +319,7 @@ func (m *Manager) ensureSecretsRoleBinding(ctx context.Context, namespace string
 	if roleBinding.RoleRef.Name != roleName {
 		return fmt.Errorf("failed to build RoleBinding %s/%s: roleRef.name=%q want %q", namespace, roleBindingName, roleBinding.RoleRef.Name, roleName)
 	}
-	m.logger.Info("Applying tenant secrets RoleBinding", "namespace", namespace, "rolebinding", roleBindingName,
-		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
+	m.logger.Info("Applying tenant secrets RoleBinding", "namespace", namespace, "rolebinding", roleBindingName)
 	if err := m.applyResource(ctx, roleBinding); err != nil {
 		return fmt.Errorf("failed to apply secrets RoleBinding %s/%s: %w", namespace, roleBindingName, err)
 	}
@@ -422,15 +330,14 @@ func (m *Manager) ensureSecretsRoleBinding(ctx context.Context, namespace string
 // IsTenantNamespaceProvisioned returns true if the tenant namespace has been provisioned
 // (i.e., the core tenant RoleBinding exists).
 //
-// SECURITY: This uses the impersonated (delegate) client to avoid requiring the Provisioner
-// ServiceAccount to list/watch/get RBAC resources cluster-wide via the controller-runtime cache.
+// SECURITY: RBAC objects are not cached, so this avoids requiring list/watch permissions.
 func (m *Manager) IsTenantNamespaceProvisioned(ctx context.Context, namespace string) (bool, error) {
 	if namespace == "" {
 		return false, fmt.Errorf("namespace is required")
 	}
 
 	existing := &rbacv1.RoleBinding{}
-	if err := m.impersonatedClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantRoleBindingName}, existing); err != nil {
+	if err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantRoleBindingName}, existing); err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil
 		}
@@ -447,7 +354,7 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 	}
 	for _, name := range secretRoleBindings {
 		roleBinding := &rbacv1.RoleBinding{}
-		err := m.impersonatedClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, roleBinding)
+		err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, roleBinding)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
@@ -455,7 +362,7 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 			return fmt.Errorf("failed to get RoleBinding %s/%s: %w", namespace, name, err)
 		}
 		m.logger.Info("Deleting tenant secrets RoleBinding", "namespace", namespace, "rolebinding", name)
-		if err := m.impersonatedClient.Delete(ctx, roleBinding); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.client.Delete(ctx, roleBinding); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete RoleBinding %s/%s: %w", namespace, name, err)
 		}
 	}
@@ -466,7 +373,7 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 	}
 	for _, name := range secretRoles {
 		role := &rbacv1.Role{}
-		err := m.impersonatedClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, role)
+		err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, role)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
@@ -474,14 +381,14 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 			return fmt.Errorf("failed to get Role %s/%s: %w", namespace, name, err)
 		}
 		m.logger.Info("Deleting tenant secrets Role", "namespace", namespace, "role", name)
-		if err := m.impersonatedClient.Delete(ctx, role); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.client.Delete(ctx, role); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete Role %s/%s: %w", namespace, name, err)
 		}
 	}
 
 	// Delete RoleBinding first
 	roleBinding := &rbacv1.RoleBinding{}
-	err := m.impersonatedClient.Get(ctx, types.NamespacedName{
+	err := m.client.Get(ctx, types.NamespacedName{
 		Namespace: namespace,
 		Name:      TenantRoleBindingName,
 	}, roleBinding)
@@ -491,14 +398,14 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 		}
 	} else {
 		m.logger.Info("Deleting tenant RoleBinding", "namespace", namespace, "rolebinding", TenantRoleBindingName)
-		if err := m.impersonatedClient.Delete(ctx, roleBinding); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.client.Delete(ctx, roleBinding); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete RoleBinding %s/%s: %w", namespace, TenantRoleBindingName, err)
 		}
 	}
 
 	// Delete Role
 	role := &rbacv1.Role{}
-	err = m.impersonatedClient.Get(ctx, types.NamespacedName{
+	err = m.client.Get(ctx, types.NamespacedName{
 		Namespace: namespace,
 		Name:      TenantRoleName,
 	}, role)
@@ -508,7 +415,7 @@ func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error
 		}
 	} else {
 		m.logger.Info("Deleting tenant Role", "namespace", namespace, "role", TenantRoleName)
-		if err := m.impersonatedClient.Delete(ctx, role); err != nil && !apierrors.IsNotFound(err) {
+		if err := m.client.Delete(ctx, role); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete Role %s/%s: %w", namespace, TenantRoleName, err)
 		}
 	}

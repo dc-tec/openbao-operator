@@ -39,9 +39,4 @@ defer func() {
 
 ## ValidatingAdmissionPolicy
 
-Sentinel security depends on these policies:
-
-- `openbao-restrict-sentinel-mutations`
-- `openbao-restrict-provisioner-delegate`
-
 Changes to RBAC/admission must be reviewed carefully.

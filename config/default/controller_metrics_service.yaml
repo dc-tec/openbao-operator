@@ -5,7 +5,7 @@ metadata:
     app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
-  name: openbao-operator-controller-metrics-service
+  name: controller-metrics-service
   namespace: system
 spec:
   ports:

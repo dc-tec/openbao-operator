@@ -46,8 +46,8 @@ var _ = Describe("OpenShift Platform", Label("openshift", "platform"), Ordered, 
 	It("does not pin runAsUser/runAsGroup in operator Deployments", func() {
 		ctx := context.Background()
 		names := []types.NamespacedName{
-			{Namespace: operatorNamespace, Name: "openbao-operator-openbao-operator-controller"},
-			{Namespace: operatorNamespace, Name: "openbao-operator-openbao-operator-provisioner"},
+			{Namespace: operatorNamespace, Name: "openbao-operator-controller"},
+			{Namespace: operatorNamespace, Name: "openbao-operator-provisioner"},
 		}
 
 		for _, nn := range names {
@@ -55,7 +55,7 @@ var _ = Describe("OpenShift Platform", Label("openshift", "platform"), Ordered, 
 			err := k8sClient.Get(ctx, nn, deploy)
 			if apierrors.IsNotFound(err) {
 				// Provisioner is not deployed in single-tenant mode; controller is always expected.
-				if nn.Name == "openbao-operator-openbao-operator-provisioner" {
+				if nn.Name == "openbao-operator-provisioner" {
 					continue
 				}
 			}

@@ -24,7 +24,7 @@ const integrationFieldOwner = "openbao-operator-integration-tests"
 
 var (
 	onceDefaultPolicies sync.Once
-	onceDelegateRBAC    sync.Once
+	onceProvisionerRBAC sync.Once
 )
 
 func ensureDefaultAdmissionPoliciesApplied(t *testing.T) {
@@ -45,10 +45,10 @@ func ensureDefaultAdmissionPoliciesApplied(t *testing.T) {
 	})
 }
 
-func ensureProvisionerDelegateRBACApplied(t *testing.T) {
+func ensureProvisionerRBACApplied(t *testing.T) {
 	t.Helper()
 
-	onceDelegateRBAC.Do(func() {
+	onceProvisionerRBAC.Do(func() {
 		yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
 
 		objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
@@ -59,9 +59,9 @@ func ensureProvisionerDelegateRBACApplied(t *testing.T) {
 
 			switch gvk.Kind {
 			case "ClusterRole":
-				return strings.Contains(u.GetName(), "tenant-template")
+				return strings.Contains(u.GetName(), "provisioner-role")
 			case "ClusterRoleBinding":
-				return strings.Contains(u.GetName(), "tenant-delegate-binding")
+				return strings.Contains(u.GetName(), "provisioner-rolebinding")
 			default:
 				return false
 			}

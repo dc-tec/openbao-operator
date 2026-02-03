@@ -5,19 +5,19 @@ import (
 	"testing"
 )
 
-// TestRestrictProvisionerDelegatePolicyContainsDangerousVerbGuard provides a
+// TestRestrictProvisionerRBACPolicyContainsDangerousVerbGuard provides a
 // minimal regression check that the ValidatingAdmissionPolicy used to restrict
-// the Provisioner Delegate continues to enforce the dangerous-verb guard that
+// the Provisioner continues to enforce the dangerous-verb guard that
 // was added as a defense-in-depth measure.
 //
 // The policy itself is evaluated by the Kubernetes API server, so this test
 // does not attempt to execute CEL expressions. Instead, it asserts that the
 // expected Rule 6 stanza is present in the policy manifest. This helps prevent
 // accidental removal during future refactors.
-func TestRestrictProvisionerDelegatePolicyContainsDangerousVerbGuard(t *testing.T) {
+func TestRestrictProvisionerRBACPolicyContainsDangerousVerbGuard(t *testing.T) {
 	const (
-		policyPath = "../../config/policy/restrict-provisioner-delegate.yaml"
-		required   = "The Provisioner Delegate cannot create Roles granting " +
+		policyPath = "../../config/policy/restrict-provisioner-rbac.yaml"
+		required   = "The Provisioner cannot create Roles granting " +
 			"'impersonate', 'bind', 'escalate', or wildcard permissions."
 	)
 
@@ -31,10 +31,10 @@ func TestRestrictProvisionerDelegatePolicyContainsDangerousVerbGuard(t *testing.
 	}
 }
 
-func TestRestrictProvisionerDelegatePolicyContainsSecretsRoleGuards(t *testing.T) {
+func TestRestrictProvisionerRBACPolicyContainsSecretsRoleGuards(t *testing.T) {
 	const (
-		policyPath = "../../config/policy/restrict-provisioner-delegate.yaml"
-		required   = "The Provisioner Delegate can only grant Secrets permissions via the dedicated secrets allowlist Roles."
+		policyPath = "../../config/policy/restrict-provisioner-rbac.yaml"
+		required   = "The Provisioner can only grant Secrets permissions via the dedicated secrets allowlist Roles."
 	)
 
 	data, err := os.ReadFile(policyPath)

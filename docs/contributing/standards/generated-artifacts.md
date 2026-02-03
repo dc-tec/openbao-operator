@@ -11,7 +11,6 @@ This project contains several artifacts that are automatically generated from so
 | If you modified... | Run this command | Verified by CI target |
 | :--- | :--- | :--- |
 | `api/v1alpha1/*.go` | `make manifests generate` | `verify-generated` |
-| `internal/provisioner` | `make rbac-sync` | `verify-rbac-sync` |
 | `dist/install.yaml` | `make helm-sync` | `verify-helm` |
 | `internal/config/*.go` | `make test-update-golden` | `test` (fails if mismatch) |
 | **I don't know** | `make generate manifests helm-sync` | `verify-generated` |
@@ -39,15 +38,7 @@ We maintain a standalone Helm chart that must stay in sync with our core manifes
   - `charts/openbao-operator/templates/rbac/` (Synced RBAC templates)
 - **Command:** `make helm-sync`
 
-### 3. Provisioner RBAC
-
-The Provisioner Delegate's permissions are strictly defined in Go code to ensure security.
-
-- **Source:** `internal/provisioner/rbac.go` (Go struct definitions)
-- **Output:** `config/rbac/provisioner_delegate_clusterrole.yaml`
-- **Command:** `make rbac-sync`
-
-### 4. Golden Test Files
+### 3. Golden Test Files
 
 We use "Golden Files" to verify complex HCL configuration generation reliability.
 

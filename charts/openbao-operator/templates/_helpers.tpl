@@ -96,8 +96,57 @@ Provisioner service account name
 {{- end -}}
 
 {{/*
-Provisioner delegate service account name
+Provisioner RBAC ValidatingAdmissionPolicy: deny system namespaces.
+
+Returns a CEL boolean expression snippet like:
+  request.namespace == "ns" || request.namespace.startsWith("kube-") || ...
+
+The release namespace is always included. Users may extend the deny set via:
+  admissionPolicies.provisionerRBAC.deniedNamespaces
+  admissionPolicies.provisionerRBAC.deniedNamespacePrefixes
 */}}
-{{- define "openbao-operator.provisionerDelegateServiceAccountName" -}}
-{{- printf "%s-provisioner-delegate" (include "openbao-operator.fullname" .) -}}
+{{- define "openbao-operator.admission.provisionerRBACSystemNamespaceClauses" -}}
+{{- $cfg := default dict .Values.admissionPolicies.provisionerRBAC -}}
+{{- $clauses := list (printf "request.namespace == %q" .Release.Namespace) -}}
+{{- range $ns := (default (list) $cfg.deniedNamespaces) -}}
+  {{- $ns = (toString $ns | trim) -}}
+  {{- if $ns -}}
+    {{- $clauses = append $clauses (printf "request.namespace == %q" $ns) -}}
+  {{- end -}}
+{{- end -}}
+{{- range $prefix := (default (list) $cfg.deniedNamespacePrefixes) -}}
+  {{- $prefix = (toString $prefix | trim) -}}
+  {{- if $prefix -}}
+    {{- $clauses = append $clauses (printf "request.namespace.startsWith(%q)" $prefix) -}}
+  {{- end -}}
+{{- end -}}
+{{- join " ||\n" $clauses -}}
+{{- end -}}
+
+{{/*
+Provisioner Namespace mutation VAP: deny system namespaces by name.
+
+Returns a CEL boolean expression snippet like:
+  request.name == "ns" || request.name.startsWith("kube-") || ...
+
+The release namespace is always included. Users may extend the deny set via:
+  admissionPolicies.provisionerRBAC.deniedNamespaces
+  admissionPolicies.provisionerRBAC.deniedNamespacePrefixes
+*/}}
+{{- define "openbao-operator.admission.provisionerSystemNamespaceNameClauses" -}}
+{{- $cfg := default dict .Values.admissionPolicies.provisionerRBAC -}}
+{{- $clauses := list (printf "request.name == %q" .Release.Namespace) -}}
+{{- range $ns := (default (list) $cfg.deniedNamespaces) -}}
+  {{- $ns = (toString $ns | trim) -}}
+  {{- if $ns -}}
+    {{- $clauses = append $clauses (printf "request.name == %q" $ns) -}}
+  {{- end -}}
+{{- end -}}
+{{- range $prefix := (default (list) $cfg.deniedNamespacePrefixes) -}}
+  {{- $prefix = (toString $prefix | trim) -}}
+  {{- if $prefix -}}
+    {{- $clauses = append $clauses (printf "request.name.startsWith(%q)" $prefix) -}}
+  {{- end -}}
+{{- end -}}
+{{- join " ||\n" $clauses -}}
 {{- end -}}

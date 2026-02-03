@@ -21,16 +21,14 @@ const (
 func (m *Manager) EnsureTenantQuotas(ctx context.Context, namespace string, quotaSpec *corev1.ResourceQuotaSpec, limitRangeSpec *corev1.LimitRangeSpec) error {
 	// Apply ResourceQuota
 	quota := GenerateTenantResourceQuota(namespace, quotaSpec)
-	m.logger.Info("Applying tenant ResourceQuota", "namespace", namespace, "name", TenantResourceQuotaName,
-		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
+	m.logger.Info("Applying tenant ResourceQuota", "namespace", namespace, "name", TenantResourceQuotaName)
 	if err := m.applyResource(ctx, quota); err != nil {
 		return fmt.Errorf("failed to apply ResourceQuota %s/%s: %w", namespace, TenantResourceQuotaName, err)
 	}
 
 	// Apply LimitRange
 	limitRange := GenerateTenantLimitRange(namespace, limitRangeSpec)
-	m.logger.Info("Applying tenant LimitRange", "namespace", namespace, "name", TenantLimitRangeName,
-		"impersonating", fmt.Sprintf("system:serviceaccount:%s:%s", m.delegateSA.Namespace, m.delegateSA.Name))
+	m.logger.Info("Applying tenant LimitRange", "namespace", namespace, "name", TenantLimitRangeName)
 	if err := m.applyResource(ctx, limitRange); err != nil {
 		return fmt.Errorf("failed to apply LimitRange %s/%s: %w", namespace, TenantLimitRangeName, err)
 	}

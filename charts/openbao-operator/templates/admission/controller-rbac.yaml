@@ -1,0 +1,155 @@
+{{- if .Values.admissionPolicies.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-controller-rbac
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["roles", "rolebindings"]
+  variables:
+    - name: is_controller
+      # Matches the ServiceAccount of the Controller.
+      expression: >-
+        request.userInfo.username in [
+          "system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.controllerServiceAccountName" . }}"
+        ]
+    - name: component_label
+      # openbao.org/component label if present; empty otherwise.
+      expression: >-
+        request.operation == "DELETE" ?
+          (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels) && ("openbao.org/component" in oldObject.metadata.labels) ?
+            oldObject.metadata.labels["openbao.org/component"] : "") :
+          (object != null && has(object.metadata) && has(object.metadata.labels) && ("openbao.org/component" in object.metadata.labels) ?
+            object.metadata.labels["openbao.org/component"] :
+            (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels) && ("openbao.org/component" in oldObject.metadata.labels) ?
+              oldObject.metadata.labels["openbao.org/component"] : ""))
+  validations:
+    # Rule 0: Role restriction
+    # The controller may only create/update/delete Roles used for pod discovery and service registration.
+    - expression: >-
+        !variables.is_controller ||
+        request.resource.resource != "roles" ||
+        request.operation == "DELETE" ||
+        (
+          object != null &&
+          has(object.metadata) &&
+          has(object.metadata.name) &&
+          object.metadata.name.endsWith("-role") &&
+          has(object.rules) &&
+          object.rules != null &&
+          (
+            (
+              variables.component_label in ["backup", "restore"] &&
+              object.rules.size() == 1 &&
+              object.rules[0].apiGroups == [""] &&
+              object.rules[0].resources == ["pods"] &&
+              has(object.rules[0].verbs) &&
+              object.rules[0].verbs != null &&
+              object.rules[0].verbs.all(v, v in ["get", "list", "watch"]) &&
+              object.rules[0].verbs.exists(v, v == "get") &&
+              object.rules[0].verbs.exists(v, v == "list") &&
+              object.rules[0].verbs.exists(v, v == "watch")
+            ) ||
+            (
+              variables.component_label == "" &&
+              object.rules.size() == 2 &&
+              object.rules.all(r, r.apiGroups == [""] && r.resources == ["pods"] && has(r.verbs) && r.verbs != null) &&
+              object.rules.exists(r,
+                r.verbs.all(v, v in ["get", "list", "watch"]) &&
+                r.verbs.exists(v, v == "get") &&
+                r.verbs.exists(v, v == "list") &&
+                r.verbs.exists(v, v == "watch") &&
+                (!has(r.resourceNames) || r.resourceNames == null || r.resourceNames.size() == 0)
+              ) &&
+              object.rules.exists(r,
+                r.verbs.all(v, v in ["patch", "update"]) &&
+                (r.verbs.exists(v, v == "patch") || r.verbs.exists(v, v == "update")) &&
+                has(r.resourceNames) &&
+                r.resourceNames != null &&
+                r.resourceNames.size() > 0
+              )
+            )
+          )
+        )
+      message: "The controller can only create/update Roles for pod discovery (and service registration label updates for the OpenBao service account)."
+
+    # Rule 1: RoleBinding restriction
+    # RoleBindings must bind exactly one ServiceAccount in the same namespace to its own Role.
+    - expression: >-
+        !variables.is_controller ||
+        request.resource.resource != "rolebindings" ||
+        request.operation == "DELETE" ||
+        (
+          object != null &&
+          has(object.metadata) &&
+          has(object.metadata.name) &&
+          object.metadata.name.endsWith("-rolebinding") &&
+          has(object.roleRef) &&
+          object.roleRef.apiGroup == "rbac.authorization.k8s.io" &&
+          object.roleRef.kind == "Role" &&
+          has(object.roleRef.name) &&
+          has(object.subjects) &&
+          object.subjects != null &&
+          object.subjects.size() == 1 &&
+          object.subjects[0].kind == "ServiceAccount" &&
+          (!has(object.subjects[0].apiGroup) || object.subjects[0].apiGroup == "") &&
+          object.subjects[0].namespace == request.namespace &&
+          object.metadata.name == object.subjects[0].name + "-rolebinding" &&
+          object.roleRef.name == object.subjects[0].name + "-role"
+        )
+      message: "The controller can only create/update RoleBindings that bind a ServiceAccount to its own pod-discovery Role."
+
+    # Rule 2: Deletion restriction (Roles)
+    - expression: >-
+        !variables.is_controller ||
+        request.operation != "DELETE" ||
+        request.resource.resource != "roles" ||
+        (
+          oldObject != null &&
+          has(oldObject.metadata) &&
+          has(oldObject.metadata.name) &&
+          oldObject.metadata.name.endsWith("-role")
+        )
+      message: "The controller can only delete Roles for pod discovery."
+
+    # Rule 3: Deletion restriction (RoleBindings)
+    - expression: >-
+        !variables.is_controller ||
+        request.operation != "DELETE" ||
+        request.resource.resource != "rolebindings" ||
+        (
+          oldObject != null &&
+          has(oldObject.metadata) &&
+          has(oldObject.metadata.name) &&
+          oldObject.metadata.name.endsWith("-rolebinding")
+        )
+      message: "The controller can only delete RoleBindings for pod discovery."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-controller-rbac-binding
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
+  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
+  policyName: {{ include "openbao-operator.fullname" . }}-openbao-restrict-controller-rbac
+  validationActions: [Deny]
+  matchResources:
+    # This binding applies the policy to ALL Role/RoleBinding requests.
+    # The policy itself filters for the specific user (is_controller variable).
+    resourceRules:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["roles", "rolebindings"]
+
+{{- end }}

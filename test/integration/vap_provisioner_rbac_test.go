@@ -12,16 +12,20 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	provisionerpkg "github.com/dc-tec/openbao-operator/internal/provisioner"
 )
 
-const provisionerDelegateUsername = "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner-delegate"
+// Use the legacy/double-prefixed provisioner username to keep upgrade/migration paths covered.
+const provisionerUsername = "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner"
 
-func TestVAP_ProvisionerDelegate_DeniesWrongRoleName(t *testing.T) {
+func TestVAP_ProvisionerRBAC_DeniesWrongRoleName(t *testing.T) {
 	ensureDefaultAdmissionPoliciesApplied(t)
-	ensureProvisionerDelegateRBACApplied(t)
+	ensureProvisionerRBACApplied(t)
 
 	namespace := newTestNamespace(t)
-	delegateClient := newImpersonatedClient(t, provisionerDelegateUsername)
+	provisionerClient := newImpersonatedClient(t, provisionerUsername)
 	legacyRoleName := "openbao-operator-legacy-role"
 
 	// Admission policies can take a short moment to become effective after apply.
@@ -35,7 +39,7 @@ func TestVAP_ProvisionerDelegate_DeniesWrongRoleName(t *testing.T) {
 			Rules: []rbacv1.PolicyRule{},
 		}
 
-		err := delegateClient.Create(ctx, role)
+		err := provisionerClient.Create(ctx, role)
 		if err == nil {
 			_ = k8sClient.Delete(ctx, role)
 			time.Sleep(100 * time.Millisecond)
@@ -43,7 +47,7 @@ func TestVAP_ProvisionerDelegate_DeniesWrongRoleName(t *testing.T) {
 		}
 
 		requireAdmissionDenied(t, err)
-		if !strings.Contains(err.Error(), "Provisioner Delegate can only create Roles") {
+		if !strings.Contains(err.Error(), "Provisioner can only create Roles") {
 			t.Fatalf("unexpected error message: %v", err)
 		}
 		return
@@ -60,26 +64,24 @@ func TestVAP_ProvisionerDelegate_DeniesWrongRoleName(t *testing.T) {
 	t.Fatalf("expected VAP to deny creating Role with non-allowed name after retries")
 }
 
-func TestVAP_ProvisionerDelegate_RestrictsRoleBindingSubjects(t *testing.T) {
+func TestVAP_ProvisionerRBAC_RestrictsRoleBindingSubjects(t *testing.T) {
 	ensureDefaultAdmissionPoliciesApplied(t)
-	ensureProvisionerDelegateRBACApplied(t)
+	ensureProvisionerRBACApplied(t)
 
 	namespace := newTestNamespace(t)
-	delegateClient := newImpersonatedClient(t, provisionerDelegateUsername)
+	provisionerClient := newImpersonatedClient(t, provisionerUsername)
 
 	// Some API servers validate RoleBinding.roleRef existence; create the Role first.
-	tenantRole := &rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "openbao-operator-tenant-role",
-			Namespace: namespace,
-		},
-		Rules: []rbacv1.PolicyRule{},
-	}
-	if err := delegateClient.Create(ctx, tenantRole); err != nil {
+	tenantRole := provisionerpkg.GenerateTenantRole(namespace)
+	if err := provisionerClient.Patch(ctx, tenantRole, client.Apply, client.ForceOwnership, client.FieldOwner(integrationFieldOwner)); err != nil {
 		t.Fatalf("create tenant Role: %v", err)
 	}
 
 	tenantRB := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "openbao-operator-tenant-rolebinding",
 			Namespace: namespace,
@@ -98,17 +100,18 @@ func TestVAP_ProvisionerDelegate_RestrictsRoleBindingSubjects(t *testing.T) {
 		},
 	}
 
-	if err := delegateClient.Create(ctx, tenantRB); err != nil {
+	if err := provisionerClient.Patch(ctx, tenantRB, client.Apply, client.ForceOwnership, client.FieldOwner(integrationFieldOwner)); err != nil {
 		t.Fatalf("expected tenant RoleBinding creation to succeed, got: %v", err)
 	}
 
 	// Attempt to broaden subject namespace; should be denied by the VAP.
 	var latest rbacv1.RoleBinding
-	if err := delegateClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: tenantRB.Name}, &latest); err != nil {
+	if err := provisionerClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: tenantRB.Name}, &latest); err != nil {
 		t.Fatalf("get RoleBinding: %v", err)
 	}
+	original := latest.DeepCopy()
 	latest.Subjects[0].Namespace = "kube-system"
-	err := delegateClient.Update(ctx, &latest)
+	err := provisionerClient.Patch(ctx, &latest, client.MergeFrom(original))
 	requireAdmissionDenied(t, err)
 	if !strings.Contains(err.Error(), "can only bind tenant RBAC") {
 		t.Fatalf("unexpected error message: %v", err)

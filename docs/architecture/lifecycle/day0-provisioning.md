@@ -9,7 +9,7 @@ Day 0 operations focus on onboarding tenants and ensuring they have the necessar
 
 - A cluster admin (or a namespace owner in self-service mode) creates an `OpenBaoTenant` resource.
 - The Provisioner Controller reconciles `OpenBaoTenant` and provisions the target namespace with the required tenant-scoped RBAC so the operator can manage OpenBao resources there.
-  This includes creating namespaced `Role` and `RoleBinding` resources that delegate permissions to the operator's ServiceAccount.
+  This includes creating namespaced `Role` and `RoleBinding` resources that grant permissions to the operator's Controller ServiceAccount.
 
 ## 2. Resource Quotas
 

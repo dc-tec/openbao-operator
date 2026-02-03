@@ -115,6 +115,15 @@
         "extraEnv": {
           "$ref": "#/$defs/envVars"
         },
+        "extraArgs": {
+          "type": "array",
+          "description": "Additional arguments for the controller manager",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        },
         "nodeSelector": {
           "$ref": "#/$defs/nodeSelector"
         },
@@ -157,6 +166,15 @@
         },
         "extraEnv": {
           "$ref": "#/$defs/envVars"
+        },
+        "extraArgs": {
+          "type": "array",
+          "description": "Additional arguments for the provisioner manager",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
         },
         "nodeSelector": {
           "$ref": "#/$defs/nodeSelector"
@@ -260,8 +278,55 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Enable ValidatingAdmissionPolicies for resource protection",
+          "description": "Enable ValidatingAdmissionPolicies for resource protection. Setting this to false is treated as UNSAFE MODE (operator runs without admission guardrails).",
           "default": true
+        },
+        "provisionerRBAC": {
+          "type": "object",
+          "description": "Provisioner RBAC ValidatingAdmissionPolicy configuration (multi-tenant mode)",
+          "additionalProperties": false,
+          "properties": {
+            "deniedNamespaces": {
+              "type": "array",
+              "description": "Exact namespace names where the Provisioner may not manage tenant RBAC (release namespace is always denied)",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "default": [
+                "openshift"
+              ]
+            },
+            "deniedNamespacePrefixes": {
+              "type": "array",
+              "description": "Namespace prefixes where the Provisioner may not manage tenant RBAC (release namespace is always denied)",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "default": [
+                "kube-",
+                "openshift-",
+                "gke-",
+                "eks-",
+                "aws-",
+                "aks-",
+                "azure-"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "serviceAccountToken": {
+      "type": "object",
+      "description": "Projected ServiceAccount token configuration for operator pods",
+      "additionalProperties": false,
+      "properties": {
+        "kubernetesAudience": {
+          "type": "string",
+          "description": "Audience for the projected Kubernetes API ServiceAccount token (`--api-audiences`)",
+          "default": ""
         }
       }
     },

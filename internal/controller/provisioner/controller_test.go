@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/admission"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
 )
 
@@ -55,6 +56,8 @@ func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 }
 
 func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
+	setAdmissionReady(t)
+
 	// Create target namespace
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -77,13 +80,14 @@ func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, namespace, tenant)
-	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
 		Client:            k8sClient,
+		APIReader:         k8sClient,
 		Scheme:            testScheme,
 		Provisioner:       provisionerManager,
 		OperatorNamespace: "openbao-operator-system",
@@ -148,6 +152,8 @@ func TestNamespaceProvisionerReconcile_TenantProvisioning(t *testing.T) {
 }
 
 func TestNamespaceProvisionerReconcile_TargetNamespaceNotFound(t *testing.T) {
+	setAdmissionReady(t)
+
 	// Create OpenBaoTenant CR with non-existent target namespace
 	tenant := &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{
@@ -163,13 +169,14 @@ func TestNamespaceProvisionerReconcile_TargetNamespaceNotFound(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, tenant)
-	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
 		Client:            k8sClient,
+		APIReader:         k8sClient,
 		Scheme:            testScheme,
 		Provisioner:       provisionerManager,
 		OperatorNamespace: "openbao-operator-system",
@@ -216,16 +223,19 @@ func TestNamespaceProvisionerReconcile_TargetNamespaceNotFound(t *testing.T) {
 }
 
 func TestNamespaceProvisionerReconcile_OpenBaoTenantDeleted(t *testing.T) {
+	setAdmissionReady(t)
+
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
 		Client:            k8sClient,
+		APIReader:         k8sClient,
 		Scheme:            testScheme,
 		Provisioner:       provisionerManager,
 		OperatorNamespace: "openbao-operator-system",
@@ -251,6 +261,8 @@ func TestNamespaceProvisionerReconcile_OpenBaoTenantDeleted(t *testing.T) {
 }
 
 func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
+	setAdmissionReady(t)
+
 	// Create target namespace
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -290,13 +302,14 @@ func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, namespace, tenant, existingRole, existingRoleBinding)
-	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
 		Client:            k8sClient,
+		APIReader:         k8sClient,
 		Scheme:            testScheme,
 		Provisioner:       provisionerManager,
 		OperatorNamespace: "openbao-operator-system",
@@ -352,6 +365,8 @@ func TestNamespaceProvisionerReconcile_DeletionWithFinalizer(t *testing.T) {
 }
 
 func TestNamespaceProvisionerReconcile_SecurityViolation(t *testing.T) {
+	setAdmissionReady(t)
+
 	// Create OpenBaoTenant in user namespace targeting a different namespace
 	tenant := &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{
@@ -367,13 +382,14 @@ func TestNamespaceProvisionerReconcile_SecurityViolation(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, tenant)
-	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
 		Client:            k8sClient,
+		APIReader:         k8sClient,
 		Scheme:            testScheme,
 		Provisioner:       provisionerManager,
 		OperatorNamespace: "openbao-operator-system", // Trusted NS is different from user-ns
@@ -420,6 +436,8 @@ func TestNamespaceProvisionerReconcile_SecurityViolation(t *testing.T) {
 }
 
 func TestNamespaceProvisionerReconcile_SelfService_Success(t *testing.T) {
+	setAdmissionReady(t)
+
 	// Create OpenBaoTenant in user namespace targeting SAME namespace
 	tenant := &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{
@@ -442,13 +460,14 @@ func TestNamespaceProvisionerReconcile_SelfService_Success(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, tenant, namespace)
-	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
 		Client:            k8sClient,
+		APIReader:         k8sClient,
 		Scheme:            testScheme,
 		Provisioner:       provisionerManager,
 		OperatorNamespace: "openbao-operator-system",
@@ -485,6 +504,8 @@ func TestNamespaceProvisionerReconcile_SelfService_Success(t *testing.T) {
 }
 
 func TestNamespaceProvisionerReconcile_DeletionWithExistingCluster(t *testing.T) {
+	setAdmissionReady(t)
+
 	// Create target namespace
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -526,13 +547,14 @@ func TestNamespaceProvisionerReconcile_DeletionWithExistingCluster(t *testing.T)
 	logger := logr.Discard()
 	// Be sure to include the cluster in the fake client so List works
 	k8sClient := newTestClient(t, namespace, tenant, existingRole, cluster)
-	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, nil, logger)
+	provisionerManager, err := provisioner.NewManager(ctx, k8sClient, logger)
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
 
 	reconciler := &NamespaceProvisionerReconciler{
 		Client:            k8sClient,
+		APIReader:         k8sClient,
 		Scheme:            testScheme,
 		Provisioner:       provisionerManager,
 		OperatorNamespace: "openbao-operator-system",
@@ -598,4 +620,13 @@ func TestNamespaceProvisionerReconcile_DeletionWithExistingCluster(t *testing.T)
 			}
 		}
 	}
+}
+
+func setAdmissionReady(t *testing.T) {
+	t.Helper()
+
+	admission.SetAdmissionDependenciesReady(true)
+	t.Cleanup(func() {
+		admission.SetAdmissionDependenciesReady(false)
+	})
 }

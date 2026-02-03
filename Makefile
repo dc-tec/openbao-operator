@@ -82,6 +82,10 @@ endif
 .PHONY: ci-core
 ci-core: security-scan lint-config lint verify-fmt verify-tidy verify-generated test-ci verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
 
+.PHONY: pentest-smoke
+pentest-smoke: ## Run "pentest" labeled e2e tests against an existing cluster (requires E2E_OPERATOR_IMAGE).
+	@$(MAKE) test-e2e-existing E2E_LABEL_FILTER='pentest && security'
+
 ##@ Development
 
 .PHONY: manifests
@@ -134,23 +138,8 @@ verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
 		exit 1; \
 	}
 
-.PHONY: rbac-sync
-rbac-sync: ## Sync the provisioner delegate RBAC template from Go sources.
-	@go run ./hack/gen-rbac
-
-.PHONY: verify-rbac-sync
-verify-rbac-sync: ## Verify provisioner delegate RBAC template is in sync (does not modify tracked files).
-	@go run ./hack/gen-rbac
-	@{ \
-		git diff --exit-code -- config/rbac/provisioner_delegate_clusterrole.yaml; \
-	} || { \
-		echo "RBAC delegate template is out of date. Run 'make rbac-sync' and commit the result."; \
-		git --no-pager diff -- config/rbac/provisioner_delegate_clusterrole.yaml; \
-		exit 1; \
-	}
-
 .PHONY: verify-generated
-verify-generated: manifests generate verify-rbac-sync ## Verify generated artifacts are up-to-date (does not modify tracked files).
+verify-generated: manifests generate ## Verify generated artifacts are up-to-date (does not modify tracked files).
 	@{ \
 		git diff --exit-code -- api/v1alpha1 config/crd/bases; \
 	} || { \
@@ -643,6 +632,13 @@ deploy: manifests kustomize ## Deploy both provisioner and controller to the K8s
 	( cd "$$tmp/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
 	"$(KUSTOMIZE)" build "$$tmp/config/default" | "$(KUBECTL)" apply -f -
 
+.PHONY: deploy-dev
+deploy-dev: ## Build, push, and deploy the manager image (avoids stale local tags).
+	@dev_img="$${IMG:-k3d-registry.localhost:5000/openbao-operator:dev-$$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"; \
+	echo "Deploying dev image: $$dev_img"; \
+	$(MAKE) docker-build docker-push IMG="$$dev_img"; \
+	$(MAKE) deploy IMG="$$dev_img"
+
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy both provisioner and controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion. Call with wait=false to avoid waiting for finalizers.
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) --wait=$(wait) -f -
@@ -727,21 +723,20 @@ security-scan: ## Run Trivy security scans (filesystem and container image)
 	# - Use "misconfig" (not deprecated "config")
 	# - Explicitly load ignore rules from .trivyignore
 	# - Render Helm charts against a modern Kubernetes version
-	trivy fs \
-		--scanners vuln,misconfig \
-		--severity HIGH,CRITICAL \
-		--ignore-unfixed \
-		--exit-code 1 \
-		--ignorefile .trivyignore \
-		--skip-version-check \
-		--helm-kube-version 1.34.0 \
-		--skip-files config/rbac/provisioner_delegate_clusterrole.yaml \
-		--skip-files config/rbac/provisioner_minimal_role.yaml \
-		--skip-files config/rbac/single_tenant_clusterrole.yaml \
-		--skip-files dist/install.yaml \
-		--skip-files charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml \
-		--skip-dirs test/manifests \
-		.
+		trivy fs \
+			--scanners vuln,misconfig \
+			--severity HIGH,CRITICAL \
+			--ignore-unfixed \
+			--exit-code 1 \
+			--ignorefile .trivyignore \
+			--skip-version-check \
+			--helm-kube-version 1.34.0 \
+			--skip-files config/rbac/provisioner_minimal_role.yaml \
+			--skip-files charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml \
+			--skip-files config/rbac/single_tenant_clusterrole.yaml \
+			--skip-files dist/install.yaml \
+			--skip-dirs test/manifests \
+			.
 	trivy image \
 		--severity HIGH,CRITICAL \
 		--ignore-unfixed \

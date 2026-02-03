@@ -19,6 +19,7 @@ func init() {
 
 // SetAdmissionDependenciesReady sets the readiness gauge for admission dependencies.
 func SetAdmissionDependenciesReady(ready bool) {
+	setAdmissionDependenciesReady(ready)
 	if ready {
 		admissionDependenciesReadyGauge.Set(1)
 		return

@@ -12,57 +12,69 @@ flowchart TB
     subgraph OperatorNS ["Operator Namespace"]
         Prov["Provisioner SA"]
         Ctrl["Controller SA"]
-        Tmpl["Delegate Template"]
     end
 
     subgraph TenantNS ["Tenant Namespace"]
         TRole["Tenant Role"]
+        TRB["Tenant RoleBinding"]
+        CRBAC["Per-Cluster RBAC<br/>(pods discovery)"]
         Workload["StatefulSet / Pods"]
     end
 
+    subgraph Policies ["Admission Guardrails"]
+        PVAP["VAP: openbao-restrict-provisioner-rbac"]
+        NVAP["VAP: openbao-restrict-provisioner-namespace-mutations"]
+        CVAP["VAP: openbao-restrict-controller-rbac"]
+    end
+
     %% Provisioner Flow
-    Prov -.->|"Impersonate"| Tmpl
-    Tmpl --"Create/Update"--> TRole
+    Prov --"Create/Update/Delete"--> TRole
+    Prov --"Create/Update/Delete"--> TRB
+    Prov -. "Restricted" .-> PVAP
+    Prov -. "Restricted" .-> NVAP
 
     %% Controller Flow
-    Ctrl --"Bind"--> TRole
-    TRole --"Manage"--> Workload
+    TRB --"Bind"--> Ctrl
+    Ctrl --"Manage"--> Workload
+    Ctrl --"Create/Update/Delete"--> CRBAC
+    Ctrl -. "Restricted" .-> CVAP
 
     %% Styling
     classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
     classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
 
-    class Prov,Tmpl,TRole security;
+    class Prov,TRole,TRB,PVAP,NVAP,CVAP security;
     class Ctrl,Workload write;
+    class CRBAC write;
 ```
 
 ## ServiceAccount Permissions
 
+!!! note "Projected Kubernetes API token audience"
+    The OpenBao Operator disables default token auto-mounting (`automountServiceAccountToken: false`) and mounts an explicit projected ServiceAccount token for Kubernetes API access (TTL: 3600s). By default, the Kubernetes API token does not set an explicit audience (the API server selects the default). If you want to pin the audience, set `serviceAccountToken.kubernetesAudience` (Helm) or patch the `audience` field in `config/manager/controller.yaml` and `config/manager/provisioner.yaml` (Kustomize/YAML installs). An incorrect audience typically results in 401s for in-cluster API calls.
+
+!!! warning "Unsafe mode"
+    Installing with admission policies disabled (Helm: `admissionPolicies.enabled=false`) is treated as **unsafe mode**. The chart sets `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can run without fail-closed admission dependency enforcement and without reconciliation gating. This materially weakens the operator's defense-in-depth controls.
+
 === ":material-account-cog: Provisioner"
 
-    The **Provisioner** is responsible for "Day 1" setup. It provisions tenant RBAC by impersonating a dedicated **Delegate** ServiceAccount.
+    The **Provisioner** is responsible for Day 0 tenant onboarding. It provisions tenant-scoped RBAC directly and is constrained by a `ValidatingAdmissionPolicy` that restricts the exact RBAC objects it can create/update/delete.
 
     !!! note "Blind Write Pattern"
-        The Provisioner creates Roles in tenant namespaces but does not grant *itself* permission to use them. It delegates these permissions to the Controller. This prevents the Provisioner from inspecting tenant data.
+        The Provisioner creates tenant-scoped Roles/RoleBindings but does not grant *itself* permission to use tenant Secrets or workloads. It binds the resulting permissions to the Controller ServiceAccount. This prevents the Provisioner identity from inspecting tenant data.
 
     | Resource | Verbs | Rationale |
     | :--- | :--- | :--- |
-    | `Namespace` | `get`, `update`, `patch` | Manage namespace labels/annotations. **No `list`** (prevents discovery). |
+    | `Namespace` | `get`, `update`, `patch` | Enforce Pod Security Standards labels during onboarding. **No `list`** (prevents discovery). Admission policy restricts Namespace updates to the three PSS label keys and blocks system namespaces. |
     | `OpenBaoTenant` | `get`, `list`, `watch` | Watch for new tenant requests. |
-    | `Role / RoleBinding` | *(none directly)* | RBAC objects are created/updated/deleted via the **Delegate** ServiceAccount through impersonation. |
-    | `ServiceAccount` | `impersonate` | Use the "Delegate" to safely elevate privileges for Role creation. |
-
-=== ":material-account-switch: Delegate (Impersonated)"
-
-    The **Delegate** ServiceAccount is never used directly by a controller. It exists only to provide a tightly scoped identity that the Provisioner can impersonate for RBAC management.
-
-    !!! warning "Defense In Depth"
-        The Delegate is additionally constrained by the `restrict-provisioner-delegate` ValidatingAdmissionPolicy, which limits the RBAC objects it can create/update and enforces strict Secret allowlist Roles.
+    | `ResourceQuota`, `LimitRange` | `get`, `create`, `patch` | Apply default quota/limits during onboarding (Server-Side Apply). **No `list`** (prevents discovery). |
+    | `Role / RoleBinding` | `create`, `get`, `patch`, `delete` | Create and reconcile the tenant template RBAC objects (Server-Side Apply). Delete/patch are name-scoped; CREATE is guarded by admission policy. No `list`/`watch` (prevents discovery). |
+    | `Role` | `bind`, `escalate` | Required by Kubernetes RBAC to create RoleBindings to specific, operator-defined Roles without holding tenant permissions directly. Guarded by admission policy. |
 
 === ":material-controller: Controller"
 
-    The **Controller** is responsible for "Day 2" operations. It has high privileges within tenant namespaces but **zero** privileges outside them.
+    The **Controller** is responsible for "Day 1 and 2" operations. It has high privileges within tenant namespaces but **zero** privileges outside them.
 
     !!! success "Isolation"
         The Controller cannot even *list* namespaces. It is entirely dependent on the Provisioner to "introduce" it to a tenant namespace via a RoleBinding.
@@ -85,15 +97,16 @@ flowchart TB
     | `ConfigMap` | `*` | Manage configuration and TLS metadata. |
     | `Job` | `*` | Run snapshots and upgrades. |
     | `Gateway` ... | `*` | (Optional) Manage Gateway API resources if enabled. |
+    | `Role / RoleBinding` | *(restricted)* | Create minimal per-cluster pod discovery RBAC for OpenBao service accounts. Admission policy restricts RBAC writes to a narrow, allowlisted pattern (prevents RBAC self-escalation). |
 
 ## Security Guarantees
 
 1. **No Secret Enumeration:** Neither ServiceAccount has `list` permissions on Secrets cluster-wide.
 2. **No Topology Discovery:** Neither ServiceAccount has `list` permissions on Namespaces (Provisioner knows only what you tell it via CRs).
-3. **Privilege Separation:** The account that *writes* the permissions (Provisioner) cannot *use* them, and the account that *uses* them (Controller) cannot *change* them.
+3. **Privilege Separation:** The account that *writes* the permissions (Provisioner) cannot *use* them, and the account that *uses* them (Controller) cannot *change* them. Admission policies provide defense-in-depth by constraining both RBAC writes and Namespace mutations.
 4. **Name-Scoped Secrets:** Tenant Secret access is restricted to explicit Secret name allowlists and enforced by admission policy (no Secrets wildcards or enumeration).
 
 ## See Also
 
-- [:material-policy: Admission Policies](admission-policies.md)
+- [:material-shield: Admission Policies](admission-policies.md)
 - [:material-lan-check: Network Security](network-security.md)

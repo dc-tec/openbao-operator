@@ -1,0 +1,104 @@
+{{- if .Values.admissionPolicies.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-namespace-mutations
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["namespaces"]
+  variables:
+    - name: is_provisioner
+      # Matches the ServiceAccount of the Provisioner.
+      expression: >-
+        request.userInfo.username in [
+          "system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.provisionerServiceAccountName" . }}"
+        ]
+    - name: is_system_namespace
+      # Use request.name for cluster-scoped Namespace objects.
+      expression: >-
+        request.name == "{{ .Release.Namespace }}" ||
+        request.name.startsWith("kube-") ||
+        request.name == "openshift" ||
+        request.name.startsWith("openshift-") ||
+        request.name.startsWith("gke-")
+    - name: new_labels
+      expression: >-
+        (object != null && has(object.metadata) && has(object.metadata.labels)) ? object.metadata.labels : {}
+    - name: old_labels
+      expression: >-
+        (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels)) ? oldObject.metadata.labels : {}
+  validations:
+    # Rule 0: Never mutate system namespaces.
+    - expression: >-
+        !variables.is_provisioner ||
+        !variables.is_system_namespace
+      message: "The Provisioner may not mutate system namespaces."
+
+    # Rule 1: Only enforce Pod Security Standards labels (restricted), and do not change anything else.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation != "UPDATE" ||
+        request.resource.resource != "namespaces" ||
+        (
+          oldObject != null &&
+          object != null &&
+          object.spec == oldObject.spec &&
+          object.status == oldObject.status &&
+          (has(object.metadata.annotations) == has(oldObject.metadata.annotations) &&
+            (!has(object.metadata.annotations) || object.metadata.annotations == oldObject.metadata.annotations)) &&
+          (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+            (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+          (has(object.metadata.finalizers) == has(oldObject.metadata.finalizers) &&
+            (!has(object.metadata.finalizers) || object.metadata.finalizers == oldObject.metadata.finalizers)) &&
+          ("pod-security.kubernetes.io/enforce" in variables.new_labels) &&
+          ("pod-security.kubernetes.io/audit" in variables.new_labels) &&
+          ("pod-security.kubernetes.io/warn" in variables.new_labels) &&
+          variables.new_labels["pod-security.kubernetes.io/enforce"] == "restricted" &&
+          variables.new_labels["pod-security.kubernetes.io/audit"] == "restricted" &&
+          variables.new_labels["pod-security.kubernetes.io/warn"] == "restricted" &&
+          (
+            variables.new_labels.all(k, v,
+              k in [
+                "pod-security.kubernetes.io/enforce",
+                "pod-security.kubernetes.io/audit",
+                "pod-security.kubernetes.io/warn"
+              ] || (k in variables.old_labels && variables.old_labels[k] == v)) &&
+            variables.old_labels.all(k, v,
+              k in [
+                "pod-security.kubernetes.io/enforce",
+                "pod-security.kubernetes.io/audit",
+                "pod-security.kubernetes.io/warn"
+              ] || (k in variables.new_labels && variables.new_labels[k] == v))
+          )
+        )
+      message: "The Provisioner may only enforce Pod Security Standards labels (restricted) on Namespaces."
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-namespace-mutations-binding
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
+  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
+  policyName: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-namespace-mutations
+  validationActions: [Deny]
+  matchResources:
+    # This binding applies the policy to ALL Namespace update requests.
+    # The policy itself filters for the specific user (is_provisioner variable).
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["namespaces"]
+
+{{- end }}

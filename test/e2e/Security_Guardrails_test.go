@@ -6,11 +6,13 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
@@ -98,6 +101,411 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 
 		admin, err = client.New(cfg, client.Options{Scheme: scheme})
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	// --- Operator Pod Hardening ---
+	Context("Operator Pod Hardening", Label("pentest", "tokens"), func() {
+		const (
+			controllerDeployment  = "openbao-operator-controller"
+			provisionerDeployment = "openbao-operator-provisioner"
+		)
+
+		getDeployment := func(name string) (*appsv1.Deployment, error) {
+			deploy := &appsv1.Deployment{}
+			if err := admin.Get(ctx, types.NamespacedName{Name: name, Namespace: operatorNamespace}, deploy); err != nil {
+				return nil, err
+			}
+			return deploy, nil
+		}
+
+		serviceAccountUsername := func(namespace, saName string) string {
+			return fmt.Sprintf("system:serviceaccount:%s:%s", namespace, saName)
+		}
+
+		findProjectedSAToken := func(vol corev1.Volume) *corev1.ServiceAccountTokenProjection {
+			if vol.Projected == nil {
+				return nil
+			}
+			for i := range vol.Projected.Sources {
+				src := &vol.Projected.Sources[i]
+				if src.ServiceAccountToken != nil {
+					return src.ServiceAccountToken
+				}
+			}
+			return nil
+		}
+
+		It("disables default ServiceAccount token automount", func() {
+			ctrl, err := getDeployment(controllerDeployment)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ctrl.Spec.Template.Spec.AutomountServiceAccountToken).NotTo(BeNil())
+			Expect(*ctrl.Spec.Template.Spec.AutomountServiceAccountToken).To(BeFalse())
+
+			// Provisioner exists only in multi-tenant mode; skip if absent (single-tenant installs).
+			prov, err := getDeployment(provisionerDeployment)
+			if apierrors.IsNotFound(err) {
+				Skip("Provisioner Deployment not found; likely running in single-tenant mode")
+			}
+			Expect(err).NotTo(HaveOccurred())
+			Expect(prov.Spec.Template.Spec.AutomountServiceAccountToken).NotTo(BeNil())
+			Expect(*prov.Spec.Template.Spec.AutomountServiceAccountToken).To(BeFalse())
+		})
+
+		It("uses projected Kubernetes API token with explicit audience and TTL", func() {
+			expectedKubeAudience := os.Getenv("OPENBAO_KUBE_API_AUDIENCE")
+
+			ctrl, err := getDeployment(controllerDeployment)
+			Expect(err).NotTo(HaveOccurred())
+
+			var kubeAPIVol *corev1.Volume
+			var openBaoVol *corev1.Volume
+			for i := range ctrl.Spec.Template.Spec.Volumes {
+				vol := &ctrl.Spec.Template.Spec.Volumes[i]
+				switch vol.Name {
+				case "kube-api-access":
+					kubeAPIVol = vol
+				case "openbao-token":
+					openBaoVol = vol
+				}
+			}
+			Expect(kubeAPIVol).NotTo(BeNil(), "expected kube-api-access projected volume")
+			Expect(openBaoVol).NotTo(BeNil(), "expected openbao-token projected volume")
+
+			kubeToken := findProjectedSAToken(*kubeAPIVol)
+			Expect(kubeToken).NotTo(BeNil(), "expected serviceAccountToken projection for kube-api-access")
+			Expect(kubeToken.ExpirationSeconds).NotTo(BeNil())
+			Expect(*kubeToken.ExpirationSeconds).To(Equal(int64(3600)))
+			if expectedKubeAudience == "" {
+				Expect(kubeToken.Audience).To(BeEmpty())
+			} else {
+				Expect(kubeToken.Audience).To(Equal(expectedKubeAudience))
+			}
+
+			openBaoToken := findProjectedSAToken(*openBaoVol)
+			Expect(openBaoToken).NotTo(BeNil(), "expected serviceAccountToken projection for openbao-token")
+			Expect(openBaoToken.ExpirationSeconds).NotTo(BeNil())
+			Expect(*openBaoToken.ExpirationSeconds).To(Equal(int64(3600)))
+			Expect(openBaoToken.Audience).To(Equal("openbao-internal"))
+
+			// Also verify the provisioner token settings when present.
+			prov, err := getDeployment(provisionerDeployment)
+			if apierrors.IsNotFound(err) {
+				Skip("Provisioner Deployment not found; likely running in single-tenant mode")
+			}
+			Expect(err).NotTo(HaveOccurred())
+
+			var provKubeAPIVol *corev1.Volume
+			for i := range prov.Spec.Template.Spec.Volumes {
+				vol := &prov.Spec.Template.Spec.Volumes[i]
+				if vol.Name == "kube-api-access" {
+					provKubeAPIVol = vol
+					break
+				}
+			}
+			Expect(provKubeAPIVol).NotTo(BeNil(), "expected kube-api-access projected volume on provisioner")
+			provKubeToken := findProjectedSAToken(*provKubeAPIVol)
+			Expect(provKubeToken).NotTo(BeNil(), "expected serviceAccountToken projection for provisioner kube-api-access")
+			Expect(provKubeToken.ExpirationSeconds).NotTo(BeNil())
+			Expect(*provKubeToken.ExpirationSeconds).To(Equal(int64(3600)))
+			if expectedKubeAudience == "" {
+				Expect(provKubeToken.Audience).To(BeEmpty())
+			} else {
+				Expect(provKubeToken.Audience).To(Equal(expectedKubeAudience))
+			}
+		})
+
+		It("applies admission guardrails to provisioner identity", Label("rbac"), func() {
+			prov, err := getDeployment(provisionerDeployment)
+			if apierrors.IsNotFound(err) {
+				Skip("Provisioner Deployment not found; likely running in single-tenant mode")
+			}
+			Expect(err).NotTo(HaveOccurred())
+
+			tenantFW, err := framework.New(ctx, admin, "tenant-prov-guardrails", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() { _ = tenantFW.Cleanup(ctx) })
+
+			provisionerSA := prov.Spec.Template.Spec.ServiceAccountName
+			Expect(provisionerSA).NotTo(BeEmpty())
+			provisionerUser := serviceAccountUsername(operatorNamespace, provisionerSA)
+			provisionerGroups := []string{
+				"system:serviceaccounts",
+				fmt.Sprintf("system:serviceaccounts:%s", operatorNamespace),
+				"system:authenticated",
+			}
+
+			By("denying creation of non-allowlisted Roles")
+			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
+				return c.Create(ctx, &rbacv1.Role{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "evil-role",
+						Namespace: tenantFW.Namespace,
+					},
+					// Intentionally empty rules: if we request permissions the Provisioner does not already hold,
+					// Kubernetes RBAC escalation checks can deny the request before admission policies run.
+					// This test is meant to validate the ValidatingAdmissionPolicy name restriction.
+					Rules: []rbacv1.PolicyRule{},
+				})
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(SatisfyAny(
+				ContainSubstring("The Provisioner can only create Roles"),
+				ContainSubstring("Provisioner can only create Roles"),
+			))
+
+			By("denying updates that attempt to broaden the tenant Role")
+			roleKey := types.NamespacedName{Name: provisioner.TenantRoleName, Namespace: tenantFW.Namespace}
+			original := &rbacv1.Role{}
+			Expect(admin.Get(ctx, roleKey, original)).To(Succeed(), "expected tenant Role to exist")
+
+			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
+				current := &rbacv1.Role{}
+				if err := c.Get(ctx, roleKey, current); err != nil {
+					return err
+				}
+				current.Rules = append(current.Rules, rbacv1.PolicyRule{
+					APIGroups: []string{"*"},
+					Resources: []string{"*"},
+					Verbs:     []string{"*"},
+				})
+				return c.Patch(ctx, current, client.MergeFrom(original))
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(SatisfyAny(
+				ContainSubstring("wildcard permissions"),
+				ContainSubstring("wildcard apiGroups or resources"),
+				ContainSubstring("allowlisted set of API groups, resources, and verbs"),
+			))
+
+			By("denying updates that attempt to grant pods/exec on the tenant Role")
+			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
+				current := &rbacv1.Role{}
+				if err := c.Get(ctx, roleKey, current); err != nil {
+					return err
+				}
+				current.Rules = append(current.Rules, rbacv1.PolicyRule{
+					APIGroups: []string{""},
+					Resources: []string{"pods/exec"},
+					Verbs:     []string{"create"},
+				})
+				return c.Patch(ctx, current, client.MergeFrom(original))
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(SatisfyAny(
+				ContainSubstring("allowlisted set of API groups, resources, and verbs"),
+				ContainSubstring("allowlisted set of API groups"),
+			))
+
+			By("denying RBAC writes in system namespaces")
+			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
+				return c.Create(ctx, &rbacv1.Role{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      provisioner.TenantRoleName,
+						Namespace: "kube-system",
+					},
+				})
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("may not manage tenant RBAC in system namespaces"))
+		})
+
+		It("applies admission guardrails to provisioner Namespace mutations", Label("rbac"), func() {
+			prov, err := getDeployment(provisionerDeployment)
+			if apierrors.IsNotFound(err) {
+				Skip("Provisioner Deployment not found; likely running in single-tenant mode")
+			}
+			Expect(err).NotTo(HaveOccurred())
+
+			tenantFW, err := framework.New(ctx, admin, "tenant-prov-ns-guardrails", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() { _ = tenantFW.Cleanup(ctx) })
+
+			provisionerSA := prov.Spec.Template.Spec.ServiceAccountName
+			Expect(provisionerSA).NotTo(BeEmpty())
+			provisionerUser := serviceAccountUsername(operatorNamespace, provisionerSA)
+			provisionerGroups := []string{
+				"system:serviceaccounts",
+				fmt.Sprintf("system:serviceaccounts:%s", operatorNamespace),
+				"system:authenticated",
+			}
+
+			By("denying Namespace label mutations outside the PSS enforcement keys")
+			nsKey := types.NamespacedName{Name: tenantFW.Namespace}
+			original := &corev1.Namespace{}
+			Expect(admin.Get(ctx, nsKey, original)).To(Succeed())
+
+			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
+				current := &corev1.Namespace{}
+				if err := c.Get(ctx, nsKey, current); err != nil {
+					return err
+				}
+				if current.Labels == nil {
+					current.Labels = map[string]string{}
+				}
+				current.Labels["e2e.openbao.org/evil"] = "true"
+				return c.Patch(ctx, current, client.MergeFrom(original))
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(SatisfyAny(
+				ContainSubstring("may only enforce Pod Security Standards labels"),
+				ContainSubstring("only enforce Pod Security Standards labels"),
+			))
+
+			By("allowing Pod Security Standards enforce=restricted label enforcement")
+			original = &corev1.Namespace{}
+			Expect(admin.Get(ctx, nsKey, original)).To(Succeed())
+			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
+				current := &corev1.Namespace{}
+				if err := c.Get(ctx, nsKey, current); err != nil {
+					return err
+				}
+				if current.Labels == nil {
+					current.Labels = map[string]string{}
+				}
+				current.Labels["pod-security.kubernetes.io/enforce"] = "restricted"
+				return c.Patch(ctx, current, client.MergeFrom(original))
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("applies admission guardrails to controller RBAC writes", Label("rbac"), func() {
+			ctrl, err := getDeployment(controllerDeployment)
+			Expect(err).NotTo(HaveOccurred())
+
+			tenantFW, err := framework.New(ctx, admin, "tenant-ctrl-rbac-guardrails", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() { _ = tenantFW.Cleanup(ctx) })
+
+			controllerSA := ctrl.Spec.Template.Spec.ServiceAccountName
+			Expect(controllerSA).NotTo(BeEmpty())
+			controllerUser := serviceAccountUsername(operatorNamespace, controllerSA)
+			controllerGroups := []string{
+				"system:serviceaccounts",
+				fmt.Sprintf("system:serviceaccounts:%s", operatorNamespace),
+				"system:authenticated",
+			}
+
+			By("denying controller creation of arbitrary Roles")
+			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, controllerUser, controllerGroups, func(c client.Client) error {
+				return c.Create(ctx, &rbacv1.Role{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "evil-controller-role",
+						Namespace: tenantFW.Namespace,
+					},
+					// Empty rules avoids RBAC escalation checks and ensures the denial is from the VAP.
+					Rules: []rbacv1.PolicyRule{},
+				})
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(SatisfyAny(
+				ContainSubstring("controller can only create/update Roles"),
+				ContainSubstring("Controller can only create/update Roles"),
+			))
+
+			By("denying controller creation of RoleBindings that do not match the allowlisted pattern")
+			// Create a harmless Role as admin so API servers that validate roleRef existence succeed.
+			dummyRole := &rbacv1.Role{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "e2e-dummy-role",
+					Namespace: tenantFW.Namespace,
+				},
+				Rules: []rbacv1.PolicyRule{},
+			}
+			err = admin.Create(ctx, dummyRole)
+			if err != nil && !apierrors.IsAlreadyExists(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, controllerUser, controllerGroups, func(c client.Client) error {
+				return c.Create(ctx, &rbacv1.RoleBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "evil-controller-binding",
+						Namespace: tenantFW.Namespace,
+					},
+					RoleRef: rbacv1.RoleRef{
+						APIGroup: rbacv1.GroupName,
+						Kind:     "Role",
+						Name:     dummyRole.Name,
+					},
+					Subjects: []rbacv1.Subject{
+						{
+							Kind:      "ServiceAccount",
+							Name:      "some-other-sa",
+							Namespace: tenantFW.Namespace,
+						},
+					},
+				})
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(SatisfyAny(
+				ContainSubstring("can only create/update RoleBindings"),
+				ContainSubstring("only create/update RoleBindings"),
+			))
+		})
+
+		It("prevents operator identities from cluster-scoped RBAC writes", Label("rbac"), func() {
+			ctrl, err := getDeployment(controllerDeployment)
+			Expect(err).NotTo(HaveOccurred())
+
+			prov, err := getDeployment(provisionerDeployment)
+			if apierrors.IsNotFound(err) {
+				Skip("Provisioner Deployment not found; likely running in single-tenant mode")
+			}
+			Expect(err).NotTo(HaveOccurred())
+
+			controllerSA := ctrl.Spec.Template.Spec.ServiceAccountName
+			Expect(controllerSA).NotTo(BeEmpty())
+			controllerUser := serviceAccountUsername(operatorNamespace, controllerSA)
+
+			provisionerSA := prov.Spec.Template.Spec.ServiceAccountName
+			Expect(provisionerSA).NotTo(BeEmpty())
+			provisionerUser := serviceAccountUsername(operatorNamespace, provisionerSA)
+
+			checkCanI := func(user string, ra authorizationv1.ResourceAttributes) bool {
+				impCfg := rest.CopyConfig(cfg)
+				impCfg.Impersonate = rest.ImpersonationConfig{
+					UserName: user,
+					Groups: []string{
+						"system:serviceaccounts",
+						fmt.Sprintf("system:serviceaccounts:%s", operatorNamespace),
+						"system:authenticated",
+					},
+				}
+				clientset, err := kubernetes.NewForConfig(impCfg)
+				Expect(err).NotTo(HaveOccurred())
+				resp, err := clientset.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
+					Spec: authorizationv1.SelfSubjectAccessReviewSpec{
+						ResourceAttributes: &ra,
+					},
+				}, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				return resp.Status.Allowed
+			}
+
+			By("denying controller clusterrole/clusterrolebinding creation via RBAC")
+			Expect(checkCanI(controllerUser, authorizationv1.ResourceAttributes{
+				Group:    "rbac.authorization.k8s.io",
+				Resource: "clusterroles",
+				Verb:     "create",
+			})).To(BeFalse())
+			Expect(checkCanI(controllerUser, authorizationv1.ResourceAttributes{
+				Group:    "rbac.authorization.k8s.io",
+				Resource: "clusterrolebindings",
+				Verb:     "create",
+			})).To(BeFalse())
+
+			By("denying provisioner clusterrole/clusterrolebinding creation via RBAC")
+			Expect(checkCanI(provisionerUser, authorizationv1.ResourceAttributes{
+				Group:    "rbac.authorization.k8s.io",
+				Resource: "clusterroles",
+				Verb:     "create",
+			})).To(BeFalse())
+			Expect(checkCanI(provisionerUser, authorizationv1.ResourceAttributes{
+				Group:    "rbac.authorization.k8s.io",
+				Resource: "clusterrolebindings",
+				Verb:     "create",
+			})).To(BeFalse())
+		})
 	})
 
 	// --- Admission Policy Enforcement ---
@@ -717,6 +1125,155 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				g.Expect(admin.Get(ctx, writerRBKey, rb)).To(Succeed())
 				g.Expect(rb.RoleRef.Name).To(Equal(provisioner.TenantSecretsWriterRoleName))
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		It("restricts OpenBao pod ServiceAccount pod patching to cluster pods", Label("pentest"), func() {
+			clusterName := "rbac-pod-mutation"
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  openBaoVersion,
+					Image:    openBaoImage,
+					Replicas: 1,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled:  true,
+						Requests: framework.DefaultAdminSelfInitRequests(),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, cluster)).To(Succeed())
+			DeferCleanup(func() {
+				_ = admin.Delete(ctx, cluster)
+			})
+
+			By("waiting for the cluster StatefulSet to exist and expose the Pod service account")
+			var clusterSA string
+			Eventually(func(g Gomega) {
+				sts := &appsv1.StatefulSet{}
+				err := admin.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, sts)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(sts.Spec.Template.Spec.ServiceAccountName).NotTo(BeEmpty())
+				clusterSA = sts.Spec.Template.Spec.ServiceAccountName
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			clusterUser := fmt.Sprintf("system:serviceaccount:%s:%s", tenantNamespace, clusterSA)
+			impCfg := rest.CopyConfig(cfg)
+			impCfg.Impersonate = rest.ImpersonationConfig{
+				UserName: clusterUser,
+				Groups: []string{
+					"system:serviceaccounts",
+					fmt.Sprintf("system:serviceaccounts:%s", tenantNamespace),
+					"system:authenticated",
+				},
+			}
+			clientset, err := kubernetes.NewForConfig(impCfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("creating a non-OpenBao pod in the tenant namespace")
+			otherPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "not-" + clusterName + "-0",
+					Namespace: tenantNamespace,
+				},
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					AutomountServiceAccountToken: func() *bool {
+						v := false
+						return &v
+					}(),
+					SecurityContext: &corev1.PodSecurityContext{
+						RunAsNonRoot: func() *bool {
+							v := true
+							return &v
+						}(),
+						RunAsUser: func() *int64 {
+							v := int64(65532)
+							return &v
+						}(),
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
+					},
+					Containers: []corev1.Container{
+						{
+							Name:  "pause",
+							Image: "registry.k8s.io/pause:3.9",
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: func() *bool {
+									v := false
+									return &v
+								}(),
+								ReadOnlyRootFilesystem: func() *bool {
+									v := true
+									return &v
+								}(),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+							},
+						},
+					},
+				},
+			}
+			err = admin.Create(ctx, otherPod)
+			if err != nil && !apierrors.IsAlreadyExists(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+			DeferCleanup(func() {
+				_ = admin.Delete(ctx, otherPod)
+			})
+
+			By("waiting for an OpenBao pod to exist")
+			openBaoPodName := ""
+			Eventually(func(g Gomega) {
+				podList := &corev1.PodList{}
+				g.Expect(admin.List(ctx, podList,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{"openbao.org/cluster": clusterName},
+				)).To(Succeed())
+				g.Expect(podList.Items).NotTo(BeEmpty())
+				openBaoPodName = podList.Items[0].Name
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			patch := []byte(`{"metadata":{"labels":{"openbao-active":"true"}}}`)
+			_, err = clientset.CoreV1().Pods(tenantNamespace).Patch(
+				ctx,
+				openBaoPodName,
+				types.MergePatchType,
+				patch,
+				metav1.PatchOptions{DryRun: []string{metav1.DryRunAll}},
+			)
+			Expect(err).NotTo(HaveOccurred(), "expected OpenBao pod ServiceAccount to be able to patch the OpenBao pod labels (dry-run)")
+
+			_, err = clientset.CoreV1().Pods(tenantNamespace).Patch(
+				ctx,
+				otherPod.Name,
+				types.MergePatchType,
+				patch,
+				metav1.PatchOptions{DryRun: []string{metav1.DryRunAll}},
+			)
+			Expect(err).To(HaveOccurred())
+			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected OpenBao pod ServiceAccount pod patch to be restricted by resourceNames")
 		})
 
 		It("has required ValidatingAdmissionPolicy dependencies installed and correctly bound", func() {

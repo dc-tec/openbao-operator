@@ -96,13 +96,37 @@ patchesJson6902:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-openbao-restrict-provisioner-delegate
+      name: openbao-operator-openbao-restrict-provisioner-rbac
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicyBinding
-      name: openbao-operator-openbao-restrict-provisioner-delegate-binding
+      name: openbao-operator-openbao-restrict-provisioner-rbac-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-controller-rbac
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-restrict-controller-rbac-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-restrict-provisioner-namespace-mutations-binding
     path: policy_strip_namespace_patch.yaml
 
     # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER' prefix.
@@ -167,22 +191,6 @@ replacements:
   #         delimiter: '.'
   #         index: 1
   #         create: true
-
-  # Ensure ClusterRoleBinding subject namespace matches kustomize namespace
-  # This is required because ClusterRoleBindings are cluster-scoped and kustomize
-  # doesn't automatically transform the namespace in the subject.
-  - source:
-      kind: ServiceAccount
-      name: provisioner-delegate
-      fieldPath: .metadata.namespace
-    targets:
-      - select:
-          kind: ClusterRoleBinding
-          name: openbao-operator-tenant-delegate-binding
-        fieldPaths:
-          - .subjects.[name=provisioner-delegate].namespace
-        options:
-          create: true
 
   # Webhooks are intentionally not used by this operator. Admission control is
   # implemented via ValidatingAdmissionPolicy and CRD structural validation.

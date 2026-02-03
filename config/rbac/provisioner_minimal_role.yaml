@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: openbao-operator-provisioner-role
+  name: provisioner-role
   labels:
     app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: provisioner
@@ -23,29 +23,10 @@ rules:
       - update
       - patch
 
-  # 2. Impersonation
-  - apiGroups:
-      - ""
-    resources:
-      - serviceaccounts
-    verbs:
-      - impersonate
-    resourceNames:
-      # NOTE: This value must match the fully qualified name of the delegate
-      # ServiceAccount after kustomize namePrefix transformations. The
-      # ServiceAccount is defined as "provisioner-delegate" in
-      # config/rbac/provisioner_delegate_serviceaccount.yaml and kustomize
-      # applies the "openbao-operator-" prefix, resulting in the final name
-      # "openbao-operator-provisioner-delegate".
-      - openbao-operator-provisioner-delegate
-
-  # 3. ServiceAccount Access (get only - no list/watch)
-  # SECURITY: The Provisioner only needs to get a specific ServiceAccount (the delegate
-  # ServiceAccount) in the operator namespace during initialization. Cache is disabled
-  # for ServiceAccounts to prevent requiring cluster-wide list/watch permissions.
-  # This eliminates the ability for a compromised Provisioner to enumerate ServiceAccounts
-  # across the cluster. The Provisioner makes direct API calls (GET) for the specific
-  # ServiceAccount it needs instead of using the cached client.
+  # 2. ServiceAccount Access (get only - no list/watch)
+  # SECURITY: The Provisioner only needs to get specific ServiceAccounts in the operator
+  # namespace during initialization. Cache is disabled for ServiceAccounts to prevent
+  # requiring cluster-wide list/watch permissions.
   - apiGroups:
       - ""
     resources:
@@ -79,7 +60,71 @@ rules:
       - list
       - watch
 
-  # 5. RBAC Management
-  # RBAC resources are always managed via impersonation of the delegate ServiceAccount.
-  # This eliminates the need for the Provisioner ServiceAccount to have any direct
-  # Role/RoleBinding permissions.
+  # 4c. Admission policy dependency checks (get only)
+  # Required for fail-closed startup validation that ValidatingAdmissionPolicies are present and enforced.
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
+    verbs:
+      - get
+
+  # 4d. Tenant quota/limits management (namespaced)
+  # NOTE: Server-Side Apply may create objects when they don't exist yet, which requires 'create' permission.
+  - apiGroups:
+      - ""
+    resources:
+      - resourcequotas
+      - limitranges
+    verbs:
+      - get
+      - create
+      - patch
+
+  # 5. Tenant onboarding resources (Server-Side Apply)
+  # SECURITY: The Provisioner uses Server-Side Apply (PATCH) against fixed resource names.
+  # NOTE: Server-Side Apply may create objects when they don't exist yet, which requires 'create' permission.
+  # Admission policy enforcement restricts which RBAC objects can be created and what they may contain.
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+      - rolebindings
+    verbs:
+      - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+    resourceNames:
+      - openbao-operator-tenant-role
+      - openbao-operator-tenant-secrets-reader
+      - openbao-operator-tenant-secrets-writer
+    verbs:
+      - get
+      - patch
+      - delete
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - rolebindings
+    resourceNames:
+      - openbao-operator-tenant-rolebinding
+      - openbao-operator-tenant-secrets-reader-rolebinding
+      - openbao-operator-tenant-secrets-writer-rolebinding
+    verbs:
+      - get
+      - patch
+      - delete
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+    verbs:
+      - bind
+      - escalate
+    resourceNames:
+      - openbao-operator-tenant-role
+      - openbao-operator-tenant-secrets-reader
+      - openbao-operator-tenant-secrets-writer

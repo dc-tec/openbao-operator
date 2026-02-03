@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: openbao-operator-provisioner
+  name: provisioner
   namespace: system
   labels:
     app.kubernetes.io/name: openbao-operator
@@ -21,23 +21,29 @@ spec:
         app.kubernetes.io/name: openbao-operator
         app.kubernetes.io/component: provisioner
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: manager
-          # [FIX] Replace :latest with a distinct placeholder or version.
-          # Kustomize will overwrite this, but specific tags satisfy scanners.
           image: controller:0.0.0
           command: ["/manager", "provisioner"]
           args:
             - --leader-elect
             - --health-probe-bind-address=:8081
-            - --metrics-bind-address=:8443
           env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OPERATOR_NAME_PREFIX
+              value: openbao-operator-
+            - name: OPERATOR_SERVICE_ACCOUNT_NAME
+              value: openbao-operator-controller
             - name: OPERATOR_VERSION
-              value: "0.0.0" # [FIX] Set to actual version during release/build
+              value: "0.0.0"
           ports: []
           securityContext:
             readOnlyRootFilesystem: true
@@ -64,7 +70,27 @@ spec:
             limits:
               cpu: 100m
               memory: 64Mi
-          volumeMounts: []
-      volumes: []
-      serviceAccountName: openbao-operator-provisioner
+          volumeMounts:
+            - name: kube-api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+      volumes:
+        - name: kube-api-access
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef:
+                        fieldPath: metadata.namespace
+            defaultMode: 420
+      serviceAccountName: provisioner
       terminationGracePeriodSeconds: 10

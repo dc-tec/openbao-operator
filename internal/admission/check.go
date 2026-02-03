@@ -3,6 +3,7 @@ package admission
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -36,9 +37,43 @@ type Status struct {
 }
 
 const (
-	dependencyProvisionerDelegate  = "provisioner-delegate"
+	dependencyProvisionerRBAC      = "provisioner-rbac"
+	dependencyProvisionerNamespace = "provisioner-namespace-mutations"
+	dependencyControllerRBAC       = "controller-rbac"
 	dependencyManagedResourceLocks = "managed-resource-locks"
 )
+
+// DefaultNamePrefixes returns the resource name prefixes to try when resolving
+// admission policy objects.
+//
+// Kustomize installs use the stable prefix "openbao-operator-".
+// Helm installs typically use "<release>-openbao-operator-" (or fullnameOverride).
+func DefaultNamePrefixes() []string {
+	var prefixes []string
+
+	if env := strings.TrimSpace(os.Getenv("OPERATOR_NAME_PREFIX")); env != "" {
+		// Accept either "foo-" or "foo" and normalize to a prefix.
+		if !strings.HasSuffix(env, "-") {
+			env = env + "-"
+		}
+		prefixes = append(prefixes, env)
+	}
+
+	// Backward compatible defaults.
+	prefixes = append(prefixes, "openbao-operator-", "")
+
+	// De-duplicate while keeping order (empty string must remain last if present).
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(prefixes))
+	for _, p := range prefixes {
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return out
+}
 
 // DefaultDependencies returns the admission dependencies treated as release-critical.
 func DefaultDependencies() []Dependency {
@@ -54,9 +89,19 @@ func DefaultDependencies() []Dependency {
 			BindingName: "lock-controller-statefulset-mutations",
 		},
 		{
-			Name:        dependencyProvisionerDelegate,
-			PolicyName:  "openbao-restrict-provisioner-delegate",
-			BindingName: "openbao-restrict-provisioner-delegate-binding",
+			Name:        dependencyProvisionerRBAC,
+			PolicyName:  "openbao-restrict-provisioner-rbac",
+			BindingName: "openbao-restrict-provisioner-rbac-binding",
+		},
+		{
+			Name:        dependencyProvisionerNamespace,
+			PolicyName:  "openbao-restrict-provisioner-namespace-mutations",
+			BindingName: "openbao-restrict-provisioner-namespace-mutations-binding",
+		},
+		{
+			Name:        dependencyControllerRBAC,
+			PolicyName:  "openbao-restrict-controller-rbac",
+			BindingName: "openbao-restrict-controller-rbac-binding",
 		},
 		{
 			Name:        dependencyManagedResourceLocks,

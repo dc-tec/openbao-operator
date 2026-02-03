@@ -1,8 +1,7 @@
 ---
 # ClusterRoleBinding for the Provisioner Controller
 # This binds the operator ServiceAccount to the Provisioner ClusterRole,
-# allowing it to watch namespaces and create Role/RoleBinding resources
-# in tenant namespaces.
+# allowing it to onboard tenant namespaces by creating fixed Role/RoleBinding resources.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -10,12 +9,12 @@ metadata:
     app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
-  name: openbao-operator-provisioner-rolebinding
+  name: provisioner-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openbao-operator-provisioner-role
+  name: provisioner-role
 subjects:
   - kind: ServiceAccount
-    name: openbao-operator-provisioner
+    name: provisioner
     namespace: system

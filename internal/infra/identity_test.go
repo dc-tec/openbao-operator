@@ -145,27 +145,78 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 	}
 
 	foundPodRule := false
+	foundPodMutationRule := false
 	for _, rule := range role.Rules {
 		if len(rule.APIGroups) > 0 && rule.APIGroups[0] == "" &&
 			len(rule.Resources) > 0 && rule.Resources[0] == "pods" {
-			foundPodRule = true
-			expectedVerbs := []string{"get", "list", "watch", "patch", "update"}
-			for _, expectedVerb := range expectedVerbs {
-				found := false
-				for _, verb := range rule.Verbs {
-					if verb == expectedVerb {
-						found = true
-						break
+			// Discovery rule (list/watch) should not allow mutation.
+			hasListOrWatch := false
+			hasPatchOrUpdate := false
+			for _, verb := range rule.Verbs {
+				if verb == "list" || verb == "watch" {
+					hasListOrWatch = true
+				}
+				if verb == "patch" || verb == "update" {
+					hasPatchOrUpdate = true
+				}
+			}
+
+			if hasListOrWatch {
+				foundPodRule = true
+				if hasPatchOrUpdate {
+					t.Errorf("expected pod discovery rule to not include patch/update, got verbs=%v", rule.Verbs)
+				}
+				for _, expectedVerb := range []string{"get", "list", "watch"} {
+					found := false
+					for _, verb := range rule.Verbs {
+						if verb == expectedVerb {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected Role to have verb %q in discovery rule", expectedVerb)
 					}
 				}
-				if !found {
-					t.Errorf("expected Role to have verb %q", expectedVerb)
+			}
+
+			if hasPatchOrUpdate {
+				foundPodMutationRule = true
+				if len(rule.ResourceNames) == 0 {
+					t.Errorf("expected pod mutation rule to restrict resourceNames, got none")
+				}
+				for _, expectedName := range []string{cluster.Name + "-0", cluster.Name + "-1", cluster.Name + "-2"} {
+					found := false
+					for _, n := range rule.ResourceNames {
+						if n == expectedName {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected pod mutation rule to include resourceName %q", expectedName)
+					}
+				}
+				for _, expectedVerb := range []string{"patch", "update"} {
+					found := false
+					for _, verb := range rule.Verbs {
+						if verb == expectedVerb {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected Role to have verb %q in mutation rule", expectedVerb)
+					}
 				}
 			}
 		}
 	}
 	if !foundPodRule {
-		t.Fatalf("expected Role to have pod list/get rule")
+		t.Fatalf("expected Role to have pod discovery rule")
+	}
+	if !foundPodMutationRule {
+		t.Fatalf("expected Role to have pod mutation rule with resourceNames")
 	}
 
 	// Verify RoleBinding exists
@@ -200,6 +251,71 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 	if !foundSubject {
 		t.Fatalf("expected RoleBinding to reference ServiceAccount %q", saName)
 	}
+}
+
+func TestEnsureRBAC_IncludesBlueGreenPodResourceNames(t *testing.T) {
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-rbac-bluegreen", ns)
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+		Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+	}
+	cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+		BlueRevision:  "rev-blue",
+		GreenRevision: "rev-green",
+	}
+	createClusterCRForTest(t, k8sClient, cluster)
+	createTLSSecretForTest(t, k8sClient, cluster)
+
+	ctx := context.Background()
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	role := &rbacv1.Role{}
+	roleName := serviceAccountName(cluster) + "-role"
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      roleName,
+	}, role)
+	if err != nil {
+		t.Fatalf("expected Role to exist: %v", err)
+	}
+
+	var mutationRule *rbacv1.PolicyRule
+	for i := range role.Rules {
+		rule := &role.Rules[i]
+		if len(rule.APIGroups) > 0 && rule.APIGroups[0] == "" &&
+			len(rule.Resources) > 0 && rule.Resources[0] == "pods" &&
+			contains(rule.Verbs, "patch") {
+			mutationRule = rule
+			break
+		}
+	}
+	if mutationRule == nil {
+		t.Fatalf("expected pod mutation rule to exist")
+	}
+
+	for _, expected := range []string{
+		cluster.Name + "-rev-blue-0",
+		cluster.Name + "-rev-green-0",
+	} {
+		if !contains(mutationRule.ResourceNames, expected) {
+			t.Fatalf("expected mutation rule to include %q, got %v", expected, mutationRule.ResourceNames)
+		}
+	}
+}
+
+func contains(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }
 
 func TestEnsureRBAC_IsIdempotent(t *testing.T) {
