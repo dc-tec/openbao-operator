@@ -39,8 +39,8 @@ const serviceAccountName = "openbao-operator-controller"
 
 // metricsServiceName is the name of the metrics service of the project
 // After kustomize namePrefix (openbao-operator-) is applied to openbao-operator-controller-metrics-service,
-// the final name becomes openbao-operator-openbao-operator-controller-metrics-service
-const metricsServiceName = "openbao-operator-openbao-operator-controller-metrics-service"
+// the final name becomes openbao-operator-controller-metrics-service
+const metricsServiceName = "openbao-operator-controller-metrics-service"
 
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
 const metricsRoleBindingName = "openbao-operator-metrics-binding"

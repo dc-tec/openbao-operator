@@ -44,7 +44,7 @@ func randString(n int) string {
 }
 
 func patchSingleTenantMode(namespace string) error {
-	cmd := exec.Command("kubectl", "set", "env", "deployment/openbao-operator-openbao-operator-controller",
+	cmd := exec.Command("kubectl", "set", "env", "deployment/openbao-operator-controller",
 		fmt.Sprintf("WATCH_NAMESPACE=%s", namespace),
 		"-n", operatorNamespace,
 	)
@@ -56,7 +56,7 @@ func patchSingleTenantMode(namespace string) error {
 
 // restoreMultiTenantMode removes the WATCH_NAMESPACE env var to restore multi-tenant mode.
 func restoreMultiTenantMode() {
-	cmd := exec.Command("kubectl", "set", "env", "deployment/openbao-operator-openbao-operator-controller",
+	cmd := exec.Command("kubectl", "set", "env", "deployment/openbao-operator-controller",
 		"WATCH_NAMESPACE-",
 		"-n", operatorNamespace,
 	)
@@ -70,7 +70,7 @@ func restoreMultiTenantMode() {
 
 func waitForControllerRolloutAndLeader(watchNamespace string) {
 	By("waiting for controller deployment rollout to complete")
-	cmd := exec.Command("kubectl", "rollout", "status", "deployment/openbao-operator-openbao-operator-controller",
+	cmd := exec.Command("kubectl", "rollout", "status", "deployment/openbao-operator-controller",
 		"-n", operatorNamespace,
 		"--timeout=2m",
 	)

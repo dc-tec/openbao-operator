@@ -33,6 +33,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -118,6 +119,82 @@ var (
 	// Default is false to reduce blast radius on shared clusters.
 	existingClusterFullCleanup = os.Getenv("E2E_EXISTING_CLUSTER_FULL_CLEANUP") == "true"
 )
+
+func patchOperatorKubeAPITokenAudience(ctx context.Context, namespace string) error {
+	audience := strings.TrimSpace(os.Getenv("OPENBAO_KUBE_API_AUDIENCE"))
+	if audience == "" {
+		return nil
+	}
+
+	cfg, err := ctrlconfig.GetConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get kube config: %w", err)
+	}
+
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return fmt.Errorf("failed to add client-go scheme: %w", err)
+	}
+	if err := appsv1.AddToScheme(scheme); err != nil {
+		return fmt.Errorf("failed to add apps scheme: %w", err)
+	}
+
+	c, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	patchDeployment := func(name string) error {
+		deploy := &appsv1.Deployment{}
+		if err := c.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, deploy); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+
+		orig := deploy.DeepCopy()
+		updated := false
+
+		for i := range deploy.Spec.Template.Spec.Volumes {
+			vol := &deploy.Spec.Template.Spec.Volumes[i]
+			if vol.Name != "kube-api-access" || vol.Projected == nil {
+				continue
+			}
+			for j := range vol.Projected.Sources {
+				src := &vol.Projected.Sources[j]
+				if src.ServiceAccountToken == nil {
+					continue
+				}
+				if src.ServiceAccountToken.Audience != audience {
+					src.ServiceAccountToken.Audience = audience
+					updated = true
+				}
+				break
+			}
+			break
+		}
+
+		if !updated {
+			return nil
+		}
+
+		if err := c.Patch(ctx, deploy, client.MergeFrom(orig)); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	if err := patchDeployment("openbao-operator-controller"); err != nil {
+		return fmt.Errorf("patch controller audience: %w", err)
+	}
+	if err := patchDeployment("openbao-operator-provisioner"); err != nil {
+		return fmt.Errorf("patch provisioner audience: %w", err)
+	}
+
+	return nil
+}
 
 func kindClusterName(base string, index int) string {
 	if index < 1 {
@@ -302,6 +379,10 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the operator")
+
+			By("applying kube-apiserver token audience override when configured")
+			ExpectWithOffset(1, patchOperatorKubeAPITokenAudience(context.Background(), operatorNamespace)).
+				To(Succeed(), "Failed to patch kube-api token audience on operator Deployments")
 
 			By("waiting for operator deployments to become Available")
 			ExpectWithOffset(1, waitForDeploymentsAvailable(operatorNamespace, 5*time.Minute)).
@@ -504,6 +585,10 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to deploy the operator (cluster=%s)", clusterName))
+
+			By(fmt.Sprintf("applying kube-apiserver token audience override when configured (cluster=%s)", clusterName))
+			ExpectWithOffset(1, patchOperatorKubeAPITokenAudience(context.Background(), operatorNamespace)).
+				To(Succeed(), fmt.Sprintf("Failed to patch kube-api token audience on operator Deployments (cluster=%s)", clusterName))
 
 			By(fmt.Sprintf("waiting for operator deployments to become Available (cluster=%s)", clusterName))
 			ExpectWithOffset(1, waitForDeploymentsAvailable(operatorNamespace, 5*time.Minute)).

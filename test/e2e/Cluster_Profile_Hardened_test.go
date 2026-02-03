@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -617,6 +618,28 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 			g.Expect(svc.Spec.ClusterIP).NotTo(BeEmpty())
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+		By("ensuring public service has ready endpoints")
+		// The Service object can exist before kube-proxy has any ready endpoints. In that window,
+		// in-cluster clients can see "connection refused" when connecting to the ClusterIP.
+		slices := &discoveryv1.EndpointSliceList{}
+		Eventually(func(g Gomega) {
+			g.Expect(c.List(ctx, slices,
+				client.InNamespace(f.Namespace),
+				client.MatchingLabels{"kubernetes.io/service-name": clusterName + "-public"},
+			)).To(Succeed(), "public EndpointSlices should be listable")
+
+			ready := 0
+			for _, s := range slices.Items {
+				for _, ep := range s.Endpoints {
+					if ep.Conditions.Ready != nil && !*ep.Conditions.Ready {
+						continue
+					}
+					ready += len(ep.Addresses)
+				}
+			}
+			g.Expect(ready).To(BeNumerically(">", 0), "public EndpointSlices should have at least one ready address")
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
 		By("allowing verification pod egress to OpenBao cluster (NetworkPolicy)")
 		tcpProto := corev1.ProtocolTCP
 		udpProto := corev1.ProtocolUDP
@@ -648,10 +671,27 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 					},
 					{
 						To: []networkingv1.NetworkPolicyPeer{
+							// Allow egress to the Service ClusterIP (some CNIs evaluate policy pre-DNAT).
+							{
+								IPBlock: &networkingv1.IPBlock{
+									CIDR: svc.Spec.ClusterIP + "/32",
+								},
+							},
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										constants.LabelOpenBaoCluster: clusterName,
+									},
+								},
+							},
+							// Allow egress using the app.kubernetes.io labels (used by several tests and
+							// avoids depending on a single label for pod selection).
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"app.kubernetes.io/instance":   clusterName,
+										"app.kubernetes.io/name":       "openbao",
+										"app.kubernetes.io/managed-by": "openbao-operator",
 									},
 								},
 							},
