@@ -41,9 +41,13 @@ func (m *Manager) ensureServiceAccount(ctx context.Context, _ logr.Logger, clust
 	return nil
 }
 
-// ensureRBAC creates a Role and RoleBinding that grants the OpenBaoCluster service account
-// permission to list pods in its namespace. This is required for OpenBao's Kubernetes
-// auto-join discovery mechanism to work. Uses Server-Side Apply.
+// ensureRBAC creates a Role and RoleBinding for the OpenBaoCluster service account.
+//
+// This is required for:
+// - OpenBao's Kubernetes auto-join discovery (pod list/watch by label selector)
+// - OpenBao's Kubernetes service registration (pod label updates; some clients use PATCH)
+//
+// Uses Server-Side Apply.
 func (m *Manager) ensureRBAC(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	saName := serviceAccountName(cluster)
 	roleName := saName + "-role"
