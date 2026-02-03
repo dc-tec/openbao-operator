@@ -80,7 +80,6 @@ spec:
           ) &&
           object.rules.all(rule,
             (
-              # openbao.org (OpenBaoCluster + OpenBaoRestore)
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'openbao.org' &&
               rule.resources != null &&
@@ -92,7 +91,6 @@ spec:
               rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
             ) ||
             (
-              # apps (StatefulSet + Deployment)
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'apps' &&
               rule.resources != null &&
@@ -102,7 +100,6 @@ spec:
               rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
             ) ||
             (
-              # core (workload + infra)
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == '' &&
               rule.resources != null &&
@@ -134,7 +131,6 @@ spec:
               )
             ) ||
             (
-              # events.k8s.io (Events)
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'events.k8s.io' &&
               rule.resources != null &&
@@ -144,7 +140,6 @@ spec:
               rule.verbs.all(v, v in ['create', 'patch'])
             ) ||
             (
-              # discovery.k8s.io (EndpointSlices)
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'discovery.k8s.io' &&
               rule.resources != null &&
@@ -154,7 +149,6 @@ spec:
               rule.verbs.all(v, v in ['get', 'list', 'watch'])
             ) ||
             (
-              # batch (Jobs)
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'batch' &&
               rule.resources != null &&
@@ -164,7 +158,6 @@ spec:
               rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
             ) ||
             (
-              # policy (PodDisruptionBudget)
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'policy' &&
               rule.resources != null &&
@@ -174,7 +167,6 @@ spec:
               rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
             ) ||
             (
-              # networking.k8s.io (Ingress + NetworkPolicy)
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'networking.k8s.io' &&
               rule.resources != null &&
@@ -184,7 +176,6 @@ spec:
               rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
             ) ||
             (
-              # gateway.networking.k8s.io (Gateway API)
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'gateway.networking.k8s.io' &&
               rule.resources != null &&
@@ -194,7 +185,6 @@ spec:
               rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
             ) ||
             (
-              # rbac.authorization.k8s.io (namespaced RBAC only)
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'rbac.authorization.k8s.io' &&
               rule.resources != null &&

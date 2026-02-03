@@ -12,6 +12,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	provisionerpkg "github.com/dc-tec/openbao-operator/internal/provisioner"
 )
 
 // Use the legacy/double-prefixed provisioner username to keep upgrade/migration paths covered.
@@ -69,18 +72,16 @@ func TestVAP_ProvisionerRBAC_RestrictsRoleBindingSubjects(t *testing.T) {
 	provisionerClient := newImpersonatedClient(t, provisionerUsername)
 
 	// Some API servers validate RoleBinding.roleRef existence; create the Role first.
-	tenantRole := &rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "openbao-operator-tenant-role",
-			Namespace: namespace,
-		},
-		Rules: []rbacv1.PolicyRule{},
-	}
-	if err := provisionerClient.Create(ctx, tenantRole); err != nil {
+	tenantRole := provisionerpkg.GenerateTenantRole(namespace)
+	if err := provisionerClient.Patch(ctx, tenantRole, client.Apply, client.ForceOwnership, client.FieldOwner(integrationFieldOwner)); err != nil {
 		t.Fatalf("create tenant Role: %v", err)
 	}
 
 	tenantRB := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "openbao-operator-tenant-rolebinding",
 			Namespace: namespace,
@@ -99,7 +100,7 @@ func TestVAP_ProvisionerRBAC_RestrictsRoleBindingSubjects(t *testing.T) {
 		},
 	}
 
-	if err := provisionerClient.Create(ctx, tenantRB); err != nil {
+	if err := provisionerClient.Patch(ctx, tenantRB, client.Apply, client.ForceOwnership, client.FieldOwner(integrationFieldOwner)); err != nil {
 		t.Fatalf("expected tenant RoleBinding creation to succeed, got: %v", err)
 	}
 
@@ -108,8 +109,9 @@ func TestVAP_ProvisionerRBAC_RestrictsRoleBindingSubjects(t *testing.T) {
 	if err := provisionerClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: tenantRB.Name}, &latest); err != nil {
 		t.Fatalf("get RoleBinding: %v", err)
 	}
+	original := latest.DeepCopy()
 	latest.Subjects[0].Namespace = "kube-system"
-	err := provisionerClient.Update(ctx, &latest)
+	err := provisionerClient.Patch(ctx, &latest, client.MergeFrom(original))
 	requireAdmissionDenied(t, err)
 	if !strings.Contains(err.Error(), "can only bind tenant RBAC") {
 		t.Fatalf("unexpected error message: %v", err)
