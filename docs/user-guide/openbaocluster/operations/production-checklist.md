@@ -22,7 +22,7 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
 !!! warning "Admission Control"
     Without these policies, tenant isolation cannot be guaranteed.
 
-    - [ ] **ValidatingAdmissionPolicies**: Verify that `validate-openbaocluster` and `openbao-restrict-provisioner-delegate` are installed and Enforced.
+    - [ ] **ValidatingAdmissionPolicies**: Verify that `validate-openbaocluster` and `openbao-restrict-provisioner-rbac` are installed and Enforced.
         - [Learn more](../../../security/infrastructure/admission-policies.md)
 
 ## Reliability & Scale

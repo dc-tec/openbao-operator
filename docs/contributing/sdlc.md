@@ -64,7 +64,7 @@ The lifecycle maps directly to our documentation and toolchain.
     Build once, sign, and promote.
 
       - :material-rocket-launch: [Release Process](release-management.md)
-      - :material-signature-freehand: [Artifact Verification](release-management.md#3-verifying-artifacts)
+      - :material-signature-freehand: [Artifact Verification](release-management.md#5-verifying-artifacts)
       - :material-package-variant: [Helm Charts](https://github.com/dc-tec/openbao-operator/tree/main/charts/openbao-operator)
 
 - :material-server-network: **Operate & Monitor**

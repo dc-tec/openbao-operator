@@ -39,14 +39,18 @@ The Operator ships with a suite of policies to enforce "Least Privilege" and "Gi
 
 | Policy Name | Target | Enforcement | Description |
 | :--- | :--- | :--- | :--- |
-| `lock-managed-resource-mutations` | `StatefulSet`, `Service`, `Secret` | **Block** | Prevents users/GitOps from modifying resources managed by the Operator (labeled `app.kubernetes.io/managed-by=openbao-operator`). |
+| `lock-managed-resource-mutations` | Operator-managed resources (e.g. `StatefulSet`, `Service`, `Secret`, `Pod`) | **Block** | Prevents users/GitOps from modifying resources managed by the Operator (labeled `app.kubernetes.io/managed-by=openbao-operator`). Allows controlled exceptions for Kubernetes controllers and OpenBao service registration label updates. |
 | `lock-controller-statefulset-mutations` | `StatefulSet` (Controller) | **Block** | Self-protection: prevents the Controller from modifying its own sensitive fields (volumes, args). |
 | `validate-openbaocluster` | `OpenBaoCluster` | **Validate** | Enforces spec invariants (e.g., Hardened profile requirements, TLS configs). |
-| `restrict-provisioner-delegate` | `Role`, `RoleBinding` | **Restrict** | Limits the Provisioner Delegate to creating only specific, pre-approved RBAC roles. |
+| `validate-openbao-tenant` | `OpenBaoTenant` | **Validate** | Enforces tenant spec invariants and multi-tenant guardrails. |
+| `validate-openbaorestore` | `OpenBaoRestore` | **Validate** | Enforces restore spec invariants and safety checks. |
+| `openbao-restrict-provisioner-rbac` | `Role`, `RoleBinding` | **Restrict** | Restricts the Provisioner ServiceAccount to a fixed set of tenant RBAC objects and contents (CREATE/UPDATE/DELETE), and blocks system namespaces. |
+| `openbao-restrict-provisioner-namespace-mutations` | `Namespace` | **Restrict** | Restricts Provisioner Namespace updates to Pod Security Standards label enforcement only (restricted), and blocks system namespaces. |
+| `openbao-restrict-controller-rbac` | `Role`, `RoleBinding` | **Restrict** | Restricts Controller RBAC writes to the narrow per-cluster pod discovery/service registration Role/RoleBinding pattern (prevents RBAC self-escalation). |
 
-## Provisioner Delegate Hardening
+## Provisioner RBAC Hardening
 
-The `restrict-provisioner-delegate` policy is a defense-in-depth control that applies to RBAC mutations performed by the impersonated Provisioner Delegate identity.
+The `openbao-restrict-provisioner-rbac` policy is a defense-in-depth control that applies to RBAC mutations performed by the Provisioner identity.
 
 **Key guarantees:**
 
@@ -54,6 +58,54 @@ The `restrict-provisioner-delegate` policy is a defense-in-depth control that ap
 - RoleBindings are restricted to known ServiceAccount subjects (prevents backdoor bindings).
 - Dangerous verbs and wildcards are denied (`impersonate`, `bind`, `escalate`, `*`).
 - Secret permissions are only allowed via the dedicated secrets allowlist Roles, and those Roles must be name-scoped (`resourceNames`) and non-enumerating (no `list`/`watch`).
+- Deletion is restricted to the fixed tenant template Role/RoleBinding objects.
+- RBAC mutations are blocked in system namespaces (at minimum: the Operator namespace, `kube-*`, and commonly provider-reserved namespaces like `openshift*` and `gke-*`).
+- Provider-reserved namespaces are cluster-dependent. The Helm defaults include best-effort prefixes for common managed offerings (`openshift-*`, `gke-*`, `eks-*`, `aws-*`, `aks-*`, `azure-*`); tune these to match your platform add-ons.
+
+!!! note "Helm: provider-reserved namespaces"
+    When installing via Helm, you can extend the system namespace deny set with:
+
+    - `admissionPolicies.provisionerRBAC.deniedNamespaces`
+    - `admissionPolicies.provisionerRBAC.deniedNamespacePrefixes`
+
+!!! note "Startup enforcement"
+    The OpenBao Operator defaults to fail-closed startup (`--admission-enforcement=fail`), refusing to run unless required admission policies are installed and enforced.
+
+!!! warning "Unsafe mode"
+    Disabling admission policies is treated as **unsafe mode**. When installing via Helm with `admissionPolicies.enabled=false`, the chart sets `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can start without fail-closed admission dependency enforcement. This is intended only for development/break-glass scenarios.
+
+!!! note "Optional runtime canary"
+    The Provisioner supports an optional enforcement canary (`--admission-canary`) that performs a dry-run RBAC request which must be denied by the Provisioner RBAC policy. This provides stronger assurance that policy *enforcement* is active (not just policy presence/bindings).
+
+!!! note "What This Does *Not* Do"
+    This policy constrains RBAC mutations by the Provisioner. It does not replace Kubernetes RBAC review or cluster-wide policy governance.
+
+## Provisioner Namespace Mutation Hardening
+
+The `openbao-restrict-provisioner-namespace-mutations` policy constrains Namespace updates performed by the Provisioner.
+
+**Key guarantees:**
+
+- The Provisioner may not mutate system namespaces.
+- Namespace updates are limited to enforcing the three Pod Security Standards labels:
+  - `pod-security.kubernetes.io/enforce=restricted`
+  - `pod-security.kubernetes.io/audit=restricted`
+  - `pod-security.kubernetes.io/warn=restricted`
+- No other changes are allowed (spec/status/annotations/finalizers/ownerReferences must remain unchanged).
+
+## Controller RBAC Hardening
+
+The `openbao-restrict-controller-rbac` policy constrains RBAC mutations performed by the Controller identity.
+
+**Why this exists:**
+
+- Some tenant-scoped operations require per-cluster ServiceAccounts and minimal RBAC (pod discovery and OpenBao service registration label updates).
+- Without an admission-level guard, any bug or compromise in the controller process could use RBAC writes to broaden privileges inside tenant namespaces.
+
+**Key guarantees:**
+
+- Roles created/updated by the Controller are restricted to the `pods` resource and must match a narrow allowlist-style pattern.
+- RoleBindings created/updated by the Controller must bind a ServiceAccount to its own `*-role` in the same namespace.
 
 ## Configuration Ownership
 
