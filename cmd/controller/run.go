@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -117,6 +118,10 @@ func Run(args []string) {
 	var clientCBFailureThreshold int
 	var clientCBOpenDuration time.Duration
 
+	// Admission policy enforcement
+	var admissionEnforcement string
+	var admissionStartupTimeout time.Duration
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -144,6 +149,11 @@ func Run(args []string) {
 	flag.DurationVar(&clientCBOpenDuration, "openbao-client-cb-open-duration", 30*time.Second,
 		"The duration the circuit breaker remains open before testing the connection.")
 
+	flag.StringVar(&admissionEnforcement, "admission-enforcement", "fail",
+		"Admission dependency enforcement mode: fail or warn. In fail mode the operator refuses to start unless required ValidatingAdmissionPolicies are present and enforced.")
+	flag.DurationVar(&admissionStartupTimeout, "admission-startup-timeout", 60*time.Second,
+		"Maximum time to wait for required admission policies at startup when --admission-enforcement=fail.")
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -151,6 +161,14 @@ func Run(args []string) {
 	flag.Parse()
 
 	platform = strings.ToLower(strings.TrimSpace(platform))
+	admissionEnforcement = strings.ToLower(strings.TrimSpace(admissionEnforcement))
+	if admissionEnforcement == "" {
+		admissionEnforcement = "fail"
+	}
+	if admissionEnforcement != "fail" && admissionEnforcement != "warn" {
+		setupLog.Error(fmt.Errorf("invalid admission enforcement mode %q", admissionEnforcement), "expected --admission-enforcement=fail or warn")
+		os.Exit(2)
+	}
 
 	// Allow environment variable to override flag (useful for Helm charts).
 	if envPlatform := strings.TrimSpace(os.Getenv("OPERATOR_PLATFORM")); envPlatform != "" {
@@ -365,23 +383,52 @@ func Run(args []string) {
 	}
 
 	// Admission policy dependency check (release-critical security boundary).
-	admissionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	admissionStatus, err := admission.CheckDependencies(
-		admissionCtx,
-		mgr.GetAPIReader(),
-		admission.DefaultDependencies(),
-		[]string{"openbao-operator-", ""},
-	)
-	if err != nil {
-		setupLog.Error(err, "Failed to evaluate admission policy dependencies; treating admission as not ready")
-		admissionStatus.OverallReady = false
-	}
-	admission.SetAdmissionDependenciesReady(admissionStatus.OverallReady)
-	if admissionStatus.OverallReady {
-		setupLog.Info("Admission policy dependencies ready")
+	var admissionStatus admission.Status
+	if admission.UnsafeAdmissionDisabled() {
+		setupLog.Info("UNSAFE MODE: admission policy enforcement disabled; skipping dependency checks")
+		admissionStatus.OverallReady = true
+		admission.SetAdmissionDependenciesReady(true)
 	} else {
-		setupLog.Info("Admission policy dependencies not ready", "summary", admissionStatus.SummaryMessage())
+		switch admissionEnforcement {
+		case "fail":
+			setupLog.Info("Waiting for admission policy dependencies", "timeout", admissionStartupTimeout)
+			status, err := admission.WaitForDependencies(
+				context.Background(),
+				mgr.GetAPIReader(),
+				admission.DefaultDependencies(),
+				admission.DefaultNamePrefixes(),
+				admissionStartupTimeout,
+				2*time.Second,
+			)
+			admissionStatus = status
+			if !admissionStatus.OverallReady {
+				if err == nil {
+					err = fmt.Errorf("admission policy dependencies not ready")
+				}
+				setupLog.Error(err, "Admission policy dependencies not ready; refusing to start", "summary", admissionStatus.SummaryMessage())
+				os.Exit(1)
+			}
+		default: // warn
+			admissionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			status, err := admission.CheckDependencies(
+				admissionCtx,
+				mgr.GetAPIReader(),
+				admission.DefaultDependencies(),
+				admission.DefaultNamePrefixes(),
+			)
+			admissionStatus = status
+			if err != nil {
+				setupLog.Error(err, "Failed to evaluate admission policy dependencies; treating admission as not ready")
+				admissionStatus.OverallReady = false
+			}
+		}
+		admission.SetAdmissionDependenciesReady(admissionStatus.OverallReady)
+		if admissionStatus.OverallReady {
+			setupLog.Info("Admission policy dependencies ready")
+		} else {
+			setupLog.Info("Admission policy dependencies not ready", "summary", admissionStatus.SummaryMessage())
+		}
 	}
 
 	// Pass these values into the Reconciler struct

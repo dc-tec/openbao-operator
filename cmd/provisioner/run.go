@@ -19,7 +19,10 @@ package provisioner
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -29,6 +32,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +42,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/admission"
 	provisionercontroller "github.com/dc-tec/openbao-operator/internal/controller/provisioner"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -70,6 +75,11 @@ func Run(args []string) {
 	var probeAddr string
 	var secureMetrics bool
 
+	// Admission policy enforcement
+	var admissionEnforcement string
+	var admissionStartupTimeout time.Duration
+	var admissionCanary bool
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -77,12 +87,27 @@ func Run(args []string) {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
+	flag.StringVar(&admissionEnforcement, "admission-enforcement", "fail",
+		"Admission dependency enforcement mode: fail or warn. In fail mode the operator refuses to start unless required ValidatingAdmissionPolicies are present and enforced.")
+	flag.DurationVar(&admissionStartupTimeout, "admission-startup-timeout", 60*time.Second,
+		"Maximum time to wait for required admission policies at startup when --admission-enforcement=fail.")
+	flag.BoolVar(&admissionCanary, "admission-canary", false,
+		"If set, perform an admission canary (dry-run) that must be denied by the Provisioner RBAC ValidatingAdmissionPolicy. This provides stronger assurance that enforcement is active.")
 
 	opts := zap.Options{
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	admissionEnforcement = strings.ToLower(strings.TrimSpace(admissionEnforcement))
+	if admissionEnforcement == "" {
+		admissionEnforcement = "fail"
+	}
+	if admissionEnforcement != "fail" && admissionEnforcement != "warn" {
+		setupLog.Error(fmt.Errorf("invalid admission enforcement mode %q", admissionEnforcement), "expected --admission-enforcement=fail or warn")
+		os.Exit(2)
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -108,7 +133,7 @@ func Run(args []string) {
 		// No webhook server for Provisioner
 		// SECURITY: Disable cache for ServiceAccounts to align with RBAC permissions that only grant
 		// 'get' (not 'list' or 'watch'). The Provisioner only needs to get a specific ServiceAccount
-		// (the delegate ServiceAccount) in a known namespace during initialization. This prevents
+		// (the controller ServiceAccount) in a known namespace during initialization. This prevents
 		// the cache from requiring cluster-wide list/watch permissions and eliminates the ability
 		// for a compromised Provisioner to enumerate ServiceAccounts across the cluster.
 		Client: client.Options{
@@ -119,8 +144,7 @@ func Run(args []string) {
 					// cluster topology enumeration. It only needs direct GET/PATCH on
 					// specific namespaces declared in OpenBaoTenant.Spec.TargetNamespace.
 					&corev1.Namespace{},
-					// SECURITY: RBAC resources are managed via the impersonated (delegate)
-					// client, so we avoid caching Roles/RoleBindings to prevent requiring
+					// SECURITY: Avoid caching Roles/RoleBindings to prevent requiring
 					// cluster-wide list/watch permissions.
 					&rbacv1.Role{},
 					&rbacv1.RoleBinding{},
@@ -133,11 +157,74 @@ func Run(args []string) {
 		os.Exit(1)
 	}
 
+	// Admission policy dependency check (release-critical security boundary).
+	if admission.UnsafeAdmissionDisabled() {
+		setupLog.Info("UNSAFE MODE: admission policy enforcement disabled; skipping dependency checks and allowing provisioning without guardrails")
+		admission.SetAdmissionDependenciesReady(true)
+	} else {
+		switch admissionEnforcement {
+		case "fail":
+			setupLog.Info("Waiting for admission policy dependencies", "timeout", admissionStartupTimeout)
+			status, err := admission.WaitForDependencies(
+				context.Background(),
+				mgr.GetAPIReader(),
+				admission.DefaultDependencies(),
+				admission.DefaultNamePrefixes(),
+				admissionStartupTimeout,
+				2*time.Second,
+			)
+			admission.SetAdmissionDependenciesReady(status.OverallReady)
+			if !status.OverallReady {
+				if err == nil {
+					err = fmt.Errorf("admission policy dependencies not ready")
+				}
+				setupLog.Error(err, "Admission policy dependencies not ready; refusing to start", "summary", status.SummaryMessage())
+				os.Exit(1)
+			}
+			setupLog.Info("Admission policy dependencies ready")
+
+			if admissionCanary {
+				// Verify enforcement via a dry-run forbidden RBAC request.
+				clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
+				if err != nil {
+					setupLog.Error(err, "Failed to create Kubernetes clientset for admission canary; refusing to start")
+					os.Exit(1)
+				}
+				canaryCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				// Use a commonly-present namespace that is typically not considered a system namespace.
+				// This makes the canary assert the Role name restriction, not just the system namespace restriction.
+				if err := admission.VerifyProvisionerRBACEnforcement(canaryCtx, clientset, "default"); err != nil {
+					setupLog.Error(err, "Admission canary failed; refusing to start")
+					os.Exit(1)
+				}
+				setupLog.Info("Admission canary succeeded")
+			}
+		default: // warn
+			checkCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			status, err := admission.CheckDependencies(
+				checkCtx,
+				mgr.GetAPIReader(),
+				admission.DefaultDependencies(),
+				admission.DefaultNamePrefixes(),
+			)
+			if err != nil {
+				setupLog.Error(err, "Failed to evaluate admission policy dependencies; treating admission as not ready")
+				status.OverallReady = false
+			}
+			admission.SetAdmissionDependenciesReady(status.OverallReady)
+			if status.OverallReady {
+				setupLog.Info("Admission policy dependencies ready")
+			} else {
+				setupLog.Info("Admission policy dependencies not ready", "summary", status.SummaryMessage())
+			}
+		}
+	}
+
 	// Create provisioner manager for namespace onboarding
-	// SECURITY: The manager uses impersonation to enforce least privilege
 	provisionerMgr, err := provisioner.NewManager(context.Background(),
 		mgr.GetClient(),
-		mgr.GetConfig(),
 		setupLog.WithName("provisioner"))
 	if err != nil {
 		setupLog.Error(err, "unable to create provisioner manager")
@@ -153,6 +240,7 @@ func Run(args []string) {
 	// Register namespace provisioner controller
 	if err := (&provisionercontroller.NamespaceProvisionerReconciler{
 		Client:            mgr.GetClient(),
+		APIReader:         mgr.GetAPIReader(),
 		Scheme:            mgr.GetScheme(),
 		Provisioner:       provisionerMgr,
 		OperatorNamespace: operatorNS,
@@ -166,6 +254,7 @@ func Run(args []string) {
 	// to reduce Secret blast radius in tenant namespaces.
 	if err := (&provisionercontroller.TenantSecretsRBACReconciler{
 		Client:      mgr.GetClient(),
+		APIReader:   mgr.GetAPIReader(),
 		Scheme:      mgr.GetScheme(),
 		Provisioner: provisionerMgr,
 	}).SetupWithManager(mgr); err != nil {

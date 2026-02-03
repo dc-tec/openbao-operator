@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/admission"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	controllerpredicates "github.com/dc-tec/openbao-operator/internal/controller"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
@@ -53,18 +54,19 @@ import (
 // posture by preventing the Provisioner from surveying the cluster topology.
 type NamespaceProvisionerReconciler struct {
 	client.Client
+	APIReader         client.Reader
 	Scheme            *runtime.Scheme
 	Provisioner       *provisioner.Manager
 	OperatorNamespace string
 }
 
 // SECURITY: RBAC is manually maintained in config/rbac/provisioner_minimal_role.yaml.
-// We do NOT use kubebuilder annotations because:
-// 1. The Provisioner uses impersonation (impersonate serviceaccounts verb), which kubebuilder cannot generate
-// 2. The RBAC is security-critical and must be explicitly controlled
-// 3. The Provisioner only needs: namespace get/update/patch, RBAC read access, and impersonation permission
-// 4. All create/update/delete operations on Roles/RoleBindings are performed via impersonation
-//    of the delegate ServiceAccount, which enforces least privilege at the API server level.
+// We do NOT use kubebuilder RBAC annotations because:
+// 1. The RBAC is security-critical and must be explicitly controlled and reviewed
+// 2. The Provisioner is designed for least privilege (no namespace list/watch, no Secret access)
+// 3. The Provisioner includes bind/escalate only for specific, operator-defined Role names
+// 4. ValidatingAdmissionPolicy provides defense-in-depth by restricting the exact RBAC objects
+//    the Provisioner may create/update.
 
 func (r *NamespaceProvisionerReconciler) patchStatus(ctx context.Context, tenant *openbaov1alpha1.OpenBaoTenant, original *openbaov1alpha1.OpenBaoTenant) error {
 	return r.Status().Patch(ctx, tenant, client.MergeFrom(original))
@@ -95,7 +97,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	// To prevent cross-tenant attacks ("Confused Deputy"), we enforce that
 	// OpenBaoTenant resources created in user namespaces can ONLY target
 	// their own namespace. Only the Operator namespace is trusted to
-	// delegate to arbitrary namespaces.
+	// target arbitrary namespaces.
 	//
 	// Note: We check r.OperatorNamespace != "" to allow local testing/development
 	// where the env var might not be set, though properly it should always be set.
@@ -195,6 +197,44 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 			return ctrl.Result{RequeueAfter: constants.RequeueStandard}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get namespace %s: %w", targetNS, err)
+	}
+
+	// SECURITY: If admission policies are not ready, do not create/update tenant RBAC or other tenant-scoped resources.
+	// This keeps --admission-enforcement=warn safe: the process may run, but it will not perform privileged actions
+	// until the ValidatingAdmissionPolicies are confirmed to be installed and enforced.
+	if admission.UnsafeAdmissionDisabled() {
+		// UNSAFE MODE: Caller explicitly disabled admission policies; proceed without fail-closed gating.
+		admission.SetAdmissionDependenciesReady(true)
+	} else if !admission.AdmissionDependenciesReady() {
+		reader := r.APIReader
+		if reader == nil {
+			reader = r.Client
+		}
+
+		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		status, err := admission.CheckDependencies(
+			checkCtx,
+			reader,
+			admission.DefaultDependencies(),
+			admission.DefaultNamePrefixes(),
+		)
+		cancel()
+		if err != nil {
+			admission.SetAdmissionDependenciesReady(false)
+			logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "error", err)
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+
+		admission.SetAdmissionDependenciesReady(status.OverallReady)
+		if !status.OverallReady {
+			original := tenant.DeepCopy()
+			tenant.Status.Provisioned = false
+			tenant.Status.LastError = status.SummaryMessage()
+			_ = r.patchStatus(ctx, tenant, original)
+
+			logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "summary", status.SummaryMessage())
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
 	}
 
 	// Provision RBAC

@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/admission"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
 )
@@ -23,6 +24,7 @@ import (
 // via OpenBaoTenant, maintains the per-namespace Secret reader/writer Roles and RoleBindings.
 type TenantSecretsRBACReconciler struct {
 	client.Client
+	APIReader   client.Reader
 	Scheme      *runtime.Scheme
 	Provisioner *provisioner.Manager
 }
@@ -35,6 +37,37 @@ func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	if r.Provisioner == nil {
 		return ctrl.Result{}, fmt.Errorf("provisioner manager is required")
+	}
+
+	// SECURITY: If admission policies are not ready, do not create/update tenant Secret RBAC allowlists.
+	if admission.UnsafeAdmissionDisabled() {
+		// UNSAFE MODE: Caller explicitly disabled admission policies; proceed without fail-closed gating.
+		admission.SetAdmissionDependenciesReady(true)
+	} else if !admission.AdmissionDependenciesReady() {
+		reader := r.APIReader
+		if reader == nil {
+			reader = r.Client
+		}
+
+		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		status, err := admission.CheckDependencies(
+			checkCtx,
+			reader,
+			admission.DefaultDependencies(),
+			admission.DefaultNamePrefixes(),
+		)
+		cancel()
+		if err != nil {
+			admission.SetAdmissionDependenciesReady(false)
+			logger.Info("Admission policy dependencies not ready; delaying tenant Secret RBAC sync", "error", err)
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+
+		admission.SetAdmissionDependenciesReady(status.OverallReady)
+		if !status.OverallReady {
+			logger.Info("Admission policy dependencies not ready; delaying tenant Secret RBAC sync", "summary", status.SummaryMessage())
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
 	}
 
 	// check if the tenant namespace is provisioned
