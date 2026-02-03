@@ -3,11 +3,10 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
     app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/managed-by: kustomize
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-admin
-  labels:
-    {{- include "openbao-operator.labels" . | nindent 4 }}
 rules:
   - apiGroups:
       - openbao.org
@@ -27,11 +26,10 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
     app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/managed-by: kustomize
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-editor
-  labels:
-    {{- include "openbao-operator.labels" . | nindent 4 }}
 rules:
   - apiGroups:
       - openbao.org
@@ -57,11 +55,10 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
     app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/managed-by: kustomize
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-viewer
-  labels:
-    {{- include "openbao-operator.labels" . | nindent 4 }}
 rules:
   - apiGroups:
       - openbao.org
@@ -84,7 +81,6 @@ metadata:
   name: {{ include "openbao-operator.fullname" . }}-openbaotenant-editor
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
-  labels:
     rbac.authorization.k8s.io/aggregate-to-admin: "true"
     rbac.authorization.k8s.io/aggregate-to-edit: "true"
 rules:

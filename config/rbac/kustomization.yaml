@@ -9,11 +9,6 @@ resources:
   # Note: provisioner_minimal_role.yaml is the active role (with labels and proper structure).
   - provisioner_minimal_role.yaml
   - provisioner_role_binding.yaml
-  # Provisioner Impersonation Pattern: Delegate ServiceAccount and Template Role
-  # These resources enable the Provisioner to use impersonation, reducing privilege escalation risk
-  - provisioner_delegate_clusterrole.yaml
-  - provisioner_delegate_serviceaccount.yaml
-  - provisioner_delegate_clusterrolebinding.yaml
   - leader_election_role.yaml
   - provisioner_leader_election_role_binding.yaml
   # Controller RBAC: OpenBaoCluster watch, leader election, and metrics

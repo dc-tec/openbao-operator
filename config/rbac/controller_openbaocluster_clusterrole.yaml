@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: openbao-operator-controller-openbaocluster-role
+  name: controller-openbaocluster-role
   labels:
     app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: controller

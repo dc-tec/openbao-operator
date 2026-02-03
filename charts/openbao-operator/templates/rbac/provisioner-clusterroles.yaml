@@ -5,7 +5,6 @@ metadata:
   name: {{ include "openbao-operator.fullname" . }}-provisioner
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
-  labels:
     app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
@@ -18,15 +17,6 @@ rules:
       - get
       - update
       - patch
-
-  - apiGroups:
-      - ""
-    resources:
-      - serviceaccounts
-    verbs:
-      - impersonate
-    resourceNames:
-      - {{ include "openbao-operator.provisionerDelegateServiceAccountName" . }}
 
   - apiGroups:
       - ""
@@ -57,18 +47,24 @@ rules:
       - list
       - watch
 
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: {{ include "openbao-operator.fullname" . }}-tenant-template
-  labels:
-    {{- include "openbao-operator.labels" . | nindent 4 }}
-  labels:
-    app.kubernetes.io/name: openbao-operator
-    app.kubernetes.io/component: provisioner
-    app.kubernetes.io/managed-by: kustomize
-rules:
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
+    verbs:
+      - get
+
+  - apiGroups:
+      - ""
+    resources:
+      - resourcequotas
+      - limitranges
+    verbs:
+      - get
+      - create
+      - patch
+
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -76,202 +72,41 @@ rules:
       - rolebindings
     verbs:
       - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+    resourceNames:
+      - openbao-operator-tenant-role
+      - openbao-operator-tenant-secrets-reader
+      - openbao-operator-tenant-secrets-writer
+    verbs:
+      - get
+      - patch
       - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
   - apiGroups:
-      - openbao.org
+      - rbac.authorization.k8s.io
     resources:
-      - openbaoclusters
-      - openbaoclusters/status
-      - openbaoclusters/finalizers
+      - rolebindings
+    resourceNames:
+      - openbao-operator-tenant-rolebinding
+      - openbao-operator-tenant-secrets-reader-rolebinding
+      - openbao-operator-tenant-secrets-writer-rolebinding
     verbs:
-      - create
+      - get
+      - patch
       - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
   - apiGroups:
-      - openbao.org
+      - rbac.authorization.k8s.io
     resources:
-      - openbaorestores
-      - openbaorestores/status
-      - openbaorestores/finalizers
+      - roles
     verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - apps
-    resources:
-      - statefulsets
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - apps
-    resources:
-      - deployments
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - ""
-    resources:
-      - services
-      - configmaps
-      - serviceaccounts
-      - resourcequotas
-      - limitranges
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - ""
-    resources:
-      - events
-    verbs:
-      - create
-      - patch
-  - apiGroups:
-      - events.k8s.io
-    resources:
-      - events
-    verbs:
-      - create
-      - patch
-  - apiGroups:
-      - ""
-    resources:
-      - pods
-    verbs:
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - ""
-    resources:
-      - persistentvolumeclaims
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - batch
-    resources:
-      - jobs
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - policy
-    resources:
-      - poddisruptionbudgets
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - networking.k8s.io
-    resources:
-      - ingresses
-      - networkpolicies
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  {{- if .Values.gatewayAPI.enabled }}
-  - apiGroups:
-      - gateway.networking.k8s.io
-    resources:
-      - httproutes
-      - tlsroutes
-      - backendtlspolicies
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch{{- end }}
-
-  - apiGroups:
-      - ""
-    resources:
-      - endpoints
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - discovery.k8s.io
-    resources:
-      - endpointslices
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - ""
-    resources:
-      - secrets
-    verbs:
-      - get
-  - apiGroups:
-      - ""
-    resources:
-      - secrets
-    verbs:
-      - create
-      - delete
-      - get
-      - patch
-      - update
+      - bind
+      - escalate
+    resourceNames:
+      - openbao-operator-tenant-role
+      - openbao-operator-tenant-secrets-reader
+      - openbao-operator-tenant-secrets-writer
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -303,21 +138,5 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "openbao-operator.provisionerServiceAccountName" . }}
-    namespace: {{ .Release.Namespace }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: {{ include "openbao-operator.fullname" . }}-tenant-delegate
-  labels:
-    {{- include "openbao-operator.labels" . | nindent 4 }}
-    app.kubernetes.io/component: provisioner
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ include "openbao-operator.fullname" . }}-tenant-template
-subjects:
-  - kind: ServiceAccount
-    name: {{ include "openbao-operator.provisionerDelegateServiceAccountName" . }}
     namespace: {{ .Release.Namespace }}
 {{- end }}

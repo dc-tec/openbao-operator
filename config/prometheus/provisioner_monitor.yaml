@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
-  name: openbao-operator-provisioner-metrics-monitor
+  name: provisioner-metrics-monitor
   namespace: system
 spec:
   endpoints:
