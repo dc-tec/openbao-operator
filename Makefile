@@ -628,6 +628,13 @@ deploy: manifests kustomize ## Deploy both provisioner and controller to the K8s
 	( cd "$$tmp/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
 	"$(KUSTOMIZE)" build "$$tmp/config/default" | "$(KUBECTL)" apply -f -
 
+.PHONY: deploy-dev
+deploy-dev: ## Build, push, and deploy the manager image (avoids stale local tags).
+	@dev_img="$${IMG:-k3d-registry.localhost:5000/openbao-operator:dev-$$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"; \
+	echo "Deploying dev image: $$dev_img"; \
+	$(MAKE) docker-build docker-push IMG="$$dev_img"; \
+	$(MAKE) deploy IMG="$$dev_img"
+
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy both provisioner and controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion. Call with wait=false to avoid waiting for finalizers.
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) --wait=$(wait) -f -
