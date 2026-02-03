@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
@@ -1043,6 +1044,120 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				g.Expect(admin.Get(ctx, writerRBKey, rb)).To(Succeed())
 				g.Expect(rb.RoleRef.Name).To(Equal(provisioner.TenantSecretsWriterRoleName))
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		It("restricts OpenBao pod ServiceAccount pod patching to cluster pods", func() {
+			clusterName := "rbac-pod-mutation"
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  openBaoVersion,
+					Image:    openBaoImage,
+					Replicas: 1,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled:  true,
+						Requests: framework.DefaultAdminSelfInitRequests(),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, cluster)).To(Succeed())
+			DeferCleanup(func() {
+				_ = admin.Delete(ctx, cluster)
+			})
+
+			By("waiting for the cluster StatefulSet to exist and expose the Pod service account")
+			var clusterSA string
+			Eventually(func(g Gomega) {
+				sts := &appsv1.StatefulSet{}
+				err := admin.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, sts)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(sts.Spec.Template.Spec.ServiceAccountName).NotTo(BeEmpty())
+				clusterSA = sts.Spec.Template.Spec.ServiceAccountName
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			clusterUser := fmt.Sprintf("system:serviceaccount:%s:%s", tenantNamespace, clusterSA)
+			impCfg := rest.CopyConfig(cfg)
+			impCfg.Impersonate = rest.ImpersonationConfig{
+				UserName: clusterUser,
+				Groups: []string{
+					"system:serviceaccounts",
+					fmt.Sprintf("system:serviceaccounts:%s", tenantNamespace),
+					"system:authenticated",
+				},
+			}
+			clientset, err := kubernetes.NewForConfig(impCfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("creating a non-OpenBao pod in the tenant namespace")
+			otherPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "not-" + clusterName + "-0",
+					Namespace: tenantNamespace,
+				},
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:  "pause",
+							Image: "registry.k8s.io/pause:3.9",
+						},
+					},
+				},
+			}
+			err = admin.Create(ctx, otherPod)
+			if err != nil && !apierrors.IsAlreadyExists(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+			DeferCleanup(func() {
+				_ = admin.Delete(ctx, otherPod)
+			})
+
+			By("waiting for the first OpenBao pod to exist")
+			openBaoPodName := clusterName + "-0"
+			Eventually(func(g Gomega) {
+				pod := &corev1.Pod{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: openBaoPodName, Namespace: tenantNamespace}, pod)).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			patch := []byte(`{"metadata":{"labels":{"openbao-active":"true"}}}`)
+			_, err = clientset.CoreV1().Pods(tenantNamespace).Patch(
+				ctx,
+				openBaoPodName,
+				types.MergePatchType,
+				patch,
+				metav1.PatchOptions{DryRun: []string{metav1.DryRunAll}},
+			)
+			Expect(err).NotTo(HaveOccurred(), "expected OpenBao pod ServiceAccount to be able to patch the OpenBao pod labels (dry-run)")
+
+			_, err = clientset.CoreV1().Pods(tenantNamespace).Patch(
+				ctx,
+				otherPod.Name,
+				types.MergePatchType,
+				patch,
+				metav1.PatchOptions{DryRun: []string{metav1.DryRunAll}},
+			)
+			Expect(err).To(HaveOccurred())
+			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected OpenBao pod ServiceAccount pod patch to be restricted by resourceNames")
 		})
 
 		It("has required ValidatingAdmissionPolicy dependencies installed and correctly bound", func() {

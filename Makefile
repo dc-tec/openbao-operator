@@ -82,6 +82,10 @@ endif
 .PHONY: ci-core
 ci-core: security-scan lint-config lint verify-fmt verify-tidy verify-generated test-ci verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
 
+.PHONY: pentest-smoke
+pentest-smoke: ## Run "pentest" labeled e2e tests against an existing cluster (requires E2E_OPERATOR_IMAGE).
+	@$(MAKE) test-e2e-existing E2E_LABEL_FILTER='pentest && security'
+
 ##@ Development
 
 .PHONY: manifests
