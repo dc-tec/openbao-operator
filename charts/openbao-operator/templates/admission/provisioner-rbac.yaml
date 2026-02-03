@@ -1,0 +1,470 @@
+{{- if .Values.admissionPolicies.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-rbac
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["roles", "rolebindings"]
+  variables:
+    - name: is_provisioner
+      # Matches the ServiceAccount of the Provisioner.
+      expression: >-
+        request.userInfo.username in [
+          "system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.provisionerServiceAccountName" . }}"
+        ]
+  validations:
+    # Rule 0: Namespace Restriction
+    # The Provisioner must not manage tenant RBAC in system namespaces.
+    #
+    # We block:
+    # - The operator namespace (where the Provisioner runs)
+    # - Kubernetes system namespaces (kube-*)
+    # - OpenShift system namespaces (openshift, openshift-*)
+    # - GKE system namespaces (gke-*)
+    #
+    # This is defense-in-depth against a compromised Provisioner or a future RBAC misconfiguration.
+    - expression: >-
+        !variables.is_provisioner ||
+        !(
+          {{- include "openbao-operator.admission.provisionerRBACSystemNamespaceClauses" . | nindent 10 }}
+        )
+      message: "The Provisioner may not manage tenant RBAC in system namespaces."
+
+    # Rule 1: Role Name Restriction
+    # The Provisioner can ONLY create Roles with specific names.
+    # This prevents creation of arbitrary privileged roles.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'roles' ||
+        object.metadata.name in [
+          'openbao-operator-tenant-role',
+          'openbao-operator-tenant-secrets-reader',
+          'openbao-operator-tenant-secrets-writer'
+        ]
+      message: "The Provisioner can only create Roles for the operator tenant template (tenant + secrets allowlists)."
+
+    # Rule 1b: Tenant Role Content Allowlist
+    # The tenant Role must not be broadened beyond the operator-defined set of allowed rule shapes.
+    # This blocks privilege escalation via unexpected RBAC grants (e.g., pods/exec, serviceaccounts/token).
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'roles' ||
+        object.metadata.name != 'openbao-operator-tenant-role' ||
+        (
+          has(object.rules) &&
+          object.rules != null &&
+          !object.rules.exists(rule,
+            has(rule.nonResourceURLs) &&
+            rule.nonResourceURLs != null &&
+            rule.nonResourceURLs.size() > 0
+          ) &&
+          object.rules.all(rule,
+            (
+              # openbao.org (OpenBaoCluster + OpenBaoRestore)
+              rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'openbao.org' &&
+              rule.resources != null &&
+              (
+                (rule.resources.size() == 3 && rule.resources.all(r, r in ['openbaoclusters', 'openbaoclusters/status', 'openbaoclusters/finalizers'])) ||
+                (rule.resources.size() == 3 && rule.resources.all(r, r in ['openbaorestores', 'openbaorestores/status', 'openbaorestores/finalizers']))
+              ) &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+            ) ||
+            (
+              # apps (StatefulSet + Deployment)
+              rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'apps' &&
+              rule.resources != null &&
+              rule.resources.size() > 0 &&
+              rule.resources.all(r, r in ['statefulsets', 'deployments']) &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+            ) ||
+            (
+              # core (workload + infra)
+              rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == '' &&
+              rule.resources != null &&
+              (
+                (
+                  rule.resources.size() > 0 &&
+                  rule.resources.all(r, r in ['services', 'configmaps', 'serviceaccounts', 'resourcequotas', 'limitranges', 'persistentvolumeclaims']) &&
+                  rule.verbs != null &&
+                  rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+                ) ||
+                (
+                  rule.resources.size() == 1 &&
+                  rule.resources[0] == 'pods' &&
+                  rule.verbs != null &&
+                  rule.verbs.all(v, v in ['delete', 'get', 'list', 'patch', 'update', 'watch'])
+                ) ||
+                (
+                  rule.resources.size() == 1 &&
+                  rule.resources[0] == 'endpoints' &&
+                  rule.verbs != null &&
+                  rule.verbs.all(v, v in ['get', 'list', 'watch'])
+                ) ||
+                (
+                  rule.resources.size() == 1 &&
+                  rule.resources[0] == 'events' &&
+                  rule.verbs != null &&
+                  rule.verbs.all(v, v in ['create', 'patch'])
+                )
+              )
+            ) ||
+            (
+              # events.k8s.io (Events)
+              rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'events.k8s.io' &&
+              rule.resources != null &&
+              rule.resources.size() == 1 &&
+              rule.resources[0] == 'events' &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['create', 'patch'])
+            ) ||
+            (
+              # discovery.k8s.io (EndpointSlices)
+              rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'discovery.k8s.io' &&
+              rule.resources != null &&
+              rule.resources.size() == 1 &&
+              rule.resources[0] == 'endpointslices' &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['get', 'list', 'watch'])
+            ) ||
+            (
+              # batch (Jobs)
+              rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'batch' &&
+              rule.resources != null &&
+              rule.resources.size() == 1 &&
+              rule.resources[0] == 'jobs' &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+            ) ||
+            (
+              # policy (PodDisruptionBudget)
+              rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'policy' &&
+              rule.resources != null &&
+              rule.resources.size() == 1 &&
+              rule.resources[0] == 'poddisruptionbudgets' &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+            ) ||
+            (
+              # networking.k8s.io (Ingress + NetworkPolicy)
+              rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'networking.k8s.io' &&
+              rule.resources != null &&
+              rule.resources.size() > 0 &&
+              rule.resources.all(r, r in ['ingresses', 'networkpolicies']) &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+            ) ||
+            (
+              # gateway.networking.k8s.io (Gateway API)
+              rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'gateway.networking.k8s.io' &&
+              rule.resources != null &&
+              rule.resources.size() > 0 &&
+              rule.resources.all(r, r in ['httproutes', 'tlsroutes', 'backendtlspolicies']) &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+            ) ||
+            (
+              # rbac.authorization.k8s.io (namespaced RBAC only)
+              rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'rbac.authorization.k8s.io' &&
+              rule.resources != null &&
+              rule.resources.size() > 0 &&
+              rule.resources.all(r, r in ['roles', 'rolebindings']) &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+            )
+          )
+        )
+      message: "The Provisioner can only create the tenant Role with an allowlisted set of API groups, resources, and verbs (no pods/exec, serviceaccounts/token, nonResourceURLs, or other unexpected permissions)."
+
+    # Rule 2: RoleBinding Name Restriction
+    # The Provisioner can ONLY create RoleBindings with specific names.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'rolebindings' ||
+        object.metadata.name in [
+          'openbao-operator-tenant-rolebinding',
+          'openbao-operator-tenant-secrets-reader-rolebinding',
+          'openbao-operator-tenant-secrets-writer-rolebinding'
+        ]
+      message: "The Provisioner can only create RoleBindings for the operator tenant template (tenant + secrets allowlists)."
+
+    # Rule 3: Role Reference Restriction (Prevent Admin Grant)
+    # The Provisioner can ONLY bind to the specific operator-defined roles.
+    # It cannot bind 'cluster-admin' or any other privileged role.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'rolebindings' ||
+        object.roleRef.name in [
+          'openbao-operator-tenant-role',
+          'openbao-operator-tenant-secrets-reader',
+          'openbao-operator-tenant-secrets-writer'
+        ]
+      message: "The Provisioner is restricted to binding only the operator tenant template Roles (tenant + secrets allowlists)."
+
+    # Rule 4: Subject Type Restriction
+    # The Provisioner can ONLY bind roles to ServiceAccounts (not users or groups).
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'rolebindings' ||
+        object.subjects.all(s, s.kind == 'ServiceAccount')
+      message: "The Provisioner can only grant permissions to ServiceAccounts."
+
+    # Rule 4b: Subject API Group Restriction
+    # For ServiceAccount subjects, apiGroup must be empty/omitted.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'rolebindings' ||
+        object.subjects.all(s, !has(s.apiGroup) || s.apiGroup == '')
+      message: "The Provisioner can only bind to core ServiceAccount subjects (apiGroup must be empty)."
+
+    # Rule 4c: RoleRef Kind/API Group Restriction
+    # RoleBindings must point to a namespaced Role (not ClusterRole).
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'rolebindings' ||
+        (object.roleRef.kind == 'Role' && object.roleRef.apiGroup == 'rbac.authorization.k8s.io')
+      message: "The Provisioner can only create RoleBindings that reference a Role (not ClusterRole)."
+
+    # Rule 5: Subject Restriction (Prevent Backdoor Creation)
+    # Tenant RoleBinding must bind ONLY the controller ServiceAccount in the operator namespace.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'rolebindings' ||
+        (
+          (
+            object.metadata.name == 'openbao-operator-tenant-rolebinding' &&
+            object.roleRef.name == 'openbao-operator-tenant-role' &&
+            object.subjects.size() == 1 &&
+            object.subjects[0].kind == 'ServiceAccount' &&
+            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
+            object.subjects[0].namespace == '{{ .Release.Namespace }}'
+          ) ||
+          (
+            object.metadata.name == 'openbao-operator-tenant-secrets-reader-rolebinding' &&
+            object.roleRef.name == 'openbao-operator-tenant-secrets-reader' &&
+            object.subjects.size() == 1 &&
+            object.subjects[0].kind == 'ServiceAccount' &&
+            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
+            object.subjects[0].namespace == '{{ .Release.Namespace }}'
+          ) ||
+          (
+            object.metadata.name == 'openbao-operator-tenant-secrets-writer-rolebinding' &&
+            object.roleRef.name == 'openbao-operator-tenant-secrets-writer' &&
+            object.subjects.size() == 1 &&
+            object.subjects[0].kind == 'ServiceAccount' &&
+            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
+            object.subjects[0].namespace == '{{ .Release.Namespace }}'
+          )
+        )
+      message: "The Provisioner can only bind tenant RBAC to the operator controller ServiceAccount."
+
+    # Rule 6: Content Restriction (Prevent Dangerous Verbs)
+    # The Provisioner cannot create or update Roles that grant impersonation,
+    # bind/escalate, or wildcard permissions. This provides defense-in-depth
+    # even if the Provisioner ClusterRole is accidentally broadened in the future.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'roles' ||
+        !has(object.rules) ||
+        object.rules == null ||
+        !object.rules.exists(rule,
+          has(rule.verbs) &&
+          rule.verbs != null &&
+          rule.verbs.exists(v,
+            v == 'impersonate' ||
+            v == 'bind' ||
+            v == 'escalate' ||
+            v == '*'
+          )
+        )
+      message: "The Provisioner cannot create Roles granting 'impersonate', 'bind', 'escalate', or wildcard permissions."
+
+    # Rule 7: Content Restriction (Prevent Wildcard Resources)
+    # Defense-in-depth: prevent creating Roles with wildcard apiGroups or resources.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'roles' ||
+        !has(object.rules) ||
+        object.rules == null ||
+        !object.rules.exists(rule,
+          (
+            has(rule.apiGroups) &&
+            rule.apiGroups != null &&
+            rule.apiGroups.exists(g, g == '*')
+          ) ||
+          (
+            has(rule.resources) &&
+            rule.resources != null &&
+            rule.resources.exists(r, r == '*')
+          )
+        )
+      message: "The Provisioner cannot create Roles with wildcard apiGroups or resources."
+
+    # Rule 7b: Content Restriction (Prevent Non-Resource URLs)
+    # Defense-in-depth: prevent granting access to non-resource URLs.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'roles' ||
+        !has(object.rules) ||
+        object.rules == null ||
+        !object.rules.exists(rule,
+          has(rule.nonResourceURLs) &&
+          rule.nonResourceURLs != null &&
+          rule.nonResourceURLs.size() > 0
+        )
+      message: "The Provisioner cannot create Roles granting nonResourceURLs."
+
+    # Rule 8: Content Restriction (Secrets)
+    # Defense-in-depth: prevent accidental broadening of tenant roles to include
+    # Secrets access. Secret access is only allowed via the explicit allowlist Roles.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'roles' ||
+        !has(object.rules) ||
+        object.rules == null ||
+        !object.rules.exists(rule,
+          has(rule.resources) &&
+          rule.resources != null &&
+          rule.resources.exists(r, r == 'secrets') &&
+          !(object.metadata.name in [
+            'openbao-operator-tenant-secrets-reader',
+            'openbao-operator-tenant-secrets-writer'
+          ])
+        )
+      message: "The Provisioner can only grant Secrets permissions via the dedicated secrets allowlist Roles."
+
+    # Rule 9: Content Restriction (Secrets Reader Role)
+    # The secrets reader Role must be strictly name-scoped (resourceNames) and read-only.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'roles' ||
+        object.metadata.name != 'openbao-operator-tenant-secrets-reader' ||
+        (
+          has(object.rules) &&
+          object.rules != null &&
+          object.rules.size() == 1 &&
+          object.rules[0].apiGroups == [''] &&
+          object.rules[0].resources == ['secrets'] &&
+          object.rules[0].verbs == ['get'] &&
+          has(object.rules[0].resourceNames) &&
+          object.rules[0].resourceNames != null &&
+          object.rules[0].resourceNames.size() > 0
+        )
+      message: "The Provisioner can only create the secrets reader Role with a non-empty, name-scoped (resourceNames) get-only rule."
+
+    # Rule 10: Content Restriction (Secrets Writer Role)
+    # The secrets writer Role must be limited to: create on the collection + name-scoped mutations.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation == 'DELETE' ||
+        request.resource.resource != 'roles' ||
+        object.metadata.name != 'openbao-operator-tenant-secrets-writer' ||
+        (
+          has(object.rules) &&
+          object.rules != null &&
+          object.rules.size() == 2 &&
+          object.rules.all(r, r.apiGroups == [''] && r.resources == ['secrets']) &&
+          object.rules.exists(r,
+            has(r.verbs) &&
+            r.verbs != null &&
+            r.verbs == ['create'] &&
+            (!has(r.resourceNames) || r.resourceNames == null || r.resourceNames.size() == 0)
+          ) &&
+          object.rules.exists(r,
+            has(r.verbs) &&
+            r.verbs != null &&
+            r.verbs.size() > 0 &&
+            r.verbs.all(v, v in ['delete', 'get', 'patch', 'update']) &&
+            has(r.resourceNames) &&
+            r.resourceNames != null &&
+            r.resourceNames.size() > 0
+          )
+        )
+      message: "The Provisioner can only create the secrets writer Role with create + name-scoped mutations (resourceNames) on Secrets."
+
+    # Rule 11: Deletion Restriction (Roles)
+    # The Provisioner can ONLY delete the fixed tenant template Roles.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation != 'DELETE' ||
+        request.resource.resource != 'roles' ||
+        (
+          oldObject != null &&
+          has(oldObject.metadata) &&
+          oldObject.metadata.name in [
+            'openbao-operator-tenant-role',
+            'openbao-operator-tenant-secrets-reader',
+            'openbao-operator-tenant-secrets-writer'
+          ]
+        )
+      message: "The Provisioner can only delete Roles for the operator tenant template (tenant + secrets allowlists)."
+
+    # Rule 12: Deletion Restriction (RoleBindings)
+    # The Provisioner can ONLY delete the fixed tenant template RoleBindings.
+    - expression: >-
+        !variables.is_provisioner ||
+        request.operation != 'DELETE' ||
+        request.resource.resource != 'rolebindings' ||
+        (
+          oldObject != null &&
+          has(oldObject.metadata) &&
+          oldObject.metadata.name in [
+            'openbao-operator-tenant-rolebinding',
+            'openbao-operator-tenant-secrets-reader-rolebinding',
+            'openbao-operator-tenant-secrets-writer-rolebinding'
+          ]
+        )
+      message: "The Provisioner can only delete RoleBindings for the operator tenant template (tenant + secrets allowlists)."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-rbac-binding
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
+  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
+  policyName: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-rbac
+  validationActions: [Deny]
+  matchResources:
+    # This binding applies the policy to ALL Role/RoleBinding requests.
+    # The policy itself filters for the specific user (is_provisioner variable).
+    resourceRules:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["roles", "rolebindings"]
+{{- end }}

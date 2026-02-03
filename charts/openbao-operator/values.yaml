@@ -73,6 +73,13 @@ controller:
   # - name: LOG_LEVEL
   #   value: debug
 
+  # -- Additional arguments for the controller manager.
+  # Example:
+  # extraArgs:
+  #   - --admission-enforcement=warn
+  #   - --admission-startup-timeout=120s
+  extraArgs: []
+
   # -- Node selector for controller pods
   nodeSelector: {}
 
@@ -125,6 +132,13 @@ provisioner:
 
   # -- Additional environment variables for the provisioner
   extraEnv: []
+
+  # -- Additional arguments for the provisioner manager.
+  # Example:
+  # extraArgs:
+  #   - --admission-enforcement=warn
+  #   - --admission-startup-timeout=120s
+  extraArgs: []
 
   # -- Node selector for provisioner pods
   nodeSelector: {}
@@ -189,8 +203,46 @@ healthProbes:
 
 # -- ValidatingAdmissionPolicy configuration
 admissionPolicies:
-  # -- Enable ValidatingAdmissionPolicies for resource protection
+  # -- Enable ValidatingAdmissionPolicies for resource protection.
+  # -- WARNING: Setting this to false is treated as UNSAFE MODE. The chart will set
+  # -- `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can start without
+  # -- admission guardrails. Intended only for development/break-glass scenarios.
   enabled: true
+  # Provisioner RBAC policy configuration (multi-tenant mode).
+  #
+  # These lists are used to deny the Provisioner from creating/updating/deleting
+  # tenant RBAC in platform/system namespaces. The release namespace is always
+  # denied (where the operator runs).
+  #
+  # This is defense-in-depth for clusters that have provider-reserved namespaces
+  # beyond the standard `kube-*` set.
+  provisionerRBAC:
+    # -- Exact namespace names to deny.
+    deniedNamespaces:
+      - openshift
+    # -- Namespace prefixes to deny.
+    deniedNamespacePrefixes:
+      - kube-
+      - openshift-
+      - gke-
+      # Common managed-cluster / addon namespaces (provider-specific; tune as needed).
+      - eks-
+      - aws-
+      - aks-
+      - azure-
+
+# -- Projected ServiceAccount token configuration for operator pods
+# The controller/provisioner disable default token automount and instead mount
+# explicit projected tokens with a bounded TTL.
+serviceAccountToken:
+  # -- Audience to use for the projected Kubernetes API ServiceAccount token.
+  # Defaults to empty, which lets the API server decide the default audience. This is
+  # the most portable (cloud-agnostic) option.
+  #
+  # If you want to pin the audience explicitly, set this to a value accepted by the
+  # API server (`--api-audiences`). An incorrect value typically results in 401s for
+  # in-cluster API calls.
+  kubernetesAudience: ""
 
 # -- NetworkPolicy configuration for operator pods
 networkPolicy:

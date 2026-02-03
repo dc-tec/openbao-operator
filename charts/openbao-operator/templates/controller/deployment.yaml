@@ -29,6 +29,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      automountServiceAccountToken: false
       serviceAccountName: {{ include "openbao-operator.controllerServiceAccountName" . }}
       securityContext:
         {{- if $isOpenShift }}
@@ -53,15 +54,27 @@ spec:
             - --metrics-bind-address=:{{ .Values.metrics.port }}
             {{- end }}
             - --platform={{ .Values.platform }}
+            {{- if not .Values.admissionPolicies.enabled }}
+            - --admission-enforcement=warn
+            {{- end }}
+            {{- with .Values.controller.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           env:
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: OPERATOR_NAME_PREFIX
+              value: {{ include "openbao-operator.fullname" . }}-
             - name: OPERATOR_SERVICE_ACCOUNT_NAME
               value: {{ include "openbao-operator.controllerServiceAccountName" . }}
             - name: OPERATOR_VERSION
               value: {{ include "openbao-operator.operatorVersion" . | quote }}
+            {{- if not .Values.admissionPolicies.enabled }}
+            - name: OPENBAO_UNSAFE_ADMISSION_DISABLED
+              value: "true"
+            {{- end }}
             {{- with .Values.controller.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -92,10 +105,33 @@ spec:
             {{- toYaml .Values.controller.securityContext | nindent 12 }}
             {{- end }}
           volumeMounts:
+            - name: kube-api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
             - name: openbao-token
               mountPath: /var/run/secrets/tokens
               readOnly: true
       volumes:
+        - name: kube-api-access
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+                  {{- if .Values.serviceAccountToken.kubernetesAudience }}
+                  audience: {{ .Values.serviceAccountToken.kubernetesAudience | quote }}
+                  {{- end }}
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef:
+                        fieldPath: metadata.namespace
+            defaultMode: 292
         - name: openbao-token
           projected:
             sources:
@@ -103,7 +139,7 @@ spec:
                   path: openbao-token
                   expirationSeconds: 3600
                   audience: openbao-internal
-            defaultMode: 0400
+            defaultMode: 292
       {{- with .Values.controller.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

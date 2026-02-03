@@ -30,6 +30,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      automountServiceAccountToken: false
       serviceAccountName: {{ include "openbao-operator.provisionerServiceAccountName" . }}
       securityContext:
         {{- if $isOpenShift }}
@@ -53,9 +54,27 @@ spec:
             {{- if .Values.metrics.enabled }}
             - --metrics-bind-address=:{{ .Values.metrics.port }}
             {{- end }}
+            {{- if not .Values.admissionPolicies.enabled }}
+            - --admission-enforcement=warn
+            {{- end }}
+            {{- with .Values.provisioner.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OPERATOR_NAME_PREFIX
+              value: {{ include "openbao-operator.fullname" . }}-
+            - name: OPERATOR_SERVICE_ACCOUNT_NAME
+              value: {{ include "openbao-operator.controllerServiceAccountName" . }}
             - name: OPERATOR_VERSION
               value: {{ include "openbao-operator.operatorVersion" . | quote }}
+            {{- if not .Values.admissionPolicies.enabled }}
+            - name: OPENBAO_UNSAFE_ADMISSION_DISABLED
+              value: "true"
+            {{- end }}
             {{- with .Values.provisioner.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -85,6 +104,31 @@ spec:
             {{- else }}
             {{- toYaml .Values.provisioner.securityContext | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: kube-api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+      volumes:
+        - name: kube-api-access
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+                  {{- if .Values.serviceAccountToken.kubernetesAudience }}
+                  audience: {{ .Values.serviceAccountToken.kubernetesAudience | quote }}
+                  {{- end }}
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef:
+                        fieldPath: metadata.namespace
+            defaultMode: 292
       {{- with .Values.provisioner.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

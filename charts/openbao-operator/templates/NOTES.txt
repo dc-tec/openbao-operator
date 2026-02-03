@@ -1,5 +1,13 @@
 OpenBao Operator has been installed.
 
+{{- if not .Values.admissionPolicies.enabled }}
+
+WARNING: `admissionPolicies.enabled=false` (UNSAFE MODE)
+  - ValidatingAdmissionPolicies are disabled and the operator will run without admission guardrails.
+  - This materially weakens the security posture of multi-tenant installs (RBAC + tamper protections).
+  - Recommended: keep `admissionPolicies.enabled=true`.
+{{- end }}
+
 {{- if eq .Values.tenancy.mode "multi" }}
 
 Tenancy Mode: Multi-Tenant
