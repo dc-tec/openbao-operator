@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -47,11 +48,17 @@ func (m *Manager) ensureServiceAccount(ctx context.Context, _ logr.Logger, clust
 // - OpenBao's Kubernetes auto-join discovery (pod list/watch by label selector)
 // - OpenBao's Kubernetes service registration (pod label updates; some clients use PATCH)
 //
+// Security hardening:
+// - list/watch is scoped to the namespace (required for label-selector discovery)
+// - mutation (patch/update) is scoped to the OpenBao StatefulSet Pod resourceNames only
+//
 // Uses Server-Side Apply.
 func (m *Manager) ensureRBAC(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	saName := serviceAccountName(cluster)
 	roleName := saName + "-role"
 	roleBindingName := saName + "-rolebinding"
+
+	podResourceNames := openBaoPodResourceNames(cluster.Name, cluster.Spec.Replicas)
 
 	// Ensure Role exists using SSA
 	role := &rbacv1.Role{
@@ -68,7 +75,13 @@ func (m *Manager) ensureRBAC(ctx context.Context, _ logr.Logger, cluster *openba
 			{
 				APIGroups: []string{""},
 				Resources: []string{"pods"},
-				Verbs:     []string{"get", "list", "watch", "patch", "update"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+			{
+				APIGroups:     []string{""},
+				Resources:     []string{"pods"},
+				ResourceNames: podResourceNames,
+				Verbs:         []string{"patch", "update"},
 			},
 		},
 	}
@@ -115,4 +128,19 @@ func serviceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 		return cluster.Spec.ServiceAccount.Name
 	}
 	return cluster.Name + constants.SuffixServiceAccount
+}
+
+func openBaoPodResourceNames(clusterName string, replicas int32) []string {
+	// Pod names are predictable (<clusterName>-<ordinal>), and RBAC resourceNames
+	// cannot express wildcards. Include at least the default replica count (3) to:
+	// - avoid any "replicas=0" defaulting edge cases
+	// - reduce transient failures during scale-down before pods are deleted
+	if replicas < 3 {
+		replicas = 3
+	}
+	names := make([]string, 0, replicas)
+	for i := int32(0); i < replicas; i++ {
+		names = append(names, clusterName+"-"+strconv.FormatInt(int64(i), 10))
+	}
+	return names
 }
