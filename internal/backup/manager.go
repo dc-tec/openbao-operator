@@ -243,18 +243,98 @@ func (m *Manager) syncBackupMetrics(ctx context.Context, logger logr.Logger, clu
 	}
 	metrics.SetInProgress(inProgress)
 
-	// Backfill last backup duration from the most recent successful job.
-	if newestSucceeded != nil && cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupDuration == "" {
+	// Backfill missing last-* gauges from the most recent successful job so dashboards remain stable
+	// even when Status writes are temporarily blocked by SSA ownership conflicts.
+	if newestSucceeded != nil {
+		if cluster.Status.Backup == nil || cluster.Status.Backup.LastBackupTime == nil {
+			if newestSucceeded.Status.CompletionTime != nil {
+				metrics.SetLastSuccessTimestamp(float64(newestSucceeded.Status.CompletionTime.Time.Unix()))
+			} else {
+				metrics.SetLastSuccessTimestamp(float64(newestSucceeded.CreationTimestamp.Time.Unix()))
+			}
+		}
+
+		var duration time.Duration
 		if newestSucceeded.Status.StartTime != nil && newestSucceeded.Status.CompletionTime != nil {
-			duration := newestSucceeded.Status.CompletionTime.Sub(newestSucceeded.Status.StartTime.Time)
-			if duration > 0 {
-				metrics.SetLastDuration(duration.Seconds())
-				logger.V(1).Info("Backfilled backup duration from Job status", "job", newestSucceeded.Name, "duration", duration.String())
+			duration = newestSucceeded.Status.CompletionTime.Sub(newestSucceeded.Status.StartTime.Time)
+		}
+
+		if duration > 0 {
+			metrics.SetLastDuration(duration.Seconds())
+			if cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupDuration == "" {
+				cluster.Status.Backup.LastBackupDuration = duration.String()
+			}
+		}
+
+		backupKey := ""
+		if newestSucceeded.Annotations != nil {
+			backupKey = newestSucceeded.Annotations["openbao.org/backup-key"]
+		}
+		if backupKey != "" &&
+			cluster.Spec.Backup != nil &&
+			cluster.Spec.Backup.Target.RoleARN == "" &&
+			cluster.Spec.Backup.Target.CredentialsSecretRef != nil &&
+			cluster.Spec.Backup.Target.CredentialsSecretRef.Name != "" {
+			size, err := m.readBackupSizeFromObjectStorage(ctx, cluster, backupKey)
+			if err != nil {
+				logger.V(1).Info("Failed to read backup size from object storage", "backupKey", backupKey, "error", err.Error())
+			} else if size > 0 {
+				metrics.SetLastSize(size)
+				if cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupSize == 0 {
+					cluster.Status.Backup.LastBackupSize = size
+				}
+			}
+		}
+
+		// Persist best-effort backfilled status fields.
+		if cluster.Status.Backup != nil && (cluster.Status.Backup.LastBackupDuration != "" || cluster.Status.Backup.LastBackupSize > 0) {
+			if err := m.patchStatusSSA(ctx, cluster); err != nil {
+				return fmt.Errorf("failed to patch backup status after metrics backfill: %w", err)
 			}
 		}
 	}
 
 	return nil
+}
+
+func (m *Manager) readBackupSizeFromObjectStorage(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, backupKey string) (int64, error) {
+	if cluster == nil || cluster.Spec.Backup == nil || backupKey == "" {
+		return 0, nil
+	}
+
+	creds, err := kube.LoadStorageCredentials(ctx, m.client, cluster.Spec.Backup.Target.CredentialsSecretRef, cluster.Namespace)
+	if err != nil {
+		return 0, fmt.Errorf("failed to load storage credentials: %w", err)
+	}
+
+	region := creds.Region
+	if region == "" {
+		region = constants.DefaultS3Region
+	}
+
+	storageClient, err := storage.OpenS3Bucket(ctx, storage.S3ClientConfig{
+		Endpoint:        cluster.Spec.Backup.Target.Endpoint,
+		Bucket:          cluster.Spec.Backup.Target.Bucket,
+		Region:          region,
+		AccessKeyID:     creds.AccessKeyID,
+		SecretAccessKey: creds.SecretAccessKey,
+		SessionToken:    creds.SessionToken,
+		CACert:          creds.CACert,
+		UsePathStyle:    cluster.Spec.Backup.Target.UsePathStyle,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to create storage client: %w", err)
+	}
+	defer func() { _ = storageClient.Close() }()
+
+	info, err := storageClient.Head(ctx, backupKey)
+	if err != nil {
+		return 0, fmt.Errorf("failed to head object %q: %w", backupKey, err)
+	}
+	if info == nil {
+		return 0, nil
+	}
+	return info.Size, nil
 }
 
 func validateBackupEgressConfiguration(cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -345,7 +425,8 @@ func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.O
 	}
 
 	return m.client.Status().Apply(ctx, applyConfig,
-		client.FieldOwner("openbao-backup-controller"),
+		client.FieldOwner("openbao-adminops-controller"),
+		client.ForceOwnership,
 	)
 }
 
@@ -690,11 +771,16 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 		return fmt.Errorf("failed to load storage credentials for retention: %w", err)
 	}
 
+	region := creds.Region
+	if region == "" {
+		region = constants.DefaultS3Region
+	}
+
 	// Create storage client
 	storageClient, err := storage.OpenS3Bucket(ctx, storage.S3ClientConfig{
 		Endpoint:        cluster.Spec.Backup.Target.Endpoint,
 		Bucket:          cluster.Spec.Backup.Target.Bucket,
-		Region:          creds.Region,
+		Region:          region,
 		AccessKeyID:     creds.AccessKeyID,
 		SecretAccessKey: creds.SecretAccessKey,
 		SessionToken:    creds.SessionToken,
