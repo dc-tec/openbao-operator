@@ -962,8 +962,8 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_backup_success_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
-          "legendFormat": "Success Rate",
+          "expr": "sum(increase(openbao_backup_success_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[$__rate_interval]))",
+          "legendFormat": "Successes",
           "refId": "A"
         },
         {
@@ -971,8 +971,8 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_backup_failure_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
-          "legendFormat": "Failure Rate",
+          "expr": "sum(increase(openbao_backup_failure_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[$__rate_interval]))",
+          "legendFormat": "Failures",
           "refId": "B"
         }
       ],
@@ -1403,7 +1403,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_backup_last_success_timestamp{exported_namespace=\"$namespace\", name=\"$cluster\"}",
+          "expr": "openbao_backup_last_success_timestamp{exported_namespace=\"$namespace\", name=\"$cluster\"} * 1000",
           "legendFormat": "Last Successful Backup",
           "refId": "A"
         }
@@ -2018,5 +2018,4 @@
   "version": 1,
   "weekStart": ""
 }
-
 
