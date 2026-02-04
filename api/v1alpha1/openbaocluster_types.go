@@ -1832,6 +1832,7 @@ type OpenBaoClusterStatus struct {
 	Workload *WorkloadControllerStatus `json:"workload,omitempty"`
 	// AdminOps holds signals owned by the adminops controller (upgrade + backup).
 	// +optional
+	// +nullable
 	// +kubebuilder:validation:Nullable
 	AdminOps *AdminOpsControllerStatus `json:"adminOps,omitempty"`
 	// Conditions represent the current state of the OpenBaoCluster resource.
