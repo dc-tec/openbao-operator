@@ -218,6 +218,188 @@
           "minimum": 1,
           "maximum": 65535,
           "default": 8443
+        },
+        "rbac": {
+          "type": "object",
+          "description": "Optional RBAC to allow external scrapers (Prometheus/vmagent) to GET /metrics",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create a ClusterRoleBinding to the built-in metrics-reader ClusterRole",
+              "default": false
+            },
+            "subjects": {
+              "type": "array",
+              "description": "Subjects (ServiceAccounts) that should be allowed to scrape metrics",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "namespace": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "name",
+                  "namespace"
+                ]
+              },
+              "default": []
+            }
+          }
+        },
+        "serviceMonitor": {
+          "type": "object",
+          "description": "Prometheus Operator ServiceMonitor configuration",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable ServiceMonitor resources for controller/provisioner metrics",
+              "default": false
+            },
+            "namespace": {
+              "type": "string",
+              "description": "Namespace to create ServiceMonitors in (defaults to release namespace if empty)"
+            },
+            "interval": {
+              "type": "string",
+              "description": "Scrape interval",
+              "default": "30s"
+            },
+            "scrapeTimeout": {
+              "type": "string",
+              "description": "Scrape timeout",
+              "default": "10s"
+            },
+            "labels": {
+              "type": "object",
+              "description": "Additional labels to add to the ServiceMonitor",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {}
+            },
+            "tlsConfig": {
+              "type": "object",
+              "description": "TLS config for scraping the secure metrics endpoint",
+              "additionalProperties": false,
+              "properties": {
+                "insecureSkipVerify": {
+                  "type": "boolean",
+                  "description": "Skip TLS verification (useful with self-signed certs). Set to false and configure secrets for strict verification.",
+                  "default": true
+                },
+                "serverName": {
+                  "type": "string",
+                  "description": "Optional serverName override, e.g. openbao-operator-controller-metrics.<ns>.svc",
+                  "default": ""
+                },
+                "caSecret": {
+                  "type": "object",
+                  "description": "Optional CA secret reference",
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "default": ""
+                    },
+                    "key": {
+                      "type": "string",
+                      "default": "ca.crt"
+                    }
+                  }
+                },
+                "certSecret": {
+                  "type": "object",
+                  "description": "Optional client cert secret reference",
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "default": ""
+                    },
+                    "key": {
+                      "type": "string",
+                      "default": "tls.crt"
+                    }
+                  }
+                },
+                "keySecret": {
+                  "type": "object",
+                  "description": "Optional client key secret reference",
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "default": ""
+                    },
+                    "key": {
+                      "type": "string",
+                      "default": "tls.key"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "victoriaMetrics": {
+          "type": "object",
+          "description": "VictoriaMetrics Operator (VMServiceScrape) configuration",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable VMServiceScrape resources for controller/provisioner metrics",
+              "default": false
+            },
+            "namespace": {
+              "type": "string",
+              "description": "Namespace to create VMServiceScrapes in (defaults to release namespace if empty)"
+            },
+            "interval": {
+              "type": "string",
+              "description": "Scrape interval",
+              "default": "30s"
+            },
+            "scrapeTimeout": {
+              "type": "string",
+              "description": "Scrape timeout",
+              "default": "10s"
+            },
+            "labels": {
+              "type": "object",
+              "description": "Additional labels to add to the VMServiceScrape",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {}
+            },
+            "tlsConfig": {
+              "type": "object",
+              "description": "TLS config for scraping the secure metrics endpoint",
+              "additionalProperties": false,
+              "properties": {
+                "insecureSkipVerify": {
+                  "type": "boolean",
+                  "description": "Skip TLS verification (useful with self-signed certs). Set to false and configure trusted CA in your scraping stack for strict verification.",
+                  "default": true
+                },
+                "serverName": {
+                  "type": "string",
+                  "description": "Optional serverName override, e.g. openbao-operator-controller-metrics.<ns>.svc",
+                  "default": ""
+                }
+              }
+            }
+          }
         }
       }
     },
