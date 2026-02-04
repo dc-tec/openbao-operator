@@ -1,0 +1,4 @@
+resources:
+  - ../../default
+  - metrics_reader_binding.yaml
+

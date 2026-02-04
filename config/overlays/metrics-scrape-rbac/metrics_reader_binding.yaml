@@ -1,0 +1,18 @@
+# Optional opt-in: Grant a scraping ServiceAccount permission to GET /metrics.
+#
+# Notes:
+# - The permission is cluster-scoped (nonResourceURLs), so this must be a ClusterRoleBinding.
+# - Update the subject ServiceAccount name/namespace to match your Prometheus/vmagent.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metrics-reader-scraper
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metrics-reader
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-k8s
+    namespace: monitoring
+

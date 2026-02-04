@@ -21,6 +21,8 @@ resources:
   - ../policy
   # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
   #- ../prometheus
+  # [VICTORIAMETRICS] To enable VictoriaMetrics VMServiceScrape resources, uncomment:
+  #- ../victoriametrics
   # [METRICS] Expose the metrics services for both provisioner and controller.
   # To disable metrics, comment out the following lines (the metrics services won't be needed)
   - provisioner_metrics_service.yaml

@@ -1,0 +1,21 @@
+# VictoriaMetrics VMServiceScrape for Provisioner metrics
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/component: provisioner
+    app.kubernetes.io/managed-by: kustomize
+  name: provisioner-metrics-scrape
+  namespace: system
+spec:
+  endpoints:
+    - path: /metrics
+      port: https
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openbao-operator
+      app.kubernetes.io/component: provisioner
+

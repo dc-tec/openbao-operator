@@ -1,0 +1,14 @@
+resources:
+  - controller_vmservicescrape.yaml
+  - provisioner_vmservicescrape.yaml
+# [VICTORIAMETRICS-WITH-CERTS] Uncomment the following patch to configure TLS
+# with cert-manager-managed certificates. Also ensure you enable the
+# [METRICS-WITH-CERTS] patch under config/default/kustomization.yaml so the
+# manager Deployments mount the metrics certificate secret.
+#patchesJson6902:
+#  - target:
+#      group: operator.victoriametrics.com
+#      version: v1beta1
+#      kind: VMServiceScrape
+#    path: vmservicescrape_tls_patch.yaml
+
