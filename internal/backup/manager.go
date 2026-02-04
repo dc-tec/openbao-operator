@@ -74,6 +74,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	metrics := NewMetrics(cluster.Namespace, cluster.Name)
 	now := time.Now().UTC()
 
+	// Keep backup metrics aligned with observed status and Jobs so dashboards remain stable
+	// even when backups are infrequent.
+	if err := m.syncBackupMetrics(ctx, logger, cluster, metrics); err != nil {
+		return recon.Result{}, err
+	}
+
 	// If a restore is in progress for this cluster, do not start new backups.
 	// This prevents scheduled backups from repeatedly acquiring the operation lock
 	// and starving the restore controller.
@@ -161,6 +167,94 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	// Execute backup and process results
 	return m.executeAndProcessBackup(ctx, logger, cluster, schedule, metrics, now, scheduledTime, manualTrigger)
+}
+
+func (m *Manager) syncBackupMetrics(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *Metrics) error {
+	if metrics == nil {
+		return nil
+	}
+
+	// Reflect last known status values (best effort).
+	if cluster.Status.Backup != nil {
+		metrics.SetConsecutiveFailures(cluster.Status.Backup.ConsecutiveFailures)
+
+		if cluster.Status.Backup.LastBackupTime != nil {
+			metrics.SetLastSuccessTimestamp(float64(cluster.Status.Backup.LastBackupTime.Time.Unix()))
+		}
+		if cluster.Status.Backup.LastBackupSize > 0 {
+			metrics.SetLastSize(cluster.Status.Backup.LastBackupSize)
+		}
+		if cluster.Status.Backup.LastBackupDuration != "" {
+			if d, err := time.ParseDuration(cluster.Status.Backup.LastBackupDuration); err == nil {
+				metrics.SetLastDuration(d.Seconds())
+			}
+		}
+	}
+
+	// Determine if any backup Job is currently active/pending.
+	jobList := &batchv1.JobList{}
+	labelSelector := labels.SelectorFromSet(map[string]string{
+		constants.LabelAppInstance:      cluster.Name,
+		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:   cluster.Name,
+		constants.LabelOpenBaoComponent: ComponentBackup,
+	})
+	if err := m.client.List(ctx, jobList,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabelsSelector{Selector: labelSelector},
+	); err != nil {
+		return fmt.Errorf("failed to list backup jobs for metrics sync: %w", err)
+	}
+
+	inProgress := false
+	var newestSucceeded *batchv1.Job
+	for i := range jobList.Items {
+		job := &jobList.Items[i]
+		if kube.JobSucceeded(job) {
+			// Backfill success/failure counters once per observed job.
+			if markBackupJobMetricsSeen(cluster.Namespace, cluster.Name, job.UID, "success") {
+				metrics.IncrementSuccessTotal()
+			}
+			if newestSucceeded == nil {
+				newestSucceeded = job
+			} else {
+				// Prefer completion time, fall back to creation time.
+				a := newestSucceeded.CreationTimestamp.Time
+				if newestSucceeded.Status.CompletionTime != nil {
+					a = newestSucceeded.Status.CompletionTime.Time
+				}
+				b := job.CreationTimestamp.Time
+				if job.Status.CompletionTime != nil {
+					b = job.Status.CompletionTime.Time
+				}
+				if b.After(a) {
+					newestSucceeded = job
+				}
+			}
+			continue
+		}
+		if kube.JobFailed(job) {
+			if markBackupJobMetricsSeen(cluster.Namespace, cluster.Name, job.UID, "failure") {
+				metrics.IncrementFailureTotal()
+			}
+			continue
+		}
+		inProgress = true
+	}
+	metrics.SetInProgress(inProgress)
+
+	// Backfill last backup duration from the most recent successful job.
+	if newestSucceeded != nil && cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupDuration == "" {
+		if newestSucceeded.Status.StartTime != nil && newestSucceeded.Status.CompletionTime != nil {
+			duration := newestSucceeded.Status.CompletionTime.Sub(newestSucceeded.Status.StartTime.Time)
+			if duration > 0 {
+				metrics.SetLastDuration(duration.Seconds())
+				logger.V(1).Info("Backfilled backup duration from Job status", "job", newestSucceeded.Name, "duration", duration.String())
+			}
+		}
+	}
+
+	return nil
 }
 
 func validateBackupEgressConfiguration(cluster *openbaov1alpha1.OpenBaoCluster) error {
