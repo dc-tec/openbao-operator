@@ -230,7 +230,7 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, clus
 		return nil, fmt.Errorf("cluster name and namespace are required")
 	}
 
-	baseURL := fmt.Sprintf("https://%s-0.%s.%s.svc:%d", cluster.Name, cluster.Name, cluster.Namespace, constants.PortAPI)
+	baseURL := autopilotBaseURL(cluster)
 
 	// Get TLS CA for validation
 	caCert, err := m.getTLSCACert(ctx, cluster)
@@ -328,7 +328,7 @@ func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openba
 		return nil, fmt.Errorf("cluster name and namespace are required to build OpenBao client")
 	}
 
-	baseURL := fmt.Sprintf("https://%s-0.%s.%s.svc:%d", cluster.Name, cluster.Name, cluster.Namespace, constants.PortAPI)
+	baseURL := autopilotBaseURL(cluster)
 
 	caSecretName := cluster.Name + constants.SuffixTLSCA
 	secret, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, caSecretName, metav1.GetOptions{})
@@ -359,4 +359,14 @@ func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openba
 	}
 
 	return client, nil
+}
+
+// autopilotBaseURL returns a stable in-cluster address for performing Raft autopilot operations.
+//
+// We intentionally do not use Pod DNS names here because blue/green deployments use revisioned
+// StatefulSet pod names (e.g. "<cluster>-<revision>-0"), so "<cluster>-0" may not exist.
+func autopilotBaseURL(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	// Use the (clusterIP) public Service, which is stable across rolling and blue/green strategies.
+	// Service name: "<cluster>-public", DNS: "<service>.<namespace>.svc".
+	return fmt.Sprintf("https://%s-public.%s.svc:%d", cluster.Name, cluster.Namespace, constants.PortAPI)
 }
