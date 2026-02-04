@@ -3859,17 +3859,7 @@ metadata:
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-provisioner
-  namespace: openbao-operator-system
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  labels:
-    app.kubernetes.io/component: provisioner
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-provisioner-delegate
+  name: openbao-operator-provisioner
   namespace: openbao-operator-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -3911,39 +3901,11 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: openbao-operator-metrics-auth-role
-rules:
-- apiGroups:
-  - authentication.k8s.io
-  resources:
-  - tokenreviews
-  verbs:
-  - create
-- apiGroups:
-  - authorization.k8s.io
-  resources:
-  - subjectaccessreviews
-  verbs:
-  - create
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: openbao-operator-metrics-reader
-rules:
-- nonResourceURLs:
-  - /metrics
-  verbs:
-  - get
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
   labels:
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-controller-openbaocluster-role
+  name: openbao-operator-controller-openbaocluster-role
 rules:
 - apiGroups:
   - openbao.org
@@ -3974,7 +3936,7 @@ metadata:
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-controller-openbaorestore-role
+  name: openbao-operator-controller-openbaorestore-role
 rules:
 - apiGroups:
   - openbao.org
@@ -3988,265 +3950,30 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
-    app.kubernetes.io/component: provisioner
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-provisioner-role
+  name: openbao-operator-metrics-auth-role
 rules:
 - apiGroups:
-  - ""
+  - authentication.k8s.io
   resources:
-  - namespaces
+  - tokenreviews
   verbs:
-  - get
-  - update
-  - patch
+  - create
 - apiGroups:
-  - ""
-  resourceNames:
-  - openbao-operator-provisioner-delegate
+  - authorization.k8s.io
   resources:
-  - serviceaccounts
+  - subjectaccessreviews
   verbs:
-  - impersonate
-- apiGroups:
-  - ""
-  resources:
-  - serviceaccounts
-  verbs:
-  - get
-- apiGroups:
-  - openbao.org
-  resources:
-  - openbaotenants
-  - openbaotenants/status
-  - openbaotenants/finalizers
-  verbs:
-  - get
-  - list
-  - watch
-  - update
-  - patch
-- apiGroups:
-  - openbao.org
-  resources:
-  - openbaoclusters
-  verbs:
-  - get
-  - list
-  - watch
+  - create
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
-    app.kubernetes.io/component: provisioner
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-tenant-template
+  name: openbao-operator-metrics-reader
 rules:
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - roles
-  - rolebindings
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - openbao.org
-  resources:
-  - openbaoclusters
-  - openbaoclusters/status
-  - openbaoclusters/finalizers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - openbao.org
-  resources:
-  - openbaorestores
-  - openbaorestores/status
-  - openbaorestores/finalizers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - statefulsets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - services
-  - configmaps
-  - serviceaccounts
-  - resourcequotas
-  - limitranges
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-- apiGroups:
-  - events.k8s.io
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - persistentvolumeclaims
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - batch
-  resources:
-  - jobs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - policy
-  resources:
-  - poddisruptionbudgets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - networking.k8s.io
-  resources:
-  - ingresses
-  - networkpolicies
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - gateway.networking.k8s.io
-  resources:
-  - httproutes
-  - tlsroutes
-  - backendtlspolicies
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - endpoints
+- nonResourceURLs:
+  - /metrics
   verbs:
   - get
-  - list
-  - watch
-- apiGroups:
-  - discovery.k8s.io
-  resources:
-  - endpointslices
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-  - delete
-  - get
-  - patch
-  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -4347,13 +4074,115 @@ rules:
   - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/component: provisioner
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: openbao-operator
+  name: openbao-operator-provisioner-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - get
+- apiGroups:
+  - openbao.org
+  resources:
+  - openbaotenants
+  - openbaotenants/status
+  - openbaotenants/finalizers
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  - openbao.org
+  resources:
+  - openbaoclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingadmissionpolicies
+  - validatingadmissionpolicybindings
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - resourcequotas
+  - limitranges
+  verbs:
+  - get
+  - create
+  - patch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  - rolebindings
+  verbs:
+  - create
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - openbao-operator-tenant-role
+  - openbao-operator-tenant-secrets-reader
+  - openbao-operator-tenant-secrets-writer
+  resources:
+  - roles
+  verbs:
+  - get
+  - patch
+  - delete
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - openbao-operator-tenant-rolebinding
+  - openbao-operator-tenant-secrets-reader-rolebinding
+  - openbao-operator-tenant-secrets-writer-rolebinding
+  resources:
+  - rolebindings
+  verbs:
+  - get
+  - patch
+  - delete
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - openbao-operator-tenant-role
+  - openbao-operator-tenant-secrets-reader
+  - openbao-operator-tenant-secrets-writer
+  resources:
+  - roles
+  verbs:
+  - bind
+  - escalate
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-controller-leader-election-rolebinding
+  name: openbao-operator-controller-leader-election-rolebinding
   namespace: openbao-operator-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -4371,7 +4200,7 @@ metadata:
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-provisioner-leader-election-rolebinding
+  name: openbao-operator-provisioner-leader-election-rolebinding
   namespace: openbao-operator-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -4379,7 +4208,7 @@ roleRef:
   name: openbao-operator-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: openbao-operator-openbao-operator-provisioner
+  name: openbao-operator-provisioner
   namespace: openbao-operator-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -4389,7 +4218,7 @@ metadata:
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-controller-metrics-auth-rolebinding
+  name: openbao-operator-controller-metrics-auth-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -4406,11 +4235,11 @@ metadata:
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-controller-openbaocluster-rolebinding
+  name: openbao-operator-controller-openbaocluster-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openbao-operator-openbao-operator-controller-openbaocluster-role
+  name: openbao-operator-controller-openbaocluster-role
 subjects:
 - kind: ServiceAccount
   name: openbao-operator-controller
@@ -4423,11 +4252,11 @@ metadata:
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-controller-openbaorestore-rolebinding
+  name: openbao-operator-controller-openbaorestore-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openbao-operator-openbao-operator-controller-openbaorestore-role
+  name: openbao-operator-controller-openbaorestore-role
 subjects:
 - kind: ServiceAccount
   name: openbao-operator-controller
@@ -4440,14 +4269,14 @@ metadata:
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-provisioner-metrics-auth-rolebinding
+  name: openbao-operator-provisioner-metrics-auth-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: openbao-operator-metrics-auth-role
 subjects:
 - kind: ServiceAccount
-  name: openbao-operator-openbao-operator-provisioner
+  name: openbao-operator-provisioner
   namespace: openbao-operator-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -4457,31 +4286,14 @@ metadata:
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-provisioner-rolebinding
+  name: openbao-operator-provisioner-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openbao-operator-openbao-operator-provisioner-role
+  name: openbao-operator-provisioner-role
 subjects:
 - kind: ServiceAccount
-  name: openbao-operator-openbao-operator-provisioner
-  namespace: openbao-operator-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app.kubernetes.io/component: provisioner
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-tenant-delegate-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: openbao-operator-openbao-operator-tenant-template
-subjects:
-- kind: ServiceAccount
-  name: openbao-operator-provisioner-delegate
+  name: openbao-operator-provisioner
   namespace: openbao-operator-system
 ---
 apiVersion: v1
@@ -4491,7 +4303,7 @@ metadata:
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-controller-metrics-service
+  name: openbao-operator-controller-metrics-service
   namespace: openbao-operator-system
 spec:
   ports:
@@ -4510,7 +4322,7 @@ metadata:
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-provisioner-metrics-service
+  name: openbao-operator-provisioner-metrics-service
   namespace: openbao-operator-system
 spec:
   ports:
@@ -4529,7 +4341,7 @@ metadata:
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-controller
+  name: openbao-operator-controller
   namespace: openbao-operator-system
 spec:
   replicas: 1
@@ -4545,11 +4357,11 @@ spec:
         app.kubernetes.io/component: controller
         app.kubernetes.io/name: openbao-operator
     spec:
+      automountServiceAccountToken: false
       containers:
       - args:
         - --leader-elect
         - --health-probe-bind-address=:8081
-        - --metrics-bind-address=:8443
         - --metrics-bind-address=:8443
         command:
         - /manager
@@ -4559,11 +4371,13 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: OPERATOR_NAME_PREFIX
+          value: openbao-operator-
         - name: OPERATOR_SERVICE_ACCOUNT_NAME
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:671b5c4ef3c14b2ed8db0260ff49df28f4b3c9d6131445f92ab3c641a28aa9ff
+        image: ghcr.io/dc-tec/openbao-operator@sha256:5bd6ea3c8db019f4407df7a33b326773caa50757fd66cfa7ec05bb8a861a937a
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4595,6 +4409,9 @@ spec:
             - ALL
           readOnlyRootFilesystem: true
         volumeMounts:
+        - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          name: kube-api-access
+          readOnly: true
         - mountPath: /var/run/secrets/tokens
           name: openbao-token
           readOnly: true
@@ -4605,6 +4422,23 @@ spec:
       serviceAccountName: openbao-operator-controller
       terminationGracePeriodSeconds: 10
       volumes:
+      - name: kube-api-access
+        projected:
+          defaultMode: 420
+          sources:
+          - serviceAccountToken:
+              expirationSeconds: 3600
+              path: token
+          - configMap:
+              items:
+              - key: ca.crt
+                path: ca.crt
+              name: kube-root-ca.crt
+          - downwardAPI:
+              items:
+              - fieldRef:
+                  fieldPath: metadata.namespace
+                path: namespace
       - name: openbao-token
         projected:
           defaultMode: 420
@@ -4621,7 +4455,7 @@ metadata:
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
-  name: openbao-operator-openbao-operator-provisioner
+  name: openbao-operator-provisioner
   namespace: openbao-operator-system
 spec:
   replicas: 1
@@ -4637,19 +4471,27 @@ spec:
         app.kubernetes.io/component: provisioner
         app.kubernetes.io/name: openbao-operator
     spec:
+      automountServiceAccountToken: false
       containers:
       - args:
         - --leader-elect
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=:8443
-        - --metrics-bind-address=:8443
         command:
         - /manager
         - provisioner
         env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: OPERATOR_NAME_PREFIX
+          value: openbao-operator-
+        - name: OPERATOR_SERVICE_ACCOUNT_NAME
+          value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:671b5c4ef3c14b2ed8db0260ff49df28f4b3c9d6131445f92ab3c641a28aa9ff
+        image: ghcr.io/dc-tec/openbao-operator@sha256:5bd6ea3c8db019f4407df7a33b326773caa50757fd66cfa7ec05bb8a861a937a
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4680,14 +4522,34 @@ spec:
             drop:
             - ALL
           readOnlyRootFilesystem: true
-        volumeMounts: []
+        volumeMounts:
+        - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          name: kube-api-access
+          readOnly: true
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
-      serviceAccountName: openbao-operator-openbao-operator-provisioner
+      serviceAccountName: openbao-operator-provisioner
       terminationGracePeriodSeconds: 10
-      volumes: []
+      volumes:
+      - name: kube-api-access
+        projected:
+          defaultMode: 420
+          sources:
+          - serviceAccountToken:
+              expirationSeconds: 3600
+              path: token
+          - configMap:
+              items:
+              - key: ca.crt
+                path: ca.crt
+              name: kube-root-ca.crt
+          - downwardAPI:
+              items:
+              - fieldRef:
+                  fieldPath: metadata.namespace
+                path: namespace
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -5084,7 +4946,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: openbao-operator-openbao-restrict-provisioner-delegate
+  name: openbao-operator-openbao-restrict-controller-rbac
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -5096,50 +4958,392 @@ spec:
       operations:
       - CREATE
       - UPDATE
+      - DELETE
       resources:
       - roles
       - rolebindings
   validations:
   - expression: |-
-      !variables.is_delegate || request.resource.resource != 'roles' || object.metadata.name in [
+      !variables.is_controller || request.resource.resource != "roles" || request.operation == "DELETE" || (
+
+        object != null &&
+        has(object.metadata) &&
+        has(object.metadata.name) &&
+        object.metadata.name.endsWith("-role") &&
+        has(object.rules) &&
+        object.rules != null &&
+        (
+          (
+            variables.component_label in ["backup", "restore"] &&
+            object.rules.size() == 1 &&
+            object.rules[0].apiGroups == [""] &&
+            object.rules[0].resources == ["pods"] &&
+            has(object.rules[0].verbs) &&
+            object.rules[0].verbs != null &&
+            object.rules[0].verbs.all(v, v in ["get", "list", "watch"]) &&
+            object.rules[0].verbs.exists(v, v == "get") &&
+            object.rules[0].verbs.exists(v, v == "list") &&
+            object.rules[0].verbs.exists(v, v == "watch")
+          ) ||
+          (
+            variables.component_label == "" &&
+            object.rules.size() == 2 &&
+            object.rules.all(r, r.apiGroups == [""] && r.resources == ["pods"] && has(r.verbs) && r.verbs != null) &&
+            object.rules.exists(r,
+              r.verbs.all(v, v in ["get", "list", "watch"]) &&
+              r.verbs.exists(v, v == "get") &&
+              r.verbs.exists(v, v == "list") &&
+              r.verbs.exists(v, v == "watch") &&
+              (!has(r.resourceNames) || r.resourceNames == null || r.resourceNames.size() == 0)
+            ) &&
+            object.rules.exists(r,
+              r.verbs.all(v, v in ["patch", "update"]) &&
+              (r.verbs.exists(v, v == "patch") || r.verbs.exists(v, v == "update")) &&
+              has(r.resourceNames) &&
+              r.resourceNames != null &&
+              r.resourceNames.size() > 0
+            )
+          )
+        )
+      )
+    message: The controller can only create/update Roles for pod discovery (and service
+      registration label updates for the OpenBao service account).
+  - expression: |-
+      !variables.is_controller || request.resource.resource != "rolebindings" || request.operation == "DELETE" || (
+
+        object != null &&
+        has(object.metadata) &&
+        has(object.metadata.name) &&
+        object.metadata.name.endsWith("-rolebinding") &&
+        has(object.roleRef) &&
+        object.roleRef.apiGroup == "rbac.authorization.k8s.io" &&
+        object.roleRef.kind == "Role" &&
+        has(object.roleRef.name) &&
+        has(object.subjects) &&
+        object.subjects != null &&
+        object.subjects.size() == 1 &&
+        object.subjects[0].kind == "ServiceAccount" &&
+        (!has(object.subjects[0].apiGroup) || object.subjects[0].apiGroup == "") &&
+        object.subjects[0].namespace == request.namespace &&
+        object.metadata.name == object.subjects[0].name + "-rolebinding" &&
+        object.roleRef.name == object.subjects[0].name + "-role"
+      )
+    message: The controller can only create/update RoleBindings that bind a ServiceAccount
+      to its own pod-discovery Role.
+  - expression: |-
+      !variables.is_controller || request.operation != "DELETE" || request.resource.resource != "roles" || (
+
+        oldObject != null &&
+        has(oldObject.metadata) &&
+        has(oldObject.metadata.name) &&
+        oldObject.metadata.name.endsWith("-role")
+      )
+    message: The controller can only delete Roles for pod discovery.
+  - expression: |-
+      !variables.is_controller || request.operation != "DELETE" || request.resource.resource != "rolebindings" || (
+
+        oldObject != null &&
+        has(oldObject.metadata) &&
+        has(oldObject.metadata.name) &&
+        oldObject.metadata.name.endsWith("-rolebinding")
+      )
+    message: The controller can only delete RoleBindings for pod discovery.
+  variables:
+  - expression: |-
+      request.userInfo.username in [
+
+        "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
+      ]
+    name: is_controller
+  - expression: |-
+      request.operation == "DELETE" ?
+
+        (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels) && ("openbao.org/component" in oldObject.metadata.labels) ?
+          oldObject.metadata.labels["openbao.org/component"] : "") :
+        (object != null && has(object.metadata) && has(object.metadata.labels) && ("openbao.org/component" in object.metadata.labels) ?
+          object.metadata.labels["openbao.org/component"] :
+          (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels) && ("openbao.org/component" in oldObject.metadata.labels) ?
+            oldObject.metadata.labels["openbao.org/component"] : ""))
+    name: component_label
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - UPDATE
+      resources:
+      - namespaces
+  validations:
+  - expression: '!variables.is_provisioner || !variables.is_system_namespace'
+    message: The Provisioner may not mutate system namespaces.
+  - expression: |-
+      !variables.is_provisioner || request.operation != "UPDATE" || request.resource.resource != "namespaces" || (
+
+        oldObject != null &&
+        object != null &&
+        object.spec == oldObject.spec &&
+        object.status == oldObject.status &&
+        (has(object.metadata.annotations) == has(oldObject.metadata.annotations) &&
+          (!has(object.metadata.annotations) || object.metadata.annotations == oldObject.metadata.annotations)) &&
+        (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+          (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+        (has(object.metadata.finalizers) == has(oldObject.metadata.finalizers) &&
+          (!has(object.metadata.finalizers) || object.metadata.finalizers == oldObject.metadata.finalizers)) &&
+        ("pod-security.kubernetes.io/enforce" in variables.new_labels) &&
+        ("pod-security.kubernetes.io/audit" in variables.new_labels) &&
+        ("pod-security.kubernetes.io/warn" in variables.new_labels) &&
+        variables.new_labels["pod-security.kubernetes.io/enforce"] == "restricted" &&
+        variables.new_labels["pod-security.kubernetes.io/audit"] == "restricted" &&
+        variables.new_labels["pod-security.kubernetes.io/warn"] == "restricted" &&
+        (
+          variables.new_labels.all(k, v,
+            k in [
+              "pod-security.kubernetes.io/enforce",
+              "pod-security.kubernetes.io/audit",
+              "pod-security.kubernetes.io/warn"
+            ] || (k in variables.old_labels && variables.old_labels[k] == v)) &&
+          variables.old_labels.all(k, v,
+            k in [
+              "pod-security.kubernetes.io/enforce",
+              "pod-security.kubernetes.io/audit",
+              "pod-security.kubernetes.io/warn"
+            ] || (k in variables.new_labels && variables.new_labels[k] == v))
+        )
+      )
+    message: The Provisioner may only enforce Pod Security Standards labels (restricted)
+      on Namespaces.
+  variables:
+  - expression: |-
+      request.userInfo.username in [
+
+        "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner"
+      ]
+    name: is_provisioner
+  - expression: request.name == "openbao-operator-system" || request.name.startsWith("kube-")
+      || request.name == "openshift" || request.name.startsWith("openshift-") || request.name.startsWith("gke-")
+    name: is_system_namespace
+  - expression: '(object != null && has(object.metadata) && has(object.metadata.labels))
+      ? object.metadata.labels : {}'
+    name: new_labels
+  - expression: '(oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels))
+      ? oldObject.metadata.labels : {}'
+    name: old_labels
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-operator-openbao-restrict-provisioner-rbac
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - rbac.authorization.k8s.io
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - roles
+      - rolebindings
+  validations:
+  - expression: |-
+      !variables.is_provisioner || !(
+
+        request.namespace == 'openbao-operator-system' ||
+        request.namespace.startsWith('kube-') ||
+        request.namespace == 'openshift' ||
+        request.namespace.startsWith('openshift-') ||
+        request.namespace.startsWith('gke-') ||
+        request.namespace.startsWith('eks-') ||
+        request.namespace.startsWith('aws-') ||
+        request.namespace.startsWith('aks-') ||
+        request.namespace.startsWith('azure-')
+      )
+    message: The Provisioner may not manage tenant RBAC in system namespaces.
+  - expression: |-
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'roles' || object.metadata.name in [
 
         'openbao-operator-tenant-role',
         'openbao-operator-tenant-secrets-reader',
         'openbao-operator-tenant-secrets-writer'
       ]
-    message: The Provisioner Delegate can only create Roles for the operator tenant
-      template (tenant + secrets allowlists).
+    message: The Provisioner can only create Roles for the operator tenant template
+      (tenant + secrets allowlists).
   - expression: |-
-      !variables.is_delegate || request.resource.resource != 'rolebindings' || object.metadata.name in [
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'roles' || object.metadata.name != 'openbao-operator-tenant-role' || (
+
+        has(object.rules) &&
+        object.rules != null &&
+        !object.rules.exists(rule,
+          has(rule.nonResourceURLs) &&
+          rule.nonResourceURLs != null &&
+          rule.nonResourceURLs.size() > 0
+        ) &&
+        object.rules.all(rule,
+          (
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'openbao.org' &&
+            rule.resources != null &&
+            (
+              (rule.resources.size() == 3 && rule.resources.all(r, r in ['openbaoclusters', 'openbaoclusters/status', 'openbaoclusters/finalizers'])) ||
+              (rule.resources.size() == 3 && rule.resources.all(r, r in ['openbaorestores', 'openbaorestores/status', 'openbaorestores/finalizers']))
+            ) &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'apps' &&
+            rule.resources != null &&
+            rule.resources.size() > 0 &&
+            rule.resources.all(r, r in ['statefulsets', 'deployments']) &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == '' &&
+            rule.resources != null &&
+            (
+              (
+                rule.resources.size() > 0 &&
+                rule.resources.all(r, r in ['services', 'configmaps', 'serviceaccounts', 'resourcequotas', 'limitranges', 'persistentvolumeclaims']) &&
+                rule.verbs != null &&
+                rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+              ) ||
+              (
+                rule.resources.size() == 1 &&
+                rule.resources[0] == 'pods' &&
+                rule.verbs != null &&
+                rule.verbs.all(v, v in ['delete', 'get', 'list', 'patch', 'update', 'watch'])
+              ) ||
+              (
+                rule.resources.size() == 1 &&
+                rule.resources[0] == 'endpoints' &&
+                rule.verbs != null &&
+                rule.verbs.all(v, v in ['get', 'list', 'watch'])
+              ) ||
+              (
+                rule.resources.size() == 1 &&
+                rule.resources[0] == 'events' &&
+                rule.verbs != null &&
+                rule.verbs.all(v, v in ['create', 'patch'])
+              )
+            )
+          ) ||
+          (
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'events.k8s.io' &&
+            rule.resources != null &&
+            rule.resources.size() == 1 &&
+            rule.resources[0] == 'events' &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'patch'])
+          ) ||
+          (
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'discovery.k8s.io' &&
+            rule.resources != null &&
+            rule.resources.size() == 1 &&
+            rule.resources[0] == 'endpointslices' &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['get', 'list', 'watch'])
+          ) ||
+          (
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'batch' &&
+            rule.resources != null &&
+            rule.resources.size() == 1 &&
+            rule.resources[0] == 'jobs' &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'policy' &&
+            rule.resources != null &&
+            rule.resources.size() == 1 &&
+            rule.resources[0] == 'poddisruptionbudgets' &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'networking.k8s.io' &&
+            rule.resources != null &&
+            rule.resources.size() > 0 &&
+            rule.resources.all(r, r in ['ingresses', 'networkpolicies']) &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'gateway.networking.k8s.io' &&
+            rule.resources != null &&
+            rule.resources.size() > 0 &&
+            rule.resources.all(r, r in ['httproutes', 'tlsroutes', 'backendtlspolicies']) &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          ) ||
+          (
+            rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'rbac.authorization.k8s.io' &&
+            rule.resources != null &&
+            rule.resources.size() > 0 &&
+            rule.resources.all(r, r in ['roles', 'rolebindings']) &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
+          )
+        )
+      )
+    message: The Provisioner can only create the tenant Role with an allowlisted set
+      of API groups, resources, and verbs (no pods/exec, serviceaccounts/token, nonResourceURLs,
+      or other unexpected permissions).
+  - expression: |-
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'rolebindings' || object.metadata.name in [
 
         'openbao-operator-tenant-rolebinding',
         'openbao-operator-tenant-secrets-reader-rolebinding',
         'openbao-operator-tenant-secrets-writer-rolebinding'
       ]
-    message: The Provisioner Delegate can only create RoleBindings for the operator
-      tenant template (tenant + secrets allowlists).
+    message: The Provisioner can only create RoleBindings for the operator tenant
+      template (tenant + secrets allowlists).
   - expression: |-
-      !variables.is_delegate || request.resource.resource != 'rolebindings' || object.roleRef.name in [
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'rolebindings' || object.roleRef.name in [
 
         'openbao-operator-tenant-role',
         'openbao-operator-tenant-secrets-reader',
         'openbao-operator-tenant-secrets-writer'
       ]
-    message: The Provisioner Delegate is restricted to binding only the operator tenant
-      template Roles (tenant + secrets allowlists).
-  - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings''
-      || object.subjects.all(s, s.kind == ''ServiceAccount'')'
-    message: The Provisioner Delegate can only grant permissions to ServiceAccounts.
-  - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings''
-      || object.subjects.all(s, !has(s.apiGroup) || s.apiGroup == '''')'
-    message: The Provisioner Delegate can only bind to core ServiceAccount subjects
-      (apiGroup must be empty).
-  - expression: '!variables.is_delegate || request.resource.resource != ''rolebindings''
-      || (object.roleRef.kind == ''Role'' && object.roleRef.apiGroup == ''rbac.authorization.k8s.io'')'
-    message: The Provisioner Delegate can only create RoleBindings that reference
-      a Role (not ClusterRole).
+    message: The Provisioner is restricted to binding only the operator tenant template
+      Roles (tenant + secrets allowlists).
+  - expression: '!variables.is_provisioner || request.operation == ''DELETE'' || request.resource.resource
+      != ''rolebindings'' || object.subjects.all(s, s.kind == ''ServiceAccount'')'
+    message: The Provisioner can only grant permissions to ServiceAccounts.
+  - expression: '!variables.is_provisioner || request.operation == ''DELETE'' || request.resource.resource
+      != ''rolebindings'' || object.subjects.all(s, !has(s.apiGroup) || s.apiGroup
+      == '''')'
+    message: The Provisioner can only bind to core ServiceAccount subjects (apiGroup
+      must be empty).
+  - expression: '!variables.is_provisioner || request.operation == ''DELETE'' || request.resource.resource
+      != ''rolebindings'' || (object.roleRef.kind == ''Role'' && object.roleRef.apiGroup
+      == ''rbac.authorization.k8s.io'')'
+    message: The Provisioner can only create RoleBindings that reference a Role (not
+      ClusterRole).
   - expression: |-
-      !variables.is_delegate || request.resource.resource != 'rolebindings' || (
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'rolebindings' || (
 
         (
           object.metadata.name == 'openbao-operator-tenant-rolebinding' &&
@@ -5166,10 +5370,10 @@ spec:
           object.subjects[0].namespace == 'openbao-operator-system'
         )
       )
-    message: The Provisioner Delegate can only bind tenant RBAC to the operator controller
+    message: The Provisioner can only bind tenant RBAC to the operator controller
       ServiceAccount.
   - expression: |-
-      !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
 
         has(rule.verbs) &&
         rule.verbs != null &&
@@ -5180,10 +5384,10 @@ spec:
           v == '*'
         )
       )
-    message: The Provisioner Delegate cannot create Roles granting 'impersonate',
-      'bind', 'escalate', or wildcard permissions.
+    message: The Provisioner cannot create Roles granting 'impersonate', 'bind', 'escalate',
+      or wildcard permissions.
   - expression: |-
-      !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
 
         (
           has(rule.apiGroups) &&
@@ -5196,18 +5400,17 @@ spec:
           rule.resources.exists(r, r == '*')
         )
       )
-    message: The Provisioner Delegate cannot create Roles with wildcard apiGroups
-      or resources.
+    message: The Provisioner cannot create Roles with wildcard apiGroups or resources.
   - expression: |-
-      !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
 
         has(rule.nonResourceURLs) &&
         rule.nonResourceURLs != null &&
         rule.nonResourceURLs.size() > 0
       )
-    message: The Provisioner Delegate cannot create Roles granting nonResourceURLs.
+    message: The Provisioner cannot create Roles granting nonResourceURLs.
   - expression: |-
-      !variables.is_delegate || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'roles' || !has(object.rules) || object.rules == null || !object.rules.exists(rule,
 
         has(rule.resources) &&
         rule.resources != null &&
@@ -5217,10 +5420,10 @@ spec:
           'openbao-operator-tenant-secrets-writer'
         ])
       )
-    message: The Provisioner Delegate can only grant Secrets permissions via the dedicated
+    message: The Provisioner can only grant Secrets permissions via the dedicated
       secrets allowlist Roles.
   - expression: |-
-      !variables.is_delegate || request.resource.resource != 'roles' || object.metadata.name != 'openbao-operator-tenant-secrets-reader' || (
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'roles' || object.metadata.name != 'openbao-operator-tenant-secrets-reader' || (
 
         has(object.rules) &&
         object.rules != null &&
@@ -5232,10 +5435,10 @@ spec:
         object.rules[0].resourceNames != null &&
         object.rules[0].resourceNames.size() > 0
       )
-    message: The Provisioner Delegate can only create the secrets reader Role with
-      a non-empty, name-scoped (resourceNames) get-only rule.
+    message: The Provisioner can only create the secrets reader Role with a non-empty,
+      name-scoped (resourceNames) get-only rule.
   - expression: |-
-      !variables.is_delegate || request.resource.resource != 'roles' || object.metadata.name != 'openbao-operator-tenant-secrets-writer' || (
+      !variables.is_provisioner || request.operation == 'DELETE' || request.resource.resource != 'roles' || object.metadata.name != 'openbao-operator-tenant-secrets-writer' || (
 
         has(object.rules) &&
         object.rules != null &&
@@ -5257,11 +5460,41 @@ spec:
           r.resourceNames.size() > 0
         )
       )
-    message: The Provisioner Delegate can only create the secrets writer Role with
-      create + name-scoped mutations (resourceNames) on Secrets.
+    message: The Provisioner can only create the secrets writer Role with create +
+      name-scoped mutations (resourceNames) on Secrets.
+  - expression: |-
+      !variables.is_provisioner || request.operation != 'DELETE' || request.resource.resource != 'roles' || (
+
+        oldObject != null &&
+        has(oldObject.metadata) &&
+        oldObject.metadata.name in [
+          'openbao-operator-tenant-role',
+          'openbao-operator-tenant-secrets-reader',
+          'openbao-operator-tenant-secrets-writer'
+        ]
+      )
+    message: The Provisioner can only delete Roles for the operator tenant template
+      (tenant + secrets allowlists).
+  - expression: |-
+      !variables.is_provisioner || request.operation != 'DELETE' || request.resource.resource != 'rolebindings' || (
+
+        oldObject != null &&
+        has(oldObject.metadata) &&
+        oldObject.metadata.name in [
+          'openbao-operator-tenant-rolebinding',
+          'openbao-operator-tenant-secrets-reader-rolebinding',
+          'openbao-operator-tenant-secrets-writer-rolebinding'
+        ]
+      )
+    message: The Provisioner can only delete RoleBindings for the operator tenant
+      template (tenant + secrets allowlists).
   variables:
-  - expression: request.userInfo.username == "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner-delegate"
-    name: is_delegate
+  - expression: |-
+      request.userInfo.username in [
+
+        "system:serviceaccount:openbao-operator-system:openbao-operator-provisioner"
+      ]
+    name: is_provisioner
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -5453,7 +5686,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: openbao-operator-openbao-restrict-provisioner-delegate-binding
+  name: openbao-operator-openbao-restrict-controller-rbac-binding
 spec:
   matchResources:
     resourceRules:
@@ -5464,10 +5697,52 @@ spec:
       operations:
       - CREATE
       - UPDATE
+      - DELETE
       resources:
       - roles
       - rolebindings
-  policyName: openbao-operator-openbao-restrict-provisioner-delegate
+  policyName: openbao-operator-openbao-restrict-controller-rbac
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-openbao-restrict-provisioner-namespace-mutations-binding
+spec:
+  matchResources:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - UPDATE
+      resources:
+      - namespaces
+  policyName: openbao-operator-openbao-restrict-provisioner-namespace-mutations
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-openbao-restrict-provisioner-rbac-binding
+spec:
+  matchResources:
+    resourceRules:
+    - apiGroups:
+      - rbac.authorization.k8s.io
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - roles
+      - rolebindings
+  policyName: openbao-operator-openbao-restrict-provisioner-rbac
   validationActions:
   - Deny
 ---
