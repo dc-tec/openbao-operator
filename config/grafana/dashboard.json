@@ -306,6 +306,103 @@
       "fieldConfig": {
         "defaults": {
           "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "grey",
+                  "index": 0,
+                  "text": "No backup"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "Success"
+                },
+                "2": {
+                  "color": "red",
+                  "index": 2,
+                  "text": "Failure"
+                },
+                "3": {
+                  "color": "orange",
+                  "index": 3,
+                  "text": "Mixed"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "grey",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 44
+      },
+      "id": 22,
+      "options": {
+        "colWidth": 0.9,
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "clamp_max(sum(increase(openbao_backup_success_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[$__rate_interval])), 1) + 2 * clamp_max(sum(increase(openbao_backup_failure_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[$__rate_interval])), 1)",
+          "legendFormat": "Backup outcome",
+          "refId": "A"
+        }
+      ],
+      "title": "Backup Outcome (History)",
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
             "mode": "palette-classic"
           },
           "custom": {
@@ -2018,4 +2115,3 @@
   "version": 1,
   "weekStart": ""
 }
-
