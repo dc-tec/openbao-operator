@@ -217,3 +217,13 @@ func (m *RestoreMetrics) RecordFailure() {
 		WithLabelValues(m.namespace, m.name).
 		Inc()
 }
+
+// RecordFailureWithDuration increments the restore failure counter and records duration.
+func (m *RestoreMetrics) RecordFailureWithDuration(durationSeconds float64) {
+	restoreFailureTotal.
+		WithLabelValues(m.namespace, m.name).
+		Inc()
+	restoreDurationHistogram.
+		WithLabelValues(m.namespace, m.name).
+		Observe(durationSeconds)
+}

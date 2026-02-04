@@ -19,6 +19,7 @@ package openbaorestore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,6 +30,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	controllermetrics "github.com/dc-tec/openbao-operator/internal/controller"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/restore"
 	"github.com/dc-tec/openbao-operator/internal/security"
@@ -49,7 +53,28 @@ type OpenBaoRestoreReconciler struct {
 // similar to the backup controller pattern. No cluster-wide permissions are needed.
 
 // Reconcile is part of the main Kubernetes reconciliation loop.
-func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+	start := time.Now()
+	reconcileMetrics := controllermetrics.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoRestore)
+	recordedError := false
+	recordError := func(e error) {
+		if e == nil {
+			return
+		}
+		reason := "Error"
+		if r, ok := operatorerrors.Reason(e); ok {
+			reason = r
+		}
+		reconcileMetrics.IncrementError(reason)
+		recordedError = true
+	}
+	defer func() {
+		reconcileMetrics.ObserveDuration(time.Since(start).Seconds())
+		if err != nil && !recordedError {
+			recordError(err)
+		}
+	}()
+
 	logger := log.FromContext(ctx).WithName("openbaorestore")
 
 	// Fetch the OpenBaoRestore resource
@@ -78,8 +103,9 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Delegate to restore manager
-	result, err := r.RestoreManager.Reconcile(ctx, logger, restoreResource)
+	result, err = r.RestoreManager.Reconcile(ctx, logger, restoreResource)
 	if err != nil {
+		recordError(err)
 		logger.Error(err, "Reconciliation failed")
 		return result, err
 	}

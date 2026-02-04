@@ -20,6 +20,7 @@ import (
 	backupmanager "github.com/dc-tec/openbao-operator/internal/backup"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	controllermetrics "github.com/dc-tec/openbao-operator/internal/controller"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	initmanager "github.com/dc-tec/openbao-operator/internal/init"
@@ -40,6 +41,16 @@ type openBaoClusterAdminOpsReconciler struct {
 
 type openBaoClusterStatusReconciler struct {
 	parent *OpenBaoClusterReconciler
+}
+
+func reconcileErrorReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	if reason, ok := operatorerrors.Reason(err); ok {
+		return reason
+	}
+	return "Error"
 }
 
 // autopilotConfigReconciler reconciles Raft Autopilot configuration for initialized clusters.
@@ -77,7 +88,7 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 					"Error: %v"
 			}
 			r.recorder.Eventf(cluster, nil, corev1.EventTypeWarning,
-				"AutopilotConfigJWTPrerequisitesMissing", "",
+				"AutopilotConfigJWTPrerequisitesMissing", "AutopilotConfigJWTPrerequisitesMissing",
 				eventMsg, err)
 			logger.Error(err, "Failed to reconcile autopilot config (permanent error - requires user intervention)")
 			return recon.Result{}, nil
@@ -198,7 +209,7 @@ func patchAdminOpsOwnedFields(ctx context.Context, c client.Client, logger logr.
 		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
 	}
 
-	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner("openbao-adminops-controller")); err != nil {
+	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner("openbao-adminops-controller"), client.ForceOwnership); err != nil {
 		return fmt.Errorf("failed to patch adminops status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
 	logger.V(1).Info("Patched OpenBaoCluster adminops status (SSA)", "reason", reason, "fieldOwner", "openbao-adminops-controller")
@@ -210,10 +221,7 @@ func controllerErrorStatus(err error) *openbaov1alpha1.ControllerErrorStatus {
 		return nil
 	}
 
-	reason := "Error"
-	if r, ok := operatorerrors.Reason(err); ok {
-		reason = r
-	}
+	reason := reconcileErrorReason(err)
 	now := metav1.Now()
 	return &openbaov1alpha1.ControllerErrorStatus{
 		Reason:  reason,
@@ -222,7 +230,24 @@ func controllerErrorStatus(err error) *openbaov1alpha1.ControllerErrorStatus {
 	}
 }
 
-func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+	start := time.Now()
+	reconcileMetrics := controllermetrics.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterWorkload)
+	recordedError := false
+	recordError := func(e error) {
+		if e == nil {
+			return
+		}
+		reconcileMetrics.IncrementError(reconcileErrorReason(e))
+		recordedError = true
+	}
+	defer func() {
+		reconcileMetrics.ObserveDuration(time.Since(start).Seconds())
+		if err != nil && !recordedError {
+			recordError(err)
+		}
+	}()
+
 	logger := r.parent.loggerFor(ctx, req, constants.ControllerNameOpenBaoClusterWorkload)
 	logger.Info("Reconciling OpenBaoCluster workload")
 
@@ -238,7 +263,8 @@ func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, nil
 	}
 
-	return r.reconcileCluster(ctx, logger, cluster)
+	result, err = r.reconcileCluster(ctx, logger, cluster, recordError)
+	return result, err
 }
 
 func shouldSkipWorkloadReconcile(cluster *openbaov1alpha1.OpenBaoCluster) bool {
@@ -248,7 +274,12 @@ func shouldSkipWorkloadReconcile(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 		cluster.Spec.Profile == ""
 }
 
-func (r *openBaoClusterWorkloadReconciler) reconcileCluster(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
+func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	recordError func(error),
+) (ctrl.Result, error) {
 	original := cluster.DeepCopy()
 	if cluster.Status.Workload == nil {
 		cluster.Status.Workload = &openbaov1alpha1.WorkloadControllerStatus{}
@@ -298,7 +329,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(ctx context.Context,
 		}
 	}
 
-	if result, err := r.runWorkloadReconcilers(ctx, logger, original, cluster, reconcilers); err != nil || result.RequeueAfter > 0 {
+	if result, err := r.runWorkloadReconcilers(ctx, logger, original, cluster, reconcilers, recordError); err != nil || result.RequeueAfter > 0 {
 		return result, err
 	}
 
@@ -317,10 +348,14 @@ func (r *openBaoClusterWorkloadReconciler) runWorkloadReconcilers(
 	logger logr.Logger,
 	original, cluster *openbaov1alpha1.OpenBaoCluster,
 	reconcilers []SubReconciler,
+	recordError func(error),
 ) (ctrl.Result, error) {
 	for _, rec := range reconcilers {
 		result, err := rec.Reconcile(ctx, logger, cluster)
 		if err != nil {
+			if recordError != nil {
+				recordError(err)
+			}
 			cluster.Status.Workload.LastError = controllerErrorStatus(err)
 
 			// Persist status changes before returning to avoid losing in-memory updates.
@@ -374,7 +409,24 @@ func workloadResultForError(err error, lastError *openbaov1alpha1.ControllerErro
 	return ctrl.Result{}, false
 }
 
-func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+	start := time.Now()
+	reconcileMetrics := controllermetrics.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterAdminOps)
+	recordedError := false
+	recordError := func(e error) {
+		if e == nil {
+			return
+		}
+		reconcileMetrics.IncrementError(reconcileErrorReason(e))
+		recordedError = true
+	}
+	defer func() {
+		reconcileMetrics.ObserveDuration(time.Since(start).Seconds())
+		if err != nil && !recordedError {
+			recordError(err)
+		}
+	}()
+
 	logger := r.parent.loggerFor(ctx, req, constants.ControllerNameOpenBaoClusterAdminOps)
 	logger.Info("Reconciling OpenBaoCluster admin operations")
 
@@ -409,6 +461,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	for _, rec := range reconcilers {
 		result, err := rec.Reconcile(ctx, logger, cluster)
 		if err != nil {
+			recordError(err)
 			cluster.Status.AdminOps.LastError = controllerErrorStatus(err)
 
 			if statusErr := patchAdminOpsOwnedFields(ctx, r.parent.Client, logger, original, cluster, "adminops-error"); statusErr != nil {
@@ -448,7 +501,24 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	return ctrl.Result{}, nil
 }
 
-func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+	start := time.Now()
+	reconcileMetrics := controllermetrics.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterStatus)
+	recordedError := false
+	recordError := func(e error) {
+		if e == nil {
+			return
+		}
+		reconcileMetrics.IncrementError(reconcileErrorReason(e))
+		recordedError = true
+	}
+	defer func() {
+		reconcileMetrics.ObserveDuration(time.Since(start).Seconds())
+		if err != nil && !recordedError {
+			recordError(err)
+		}
+	}()
+
 	logger := r.parent.loggerFor(ctx, req, constants.ControllerNameOpenBaoClusterStatus)
 	logger.Info("Reconciling OpenBaoCluster status")
 
