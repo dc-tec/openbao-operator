@@ -215,10 +215,10 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				g.Expect(updated.Status.Upgrade.FromVersion).To(Equal(initialVersion))
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				if updated.Status.Upgrade == nil {
+				Eventually(func(g Gomega) {
+					updated := &openbaov1alpha1.OpenBaoCluster{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+					g.Expect(updated.Status.Upgrade).To(BeNil(), "Status.Upgrade should be cleared when upgrade completes")
 					g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
 					g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.ClusterPhaseRunning))
 
@@ -238,10 +238,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 							}
 						}
 					}
-					return
-				}
-				// Still upgrading
-			}, 20*time.Minute, 10*time.Second).Should(Succeed())
+				}, 20*time.Minute, 10*time.Second).Should(Succeed())
 
 			By("Verifying secret persists after upgrade")
 			Eventually(func(g Gomega) {
@@ -251,7 +248,20 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				g.Expect(err).NotTo(HaveOccurred(), "Failed to read post-upgrade secret")
 				g.Expect(val).To(Equal("bar"))
 			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
-		})
+
+				By("Verifying upgrade metrics are emitted")
+				metricsOutput, metricErr := framework.WaitForControllerMetricSubstrings(
+					operatorNamespace,
+					2*time.Minute,
+					"openbao_upgrade_success_total{",
+					fmt.Sprintf(`namespace="%s"`, tenantNamespace),
+					fmt.Sprintf(`name="%s"`, upgradeCluster.Name),
+					`strategy="RollingUpdate"`,
+					fmt.Sprintf(`openbao_upgrade_in_progress{name="%s",namespace="%s"} 0`, upgradeCluster.Name, tenantNamespace),
+					fmt.Sprintf(`openbao_upgrade_status{name="%s",namespace="%s"} 2`, upgradeCluster.Name, tenantNamespace),
+				)
+				Expect(metricErr).NotTo(HaveOccurred(), "Last metrics output:\n%s", metricsOutput)
+			})
 	})
 
 	// --- Blue/Green Upgrade ---
