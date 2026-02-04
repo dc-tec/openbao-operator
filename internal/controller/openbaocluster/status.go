@@ -193,12 +193,37 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		// We distinguish them by checking if the active BlueRevision matches the current Spec.
 		currentSpecRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
 		if cluster.Status.BlueGreen.BlueRevision == currentSpecRevision {
+			from := cluster.Status.CurrentVersion
 			cluster.Status.CurrentVersion = cluster.Spec.Version
 			logger.Info("Detected BlueGreen upgrade completion, updated CurrentVersion",
-				"fromVersion", cluster.Status.CurrentVersion,
+				"fromVersion", from,
 				"toVersion", cluster.Spec.Version,
 				"revision", currentSpecRevision)
 		}
+	}
+
+	// Detect RollingUpdate upgrade completion: when the StatefulSet reports all
+	// replicas updated and ready (CurrentRevision == UpdateRevision), the workload
+	// has converged to the new spec and we can update CurrentVersion.
+	//
+	// This is intentionally computed from observed StatefulSet status so we don't
+	// incorrectly advance CurrentVersion immediately after a spec change.
+	rollingStrategy := cluster.Spec.Upgrade == nil || cluster.Spec.Upgrade.Strategy == "" || cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyRollingUpdate
+	if rollingStrategy &&
+		state.StatefulSet != nil &&
+		cluster.Status.CurrentVersion != "" &&
+		cluster.Status.CurrentVersion != cluster.Spec.Version &&
+		state.StatefulSet.Status.ReadyReplicas == cluster.Spec.Replicas &&
+		state.StatefulSet.Status.UpdatedReplicas == cluster.Spec.Replicas &&
+		state.StatefulSet.Status.CurrentRevision != "" &&
+		state.StatefulSet.Status.CurrentRevision == state.StatefulSet.Status.UpdateRevision {
+
+		from := cluster.Status.CurrentVersion
+		cluster.Status.CurrentVersion = cluster.Spec.Version
+		logger.Info("Detected RollingUpdate upgrade completion, updated CurrentVersion",
+			"fromVersion", from,
+			"toVersion", cluster.Spec.Version,
+			"currentRevision", state.StatefulSet.Status.CurrentRevision)
 	}
 
 	// Update per-cluster metrics

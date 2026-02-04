@@ -174,6 +174,14 @@ func (m *Manager) validateBackupConfig(ctx context.Context, cluster *openbaov1al
 
 	// Check if JWT Auth is configured (preferred method)
 	hasJWTAuth := strings.TrimSpace(backupCfg.JWTAuthRole) != ""
+	// If OIDC is enabled for SelfInit, default to the operator-managed backup role
+	// even when spec.backup.jwtAuthRole is empty.
+	if !hasJWTAuth &&
+		cluster.Spec.SelfInit != nil &&
+		cluster.Spec.SelfInit.OIDC != nil &&
+		cluster.Spec.SelfInit.OIDC.Enabled {
+		hasJWTAuth = true
+	}
 
 	// Check if static token is configured (fallback method)
 	hasTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""

@@ -3,6 +3,7 @@ package bluegreen
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
@@ -13,6 +14,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 // ensurePreUpgradeSnapshotJob creates or checks the status of the pre-upgrade snapshot Job.
@@ -32,6 +34,24 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 			constants.ReasonNetworkEgressRulesRequired,
 			operatorerrors.WrapPermanentConfig(fmt.Errorf(
 				"hardened profile with pre-upgrade snapshots enabled requires explicit spec.network.egressRules so snapshot Jobs can reach the object storage endpoint",
+			)),
+		)
+	}
+
+	backupCfg := cluster.Spec.Backup
+	hasJWTAuth := strings.TrimSpace(backupCfg.JWTAuthRole) != ""
+	if !hasJWTAuth &&
+		cluster.Spec.SelfInit != nil &&
+		cluster.Spec.SelfInit.OIDC != nil &&
+		cluster.Spec.SelfInit.OIDC.Enabled {
+		hasJWTAuth = true
+	}
+	hasTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""
+	if !hasJWTAuth && !hasTokenSecret {
+		return nil, operatorerrors.WithReason(
+			upgrade.ReasonPreUpgradeBackupFailed,
+			operatorerrors.WrapPermanentConfig(fmt.Errorf(
+				"backup authentication is required: set spec.backup.jwtAuthRole or spec.backup.tokenSecretRef (or enable spec.selfInit.oidc.enabled=true)",
 			)),
 		)
 	}

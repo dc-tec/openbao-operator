@@ -154,12 +154,20 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 }
 
 // reconcileBlueGreen is the internal reconcile method that handles blue/green upgrades.
-func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (recon.Result, error) {
+func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (result recon.Result, err error) {
 	if !m.shouldReconcileBlueGreen(logger, cluster) {
 		return recon.Result{}, nil
 	}
 
+	metrics := upgrade.NewMetrics(cluster.Namespace, cluster.Name)
+	strategy := string(openbaov1alpha1.UpdateStrategyBlueGreen)
+
 	if !cluster.Status.Initialized {
+		metrics.SetInProgress(false)
+		metrics.SetStatus(upgrade.UpgradeStatusNone)
+		metrics.SetPodsCompleted(0)
+		metrics.SetTotalPods(0)
+		metrics.SetPartition(0)
 		logger.Info("Cluster not initialized; skipping blue/green upgrade reconciliation")
 		return requeueStandard(), nil
 	}
@@ -169,6 +177,15 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 	}
 
 	m.ensureBlueGreenStatus(ctx, logger, cluster)
+
+	initialPhase := openbaov1alpha1.PhaseIdle
+	initialRollbackSet := false
+	if cluster.Status.BlueGreen != nil {
+		initialPhase = cluster.Status.BlueGreen.Phase
+		initialRollbackSet = cluster.Status.BlueGreen.RollbackStartTime != nil
+	}
+
+	defer m.finalizeBlueGreenMetrics(metrics, strategy, cluster, initialPhase, initialRollbackSet)
 
 	if m.shouldHaltForBreakGlass(logger, cluster) {
 		return requeueStandard(), nil
@@ -193,7 +210,80 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 		return res, err
 	}
 
-	return m.executeStateMachine(ctx, logger, cluster, verifiedImageDigest)
+	result, err = m.executeStateMachine(ctx, logger, cluster, verifiedImageDigest)
+	return result, err
+}
+
+func (m *Manager) finalizeBlueGreenMetrics(metrics *upgrade.Metrics, strategy string, cluster *openbaov1alpha1.OpenBaoCluster, initialPhase openbaov1alpha1.BlueGreenPhase, initialRollbackSet bool) {
+	if metrics == nil || cluster == nil {
+		return
+	}
+
+	phase := openbaov1alpha1.PhaseIdle
+	if cluster.Status.BlueGreen != nil {
+		phase = cluster.Status.BlueGreen.Phase
+	}
+
+	inProgress := phase != openbaov1alpha1.PhaseIdle
+	metrics.SetInProgress(inProgress)
+	if inProgress {
+		metrics.SetStatus(upgrade.UpgradeStatusRunning)
+		metrics.SetTotalPods(int(cluster.Spec.Replicas))
+	} else {
+		// Leave status unchanged when idle so the last terminal status (success/failed)
+		// can be observed after the upgrade completes.
+		metrics.SetTotalPods(0)
+	}
+	metrics.SetPodsCompleted(0)
+	metrics.SetPartition(0)
+
+	state, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name)
+	if !ok && initialPhase != openbaov1alpha1.PhaseIdle {
+		startedAt := time.Now()
+		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.StartTime != nil {
+			startedAt = cluster.Status.BlueGreen.StartTime.Time
+		}
+		state = upgradeMetricsState{startedAt: startedAt}
+		ok = true
+		setUpgradeMetricsState(cluster.Namespace, cluster.Name, state)
+	}
+
+	// If a new upgrade started this reconcile, initialize state and increment totals once.
+	if initialPhase == openbaov1alpha1.PhaseIdle && phase != openbaov1alpha1.PhaseIdle {
+		if _, exists := getUpgradeMetricsState(cluster.Namespace, cluster.Name); !exists {
+			setUpgradeMetricsState(cluster.Namespace, cluster.Name, upgradeMetricsState{startedAt: time.Now()})
+			metrics.IncrementTotal(strategy)
+			state, ok = getUpgradeMetricsState(cluster.Namespace, cluster.Name)
+		}
+	}
+
+	// Rollback initiation: count once when RollbackStartTime is first set.
+	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.RollbackStartTime != nil && !initialRollbackSet {
+		if ok {
+			state.lastRollbackSeen = true
+			setUpgradeMetricsState(cluster.Namespace, cluster.Name, state)
+		}
+		metrics.IncrementRollback(strategy)
+		metrics.IncrementFailure(strategy)
+	}
+
+	// Completion: a transition from any non-idle phase to idle.
+	if initialPhase != openbaov1alpha1.PhaseIdle && phase == openbaov1alpha1.PhaseIdle && ok {
+		durationSeconds := time.Since(state.startedAt).Seconds()
+		metrics.RecordDuration(durationSeconds, cluster.Status.CurrentVersion, cluster.Spec.Version)
+		deleteUpgradeMetricsState(cluster.Namespace, cluster.Name)
+
+		if initialPhase == openbaov1alpha1.PhaseCleanup {
+			metrics.IncrementSuccess(strategy)
+			metrics.SetStatus(upgrade.UpgradeStatusSuccess)
+			return
+		}
+
+		if !state.lastRollbackSeen {
+			metrics.IncrementFailure(strategy)
+		}
+		metrics.SetStatus(upgrade.UpgradeStatusFailed)
+	}
 }
 
 func (m *Manager) shouldReconcileBlueGreen(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) bool {
@@ -423,8 +513,9 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 		"targetVersion", cluster.Spec.Version)
 
 	// Pre-upgrade snapshot (if enabled)
-	if cluster.Spec.Upgrade.BlueGreen != nil &&
-		cluster.Spec.Upgrade.BlueGreen.PreUpgradeSnapshot {
+	preUpgradeSnapshotEnabled := cluster.Spec.Upgrade.PreUpgradeSnapshot ||
+		(cluster.Spec.Upgrade.BlueGreen != nil && cluster.Spec.Upgrade.BlueGreen.PreUpgradeSnapshot)
+	if preUpgradeSnapshotEnabled {
 		jobName := preUpgradeSnapshotJobName(cluster)
 		if cluster.Status.BlueGreen.PreUpgradeSnapshotJobName != jobName {
 			_, err := m.ensurePreUpgradeSnapshotJob(ctx, logger, cluster, jobName)
@@ -719,6 +810,17 @@ func (m *Manager) handlePhaseDemotingBlue(ctx context.Context, logger logr.Logge
 		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
+	metrics := upgrade.NewMetrics(cluster.Namespace, cluster.Name)
+	state, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name)
+	if !ok {
+		state = upgradeMetricsState{startedAt: time.Now()}
+	}
+	if !state.stepDownCounted {
+		metrics.IncrementStepDownTotal()
+		state.stepDownCounted = true
+		setUpgradeMetricsState(cluster.Namespace, cluster.Name, state)
+	}
+
 	greenRevision := cluster.Status.BlueGreen.GreenRevision
 
 	// Safety gate: ensure Green cluster is healthy enough to take over before
@@ -747,11 +849,15 @@ func (m *Manager) handlePhaseDemotingBlue(ctx context.Context, logger logr.Logge
 		return requeueAfterOutcome(constants.RequeueShort), nil
 	}
 
+	previousLastJobFailure := cluster.Status.BlueGreen.LastJobFailure
 	step, err := m.runExecutorJobStep(ctx, logger, cluster, ActionDemoteBlueNonVotersStepDown, "demotion job failure threshold exceeded")
 	if err != nil {
 		return phaseOutcome{}, err
 	}
 	if !step.Completed {
+		if cluster.Status.BlueGreen.LastJobFailure != "" && cluster.Status.BlueGreen.LastJobFailure != previousLastJobFailure {
+			metrics.IncrementStepDownFailures()
+		}
 		return step.Outcome, nil
 	}
 

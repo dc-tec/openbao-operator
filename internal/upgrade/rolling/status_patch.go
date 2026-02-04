@@ -11,13 +11,19 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/kube"
 )
 
-const ssaFieldOwner = "openbao-upgrade-manager"
+// ssaFieldOwner matches the AdminOps controller's SSA field owner.
+//
+// The rolling upgrade manager is invoked as a sub-reconciler from the AdminOps
+// controller. It must not take ownership of unrelated status fields (for example,
+// activeLeader or conditions) which are owned by other controllers.
+const ssaFieldOwner = "openbao-adminops-controller"
 
 // patchStatusSSA updates the cluster status using Server-Side Apply.
 // SSA eliminates race conditions by having the API server merge changes,
 // rather than requiring the client to refresh and merge manually.
 func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	// Create a minimal apply configuration with just the status fields we own
+	// Apply only the rolling upgrade status we mutate. Other status fields are
+	// owned and applied by their respective controllers.
 	applyCluster := &openbaov1alpha1.OpenBaoCluster{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: openbaov1alpha1.GroupVersion.String(),
@@ -27,7 +33,9 @@ func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.O
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 		},
-		Status: cluster.Status,
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: cluster.Status.Upgrade,
+		},
 	}
 
 	applyConfig, err := kube.ToApplyConfiguration(applyCluster, m.client)

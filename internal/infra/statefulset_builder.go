@@ -441,7 +441,11 @@ func buildStatefulSetPodSecurityContext(cluster *openbaov1alpha1.OpenBaoCluster,
 func buildStatefulSetUpdateStrategy(cluster *openbaov1alpha1.OpenBaoCluster) appsv1.StatefulSetUpdateStrategy {
 	// For blue/green deployments, use OnDelete update strategy to preventing
 	// automatic rolling updates. The BlueGreenManager controls when pods are created/updated.
-	// For standard rolling upgrades, use RollingUpdate (default behavior).
+	// For standard rolling upgrades, use RollingUpdate (the Kubernetes default behavior).
+	//
+	// Important: The rolling upgrade manager controls the RollingUpdate.Partition field to
+	// orchestrate upgrades. The infra Manager strips updateStrategy from SSA patches for
+	// non-BlueGreen clusters to avoid clearing/overriding that partition value.
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		return appsv1.StatefulSetUpdateStrategy{
 			Type: appsv1.OnDeleteStatefulSetStrategyType,
