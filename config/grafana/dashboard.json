@@ -106,7 +106,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_upgrade_status{namespace=\"$namespace\", name=\"$cluster\"}",
+          "expr": "openbao_upgrade_status{exported_namespace=\"$namespace\", name=\"$cluster\"}",
           "refId": "A"
         }
       ],
@@ -169,7 +169,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_backup_in_progress{namespace=\"$namespace\", name=\"$cluster\"}",
+          "expr": "openbao_backup_in_progress{exported_namespace=\"$namespace\", name=\"$cluster\"}",
           "refId": "A"
         }
       ],
@@ -226,7 +226,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_cluster_ready_replicas{namespace=\"$namespace\", name=\"$cluster\"}",
+          "expr": "openbao_cluster_ready_replicas{exported_namespace=\"$namespace\", name=\"$cluster\"}",
           "refId": "A"
         }
       ],
@@ -291,7 +291,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_backup_consecutive_failures{namespace=\"$namespace\", name=\"$cluster\"}",
+          "expr": "openbao_backup_consecutive_failures{exported_namespace=\"$namespace\", name=\"$cluster\"}",
           "refId": "A"
         }
       ],
@@ -380,7 +380,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(openbao_reconcile_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, namespace, name, controller))",
+          "expr": "histogram_quantile(0.50, sum(rate(openbao_reconcile_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, exported_namespace, name, controller))",
           "legendFormat": "{{controller}} (p50)",
           "refId": "A"
         },
@@ -389,7 +389,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(openbao_reconcile_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, namespace, name, controller))",
+          "expr": "histogram_quantile(0.95, sum(rate(openbao_reconcile_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, exported_namespace, name, controller))",
           "legendFormat": "{{controller}} (p95)",
           "refId": "B"
         },
@@ -398,7 +398,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(openbao_reconcile_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, namespace, name, controller))",
+          "expr": "histogram_quantile(0.99, sum(rate(openbao_reconcile_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, exported_namespace, name, controller))",
           "legendFormat": "{{controller}} (p99)",
           "refId": "C"
         }
@@ -487,7 +487,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_reconcile_errors_total{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (controller, reason)",
+          "expr": "sum(rate(openbao_reconcile_errors_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (controller, reason)",
           "legendFormat": "{{controller}} - {{reason}}",
           "refId": "A"
         }
@@ -577,7 +577,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(openbao_upgrade_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, namespace, name))",
+          "expr": "histogram_quantile(0.50, sum(rate(openbao_upgrade_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, exported_namespace, name))",
           "legendFormat": "Total Duration (p50)",
           "refId": "A"
         },
@@ -586,7 +586,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(openbao_upgrade_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, namespace, name))",
+          "expr": "histogram_quantile(0.95, sum(rate(openbao_upgrade_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, exported_namespace, name))",
           "legendFormat": "Total Duration (p95)",
           "refId": "B"
         },
@@ -595,7 +595,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(openbao_upgrade_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, namespace, name))",
+          "expr": "histogram_quantile(0.99, sum(rate(openbao_upgrade_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, exported_namespace, name))",
           "legendFormat": "Total Duration (p99)",
           "refId": "C"
         }
@@ -684,7 +684,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_upgrade_stepdown_total{namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
+          "expr": "sum(rate(openbao_upgrade_stepdown_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
           "legendFormat": "Step-downs",
           "refId": "A"
         },
@@ -693,7 +693,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_upgrade_stepdown_failures_total{namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
+          "expr": "sum(rate(openbao_upgrade_stepdown_failures_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
           "legendFormat": "Step-down Failures",
           "refId": "B"
         }
@@ -783,7 +783,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_backup_last_duration_seconds{namespace=\"$namespace\", name=\"$cluster\"}",
+          "expr": "openbao_backup_last_duration_seconds{exported_namespace=\"$namespace\", name=\"$cluster\"}",
           "legendFormat": "Last Backup Duration",
           "refId": "A"
         }
@@ -873,7 +873,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_backup_last_size_bytes{namespace=\"$namespace\", name=\"$cluster\"}",
+          "expr": "openbao_backup_last_size_bytes{exported_namespace=\"$namespace\", name=\"$cluster\"}",
           "legendFormat": "Last Backup Size",
           "refId": "A"
         }
@@ -962,7 +962,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_backup_success_total{namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
+          "expr": "sum(rate(openbao_backup_success_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
           "legendFormat": "Success Rate",
           "refId": "A"
         },
@@ -971,7 +971,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_backup_failure_total{namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
+          "expr": "sum(rate(openbao_backup_failure_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
           "legendFormat": "Failure Rate",
           "refId": "B"
         }
@@ -1060,7 +1060,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_backup_retention_deleted_total{namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
+          "expr": "sum(rate(openbao_backup_retention_deleted_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
           "legendFormat": "Retention Deletions",
           "refId": "A"
         }
@@ -1127,7 +1127,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_tls_cert_expiry_timestamp{namespace=\"$namespace\", name=\"$cluster\"} - time()",
+          "expr": "openbao_tls_cert_expiry_timestamp{exported_namespace=\"$namespace\", name=\"$cluster\"} - time()",
           "refId": "A"
         }
       ],
@@ -1215,7 +1215,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_tls_rotation_total{namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
+          "expr": "sum(rate(openbao_tls_rotation_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
           "legendFormat": "Certificate Rotations",
           "refId": "A"
         }
@@ -1305,8 +1305,8 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(openbao_upgrade_pod_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, namespace, name, pod))",
-          "legendFormat": "{{pod}} (p50)",
+          "expr": "histogram_quantile(0.50, sum(rate(openbao_upgrade_pod_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, exported_namespace, name, exported_pod))",
+          "legendFormat": "{{exported_pod}} (p50)",
           "refId": "A"
         },
         {
@@ -1314,8 +1314,8 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(openbao_upgrade_pod_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, namespace, name, pod))",
-          "legendFormat": "{{pod}} (p95)",
+          "expr": "histogram_quantile(0.95, sum(rate(openbao_upgrade_pod_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le, exported_namespace, name, exported_pod))",
+          "legendFormat": "{{exported_pod}} (p95)",
           "refId": "B"
         }
       ],
@@ -1403,7 +1403,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_backup_last_success_timestamp{namespace=\"$namespace\", name=\"$cluster\"}",
+          "expr": "openbao_backup_last_success_timestamp{exported_namespace=\"$namespace\", name=\"$cluster\"}",
           "legendFormat": "Last Successful Backup",
           "refId": "A"
         }
@@ -1492,7 +1492,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_upgrade_pods_completed{namespace=\"$namespace\", name=\"$cluster\"}",
+          "expr": "openbao_upgrade_pods_completed{exported_namespace=\"$namespace\", name=\"$cluster\"}",
           "legendFormat": "Pods Completed",
           "refId": "A"
         },
@@ -1501,7 +1501,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "openbao_upgrade_pods_total{namespace=\"$namespace\", name=\"$cluster\"}",
+          "expr": "openbao_upgrade_pods_total{exported_namespace=\"$namespace\", name=\"$cluster\"}",
           "legendFormat": "Total Pods",
           "refId": "B"
         }
@@ -1590,7 +1590,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_upgrade_success_total{namespace=\"$namespace\", name=\"$cluster\"}[1h])) by (strategy)",
+          "expr": "sum(rate(openbao_upgrade_success_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[1h])) by (strategy)",
           "legendFormat": "Success ({{strategy}})",
           "refId": "A"
         },
@@ -1599,7 +1599,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_upgrade_failure_total{namespace=\"$namespace\", name=\"$cluster\"}[1h])) by (strategy)",
+          "expr": "sum(rate(openbao_upgrade_failure_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[1h])) by (strategy)",
           "legendFormat": "Failure ({{strategy}})",
           "refId": "B"
         },
@@ -1608,7 +1608,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_upgrade_rollback_total{namespace=\"$namespace\", name=\"$cluster\"}[1h])) by (strategy)",
+          "expr": "sum(rate(openbao_upgrade_rollback_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[1h])) by (strategy)",
           "legendFormat": "Rollback ({{strategy}})",
           "refId": "C"
         }
@@ -1697,7 +1697,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_restore_success_total{namespace=\"$namespace\", name=\"$cluster\"}[1h]))",
+          "expr": "sum(rate(openbao_restore_success_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[1h]))",
           "legendFormat": "Success",
           "refId": "A"
         },
@@ -1706,7 +1706,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_restore_failure_total{namespace=\"$namespace\", name=\"$cluster\"}[1h]))",
+          "expr": "sum(rate(openbao_restore_failure_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[1h]))",
           "legendFormat": "Failure",
           "refId": "B"
         }
@@ -1796,7 +1796,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(openbao_restore_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(openbao_restore_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le))",
           "legendFormat": "p50",
           "refId": "A"
         },
@@ -1805,7 +1805,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(openbao_restore_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(openbao_restore_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le))",
           "legendFormat": "p95",
           "refId": "B"
         },
@@ -1814,7 +1814,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(openbao_restore_duration_seconds_bucket{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(openbao_restore_duration_seconds_bucket{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (le))",
           "legendFormat": "p99",
           "refId": "C"
         }
@@ -1903,7 +1903,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_drift_detected_total{namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (resource_kind)",
+          "expr": "sum(rate(openbao_drift_detected_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m])) by (resource_kind)",
           "legendFormat": "Detected ({{resource_kind}})",
           "refId": "A"
         },
@@ -1912,7 +1912,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(openbao_drift_corrected_total{namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
+          "expr": "sum(rate(openbao_drift_corrected_total{exported_namespace=\"$namespace\", name=\"$cluster\"}[5m]))",
           "legendFormat": "Corrected",
           "refId": "B"
         }
@@ -1960,7 +1960,7 @@
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
-        "definition": "label_values(openbao_cluster_ready_replicas, namespace)",
+        "definition": "label_values(openbao_cluster_ready_replicas, exported_namespace)",
         "hide": 0,
         "includeAll": false,
         "label": "Namespace",
@@ -1968,7 +1968,7 @@
         "name": "namespace",
         "options": [],
         "query": {
-          "query": "label_values(openbao_cluster_ready_replicas, namespace)",
+          "query": "label_values(openbao_cluster_ready_replicas, exported_namespace)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -1988,7 +1988,7 @@
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
-        "definition": "label_values(openbao_cluster_ready_replicas{namespace=\"$namespace\"}, name)",
+        "definition": "label_values(openbao_cluster_ready_replicas{exported_namespace=\"$namespace\"}, name)",
         "hide": 0,
         "includeAll": false,
         "label": "Cluster",
@@ -1996,7 +1996,7 @@
         "name": "cluster",
         "options": [],
         "query": {
-          "query": "label_values(openbao_cluster_ready_replicas{namespace=\"$namespace\"}, name)",
+          "query": "label_values(openbao_cluster_ready_replicas{exported_namespace=\"$namespace\"}, name)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -2018,7 +2018,5 @@
   "version": 1,
   "weekStart": ""
 }
-
-
 
 
