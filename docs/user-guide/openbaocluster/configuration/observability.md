@@ -294,36 +294,39 @@ The `strategy` label is either `RollingUpdate` or `BlueGreen`.
 
 ## Grafana Dashboard
 
-A pre-built Grafana dashboard is included with the OpenBao Operator.
+A set of pre-built Grafana dashboards is included with the OpenBao Operator under `config/grafana/`:
+
+- Per-feature dashboards: `config/grafana/dashboards/`
+- Optional controller-runtime dashboard: `config/grafana/optional/controller-runtime/`
+- Monolithic (legacy) dashboard: `config/grafana/dashboard.json`
 
 ### Installation
 
 === "Kubernetes ConfigMap"
 
-    Apply the dashboard as a ConfigMap for Grafana sidecar discovery:
+    Apply the per-feature dashboards as ConfigMaps for Grafana sidecar discovery:
 
     ```bash
-    kubectl apply -k config/grafana
+    # Apply in the same namespace as Grafana (example: monitoring)
+    kubectl apply -k config/grafana -n monitoring
     ```
 
 === "Manual Import"
 
     1. Open Grafana and navigate to **Dashboards > Import**.
-    2. Upload `config/grafana/dashboard.json`.
-    3. Select your Prometheus data source.
+    2. Upload one of the per-feature dashboards under `config/grafana/dashboards/` (recommended). 
+    3. Select your Prometheus data source and click **Import**.
 
 ### Dashboard Panels
 
-The dashboard includes:
+The per-feature dashboards include:
 
-| Section | Panels |
-| :------ | :----- |
-| **Overview** | Upgrade Status, Backup Status, Ready Replicas |
-| **Reconciliation** | Duration (p50/p95/p99), Error Rate by Controller |
-| **Backups** | Success/Failure Rate, Duration, Size, Last Success |
-| **Upgrades** | Duration, Step-Down Operations, Progress |
-| **Restores** | Success/Failure Rate, Duration |
-| **TLS** | Certificate Expiry, Rotation Count |
+| Dashboard | Panels |
+| :-------- | :----- |
+| **Overview** | Upgrade Status, Backup Status, Ready Replicas, TLS expiry |
+| **Backups & Restore** | Backup outcome timeline, duration/size, success/failure, restore outcome timeline |
+| **Upgrades** | Upgrade status timeline, duration, per-pod duration, step-down operations, progress |
+| **Controller Runtime** (optional) | workqueue depth/retries, reconcile totals/errors |
 
 ## Logging
 
