@@ -71,10 +71,10 @@ jobs:
       - name: Validate HCL fixtures against upstream OpenBao parser
         env:
           REPORT_SCHEMA_DRIFT: "true"
-        run: bash hack/ci/openbao-config-compat.sh 2.4.0 2.4.1 2.4.3 2.4.4
+        run: bash hack/ci/openbao-config-compat.sh 2.4.4 2.5.0
 
       - name: Report operator-vs-upstream config schema drift (informational)
-        run: go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
+        run: go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.5.0
 
   build-artifacts:
     name: Build Artifacts
