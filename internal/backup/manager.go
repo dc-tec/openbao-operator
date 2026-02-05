@@ -178,6 +178,10 @@ func (m *Manager) syncBackupMetrics(ctx context.Context, logger logr.Logger, clu
 	if cluster.Status.Backup != nil {
 		metrics.SetConsecutiveFailures(cluster.Status.Backup.ConsecutiveFailures)
 
+		if cluster.Status.Backup.LastAttemptTime != nil {
+			metrics.SetLastAttemptTimestamp(float64(cluster.Status.Backup.LastAttemptTime.Time.Unix()))
+		}
+
 		if cluster.Status.Backup.LastBackupTime != nil {
 			metrics.SetLastSuccessTimestamp(float64(cluster.Status.Backup.LastBackupTime.Time.Unix()))
 		}
@@ -208,6 +212,7 @@ func (m *Manager) syncBackupMetrics(ctx context.Context, logger logr.Logger, clu
 
 	inProgress := false
 	var newestSucceeded *batchv1.Job
+	var newestFailed *batchv1.Job
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
 		if kube.JobSucceeded(job) {
@@ -237,11 +242,65 @@ func (m *Manager) syncBackupMetrics(ctx context.Context, logger logr.Logger, clu
 			if markBackupJobMetricsSeen(cluster.Namespace, cluster.Name, job.UID, "failure") {
 				metrics.IncrementFailureTotal()
 			}
+			if newestFailed == nil {
+				newestFailed = job
+			} else {
+				a := newestFailed.CreationTimestamp.Time
+				if newestFailed.Status.CompletionTime != nil {
+					a = newestFailed.Status.CompletionTime.Time
+				}
+				b := job.CreationTimestamp.Time
+				if job.Status.CompletionTime != nil {
+					b = job.Status.CompletionTime.Time
+				}
+				if b.After(a) {
+					newestFailed = job
+				}
+			}
 			continue
 		}
 		inProgress = true
 	}
 	metrics.SetInProgress(inProgress)
+
+	// Set state for dashboards (state timeline panels).
+	// Priority: InProgress > most recent completed job > status-derived last known state > None.
+	if inProgress {
+		metrics.SetState(3)
+	} else if newestSucceeded != nil || newestFailed != nil {
+		latestOutcome := 0.0
+		latestTime := time.Time{}
+
+		if newestSucceeded != nil {
+			t := newestSucceeded.CreationTimestamp.Time
+			if newestSucceeded.Status.CompletionTime != nil {
+				t = newestSucceeded.Status.CompletionTime.Time
+			}
+			latestOutcome = 1
+			latestTime = t
+		}
+		if newestFailed != nil {
+			t := newestFailed.CreationTimestamp.Time
+			if newestFailed.Status.CompletionTime != nil {
+				t = newestFailed.Status.CompletionTime.Time
+			}
+			if latestTime.IsZero() || t.After(latestTime) {
+				latestOutcome = 2
+				latestTime = t
+			}
+		}
+
+		if !latestTime.IsZero() {
+			metrics.SetLastAttemptTimestamp(float64(latestTime.Unix()))
+		}
+		metrics.SetState(latestOutcome)
+	} else if cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupTime != nil {
+		metrics.SetState(1)
+	} else if cluster.Status.Backup != nil && cluster.Status.Backup.ConsecutiveFailures > 0 {
+		metrics.SetState(2)
+	} else {
+		metrics.SetState(0)
+	}
 
 	// Backfill missing last-* gauges from the most recent successful job so dashboards remain stable
 	// even when Status writes are temporarily blocked by SSA ownership conflicts.

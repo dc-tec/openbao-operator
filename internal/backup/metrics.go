@@ -6,6 +6,29 @@ import (
 )
 
 var (
+	// backupState tracks the current/last-known backup state per cluster.
+	// Values: 0=none/unknown, 1=success, 2=failure, 3=in_progress
+	backupState = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "openbao",
+			Subsystem: "backup",
+			Name:      "state",
+			Help:      "Current backup state per cluster (0=none, 1=success, 2=failure, 3=in_progress)",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	// backupLastAttemptTimestamp tracks the Unix timestamp of the last backup attempt completion (success or failure).
+	backupLastAttemptTimestamp = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "openbao",
+			Subsystem: "backup",
+			Name:      "last_attempt_timestamp",
+			Help:      "Unix timestamp of the last backup attempt completion (success or failure)",
+		},
+		[]string{"namespace", "name"},
+	)
+
 	// backupLastSuccessTimestamp tracks the Unix timestamp of the last successful backup.
 	backupLastSuccessTimestamp = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -98,6 +121,8 @@ var (
 func init() {
 	// Register all metrics with the controller-runtime metrics registry
 	metrics.Registry.MustRegister(
+		backupState,
+		backupLastAttemptTimestamp,
 		backupLastSuccessTimestamp,
 		backupLastDurationSeconds,
 		backupLastSizeBytes,
@@ -113,6 +138,16 @@ func init() {
 type Metrics struct {
 	namespace string
 	name      string
+}
+
+// SetState sets the backup state.
+func (m *Metrics) SetState(state float64) {
+	backupState.WithLabelValues(m.namespace, m.name).Set(state)
+}
+
+// SetLastAttemptTimestamp sets the timestamp of the last backup attempt completion.
+func (m *Metrics) SetLastAttemptTimestamp(unixTimestamp float64) {
+	backupLastAttemptTimestamp.WithLabelValues(m.namespace, m.name).Set(unixTimestamp)
 }
 
 // NewMetrics creates a new Metrics instance for the given cluster.
@@ -169,6 +204,8 @@ func (m *Metrics) IncrementRetentionDeleted(count int) {
 
 // RecordSuccess records metrics for a successful backup.
 func (m *Metrics) RecordSuccess(durationSeconds float64, sizeBytes int64, timestamp float64) {
+	m.SetState(1)
+	m.SetLastAttemptTimestamp(timestamp)
 	m.SetLastSuccessTimestamp(timestamp)
 	m.SetLastDuration(durationSeconds)
 	m.SetLastSize(sizeBytes)
@@ -179,6 +216,8 @@ func (m *Metrics) RecordSuccess(durationSeconds float64, sizeBytes int64, timest
 
 // RecordFailure records metrics for a failed backup.
 func (m *Metrics) RecordFailure(consecutiveFailures int32) {
+	// Note: caller should set last attempt timestamp when available.
+	m.SetState(2)
 	m.IncrementFailureTotal()
 	m.SetConsecutiveFailures(consecutiveFailures)
 	m.SetInProgress(false)
@@ -186,6 +225,8 @@ func (m *Metrics) RecordFailure(consecutiveFailures int32) {
 
 // Clear removes all metrics for this cluster (used on deletion).
 func (m *Metrics) Clear() {
+	backupState.DeleteLabelValues(m.namespace, m.name)
+	backupLastAttemptTimestamp.DeleteLabelValues(m.namespace, m.name)
 	backupLastSuccessTimestamp.DeleteLabelValues(m.namespace, m.name)
 	backupLastDurationSeconds.DeleteLabelValues(m.namespace, m.name)
 	backupLastSizeBytes.DeleteLabelValues(m.namespace, m.name)
