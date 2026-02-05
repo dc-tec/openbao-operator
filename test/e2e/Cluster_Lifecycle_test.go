@@ -128,6 +128,17 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
 			f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
 
+			By("verifying reconcile metrics are emitted for the cluster")
+			metricsOutput, metricErr := framework.WaitForControllerMetricSubstrings(
+				operatorNamespace,
+				2*time.Minute,
+				"openbao_reconcile_duration_seconds_count{",
+				fmt.Sprintf(`namespace="%s"`, f.Namespace),
+				fmt.Sprintf(`name="%s"`, clusterName),
+				`controller="openbaocluster-status"`,
+			)
+			Expect(metricErr).NotTo(HaveOccurred(), "Last metrics output:\n%s", metricsOutput)
+
 			By("verifying Raft Autopilot is configured")
 			// (Simplified verification for smoke test)
 			cm := &corev1.ConfigMap{}

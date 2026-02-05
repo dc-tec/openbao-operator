@@ -1,23 +1,15 @@
-# Kustomization file for Grafana dashboard resources
-# This file can be included in your Grafana deployment kustomization
-# to automatically provision the dashboard.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
 
-resources:
-  # Dashboard JSON is typically deployed as a ConfigMap
-  # Uncomment and customize the following if deploying via ConfigMap:
-  # - dashboard-configmap.yaml
-# Example ConfigMap for Grafana Operator:
-# apiVersion: v1
-# kind: ConfigMap
-# metadata:
-#   name: openbao-operator-dashboard
-#   namespace: grafana
-#   labels:
-#     grafana_dashboard: "1"
-# data:
-#   dashboard.json: |
-#     <contents of dashboard.json>
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
 
-
-
-
+configMapGenerator:
+  - name: openbao-operator-grafana-dashboards
+    files:
+      - dashboards/overview.json
+      - dashboards/backup-restore.json
+      - dashboards/upgrades.json
+      - dashboards/controller-runtime.json

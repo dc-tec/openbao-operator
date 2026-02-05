@@ -194,7 +194,7 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 
 	logger.Error(err, opts.failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
 	if opts.emitEventOnWarn && r.recorder != nil {
-		r.recorder.Eventf(cluster, nil, corev1.EventTypeWarning, opts.failureReason, "", "%s but proceeding due to Warn policy: %v", opts.failureMessagePrefix, err)
+		r.recorder.Eventf(cluster, nil, corev1.EventTypeWarning, opts.failureReason, opts.failureReason, "%s but proceeding due to Warn policy: %v", opts.failureMessagePrefix, err)
 	}
 	return "", nil
 }

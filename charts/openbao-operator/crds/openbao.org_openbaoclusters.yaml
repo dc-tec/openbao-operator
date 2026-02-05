@@ -2810,6 +2810,7 @@ spec:
               adminOps:
                 description: AdminOps holds signals owned by the adminops controller
                   (upgrade + backup).
+                nullable: true
                 properties:
                   lastError:
                     description: LastError is the last adminops-controller error observed

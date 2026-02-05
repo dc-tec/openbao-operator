@@ -12,7 +12,7 @@ import (
 )
 
 // initializeUpgrade sets up the upgrade state and locks the StatefulSet partition.
-func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *upgrade.Metrics, strategy string) error {
 	fromVersion := cluster.Status.CurrentVersion
 	toVersion := cluster.Spec.Version
 
@@ -33,6 +33,10 @@ func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, clu
 	if err := m.patchStatusSSA(ctx, cluster); err != nil {
 		return fmt.Errorf("failed to update status after initializing upgrade: %w", err)
 	}
+	// Only increment after the upgrade start state has been persisted successfully.
+	if metrics != nil {
+		metrics.IncrementTotal(strategy)
+	}
 
 	logger.Info("Upgrade initialized; StatefulSet partition locked",
 		"partition", cluster.Spec.Replicas)
@@ -41,7 +45,7 @@ func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, clu
 }
 
 // finalizeUpgrade completes the upgrade process.
-func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *upgrade.Metrics) error {
+func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *upgrade.Metrics, strategy string) error {
 	var upgradeDuration float64
 	var fromVersion string
 
@@ -64,6 +68,7 @@ func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, clust
 	}
 	metrics.SetInProgress(false)
 	metrics.SetStatus(upgrade.UpgradeStatusSuccess)
+	metrics.IncrementSuccess(strategy)
 	metrics.SetPodsCompleted(0)
 	metrics.SetTotalPods(0)
 	metrics.SetPartition(0)

@@ -365,3 +365,15 @@ func TestBuildAutopilotConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestAutopilotBaseURL_UsesPublicService(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	cluster.Name = "openbaocluster-dev"
+	cluster.Namespace = "openbaocluster-dev"
+
+	got := autopilotBaseURL(cluster)
+	want := "https://openbaocluster-dev-public.openbaocluster-dev.svc:8200"
+	if got != want {
+		t.Fatalf("autopilotBaseURL() = %q, want %q", got, want)
+	}
+}

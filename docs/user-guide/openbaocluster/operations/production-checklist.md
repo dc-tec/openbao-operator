@@ -44,7 +44,12 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
         - [Learn more](backups.md)
     - [ ] **Network Policy**: Verify `egressRules` allow access to necessary external services (Cloud KMS, S3, OIDC providers).
         - [Learn more](../../../security/infrastructure/network-security.md)
-    - [ ] **Monitoring**: Ensure Prometheus is scraping `openbao_*` metrics and alerts are configured for high error rates or leader loss.
+    - [ ] **Monitoring**: Ensure metrics scraping is configured and secured.
+        - [ ] **Scraping**: Use Prometheus Operator (`ServiceMonitor`) or VictoriaMetrics Operator (`VMServiceScrape`) for operator metrics.
+        - [ ] **RBAC**: Grant your scraper ServiceAccount permission to GET `/metrics` (Helm: `metrics.rbac.enabled: true` with `metrics.rbac.subjects`).
+        - [ ] **TLS Verification**: Prefer strict TLS verification in production.
+            - Set `metrics.serviceMonitor.tlsConfig.insecureSkipVerify: false` (and configure CA/certs), or
+            - Set `metrics.victoriaMetrics.tlsConfig.insecureSkipVerify: false` (and configure trusted CA in your scraping stack).
         - [Learn more](../configuration/observability.md)
     - [ ] **Logs**: Verify structured logs (`cluster_name`, `cluster_namespace`) are reaching your log aggregator.
         - [Learn more](../configuration/observability.md#logging)

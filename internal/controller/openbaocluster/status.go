@@ -3,6 +3,7 @@ package openbaocluster
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -17,6 +18,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
 	"github.com/dc-tec/openbao-operator/internal/kube"
+	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 )
 
@@ -162,58 +164,27 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		return ctrl.Result{}, err
 	}
 
+	observedVersion := observedVersionFromPods(state)
+
 	// 2. Compute and set all conditions (pure logic)
 	now := metav1.Now()
 	applyAllConditions(cluster, state, r.AdmissionStatus, now)
 
-	// 3. Update status fields
+	// 3. Update status fields (computed locally)
 	cluster.Status.ReadyReplicas = state.ReadyReplicas
 	cluster.Status.ActiveLeader = state.LeaderName
 	cluster.Status.Phase = computePhase(state)
 
-	// Set initial CurrentVersion if empty (first reconcile after initialization)
-	if cluster.Status.CurrentVersion == "" && cluster.Status.Initialized {
-		cluster.Status.CurrentVersion = cluster.Spec.Version
-		logger.Info("Set initial CurrentVersion", "version", cluster.Spec.Version)
-	}
-
-	// Detect BlueGreen upgrade completion: if BlueGreen is Idle and CurrentVersion
-	// doesn't match Spec.Version, the upgrade completed and we should update.
-	// This allows Status controller to own currentVersion while BlueGreen manager
-	// signals completion via phase transition.
-	if cluster.Status.BlueGreen != nil &&
-		cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
-		cluster.Status.CurrentVersion != "" &&
-		cluster.Status.CurrentVersion != cluster.Spec.Version &&
-		cluster.Spec.Upgrade != nil &&
-		cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-
-		// CRITICAL CHECK: Verify that the upgrade actually happened.
-		// PhaseIdle can mean "Before Upgrade" OR "After Upgrade".
-		// We distinguish them by checking if the active BlueRevision matches the current Spec.
-		currentSpecRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
-		if cluster.Status.BlueGreen.BlueRevision == currentSpecRevision {
-			cluster.Status.CurrentVersion = cluster.Spec.Version
-			logger.Info("Detected BlueGreen upgrade completion, updated CurrentVersion",
-				"fromVersion", cluster.Status.CurrentVersion,
-				"toVersion", cluster.Spec.Version,
-				"revision", currentSpecRevision)
-		}
-	}
+	r.reconcileCurrentVersion(logger, cluster, state, observedVersion)
+	r.maybeAdvanceCurrentVersionForBlueGreen(logger, cluster, observedVersion)
+	r.maybeAdvanceCurrentVersionForRollingUpdate(logger, cluster, state, observedVersion)
 
 	// Update per-cluster metrics
 	clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.SetReadyReplicas(state.ReadyReplicas)
 	clusterMetrics.SetPhase(cluster.Status.Phase)
 
-	// SECURITY: Warn when SelfInit is disabled - the operator will store the root token.
-	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
-	if !selfInitEnabled {
-		logger.Info("SECURITY WARNING: SelfInit is disabled - root token will be stored in Secret",
-			"cluster_namespace", cluster.Namespace,
-			"cluster_name", cluster.Name,
-			"secret_name", cluster.Name+"-root-token")
-	}
+	r.warnIfSelfInitDisabled(logger, cluster)
 
 	// 4. Persist status (single API call via SSA)
 	if err := r.patchStatusSSA(ctx, cluster); err != nil {
@@ -226,29 +197,226 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		"currentVersion", cluster.Status.CurrentVersion)
 
 	// 5. Determine requeue
+	return r.determineStatusRequeue(logger, state, original, cluster), nil
+}
+
+func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState, observedVersion string) {
+	// Initialize (or correct) CurrentVersion from observed running pods.
+	//
+	// RATIONALE: spec.version can be updated ahead of the actual workload rollout
+	// (for example, RollingUpdate with a locked partition). Status must reflect the
+	// currently-running OpenBao version to drive safe upgrade orchestration.
+	if !cluster.Status.Initialized {
+		return
+	}
+
+	if cluster.Status.CurrentVersion == "" && observedVersion != "" {
+		cluster.Status.CurrentVersion = observedVersion
+		logger.Info("Set initial CurrentVersion from running pod labels", "version", observedVersion)
+		return
+	}
+
+	if state == nil || state.UpgradeInProgress {
+		return
+	}
+
+	if observedVersion == "" || cluster.Status.CurrentVersion == "" || cluster.Status.CurrentVersion == observedVersion {
+		return
+	}
+
+	from := cluster.Status.CurrentVersion
+	cluster.Status.CurrentVersion = observedVersion
+	logger.Info("Corrected CurrentVersion from running pod labels",
+		"fromVersion", from,
+		"toVersion", observedVersion)
+}
+
+func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForBlueGreen(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, observedVersion string) {
+	// Detect BlueGreen upgrade completion: if BlueGreen is Idle and CurrentVersion
+	// doesn't match Spec.Version, the upgrade completed and we should update.
+	// This allows Status controller to own currentVersion while BlueGreen manager
+	// signals completion via phase transition.
+	if cluster.Status.BlueGreen == nil ||
+		cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle ||
+		cluster.Status.CurrentVersion == "" ||
+		cluster.Status.CurrentVersion == cluster.Spec.Version ||
+		cluster.Spec.Upgrade == nil ||
+		cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen {
+		return
+	}
+
+	// CRITICAL CHECK: Verify that the upgrade actually happened.
+	// PhaseIdle can mean "Before Upgrade" OR "After Upgrade".
+	// We distinguish them by checking if the active BlueRevision matches the current Spec.
+	currentSpecRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+	if cluster.Status.BlueGreen.BlueRevision != currentSpecRevision {
+		return
+	}
+
+	// Extra safety: only advance the version if pods are actually reporting the target version.
+	// If the label is missing, fall back to the revision-based check above.
+	if observedVersion != "" && strings.TrimSpace(observedVersion) != strings.TrimSpace(cluster.Spec.Version) {
+		logger.V(1).Info("BlueGreen revision matches but running pods do not report target version; skipping CurrentVersion update",
+			"observedVersion", observedVersion,
+			"targetVersion", cluster.Spec.Version,
+			"revision", currentSpecRevision)
+		return
+	}
+
+	from := cluster.Status.CurrentVersion
+	cluster.Status.CurrentVersion = cluster.Spec.Version
+	logger.Info("Detected BlueGreen upgrade completion, updated CurrentVersion",
+		"fromVersion", from,
+		"toVersion", cluster.Spec.Version,
+		"revision", currentSpecRevision)
+}
+
+func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForRollingUpdate(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState, observedVersion string) {
+	// Detect RollingUpdate upgrade completion: when the StatefulSet reports all
+	// replicas updated and ready (CurrentRevision == UpdateRevision), the workload
+	// has converged to the new spec and we can update CurrentVersion.
+	//
+	// This is intentionally computed from observed StatefulSet status so we don't
+	// incorrectly advance CurrentVersion immediately after a spec change.
+	rollingStrategy := cluster.Spec.Upgrade == nil ||
+		cluster.Spec.Upgrade.Strategy == "" ||
+		cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyRollingUpdate
+
+	if !rollingStrategy ||
+		state == nil ||
+		state.StatefulSet == nil ||
+		cluster.Status.CurrentVersion == "" ||
+		cluster.Status.CurrentVersion == cluster.Spec.Version {
+		return
+	}
+
+	sts := state.StatefulSet.Status
+	rolloutComplete := sts.ReadyReplicas == cluster.Spec.Replicas &&
+		sts.UpdatedReplicas == cluster.Spec.Replicas &&
+		sts.CurrentRevision != "" &&
+		sts.CurrentRevision == sts.UpdateRevision
+	if !rolloutComplete {
+		return
+	}
+
+	// Extra safety: do not advance CurrentVersion unless pods actually report the target version.
+	// This prevents false completion when the StatefulSet is blocked (for example, by a locked partition).
+	if observedVersion != "" && strings.TrimSpace(observedVersion) != strings.TrimSpace(cluster.Spec.Version) {
+		logger.V(1).Info("StatefulSet reports roll-out complete but running pods do not report target version; skipping CurrentVersion update",
+			"observedVersion", observedVersion,
+			"targetVersion", cluster.Spec.Version,
+			"currentRevision", sts.CurrentRevision)
+		return
+	}
+
+	from := cluster.Status.CurrentVersion
+	cluster.Status.CurrentVersion = cluster.Spec.Version
+	logger.Info("Detected RollingUpdate upgrade completion, updated CurrentVersion",
+		"fromVersion", from,
+		"toVersion", cluster.Spec.Version,
+		"currentRevision", sts.CurrentRevision)
+}
+
+func (r *OpenBaoClusterReconciler) warnIfSelfInitDisabled(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
+	// SECURITY: Warn when SelfInit is disabled - the operator will store the root token.
+	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
+	if selfInitEnabled {
+		return
+	}
+
+	logger.Info("SECURITY WARNING: SelfInit is disabled - root token will be stored in Secret",
+		"cluster_namespace", cluster.Namespace,
+		"cluster_name", cluster.Name,
+		"secret_name", cluster.Name+"-root-token")
+}
+
+func (r *OpenBaoClusterReconciler) determineStatusRequeue(logger logr.Logger, state *clusterState, original, cluster *openbaov1alpha1.OpenBaoCluster) ctrl.Result {
+	if state == nil || original == nil || cluster == nil {
+		return ctrl.Result{}
+	}
+
 	previousReadyReplicas := original.Status.ReadyReplicas
 	readyReplicasChanged := state.ReadyReplicas != previousReadyReplicas
 
 	if state.StatusStale {
 		logger.V(1).Info("StatefulSet status may be stale; requeuing to check status")
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}
 	}
 
 	if !state.Available && state.ReadyReplicas > 0 {
 		logger.V(1).Info("Not all replicas are ready; requeuing to check status",
 			"readyReplicas", state.ReadyReplicas,
 			"desiredReplicas", cluster.Spec.Replicas)
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}
 	}
 
 	if state.Available && readyReplicasChanged {
 		logger.V(1).Info("All replicas became ready; requeuing once to ensure status is persisted",
 			"readyReplicas", state.ReadyReplicas,
 			"previousReadyReplicas", previousReadyReplicas)
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{}
+}
+
+func observedVersionFromPods(state *clusterState) string {
+	if state == nil || len(state.Pods) == 0 {
+		return ""
+	}
+
+	// Prefer the leader's reported version when available.
+	if strings.TrimSpace(state.LeaderName) != "" {
+		for i := range state.Pods {
+			pod := &state.Pods[i]
+			if pod.Name == state.LeaderName {
+				if pod.Labels != nil {
+					if raw, ok := pod.Labels[openbaolabels.LabelVersion]; ok {
+						v := strings.TrimSpace(raw)
+						if v != "" {
+							return v
+						}
+					}
+				}
+				break
+			}
+		}
+	}
+
+	// Next, prefer pod0 (stable identity).
+	if state.Pod0 != nil && state.Pod0.Labels != nil {
+		if raw, ok := state.Pod0.Labels[openbaolabels.LabelVersion]; ok {
+			v := strings.TrimSpace(raw)
+			if v != "" {
+				return v
+			}
+		}
+	}
+
+	// Finally, if all pods report the same non-empty version, use it.
+	var candidate string
+	for i := range state.Pods {
+		pod := &state.Pods[i]
+		if pod.Labels == nil {
+			return ""
+		}
+		raw, ok := pod.Labels[openbaolabels.LabelVersion]
+		if !ok {
+			return ""
+		}
+		v := strings.TrimSpace(raw)
+		if v == "" {
+			return ""
+		}
+		if candidate == "" {
+			candidate = v
+			continue
+		}
+		if candidate != v {
+			return ""
+		}
+	}
+	return candidate
 }
 
 // setTLSReadyCondition evaluates and sets the TLSReady condition.

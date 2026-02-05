@@ -24,6 +24,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	controllermetrics "github.com/dc-tec/openbao-operator/internal/controller"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/kube"
@@ -114,6 +115,8 @@ func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore
 	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
 	}
+
+	controllermetrics.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordStarted()
 
 	return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
 }
@@ -249,7 +252,7 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 // handleLockOverride records an event and sets a condition when a lock override occurs.
 func (m *Manager) handleLockOverride(restore *openbaov1alpha1.OpenBaoRestore, lockBefore *openbaov1alpha1.OperationLockStatus) {
 	if m.recorder != nil {
-		m.recorder.Eventf(restore, nil, corev1.EventTypeWarning, "OperationLockOverride", "",
+		m.recorder.Eventf(restore, nil, corev1.EventTypeWarning, "OperationLockOverride", "OperationLockOverride",
 			"OverrideOperationLock used; cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder)
 	}
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
@@ -466,6 +469,12 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
 	}
 
+	durationSeconds := 0.0
+	if restore.Status.StartTime != nil {
+		durationSeconds = now.Time.Sub(restore.Status.StartTime.Time).Seconds()
+	}
+	controllermetrics.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordFailureWithDuration(durationSeconds)
+
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
 		logger.Error(err, "Failed to release cluster operation lock after restore failure")
 	}
@@ -492,6 +501,12 @@ func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, resto
 	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return fmt.Errorf("failed to patch restore status: %w", err)
 	}
+
+	durationSeconds := 0.0
+	if restore.Status.StartTime != nil {
+		durationSeconds = now.Time.Sub(restore.Status.StartTime.Time).Seconds()
+	}
+	controllermetrics.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordSuccess(durationSeconds)
 
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
 		logger.Error(err, "Failed to release cluster operation lock after restore completion")

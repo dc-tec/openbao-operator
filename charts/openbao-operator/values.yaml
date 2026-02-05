@@ -182,6 +182,63 @@ metrics:
   enabled: true
   # -- Metrics port
   port: 8443
+  # -- Optional RBAC to allow external scrapers (Prometheus/vmagent) to GET /metrics
+  rbac:
+    # -- Create a ClusterRoleBinding to the built-in "metrics-reader" ClusterRole
+    enabled: false
+    # -- Subjects (ServiceAccounts) that should be allowed to scrape metrics
+    # subjects:
+    #   - name: prometheus-k8s
+    #     namespace: monitoring
+    subjects: []
+  # -- Prometheus Operator ServiceMonitor configuration
+  serviceMonitor:
+    # -- Enable ServiceMonitor resources for controller/provisioner metrics
+    enabled: false
+    # -- Namespace to create ServiceMonitors in (defaults to release namespace if empty)
+    namespace: ""
+    # -- Scrape interval
+    interval: 30s
+    # -- Scrape timeout
+    scrapeTimeout: 10s
+    # -- Additional labels to add to the ServiceMonitor
+    labels: {}
+    # -- TLS config for scraping the secure metrics endpoint
+    tlsConfig:
+      # -- Skip TLS verification (useful with self-signed certs). Set to false and configure secrets for strict verification.
+      insecureSkipVerify: true
+      # -- Optional serverName override, e.g. "openbao-operator-controller-metrics.<ns>.svc"
+      serverName: ""
+      # -- Optional CA secret reference
+      caSecret:
+        name: ""
+        key: ca.crt
+      # -- Optional client cert secret reference
+      certSecret:
+        name: ""
+        key: tls.crt
+      # -- Optional client key secret reference
+      keySecret:
+        name: ""
+        key: tls.key
+  # -- VictoriaMetrics Operator (VMServiceScrape) configuration
+  victoriaMetrics:
+    # -- Enable VMServiceScrape resources for controller/provisioner metrics
+    enabled: false
+    # -- Namespace to create VMServiceScrapes in (defaults to release namespace if empty)
+    namespace: ""
+    # -- Scrape interval
+    interval: 30s
+    # -- Scrape timeout
+    scrapeTimeout: 10s
+    # -- Additional labels to add to the VMServiceScrape
+    labels: {}
+    # -- TLS config for scraping the secure metrics endpoint
+    tlsConfig:
+      # -- Skip TLS verification (useful with self-signed certs). Set to false and configure trusted CA in your scraping stack for strict verification.
+      insecureSkipVerify: true
+      # -- Optional serverName override, e.g. "openbao-operator-controller-metrics.<ns>.svc"
+      serverName: ""
 
 # -- Leader election configuration
 leaderElection:

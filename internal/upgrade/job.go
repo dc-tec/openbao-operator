@@ -191,13 +191,13 @@ func buildUpgradeExecutorJob(
 	clientConfig openbao.ClientConfig,
 	platform string,
 ) (*batchv1.Job, error) {
-	if cluster.Spec.Upgrade == nil {
-		return nil, fmt.Errorf("spec.upgrade is required for upgrade Jobs")
-	}
+	upgradeCfg := cluster.Spec.Upgrade
 
 	image := verifiedExecutorDigest
 	if image == "" {
-		image = strings.TrimSpace(cluster.Spec.Upgrade.Image)
+		if upgradeCfg != nil {
+			image = strings.TrimSpace(upgradeCfg.Image)
+		}
 	}
 	if image == "" {
 		var err error
@@ -208,17 +208,16 @@ func buildUpgradeExecutorJob(
 	}
 
 	// Get effective JWT role - use configured role or default to auto-created role if OIDC is enabled
-	jwtRole := strings.TrimSpace(cluster.Spec.Upgrade.JWTAuthRole)
+	jwtRole := ""
+	if upgradeCfg != nil {
+		jwtRole = strings.TrimSpace(upgradeCfg.JWTAuthRole)
+	}
 	if jwtRole == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
 		// Operator will auto-create the upgrade role with name constants.RoleNameUpgrade
 		jwtRole = constants.RoleNameUpgrade
 	}
 	if jwtRole == "" {
-		if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-			jwtRole = constants.RoleNameUpgrade
-		} else {
-			return nil, fmt.Errorf("spec.upgrade.jwtAuthRole is required for upgrade Jobs (or enable spec.selfInit.oidc)")
-		}
+		return nil, fmt.Errorf("upgrade Jobs require JWT auth: Configure JWT auth and set the role name in spec.upgrade.jwtAuthRole")
 	}
 
 	env := []corev1.EnvVar{

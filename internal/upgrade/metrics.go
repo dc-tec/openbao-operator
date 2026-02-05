@@ -32,6 +32,50 @@ var (
 		[]string{"namespace", "name"},
 	)
 
+	// upgradeTotalCounter tracks the total number of upgrades initiated.
+	upgradeTotalCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openbao",
+			Subsystem: "upgrade",
+			Name:      "total",
+			Help:      "Total number of upgrade operations initiated",
+		},
+		[]string{"namespace", "name", "strategy"},
+	)
+
+	// upgradeSuccessTotalCounter tracks successful upgrades.
+	upgradeSuccessTotalCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openbao",
+			Subsystem: "upgrade",
+			Name:      "success_total",
+			Help:      "Total number of successful upgrade operations",
+		},
+		[]string{"namespace", "name", "strategy"},
+	)
+
+	// upgradeFailureTotalCounter tracks failed upgrades.
+	upgradeFailureTotalCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openbao",
+			Subsystem: "upgrade",
+			Name:      "failure_total",
+			Help:      "Total number of failed upgrade operations",
+		},
+		[]string{"namespace", "name", "strategy"},
+	)
+
+	// upgradeRollbackTotalCounter tracks rollbacks triggered during upgrades.
+	upgradeRollbackTotalCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openbao",
+			Subsystem: "upgrade",
+			Name:      "rollback_total",
+			Help:      "Total number of upgrade rollbacks triggered",
+		},
+		[]string{"namespace", "name", "strategy"},
+	)
+
 	// upgradeDurationHistogram tracks the total duration of upgrades.
 	upgradeDurationHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -127,6 +171,10 @@ func init() {
 	// Register all metrics with the controller-runtime metrics registry
 	metrics.Registry.MustRegister(
 		upgradeStatusGauge,
+		upgradeTotalCounter,
+		upgradeSuccessTotalCounter,
+		upgradeFailureTotalCounter,
+		upgradeRollbackTotalCounter,
 		upgradeDurationHistogram,
 		upgradePodDurationHistogram,
 		upgradeStepDownCounter,
@@ -155,6 +203,26 @@ func NewMetrics(namespace, name string) *Metrics {
 // SetStatus sets the current upgrade status.
 func (m *Metrics) SetStatus(status UpgradeStatus) {
 	upgradeStatusGauge.WithLabelValues(m.namespace, m.name).Set(float64(status))
+}
+
+// IncrementTotal increments the total upgrades initiated counter.
+func (m *Metrics) IncrementTotal(strategy string) {
+	upgradeTotalCounter.WithLabelValues(m.namespace, m.name, strategy).Inc()
+}
+
+// IncrementSuccess increments the successful upgrades counter.
+func (m *Metrics) IncrementSuccess(strategy string) {
+	upgradeSuccessTotalCounter.WithLabelValues(m.namespace, m.name, strategy).Inc()
+}
+
+// IncrementFailure increments the failed upgrades counter.
+func (m *Metrics) IncrementFailure(strategy string) {
+	upgradeFailureTotalCounter.WithLabelValues(m.namespace, m.name, strategy).Inc()
+}
+
+// IncrementRollback increments the rollbacks triggered counter.
+func (m *Metrics) IncrementRollback(strategy string) {
+	upgradeRollbackTotalCounter.WithLabelValues(m.namespace, m.name, strategy).Inc()
 }
 
 // RecordDuration records the total duration of an upgrade.
@@ -204,6 +272,12 @@ func (m *Metrics) SetPartition(partition int32) {
 // Clear resets all metrics for this cluster (used on deletion).
 func (m *Metrics) Clear() {
 	upgradeStatusGauge.DeleteLabelValues(m.namespace, m.name)
+	for _, strategy := range []string{"RollingUpdate", "BlueGreen"} {
+		upgradeTotalCounter.DeleteLabelValues(m.namespace, m.name, strategy)
+		upgradeSuccessTotalCounter.DeleteLabelValues(m.namespace, m.name, strategy)
+		upgradeFailureTotalCounter.DeleteLabelValues(m.namespace, m.name, strategy)
+		upgradeRollbackTotalCounter.DeleteLabelValues(m.namespace, m.name, strategy)
+	}
 	upgradeInProgressGauge.DeleteLabelValues(m.namespace, m.name)
 	upgradePodsCompletedGauge.DeleteLabelValues(m.namespace, m.name)
 	upgradeTotalPodsGauge.DeleteLabelValues(m.namespace, m.name)

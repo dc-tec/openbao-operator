@@ -47,6 +47,15 @@ var (
 	)
 
 	// Restore metrics
+	restoreStateGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "openbao",
+			Name:      "restore_state",
+			Help:      "Current restore state per cluster (0=none, 1=running, 2=success, 3=failed)",
+		},
+		[]string{"namespace", "name"},
+	)
+
 	restoreTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "openbao",
@@ -92,6 +101,7 @@ func init() {
 		clusterReadyReplicasGauge,
 		clusterPhaseGauge,
 		// Restore metrics
+		restoreStateGauge,
 		restoreTotal,
 		restoreSuccessTotal,
 		restoreFailureTotal,
@@ -186,6 +196,12 @@ type RestoreMetrics struct {
 	name      string
 }
 
+func (m *RestoreMetrics) setState(state float64) {
+	restoreStateGauge.
+		WithLabelValues(m.namespace, m.name).
+		Set(state)
+}
+
 // NewRestoreMetrics creates a new RestoreMetrics instance.
 func NewRestoreMetrics(namespace, name string) *RestoreMetrics {
 	return &RestoreMetrics{
@@ -196,6 +212,7 @@ func NewRestoreMetrics(namespace, name string) *RestoreMetrics {
 
 // RecordStarted increments the restore total counter.
 func (m *RestoreMetrics) RecordStarted() {
+	m.setState(1)
 	restoreTotal.
 		WithLabelValues(m.namespace, m.name).
 		Inc()
@@ -203,6 +220,7 @@ func (m *RestoreMetrics) RecordStarted() {
 
 // RecordSuccess increments the restore success counter and records duration.
 func (m *RestoreMetrics) RecordSuccess(durationSeconds float64) {
+	m.setState(2)
 	restoreSuccessTotal.
 		WithLabelValues(m.namespace, m.name).
 		Inc()
@@ -213,7 +231,19 @@ func (m *RestoreMetrics) RecordSuccess(durationSeconds float64) {
 
 // RecordFailure increments the restore failure counter.
 func (m *RestoreMetrics) RecordFailure() {
+	m.setState(3)
 	restoreFailureTotal.
 		WithLabelValues(m.namespace, m.name).
 		Inc()
+}
+
+// RecordFailureWithDuration increments the restore failure counter and records duration.
+func (m *RestoreMetrics) RecordFailureWithDuration(durationSeconds float64) {
+	m.setState(3)
+	restoreFailureTotal.
+		WithLabelValues(m.namespace, m.name).
+		Inc()
+	restoreDurationHistogram.
+		WithLabelValues(m.namespace, m.name).
+		Observe(durationSeconds)
 }

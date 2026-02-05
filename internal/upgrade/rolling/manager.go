@@ -85,6 +85,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	)
 
 	metrics := upgrade.NewMetrics(cluster.Namespace, cluster.Name)
+	strategy := string(openbaov1alpha1.UpdateStrategyRollingUpdate)
+	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy != "" {
+		strategy = string(cluster.Spec.Upgrade.Strategy)
+	}
 
 	// Check if cluster is initialized; upgrades can only proceed after initialization
 	if !cluster.Status.Initialized {
@@ -117,7 +121,6 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 		// No upgrade needed, ensure metrics reflect idle state
 		metrics.SetInProgress(false)
-		metrics.SetStatus(upgrade.UpgradeStatusNone)
 		return recon.Result{}, nil
 	}
 
@@ -128,8 +131,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if err := upgrade.AcquireUpgradeOperationLock(ctx, m.client, cluster, lockMessage); err != nil {
 		if upgrade.IsOperationLockHeld(err) {
 			if cluster.Status.Upgrade != nil {
+				firstFailure := cluster.Status.Upgrade.LastErrorAt == nil
 				upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonUpgradeFailed, "upgrade halted due to concurrent operation lock", cluster.Generation)
 				metrics.SetStatus(upgrade.UpgradeStatusFailed)
+				if firstFailure {
+					metrics.IncrementFailure(strategy)
+				}
 				return recon.Result{}, fmt.Errorf("upgrade in progress but operation lock is held by another operation: %w", err)
 			}
 			logger.Info("Upgrade blocked by operation lock", "error", err.Error())
@@ -185,7 +192,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Phase 4: Initialize Upgrade (if not resuming)
 	// Only reached if pre-upgrade snapshot is complete or not enabled
 	if cluster.Status.Upgrade == nil {
-		if err := m.initializeUpgrade(ctx, logger, cluster); err != nil {
+		if err := m.initializeUpgrade(ctx, logger, cluster, metrics, strategy); err != nil {
 			return recon.Result{}, err
 		}
 	}
@@ -202,8 +209,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// Phase 5: Pod-by-Pod Update
 	completed, err := m.performPodByPodUpgrade(ctx, logger, cluster, metrics)
 	if err != nil {
+		firstFailure := cluster.Status.Upgrade == nil || cluster.Status.Upgrade.LastErrorAt == nil
 		upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonUpgradeFailed, err.Error(), cluster.Generation)
 		metrics.SetStatus(upgrade.UpgradeStatusFailed)
+		if firstFailure {
+			metrics.IncrementFailure(strategy)
+		}
 
 		// Update status using SSA (eliminates race conditions)
 		if statusErr := m.patchStatusSSA(ctx, cluster); statusErr != nil {
@@ -222,7 +233,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	// Phase 6: Finalization
-	if err := m.finalizeUpgrade(ctx, logger, cluster, metrics); err != nil {
+	if err := m.finalizeUpgrade(ctx, logger, cluster, metrics, strategy); err != nil {
 		return recon.Result{}, err
 	}
 

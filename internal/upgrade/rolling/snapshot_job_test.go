@@ -157,6 +157,75 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 	assert.Contains(t, jobList.Items[0].Name, "pre-upgrade-backup", "job name should contain pre-upgrade-backup")
 }
 
+func TestHandlePreUpgradeSnapshot_CreatesJobWithOIDCDefaultRole(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-ns",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileDevelopment,
+			Version:  "2.4.4",
+			Replicas: 3,
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
+			},
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				PreUpgradeSnapshot: true,
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Image: "test-image:latest",
+				// JWTAuthRole intentionally omitted; should default when OIDC is enabled
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "http://test-endpoint",
+					Bucket:   "test-bucket",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.3",
+			Initialized:    true,
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	_ = batchv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-tls-ca",
+			Namespace: "test-ns",
+		},
+		Data: map[string][]byte{
+			"ca.crt": []byte("test-ca-cert"),
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, secret).
+		WithReturnManagedFields().
+		Build()
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
+	assert.NoError(t, err, "should create backup job successfully when OIDC is enabled")
+	assert.False(t, complete, "should return complete=false when job is created")
+
+	jobList := &batchv1.JobList{}
+	err = k8sClient.List(context.Background(), jobList, client.InNamespace("test-ns"))
+	require.NoError(t, err)
+	assert.Len(t, jobList.Items, 1, "should have created one backup job")
+	assert.Contains(t, jobList.Items[0].Name, "pre-upgrade-backup", "job name should contain pre-upgrade-backup")
+}
+
 func TestHandlePreUpgradeSnapshot_HardenedRequiresEgressRules(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{

@@ -541,6 +541,16 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(err).NotTo(HaveOccurred(), "Failed to read post-restore secret")
 				g.Expect(val).To(Equal("bar"))
 			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
+
+			By("Verifying restore metrics are emitted")
+			metricsOutput, metricErr := framework.WaitForControllerMetricSubstrings(
+				operatorNamespace,
+				2*time.Minute,
+				"openbao_restore_success_total{",
+				fmt.Sprintf(`namespace="%s"`, tenantNamespace),
+				fmt.Sprintf(`name="%s"`, drCluster.Name),
+			)
+			Expect(metricErr).NotTo(HaveOccurred(), "Last metrics output:\n%s", metricsOutput)
 		})
 	})
 

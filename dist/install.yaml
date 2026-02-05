@@ -2808,6 +2808,7 @@ spec:
               adminOps:
                 description: AdminOps holds signals owned by the adminops controller
                   (upgrade + backup).
+                nullable: true
                 properties:
                   lastError:
                     description: LastError is the last adminops-controller error observed
@@ -5548,6 +5549,10 @@ spec:
       != "")'
     message: spec.gateway.hostname and spec.gateway.gatewayRef.name are required when
       Gateway is enabled.
+  - expression: '!(variables.has_pre_upgrade_snapshot || variables.has_bluegreen_pre_upgrade_snapshot)
+      || variables.has_backup'
+    message: spec.backup is required when pre-upgrade snapshots are enabled (spec.upgrade.preUpgradeSnapshot
+      or spec.upgrade.blueGreen.preUpgradeSnapshot).
   - expression: |-
       !variables.has_backup || (object.spec.backup.schedule != "" &&
 
@@ -5638,11 +5643,12 @@ spec:
   variables:
   - expression: has(object.spec.backup)
     name: has_backup
-  - expression: has(object.spec.upgrade) && object.spec.upgrade.preUpgradeSnapshot
-      == true
+  - expression: has(object.spec.upgrade) && has(object.spec.upgrade.preUpgradeSnapshot)
+      && object.spec.upgrade.preUpgradeSnapshot == true
     name: has_pre_upgrade_snapshot
   - expression: has(object.spec.upgrade) && has(object.spec.upgrade.blueGreen) &&
-      object.spec.upgrade.blueGreen.preUpgradeSnapshot == true
+      has(object.spec.upgrade.blueGreen.preUpgradeSnapshot) && object.spec.upgrade.blueGreen.preUpgradeSnapshot
+      == true
     name: has_bluegreen_pre_upgrade_snapshot
 ---
 apiVersion: admissionregistration.k8s.io/v1

@@ -105,6 +105,61 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 	existingSTS := &appsv1.StatefulSet{}
 	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, existingSTS); err == nil {
 		desired.Spec.VolumeClaimTemplates = existingSTS.Spec.VolumeClaimTemplates
+
+		// POLICY COMPLIANCE: The operator ships an ValidatingAdmissionPolicy
+		// (e.g. openbao-operator-lock-controller-statefulset-mutations) that forbid
+		// the OpenBao controller from mutating specific StatefulSet pod-template fields
+		// (volumes/volumeMounts/securityContext/command/args/automountServiceAccountToken).
+		//
+		// SSA would otherwise attempt to apply our desired values and can be denied even
+		// when we only intend to upgrade images. Preserve the locked fields from the
+		// existing StatefulSet so the UPDATE passes admission.
+		preserveLockedStatefulSetTemplateFields(desired, existingSTS)
+
+		// ROLLING UPGRADE SAFETY: lock the StatefulSet partition before we apply a template change
+		// that would otherwise trigger an uncontrolled rollout.
+		//
+		// The AdminOps rolling upgrade manager orchestrates upgrades (leader step-down, pod-by-pod),
+		// but the workload controller is responsible for applying the target pod template. Since
+		// the controllers reconcile concurrently, the workload controller must ensure the partition
+		// is locked before it applies an upgrade template, otherwise Kubernetes may roll all pods
+		// immediately and bypass the orchestrated upgrade flow.
+		rollingStrategy := cluster.Spec.Upgrade == nil ||
+			cluster.Spec.Upgrade.Strategy == "" ||
+			cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyRollingUpdate
+		pendingVersionUpgrade := rollingStrategy &&
+			initialized &&
+			revision == "" &&
+			cluster.Status.Upgrade == nil &&
+			cluster.Status.CurrentVersion != "" &&
+			cluster.Status.CurrentVersion != cluster.Spec.Version
+
+		if pendingVersionUpgrade {
+			var existingPartition *int32
+			if existingSTS.Spec.UpdateStrategy.RollingUpdate != nil {
+				existingPartition = existingSTS.Spec.UpdateStrategy.RollingUpdate.Partition
+			}
+
+			partition := cluster.Spec.Replicas
+			if existingPartition == nil || *existingPartition != partition {
+				logger.Info("Locking StatefulSet rolling partition prior to version upgrade",
+					"statefulset", name,
+					"partition", partition,
+					"fromVersion", cluster.Status.CurrentVersion,
+					"toVersion", cluster.Spec.Version)
+
+				patched := existingSTS.DeepCopy()
+				patched.Spec.UpdateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
+				patched.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{Partition: &partition}
+				if err := m.client.Patch(ctx, patched, client.MergeFrom(existingSTS)); err != nil {
+					return fmt.Errorf("failed to lock StatefulSet partition for upgrade: %w", err)
+				}
+			} else {
+				logger.V(1).Info("StatefulSet rolling partition already set; skipping pre-lock",
+					"statefulset", name,
+					"partition", *existingPartition)
+			}
+		}
 	} else if !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to get StatefulSet %s/%s: %w", cluster.Namespace, name, err)
 	}
@@ -118,9 +173,8 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 		APIVersion: "apps/v1",
 	}
 
-	// Note: We intentionally do NOT set UpdateStrategy here. The UpgradeManager manages
-	// UpdateStrategy (including RollingUpdate.Partition) for rollout orchestration.
-	// SSA will preserve the existing UpdateStrategy if it's not specified in our desired object.
+	// Note: RollingUpdate.Partition is intentionally not set via SSA here. The AdminOps
+	// rolling upgrade manager patches partition via a strategic merge patch to orchestrate rollouts.
 
 	if err := m.applyResource(ctx, desired, cluster); err != nil {
 		return fmt.Errorf("failed to ensure StatefulSet %s/%s: %w", cluster.Namespace, name, err)
@@ -131,6 +185,63 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 	}
 
 	return nil
+}
+
+func preserveLockedStatefulSetTemplateFields(desired *appsv1.StatefulSet, existing *appsv1.StatefulSet) {
+	if desired == nil || existing == nil {
+		return
+	}
+
+	// Pod-level locked fields
+	desired.Spec.Template.Spec.Volumes = existing.Spec.Template.Spec.Volumes
+	desired.Spec.Template.Spec.AutomountServiceAccountToken = existing.Spec.Template.Spec.AutomountServiceAccountToken
+	desired.Spec.Template.Spec.SecurityContext = existing.Spec.Template.Spec.SecurityContext
+
+	// Container locked fields (order-sensitive in admission policy expressions)
+	if len(existing.Spec.Template.Spec.Containers) > 0 {
+		desiredByName := make(map[string]corev1.Container, len(desired.Spec.Template.Spec.Containers))
+		for _, c := range desired.Spec.Template.Spec.Containers {
+			desiredByName[c.Name] = c
+		}
+
+		newContainers := make([]corev1.Container, 0, len(existing.Spec.Template.Spec.Containers))
+		for _, existingC := range existing.Spec.Template.Spec.Containers {
+			if desiredC, ok := desiredByName[existingC.Name]; ok {
+				desiredC.Command = existingC.Command
+				desiredC.Args = existingC.Args
+				desiredC.SecurityContext = existingC.SecurityContext
+				desiredC.VolumeMounts = existingC.VolumeMounts
+				newContainers = append(newContainers, desiredC)
+			} else {
+				// Do not add/remove containers under a locked policy; keep existing entry.
+				newContainers = append(newContainers, existingC)
+			}
+		}
+		desired.Spec.Template.Spec.Containers = newContainers
+	}
+
+	// Init container locked fields (order-sensitive in admission policy expressions)
+	existingInit := existing.Spec.Template.Spec.InitContainers
+	if existingInit != nil {
+		desiredByName := make(map[string]corev1.Container, len(desired.Spec.Template.Spec.InitContainers))
+		for _, c := range desired.Spec.Template.Spec.InitContainers {
+			desiredByName[c.Name] = c
+		}
+
+		newInit := make([]corev1.Container, 0, len(existingInit))
+		for _, existingC := range existingInit {
+			if desiredC, ok := desiredByName[existingC.Name]; ok {
+				desiredC.Command = existingC.Command
+				desiredC.Args = existingC.Args
+				desiredC.VolumeMounts = existingC.VolumeMounts
+				desiredC.SecurityContext = existingC.SecurityContext
+				newInit = append(newInit, desiredC)
+			} else {
+				newInit = append(newInit, existingC)
+			}
+		}
+		desired.Spec.Template.Spec.InitContainers = newInit
+	}
 }
 
 // deletePVCs removes all PersistentVolumeClaims associated with the OpenBaoCluster.

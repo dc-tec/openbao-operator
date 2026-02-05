@@ -22,28 +22,14 @@ package e2e
 import (
 	"fmt"
 	"os/exec"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	"github.com/dc-tec/openbao-operator/test/utils"
 )
-
-// serviceAccountName created for the project
-// After kustomize namePrefix (openbao-operator-) is applied to controller-manager,
-// the final name becomes openbao-operator-controller-manager, but the actual
-// service account created is openbao-operator-controller (from controller.yaml).
-const serviceAccountName = "openbao-operator-controller"
-
-// metricsServiceName is the name of the metrics service of the project
-// After kustomize namePrefix (openbao-operator-) is applied to openbao-operator-controller-metrics-service,
-// the final name becomes openbao-operator-controller-metrics-service
-const metricsServiceName = "openbao-operator-controller-metrics-service"
-
-// metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
-const metricsRoleBindingName = "openbao-operator-metrics-binding"
 
 var _ = Describe("Manager", Label("manager", "critical", "smoke"), Ordered, func() {
 	var controllerPodName string
@@ -69,15 +55,6 @@ var _ = Describe("Manager", Label("manager", "critical", "smoke"), Ordered, func
 				_, _ = fmt.Fprintf(GinkgoWriter, "Kubernetes events:\n%s", eventsOutput)
 			} else {
 				_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get Kubernetes events: %s", err)
-			}
-
-			By("Fetching curl-metrics logs")
-			cmd = exec.Command("kubectl", "logs", "curl-metrics", "-n", operatorNamespace)
-			metricsOutput, err := utils.Run(cmd)
-			if err == nil {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Metrics logs:\n %s", metricsOutput)
-			} else {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get curl-metrics logs: %s", err)
 			}
 
 			By("Fetching controller manager pod description")
@@ -128,23 +105,10 @@ var _ = Describe("Manager", Label("manager", "critical", "smoke"), Ordered, func
 		})
 
 		It("should ensure the metrics endpoint is serving metrics", func() {
-			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
-			cmd := exec.Command("kubectl", "create", "clusterrolebinding", metricsRoleBindingName,
-				"--clusterrole=openbao-operator-metrics-reader",
-				fmt.Sprintf("--serviceaccount=%s:%s", operatorNamespace, serviceAccountName),
-			)
-			_, err := utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create ClusterRoleBinding")
-
 			By("validating that the metrics service is available")
-			cmd = exec.Command("kubectl", "get", "service", metricsServiceName, "-n", operatorNamespace)
-			_, err = utils.Run(cmd)
+			cmd := exec.Command("kubectl", "get", "service", "openbao-operator-controller-metrics-service", "-n", operatorNamespace)
+			_, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred(), "Metrics service should exist")
-
-			By("getting the service account token")
-			token, err := serviceAccountToken()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(token).NotTo(BeEmpty())
 
 			By("ensuring the controller pod is ready")
 			verifyControllerPodReady := func(g Gomega) {
@@ -168,104 +132,11 @@ var _ = Describe("Manager", Label("manager", "critical", "smoke"), Ordered, func
 
 			// +kubebuilder:scaffold:e2e-metrics-webhooks-readiness
 
-			By("creating the curl-metrics pod to access the metrics endpoint")
-			cmd = exec.Command("kubectl", "run", "curl-metrics", "--restart=Never",
-				"--namespace", operatorNamespace,
-				"--image=curlimages/curl:latest",
-				"--overrides",
-				fmt.Sprintf(`{
-					"spec": {
-						"containers": [{
-							"name": "curl",
-							"image": "curlimages/curl:latest",
-							"command": ["/bin/sh", "-c"],
-							"args": ["curl -v -k -H 'Authorization: Bearer %s' https://%s.%s.svc.cluster.local:8443/metrics"],
-							"securityContext": {
-								"readOnlyRootFilesystem": true,
-								"allowPrivilegeEscalation": false,
-								"capabilities": {
-									"drop": ["ALL"]
-								},
-								"runAsNonRoot": true,
-								"runAsUser": 1000,
-								"seccompProfile": {
-									"type": "RuntimeDefault"
-								}
-							}
-						}],
-						"serviceAccountName": "%s"
-					}
-				}`, token, metricsServiceName, operatorNamespace, serviceAccountName))
-			_, err = utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create curl-metrics pod")
-
-			By("waiting for the curl-metrics pod to complete.")
-			verifyCurlUp := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "pods", "curl-metrics",
-					"-o", "jsonpath={.status.phase}",
-					"-n", operatorNamespace)
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("Succeeded"), "curl pod in wrong status")
-			}
-			Eventually(verifyCurlUp, 5*time.Minute).Should(Succeed())
-
-			By("getting the metrics by checking curl-metrics logs")
-			verifyMetricsAvailable := func(g Gomega) {
-				metricsOutput, err := getMetricsOutput()
-				g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve logs from curl pod")
-				g.Expect(metricsOutput).NotTo(BeEmpty())
-				g.Expect(metricsOutput).To(ContainSubstring("< HTTP/1.1 200 OK"))
-			}
-			Eventually(verifyMetricsAvailable, 2*time.Minute).Should(Succeed())
+			By("verifying that the controller metrics endpoint returns data")
+			metricsOutput, err := framework.WaitForControllerMetricSubstring(operatorNamespace, "go_goroutines", 2*time.Minute)
+			Expect(err).NotTo(HaveOccurred(), "Last metrics output:\n%s", metricsOutput)
+			Expect(metricsOutput).To(ContainSubstring("go_goroutines"))
 		})
 
 	})
 })
-
-// serviceAccountToken returns a token for the specified service account in the given namespace.
-// It uses kubectl create token which is the recommended way to get service account tokens
-// in Kubernetes 1.24+ (TokenRequest API).
-func serviceAccountToken() (string, error) {
-	var out string
-	var lastErr error
-	verifyTokenCreation := func(g Gomega) {
-		// Use kubectl create token which is simpler and more reliable than --raw API calls
-		cmd := exec.Command("kubectl", "create", "token", serviceAccountName,
-			"-n", operatorNamespace,
-			"--duration=1h",
-		)
-
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			lastErr = fmt.Errorf("kubectl create token failed: %w, output: %s", err, string(output))
-			g.Expect(err).NotTo(HaveOccurred(), "Failed to create service account token: %v", lastErr)
-			return
-		}
-
-		token := strings.TrimSpace(string(output))
-		if token == "" {
-			lastErr = fmt.Errorf("token is empty in response: %s", string(output))
-			g.Expect(token).NotTo(BeEmpty(), "Token is empty in response")
-			return
-		}
-
-		out = token
-		lastErr = nil
-	}
-	Eventually(verifyTokenCreation, 30*time.Second, 2*time.Second).Should(Succeed(),
-		"Failed to create service account token after timeout. Last error: %v", lastErr)
-
-	if lastErr != nil {
-		return "", lastErr
-	}
-
-	return out, nil
-}
-
-// getMetricsOutput retrieves and returns the logs from the curl pod used to access the metrics endpoint.
-func getMetricsOutput() (string, error) {
-	By("getting the curl-metrics logs")
-	cmd := exec.Command("kubectl", "logs", "curl-metrics", "-n", operatorNamespace)
-	return utils.Run(cmd)
-}

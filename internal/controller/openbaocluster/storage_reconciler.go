@@ -162,7 +162,7 @@ func (r *storageReconciler) expandPVCs(ctx context.Context, cluster *openbaov1al
 
 		patched++
 		if r.recorder != nil {
-			r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResize", "", "Resizing PVC %s from %s to %s", pvc.Name, currentQty.String(), desiredQty.String())
+			r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResize", "PVCResize", "Resizing PVC %s from %s to %s", pvc.Name, currentQty.String(), desiredQty.String())
 		}
 	}
 
@@ -247,7 +247,7 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 				return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to step down leader %s before restart: %w", targetPod.Name, err))
 			}
 			if r.recorder != nil {
-				r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
+				r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "PVCResizeLeaderStepDown", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
 			}
 			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
@@ -263,7 +263,7 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 	}
 
 	if r.recorder != nil {
-		r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizePodRestart", "", "Restarted pod %s to complete filesystem resize", targetPod.Name)
+		r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizePodRestart", "PVCResizePodRestart", "Restarted pod %s to complete filesystem resize", targetPod.Name)
 	}
 
 	return recon.Result{RequeueAfter: constants.RequeueShort}, nil

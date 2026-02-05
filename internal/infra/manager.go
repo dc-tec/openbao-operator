@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -242,6 +244,33 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 	applyConfig, err := kube.ToApplyConfiguration(obj, m.client)
 	if err != nil {
 		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
+	}
+
+	// ROLLING UPGRADE SAFETY: For non-BlueGreen clusters, do not apply the StatefulSet
+	// updateStrategy via SSA. The rolling upgrade manager owns RollingUpdate.Partition and
+	// patches it via a strategic merge patch to orchestrate upgrades. Applying updateStrategy
+	// here would risk clearing or overriding the partition and causing uncontrolled rollouts.
+	if sts, ok := obj.(*appsv1.StatefulSet); ok &&
+		(cluster.Spec.Upgrade == nil || cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen) {
+		u, err := runtime.DefaultUnstructuredConverter.ToUnstructured(sts)
+		if err != nil {
+			return fmt.Errorf("failed to convert StatefulSet to unstructured: %w", err)
+		}
+
+		if spec, ok := u["spec"].(map[string]any); ok {
+			delete(spec, "updateStrategy")
+		}
+
+		unstructuredObj := &unstructured.Unstructured{Object: u}
+		gvk := sts.GetObjectKind().GroupVersionKind()
+		if gvk.Empty() {
+			gvk, err = m.client.GroupVersionKindFor(sts)
+			if err != nil {
+				return fmt.Errorf("failed to resolve GVK for StatefulSet: %w", err)
+			}
+		}
+		unstructuredObj.SetGroupVersionKind(gvk)
+		applyConfig = client.ApplyConfigurationFromUnstructured(unstructuredObj)
 	}
 
 	applyOpts := []client.ApplyOption{

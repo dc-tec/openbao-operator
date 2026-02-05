@@ -53,6 +53,8 @@ spec:
             - --health-probe-bind-address=:{{ .Values.healthProbes.port }}
             {{- if .Values.metrics.enabled }}
             - --metrics-bind-address=:{{ .Values.metrics.port }}
+            {{- else }}
+            - --metrics-bind-address=0
             {{- end }}
             {{- if not .Values.admissionPolicies.enabled }}
             - --admission-enforcement=warn

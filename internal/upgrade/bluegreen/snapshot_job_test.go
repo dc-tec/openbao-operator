@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -77,6 +78,77 @@ func TestBuildSnapshotJob_PodSecurityContext_Platform(t *testing.T) {
 		require.Equal(t, ptr.To(constants.GroupBackup), sc.RunAsGroup)
 		require.Equal(t, ptr.To(constants.GroupBackup), sc.FSGroup)
 	})
+}
+
+func TestEnsurePreUpgradeSnapshotJob_RequiresBackupAuthUnlessOIDC(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = openbaov1alpha1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Image: "test-image:latest",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "http://test-endpoint",
+					Bucket:   "test-bucket",
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	mgr := NewManager(fakeClient, scheme, nil, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
+
+	_, err := mgr.ensurePreUpgradeSnapshotJob(context.Background(), testLogger(), cluster, "pre-upgrade-snapshot")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "backup authentication is required")
+}
+
+func TestEnsurePreUpgradeSnapshotJob_AllowsOIDCDefaultRole(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = openbaov1alpha1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Image: "test-image:latest",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "http://test-endpoint",
+					Bucket:   "test-bucket",
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	mgr := NewManager(fakeClient, scheme, nil, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
+
+	result, err := mgr.ensurePreUpgradeSnapshotJob(context.Background(), testLogger(), cluster, "pre-upgrade-snapshot")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Running)
 }
 
 func TestHandlePhaseIdle_BlocksOnFailedSnapshot(t *testing.T) {
@@ -166,6 +238,57 @@ func TestHandlePhaseIdle_BlocksOnFailedSnapshot(t *testing.T) {
 		assert.NotEqual(t, phaseOutcomeAdvance, outcome.kind, "Should not advance when snapshot failed")
 		assert.NotEqual(t, openbaov1alpha1.PhaseDeployingGreen, outcome.nextPhase, "Should not transition to DeployingGreen")
 	}
+}
+
+func TestHandlePhaseIdle_RespectsTopLevelPreUpgradeSnapshot(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = openbaov1alpha1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.5.0",
+			Replicas: 3,
+			Image:    "openbao:2.5.0",
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Strategy:           openbaov1alpha1.UpdateStrategyBlueGreen,
+				PreUpgradeSnapshot: true,
+				BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+					PreUpgradeSnapshot: false,
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.0",
+			Initialized:    true,
+			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+				Phase:        openbaov1alpha1.PhaseIdle,
+				BlueRevision: "rev-blue",
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	mgr := NewManager(fakeClient, scheme, nil, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
+
+	jobName := preUpgradeSnapshotJobName(cluster)
+	cluster.Status.BlueGreen.PreUpgradeSnapshotJobName = jobName
+	runningJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: cluster.Namespace,
+		},
+	}
+	require.NoError(t, fakeClient.Create(context.Background(), runningJob))
+
+	outcome, err := mgr.handlePhaseIdle(context.Background(), testLogger(), cluster, "")
+	require.NoError(t, err)
+	require.Equal(t, phaseOutcomeRequeueAfter, outcome.kind, "should requeue while pre-upgrade snapshot is running")
 }
 
 func testLogger() logr.Logger {

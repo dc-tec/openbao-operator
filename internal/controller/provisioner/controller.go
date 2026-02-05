@@ -36,7 +36,8 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	controllerpredicates "github.com/dc-tec/openbao-operator/internal/controller"
+	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
 )
 
@@ -75,7 +76,28 @@ func (r *NamespaceProvisionerReconciler) patchStatus(ctx context.Context, tenant
 // Reconcile is part of the main Kubernetes reconciliation loop which watches
 // for OpenBaoTenant resources and provisions RBAC for the target namespace
 // specified in the CRD.
-func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+	start := time.Now()
+	reconcileMetrics := controllerutil.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameNamespaceProvisioner)
+	recordedError := false
+	recordError := func(e error) {
+		if e == nil {
+			return
+		}
+		reason := "Error"
+		if r, ok := operatorerrors.Reason(e); ok {
+			reason = r
+		}
+		reconcileMetrics.IncrementError(reason)
+		recordedError = true
+	}
+	defer func() {
+		reconcileMetrics.ObserveDuration(time.Since(start).Seconds())
+		if err != nil && !recordedError {
+			recordError(err)
+		}
+	}()
+
 	baseLogger := log.FromContext(ctx)
 	logger := baseLogger.WithValues(
 		"tenant", req.NamespacedName,
@@ -108,6 +130,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		err := fmt.Errorf("security violation: OpenBaoTenant in namespace %q cannot target namespace %q",
 			tenant.Namespace, tenant.Spec.TargetNamespace)
 
+		recordError(err)
 		logger.Error(err, "Blocking provisioning attempt")
 
 		// Update status to reflect failure
@@ -286,7 +309,7 @@ func removeFinalizer(finalizers []string, value string) []string {
 func (r *NamespaceProvisionerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoTenant{}).
-		WithEventFilter(controllerpredicates.OpenBaoTenantPredicate()).
+		WithEventFilter(controllerutil.OpenBaoTenantPredicate()).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 3,
 			RateLimiter:             workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
