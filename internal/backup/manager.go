@@ -174,28 +174,55 @@ func (m *Manager) syncBackupMetrics(ctx context.Context, logger logr.Logger, clu
 		return nil
 	}
 
-	// Reflect last known status values (best effort).
-	if cluster.Status.Backup != nil {
-		metrics.SetConsecutiveFailures(cluster.Status.Backup.ConsecutiveFailures)
+	m.syncBackupStatusMetrics(cluster, metrics)
 
-		if cluster.Status.Backup.LastAttemptTime != nil {
-			metrics.SetLastAttemptTimestamp(float64(cluster.Status.Backup.LastAttemptTime.Time.Unix()))
-		}
+	snapshot, err := m.collectBackupJobMetricsSnapshot(ctx, cluster, metrics)
+	if err != nil {
+		return err
+	}
+	m.applyBackupJobSnapshotToMetrics(cluster, metrics, snapshot)
 
-		if cluster.Status.Backup.LastBackupTime != nil {
-			metrics.SetLastSuccessTimestamp(float64(cluster.Status.Backup.LastBackupTime.Time.Unix()))
-		}
-		if cluster.Status.Backup.LastBackupSize > 0 {
-			metrics.SetLastSize(cluster.Status.Backup.LastBackupSize)
-		}
-		if cluster.Status.Backup.LastBackupDuration != "" {
-			if d, err := time.ParseDuration(cluster.Status.Backup.LastBackupDuration); err == nil {
-				metrics.SetLastDuration(d.Seconds())
-			}
-		}
+	if err := m.backfillBackupGaugesFromLatestSuccess(ctx, logger, cluster, metrics, snapshot.newestSucceeded); err != nil {
+		return err
 	}
 
-	// Determine if any backup Job is currently active/pending.
+	return nil
+}
+
+type backupJobMetricsSnapshot struct {
+	inProgress      bool
+	newestSucceeded *batchv1.Job
+	newestFailed    *batchv1.Job
+}
+
+func (m *Manager) syncBackupStatusMetrics(cluster *openbaov1alpha1.OpenBaoCluster, metrics *Metrics) {
+	// Reflect last known status values (best effort).
+	if cluster == nil || metrics == nil || cluster.Status.Backup == nil {
+		return
+	}
+
+	metrics.SetConsecutiveFailures(cluster.Status.Backup.ConsecutiveFailures)
+
+	if cluster.Status.Backup.LastAttemptTime != nil {
+		metrics.SetLastAttemptTimestamp(float64(cluster.Status.Backup.LastAttemptTime.Unix()))
+	}
+
+	if cluster.Status.Backup.LastBackupTime != nil {
+		metrics.SetLastSuccessTimestamp(float64(cluster.Status.Backup.LastBackupTime.Unix()))
+	}
+
+	if cluster.Status.Backup.LastBackupSize > 0 {
+		metrics.SetLastSize(cluster.Status.Backup.LastBackupSize)
+	}
+
+	if cluster.Status.Backup.LastBackupDuration != "" {
+		if d, err := time.ParseDuration(cluster.Status.Backup.LastBackupDuration); err == nil {
+			metrics.SetLastDuration(d.Seconds())
+		}
+	}
+}
+
+func (m *Manager) collectBackupJobMetricsSnapshot(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, metrics *Metrics) (backupJobMetricsSnapshot, error) {
 	jobList := &batchv1.JobList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
 		constants.LabelAppInstance:      cluster.Name,
@@ -203,157 +230,183 @@ func (m *Manager) syncBackupMetrics(ctx context.Context, logger logr.Logger, clu
 		constants.LabelOpenBaoCluster:   cluster.Name,
 		constants.LabelOpenBaoComponent: ComponentBackup,
 	})
+
 	if err := m.client.List(ctx, jobList,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabelsSelector{Selector: labelSelector},
 	); err != nil {
-		return fmt.Errorf("failed to list backup jobs for metrics sync: %w", err)
+		return backupJobMetricsSnapshot{}, fmt.Errorf("failed to list backup jobs for metrics sync: %w", err)
 	}
 
-	inProgress := false
-	var newestSucceeded *batchv1.Job
-	var newestFailed *batchv1.Job
+	var snapshot backupJobMetricsSnapshot
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
-		if kube.JobSucceeded(job) {
-			// Backfill success/failure counters once per observed job.
+
+		switch {
+		case kube.JobSucceeded(job):
 			if markBackupJobMetricsSeen(cluster.Namespace, cluster.Name, job.UID, "success") {
 				metrics.IncrementSuccessTotal()
 			}
-			if newestSucceeded == nil {
-				newestSucceeded = job
-			} else {
-				// Prefer completion time, fall back to creation time.
-				a := newestSucceeded.CreationTimestamp.Time
-				if newestSucceeded.Status.CompletionTime != nil {
-					a = newestSucceeded.Status.CompletionTime.Time
-				}
-				b := job.CreationTimestamp.Time
-				if job.Status.CompletionTime != nil {
-					b = job.Status.CompletionTime.Time
-				}
-				if b.After(a) {
-					newestSucceeded = job
-				}
-			}
-			continue
-		}
-		if kube.JobFailed(job) {
+			snapshot.newestSucceeded = newestBackupJob(snapshot.newestSucceeded, job)
+		case kube.JobFailed(job):
 			if markBackupJobMetricsSeen(cluster.Namespace, cluster.Name, job.UID, "failure") {
 				metrics.IncrementFailureTotal()
 			}
-			if newestFailed == nil {
-				newestFailed = job
-			} else {
-				a := newestFailed.CreationTimestamp.Time
-				if newestFailed.Status.CompletionTime != nil {
-					a = newestFailed.Status.CompletionTime.Time
-				}
-				b := job.CreationTimestamp.Time
-				if job.Status.CompletionTime != nil {
-					b = job.Status.CompletionTime.Time
-				}
-				if b.After(a) {
-					newestFailed = job
-				}
-			}
-			continue
+			snapshot.newestFailed = newestBackupJob(snapshot.newestFailed, job)
+		default:
+			snapshot.inProgress = true
 		}
-		inProgress = true
 	}
-	metrics.SetInProgress(inProgress)
+
+	return snapshot, nil
+}
+
+func newestBackupJob(a, b *batchv1.Job) *batchv1.Job {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	if backupJobTimestamp(b).After(backupJobTimestamp(a)) {
+		return b
+	}
+	return a
+}
+
+func backupJobTimestamp(job *batchv1.Job) time.Time {
+	if job == nil {
+		return time.Time{}
+	}
+	if job.Status.CompletionTime != nil {
+		return job.Status.CompletionTime.Time
+	}
+	return job.CreationTimestamp.Time
+}
+
+func (m *Manager) applyBackupJobSnapshotToMetrics(cluster *openbaov1alpha1.OpenBaoCluster, metrics *Metrics, snapshot backupJobMetricsSnapshot) {
+	if metrics == nil {
+		return
+	}
+
+	metrics.SetInProgress(snapshot.inProgress)
 
 	// Set state for dashboards (state timeline panels).
 	// Priority: InProgress > most recent completed job > status-derived last known state > None.
-	if inProgress {
+	if snapshot.inProgress {
 		metrics.SetState(3)
-	} else if newestSucceeded != nil || newestFailed != nil {
-		latestOutcome := 0.0
-		latestTime := time.Time{}
-
-		if newestSucceeded != nil {
-			t := newestSucceeded.CreationTimestamp.Time
-			if newestSucceeded.Status.CompletionTime != nil {
-				t = newestSucceeded.Status.CompletionTime.Time
-			}
-			latestOutcome = 1
-			latestTime = t
-		}
-		if newestFailed != nil {
-			t := newestFailed.CreationTimestamp.Time
-			if newestFailed.Status.CompletionTime != nil {
-				t = newestFailed.Status.CompletionTime.Time
-			}
-			if latestTime.IsZero() || t.After(latestTime) {
-				latestOutcome = 2
-				latestTime = t
-			}
-		}
-
-		if !latestTime.IsZero() {
-			metrics.SetLastAttemptTimestamp(float64(latestTime.Unix()))
-		}
-		metrics.SetState(latestOutcome)
-	} else if cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupTime != nil {
-		metrics.SetState(1)
-	} else if cluster.Status.Backup != nil && cluster.Status.Backup.ConsecutiveFailures > 0 {
-		metrics.SetState(2)
-	} else {
-		metrics.SetState(0)
+		return
 	}
 
-	// Backfill missing last-* gauges from the most recent successful job so dashboards remain stable
-	// even when Status writes are temporarily blocked by SSA ownership conflicts.
-	if newestSucceeded != nil {
-		if cluster.Status.Backup == nil || cluster.Status.Backup.LastBackupTime == nil {
-			if newestSucceeded.Status.CompletionTime != nil {
-				metrics.SetLastSuccessTimestamp(float64(newestSucceeded.Status.CompletionTime.Time.Unix()))
-			} else {
-				metrics.SetLastSuccessTimestamp(float64(newestSucceeded.CreationTimestamp.Time.Unix()))
+	if outcome, at, ok := latestBackupOutcome(snapshot); ok {
+		if !at.IsZero() {
+			metrics.SetLastAttemptTimestamp(float64(at.Unix()))
+		}
+		metrics.SetState(outcome)
+		return
+	}
+
+	if cluster != nil && cluster.Status.Backup != nil {
+		if cluster.Status.Backup.LastBackupTime != nil {
+			metrics.SetState(1)
+			return
+		}
+		if cluster.Status.Backup.ConsecutiveFailures > 0 {
+			metrics.SetState(2)
+			return
+		}
+	}
+
+	metrics.SetState(0)
+}
+
+func latestBackupOutcome(snapshot backupJobMetricsSnapshot) (outcome float64, at time.Time, ok bool) {
+	if snapshot.newestSucceeded == nil && snapshot.newestFailed == nil {
+		return 0, time.Time{}, false
+	}
+
+	if snapshot.newestSucceeded != nil {
+		ok = true
+		outcome = 1
+		at = backupJobTimestamp(snapshot.newestSucceeded)
+	}
+	if snapshot.newestFailed != nil {
+		t := backupJobTimestamp(snapshot.newestFailed)
+		if !ok || t.After(at) {
+			ok = true
+			outcome = 2
+			at = t
+		}
+	}
+
+	return outcome, at, ok
+}
+
+func (m *Manager) backfillBackupGaugesFromLatestSuccess(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *Metrics, newestSucceeded *batchv1.Job) error {
+	if metrics == nil || newestSucceeded == nil || cluster == nil || cluster.Status.Backup == nil {
+		return nil
+	}
+
+	statusChanged := false
+
+	if cluster.Status.Backup.LastBackupTime == nil {
+		metrics.SetLastSuccessTimestamp(float64(backupJobTimestamp(newestSucceeded).Unix()))
+	}
+
+	if duration, ok := jobDuration(newestSucceeded); ok {
+		metrics.SetLastDuration(duration.Seconds())
+		if cluster.Status.Backup.LastBackupDuration == "" {
+			cluster.Status.Backup.LastBackupDuration = duration.String()
+			statusChanged = true
+		}
+	}
+
+	if key := backupJobKey(newestSucceeded); key != "" && shouldReadBackupSizeFromObjectStorage(cluster) {
+		size, err := m.readBackupSizeFromObjectStorage(ctx, cluster, key)
+		if err != nil {
+			logger.V(1).Info("Failed to read backup size from object storage", "backupKey", key, "error", err.Error())
+		} else if size > 0 {
+			metrics.SetLastSize(size)
+			if cluster.Status.Backup.LastBackupSize == 0 {
+				cluster.Status.Backup.LastBackupSize = size
+				statusChanged = true
 			}
 		}
+	}
 
-		var duration time.Duration
-		if newestSucceeded.Status.StartTime != nil && newestSucceeded.Status.CompletionTime != nil {
-			duration = newestSucceeded.Status.CompletionTime.Sub(newestSucceeded.Status.StartTime.Time)
-		}
-
-		if duration > 0 {
-			metrics.SetLastDuration(duration.Seconds())
-			if cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupDuration == "" {
-				cluster.Status.Backup.LastBackupDuration = duration.String()
-			}
-		}
-
-		backupKey := ""
-		if newestSucceeded.Annotations != nil {
-			backupKey = newestSucceeded.Annotations["openbao.org/backup-key"]
-		}
-		if backupKey != "" &&
-			cluster.Spec.Backup != nil &&
-			cluster.Spec.Backup.Target.RoleARN == "" &&
-			cluster.Spec.Backup.Target.CredentialsSecretRef != nil &&
-			cluster.Spec.Backup.Target.CredentialsSecretRef.Name != "" {
-			size, err := m.readBackupSizeFromObjectStorage(ctx, cluster, backupKey)
-			if err != nil {
-				logger.V(1).Info("Failed to read backup size from object storage", "backupKey", backupKey, "error", err.Error())
-			} else if size > 0 {
-				metrics.SetLastSize(size)
-				if cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupSize == 0 {
-					cluster.Status.Backup.LastBackupSize = size
-				}
-			}
-		}
-
-		// Persist best-effort backfilled status fields.
-		if cluster.Status.Backup != nil && (cluster.Status.Backup.LastBackupDuration != "" || cluster.Status.Backup.LastBackupSize > 0) {
-			if err := m.patchStatusSSA(ctx, cluster); err != nil {
-				return fmt.Errorf("failed to patch backup status after metrics backfill: %w", err)
-			}
+	if statusChanged {
+		if err := m.patchStatusSSA(ctx, cluster); err != nil {
+			return fmt.Errorf("failed to patch backup status after metrics backfill: %w", err)
 		}
 	}
 
 	return nil
+}
+
+func jobDuration(job *batchv1.Job) (time.Duration, bool) {
+	if job == nil || job.Status.StartTime == nil || job.Status.CompletionTime == nil {
+		return 0, false
+	}
+	d := job.Status.CompletionTime.Sub(job.Status.StartTime.Time)
+	if d <= 0 {
+		return 0, false
+	}
+	return d, true
+}
+
+func backupJobKey(job *batchv1.Job) string {
+	if job == nil || job.Annotations == nil {
+		return ""
+	}
+	return job.Annotations["openbao.org/backup-key"]
+}
+
+func shouldReadBackupSizeFromObjectStorage(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return cluster != nil &&
+		cluster.Spec.Backup != nil &&
+		cluster.Spec.Backup.Target.RoleARN == "" &&
+		cluster.Spec.Backup.Target.CredentialsSecretRef != nil &&
+		cluster.Spec.Backup.Target.CredentialsSecretRef.Name != ""
 }
 
 func (m *Manager) readBackupSizeFromObjectStorage(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, backupKey string) (int64, error) {

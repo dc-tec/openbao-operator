@@ -16,4 +16,3 @@ func markBackupJobMetricsSeen(namespace, name string, jobUID types.UID, outcome 
 	_, loaded := backupJobMetricsSeen.LoadOrStore(backupJobMetricsSeenKey(namespace, name, jobUID, outcome), struct{}{})
 	return !loaded
 }
-
