@@ -30,7 +30,7 @@ func (m *Manager) detectUpgradeState(logger logr.Logger, cluster *openbaov1alpha
 				return false, true
 			}
 
-			if _, requested := rollingRetryToken(cluster); !requested {
+			if !rollingRetryToken(cluster) {
 				logger.Info("Upgrade is in failed state; waiting for manual retry annotation",
 					"failureReason", cluster.Status.Upgrade.LastErrorReason,
 					"failureMessage", cluster.Status.Upgrade.LastErrorMessage,

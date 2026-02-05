@@ -21,13 +21,15 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
+const testNamespace = "ns1"
+
 func TestStepDownLeader_DoesNotTimeoutFromUpgradeStart(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
 	_ = batchv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	ns := "ns1"
+	ns := testNamespace
 	name := "c1"
 	podName := name + "-0"
 
@@ -78,7 +80,7 @@ func TestStepDownLeader_TimesOutBasedOnJobAge(t *testing.T) {
 	_ = batchv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	ns := "ns1"
+	ns := testNamespace
 	name := "c1"
 	podName := name + "-0"
 
@@ -136,7 +138,7 @@ func TestStepDownLeader_DeletesStaleSucceededJobWhenTargetStillLeader(t *testing
 	_ = batchv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	ns := "ns1"
+	ns := testNamespace
 	name := "c1"
 	podName := name + "-0"
 
@@ -221,7 +223,7 @@ func TestStepDownLeader_VerifiesTransferViaAPIWhenLabelsLag(t *testing.T) {
 	_ = batchv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	ns := "ns1"
+	ns := testNamespace
 	name := "c1"
 	podName := name + "-0"
 
@@ -306,7 +308,7 @@ func TestStepDownLeader_SkipsJobWhenTargetPodIsNotLeader(t *testing.T) {
 	_ = batchv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	ns := "ns1"
+	ns := testNamespace
 	name := "c1"
 	podName := name + "-1"
 
@@ -365,7 +367,7 @@ func TestWaitForPodRevisionUpdated_WaitsUntilRevisionMatches(t *testing.T) {
 	_ = corev1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	ns := "ns1"
+	ns := testNamespace
 	name := "c1"
 	podName := name + "-0"
 	startedAt := metav1.Now()
@@ -422,7 +424,7 @@ func TestWaitForPodRevisionUpdated_SucceedsWhenRevisionMatches(t *testing.T) {
 	_ = corev1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	ns := "ns1"
+	ns := testNamespace
 	name := "c1"
 	podName := name + "-0"
 	startedAt := metav1.Now()

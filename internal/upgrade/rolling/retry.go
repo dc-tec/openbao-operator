@@ -16,13 +16,13 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
-func rollingRetryToken(cluster *openbaov1alpha1.OpenBaoCluster) (string, bool) {
+func rollingRetryToken(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 	if cluster == nil || cluster.Annotations == nil {
-		return "", false
+		return false
 	}
 
 	value := strings.TrimSpace(cluster.Annotations[constants.AnnotationRetryRollingUpgrade])
-	return value, value != ""
+	return value != ""
 }
 
 func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
@@ -38,8 +38,7 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 		return false, nil
 	}
 
-	_, requested := rollingRetryToken(cluster)
-	if !requested {
+	if !rollingRetryToken(cluster) {
 		return false, nil
 	}
 
