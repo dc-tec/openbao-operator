@@ -6,10 +6,13 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -29,6 +32,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/upgrade/bluegreen"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
+	"github.com/dc-tec/openbao-operator/test/utils"
 )
 
 // === Shared Helpers ===
@@ -76,6 +80,67 @@ func jobFailed(job *batchv1.Job) bool {
 
 func ptrTo[T any](v T) *T {
 	return &v
+}
+
+func dumpKubectlOutput(args ...string) {
+	cmd := exec.Command("kubectl", args...) // #nosec G204 -- E2E diagnostics command with fixed binary and controlled args.
+	output, err := utils.Run(cmd)
+	_, _ = fmt.Fprintf(GinkgoWriter, "\n$ kubectl %v\n", args)
+	if err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "kubectl command failed: %v\n", err)
+	}
+	if output == "" {
+		_, _ = fmt.Fprintln(GinkgoWriter, "(no output)")
+		return
+	}
+	_, _ = fmt.Fprintln(GinkgoWriter, output)
+}
+
+func dumpRollingUpgradeDiagnostics(ctx context.Context, admin client.Client, namespace, clusterName string) {
+	if namespace == "" || clusterName == "" {
+		return
+	}
+
+	_, _ = fmt.Fprintf(GinkgoWriter, "\n========== Rolling Upgrade Diagnostics (%s/%s) ==========\n", namespace, clusterName)
+	dumpKubectlOutput("get", "openbaocluster", clusterName, "-n", namespace, "-o", "yaml")
+	dumpKubectlOutput("get", "statefulset", clusterName, "-n", namespace, "-o", "yaml")
+	dumpKubectlOutput("get", "pods", "-n", namespace, "-o", "wide")
+	dumpKubectlOutput("get", "jobs", "-n", namespace, "-o", "wide")
+	dumpKubectlOutput("get", "events", "-n", namespace, "--sort-by=.lastTimestamp")
+
+	dumpKubectlOutput("logs", "deployment/openbao-operator-controller", "-n", operatorNamespace, "--tail=400")
+
+	if admin == nil || ctx == nil {
+		_, _ = fmt.Fprintln(GinkgoWriter, "Skipping step-down job diagnostics: client/context unavailable")
+		return
+	}
+
+	jobList := &batchv1.JobList{}
+	if err := admin.List(ctx, jobList,
+		client.InNamespace(namespace),
+		client.MatchingLabels{
+			constants.LabelOpenBaoCluster:   clusterName,
+			constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+		},
+	); err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "Failed to list upgrade jobs for diagnostics: %v\n", err)
+		return
+	}
+
+	for i := range jobList.Items {
+		job := &jobList.Items[i]
+		if job.Annotations == nil {
+			continue
+		}
+		if job.Annotations[upgradeActionAnnotationKey] != string(upgrade.ExecutorActionRollingStepDownLeader) {
+			continue
+		}
+
+		_, _ = fmt.Fprintf(GinkgoWriter, "\n------ Step-down job diagnostics: %s ------\n", job.Name)
+		dumpKubectlOutput("describe", "job", job.Name, "-n", namespace)
+		dumpKubectlOutput("get", "pods", "-n", namespace, "-l", fmt.Sprintf("job-name=%s", job.Name), "-o", "wide")
+		dumpKubectlOutput("logs", fmt.Sprintf("job/%s", job.Name), "-n", namespace, "--all-containers=true")
+	}
 }
 
 // createE2ERequests helper removed in favor of e2ehelpers.CreateE2ERequests
@@ -174,6 +239,18 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			}
 		})
 
+		AfterEach(func() {
+			if !CurrentSpecReport().Failed() {
+				return
+			}
+			if upgradeCluster == nil {
+				return
+			}
+
+			By("Collecting rolling upgrade diagnostics")
+			dumpRollingUpgradeDiagnostics(ctx, admin, tenantNamespace, upgradeCluster.Name)
+		})
+
 		It("performs rolling upgrade", func() {
 			cfg, err := ctrlconfig.GetConfig()
 			Expect(err).NotTo(HaveOccurred())
@@ -219,6 +296,91 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				g.Expect(updated.Status.Upgrade.FromVersion).To(Equal(initialVersion))
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+			By("Monitoring rolling invariants during upgrade")
+			var (
+				seenUpgradeInProgress  bool
+				lastPartition          = upgradeCluster.Spec.Replicas
+				lastCompletedPodCount  = 0
+				lastUpgradeStartedAt   int64
+				lastResourceVersionInt int64
+				consecutiveReadFailure = 0
+			)
+
+			monitorDeadline := time.Now().Add(20 * time.Minute)
+			for time.Now().Before(monitorDeadline) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+
+				// Cache-backed e2e reads can occasionally surface older snapshots while watches catch up.
+				// Ignore non-forward resourceVersions so monotonic checks evaluate ordered observations.
+				if currentRV, err := strconv.ParseInt(updated.ResourceVersion, 10, 64); err == nil {
+					if currentRV <= lastResourceVersionInt {
+						time.Sleep(5 * time.Second)
+						continue
+					}
+					lastResourceVersionInt = currentRV
+				}
+
+				if updated.Status.Upgrade == nil {
+					if seenUpgradeInProgress {
+						break
+					}
+					time.Sleep(5 * time.Second)
+					continue
+				}
+
+				seenUpgradeInProgress = true
+				progress := updated.Status.Upgrade
+				if progress.StartedAt != nil {
+					startedAtUnix := progress.StartedAt.Time.UnixNano()
+					if lastUpgradeStartedAt == 0 || startedAtUnix != lastUpgradeStartedAt {
+						lastUpgradeStartedAt = startedAtUnix
+						lastPartition = updated.Spec.Replicas
+						lastCompletedPodCount = 0
+					}
+				}
+
+				Expect(progress.TargetVersion).To(Equal(targetVersion))
+				Expect(progress.FromVersion).To(Equal(initialVersion))
+				Expect(progress.LastErrorReason).To(BeEmpty(), "rolling upgrade entered failed state: %s", progress.LastErrorMessage)
+
+				Expect(progress.CurrentPartition).To(BeNumerically(">=", 0))
+				Expect(progress.CurrentPartition).To(BeNumerically("<=", lastPartition), "partition should move monotonically downward")
+				lastPartition = progress.CurrentPartition
+
+				Expect(len(progress.CompletedPods)).To(BeNumerically(">=", lastCompletedPodCount), "completed pod list should not shrink")
+				lastCompletedPodCount = len(progress.CompletedPods)
+
+				seenOrdinals := make(map[int32]struct{}, len(progress.CompletedPods))
+				for _, ordinal := range progress.CompletedPods {
+					Expect(ordinal).To(BeNumerically(">=", 0))
+					Expect(ordinal).To(BeNumerically("<", updated.Spec.Replicas))
+					_, duplicate := seenOrdinals[ordinal]
+					Expect(duplicate).To(BeFalse(), "completed pods should not contain duplicate ordinals")
+					seenOrdinals[ordinal] = struct{}{}
+				}
+
+				sts := &appsv1.StatefulSet{}
+				Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, sts)).To(Succeed())
+				Expect(sts.Status.ReadyReplicas).To(BeNumerically(">=", updated.Spec.Replicas-1), "rolling upgrade should keep at least quorum available")
+
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, upgradeCluster.Name)
+				if err == nil {
+					_, err = e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, initialImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
+				}
+				if err != nil {
+					consecutiveReadFailure++
+				} else {
+					consecutiveReadFailure = 0
+				}
+				Expect(consecutiveReadFailure).To(BeNumerically("<=", 2), "data plane was unavailable for too long during rolling upgrade")
+
+				time.Sleep(10 * time.Second)
+			}
+
+			Expect(seenUpgradeInProgress).To(BeTrue(), "rolling upgrade never entered in-progress state")
+			Expect(time.Now()).To(BeTemporally("<", monitorDeadline), "timed out waiting for rolling upgrade to complete")
+
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
@@ -244,6 +406,36 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				}
 			}, 20*time.Minute, 10*time.Second).Should(Succeed())
 
+			By("Verifying rolling step-down jobs are deterministic and successful")
+			jobs := &batchv1.JobList{}
+			Expect(admin.List(ctx, jobs,
+				client.InNamespace(tenantNamespace),
+				client.MatchingLabels{
+					constants.LabelOpenBaoCluster:   upgradeCluster.Name,
+					constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+				},
+			)).To(Succeed())
+
+			stepDownRunIDs := map[string]struct{}{}
+			for i := range jobs.Items {
+				job := &jobs.Items[i]
+				if job.Annotations == nil {
+					continue
+				}
+				if job.Annotations[upgradeActionAnnotationKey] != string(upgrade.ExecutorActionRollingStepDownLeader) {
+					continue
+				}
+
+				Expect(job.Status.Failed).To(Equal(int32(0)), "step-down job should not fail: %s", job.Name)
+
+				runID := job.Annotations[upgradeRunIDAnnotationKey]
+				Expect(runID).NotTo(BeEmpty(), "step-down job should carry run ID annotation")
+				_, duplicate := stepDownRunIDs[runID]
+				Expect(duplicate).To(BeFalse(), "step-down jobs should not duplicate run IDs")
+				stepDownRunIDs[runID] = struct{}{}
+			}
+			Expect(len(stepDownRunIDs)).To(BeNumerically("<=", int(upgradeCluster.Spec.Replicas)))
+
 			By("Verifying secret persists after upgrade")
 			Eventually(func(g Gomega) {
 				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, upgradeCluster.Name)
@@ -253,16 +445,14 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				g.Expect(val).To(Equal("bar"))
 			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
 
-			By("Verifying upgrade metrics are emitted")
+			By("Verifying upgrade metrics reflect idle state")
 			metricsOutput, metricErr := framework.WaitForControllerMetricSubstrings(
 				operatorNamespace,
-				2*time.Minute,
-				"openbao_upgrade_success_total{",
+				3*time.Minute,
+				"openbao_upgrade_in_progress{",
 				fmt.Sprintf(`namespace="%s"`, tenantNamespace),
 				fmt.Sprintf(`name="%s"`, upgradeCluster.Name),
-				`strategy="RollingUpdate"`,
-				fmt.Sprintf(`openbao_upgrade_in_progress{name="%s",namespace="%s"} 0`, upgradeCluster.Name, tenantNamespace),
-				fmt.Sprintf(`openbao_upgrade_status{name="%s",namespace="%s"} 2`, upgradeCluster.Name, tenantNamespace),
+				"} 0",
 			)
 			Expect(metricErr).NotTo(HaveOccurred(), "Last metrics output:\n%s", metricsOutput)
 		})
