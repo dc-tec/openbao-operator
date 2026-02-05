@@ -1,38 +1,52 @@
 # OpenBao Operator Grafana Dashboard
 
-This directory contains a sample Grafana dashboard for monitoring OpenBao Operator metrics.
+This directory contains sample Grafana dashboards for monitoring OpenBao Operator metrics.
 
-## Dashboard Overview
+## Dashboards
 
-The dashboard provides monitoring of OpenBao Operator operations across several key areas:
+The dashboards provide monitoring of OpenBao Operator operations across several key areas:
 
-1. **Overview/Summary** - Key metrics at a glance (upgrade status, backup status, ready replicas)
-2. **Reconciliation Performance** - Duration and error rates for reconciliation operations
-3. **Upgrade Operations** - Upgrade duration, step-down operations, and per-pod upgrade metrics
-4. **Backup Operations** - Backup duration, size, success/failure rates, and retention metrics
-5. **TLS/Certificates** - Certificate expiry and rotation metrics
-6. **Cluster Health** - Ready replicas and cluster phase
+- `dashboards/overview.json` - Key cluster signals at a glance (upgrade, backup, replicas, TLS)
+- `dashboards/backup-restore.json` - Backups and restore operations
+- `dashboards/upgrades.json` - Upgrade progress and upgrade performance
+- `optional/controller-runtime/dashboard.json` - Operator controller-runtime health signals (workqueues, reconcile metrics) (optional)
+
+> **Note**: `dashboard.json` is a monolithic dashboard kept for backwards compatibility.
 
 ## Installation
 
 ### Option 1: Import via Grafana UI
 
 1. Open Grafana and navigate to **Dashboards** → **Import**
-2. Upload the `dashboard.json` file or paste its contents
+2. Upload one of the dashboards under `dashboards/` (or `dashboard.json` for the monolithic view)
 3. Select your Prometheus data source
 4. Click **Import**
 
 ### Option 2: Deploy via ConfigMap (Kubernetes)
 
+Apply the bundled dashboards via Kustomize (recommended):
+
 ```bash
-kubectl create configmap openbao-operator-dashboard \
-  --from-file=dashboard.json=config/grafana/dashboard.json \
-  -n grafana
+kubectl apply -k config/grafana
+```
+
+To deploy the optional controller-runtime dashboard:
+
+```bash
+kubectl apply -k config/grafana/optional/controller-runtime
+```
+
+Or create a ConfigMap manually:
+
+```bash
+kubectl create configmap openbao-operator-grafana-dashboards \
+  --from-file=config/grafana/dashboards/ \
+  -n grafana --dry-run=client -o yaml | kubectl apply -f -
 
 # If using Grafana Operator, label it appropriately
-kubectl label configmap openbao-operator-dashboard \
+kubectl label configmap openbao-operator-grafana-dashboards \
   grafana_dashboard=1 \
-  -n grafana
+  -n grafana --overwrite
 ```
 
 ## Configuration
@@ -62,6 +76,8 @@ The following metrics are implemented and will display data:
   - `openbao_upgrade_pods_total`
 
 - **Backup Metrics:**
+  - `openbao_backup_state`
+  - `openbao_backup_last_attempt_timestamp`
   - `openbao_backup_last_success_timestamp`
   - `openbao_backup_last_duration_seconds`
   - `openbao_backup_last_size_bytes`
@@ -70,6 +86,13 @@ The following metrics are implemented and will display data:
   - `openbao_backup_consecutive_failures`
   - `openbao_backup_in_progress`
   - `openbao_backup_retention_deleted_total`
+
+- **Restore Metrics:**
+  - `openbao_restore_state`
+  - `openbao_restore_total`
+  - `openbao_restore_success_total`
+  - `openbao_restore_failure_total`
+  - `openbao_restore_duration_seconds`
   - `openbao_cluster_ready_replicas`
   - `openbao_cluster_phase`
   - `openbao_reconcile_duration_seconds`
@@ -119,5 +142,3 @@ If certain metrics show "No data", they may not be implemented yet. Refer to the
 - [Architecture Document](../../docs/architecture.md) - Section 5 (Observability & Metrics)
 - [Prometheus Integration](../prometheus/) - ServiceMonitor configuration
 - [Grafana Dashboard Documentation](https://grafana.com/docs/grafana/latest/dashboards/)
-
-
