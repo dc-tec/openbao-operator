@@ -14,6 +14,8 @@ const (
 	AnnotationMaintenanceAllowed = "openbao.org/maintenance-allowed"
 	// AnnotationRestartAt is the annotation key used to trigger a rolling restart via Pod template updates.
 	AnnotationRestartAt = "openbao.org/restart-at"
+	// AnnotationRetryRollingUpgrade is a manual trigger to retry a failed rolling upgrade.
+	AnnotationRetryRollingUpgrade = "openbao.org/retry-rolling-upgrade"
 
 	// AnnotationLastDevelopmentWarning is the last time the operator emitted a Development profile warning event.
 	AnnotationLastDevelopmentWarning = "openbao.org/last-development-warning"

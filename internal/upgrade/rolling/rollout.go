@@ -7,8 +7,10 @@ import (
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -71,6 +73,15 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 		return false, fmt.Errorf("failed to update partition: %w", err)
 	}
 
+	// Check that the target pod has actually rolled to StatefulSet UpdateRevision.
+	revisionUpdated, err := m.waitForPodRevisionUpdated(ctx, logger, cluster, podName)
+	if err != nil {
+		return false, err
+	}
+	if !revisionUpdated {
+		return false, nil // Requeue
+	}
+
 	// Check pod readiness (level-triggered)
 	podReady, err := m.waitForPodReady(ctx, logger, cluster, podName)
 	if err != nil {
@@ -92,7 +103,7 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 	}
 
 	// Update progress
-	upgrade.SetUpgradeProgress(&cluster.Status, newPartition, targetOrdinal, cluster.Spec.Replicas, cluster.Generation)
+	upgrade.SetUpgradeProgress(&cluster.Status, newPartition, targetOrdinal)
 
 	// Record pod upgrade duration
 	podDuration := time.Since(podStartTime).Seconds()
@@ -158,8 +169,36 @@ func (m *Manager) currentLeaderPodByLabel(ctx context.Context, cluster *openbaov
 //   - (false, nil) if step-down is in progress (caller should requeue)
 //   - (false, error) if step-down failed fatally
 func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string, metrics *upgrade.Metrics) (bool, error) {
-	// Record step-down attempt (only on first call, tracked by LastStepDownTime)
-	if cluster.Status.Upgrade == nil || cluster.Status.Upgrade.LastStepDownTime == nil {
+	if cluster.Status.Upgrade == nil {
+		return false, fmt.Errorf("upgrade state is nil")
+	}
+
+	jobName := upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
+	jobKey := types.NamespacedName{Namespace: cluster.Namespace, Name: jobName}
+
+	stepDownJob := &batchv1.Job{}
+	jobExists := true
+	if err := m.client.Get(ctx, jobKey, stepDownJob); err != nil {
+		if apierrors.IsNotFound(err) {
+			jobExists = false
+		} else {
+			return false, fmt.Errorf("failed to get step-down Job %s/%s: %w", cluster.Namespace, jobName, err)
+		}
+	}
+
+	// Record step-down attempt only once per pod by keying off Job existence.
+	// This avoids inflating metrics and audit events during requeues.
+	if !jobExists {
+		targetIsLeader, err := m.isTargetPodLeader(ctx, cluster, podName)
+		if err != nil {
+			logger.V(1).Info("Unable to confirm target pod leadership before step-down; will retry", "pod", podName, "error", err)
+			return false, nil // Requeue
+		}
+		if !targetIsLeader {
+			logger.V(1).Info("Skipping leader step-down because target pod is not leader", "pod", podName)
+			return true, nil
+		}
+
 		metrics.IncrementStepDownTotal()
 
 		// Audit log: Leader step-down operation
@@ -170,18 +209,6 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 			"target_version":    cluster.Status.Upgrade.TargetVersion,
 			"from_version":      cluster.Status.Upgrade.FromVersion,
 		})
-	}
-
-	// Check if we've exceeded the timeout based on upgrade start time
-	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.StartedAt != nil {
-		elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
-		if elapsed > upgrade.DefaultStepDownTimeout {
-			metrics.IncrementStepDownFailures()
-			upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonStepDownTimeout,
-				fmt.Sprintf(upgrade.MessageStepDownTimeout, upgrade.DefaultStepDownTimeout),
-				cluster.Generation)
-			return false, fmt.Errorf("step-down timeout: exceeded %v", upgrade.DefaultStepDownTimeout)
-		}
 	}
 
 	// Ensure step-down Job exists/is running
@@ -207,11 +234,26 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		return false, fmt.Errorf("step-down Job %s failed", result.Name)
 	}
 	if result.Running {
+		// Time out only while the step-down Job is actively running.
+		// A completed Job may still be observed on subsequent reconciles while
+		// pod labels/API leadership settle; that must not be treated as timeout.
+		if jobExists && !stepDownJob.CreationTimestamp.IsZero() {
+			elapsed := time.Since(stepDownJob.CreationTimestamp.Time)
+			if elapsed > upgrade.DefaultStepDownTimeout {
+				metrics.IncrementStepDownFailures()
+				upgrade.SetUpgradeFailed(
+					&cluster.Status,
+					upgrade.ReasonStepDownTimeout,
+					fmt.Sprintf(upgrade.MessageStepDownTimeout, podName),
+				)
+				return false, fmt.Errorf("step-down timeout for pod %s: exceeded %v", podName, upgrade.DefaultStepDownTimeout)
+			}
+		}
 		logger.V(1).Info("Step-down job still running", "pod", podName)
 		return false, nil // Requeue
 	}
 
-	// Job succeeded - check if leadership has transferred
+	// Job succeeded - check if the pod we're about to restart is no longer leader.
 	pod := &corev1.Pod{}
 	if err := m.client.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
@@ -238,45 +280,86 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		return true, nil
 	}
 
-	// If the previous leader label is missing, treat transfer as complete if we
-	// can observe a different pod labeled as leader.
-	if !present {
-		podList := &corev1.PodList{}
-		if err := m.client.List(ctx, podList,
-			client.InNamespace(cluster.Namespace),
-			client.MatchingLabels(map[string]string{
-				constants.LabelAppInstance: cluster.Name,
-				constants.LabelAppName:     constants.LabelValueAppNameOpenBao,
-			}),
-		); err != nil {
-			logger.V(1).Info("Error listing pods while waiting for leader transfer", "error", err)
+	// Labels can lag behind reality; confirm leadership via the OpenBao API.
+	caCert, err := m.getClusterCACert(ctx, cluster)
+	if err != nil {
+		logger.V(1).Info("CA certificate not available yet while checking leader transfer", "error", err)
+		return false, nil // Requeue
+	}
+
+	apiClient, err := m.newPodClient(cluster, podName, caCert)
+	if err != nil {
+		if operatorerrors.IsTransientConnection(err) {
+			logger.V(1).Info("Transient connection error creating client while checking leader transfer", "error", err)
 			return false, nil // Requeue
 		}
+		return false, fmt.Errorf("failed to create OpenBao client while checking leader transfer: %w", err)
+	}
 
-		for i := range podList.Items {
-			candidate := &podList.Items[i]
-			if candidate.Name == podName {
-				continue
+	isLeader, err := apiClient.IsLeader(ctx)
+	if err != nil {
+		logger.V(1).Info("Leader check failed after step-down; will retry", "pod", podName, "error", err)
+		return false, nil // Requeue
+	}
+	if !isLeader {
+		logger.Info("Leadership transferred successfully (verified via API)", "previousLeader", podName)
+		upgrade.SetStepDownPerformed(&cluster.Status)
+		logging.LogAuditEvent(logger, "StepDownCompleted", map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"pod":               podName,
+		})
+		return true, nil
+	}
+
+	// The step-down Job can succeed while leadership quickly returns to the same pod.
+	// If that persisted longer than the step-down timeout window, recycle the Job so
+	// the next reconcile performs another step-down attempt for this pod.
+	if jobExists && !stepDownJob.CreationTimestamp.IsZero() {
+		elapsed := time.Since(stepDownJob.CreationTimestamp.Time)
+		if elapsed > upgrade.DefaultStepDownTimeout {
+			// Use foreground deletion so the old Job pod is removed before a new
+			// retry Job with the same deterministic name is created.
+			propagationPolicy := metav1.DeletePropagationForeground
+			if err := m.client.Delete(
+				ctx,
+				stepDownJob,
+				&client.DeleteOptions{PropagationPolicy: &propagationPolicy},
+			); err != nil && !apierrors.IsNotFound(err) {
+				return false, fmt.Errorf("failed to delete stale step-down Job %s/%s for retry: %w", cluster.Namespace, stepDownJob.Name, err)
 			}
-			leader, leaderPresent, err := openbaoapi.ParseBoolLabel(candidate.Labels, openbaoapi.LabelActive)
-			if err != nil || !leaderPresent {
-				continue
-			}
-			if leader {
-				logger.Info("Leadership transferred successfully", "previousLeader", podName, "newLeader", candidate.Name)
-				upgrade.SetStepDownPerformed(&cluster.Status)
-				logging.LogAuditEvent(logger, "StepDownCompleted", map[string]string{
-					"cluster_namespace": cluster.Namespace,
-					"cluster_name":      cluster.Name,
-					"pod":               podName,
-				})
-				return true, nil
-			}
+			logger.Info("Step-down job succeeded but target pod is still leader; deleting job to retry",
+				"pod", podName,
+				"job", stepDownJob.Name,
+				"elapsed", elapsed)
+			return false, nil
 		}
 	}
 
 	logger.V(1).Info("Waiting for leadership transfer", "pod", podName)
 	return false, nil // Requeue
+}
+
+func (m *Manager) isTargetPodLeader(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
+	caCert, err := m.getClusterCACert(ctx, cluster)
+	if err != nil {
+		return false, fmt.Errorf("failed to get CA certificate for leader check: %w", err)
+	}
+
+	apiClient, err := m.newPodClient(cluster, podName, caCert)
+	if err != nil {
+		if operatorerrors.IsTransientConnection(err) {
+			return false, err
+		}
+		return false, fmt.Errorf("failed to create OpenBao client for leader check: %w", err)
+	}
+
+	isLeader, err := apiClient.IsLeader(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check leadership for pod %s: %w", podName, err)
+	}
+
+	return isLeader, nil
 }
 
 // setStatefulSetPartition updates the StatefulSet's partition value using strategic merge patch.
@@ -313,6 +396,61 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 	return nil
 }
 
+// waitForPodRevisionUpdated checks whether a pod has rolled to the StatefulSet update revision.
+// Returns:
+//   - (true, nil) if the pod revision matches StatefulSet UpdateRevision
+//   - (false, nil) if not updated yet (caller should requeue)
+//   - (false, error) if timeout exceeded or fatal error
+func (m *Manager) waitForPodRevisionUpdated(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
+	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.StartedAt != nil {
+		elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
+		if elapsed > upgrade.DefaultPodReadyTimeout {
+			upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonPodNotReady,
+				fmt.Sprintf(upgrade.MessagePodNotReady, podName, upgrade.DefaultPodReadyTimeout))
+			return false, fmt.Errorf("pod %s did not roll to update revision within %v", podName, upgrade.DefaultPodReadyTimeout)
+		}
+	}
+
+	sts := &appsv1.StatefulSet{}
+	stsKey := types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cluster.Name,
+	}
+	if err := m.client.Get(ctx, stsKey, sts); err != nil {
+		return false, fmt.Errorf("failed to get StatefulSet while checking pod revision: %w", err)
+	}
+
+	targetRevision := sts.Status.UpdateRevision
+	if targetRevision == "" {
+		logger.V(1).Info("StatefulSet update revision not set yet; waiting")
+		return false, nil
+	}
+
+	pod := &corev1.Pod{}
+	if err := m.client.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      podName,
+	}, pod); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.V(1).Info("Pod not found yet while waiting for revision update", "pod", podName)
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get pod %s while checking revision: %w", podName, err)
+	}
+
+	podRevision := pod.Labels[appsv1.StatefulSetRevisionLabel]
+	if podRevision != targetRevision {
+		logger.V(1).Info("Waiting for pod revision update",
+			"pod", podName,
+			"currentRevision", podRevision,
+			"targetRevision", targetRevision)
+		return false, nil
+	}
+
+	logger.Info("Pod revision updated", "pod", podName, "revision", targetRevision)
+	return true, nil
+}
+
 // waitForPodReady checks if a pod is Ready using level-triggered semantics.
 // Instead of blocking, it checks the condition once and returns the result.
 //
@@ -326,8 +464,7 @@ func (m *Manager) waitForPodReady(ctx context.Context, logger logr.Logger, clust
 		elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
 		if elapsed > upgrade.DefaultPodReadyTimeout {
 			upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonPodNotReady,
-				fmt.Sprintf(upgrade.MessagePodNotReady, podName, upgrade.DefaultPodReadyTimeout),
-				cluster.Generation)
+				fmt.Sprintf(upgrade.MessagePodNotReady, podName, upgrade.DefaultPodReadyTimeout))
 			return false, fmt.Errorf("pod %s did not become ready within %v", podName, upgrade.DefaultPodReadyTimeout)
 		}
 	}
@@ -368,8 +505,7 @@ func (m *Manager) waitForPodHealthy(ctx context.Context, logger logr.Logger, clu
 		elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
 		if elapsed > upgrade.DefaultPodReadyTimeout+upgrade.DefaultHealthCheckTimeout {
 			upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonHealthCheckFailed,
-				fmt.Sprintf(upgrade.MessageHealthCheckFailed, podName, "timeout"),
-				cluster.Generation)
+				fmt.Sprintf(upgrade.MessageHealthCheckFailed, podName, "timeout"))
 			return false, fmt.Errorf("OpenBao health check timeout for pod %s", podName)
 		}
 	}
@@ -381,12 +517,7 @@ func (m *Manager) waitForPodHealthy(ctx context.Context, logger logr.Logger, clu
 		return false, nil // Requeue
 	}
 
-	podURL := m.getPodURL(cluster, podName)
-	apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
-		ClusterKey: fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
-		BaseURL:    podURL,
-		CACert:     caCert,
-	})
+	apiClient, err := m.newPodClient(cluster, podName, caCert)
 	if err != nil {
 		// Wrap connection errors as transient and requeue
 		if operatorerrors.IsTransientConnection(err) {
