@@ -31,20 +31,24 @@ The Manager supports two distinct strategies, controlled by `spec.upgrade.strate
         WaitReady --> WaitHealth[Wait for OpenBao Health]
         WaitHealth --> Loop
         
-        Loop -- No --> Done[Upgrade Complete]
+        Loop -- No --> Converge[Wait for StatefulSet + Pod Convergence]
+        Converge --> Finalize[Atomically Clear status.upgrade + Set currentVersion]
+        Finalize --> Done[Upgrade Complete]
 
         classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
         classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
         classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
         
-        class Partition,StepDown,Update write;
+        class Partition,StepDown,Update,Finalize write;
         class Trigger,Ident,WaitReady,WaitHealth read;
-        class Loop,WaitTransfer process;
+        class Loop,WaitTransfer,Converge process;
     ```
 
     1.  **Partitioning:** We pause Kubernetes updates by setting `partition` equal to `replicas`.
     2.  **Reverse Ordinal:** We update from highest index (e.g., 2) down to 0.
     3.  **Leader Safety:** Before updating the node that is currently the **Leader**, we send `PUT /sys/step-down` to force a leadership transfer. This prevents the cluster from crashing during the leader's restart.
+    4.  **Convergence before finalize:** We only finalize after StatefulSet and pod revisions/health fully converge.
+    5.  **Atomic finalization:** Rolling completion writes `status.upgrade=nil` and `status.currentVersion=<target>` together to avoid split state.
 
 === "Blue/Green"
 
@@ -113,6 +117,12 @@ Upgrades are designed to survive Operator restarts. All state is stored in `Stat
 
 If the Operator crashes, it reads the Status on startup and **resumes** exactly where it left off.
 
+### Rolling completion semantics
+
+- `status.upgrade` remains present until rollout convergence is verified.
+- Finalization updates `status.upgrade` and `status.currentVersion` in a single status patch.
+- The Status controller ignores observed pod-label version regressions, so transient stale observations do not restart a completed rolling upgrade.
+
 ### Image Verification
 
 If `spec.imageVerification.enabled` is `true`:
@@ -125,3 +135,4 @@ If `spec.imageVerification.enabled` is `true`:
 - **Idempotency:** Re-running a phase multiple times does not cause side effects (e.g., "Join" checks if already joined).
 - **Safety:** The Operator prioritizes **Availability** over Progress. If a health check fails, the upgrade pauses/retries indefinitely (Rolling) or triggers a rollback (Blue/Green).
 - **OwnerReferences:** Executor jobs in Blue/Green are owned by the Cluster CR, ensuring easy cleanup.
+- **Upgrade stability:** Autopilot config reconciliation is skipped while `status.upgrade` is present to reduce transient API pressure during rolling restarts.
