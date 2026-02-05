@@ -4136,7 +4136,14 @@
 <li><a href="../../../../security/infrastructure/network-security/">Learn more</a></li>
 </ul>
 </li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Monitoring</strong>: Ensure Prometheus is scraping <code>openbao_*</code> metrics and alerts are configured for high error rates or leader loss.<ul>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Monitoring</strong>: Ensure metrics scraping is configured and secured.<ul class="task-list">
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Scraping</strong>: Use Prometheus Operator (<code>ServiceMonitor</code>) or VictoriaMetrics Operator (<code>VMServiceScrape</code>) for operator metrics.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>RBAC</strong>: Grant your scraper ServiceAccount permission to GET <code>/metrics</code> (Helm: <code>metrics.rbac.enabled: true</code> with <code>metrics.rbac.subjects</code>).</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>TLS Verification</strong>: Prefer strict TLS verification in production.<ul>
+<li>Set <code>metrics.serviceMonitor.tlsConfig.insecureSkipVerify: false</code> (and configure CA/certs), or</li>
+<li>Set <code>metrics.victoriaMetrics.tlsConfig.insecureSkipVerify: false</code> (and configure trusted CA in your scraping stack).</li>
+</ul>
+</li>
 <li><a href="../../configuration/observability/">Learn more</a></li>
 </ul>
 </li>
