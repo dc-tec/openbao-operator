@@ -1,0 +1,474 @@
+package rolling
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/go-logr/logr/testr"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
+)
+
+func TestStepDownLeader_DoesNotTimeoutFromUpgradeStart(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	ns := "ns1"
+	name := "c1"
+	podName := name + "-0"
+
+	startedLongAgo := metav1.NewTime(time.Now().Add(-20 * time.Minute))
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				TargetVersion: "2.5.0",
+				FromVersion:   "2.4.4",
+				StartedAt:     &startedLongAgo,
+			},
+		},
+	}
+
+	jobName := upgrade.ExecutorJobName(name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              jobName,
+			Namespace:         ns,
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-10 * time.Second)),
+		},
+		Status: batchv1.JobStatus{
+			Active: 1,
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
+	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+		return &openbaoapi.MockClusterActions{}, nil
+	}, openbaoapi.ClientConfig{}, nil, "")
+
+	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if ok {
+		t.Fatalf("expected step-down to be in progress")
+	}
+}
+
+func TestStepDownLeader_TimesOutBasedOnJobAge(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	ns := "ns1"
+	name := "c1"
+	podName := name + "-0"
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				TargetVersion: "2.5.0",
+				FromVersion:   "2.4.4",
+			},
+		},
+	}
+
+	jobName := upgrade.ExecutorJobName(name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              jobName,
+			Namespace:         ns,
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-(upgrade.DefaultStepDownTimeout + time.Second))),
+		},
+		Status: batchv1.JobStatus{
+			Active: 1,
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
+	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+		return &openbaoapi.MockClusterActions{}, nil
+	}, openbaoapi.ClientConfig{}, nil, "")
+
+	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if ok {
+		t.Fatalf("expected step-down to not be complete")
+	}
+	if cluster.Status.Upgrade == nil {
+		t.Fatalf("expected upgrade status to be present")
+	}
+	if cluster.Status.Upgrade.LastErrorReason != upgrade.ReasonStepDownTimeout {
+		t.Fatalf("LastErrorReason=%q, want %q", cluster.Status.Upgrade.LastErrorReason, upgrade.ReasonStepDownTimeout)
+	}
+	if cluster.Status.Upgrade.LastErrorMessage != "Leader step-down timed out for pod "+podName {
+		t.Fatalf("LastErrorMessage=%q, want %q", cluster.Status.Upgrade.LastErrorMessage, "Leader step-down timed out for pod "+podName)
+	}
+}
+
+func TestStepDownLeader_DeletesStaleSucceededJobWhenTargetStillLeader(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	ns := "ns1"
+	name := "c1"
+	podName := name + "-0"
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				TargetVersion: "2.5.0",
+				FromVersion:   "2.4.4",
+			},
+		},
+	}
+
+	jobName := upgrade.ExecutorJobName(name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              jobName,
+			Namespace:         ns,
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-(upgrade.DefaultStepDownTimeout + 30*time.Second))),
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: 1,
+		},
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns,
+			Labels: map[string]string{
+				openbaoapi.LabelActive: "true",
+			},
+		},
+	}
+
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + constants.SuffixTLSCA,
+			Namespace: ns,
+		},
+		Data: map[string][]byte{
+			"ca.crt": []byte("fake-ca"),
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job, pod, caSecret).Build()
+	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+		return &openbaoapi.MockClusterActions{
+			IsLeaderFunc: func(ctx context.Context) (bool, error) {
+				return true, nil
+			},
+		}, nil
+	}, openbaoapi.ClientConfig{}, nil, "")
+
+	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if ok {
+		t.Fatalf("expected step-down to remain in progress while leader transfer is not yet observed")
+	}
+	if cluster.Status.Upgrade.LastErrorReason != "" {
+		t.Fatalf("expected LastErrorReason to remain empty, got %q", cluster.Status.Upgrade.LastErrorReason)
+	}
+
+	gotJob := &batchv1.Job{}
+	getErr := c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: jobName}, gotJob)
+	if getErr == nil {
+		t.Fatalf("expected stale succeeded step-down job to be deleted for retry")
+	}
+	if !apierrors.IsNotFound(getErr) {
+		t.Fatalf("expected NotFound after deleting stale step-down job, got %v", getErr)
+	}
+}
+
+func TestStepDownLeader_VerifiesTransferViaAPIWhenLabelsLag(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	ns := "ns1"
+	name := "c1"
+	podName := name + "-0"
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				TargetVersion: "2.5.0",
+				FromVersion:   "2.4.4",
+			},
+		},
+	}
+
+	jobName := upgrade.ExecutorJobName(name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              jobName,
+			Namespace:         ns,
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-5 * time.Second)),
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: 1,
+		},
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns,
+			Labels: map[string]string{
+				openbaoapi.LabelActive: "true",
+			},
+		},
+	}
+
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + constants.SuffixTLSCA,
+			Namespace: ns,
+		},
+		Data: map[string][]byte{
+			"ca.crt": []byte("fake-ca"),
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job, pod, caSecret).Build()
+
+	var gotConfig openbaoapi.ClientConfig
+	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+		gotConfig = config
+		return &openbaoapi.MockClusterActions{
+			IsLeaderFunc: func(ctx context.Context) (bool, error) {
+				return false, nil
+			},
+		}, nil
+	}, openbaoapi.ClientConfig{}, nil, "")
+
+	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected step-down to be complete")
+	}
+	if cluster.Status.Upgrade.LastStepDownTime == nil {
+		t.Fatalf("expected LastStepDownTime to be set")
+	}
+	if gotConfig.BaseURL == "" {
+		t.Fatalf("expected client factory to be called with BaseURL")
+	}
+	if len(gotConfig.CACert) == 0 {
+		t.Fatalf("expected client factory to be called with CACert")
+	}
+}
+
+func TestStepDownLeader_SkipsJobWhenTargetPodIsNotLeader(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	ns := "ns1"
+	name := "c1"
+	podName := name + "-1"
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				TargetVersion: "2.5.0",
+				FromVersion:   "2.4.4",
+			},
+		},
+	}
+
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + constants.SuffixTLSCA,
+			Namespace: ns,
+		},
+		Data: map[string][]byte{
+			"ca.crt": []byte("fake-ca"),
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(caSecret).Build()
+	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+		return &openbaoapi.MockClusterActions{
+			IsLeaderFunc: func(ctx context.Context) (bool, error) {
+				return false, nil
+			},
+		}, nil
+	}, openbaoapi.ClientConfig{}, nil, "")
+
+	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected step-down to be treated as complete when target pod is not leader")
+	}
+
+	jobList := &batchv1.JobList{}
+	if err := c.List(context.Background(), jobList); err != nil {
+		t.Fatalf("expected listing jobs to succeed, got %v", err)
+	}
+	if len(jobList.Items) != 0 {
+		t.Fatalf("expected no step-down jobs to be created, got %d", len(jobList.Items))
+	}
+}
+
+func TestWaitForPodRevisionUpdated_WaitsUntilRevisionMatches(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = appsv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	ns := "ns1"
+	name := "c1"
+	podName := name + "-0"
+	startedAt := metav1.Now()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				StartedAt: &startedAt,
+			},
+		},
+	}
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Status: appsv1.StatefulSetStatus{
+			UpdateRevision: "rev-new",
+		},
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns,
+			Labels: map[string]string{
+				appsv1.StatefulSetRevisionLabel: "rev-old",
+			},
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod).Build()
+	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+		return &openbaoapi.MockClusterActions{}, nil
+	}, openbaoapi.ClientConfig{}, nil, "")
+
+	ok, err := mgr.waitForPodRevisionUpdated(context.Background(), testr.New(t), cluster, podName)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if ok {
+		t.Fatalf("expected revision check to wait while pod revision is old")
+	}
+}
+
+func TestWaitForPodRevisionUpdated_SucceedsWhenRevisionMatches(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = appsv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	ns := "ns1"
+	name := "c1"
+	podName := name + "-0"
+	startedAt := metav1.Now()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				StartedAt: &startedAt,
+			},
+		},
+	}
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Status: appsv1.StatefulSetStatus{
+			UpdateRevision: "rev-new",
+		},
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns,
+			Labels: map[string]string{
+				appsv1.StatefulSetRevisionLabel: "rev-new",
+			},
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod).Build()
+	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+		return &openbaoapi.MockClusterActions{}, nil
+	}, openbaoapi.ClientConfig{}, nil, "")
+
+	ok, err := mgr.waitForPodRevisionUpdated(context.Background(), testr.New(t), cluster, podName)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected revision check to succeed when revisions match")
+	}
+}

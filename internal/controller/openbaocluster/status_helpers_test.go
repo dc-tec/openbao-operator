@@ -3,6 +3,7 @@ package openbaocluster
 import (
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -354,4 +355,65 @@ func TestEvaluateProductionReady(t *testing.T) {
 			assert.Equal(t, tt.wantReason, reason)
 		})
 	}
+}
+
+func TestReconcileCurrentVersion_SkipsWhenRollingUpgradeStatusExists(t *testing.T) {
+	reconciler := &OpenBaoClusterReconciler{}
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "2.4.3",
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				TargetVersion:   "2.4.4",
+				LastErrorReason: "UpgradeFailed",
+			},
+		},
+	}
+
+	state := &clusterState{
+		RollingUpgradeInProgress: true,
+		UpgradeInProgress:        false,
+		UpgradeFailed:            true,
+	}
+
+	reconciler.reconcileCurrentVersion(logr.Discard(), cluster, state, "2.4.4")
+	assert.Equal(t, "2.4.3", cluster.Status.CurrentVersion)
+}
+
+func TestReconcileCurrentVersion_DoesNotRegressWhenObservedVersionIsLower(t *testing.T) {
+	reconciler := &OpenBaoClusterReconciler{}
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "2.4.4",
+		},
+	}
+
+	state := &clusterState{
+		RollingUpgradeInProgress: false,
+		BlueGreenInProgress:      false,
+		UpgradeInProgress:        false,
+	}
+
+	reconciler.reconcileCurrentVersion(logr.Discard(), cluster, state, "2.4.3")
+	assert.Equal(t, "2.4.4", cluster.Status.CurrentVersion)
+}
+
+func TestReconcileCurrentVersion_AdvancesWhenObservedVersionIsHigher(t *testing.T) {
+	reconciler := &OpenBaoClusterReconciler{}
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "2.4.3",
+		},
+	}
+
+	state := &clusterState{
+		RollingUpgradeInProgress: false,
+		BlueGreenInProgress:      false,
+		UpgradeInProgress:        false,
+	}
+
+	reconciler.reconcileCurrentVersion(logr.Discard(), cluster, state, "2.4.4")
+	assert.Equal(t, "2.4.4", cluster.Status.CurrentVersion)
 }
