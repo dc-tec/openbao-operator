@@ -92,7 +92,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			tenantFW        *framework.Framework
 			upgradeCluster  *openbaov1alpha1.OpenBaoCluster
 			initialVersion  string
+			initialImage    string
 			targetVersion   string
+			targetImage     string
 			admin           client.Client
 		)
 
@@ -105,6 +107,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 
 			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
 			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialImage = fmt.Sprintf("openbao/openbao:%s", initialVersion)
+			targetImage = fmt.Sprintf("openbao/openbao:%s", targetVersion)
 
 			if initialVersion == targetVersion {
 				Skip(fmt.Sprintf("Upgrade test skipped: versions identical (%s)", initialVersion))
@@ -118,7 +122,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Profile:  openbaov1alpha1.ProfileDevelopment,
 					Version:  initialVersion,
-					Image:    openBaoImage,
+					Image:    initialImage,
 					Replicas: 3,
 					InitContainer: &openbaov1alpha1.InitContainerConfig{
 						Enabled: true,
@@ -188,7 +192,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			Eventually(func(g Gomega) {
 				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, upgradeCluster.Name)
 				g.Expect(err).NotTo(HaveOccurred())
-				err = e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
+				err = e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, initialImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
 				g.Expect(err).NotTo(HaveOccurred())
 			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed(), "Failed to write pre-upgrade secret")
 
@@ -198,7 +202,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 				original := updated.DeepCopy()
 				updated.Spec.Version = targetVersion
-				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", targetVersion)
+				updated.Spec.Image = targetImage
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
@@ -215,53 +219,53 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				g.Expect(updated.Status.Upgrade.FromVersion).To(Equal(initialVersion))
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-				Eventually(func(g Gomega) {
-					updated := &openbaov1alpha1.OpenBaoCluster{}
-					g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-					g.Expect(updated.Status.Upgrade).To(BeNil(), "Status.Upgrade should be cleared when upgrade completes")
-					g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
-					g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.ClusterPhaseRunning))
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Upgrade).To(BeNil(), "Status.Upgrade should be cleared when upgrade completes")
+				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.ClusterPhaseRunning))
 
-					// Strict verification: Check that all pods are running the target image
-					podList := &corev1.PodList{}
-					g.Expect(admin.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabels(map[string]string{
-						constants.LabelOpenBaoCluster: upgradeCluster.Name,
-					}))).To(Succeed())
-					g.Expect(podList.Items).NotTo(BeEmpty())
+				// Strict verification: Check that all pods are running the target image
+				podList := &corev1.PodList{}
+				g.Expect(admin.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabels(map[string]string{
+					constants.LabelOpenBaoCluster: upgradeCluster.Name,
+				}))).To(Succeed())
+				g.Expect(podList.Items).NotTo(BeEmpty())
 
-					expectedImage := fmt.Sprintf("openbao/openbao:%s", targetVersion)
-					for _, pod := range podList.Items {
-						// Check container image
-						for _, container := range pod.Spec.Containers {
-							if container.Name == "openbao" {
-								g.Expect(container.Image).To(Equal(expectedImage), "Pod %s not running expected image", pod.Name)
-							}
+				expectedImage := fmt.Sprintf("openbao/openbao:%s", targetVersion)
+				for _, pod := range podList.Items {
+					// Check container image
+					for _, container := range pod.Spec.Containers {
+						if container.Name == "openbao" {
+							g.Expect(container.Image).To(Equal(expectedImage), "Pod %s not running expected image", pod.Name)
 						}
 					}
-				}, 20*time.Minute, 10*time.Second).Should(Succeed())
+				}
+			}, 20*time.Minute, 10*time.Second).Should(Succeed())
 
 			By("Verifying secret persists after upgrade")
 			Eventually(func(g Gomega) {
 				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, upgradeCluster.Name)
 				g.Expect(err).NotTo(HaveOccurred())
-				val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
+				val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, targetImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
 				g.Expect(err).NotTo(HaveOccurred(), "Failed to read post-upgrade secret")
 				g.Expect(val).To(Equal("bar"))
 			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
 
-				By("Verifying upgrade metrics are emitted")
-				metricsOutput, metricErr := framework.WaitForControllerMetricSubstrings(
-					operatorNamespace,
-					2*time.Minute,
-					"openbao_upgrade_success_total{",
-					fmt.Sprintf(`namespace="%s"`, tenantNamespace),
-					fmt.Sprintf(`name="%s"`, upgradeCluster.Name),
-					`strategy="RollingUpdate"`,
-					fmt.Sprintf(`openbao_upgrade_in_progress{name="%s",namespace="%s"} 0`, upgradeCluster.Name, tenantNamespace),
-					fmt.Sprintf(`openbao_upgrade_status{name="%s",namespace="%s"} 2`, upgradeCluster.Name, tenantNamespace),
-				)
-				Expect(metricErr).NotTo(HaveOccurred(), "Last metrics output:\n%s", metricsOutput)
-			})
+			By("Verifying upgrade metrics are emitted")
+			metricsOutput, metricErr := framework.WaitForControllerMetricSubstrings(
+				operatorNamespace,
+				2*time.Minute,
+				"openbao_upgrade_success_total{",
+				fmt.Sprintf(`namespace="%s"`, tenantNamespace),
+				fmt.Sprintf(`name="%s"`, upgradeCluster.Name),
+				`strategy="RollingUpdate"`,
+				fmt.Sprintf(`openbao_upgrade_in_progress{name="%s",namespace="%s"} 0`, upgradeCluster.Name, tenantNamespace),
+				fmt.Sprintf(`openbao_upgrade_status{name="%s",namespace="%s"} 2`, upgradeCluster.Name, tenantNamespace),
+			)
+			Expect(metricErr).NotTo(HaveOccurred(), "Last metrics output:\n%s", metricsOutput)
+		})
 	})
 
 	// --- Blue/Green Upgrade ---
