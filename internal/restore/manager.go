@@ -11,7 +11,6 @@ import (
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +26,6 @@ import (
 	controllermetrics "github.com/dc-tec/openbao-operator/internal/controller"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
-	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
@@ -288,12 +286,7 @@ func (m *Manager) validateClusterState(ctx context.Context, logger logr.Logger, 
 // validateAuthentication validates that authentication is configured for the restore operation.
 // Returns (result, error) where result is non-nil if validation failed and should return early.
 func (m *Manager) validateAuthentication(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (*ctrl.Result, error) {
-	hasJWTAuth := restore.Spec.JWTAuthRole != ""
-	// If jwtAuthRole is empty, check if OIDC is enabled (operator will auto-create the restore role)
-	if !hasJWTAuth && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		// Operator will auto-create the restore role with name constants.RoleNameRestore
-		hasJWTAuth = true
-	}
+	hasJWTAuth := effectiveRestoreJWTRole(restore, cluster) != ""
 	hasTokenSecret := restore.Spec.TokenSecretRef != nil && restore.Spec.TokenSecretRef.Name != ""
 
 	if !hasJWTAuth && !hasTokenSecret {
@@ -579,129 +572,13 @@ func restoreJobName(restore *openbaov1alpha1.OpenBaoRestore) string {
 	return fmt.Sprintf("%s%s", RestoreJobNamePrefix, restore.Name)
 }
 
-// restoreServiceAccountName returns the name for the restore ServiceAccount.
-func restoreServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + RestoreServiceAccountSuffix
-}
-
-const ssaFieldOwner = "openbao-operator"
-
 // ensureRestoreServiceAccount creates the ServiceAccount for restore jobs using Server-Side Apply.
 func (m *Manager) ensureRestoreServiceAccount(ctx context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	saName := restoreServiceAccountName(cluster)
-	sa := &corev1.ServiceAccount{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ServiceAccount",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      saName,
-			Namespace: cluster.Namespace,
-			Labels:    restoreLabels(cluster),
-		},
-	}
-
-	if err := m.applyResource(ctx, sa, cluster); err != nil {
-		return fmt.Errorf("failed to ensure restore ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
-	}
-
-	return nil
+	return EnsureRestoreServiceAccount(ctx, m.client, m.scheme, cluster)
 }
 
 // ensureRestoreRBAC creates RBAC for the restore service account using Server-Side Apply.
 // The restore job needs permission to list pods for leader discovery.
 func (m *Manager) ensureRestoreRBAC(ctx context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	saName := restoreServiceAccountName(cluster)
-	roleName := saName + "-role"
-	roleBindingName := saName + "-rolebinding"
-	resourceLabels := restoreLabels(cluster)
-
-	role := &rbacv1.Role{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Role",
-			APIVersion: "rbac.authorization.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      roleName,
-			Namespace: cluster.Namespace,
-			Labels:    resourceLabels,
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"get", "list", "watch"},
-			},
-		},
-	}
-
-	if err := m.applyResource(ctx, role, cluster); err != nil {
-		return fmt.Errorf("failed to ensure Role %s/%s: %w", cluster.Namespace, roleName, err)
-	}
-
-	roleBinding := &rbacv1.RoleBinding{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "RoleBinding",
-			APIVersion: "rbac.authorization.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      roleBindingName,
-			Namespace: cluster.Namespace,
-			Labels:    resourceLabels,
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "Role",
-			Name:     roleName,
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      saName,
-				Namespace: cluster.Namespace,
-			},
-		},
-	}
-
-	if err := m.applyResource(ctx, roleBinding, cluster); err != nil {
-		return fmt.Errorf("failed to ensure RoleBinding %s/%s: %w", cluster.Namespace, roleBindingName, err)
-	}
-
-	return nil
-}
-
-// applyResource uses Server-Side Apply to create or update a Kubernetes resource.
-func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	if m.scheme == nil {
-		return fmt.Errorf("scheme is required")
-	}
-
-	if err := controllerutil.SetControllerReference(cluster, obj, m.scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference: %w", err)
-	}
-
-	applyConfig, err := kube.ToApplyConfiguration(obj, m.client)
-	if err != nil {
-		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
-	}
-
-	applyOpts := []client.ApplyOption{
-		client.ForceOwnership,
-		client.FieldOwner(ssaFieldOwner),
-	}
-
-	if err := m.client.Apply(ctx, applyConfig, applyOpts...); err != nil {
-		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
-	}
-
-	return nil
-}
-
-// restoreLabels returns standard labels for restore resources.
-func restoreLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
-	return map[string]string{
-		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: ComponentRestore,
-	}
+	return EnsureRestoreRBAC(ctx, m.client, m.scheme, cluster)
 }
