@@ -86,8 +86,8 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, restore *op
 	case openbaov1alpha1.RestorePhaseRunning:
 		return m.handleRunning(ctx, logger, restore)
 	case openbaov1alpha1.RestorePhaseCompleted, openbaov1alpha1.RestorePhaseFailed:
-		// Terminal states - nothing to do
-		return ctrl.Result{}, nil
+		// Terminal states: ensure lock cleanup eventually succeeds.
+		return m.ensureTerminalLockReleased(ctx, logger, restore)
 	default:
 		logger.Info("Unknown restore phase", "phase", restore.Status.Phase)
 		return ctrl.Result{}, nil
@@ -96,6 +96,13 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, restore *op
 
 func (m *Manager) patchStatus(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore, original *openbaov1alpha1.OpenBaoRestore) error {
 	return m.client.Status().Patch(ctx, restore, client.MergeFrom(original))
+}
+
+func (m *Manager) ensureTerminalLockReleased(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
+	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to release cluster operation lock for terminal restore %s/%s: %w", restore.Namespace, restore.Name, err)
+	}
+	return ctrl.Result{}, nil
 }
 
 // handlePending transitions from Pending to Validating phase.
@@ -141,7 +148,11 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 
 	// Handle lock override event if needed
 	if forceAcquired && lockBefore != nil {
+		original := restore.DeepCopy()
 		m.handleLockOverride(restore, lockBefore)
+		if err := m.patchStatus(ctx, restore, original); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch restore status after lock override: %w", err)
+		}
 	}
 
 	// Validate cluster state

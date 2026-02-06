@@ -8,12 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
@@ -266,6 +268,139 @@ func TestReconcilePhaseRouting(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReconcileTerminalPhase_ReleasesOperationLock(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			UID:       "cluster-uid",
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationRestore,
+				Holder:    constants.ControllerNameOpenBaoRestore + "/test-restore",
+				Message:   "restore default/test-restore",
+			},
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshot-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseCompleted,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.Reconcile(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), int64(result.RequeueAfter))
+
+	updatedCluster := &openbaov1alpha1.OpenBaoCluster{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-cluster", Namespace: "default"}, updatedCluster))
+	assert.Nil(t, updatedCluster.Status.OperationLock)
+}
+
+func TestHandleValidating_PersistsOperationLockOverrideCondition(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, rbacv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			UID:       "cluster-uid",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: true,
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationBackup,
+				Holder:    "openbao-adminops-support-controller/backup",
+				Message:   "backup job",
+			},
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+			UID:       "restore-uid",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster:               "test-cluster",
+			JWTAuthRole:           "restore-role",
+			OverrideOperationLock: true,
+			Force:                 true,
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshot-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.handleValidating(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.True(t, result.RequeueAfter > 0)
+
+	updatedRestore := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updatedRestore))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseRunning, updatedRestore.Status.Phase)
+
+	foundOverrideCondition := false
+	for i := range updatedRestore.Status.Conditions {
+		cond := updatedRestore.Status.Conditions[i]
+		if cond.Type != constants.ConditionTypeOperationLockOverride {
+			continue
+		}
+		foundOverrideCondition = true
+		assert.Equal(t, metav1.ConditionTrue, cond.Status)
+		assert.Equal(t, constants.ReasonOperationLockOverridden, cond.Reason)
+		break
+	}
+	assert.True(t, foundOverrideCondition, "expected operation lock override condition to be persisted")
 }
 
 func TestReconcilePending_AddsFinalizerThenPatchesStatus(t *testing.T) {
