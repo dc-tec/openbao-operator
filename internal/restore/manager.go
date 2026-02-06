@@ -404,6 +404,10 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 		}
 
 		if err := m.client.Create(ctx, job); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				logger.V(1).Info("Restore job already exists after create attempt; proceeding", "job", jobName)
+				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			}
 			return ctrl.Result{}, fmt.Errorf("failed to create restore job: %w", err)
 		}
 

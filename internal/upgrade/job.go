@@ -151,6 +151,13 @@ func ensureUpgradeExecutorJob(
 
 		logger.Info("Creating upgrade executor Job", "job", jobName, "action", action, "runID", runID)
 		if err := c.Create(ctx, job); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				logger.V(1).Info("Upgrade executor Job already exists after create attempt", "job", jobName)
+				return &executorJobResult{
+					Name:    jobName,
+					Running: true,
+				}, nil
+			}
 			return nil, fmt.Errorf("failed to create upgrade Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
 

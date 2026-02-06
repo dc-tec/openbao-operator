@@ -67,6 +67,14 @@ func ensureJob(
 
 		logger.Info("Creating Job", append([]any{"job", jobName}, createLogKeysAndValues...)...)
 		if err := c.Create(ctx, built); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				logger.V(1).Info("Job already exists after create attempt", "job", jobName)
+				return &JobResult{
+					Name:    jobName,
+					Exists:  true,
+					Running: true,
+				}, nil
+			}
 			return nil, fmt.Errorf("failed to create Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
 

@@ -136,6 +136,10 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 		}
 
 		if err := m.client.Create(ctx, job); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				logger.V(1).Info("Backup Job already exists after create attempt", "job", jobName)
+				return true, nil
+			}
 			return false, fmt.Errorf("failed to create backup Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
 

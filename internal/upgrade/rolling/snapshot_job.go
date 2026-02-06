@@ -157,6 +157,10 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 	}
 
 	if err := m.client.Create(ctx, job); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			logger.V(1).Info("Pre-upgrade backup job already exists after create attempt", "job", jobName)
+			return false, nil
+		}
 		return false, fmt.Errorf("failed to create backup job: %w", err)
 	}
 
