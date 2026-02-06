@@ -160,10 +160,6 @@ func TestVAP_OpenBaoCluster_RequiresProfile(t *testing.T) {
 	for attempt := 0; attempt < 25; attempt++ {
 		cluster := newMinimalClusterObj(namespace, fmt.Sprintf("cluster-missing-profile-%d", attempt))
 		cluster.Spec.Profile = ""
-		cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
-			Enabled: true,
-			Image:   "openbao/openbao-init:latest",
-		}
 
 		err := k8sClient.Create(ctx, cluster)
 		if err == nil {
@@ -180,6 +176,34 @@ func TestVAP_OpenBaoCluster_RequiresProfile(t *testing.T) {
 	}
 
 	t.Fatalf("expected VAP to deny OpenBaoCluster create without spec.profile after retries")
+}
+
+func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+	namespace := newTestNamespace(t)
+
+	// First ensure admission policies are active by waiting for a known denial.
+	for attempt := 0; attempt < 25; attempt++ {
+		invalid := newMinimalClusterObj(namespace, fmt.Sprintf("cluster-policy-probe-%d", attempt))
+		invalid.Spec.Profile = ""
+
+		err := k8sClient.Create(ctx, invalid)
+		if err == nil {
+			_ = k8sClient.Delete(ctx, invalid)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		requireAdmissionDenied(t, err)
+		break
+	}
+
+	cluster := newMinimalClusterObj(namespace, "cluster-default-init")
+	cluster.Spec.Profile = openbaov1alpha1.ProfileDevelopment
+	cluster.Spec.InitContainer = nil
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected OpenBaoCluster create without spec.initContainer to succeed, got: %v", err)
+	}
 }
 
 func TestVAP_OpenBaoTenant_RejectsCrossNamespaceSelfService(t *testing.T) {

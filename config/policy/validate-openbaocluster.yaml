@@ -33,10 +33,10 @@ spec:
           !(has(object.spec.unseal.kmip) && has(object.spec.unseal.kmip.tlsSkipVerify) && object.spec.unseal.kmip.tlsSkipVerify == true))
       message: Hardened profile requires TLS mode External or ACME, an external unseal (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
     - expression: >-
-        has(object.spec.initContainer) &&
-        object.spec.initContainer.enabled == true &&
-        object.spec.initContainer.image != ""
-      message: spec.initContainer is required, must be enabled, and must specify a non-empty image.
+        !has(object.spec.initContainer) ||
+        !has(object.spec.initContainer.enabled) ||
+        object.spec.initContainer.enabled == true
+      message: spec.initContainer is optional; when set, spec.initContainer.enabled must be true.
     - expression: >-
         !has(object.spec.selfInit) ||
         object.spec.selfInit.enabled == false ||
