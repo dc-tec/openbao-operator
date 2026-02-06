@@ -4245,8 +4245,8 @@
 </div>
 </div>
 <div class="tabbed-block">
-<p><strong>Best for:</strong> Production critical paths, Major version jumps, Instant rollback capability.</p>
-<p>The Operator spins up a <strong>parallel</strong> "Green" cluster, syncs data, validates it, and then switches traffic over atomically.</p>
+<p><strong>Best for:</strong> Production-critical paths and major version upgrades where controlled cutover is required.</p>
+<p>The OpenBao Operator creates a <strong>parallel</strong> Green revision, syncs and validates it, promotes Green to voters, then shifts traffic during <code>Cleanup</code>.</p>
 <pre class="mermaid"><code>flowchart TB
     Start[Start Upgrade]
 
@@ -4264,8 +4264,10 @@
     Start --&gt; Deploy
     Deploy --&gt; Sync
     Sync --&gt; Test
-    Test -- "Success" --&gt; Switch[4. Switch Traffic to Green]
-    Switch --&gt; Cleanup[5. Delete Blue Cluster]
+    Test -- "Success" --&gt; Promote[4. Promote Green Voters]
+    Promote --&gt; Demote[5. Demote Blue Non-Voters]
+    Demote --&gt; Switch[6. Cleanup Phase: Switch Traffic to Green]
+    Switch --&gt; Cleanup[7. Remove Blue Peers and Delete Blue Cluster]
 
     classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
@@ -4273,7 +4275,14 @@
 
     class Start read;
     class B write;
-    class Deploy,Sync,Test,Switch,Cleanup process;</code></pre>
+    class Deploy,Sync,Test,Promote,Demote,Switch,Cleanup process;</code></pre>
+<p><strong>Blue/Green phases (<code>status.blueGreen.phase</code>):</strong>
+1. <code>DeployingGreen</code>
+2. <code>JoiningMesh</code>
+3. <code>Syncing</code>
+4. <code>Promoting</code>
+5. <code>DemotingBlue</code>
+6. <code>Cleanup</code></p>
 <p><strong>Configuration:</strong></p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2.4.4&quot;</span>
@@ -4283,7 +4292,7 @@
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">blueGreen</span><span class="p">:</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">      </span><span class="nt">autoPromote</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">  </span><span class="c1"># Automatically switch traffic if healthy</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">      </span><span class="nt">autoRollback</span><span class="p">:</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">  </span><span class="c1"># Revert if Green fails validation or early job failures</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">  </span><span class="c1"># Abort early failures, rollback late failures</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -4301,7 +4310,12 @@
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;curl&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-f&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;https://green-cluster:8200/v1/sys/health&quot;</span><span class="p p-Indicator">]</span>
 </span></code></pre></div>
 <h3 id="auto-rollback">Auto-Rollback<a class="headerlink" href="#auto-rollback" title="Permanent link">&para;</a></h3>
-<p>If the Green cluster fails validation or upgrade jobs fail during the early upgrade phases, the Operator can automatically roll back.</p>
+<p>If Green validation fails or executor jobs repeatedly fail, the OpenBao Operator can automatically recover:</p>
+<ul>
+<li>In early phases (<code>DeployingGreen</code>, <code>JoiningMesh</code>, <code>Syncing</code>), it aborts the upgrade and removes Green.</li>
+<li>In later phases (<code>Promoting</code>, <code>DemotingBlue</code>, <code>Cleanup</code>), it triggers rollback (<code>RollingBack</code>, <code>RollbackCleanup</code>).</li>
+<li>After Blue has been fully removed in <code>Cleanup</code>, rollback is no longer possible.</li>
+</ul>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">upgrade</span><span class="p">:</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">BlueGreen</span>
@@ -4312,7 +4326,7 @@
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">        </span><span class="nt">onValidationFailure</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <h3 id="gateway-api-and-bluegreen-upgrades">Gateway API and Blue/Green upgrades<a class="headerlink" href="#gateway-api-and-bluegreen-upgrades" title="Permanent link">&para;</a></h3>
-<p>When using <strong>Gateway API</strong>, the Operator creates an <code>HTTPRoute</code> that targets the cluster's main external Service (<code>&lt;cluster&gt;-public</code>). During cutover, the operator updates that Service's selector to point at the Green revision.</p>
+<p>When using <strong>Gateway API</strong>, the OpenBao Operator creates an <code>HTTPRoute</code> that targets the cluster's main external Service (<code>&lt;cluster&gt;-public</code>). During <code>Cleanup</code>, it updates that Service selector to the Green revision.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">gateway</span><span class="p">:</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -4333,7 +4347,7 @@
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>my-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.blueGreen}{&quot;\n&quot;}&#39;</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>my-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.blueGreen.phase}{&quot;\n&quot;}{.status.blueGreen.jobFailureCount}{&quot;\n&quot;}{.status.blueGreen.lastJobFailure}{&quot;\n&quot;}&#39;</span>
 </span></code></pre></div>
 </div>
 </div>

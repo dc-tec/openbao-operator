@@ -4171,33 +4171,35 @@
 </ol>
 </div>
 <div class="tabbed-block">
-<p><strong>Goal:</strong> Zero-downtime upgrades with instant rollback.</p>
+<p><strong>Goal:</strong> Zero-downtime upgrades with deterministic phase transitions and controlled rollback boundaries.</p>
 <div class="admonition warning">
 <p class="admonition-title">Resource Usage</p>
 <p>Requires <strong>2x Storage</strong> capacity during the transition (Blue volume + Green volume).</p>
 </div>
-<p>This strategy spawns a parallel "Green" cluster and migrates data via Raft.</p>
+<p>This strategy creates a parallel Green revision, joins it as non-voters, promotes it to voters, then cuts over traffic during <code>Cleanup</code>.</p>
 <pre class="mermaid"><code>graph TD
     Start((Start)) --&gt;|v1 -&gt; v2| Deploy[Deploy Green Cluster]
 
     subgraph Preparation
-        Deploy --&gt;|Wait Ready| Join[Join Raft Mesh]
-        Join -.-&gt;|Non-Voters| Sync[Sync Data]
-        Sync --&gt;|Wait Index| Promote[Promote Green to Voters]
+        Deploy --&gt;|Wait Ready + Unsealed| Join[Join Green as Non-Voters]
+        Join --&gt; Sync[Wait Green Synced]
+        Sync --&gt; Promote[Promote Green to Voters]
     end
 
-    subgraph Critical_Section [Traffic Switch]
-        Promote --&gt; Switch[Update Service Selector]
-        Switch --&gt;|Traffic -&gt; Green| Stabilization{Stable?}
-
-        Stabilization -- No --&gt; Rollback[Rollback: Point Service to Blue]
-        Stabilization -- Yes --&gt; Demote[Demote Blue to Non-Voters]
+    subgraph Cutover
+        Promote --&gt; Demote[Demote Blue Non-Voters + Step-Down]
+        Demote --&gt; LeaderCheck{Green Leader Observed?}
+        LeaderCheck -- No --&gt; Wait[Requeue]
+        Wait --&gt; LeaderCheck
+        LeaderCheck -- Yes --&gt; Switch[Phase Cleanup: Service Selects Green]
     end
 
     subgraph Cleanup
-        Demote --&gt; Remove[Remove Blue from Raft]
+        Switch --&gt; Remove[Remove Blue Peers]
         Remove --&gt; Delete[Delete Blue StatefulSet]
-        Rollback --&gt; RemoveGreen[Remove Green from Raft]
+        Promote --&gt; Rollback[Late Failure: Trigger Rollback]
+        Rollback --&gt; Repair["Repair Consensus (Blue Voters, Green Non-Voters)"]
+        Repair --&gt; RemoveGreen[Remove Green Peers]
         RemoveGreen --&gt; DeleteGreen[Delete Green StatefulSet]
     end
 
@@ -4208,10 +4210,10 @@
     classDef critical fill:transparent,stroke:#dc2626,stroke-width:2px,stroke-dasharray: 5 5,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
 
-    class Deploy,Join,Sync,Promote,Demote,Remove,Delete,RemoveGreen,DeleteGreen process;
+    class Deploy,Join,Sync,Promote,Demote,Wait,Remove,Delete,Repair,RemoveGreen,DeleteGreen process;
     class Switch,Rollback critical;
-    class Start,Done,Stabilization write;</code></pre>
-<p><strong>Key Phases:</strong></p>
+    class Start,Done,LeaderCheck write;</code></pre>
+<p><strong>Key phases (<code>status.blueGreen.phase</code>):</strong></p>
 <table>
 <thead>
 <tr>
@@ -4221,27 +4223,47 @@
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>Deploying</strong></td>
-<td style="text-align: left;">Creates the new StatefulSet.</td>
+<td style="text-align: left;"><code>DeployingGreen</code></td>
+<td style="text-align: left;">Creates Green StatefulSet and waits for Ready + unsealed pods.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Joining</strong></td>
-<td style="text-align: left;">Adds new pods as <strong>Non-Voters</strong> (Read-Only).</td>
+<td style="text-align: left;"><code>JoiningMesh</code></td>
+<td style="text-align: left;">Adds Green pods as non-voters.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Promoting</strong></td>
-<td style="text-align: left;">Promotes new pods to <strong>Voters</strong> (Write-Access).</td>
+<td style="text-align: left;"><code>Syncing</code></td>
+<td style="text-align: left;">Waits for sync, optional <code>minSyncDuration</code>, and optional pre-promotion hook.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Switching</strong></td>
-<td style="text-align: left;">Updates Service selector to point to Green.</td>
+<td style="text-align: left;"><code>Promoting</code></td>
+<td style="text-align: left;">Promotes Green pods to voters.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Cleanup</strong></td>
-<td style="text-align: left;">Removes Blue pods from the Raft peer list.</td>
+<td style="text-align: left;"><code>DemotingBlue</code></td>
+<td style="text-align: left;">Demotes Blue voters and verifies a Green leader is observed.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Cleanup</code></td>
+<td style="text-align: left;">Switches service selector to Green, removes Blue peers, deletes Blue StatefulSet.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>RollingBack</code></td>
+<td style="text-align: left;">Executes rollback consensus repair (Blue voters, Green non-voters).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>RollbackCleanup</code></td>
+<td style="text-align: left;">Removes Green peers and deletes Green StatefulSet.</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Blue/Green service traffic switches to Green only in <code>Cleanup</code>.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Rollback is possible until irreversible cleanup has completed.</p>
+</div>
 </div>
 </div>
 </div>
@@ -4268,7 +4290,7 @@
 <h2 id="3-reconciliation-semantics">3. Reconciliation Semantics<a class="headerlink" href="#3-reconciliation-semantics" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Idempotency:</strong> Re-running a phase multiple times does not cause side effects (e.g., "Join" checks if already joined).</li>
-<li><strong>Safety:</strong> The Operator prioritizes <strong>Availability</strong> over Progress. If a health check fails, the upgrade pauses/retries indefinitely (Rolling) or triggers a rollback (Blue/Green).</li>
+<li><strong>Safety:</strong> The OpenBao Operator prioritizes <strong>Availability</strong> over Progress. Rolling pauses/retries until healthy. Blue/Green aborts in early phases and rolls back in later phases.</li>
 <li><strong>OwnerReferences:</strong> Executor jobs in Blue/Green are owned by the Cluster CR, ensuring easy cleanup.</li>
 <li><strong>Upgrade stability:</strong> Autopilot config reconciliation is skipped while <code>status.upgrade</code> is present to reduce transient API pressure during rolling restarts.</li>
 </ul>
