@@ -54,6 +54,8 @@ type OpenBaoTenantStatus struct {
 	LastError string `json:"lastError,omitempty"`
 
 	// Conditions represent the latest available observations of the tenant's state.
+	// +listType=map
+	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
@@ -74,7 +76,7 @@ type OpenBaoTenant struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OpenBaoTenantSpec   `json:"spec,omitempty"`
+	Spec   OpenBaoTenantSpec   `json:"spec"`
 	Status OpenBaoTenantStatus `json:"status,omitempty"`
 }
 
