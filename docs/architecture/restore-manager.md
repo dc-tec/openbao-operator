@@ -55,6 +55,7 @@ graph TD
 1. **Validation:**
     - Target Cluster exists.
     - Snapshot source is accessible.
+    - Authentication is configured (`tokenSecretRef` or JWT auth; when self-init OIDC is enabled, JWT can use the default `openbao-operator-restore` role).
     - No conflicting operations (unless `OpenBaoRestore.spec.overrideOperationLock` is used with `OpenBaoRestore.spec.force: true`).
 2. **Operation Lock:**
     - The controller acquires the cluster operation lock by updating `OpenBaoCluster.status.operationLock`:

@@ -315,6 +315,7 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
 ### Retention Policy
 
 Automatically clean up old backups from object storage.
+Retention cleanup runs after successful backups and applies to all supported providers (S3, GCS, Azure).
 
 ```yaml
 spec:

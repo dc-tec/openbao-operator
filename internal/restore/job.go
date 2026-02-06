@@ -12,18 +12,19 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/storageenv"
 )
 
 const (
 	// Volume and mount names for restore jobs
-	restoreTLSCAVolumeName        = "tls-ca"
-	restoreTLSCAMountPath         = constants.PathTLS
-	restoreS3CredentialsVolume    = "s3-credentials"
-	restoreS3CredentialsMountPath = constants.PathBackupCredentials // Same path as backup for LoadExecutorConfig
-	restoreJWTTokenVolumeName     = "jwt-token"
-	restoreJWTTokenMountPath      = "/var/run/secrets/tokens" // #nosec G101 -- mount path not credential
-	restoreTokenVolumeName        = "restore-token"
-	restoreTokenMountPath         = "/etc/bao/restore/token" // #nosec G101 -- mount path not credential
+	restoreTLSCAVolumeName      = "tls-ca"
+	restoreTLSCAMountPath       = constants.PathTLS
+	restoreCredentialsVolume    = "storage-credentials"
+	restoreCredentialsMountPath = constants.PathBackupCredentials // Same path as backup for LoadExecutorConfig
+	restoreJWTTokenVolumeName   = "jwt-token"
+	restoreJWTTokenMountPath    = "/var/run/secrets/tokens" // #nosec G101 -- mount path not credential
+	restoreTokenVolumeName      = "restore-token"
+	restoreTokenMountPath       = "/etc/bao/restore/token" // #nosec G101 -- mount path not credential
 )
 
 func getRestoreExecutorImage(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
@@ -137,11 +138,7 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 
 // buildRestoreEnvVars builds environment variables for the restore job.
 func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar {
-	// Determine provider (default to s3)
-	provider := restore.Spec.Source.Target.Provider
-	if provider == "" {
-		provider = constants.StorageProviderS3
-	}
+	provider := storageenv.EffectiveProvider(restore.Spec.Source.Target.Provider)
 
 	envVars := []corev1.EnvVar{
 		// Set executor mode to restore
@@ -191,84 +188,12 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 		},
 	}
 
-	// Provider-specific environment variables
-	if restore.Spec.Source.Target.InsecureSkipVerify {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  constants.EnvBackupInsecureSkipVerify,
-			Value: "true",
-		})
-	}
-
-	switch provider {
-	case constants.StorageProviderS3:
-		region := restore.Spec.Source.Target.Region
-		if region == "" {
-			region = constants.DefaultS3Region
-		}
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  constants.EnvBackupRegion,
-			Value: region,
-		})
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  constants.EnvBackupUsePathStyle,
-			Value: fmt.Sprintf("%t", restore.Spec.Source.Target.UsePathStyle),
-		})
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  constants.EnvRestoreRegion,
-			Value: region,
-		})
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  constants.EnvRestoreUsePathStyle,
-			Value: fmt.Sprintf("%t", restore.Spec.Source.Target.UsePathStyle),
-		})
-	case constants.StorageProviderGCS:
-		if restore.Spec.Source.Target.GCS != nil && restore.Spec.Source.Target.GCS.Project != "" {
-			envVars = append(envVars, corev1.EnvVar{
-				Name:  constants.EnvBackupGCSProject,
-				Value: restore.Spec.Source.Target.GCS.Project,
-			})
-		}
-
-	// Set STORAGE_EMULATOR_HOST for GCS emulator -- REVERTED: Does not fix fake-gcs-server interactions
-
-	case constants.StorageProviderAzure:
-		if restore.Spec.Source.Target.Azure != nil {
-			if restore.Spec.Source.Target.Azure.StorageAccount != "" {
-				envVars = append(envVars, corev1.EnvVar{
-					Name:  constants.EnvBackupAzureStorageAccount,
-					Value: restore.Spec.Source.Target.Azure.StorageAccount,
-				})
-			}
-			if restore.Spec.Source.Target.Azure.Container != "" {
-				envVars = append(envVars, corev1.EnvVar{
-					Name:  constants.EnvBackupAzureContainer,
-					Value: restore.Spec.Source.Target.Azure.Container,
-				})
-			}
-		}
-	}
+	envVars = storageenv.AppendProviderEnvVars(envVars, restore.Spec.Source.Target)
+	envVars = storageenv.AppendRestoreProviderEnvVars(envVars, restore.Spec.Source.Target)
 
 	// JWT auth configuration
-	jwtRole := restore.Spec.JWTAuthRole
-	if jwtRole == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		jwtRole = constants.RoleNameRestore
-	}
-
-	if jwtRole != "" {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  constants.EnvBackupJWTAuthRole,
-			Value: jwtRole,
-		})
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  constants.EnvBackupAuthMethod,
-			Value: constants.BackupAuthMethodJWT,
-		})
-	} else if restore.Spec.TokenSecretRef != nil {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  constants.EnvBackupAuthMethod,
-			Value: constants.BackupAuthMethodToken,
-		})
-	}
+	jwtRole := effectiveRestoreJWTRole(restore, cluster)
+	envVars = storageenv.AppendAuthEnvVars(envVars, jwtRole, restore.Spec.TokenSecretRef != nil)
 
 	// Note: Credentials are mounted as a volume and read by the executor based on provider.
 	// S3-specific env vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) are not needed
@@ -295,12 +220,7 @@ func buildRestoreVolumes(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 	}
 
 	// JWT token volume (if using JWT auth)
-	jwtRole := restore.Spec.JWTAuthRole
-	if jwtRole == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		jwtRole = constants.RoleNameRestore
-	}
-
-	if jwtRole != "" {
+	if effectiveRestoreJWTRole(restore, cluster) != "" {
 		audience := auth.OpenBaoJWTAudience()
 		expirationSeconds := int64(3600)
 		volumes = append(volumes, corev1.Volume{
@@ -337,7 +257,7 @@ func buildRestoreVolumes(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 	if restore.Spec.Source.Target.CredentialsSecretRef != nil {
 		defaultMode := int32(0400)
 		volumes = append(volumes, corev1.Volume{
-			Name: restoreS3CredentialsVolume,
+			Name: restoreCredentialsVolume,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  restore.Spec.Source.Target.CredentialsSecretRef.Name,
@@ -364,12 +284,7 @@ func buildRestoreVolumeMounts(restore *openbaov1alpha1.OpenBaoRestore, cluster *
 	}
 
 	// JWT token mount
-	jwtRole := restore.Spec.JWTAuthRole
-	if jwtRole == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		jwtRole = constants.RoleNameRestore
-	}
-
-	if jwtRole != "" {
+	if effectiveRestoreJWTRole(restore, cluster) != "" {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      restoreJWTTokenVolumeName,
 			MountPath: restoreJWTTokenMountPath,
@@ -386,14 +301,19 @@ func buildRestoreVolumeMounts(restore *openbaov1alpha1.OpenBaoRestore, cluster *
 		})
 	}
 
-	// S3 credentials mount
+	// Storage credentials mount
 	if restore.Spec.Source.Target.CredentialsSecretRef != nil {
 		mounts = append(mounts, corev1.VolumeMount{
-			Name:      restoreS3CredentialsVolume,
-			MountPath: restoreS3CredentialsMountPath,
+			Name:      restoreCredentialsVolume,
+			MountPath: restoreCredentialsMountPath,
 			ReadOnly:  true,
 		})
 	}
 
 	return mounts
+}
+
+func effectiveRestoreJWTRole(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) string {
+	oidcEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled
+	return storageenv.EffectiveJWTRole(restore.Spec.JWTAuthRole, oidcEnabled, constants.RoleNameRestore)
 }
