@@ -12,13 +12,16 @@ import (
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -609,6 +612,37 @@ func TestEnsureBackupJob_CreatesJob(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("expected Job to exist: %v", err)
+	}
+}
+
+func TestEnsureBackupJob_CreateAlreadyExists(t *testing.T) {
+	ctx := context.Background()
+	logger := logr.Discard()
+	cluster := newTestClusterWithBackup("test-cluster", "default")
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(cluster).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if _, ok := obj.(*batchv1.Job); ok {
+					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
+				}
+				return c.Create(ctx, obj, opts...)
+			},
+		}).
+		Build()
+
+	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+
+	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
+	if err != nil {
+		t.Fatalf("ensureBackupJob() error = %v", err)
+	}
+	if !created {
+		t.Error("ensureBackupJob() should return true when create receives AlreadyExists")
 	}
 }
 

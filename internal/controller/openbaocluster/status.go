@@ -343,8 +343,8 @@ func observedVersionFromPods(state *clusterState) string {
 		return ""
 	}
 
-	// Prefer the leader's reported version when available.
-	if strings.TrimSpace(state.LeaderName) != "" {
+	// Prefer the leader's reported version only when leadership is unambiguous.
+	if state.LeaderCount == 1 && strings.TrimSpace(state.LeaderName) != "" {
 		for i := range state.Pods {
 			pod := &state.Pods[i]
 			if pod.Name == state.LeaderName {

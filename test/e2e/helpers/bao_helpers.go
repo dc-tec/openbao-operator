@@ -578,26 +578,28 @@ set -e
 export BAO_ADDR=%s
 export BAO_SKIP_VERIFY=true
 
-# Retry loop for login and verification
-for i in $(seq 1 10); do
-	echo "Attempt $i/10..."
-	TOKEN=$(bao write -field=token auth/jwt-operator/login role=test-verifier \
-		jwt=@/var/run/secrets/openbao/token 2>&1 || echo "")
-	if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
-		export BAO_TOKEN=$TOKEN
-		# Read config and check for min_quorum value
-		bao read sys/storage/raft/autopilot/configuration
-		# Use grep to find the min_quorum line and extract the number
-		if bao read sys/storage/raft/autopilot/configuration 2>&1 | grep -q "min_quorum.*%d"; then
-			echo "MIN_QUORUM_VERIFIED"
-			exit 0
+	# Retry loop for login and verification
+	for i in $(seq 1 10); do
+		echo "Attempt $i/10..."
+		set +e
+		LOGIN_OUTPUT=$(bao write -field=token auth/jwt-operator/login \
+			role=test-verifier jwt=@/var/run/secrets/openbao/token 2>&1)
+		LOGIN_EXIT=$?
+		set -e
+		if [ $LOGIN_EXIT -eq 0 ] && [ -n "$LOGIN_OUTPUT" ] && [ "$LOGIN_OUTPUT" != "null" ]; then
+			export BAO_TOKEN=$LOGIN_OUTPUT
+			# Use grep to find the min_quorum line and extract the number
+			if bao read sys/storage/raft/autopilot/configuration 2>&1 | grep -q "min_quorum.*%d"; then
+				echo "MIN_QUORUM_VERIFIED"
+				exit 0
+			fi
+			echo "Autopilot config not yet propagated or incorrect"
+		else
+			echo "Login failed"
+			echo "Login command output: $LOGIN_OUTPUT"
 		fi
-		echo "Autopilot config not yet propagated or incorrect"
-	else
-		echo "Login failed (token empty or null)"
-	fi
-	sleep 2
-done
+		sleep 2
+	done
 
 echo "Failed to verify min_quorum after 10 attempts"
 exit 1

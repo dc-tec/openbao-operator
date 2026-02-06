@@ -64,7 +64,8 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 		// If job failed, implement retry logic
 		if existingJobStatus == "failed" {
 			// Count how many failed jobs exist for this cluster
-			failedCount, err := m.countFailedPreUpgradeBackupJobs(ctx, cluster)
+			expectedJobName := m.backupJobName(cluster)
+			failedCount, err := m.countFailedPreUpgradeBackupJobs(ctx, cluster, expectedJobName)
 			if err != nil {
 				return false, fmt.Errorf("failed to count failed backup jobs: %w", err)
 			}
@@ -157,6 +158,10 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 	}
 
 	if err := m.client.Create(ctx, job); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			logger.V(1).Info("Pre-upgrade backup job already exists after create attempt", "job", jobName)
+			return false, nil
+		}
 		return false, fmt.Errorf("failed to create backup job: %w", err)
 	}
 
@@ -248,8 +253,9 @@ func (m *Manager) backupJobName(cluster *openbaov1alpha1.OpenBaoCluster) string 
 	return fmt.Sprintf("pre-upgrade-backup-%s-gen%d", cluster.Name, cluster.Generation)
 }
 
-// countFailedPreUpgradeBackupJobs counts how many failed pre-upgrade backup jobs exist for this cluster.
-func (m *Manager) countFailedPreUpgradeBackupJobs(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (int, error) {
+// countFailedPreUpgradeBackupJobs counts failed pre-upgrade backup jobs that belong
+// to the current upgrade attempt name family (expected name and optional suffixes).
+func (m *Manager) countFailedPreUpgradeBackupJobs(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, expectedJobName string) (int, error) {
 	jobList := &batchv1.JobList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
 		constants.LabelAppInstance:       cluster.Name,
@@ -268,11 +274,27 @@ func (m *Manager) countFailedPreUpgradeBackupJobs(ctx context.Context, cluster *
 
 	count := 0
 	for i := range jobList.Items {
-		if kube.JobFailed(&jobList.Items[i]) {
+		job := &jobList.Items[i]
+		if !isCurrentAttemptPreUpgradeBackupJobName(job.Name, expectedJobName) {
+			continue
+		}
+		if kube.JobFailed(job) {
 			count++
 		}
 	}
 	return count, nil
+}
+
+func isCurrentAttemptPreUpgradeBackupJobName(name string, expected string) bool {
+	name = strings.TrimSpace(name)
+	expected = strings.TrimSpace(expected)
+	if name == "" || expected == "" {
+		return false
+	}
+	if name == expected {
+		return true
+	}
+	return strings.HasPrefix(name, expected+"-")
 }
 
 // deletePreUpgradeBackupJob deletes a specific pre-upgrade backup job.

@@ -107,13 +107,19 @@ func (r *OpenBaoClusterReconciler) gatherBackupState(
 		return fmt.Errorf("failed to list backup Jobs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
+	selectedActiveJobName := ""
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
-		if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
-			state.BackupJobName = job.Name
-			state.BackupInProgress = true
-			break
+		if job.Status.Succeeded != 0 || job.Status.Failed != 0 {
+			continue
 		}
+		if selectedActiveJobName == "" || job.Name < selectedActiveJobName {
+			selectedActiveJobName = job.Name
+		}
+	}
+	if selectedActiveJobName != "" {
+		state.BackupJobName = selectedActiveJobName
+		state.BackupInProgress = true
 	}
 
 	return nil
@@ -227,7 +233,11 @@ func (r *OpenBaoClusterReconciler) gatherPodState(
 		active, present, err := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelActive)
 		if err == nil && present && active {
 			state.LeaderCount++
-			state.LeaderName = pod.Name
+			if state.LeaderCount == 1 {
+				state.LeaderName = pod.Name
+			} else {
+				state.LeaderName = ""
+			}
 		}
 	}
 

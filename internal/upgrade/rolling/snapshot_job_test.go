@@ -12,10 +12,13 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
@@ -155,6 +158,61 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, jobList.Items, 1, "should have created one backup job")
 	assert.Contains(t, jobList.Items[0].Name, "pre-upgrade-backup", "job name should contain pre-upgrade-backup")
+}
+
+func TestHandlePreUpgradeSnapshot_CreateAlreadyExists(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-ns",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileDevelopment,
+			Version:  "2.4.4",
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				PreUpgradeSnapshot: true,
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "http://test-endpoint",
+					Bucket:   "test-bucket",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.3",
+			Initialized:    true,
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	_ = batchv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if _, ok := obj.(*batchv1.Job); ok {
+					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
+				}
+				return c.Create(ctx, obj, opts...)
+			},
+		}).
+		WithReturnManagedFields().
+		Build()
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
+	assert.NoError(t, err, "AlreadyExists on create should be treated as idempotent")
+	assert.False(t, complete, "snapshot should remain in-progress when create races")
 }
 
 func TestHandlePreUpgradeSnapshot_CreatesJobWithOIDCDefaultRole(t *testing.T) {
@@ -433,15 +491,14 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 		},
 	}
 
-	// Create failed backup jobs - need 3 to exceed max retries (DefaultMaxPreUpgradeBackupRetries=3)
-	// Note: In real operation, we delete and recreate with the same name, so we wouldn't see 3 at once
-	// unless some were left over (zombies) or we changed naming strategy.
-	// For this test to work with strict name lookup, one job must match the expected name.
+	// Create failed backup jobs for the current attempt family:
+	// one exact expected name + suffixed variants.
+	// This simulates leftover retries from the same upgrade attempt.
 	var failedJobs []client.Object
 	for i := 0; i < upgrade.DefaultMaxPreUpgradeBackupRetries; i++ {
-		name := fmt.Sprintf("pre-upgrade-backup-test-cluster-attempt-%d", i)
+		name := fmt.Sprintf("pre-upgrade-backup-test-cluster-gen0-attempt-%d", i)
 		if i == 0 {
-			// Make the first one match strict lookup so 'find' sees it
+			// Exact name is required for strict lookup in findExistingPreUpgradeBackupJob.
 			name = "pre-upgrade-backup-test-cluster-gen0"
 		}
 		failedJobs = append(failedJobs, &batchv1.Job{
@@ -559,6 +616,117 @@ func TestHandlePreUpgradeSnapshot_JobFailedRetriesOnFirstFailure(t *testing.T) {
 	err = k8sClient.List(context.Background(), jobList, client.InNamespace("test-ns"))
 	require.NoError(t, err)
 	assert.Len(t, jobList.Items, 0, "failed job should have been deleted for retry")
+}
+
+func TestHandlePreUpgradeSnapshot_IgnoresFailedJobsFromPreviousGenerations(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-cluster",
+			Namespace:  "test-ns",
+			Generation: 7,
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				PreUpgradeSnapshot: true,
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "http://test-endpoint",
+					Bucket:   "test-bucket",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.3",
+			Initialized:    true,
+		},
+	}
+
+	currentFailedJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pre-upgrade-backup-test-cluster-gen7",
+			Namespace: "test-ns",
+			Labels: map[string]string{
+				constants.LabelAppInstance:       "test-cluster",
+				constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:    "test-cluster",
+				constants.LabelOpenBaoComponent:  "backup",
+				constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
+			},
+		},
+		Status: batchv1.JobStatus{
+			Failed: 1,
+		},
+	}
+
+	staleFailedJob1 := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pre-upgrade-backup-test-cluster-gen6",
+			Namespace: "test-ns",
+			Labels: map[string]string{
+				constants.LabelAppInstance:       "test-cluster",
+				constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:    "test-cluster",
+				constants.LabelOpenBaoComponent:  "backup",
+				constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
+			},
+		},
+		Status: batchv1.JobStatus{
+			Failed: 1,
+		},
+	}
+
+	staleFailedJob2 := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pre-upgrade-backup-test-cluster-gen5-attempt-1",
+			Namespace: "test-ns",
+			Labels: map[string]string{
+				constants.LabelAppInstance:       "test-cluster",
+				constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:    "test-cluster",
+				constants.LabelOpenBaoComponent:  "backup",
+				constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
+			},
+		},
+		Status: batchv1.JobStatus{
+			Failed: 1,
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	_ = batchv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, currentFailedJob, staleFailedJob1, staleFailedJob2).
+		WithReturnManagedFields().
+		Build()
+
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
+	assert.NoError(t, err, "historical failed jobs from older generations must not consume current retry budget")
+	assert.False(t, complete, "failed current-attempt job should trigger retry flow")
+
+	jobList := &batchv1.JobList{}
+	err = k8sClient.List(context.Background(), jobList, client.InNamespace("test-ns"))
+	require.NoError(t, err)
+
+	remainingNames := make([]string, 0, len(jobList.Items))
+	for i := range jobList.Items {
+		remainingNames = append(remainingNames, jobList.Items[i].Name)
+	}
+	assert.NotContains(t, remainingNames, "pre-upgrade-backup-test-cluster-gen7")
+	assert.Contains(t, remainingNames, "pre-upgrade-backup-test-cluster-gen6")
+	assert.Contains(t, remainingNames, "pre-upgrade-backup-test-cluster-gen5-attempt-1")
 }
 
 func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
