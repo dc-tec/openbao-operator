@@ -153,8 +153,7 @@ func TestVAP_OpenBaoRestore_RejectsSpecMutation(t *testing.T) {
 	t.Fatalf("expected VAP to deny OpenBaoRestore spec mutation after retries")
 }
 
-func TestVAP_OpenBaoCluster_RequiresProfile(t *testing.T) {
-	ensureDefaultAdmissionPoliciesApplied(t)
+func TestCRD_OpenBaoCluster_RequiresProfile(t *testing.T) {
 	namespace := newTestNamespace(t)
 
 	for attempt := 0; attempt < 25; attempt++ {
@@ -168,14 +167,14 @@ func TestVAP_OpenBaoCluster_RequiresProfile(t *testing.T) {
 			continue
 		}
 
-		requireAdmissionDenied(t, err)
-		if !strings.Contains(err.Error(), "spec.profile is required") {
+		requireInvalidRequest(t, err)
+		if !strings.Contains(err.Error(), "spec.profile") {
 			t.Fatalf("unexpected error message: %v", err)
 		}
 		return
 	}
 
-	t.Fatalf("expected VAP to deny OpenBaoCluster create without spec.profile after retries")
+	t.Fatalf("expected CRD validation to reject OpenBaoCluster create without spec.profile after retries")
 }
 
 func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
@@ -184,8 +183,32 @@ func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
 
 	// First ensure admission policies are active by waiting for a known denial.
 	for attempt := 0; attempt < 25; attempt++ {
-		invalid := newMinimalClusterObj(namespace, fmt.Sprintf("cluster-policy-probe-%d", attempt))
-		invalid.Spec.Profile = ""
+		invalid := &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "openbao.org/v1alpha1",
+				"kind":       "OpenBaoCluster",
+				"metadata": map[string]any{
+					"name":      fmt.Sprintf("cluster-policy-probe-%d", attempt),
+					"namespace": namespace,
+				},
+				"spec": map[string]any{
+					"version":  "2.4.4",
+					"image":    "openbao/openbao:2.4.4",
+					"replicas": int64(3),
+					"profile":  "Development",
+					"tls": map[string]any{
+						"enabled":        true,
+						"rotationPeriod": "720h",
+					},
+					"storage": map[string]any{
+						"size": "10Gi",
+					},
+					"initContainer": map[string]any{
+						"enabled": false,
+					},
+				},
+			},
+		}
 
 		err := k8sClient.Create(ctx, invalid)
 		if err == nil {

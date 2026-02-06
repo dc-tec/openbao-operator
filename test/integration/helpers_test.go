@@ -137,6 +137,7 @@ func newMinimalClusterObj(namespace, name string) *openbaov1alpha1.OpenBaoCluste
 			Version:  "2.4.4",
 			Image:    "openbao/openbao:2.4.4",
 			Replicas: 3,
+			Profile:  openbaov1alpha1.ProfileDevelopment,
 			TLS: openbaov1alpha1.TLSConfig{
 				Enabled:        true,
 				RotationPeriod: "720h",

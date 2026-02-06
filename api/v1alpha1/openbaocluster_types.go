@@ -1614,8 +1614,7 @@ type OpenBaoClusterSpec struct {
 	// When set to "Development", relaxed security is allowed but a security warning
 	// condition is set.
 	// +kubebuilder:validation:Enum=Hardened;Development
-	// +optional
-	Profile Profile `json:"profile,omitempty"`
+	Profile Profile `json:"profile"`
 }
 
 // UpgradeProgress tracks the state of an in-progress upgrade.
