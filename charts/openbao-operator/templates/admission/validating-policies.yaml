@@ -57,8 +57,6 @@ metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
 spec:
-  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
-  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
   policyName: {{ include "openbao-operator.fullname" . }}-lock-controller-statefulset-mutations
   validationActions:
     - Deny

@@ -139,8 +139,6 @@ metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
 spec:
-  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
-  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
   policyName: {{ include "openbao-operator.fullname" . }}-openbao-restrict-controller-rbac
   validationActions: [Deny]
   matchResources:
@@ -151,5 +149,4 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["roles", "rolebindings"]
-
 {{- end }}

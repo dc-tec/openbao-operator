@@ -2791,6 +2791,7 @@ spec:
                     type: boolean
                 type: object
             required:
+            - profile
             - replicas
             - storage
             - tls

@@ -68,5 +68,4 @@ spec:
   policyName: {{ include "openbao-operator.fullname" . }}-validate-openbaorestore
   validationActions:
     - Deny
-
 {{- end }}
