@@ -29,7 +29,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/storage"
 )
 
 // ErrNoBackupToken indicates that no suitable backup token is configured for
@@ -414,26 +413,7 @@ func (m *Manager) readBackupSizeFromObjectStorage(ctx context.Context, cluster *
 		return 0, nil
 	}
 
-	creds, err := kube.LoadStorageCredentials(ctx, m.client, cluster.Spec.Backup.Target.CredentialsSecretRef, cluster.Namespace)
-	if err != nil {
-		return 0, fmt.Errorf("failed to load storage credentials: %w", err)
-	}
-
-	region := creds.Region
-	if region == "" {
-		region = constants.DefaultS3Region
-	}
-
-	storageClient, err := storage.OpenS3Bucket(ctx, storage.S3ClientConfig{
-		Endpoint:        cluster.Spec.Backup.Target.Endpoint,
-		Bucket:          cluster.Spec.Backup.Target.Bucket,
-		Region:          region,
-		AccessKeyID:     creds.AccessKeyID,
-		SecretAccessKey: creds.SecretAccessKey,
-		SessionToken:    creds.SessionToken,
-		CACert:          creds.CACert,
-		UsePathStyle:    cluster.Spec.Backup.Target.UsePathStyle,
-	})
+	storageClient, err := m.openBackupStorageClient(ctx, cluster, false)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create storage client: %w", err)
 	}
@@ -877,28 +857,8 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 		MaxAge:   maxAge,
 	}
 
-	// Load storage credentials
-	creds, err := kube.LoadStorageCredentials(ctx, m.client, cluster.Spec.Backup.Target.CredentialsSecretRef, cluster.Namespace)
-	if err != nil {
-		return fmt.Errorf("failed to load storage credentials for retention: %w", err)
-	}
-
-	region := creds.Region
-	if region == "" {
-		region = constants.DefaultS3Region
-	}
-
 	// Create storage client
-	storageClient, err := storage.OpenS3Bucket(ctx, storage.S3ClientConfig{
-		Endpoint:        cluster.Spec.Backup.Target.Endpoint,
-		Bucket:          cluster.Spec.Backup.Target.Bucket,
-		Region:          region,
-		AccessKeyID:     creds.AccessKeyID,
-		SecretAccessKey: creds.SecretAccessKey,
-		SessionToken:    creds.SessionToken,
-		CACert:          creds.CACert,
-		UsePathStyle:    cluster.Spec.Backup.Target.UsePathStyle,
-	})
+	storageClient, err := m.openBackupStorageClient(ctx, cluster, false)
 	if err != nil {
 		return fmt.Errorf("failed to create storage client for retention: %w", err)
 	}
