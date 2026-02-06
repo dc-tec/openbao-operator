@@ -1881,6 +1881,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#api-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#source-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4144,6 +4155,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#api-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#source-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4323,6 +4345,12 @@
     class User,Pending,Validating read;</code></pre>
 <hr />
 <h2 id="3-configuration">3. Configuration<a class="headerlink" href="#3-configuration" title="Permanent link">&para;</a></h2>
+<h3 id="api-contract">API Contract<a class="headerlink" href="#api-contract" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>spec</code> is required.</li>
+<li><code>spec</code> is immutable after creation.</li>
+<li>To change restore parameters, create a new <code>OpenBaoRestore</code> resource.</li>
+</ul>
 <h3 id="source-configuration">Source Configuration<a class="headerlink" href="#source-configuration" title="Permanent link">&para;</a></h3>
 <p>Define where your snapshot is located. The <code>BackupTarget</code> structure supports S3, GCS, and Azure storage providers.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">S3 (AWS/MinIO)</label><label for="__tabbed_1_2">GCS (Google Cloud Storage)</label><label for="__tabbed_1_3">Azure Blob Storage</label></div>

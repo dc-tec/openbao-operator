@@ -4070,6 +4070,10 @@
 <h1 id="openbaotenant">OpenBaoTenant<a class="headerlink" href="#openbaotenant" title="Permanent link">&para;</a></h1>
 <p><code>OpenBaoTenant</code> is the governance and onboarding CRD. It authorizes the Operator to manage OpenBao resources in a target namespace by provisioning tenant-scoped isolation.</p>
 <p>It is the key to <strong>Multi-Tenancy</strong>, ensuring that different teams can safely share a Kubernetes cluster without accessing each other's secrets.</p>
+<div class="admonition note">
+<p class="admonition-title">API Contract</p>
+<p><code>spec.targetNamespace</code> is immutable after creation.</p>
+</div>
 <h2 id="tenant-isolation-model">Tenant Isolation Model<a class="headerlink" href="#tenant-isolation-model" title="Permanent link">&para;</a></h2>
 <p>When you apply an <code>OpenBaoTenant</code>, the Operator creates a "Sandbox" around the target namespace.</p>
 <pre class="mermaid"><code>graph TD

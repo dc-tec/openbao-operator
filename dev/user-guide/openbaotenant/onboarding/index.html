@@ -4192,6 +4192,10 @@
 <li><strong>Verify</strong>: Resources created in user namespaces are verified. They must target their own namespace (<code>metadata.namespace == spec.targetNamespace</code>).</li>
 <li><strong>Isolation</strong>: The Provisioner uses a delegated ServiceAccount with minimal permissions. It cannot list all namespaces in the cluster; it only acts on namespaces explicitly discovered via valid <code>OpenBaoTenant</code> CRs.</li>
 </ol>
+<div class="admonition note">
+<p class="admonition-title">API Contract</p>
+<p><code>spec.targetNamespace</code> is immutable after creation. To change the target namespace, delete and recreate the <code>OpenBaoTenant</code>.</p>
+</div>
 
 
 
