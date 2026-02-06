@@ -48,6 +48,8 @@ func RunExecutor(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) e
 		return runBlueGreenDemoteBlueNonVotersStepDown(ctx, logger, cfg)
 	case ExecutorActionBlueGreenRemoveBluePeers:
 		return runBlueGreenRemoveBluePeers(ctx, logger, cfg)
+	case ExecutorActionBlueGreenRemoveGreenPeers:
+		return runBlueGreenRemoveGreenPeers(ctx, logger, cfg)
 	case ExecutorActionBlueGreenRepairConsensus:
 		return runBlueGreenRepairConsensus(ctx, logger, cfg)
 	case ExecutorActionRollingStepDownLeader:
@@ -354,13 +356,9 @@ func runBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 	// Prefer a Blue leader when repairing consensus, since Blue should remain
 	// the authoritative cluster after rollback. If that fails, fall back to any
 	// leader we can reach (including Green) to read the Raft configuration.
-	leaderURL, err := findLeader(ctx, cfg, cfg.BlueRevision)
+	leaderURL, err := findLeaderWithFallback(ctx, logger, cfg, cfg.BlueRevision, cfg.GreenRevision, "Blue", "Green")
 	if err != nil {
-		logger.Info("Failed to find leader among Blue pods for consensus repair, falling back to Green", "error", err)
-		leaderURL, err = findLeader(ctx, cfg, cfg.GreenRevision)
-		if err != nil {
-			return fmt.Errorf("failed to find leader for consensus repair: %w", err)
-		}
+		return fmt.Errorf("failed to find leader for consensus repair: %w", err)
 	}
 	logger.Info("Leader found for consensus repair", "leader_url", leaderURL)
 
@@ -436,7 +434,11 @@ func runBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 
 		logger.Info("Demoting Green peer to non-voter during consensus repair", "node_id", server.NodeID, "address", server.Address)
 		if err := client.DemoteRaftPeer(ctx, server.NodeID); err != nil {
-			logger.Info("Failed to demote Green peer (may already be non-voter)", "node_id", server.NodeID, "error", err)
+			if isBenignDemoteError(err) {
+				logger.V(1).Info("Green peer already non-voter during consensus repair", "node_id", server.NodeID, "address", server.Address)
+				continue
+			}
+			return fmt.Errorf("failed to demote Green peer %q to non-voter during consensus repair: %w", server.NodeID, err)
 		}
 	}
 
@@ -536,13 +538,9 @@ func runBlueGreenDemoteBlueNonVotersStepDown(ctx context.Context, logger logr.Lo
 }
 
 func findInitialLeader(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) (string, error) {
-	leaderURL, err := findLeader(ctx, cfg, cfg.GreenRevision)
+	leaderURL, err := findLeaderWithFallback(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
 	if err != nil {
-		logger.Info("Failed to find leader among Green pods, checking Blue pods", "error", err)
-		leaderURL, err = findLeader(ctx, cfg, cfg.BlueRevision)
-		if err != nil {
-			return "", fmt.Errorf("failed to find initial leader: %w", err)
-		}
+		return "", fmt.Errorf("failed to find initial leader: %w", err)
 	}
 	logger.Info("Initial leader found", "leader_url", leaderURL)
 	return leaderURL, nil
@@ -624,11 +622,15 @@ func isBlueRaftServer(nodeID string, address string, bluePrefix string) bool {
 	return strings.HasPrefix(nodeID, bluePrefix) || strings.Contains(address, bluePrefix)
 }
 
+type raftPeerDemoter interface {
+	DemoteRaftPeer(ctx context.Context, serverID string) error
+}
+
 func demoteBlueVotersExceptLeader(
 	ctx context.Context,
 	logger logr.Logger,
 	cfg *ExecutorConfig,
-	client *openbao.Client,
+	client raftPeerDemoter,
 	config *openbao.RaftConfigurationResponse,
 	leaderID string,
 	bluePrefix string,
@@ -647,8 +649,12 @@ func demoteBlueVotersExceptLeader(
 
 		logger.Info("Demoting Blue peer before step-down to bias election", "node_id", server.NodeID)
 		if err := client.DemoteRaftPeer(ctx, server.NodeID); err != nil {
-			// Log but continue - step-down is the main action
-			logger.Error(err, "Failed to demote Blue peer", "node_id", server.NodeID, "cluster_replicas", cfg.ClusterReplicas)
+			if isBenignDemoteError(err) {
+				logger.V(1).Info("Blue peer already non-voter before step-down", "node_id", server.NodeID)
+				continue
+			}
+			// Log but continue - step-down is the main action.
+			logger.Error(err, "Failed to demote Blue peer before step-down", "node_id", server.NodeID, "cluster_replicas", cfg.ClusterReplicas)
 		}
 	}
 }
@@ -675,13 +681,9 @@ func waitForNewLeaderURL(ctx context.Context, logger logr.Logger, cfg *ExecutorC
 		return newLeaderURL, nil
 	}
 
-	leaderURL, findErr := findLeader(ctx, cfg, cfg.GreenRevision)
+	leaderURL, findErr := findLeaderWithFallback(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
 	if findErr != nil {
-		logger.Info("Failed to find leader among Green pods, checking Blue pods", "error", findErr)
-		leaderURL, findErr = findLeader(ctx, cfg, cfg.BlueRevision)
-		if findErr != nil {
-			return "", fmt.Errorf("failed to find new leader after step-down (checked Green and Blue): %w", findErr)
-		}
+		return "", fmt.Errorf("failed to find new leader after step-down: %w", findErr)
 	}
 	logger.Info("New leader found", "leader_url", leaderURL)
 	return leaderURL, nil
@@ -708,7 +710,7 @@ func waitForLeaderElection(ctx context.Context, cfg *ExecutorConfig, previousLea
 	return newLeaderURL, err
 }
 
-func demoteAllBluePods(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, client *openbao.Client) error {
+func demoteAllBluePods(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, client raftPeerDemoter) error {
 	if client == nil {
 		return fmt.Errorf("client is required to demote Blue pods")
 	}
@@ -717,24 +719,50 @@ func demoteAllBluePods(ctx context.Context, logger logr.Logger, cfg *ExecutorCon
 		bluePodName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.BlueRevision, i)
 		logger.V(1).Info("Demoting Blue pod to non-voter", "pod_name", bluePodName)
 		if err := client.DemoteRaftPeer(ctx, bluePodName); err != nil {
-			// It might already be demoted or is non-voter, benign error usually
-			logger.Info("Failed to demote Blue pod (might already be non-voter)", "pod_name", bluePodName, "error", err)
+			if isBenignDemoteError(err) {
+				logger.V(1).Info("Blue pod already non-voter after leader transfer", "pod_name", bluePodName)
+				continue
+			}
+			return fmt.Errorf("failed to demote Blue pod %q to non-voter: %w", bluePodName, err)
 		}
 	}
 	return nil
 }
 
 func runBlueGreenRemoveBluePeers(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) error {
-	// At this point, the leader should be a Green pod. Try Green first, then Blue.
-	leaderURL, err := findLeader(ctx, cfg, cfg.GreenRevision)
-	if err != nil {
-		// Fall back to checking Blue pods in case leadership hasn't transferred yet
-		leaderURL, err = findLeader(ctx, cfg, cfg.BlueRevision)
-		if err != nil {
-			return fmt.Errorf("failed to find leader: %w", err)
-		}
+	return runBlueGreenRemovePeers(ctx, logger, cfg, cfg.BlueRevision, cfg.GreenRevision, cfg.BlueRevision, "Blue")
+}
+
+func runBlueGreenRemoveGreenPeers(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) error {
+	return runBlueGreenRemovePeers(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision, cfg.GreenRevision, "Green")
+}
+
+func runBlueGreenRemovePeers(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	revisionToRemove string,
+	preferredLeaderRevision string,
+	fallbackLeaderRevision string,
+	peerColor string,
+) error {
+	if strings.TrimSpace(revisionToRemove) == "" {
+		return fmt.Errorf("revision to remove is required")
 	}
-	logger.Info("Leader found", "leader_url", leaderURL)
+
+	leaderURL, err := findLeaderWithFallback(
+		ctx,
+		logger,
+		cfg,
+		preferredLeaderRevision,
+		fallbackLeaderRevision,
+		"preferred",
+		"fallback",
+	)
+	if err != nil {
+		return fmt.Errorf("failed to find leader: %w", err)
+	}
+	logger.Info("Leader found", "leader_url", leaderURL, "target_revision", revisionToRemove, "target_peers", peerColor)
 
 	token, err := loginJWT(ctx, cfg, leaderURL)
 	if err != nil {
@@ -759,9 +787,12 @@ func runBlueGreenRemoveBluePeers(ctx context.Context, logger logr.Logger, cfg *E
 
 	for _, server := range config.Config.Servers {
 		for i := int32(0); i < cfg.ClusterReplicas; i++ {
-			bluePodName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.BlueRevision, i)
-			if server.NodeID == bluePodName || strings.Contains(server.Address, bluePodName) {
-				logger.Info("Removing Blue Raft peer", "node_id", server.NodeID, "address", server.Address)
+			podName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, revisionToRemove, i)
+			if server.NodeID == podName || strings.Contains(server.Address, podName) {
+				logger.Info("Removing Raft peer",
+					"target", peerColor,
+					"node_id", server.NodeID,
+					"address", server.Address)
 				if err := client.RemoveRaftPeer(ctx, server.NodeID); err != nil {
 					return fmt.Errorf("failed to remove Raft peer %q: %w", server.NodeID, err)
 				}
@@ -769,7 +800,7 @@ func runBlueGreenRemoveBluePeers(ctx context.Context, logger logr.Logger, cfg *E
 		}
 	}
 
-	logger.Info("Blue Raft peers removed")
+	logger.Info("Raft peers removed", "target", peerColor)
 	return nil
 }
 
@@ -818,6 +849,36 @@ func findLeader(ctx context.Context, cfg *ExecutorConfig, revision string) (stri
 	return "", fmt.Errorf("no leader found among %d pods", cfg.ClusterReplicas)
 }
 
+func findLeaderWithFallback(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	primaryRevision string,
+	fallbackRevision string,
+	primaryLabel string,
+	fallbackLabel string,
+) (string, error) {
+	leaderURL, err := findLeader(ctx, cfg, primaryRevision)
+	if err == nil {
+		return leaderURL, nil
+	}
+
+	if strings.TrimSpace(fallbackRevision) == "" || fallbackRevision == primaryRevision {
+		return "", fmt.Errorf("failed to find leader among %s pods: %w", primaryLabel, err)
+	}
+
+	logger.Info(
+		fmt.Sprintf("Failed to find leader among %s pods, checking %s pods", primaryLabel, fallbackLabel),
+		"error", err,
+	)
+
+	leaderURL, fallbackErr := findLeader(ctx, cfg, fallbackRevision)
+	if fallbackErr != nil {
+		return "", fmt.Errorf("failed to find leader (checked %s and %s): %w", primaryLabel, fallbackLabel, fallbackErr)
+	}
+	return leaderURL, nil
+}
+
 func findLeaderOnce(ctx context.Context, cfg *ExecutorConfig, revision string) (string, bool) {
 	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
@@ -857,6 +918,17 @@ func isBenignJoinError(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "already joined")
+}
+
+func isBenignDemoteError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "already a non-voter") ||
+		strings.Contains(message, "already non-voter") ||
+		strings.Contains(message, "already non voter")
 }
 
 func newOpenBaoClientFactory(cfg *ExecutorConfig) (*openbao.ClientFactory, func(), error) {

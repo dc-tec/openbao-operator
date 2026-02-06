@@ -300,53 +300,7 @@ func (m *Manager) shouldReconcileBlueGreen(logger logr.Logger, cluster *openbaov
 }
 
 func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
-	if cluster.Status.BlueGreen == nil {
-		inferred, inferredImage, err := infra.InferActiveRevisionFromPods(ctx, m.client, cluster)
-		if err != nil {
-			logger.Error(err, "Failed to infer active revision from pods; falling back to spec-derived revision")
-		}
-		blueRevision := inferred
-		if blueRevision == "" {
-			blueRevision = m.calculateRevision(cluster)
-		}
-
-		blueImage := cluster.Spec.Image
-		if inferredImage != "" {
-			blueImage = inferredImage
-		}
-
-		cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
-			Phase:        openbaov1alpha1.PhaseIdle,
-			BlueRevision: blueRevision,
-			BlueImage:    blueImage,
-		}
-		return
-	}
-
-	// If the operator restarted and BlueRevision was derived from spec (target) rather than the
-	// currently running ("Blue") pods, correct it before starting a new upgrade or snapshot.
-	if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
-		(cluster.Status.BlueGreen.BlueRevision == "" || cluster.Status.CurrentVersion != cluster.Spec.Version) {
-		inferred, inferredImage, err := infra.InferActiveRevisionFromPods(ctx, m.client, cluster)
-		if err != nil {
-			logger.Error(err, "Failed to infer active revision from pods; keeping existing BlueRevision", "blueRevision", cluster.Status.BlueGreen.BlueRevision)
-			return
-		}
-		if inferred != "" && inferred != cluster.Status.BlueGreen.BlueRevision {
-			logger.Info("Correcting BlueRevision from active pods", "from", cluster.Status.BlueGreen.BlueRevision, "to", inferred)
-			cluster.Status.BlueGreen.BlueRevision = inferred
-		}
-		// Also ensure BlueImage is set if missing (backfill for existing clusters) or incorrect
-		if cluster.Status.BlueGreen.BlueImage == "" {
-			cluster.Status.BlueGreen.BlueImage = cluster.Spec.Image
-			if inferredImage != "" {
-				cluster.Status.BlueGreen.BlueImage = inferredImage
-			}
-		} else if inferredImage != "" && cluster.Status.BlueGreen.BlueImage != inferredImage {
-			logger.Info("Correcting BlueImage from active pods", "from", cluster.Status.BlueGreen.BlueImage, "to", inferredImage)
-			cluster.Status.BlueGreen.BlueImage = inferredImage
-		}
-	}
+	infra.EnsureBlueGreenStatus(ctx, logger, m.client, cluster)
 }
 
 func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, upgradeActive, upgradeNeeded bool) (bool, recon.Result, error) {
@@ -393,16 +347,70 @@ func (m *Manager) handleNoUpgradeNeeded(ctx context.Context, logger logr.Logger,
 }
 
 func (m *Manager) ensureIdleAndCleanupGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle {
+	if cluster.Status.BlueGreen == nil {
 		return nil
 	}
-	if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
-		return fmt.Errorf("failed to cleanup Green StatefulSet: %w", err)
+
+	shouldCleanupGreen := cluster.Status.BlueGreen.GreenRevision != ""
+	if shouldCleanupGreen {
+		if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
+			return fmt.Errorf("failed to cleanup Green StatefulSet: %w", err)
+		}
 	}
-	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
-	cluster.Status.BlueGreen.GreenRevision = ""
-	cluster.Status.BlueGreen.StartTime = nil
+
+	resetBlueGreenTransientState(cluster.Status.BlueGreen)
+
+	if err := m.releaseUpgradeLockIfHeld(ctx, logger, cluster); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (m *Manager) releaseUpgradeLockIfHeld(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if !upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock) {
+		return nil
+	}
+	if err := upgrade.ReleaseUpgradeOperationLock(ctx, m.client, cluster); err != nil {
+		if upgrade.IsOperationLockHeld(err) {
+			logger.V(1).Info("Upgrade operation lock changed ownership before release")
+			return nil
+		}
+		return fmt.Errorf("failed to release upgrade operation lock: %w", err)
+	}
+	return nil
+}
+
+func (m *Manager) finalizeUpgradeTerminalState(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	promoteGreenToBlue bool,
+) error {
+	if cluster.Status.BlueGreen == nil {
+		return nil
+	}
+
+	if promoteGreenToBlue {
+		cluster.Status.BlueGreen.BlueRevision = cluster.Status.BlueGreen.GreenRevision
+		if cluster.Spec.Image != "" {
+			cluster.Status.BlueGreen.BlueImage = cluster.Spec.Image
+		}
+	}
+
+	resetBlueGreenTransientState(cluster.Status.BlueGreen)
+
+	return m.releaseUpgradeLockIfHeld(ctx, logger, cluster)
+}
+
+func resetBlueGreenTransientState(status *openbaov1alpha1.BlueGreenStatus) {
+	if status == nil {
+		return
+	}
+	status.Phase = openbaov1alpha1.PhaseIdle
+	status.GreenRevision = ""
+	status.StartTime = nil
+	status.JobFailureCount = 0
+	status.LastJobFailure = ""
 }
 
 func (m *Manager) maybeAbortUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, recon.Result, error) {
@@ -966,19 +974,12 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 		return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait
 	}
 
-	// Finalize upgrade
+	// Finalize upgrade.
 	// NOTE: CurrentVersion is updated by the Status controller when it detects
 	// BlueGreen.Phase == Idle and version mismatch. This maintains clean SSA field ownership.
-	cluster.Status.BlueGreen.BlueRevision = cluster.Status.BlueGreen.GreenRevision
-	// Update BlueImage to the image that was verified and used for Green
-	if cluster.Spec.Image != "" {
-		cluster.Status.BlueGreen.BlueImage = cluster.Spec.Image
-	}
-	cluster.Status.BlueGreen.GreenRevision = ""
-	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
-
-	if err := upgrade.ReleaseUpgradeOperationLock(ctx, m.client, cluster); err != nil && !upgrade.IsOperationLockHeld(err) {
-		logger.Error(err, "Failed to release upgrade operation lock after blue/green completion")
+	if err := m.finalizeUpgradeTerminalState(ctx, logger, cluster, true); err != nil {
+		logger.Error(err, "Failed to finalize blue/green terminal state")
+		return phaseOutcome{}, err
 	}
 
 	logger.Info("Blue/green upgrade completed", "newVersion", cluster.Spec.Version)
@@ -1046,17 +1047,16 @@ func (m *Manager) abortUpgrade(ctx context.Context, logger logr.Logger, cluster 
 
 	logger.Info("Aborting blue/green upgrade", "greenRevision", greenRevision)
 
-	// Delete Green StatefulSet
-	if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
-		return fmt.Errorf("failed to cleanup Green StatefulSet during abort: %w", err)
+	if greenRevision != "" {
+		// Delete Green StatefulSet
+		if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
+			return fmt.Errorf("failed to cleanup Green StatefulSet during abort: %w", err)
+		}
 	}
 
-	// Reset status
-	cluster.Status.BlueGreen.GreenRevision = ""
-	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
-	cluster.Status.BlueGreen.StartTime = nil
-	cluster.Status.BlueGreen.JobFailureCount = 0
-	cluster.Status.BlueGreen.LastJobFailure = ""
+	if err := m.finalizeUpgradeTerminalState(ctx, logger, cluster, false); err != nil {
+		return err
+	}
 
 	logger.Info("Blue/green upgrade aborted successfully")
 
@@ -1187,7 +1187,7 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 		m.scheme,
 		logger,
 		cluster,
-		ActionRemoveBluePeers, // Reuse peer removal action, targeting Green handled by executor config
+		ActionRemoveGreenPeers,
 		rollbackRunID(cluster),
 		blueRevision,
 		greenRevision,
@@ -1229,14 +1229,12 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 
 	// Finalize rollback
 	rollbackReason := cluster.Status.BlueGreen.RollbackReason
-	cluster.Status.BlueGreen.GreenRevision = ""
-	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
-	cluster.Status.BlueGreen.StartTime = nil
-	cluster.Status.BlueGreen.JobFailureCount = 0
-	cluster.Status.BlueGreen.LastJobFailure = ""
 	// Keep RollbackReason and RollbackStartTime for observability
+	if err := m.finalizeUpgradeTerminalState(ctx, logger, cluster, false); err != nil {
+		return phaseOutcome{}, err
+	}
 
 	logger.Info("Blue/green rollback completed", "reason", rollbackReason)
 
-	return advance(openbaov1alpha1.PhaseIdle), nil
+	return done(), nil
 }
