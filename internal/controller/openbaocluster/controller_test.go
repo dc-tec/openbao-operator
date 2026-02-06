@@ -463,8 +463,8 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svc.Spec.Selector).To(HaveKeyWithValue(constants.LabelOpenBaoRevision, "blue123"))
 
-			By("switching to DemotingBlue and ensuring the external Service selects the Green revision")
-			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseDemotingBlue
+			By("switching to Cleanup and ensuring the external Service selects the Green revision")
+			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
 			spec = infra.StatefulSetSpec{
 				Name:               cluster.Name,
 				Revision:           "blue123",
