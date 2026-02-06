@@ -3,9 +3,7 @@ kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: openbao-restrict-provisioner-namespace-mutations-binding
 spec:
-  # namePrefix is applied by config/default/kustomization.yaml, but kustomize may
-  # not automatically rewrite this reference for ValidatingAdmissionPolicyBinding.
-  policyName: openbao-operator-openbao-restrict-provisioner-namespace-mutations
+  policyName: openbao-restrict-provisioner-namespace-mutations
   validationActions: [Deny]
   matchResources:
     # This binding applies the policy to ALL Namespace update requests.
@@ -15,4 +13,3 @@ spec:
         apiVersions: ["v1"]
         operations: ["UPDATE"]
         resources: ["namespaces"]
-

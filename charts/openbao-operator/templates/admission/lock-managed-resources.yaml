@@ -38,7 +38,7 @@ spec:
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["tlsroutes"]
   variables:
-    - name: is_managed
+    - name: is_openbao_managed_by_operator
       expression: >-
         request.operation == "DELETE" ?
           (oldObject != null &&
@@ -56,6 +56,24 @@ spec:
               has(oldObject.metadata.labels) &&
               ("app.kubernetes.io/managed-by" in oldObject.metadata.labels) &&
               oldObject.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator"))
+    - name: has_openbao_specific_label
+      expression: >-
+        request.operation == "DELETE" ?
+          (oldObject != null &&
+            has(oldObject.metadata) &&
+            has(oldObject.metadata.labels) &&
+            oldObject.metadata.labels.exists(k, v, k.startsWith("openbao.org/"))) :
+          ((object != null &&
+              has(object.metadata) &&
+              has(object.metadata.labels) &&
+              object.metadata.labels.exists(k, v, k.startsWith("openbao.org/"))) ||
+            (oldObject != null &&
+              has(oldObject.metadata) &&
+              has(oldObject.metadata.labels) &&
+              oldObject.metadata.labels.exists(k, v, k.startsWith("openbao.org/"))))
+    - name: is_managed
+      expression: >-
+        variables.is_openbao_managed_by_operator && variables.has_openbao_specific_label
     - name: is_operator_controller
       expression: >-
         request.userInfo.username ==

@@ -158,6 +158,118 @@ patchesJson6902:
     # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER' prefix.
     # The following replacements add the cert-manager CA injection annotations.
 replacements:
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-lock-controller-statefulset-mutations
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-lock-controller-statefulset-mutations
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-lock-managed-resource-mutations
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-lock-managed-resource-mutations
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-controller-rbac
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-openbao-restrict-controller-rbac-binding
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-openbao-restrict-provisioner-namespace-mutations-binding
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-provisioner-rbac
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-openbao-restrict-provisioner-rbac-binding
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-validate-openbao-tenant
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-validate-openbao-tenant
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-validate-openbaocluster
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-validate-openbaocluster
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-validate-openbaorestore
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-validate-openbaorestore
+        fieldPaths:
+          - spec.policyName
   # - source: # Uncomment the following block to enable certificates for metrics
   #     kind: Service
   #     version: v1

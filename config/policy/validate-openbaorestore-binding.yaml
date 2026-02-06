@@ -3,7 +3,6 @@ kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: validate-openbaorestore
 spec:
-  policyName: openbao-operator-validate-openbaorestore
+  policyName: validate-openbaorestore
   validationActions:
     - Deny
-
