@@ -4294,7 +4294,9 @@
 <ul class="task-list">
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> A valid snapshot in your Object Storage bucket (see <a href="../../openbaocluster/operations/backups/">Backups</a>).</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> The <strong>Target Cluster</strong> must exist and be initialized (even if it's just a fresh, empty cluster).</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Authentication credentials (JWT Role or Admin Token) to perform the restore.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Authentication configured for the restore job:</li>
+<li>JWT (<code>spec.jwtAuthRole</code>, or the default <code>openbao-operator-restore</code> role when <code>spec.selfInit.oidc.enabled=true</code>)</li>
+<li>Static token (<code>spec.tokenSecretRef</code>)</li>
 </ul>
 <hr />
 <h2 id="2-restore-workflow">2. Restore Workflow<a class="headerlink" href="#2-restore-workflow" title="Permanent link">&para;</a></h2>
@@ -4409,7 +4411,7 @@
 <div class="tabbed-block">
 <p>Uses a short-lived Kubernetes ServiceAccount token. Requires <code>sys/auth/jwt-operator</code> to be enabled on the target.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">jwtAuthRole</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restore</span><span class="w">  </span><span class="c1"># Must match the role configured in OpenBao</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">jwtAuthRole</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao-operator-restore</span><span class="w">  </span><span class="c1"># Optional when selfInit OIDC is enabled</span>
 </span></code></pre></div>
 <details class="example">
 <summary>OpenBao Config for JWT Auth</summary>
@@ -4431,8 +4433,9 @@ Set the same value in the OpenBao role <code>bound_audiences</code> and pass the
 <div class="admonition note">
 <p class="admonition-title">JWT bootstrap</p>
 <p>When <code>spec.selfInit.oidc.enabled</code> is <code>true</code>, the OpenBao Operator can create a restore role
-bound to the restore ServiceAccount. Enable it on the cluster with <code>spec.restore.jwtAuthRole</code>,
-then set <code>OpenBaoRestore.spec.jwtAuthRole</code> to the same role name.</p>
+bound to the restore ServiceAccount. The default role name is <code>openbao-operator-restore</code>.
+You can omit <code>OpenBaoRestore.spec.jwtAuthRole</code> to use that default, or set it explicitly
+when you use a custom role name.</p>
 </div>
 </div>
 <div class="tabbed-block">
@@ -4472,7 +4475,7 @@ then set <code>OpenBaoRestore.spec.jwtAuthRole</code> to the same role name.</p>
 </span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3-creds</span>
 </span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">    </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clusters/prod/backup-2024.snap</span>
 </span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">  </span><span class="nt">jwtAuthRole</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restore</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">  </span><span class="nt">jwtAuthRole</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao-operator-restore</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -4495,7 +4498,7 @@ then set <code>OpenBaoRestore.spec.jwtAuthRole</code> to the same role name.</p>
 </span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcs-creds</span>
 </span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">    </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clusters/prod/backup-2024.snap</span>
 </span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">  </span><span class="nt">jwtAuthRole</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restore</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">  </span><span class="nt">jwtAuthRole</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao-operator-restore</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -4519,7 +4522,7 @@ then set <code>OpenBaoRestore.spec.jwtAuthRole</code> to the same role name.</p>
 </span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azure-creds</span>
 </span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">    </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clusters/prod/backup-2024.snap</span>
 </span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a>
-</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">  </span><span class="nt">jwtAuthRole</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restore</span>
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">  </span><span class="nt">jwtAuthRole</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao-operator-restore</span>
 </span></code></pre></div>
 </div>
 </div>

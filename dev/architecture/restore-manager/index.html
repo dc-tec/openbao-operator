@@ -4142,6 +4142,7 @@
 <li><strong>Validation:</strong><ul>
 <li>Target Cluster exists.</li>
 <li>Snapshot source is accessible.</li>
+<li>Authentication is configured (<code>tokenSecretRef</code> or JWT auth; when self-init OIDC is enabled, JWT can use the default <code>openbao-operator-restore</code> role).</li>
 <li>No conflicting operations (unless <code>OpenBaoRestore.spec.overrideOperationLock</code> is used with <code>OpenBaoRestore.spec.force: true</code>).</li>
 </ul>
 </li>
