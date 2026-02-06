@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"reflect"
 	"strings"
 	"time"
 
@@ -96,6 +97,29 @@ func (m *Manager) applySecret(ctx context.Context, secret *corev1.Secret) error 
 	}
 
 	return m.client.Apply(ctx, applyConfig, client.FieldOwner("openbao-cert-manager"), client.ForceOwnership)
+}
+
+func (m *Manager) ensureManagedSecretMetadata(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, secret *corev1.Secret) error {
+	before := secret.DeepCopy()
+
+	if secret.Labels == nil {
+		secret.Labels = make(map[string]string)
+	}
+	secret.Labels[constants.LabelAppManagedBy] = constants.LabelValueAppManagedByOpenBaoOperator
+	secret.Labels[constants.LabelOpenBaoCluster] = cluster.Name
+
+	if err := controllerutil.SetControllerReference(cluster, secret, m.scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on Secret %s/%s: %w", secret.Namespace, secret.Name, err)
+	}
+
+	if reflect.DeepEqual(before.Labels, secret.Labels) && reflect.DeepEqual(before.OwnerReferences, secret.OwnerReferences) {
+		return nil
+	}
+
+	if err := m.client.Patch(ctx, secret, client.MergeFrom(before)); err != nil {
+		return fmt.Errorf("failed to patch Secret metadata %s/%s: %w", secret.Namespace, secret.Name, err)
+	}
+	return nil
 }
 
 // Reconcile ensures TLS assets are aligned with the desired state for the given OpenBaoCluster.
@@ -189,6 +213,10 @@ func (m *Manager) reconcileOperatorManagedTLS(ctx context.Context, logger logr.L
 		}
 	}
 
+	if err := m.ensureManagedSecretMetadata(ctx, cluster, caSecret); err != nil {
+		return recon.Result{}, err
+	}
+
 	caCert, caKey, caCertPEM, parseErr := parseCAFromSecret(caSecret)
 	if parseErr != nil {
 		return recon.Result{}, fmt.Errorf("failed to parse CA secret %s/%s: %w", cluster.Namespace, caSecretName, parseErr)
@@ -243,6 +271,10 @@ func (m *Manager) reconcileOperatorManagedTLS(ctx context.Context, logger logr.L
 		metrics.incrementRotation()
 
 		return recon.Result{}, nil
+	}
+
+	if err := m.ensureManagedSecretMetadata(ctx, cluster, serverSecret); err != nil {
+		return recon.Result{}, err
 	}
 
 	serverCert, certErr := parseServerCertificateFromSecret(serverSecret)
@@ -491,7 +523,8 @@ func buildCASecret(cluster *openbaov1alpha1.OpenBaoCluster, name string, certPEM
 			Name:      name,
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster: cluster.Name,
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -579,7 +612,8 @@ func buildServerSecret(cluster *openbaov1alpha1.OpenBaoCluster, name string, cer
 			Name:      name,
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster: cluster.Name,
 			},
 		},
 		Type: corev1.SecretTypeTLS,
