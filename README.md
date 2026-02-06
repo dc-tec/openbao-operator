@@ -38,7 +38,7 @@ Full documentation is available at **[dc-tec.github.io/openbao-operator](https:/
 For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openbao-operator/latest/reference/compatibility/).
 
 - **Kubernetes**: `v1.33+` (tested: `v1.33`–`v1.35`)
-- **OpenBao**: >= `2.4.x`
+- **OpenBao**: >= `2.4.x` (tested: `2.5.0` (and tests upgrades from `2.4.4` to `2.5.0`))
 
 ## CRDs (API Surface)
 
