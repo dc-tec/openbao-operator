@@ -12,10 +12,13 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
@@ -155,6 +158,61 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, jobList.Items, 1, "should have created one backup job")
 	assert.Contains(t, jobList.Items[0].Name, "pre-upgrade-backup", "job name should contain pre-upgrade-backup")
+}
+
+func TestHandlePreUpgradeSnapshot_CreateAlreadyExists(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-ns",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileDevelopment,
+			Version:  "2.4.4",
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				PreUpgradeSnapshot: true,
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "http://test-endpoint",
+					Bucket:   "test-bucket",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.3",
+			Initialized:    true,
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	_ = batchv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if _, ok := obj.(*batchv1.Job); ok {
+					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
+				}
+				return c.Create(ctx, obj, opts...)
+			},
+		}).
+		WithReturnManagedFields().
+		Build()
+	manager := NewManager(k8sClient, scheme, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
+	assert.NoError(t, err, "AlreadyExists on create should be treated as idempotent")
+	assert.False(t, complete, "snapshot should remain in-progress when create races")
 }
 
 func TestHandlePreUpgradeSnapshot_CreatesJobWithOIDCDefaultRole(t *testing.T) {

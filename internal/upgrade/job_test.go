@@ -1,11 +1,22 @@
 package upgrade
 
 import (
+	"context"
 	"testing"
 
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/go-logr/logr"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	batchv1 "k8s.io/api/batch/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
@@ -194,4 +205,59 @@ func ptrInt64Value(p *int64) int64 {
 		return -1
 	}
 	return *p
+}
+
+func TestEnsureExecutorJob_CreateAlreadyExists(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Image:       "upgrade-executor:0.1.0",
+				JWTAuthRole: "upgrade-role",
+			},
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if _, ok := obj.(*batchv1.Job); ok {
+					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
+				}
+				return c.Create(ctx, obj, opts...)
+			},
+		}).
+		Build()
+
+	result, err := EnsureExecutorJob(
+		context.Background(),
+		k8sClient,
+		scheme,
+		logr.Discard(),
+		cluster,
+		ExecutorActionRollingStepDownLeader,
+		"run-1",
+		"",
+		"",
+		openbao.ClientConfig{},
+		nil,
+		"",
+	)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	assert.Equal(t, ExecutorJobName(cluster.Name, ExecutorActionRollingStepDownLeader, "run-1", "", ""), result.Name)
+	assert.True(t, result.Exists)
+	assert.True(t, result.Running)
+	assert.False(t, result.Succeeded)
+	assert.False(t, result.Failed)
 }
