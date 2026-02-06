@@ -14,7 +14,9 @@ The OpenBao Operator supports restoring clusters from snapshots stored in object
 
 - [x] A valid snapshot in your Object Storage bucket (see [Backups](../openbaocluster/operations/backups.md)).
 - [x] The **Target Cluster** must exist and be initialized (even if it's just a fresh, empty cluster).
-- [x] Authentication credentials (JWT Role or Admin Token) to perform the restore.
+- [x] Authentication configured for the restore job:
+  - JWT (`spec.jwtAuthRole`, or the default `openbao-operator-restore` role when `spec.selfInit.oidc.enabled=true`)
+  - Static token (`spec.tokenSecretRef`)
 
 ---
 
@@ -141,7 +143,7 @@ How the Restore Job authenticates to the OpenBao cluster leader.
 
     ```yaml
     spec:
-      jwtAuthRole: restore  # Must match the role configured in OpenBao
+      jwtAuthRole: openbao-operator-restore  # Optional when selfInit OIDC is enabled
     ```
 
     ??? example "OpenBao Config for JWT Auth"
@@ -162,8 +164,9 @@ How the Restore Job authenticates to the OpenBao cluster leader.
 
     !!! note "JWT bootstrap"
         When `spec.selfInit.oidc.enabled` is `true`, the OpenBao Operator can create a restore role
-        bound to the restore ServiceAccount. Enable it on the cluster with `spec.restore.jwtAuthRole`,
-        then set `OpenBaoRestore.spec.jwtAuthRole` to the same role name.
+        bound to the restore ServiceAccount. The default role name is `openbao-operator-restore`.
+        You can omit `OpenBaoRestore.spec.jwtAuthRole` to use that default, or set it explicitly
+        when you use a custom role name.
 
 === "Static Token"
 
@@ -204,7 +207,7 @@ How the Restore Job authenticates to the OpenBao cluster leader.
             name: s3-creds
         key: clusters/prod/backup-2024.snap
       
-      jwtAuthRole: restore
+      jwtAuthRole: openbao-operator-restore
     ```
 
 === "GCS Example"
@@ -229,7 +232,7 @@ How the Restore Job authenticates to the OpenBao cluster leader.
             name: gcs-creds
         key: clusters/prod/backup-2024.snap
       
-      jwtAuthRole: restore
+      jwtAuthRole: openbao-operator-restore
     ```
 
 === "Azure Example"
@@ -255,7 +258,7 @@ How the Restore Job authenticates to the OpenBao cluster leader.
             name: azure-creds
         key: clusters/prod/backup-2024.snap
       
-      jwtAuthRole: restore
+      jwtAuthRole: openbao-operator-restore
     ```
 
 ---
