@@ -2197,6 +2197,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#rolling-completion-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rolling completion semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#image-verification" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4055,6 +4066,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#rolling-completion-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rolling completion semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#image-verification" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4129,19 +4151,23 @@
     WaitReady --&gt; WaitHealth[Wait for OpenBao Health]
     WaitHealth --&gt; Loop
 
-    Loop -- No --&gt; Done[Upgrade Complete]
+    Loop -- No --&gt; Converge[Wait for StatefulSet + Pod Convergence]
+    Converge --&gt; Finalize[Atomically Clear status.upgrade + Set currentVersion]
+    Finalize --&gt; Done[Upgrade Complete]
 
     classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
     classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
 
-    class Partition,StepDown,Update write;
+    class Partition,StepDown,Update,Finalize write;
     class Trigger,Ident,WaitReady,WaitHealth read;
-    class Loop,WaitTransfer process;</code></pre>
+    class Loop,WaitTransfer,Converge process;</code></pre>
 <ol>
 <li><strong>Partitioning:</strong> We pause Kubernetes updates by setting <code>partition</code> equal to <code>replicas</code>.</li>
 <li><strong>Reverse Ordinal:</strong> We update from highest index (e.g., 2) down to 0.</li>
 <li><strong>Leader Safety:</strong> Before updating the node that is currently the <strong>Leader</strong>, we send <code>PUT /sys/step-down</code> to force a leadership transfer. This prevents the cluster from crashing during the leader's restart.</li>
+<li><strong>Convergence before finalize:</strong> We only finalize after StatefulSet and pod revisions/health fully converge.</li>
+<li><strong>Atomic finalization:</strong> Rolling completion writes <code>status.upgrade=nil</code> and <code>status.currentVersion=&lt;target&gt;</code> together to avoid split state.</li>
 </ol>
 </div>
 <div class="tabbed-block">
@@ -4227,6 +4253,12 @@
 <li><strong>Blue/Green:</strong> Tracks <code>status.blueGreen.phase</code> and <code>status.blueGreen.jobFailureCount</code>.</li>
 </ul>
 <p>If the Operator crashes, it reads the Status on startup and <strong>resumes</strong> exactly where it left off.</p>
+<h3 id="rolling-completion-semantics">Rolling completion semantics<a class="headerlink" href="#rolling-completion-semantics" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>status.upgrade</code> remains present until rollout convergence is verified.</li>
+<li>Finalization updates <code>status.upgrade</code> and <code>status.currentVersion</code> in a single status patch.</li>
+<li>The Status controller ignores observed pod-label version regressions, so transient stale observations do not restart a completed rolling upgrade.</li>
+</ul>
 <h3 id="image-verification">Image Verification<a class="headerlink" href="#image-verification" title="Permanent link">&para;</a></h3>
 <p>If <code>spec.imageVerification.enabled</code> is <code>true</code>:</p>
 <ul>
@@ -4238,6 +4270,7 @@
 <li><strong>Idempotency:</strong> Re-running a phase multiple times does not cause side effects (e.g., "Join" checks if already joined).</li>
 <li><strong>Safety:</strong> The Operator prioritizes <strong>Availability</strong> over Progress. If a health check fails, the upgrade pauses/retries indefinitely (Rolling) or triggers a rollback (Blue/Green).</li>
 <li><strong>OwnerReferences:</strong> Executor jobs in Blue/Green are owned by the Cluster CR, ensuring easy cleanup.</li>
+<li><strong>Upgrade stability:</strong> Autopilot config reconciliation is skipped while <code>status.upgrade</code> is present to reduce transient API pressure during rolling restarts.</li>
 </ul>
 
 

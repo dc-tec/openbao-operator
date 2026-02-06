@@ -4236,8 +4236,13 @@
 <p><strong>How it works:</strong>
 1.  <strong>Validation</strong>: Checks if the new version is valid.
 2.  <strong>Snapshot</strong> (Optional): Takes a pre-upgrade backup.
-3.  <strong>Rolling Replace</strong>: Updates Pod 0 -&gt; Pod 1 -&gt; Pod 2.
-4.  <strong>Leader Handling</strong>: If updating the active leader, triggers <code>sys/step-down</code> first.</p>
+3.  <strong>Partitioned Rollout</strong>: Locks StatefulSet partition, then updates pods in reverse ordinal order (for example, <code>2 -&gt; 1 -&gt; 0</code>).
+4.  <strong>Leader Handling</strong>: If the target pod is leader, runs a <code>sys/step-down</code> executor job before restart.
+5.  <strong>Convergence Gate</strong>: Finalizes only after all pods are updated, Ready, and healthy.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>You can see multiple step-down Jobs during one rolling upgrade when leadership moves between different target pods. This is expected.</p>
+</div>
 </div>
 <div class="tabbed-block">
 <p><strong>Best for:</strong> Production critical paths, Major version jumps, Instant rollback capability.</p>
@@ -4320,9 +4325,19 @@
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">      </span><span class="nt">autoPromote</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <h3 id="monitoring-progress">Monitoring Progress<a class="headerlink" href="#monitoring-progress" title="Permanent link">&para;</a></h3>
-<p>Track the upgrade status directly on the CR:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>my-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.blueGreen}&#39;</span>
+<p>Track upgrade status directly on the CR:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Rolling Update</label><label for="__tabbed_2_2">Blue/Green</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>my-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.currentVersion}{&quot;\n&quot;}{.status.upgrade}{&quot;\n&quot;}&#39;</span>
 </span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>my-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.blueGreen}{&quot;\n&quot;}&#39;</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
 
 
 
