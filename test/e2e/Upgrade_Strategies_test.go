@@ -6,8 +6,10 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -41,7 +43,68 @@ const (
 	upgradeActionAnnotationKey = "openbao.org/upgrade-action"
 	upgradeRunIDAnnotationKey  = "openbao.org/upgrade-run-id"
 	rollbackRunID              = "rollback"
+	invalidUpgradeJWTAuthRole  = "invalid-upgrade-role"
 )
+
+type serviceAvailabilityStats struct {
+	Samples                int
+	Failures               int
+	ConsecutiveFailures    int
+	MaxConsecutiveFailures int
+	LastFailure            string
+}
+
+func probeOpenBaoServiceHealthViaAPIProxy(ctx context.Context, cfg *rest.Config, namespace, serviceName string) (int, error) {
+	if cfg == nil {
+		return 0, fmt.Errorf("rest config is required")
+	}
+	if namespace == "" {
+		return 0, fmt.Errorf("namespace is required")
+	}
+	if serviceName == "" {
+		return 0, fmt.Errorf("service name is required")
+	}
+
+	transport, err := rest.TransportFor(cfg)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create API transport: %w", err)
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   10 * time.Second,
+	}
+
+	url := fmt.Sprintf(
+		"%s/api/v1/namespaces/%s/services/https:%s:%d/proxy/v1/sys/health?standbyok=true&perfstandbyok=true",
+		cfg.Host,
+		namespace,
+		serviceName,
+		constants.PortAPI,
+	)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to build health probe request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("health probe request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode, nil
+}
+
+func isOpenBaoServiceAvailableStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusOK, http.StatusTooManyRequests, 472, 473:
+		return true
+	default:
+		return false
+	}
+}
 
 func findUpgradeExecutorJob(jobs []batchv1.Job, action bluegreen.ExecutorAction, runID string) *batchv1.Job {
 	for i := range jobs {
@@ -72,6 +135,40 @@ func jobFailed(job *batchv1.Job) bool {
 			continue
 		}
 		if cond.Type == batchv1.JobFailed {
+			return true
+		}
+	}
+	return false
+}
+
+func jobSucceeded(job *batchv1.Job) bool {
+	if job == nil {
+		return false
+	}
+	if job.Status.Succeeded > 0 {
+		return true
+	}
+	for _, cond := range job.Status.Conditions {
+		if cond.Status != "True" {
+			continue
+		}
+		if cond.Type == batchv1.JobComplete {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSucceededUpgradeAction(jobs []batchv1.Job, action bluegreen.ExecutorAction) bool {
+	for i := range jobs {
+		job := &jobs[i]
+		if job.Annotations == nil {
+			continue
+		}
+		if job.Annotations[upgradeActionAnnotationKey] != string(action) {
+			continue
+		}
+		if jobSucceeded(job) {
 			return true
 		}
 	}
@@ -147,7 +244,7 @@ func dumpRollingUpgradeDiagnostics(ctx context.Context, admin client.Client, nam
 
 // === Tests ===
 
-var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Ordered, func() {
+var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	// --- Rolling Upgrade ---
@@ -229,7 +326,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				g.Expect(available).NotTo(BeNil())
 				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-
 			tenantFW.WaitForStatefulSetReady(ctx, upgradeCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
 		})
 
@@ -534,6 +630,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					Version:  initialVersion,
 					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
 					Replicas: 3,
+					Service: &openbaov1alpha1.ServiceConfig{
+						Type: corev1.ServiceTypeClusterIP,
+					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
 						Image:    upgradeExecutorImage,
@@ -696,9 +795,24 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				g.Expect(updated.Status.Initialized).To(BeTrue())
 				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
 				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
-			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				stsList := &appsv1.StatefulSetList{}
+				g.Expect(admin.List(ctx, stsList,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelOpenBaoCluster: upgradeCluster.Name,
+					},
+				)).To(Succeed())
+				g.Expect(stsList.Items).NotTo(BeEmpty(), "expected at least one StatefulSet for blue/green cluster")
 
-			tenantFW.WaitForStatefulSetReady(ctx, upgradeCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+				var totalReady int32
+				for _, sts := range stsList.Items {
+					totalReady += sts.Status.ReadyReplicas
+				}
+				g.Expect(totalReady).To(Equal(upgradeCluster.Spec.Replicas),
+					"expected total ready replicas across StatefulSets to match desired cluster replicas")
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
 		AfterAll(func() {
@@ -711,6 +825,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			By("Writing a secret before upgrade")
 			secretPath := "secret/bluegreen-upgrade-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
+			serviceName := fmt.Sprintf("%s-public", upgradeCluster.Name)
 			bypassLabels := map[string]string{
 				constants.LabelOpenBaoCluster:   upgradeCluster.Name,
 				constants.LabelOpenBaoComponent: "backup",
@@ -723,6 +838,79 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				err = e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
 				g.Expect(err).NotTo(HaveOccurred())
 			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed(), "Failed to write pre-upgrade secret")
+
+			By("Ensuring the external Service exists for zero-downtime probing")
+			Eventually(func(g Gomega) {
+				svc := &corev1.Service{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      serviceName,
+					Namespace: tenantNamespace,
+				}, svc)).To(Succeed())
+				g.Expect(svc.Spec.Type).To(Equal(corev1.ServiceTypeClusterIP))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Continuously probing Service availability during the full Blue/Green upgrade")
+			probeCtx, stopProbe := context.WithCancel(ctx)
+			defer stopProbe()
+
+			probeDone := make(chan struct{})
+			var probeMu sync.Mutex
+			probeStats := serviceAvailabilityStats{}
+
+			probeOnce := func() {
+				probeAttemptCtx, cancel := context.WithTimeout(probeCtx, 20*time.Second)
+				defer cancel()
+
+				statusCode, err := probeOpenBaoServiceHealthViaAPIProxy(probeAttemptCtx, cfg, tenantNamespace, serviceName)
+
+				probeMu.Lock()
+				defer probeMu.Unlock()
+
+				probeStats.Samples++
+				if err != nil {
+					probeStats.Failures++
+					probeStats.ConsecutiveFailures++
+					if probeStats.ConsecutiveFailures > probeStats.MaxConsecutiveFailures {
+						probeStats.MaxConsecutiveFailures = probeStats.ConsecutiveFailures
+					}
+					probeStats.LastFailure = err.Error()
+					_, _ = fmt.Fprintf(GinkgoWriter, "service availability probe failed: %v\n", err)
+					return
+				}
+
+				if !isOpenBaoServiceAvailableStatus(statusCode) {
+					probeStats.Failures++
+					probeStats.ConsecutiveFailures++
+					if probeStats.ConsecutiveFailures > probeStats.MaxConsecutiveFailures {
+						probeStats.MaxConsecutiveFailures = probeStats.ConsecutiveFailures
+					}
+					probeStats.LastFailure = fmt.Sprintf("unexpected status code: %d", statusCode)
+					_, _ = fmt.Fprintf(GinkgoWriter, "service availability probe returned unexpected status: %d\n", statusCode)
+					return
+				}
+
+				probeStats.ConsecutiveFailures = 0
+			}
+
+			go func() {
+				defer close(probeDone)
+				ticker := time.NewTicker(5 * time.Second)
+				defer ticker.Stop()
+
+				probeOnce()
+				for {
+					select {
+					case <-probeCtx.Done():
+						return
+					case <-ticker.C:
+						probeOnce()
+					}
+				}
+			}()
+			defer func() {
+				stopProbe()
+				<-probeDone
+			}()
 
 			By("Triggering upgrade")
 			Eventually(func(g Gomega) {
@@ -769,12 +957,33 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			}, 15*time.Minute, 30*time.Second).Should(Succeed())
 
 			By("Waiting for upgrade to complete")
+			phaseRank := map[openbaov1alpha1.BlueGreenPhase]int{
+				openbaov1alpha1.PhaseIdle:           0,
+				openbaov1alpha1.PhaseDeployingGreen: 1,
+				openbaov1alpha1.PhaseJoiningMesh:    2,
+				openbaov1alpha1.PhaseSyncing:        3,
+				openbaov1alpha1.PhasePromoting:      4,
+				openbaov1alpha1.PhaseDemotingBlue:   5,
+				openbaov1alpha1.PhaseCleanup:        6,
+			}
+			highestObservedPhase := openbaov1alpha1.PhaseIdle
+			highestObservedRank := phaseRank[highestObservedPhase]
+
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 
-				if updated.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle && updated.Status.CurrentVersion == targetVersion {
+				currentPhase := updated.Status.BlueGreen.Phase
+				if currentPhase == openbaov1alpha1.PhaseIdle && updated.Status.CurrentVersion == targetVersion {
 					return
+				}
+				currentRank, knownPhase := phaseRank[currentPhase]
+				g.Expect(knownPhase).To(BeTrue(), "phase should be known for monotonic ordering")
+				g.Expect(currentRank).To(BeNumerically(">=", highestObservedRank),
+					"phase regressed from %s to %s", highestObservedPhase, currentPhase)
+				if currentRank > highestObservedRank {
+					highestObservedRank = currentRank
+					highestObservedPhase = currentPhase
 				}
 				// Verify intermediate states
 				// Verify Blue pods are on initial version and Green pods (if any) are on target version
@@ -813,7 +1022,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					}
 				}
 
-				g.Expect(updated.Status.BlueGreen.Phase).To(BeElementOf(
+				g.Expect(currentPhase).To(BeElementOf(
 					openbaov1alpha1.PhaseIdle,
 					openbaov1alpha1.PhaseDeployingGreen,
 					openbaov1alpha1.PhaseJoiningMesh,
@@ -833,10 +1042,36 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				g.Expect(updated.Status.BlueGreen.PreUpgradeSnapshotJobName).NotTo(BeEmpty(), "snapshot job name should be preserved")
 			}, 30*time.Minute, 30*time.Second).Should(Succeed())
 
-			By("Verifying Blue and Green versions during upgrade")
-			// This is a retrospective check or we can do it during the loop above.
-			// Ideally we want to verify this *during* the process.
-			// Let's modify the "Waiting for upgrade to complete" block to include checks.
+			stopProbe()
+			<-probeDone
+			probeMu.Lock()
+			finalProbeStats := probeStats
+			probeMu.Unlock()
+
+			By("Verifying Service availability remained continuous during the upgrade")
+			Expect(finalProbeStats.Samples).To(BeNumerically(">", 0), "expected at least one service availability sample")
+			Expect(finalProbeStats.MaxConsecutiveFailures).To(BeNumerically("<=", 1),
+				"service had prolonged unavailability during Blue/Green upgrade (samples=%d failures=%d maxConsecutive=%d lastFailure=%q)",
+				finalProbeStats.Samples, finalProbeStats.Failures, finalProbeStats.MaxConsecutiveFailures, finalProbeStats.LastFailure)
+
+			By("Verifying critical blue/green executor actions completed successfully")
+			Eventually(func(g Gomega) {
+				jobs := &batchv1.JobList{}
+				g.Expect(admin.List(ctx, jobs,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelAppInstance:      upgradeCluster.Name,
+						constants.LabelOpenBaoCluster:   upgradeCluster.Name,
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+					},
+				)).To(Succeed())
+
+				g.Expect(hasSucceededUpgradeAction(jobs.Items, bluegreen.ActionJoinGreenNonVoters)).To(BeTrue(), "join-green-non-voters action should succeed")
+				g.Expect(hasSucceededUpgradeAction(jobs.Items, bluegreen.ActionWaitGreenSynced)).To(BeTrue(), "wait-green-synced action should succeed")
+				g.Expect(hasSucceededUpgradeAction(jobs.Items, bluegreen.ActionPromoteGreenVoters)).To(BeTrue(), "promote-green-voters action should succeed")
+				g.Expect(hasSucceededUpgradeAction(jobs.Items, bluegreen.ActionDemoteBlueNonVotersStepDown)).To(BeTrue(), "demote-blue-non-voters-stepdown action should succeed")
+				g.Expect(hasSucceededUpgradeAction(jobs.Items, bluegreen.ActionRemoveBluePeers)).To(BeTrue(), "remove-blue-peers action should succeed")
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			By("Verifying secret persists after upgrade")
 			Eventually(func(g Gomega) {
@@ -850,11 +1085,13 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 	})
 
 	// --- Failure Scenarios ---
-	Context("Failure Scenarios", Label("failure"), func() {
+	Context("Failure Scenarios", Label("failure", "bluegreen"), func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
 			failureCluster  *openbaov1alpha1.OpenBaoCluster
+			initialVersion  string
+			targetVersion   string
 			admin           client.Client
 		)
 
@@ -865,13 +1102,25 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			tenantNamespace = tenantFW.Namespace
 			admin = tenantFW.Client
 
-			initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-			targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
 			if initialVersion == targetVersion {
 				Skip("Failure test skipped")
 			}
 
-			maxFailures := int32(3)
+			// Deliberately remove upgrade capabilities so executor jobs fail and retry/abort logic is exercised.
+			brokenPolicyRequest := openbaov1alpha1.SelfInitRequest{
+				Name:      "override-upgrade-policy-broken",
+				Operation: openbaov1alpha1.SelfInitOperationUpdate,
+				Path:      "sys/policies/acl/openbao-operator-upgrade",
+				Policy: &openbaov1alpha1.SelfInitPolicy{
+					Policy: `path "sys/health" {
+  capabilities = ["read"]
+}`,
+				},
+			}
+
+			maxFailures := int32(2)
 			failureCluster = &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "failure-cluster",
@@ -887,6 +1136,185 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 						Image:    upgradeExecutorImage,
 						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 							AutoPromote:    true,
+							MaxJobFailures: &maxFailures,
+							AutoRollback: &openbaov1alpha1.AutoRollbackConfig{
+								Enabled:      true,
+								OnJobFailure: true,
+							},
+						},
+					},
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: append([]openbaov1alpha1.SelfInitRequest{brokenPolicyRequest}, e2ehelpers.CreateE2ERequests(tenantNamespace)...),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, failureCluster)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: failureCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Initialized).To(BeTrue())
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		AfterAll(func() {
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
+			}
+		})
+
+		It("induces executor failure and validates retry plus auto-abort behavior", func() {
+			var failedEarlyAction bluegreen.ExecutorAction
+
+			By("Triggering a Blue/Green upgrade")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: failureCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", targetVersion)
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for upgrade to enter an early execution phase")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: failureCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(BeElementOf(
+					openbaov1alpha1.PhaseDeployingGreen,
+					openbaov1alpha1.PhaseJoiningMesh,
+					openbaov1alpha1.PhaseSyncing,
+					openbaov1alpha1.PhaseIdle,
+				))
+			}, 15*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying an initial early-phase executor job fails due to induced policy restriction")
+			Eventually(func(g Gomega) {
+				jobs := &batchv1.JobList{}
+				g.Expect(admin.List(ctx, jobs,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelAppInstance:      failureCluster.Name,
+						constants.LabelOpenBaoCluster:   failureCluster.Name,
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+					},
+				)).To(Succeed())
+
+				candidates := []bluegreen.ExecutorAction{
+					bluegreen.ActionJoinGreenNonVoters,
+					bluegreen.ActionWaitGreenSynced,
+				}
+
+				var observed *batchv1.Job
+				for _, action := range candidates {
+					job := findUpgradeExecutorJob(jobs.Items, action, "")
+					if job == nil || !jobFailed(job) {
+						continue
+					}
+					failedEarlyAction = action
+					observed = job
+					break
+				}
+
+				g.Expect(observed).NotTo(BeNil(), "expected initial failed executor job for one of actions: %v", candidates)
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying retry job for that action is created and also fails")
+			Eventually(func(g Gomega) {
+				g.Expect(failedEarlyAction).NotTo(BeEmpty(), "failed early-phase action should be discovered before retry assertion")
+
+				jobs := &batchv1.JobList{}
+				g.Expect(admin.List(ctx, jobs,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelAppInstance:      failureCluster.Name,
+						constants.LabelOpenBaoCluster:   failureCluster.Name,
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+					},
+				)).To(Succeed())
+
+				retryJob := findUpgradeExecutorJob(jobs.Items, failedEarlyAction, "retry-1")
+				g.Expect(retryJob).NotTo(BeNil(), "retry executor job should exist for action %s", failedEarlyAction)
+				g.Expect(jobFailed(retryJob)).To(BeTrue(), "retry executor job should fail for action %s", failedEarlyAction)
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying threshold triggers early-phase abort and cluster returns to idle on original version")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: failureCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle), "upgrade should return to idle after abort")
+				g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty(), "green revision should be cleaned up on abort")
+				g.Expect(updated.Status.BlueGreen.RollbackStartTime).To(BeNil(), "early-phase failure should abort, not trigger rollback")
+				g.Expect(updated.Status.BlueGreen.JobFailureCount).To(Equal(int32(0)))
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion), "current version should remain at initial version after abort")
+			}, 30*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+		})
+	})
+
+	Context("Late-Phase Rollback Scenarios", Label("failure", "bluegreen", "rollback"), func() {
+		var (
+			tenantNamespace     string
+			tenantFW            *framework.Framework
+			rollbackFailCluster *openbaov1alpha1.OpenBaoCluster
+			initialVersion      string
+			targetVersion       string
+			admin               client.Client
+		)
+
+		BeforeAll(func() {
+			var err error
+			tenantFW, err = framework.NewSetup(ctx, "tenant-failure-rollback", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+			admin = tenantFW.Client
+
+			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			if initialVersion == targetVersion {
+				Skip("Late-phase rollback test skipped")
+			}
+
+			maxFailures := int32(2)
+			autoPromote := false
+			rollbackFailCluster = &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "rollback-failure-cluster",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  initialVersion,
+					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
+					Replicas: 3,
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy:    openbaov1alpha1.UpdateStrategyBlueGreen,
+						Image:       upgradeExecutorImage,
+						JWTAuthRole: constants.RoleNameUpgrade,
+						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+							AutoPromote:    autoPromote,
 							MaxJobFailures: &maxFailures,
 							AutoRollback: &openbaov1alpha1.AutoRollbackConfig{
 								Enabled:      true,
@@ -919,12 +1347,15 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
 			}
-			Expect(admin.Create(ctx, failureCluster)).To(Succeed())
+			Expect(admin.Create(ctx, rollbackFailCluster)).To(Succeed())
 
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: failureCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 				g.Expect(updated.Status.Initialized).To(BeTrue())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
@@ -934,18 +1365,117 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 			}
 		})
 
-		It("tracks job failures", func() {
+		It("triggers late-phase rollback after promotion failures and recovers when auth is restored", func() {
+			By("Triggering a Blue/Green upgrade")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: failureCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
-				g.Expect(updated.Status.BlueGreen.JobFailureCount).To(Equal(int32(0)))
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", targetVersion)
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for Syncing hold (autoPromote=false)")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseSyncing))
+				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty())
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying wait-green-synced completes before forcing promotion")
+			Eventually(func(g Gomega) {
+				jobs := &batchv1.JobList{}
+				g.Expect(admin.List(ctx, jobs,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelAppInstance:      rollbackFailCluster.Name,
+						constants.LabelOpenBaoCluster:   rollbackFailCluster.Name,
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+					},
+				)).To(Succeed())
+				waitSyncedJob := findUpgradeExecutorJob(jobs.Items, bluegreen.ActionWaitGreenSynced, "")
+				g.Expect(waitSyncedJob).NotTo(BeNil(), "wait-green-synced job should exist before promoting")
+				g.Expect(jobSucceeded(waitSyncedJob)).To(BeTrue(), "wait-green-synced job should succeed before promoting")
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Introducing a realistic temporary auth misconfiguration right before promotion")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Upgrade.JWTAuthRole = invalidUpgradeJWTAuthRole
+				updated.Spec.Upgrade.BlueGreen.AutoPromote = true
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying promotion executor job fails")
+			Eventually(func(g Gomega) {
+				jobs := &batchv1.JobList{}
+				g.Expect(admin.List(ctx, jobs,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelAppInstance:      rollbackFailCluster.Name,
+						constants.LabelOpenBaoCluster:   rollbackFailCluster.Name,
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+					},
+				)).To(Succeed())
+				initialPromoteJob := findUpgradeExecutorJob(jobs.Items, bluegreen.ActionPromoteGreenVoters, "")
+				g.Expect(initialPromoteJob).NotTo(BeNil(), "initial promote job should exist")
+				g.Expect(jobFailed(initialPromoteJob)).To(BeTrue(), "initial promote job should fail")
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying retry promotion job fails and triggers rollback threshold")
+			Eventually(func(g Gomega) {
+				jobs := &batchv1.JobList{}
+				g.Expect(admin.List(ctx, jobs,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelAppInstance:      rollbackFailCluster.Name,
+						constants.LabelOpenBaoCluster:   rollbackFailCluster.Name,
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+					},
+				)).To(Succeed())
+				retryPromoteJob := findUpgradeExecutorJob(jobs.Items, bluegreen.ActionPromoteGreenVoters, "retry-1")
+				g.Expect(retryPromoteJob).NotTo(BeNil(), "retry promote job should exist")
+				g.Expect(jobFailed(retryPromoteJob)).To(BeTrue(), "retry promote job should fail")
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Restoring JWT auth role so rollback automation can proceed")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Upgrade.JWTAuthRole = constants.RoleNameUpgrade
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying rollback was initiated")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.RollbackStartTime).NotTo(BeNil())
+			}, 15*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying rollback completes and cluster returns to stable initial version")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+				g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BreakGlass).To(BeNil(), "rollback should recover without entering break glass")
+			}, 30*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 		})
 	})
 
 	// --- Safe Mode (Chaos) ---
-	Context("Safe Mode (chaos)", Label("chaos"), func() {
+	Context("Safe Mode (chaos)", Label("chaos", "bluegreen"), func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -1222,7 +1752,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 	})
 
 	// --- Gateway Integration ---
-	Context("Gateway Integration", Label("gateway", "requires-gateway-api"), func() {
+	Context("Gateway Integration", Label("gateway", "requires-gateway-api", "bluegreen"), func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -1364,7 +1894,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				g.Expect(updated.Status.BlueGreen.Phase).ToNot(BeEmpty())
 			}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
-			By("Waiting for cutover (DemotingBlue) and verifying the external Service selector switches to Green")
+			By("Verifying external Service remains on Blue while DemotingBlue is in progress")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
@@ -1377,6 +1907,28 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "cluster", "slow"), Orde
 				}
 
 				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty(), "GreenRevision should be set at cutover")
+
+				svc := &corev1.Service{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Namespace: tenantNamespace,
+					Name:      fmt.Sprintf("%s-public", upgradeCluster.Name),
+				}, svc)).To(Succeed())
+				g.Expect(svc.Spec.Selector).To(HaveKeyWithValue(constants.LabelOpenBaoRevision, updated.Status.BlueGreen.BlueRevision))
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for Cleanup phase and verifying the external Service selector switches to Green")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
+
+				if updated.Status.BlueGreen.Phase != openbaov1alpha1.PhaseCleanup {
+					_, _ = fmt.Fprintf(GinkgoWriter, "Current phase before cutover: %s\n", updated.Status.BlueGreen.Phase)
+					g.Expect(updated.Status.BlueGreen.Phase).ToNot(BeEmpty())
+					return
+				}
+
+				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty(), "GreenRevision should be set during cleanup")
 
 				svc := &corev1.Service{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{

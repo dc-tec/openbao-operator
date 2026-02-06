@@ -52,35 +52,37 @@ The Manager supports two distinct strategies, controlled by `spec.upgrade.strate
 
 === "Blue/Green"
 
-    **Goal:** Zero-downtime upgrades with instant rollback.
+    **Goal:** Zero-downtime upgrades with deterministic phase transitions and controlled rollback boundaries.
 
     !!! warning "Resource Usage"
         Requires **2x Storage** capacity during the transition (Blue volume + Green volume).
 
-    This strategy spawns a parallel "Green" cluster and migrates data via Raft.
+    This strategy creates a parallel Green revision, joins it as non-voters, promotes it to voters, then cuts over traffic during `Cleanup`.
 
     ```mermaid
     graph TD
         Start((Start)) -->|v1 -> v2| Deploy[Deploy Green Cluster]
         
         subgraph Preparation
-            Deploy -->|Wait Ready| Join[Join Raft Mesh]
-            Join -.->|Non-Voters| Sync[Sync Data]
-            Sync -->|Wait Index| Promote[Promote Green to Voters]
+            Deploy -->|Wait Ready + Unsealed| Join[Join Green as Non-Voters]
+            Join --> Sync[Wait Green Synced]
+            Sync --> Promote[Promote Green to Voters]
         end
 
-        subgraph Critical_Section [Traffic Switch]
-            Promote --> Switch[Update Service Selector]
-            Switch -->|Traffic -> Green| Stabilization{Stable?}
-            
-            Stabilization -- No --> Rollback[Rollback: Point Service to Blue]
-            Stabilization -- Yes --> Demote[Demote Blue to Non-Voters]
+        subgraph Cutover
+            Promote --> Demote[Demote Blue Non-Voters + Step-Down]
+            Demote --> LeaderCheck{Green Leader Observed?}
+            LeaderCheck -- No --> Wait[Requeue]
+            Wait --> LeaderCheck
+            LeaderCheck -- Yes --> Switch[Phase Cleanup: Service Selects Green]
         end
 
         subgraph Cleanup
-            Demote --> Remove[Remove Blue from Raft]
+            Switch --> Remove[Remove Blue Peers]
             Remove --> Delete[Delete Blue StatefulSet]
-            Rollback --> RemoveGreen[Remove Green from Raft]
+            Promote --> Rollback[Late Failure: Trigger Rollback]
+            Rollback --> Repair["Repair Consensus (Blue Voters, Green Non-Voters)"]
+            Repair --> RemoveGreen[Remove Green Peers]
             RemoveGreen --> DeleteGreen[Delete Green StatefulSet]
         end
 
@@ -91,20 +93,29 @@ The Manager supports two distinct strategies, controlled by `spec.upgrade.strate
         classDef critical fill:transparent,stroke:#dc2626,stroke-width:2px,stroke-dasharray: 5 5,color:#fff;
         classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
         
-        class Deploy,Join,Sync,Promote,Demote,Remove,Delete,RemoveGreen,DeleteGreen process;
+        class Deploy,Join,Sync,Promote,Demote,Wait,Remove,Delete,Repair,RemoveGreen,DeleteGreen process;
         class Switch,Rollback critical;
-        class Start,Done,Stabilization write;
+        class Start,Done,LeaderCheck write;
     ```
 
-    **Key Phases:**
+    **Key phases (`status.blueGreen.phase`):**
 
     | Phase | Description |
     | :--- | :--- |
-    | **Deploying** | Creates the new StatefulSet. |
-    | **Joining** | Adds new pods as **Non-Voters** (Read-Only). |
-    | **Promoting** | Promotes new pods to **Voters** (Write-Access). |
-    | **Switching** | Updates Service selector to point to Green. |
-    | **Cleanup** | Removes Blue pods from the Raft peer list. |
+    | `DeployingGreen` | Creates Green StatefulSet and waits for Ready + unsealed pods. |
+    | `JoiningMesh` | Adds Green pods as non-voters. |
+    | `Syncing` | Waits for sync, optional `minSyncDuration`, and optional pre-promotion hook. |
+    | `Promoting` | Promotes Green pods to voters. |
+    | `DemotingBlue` | Demotes Blue voters and verifies a Green leader is observed. |
+    | `Cleanup` | Switches service selector to Green, removes Blue peers, deletes Blue StatefulSet. |
+    | `RollingBack` | Executes rollback consensus repair (Blue voters, Green non-voters). |
+    | `RollbackCleanup` | Removes Green peers and deletes Green StatefulSet. |
+
+    !!! note
+        Blue/Green service traffic switches to Green only in `Cleanup`.
+
+    !!! warning
+        Rollback is possible until irreversible cleanup has completed.
 
 ## 2. Upgrade State Machine
 
@@ -133,6 +144,6 @@ If `spec.imageVerification.enabled` is `true`:
 ## 3. Reconciliation Semantics
 
 - **Idempotency:** Re-running a phase multiple times does not cause side effects (e.g., "Join" checks if already joined).
-- **Safety:** The Operator prioritizes **Availability** over Progress. If a health check fails, the upgrade pauses/retries indefinitely (Rolling) or triggers a rollback (Blue/Green).
+- **Safety:** The OpenBao Operator prioritizes **Availability** over Progress. Rolling pauses/retries until healthy. Blue/Green aborts in early phases and rolls back in later phases.
 - **OwnerReferences:** Executor jobs in Blue/Green are owned by the Cluster CR, ensuring easy cleanup.
 - **Upgrade stability:** Autopilot config reconciliation is skipped while `status.upgrade` is present to reduce transient API pressure during rolling restarts.

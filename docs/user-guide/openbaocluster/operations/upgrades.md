@@ -58,9 +58,9 @@ To upgrade, update `spec.version`. The strategy configured in `spec.upgrade.stra
         You can see multiple step-down Jobs during one rolling upgrade when leadership moves between different target pods. This is expected.
 
 === "Blue/Green (Zero Downtime)"
-    **Best for:** Production critical paths, Major version jumps, Instant rollback capability.
+    **Best for:** Production-critical paths and major version upgrades where controlled cutover is required.
 
-    The Operator spins up a **parallel** "Green" cluster, syncs data, validates it, and then switches traffic over atomically.
+    The OpenBao Operator creates a **parallel** Green revision, syncs and validates it, promotes Green to voters, then shifts traffic during `Cleanup`.
 
     ```mermaid
     flowchart TB
@@ -80,8 +80,10 @@ To upgrade, update `spec.version`. The strategy configured in `spec.upgrade.stra
         Start --> Deploy
         Deploy --> Sync
         Sync --> Test
-        Test -- "Success" --> Switch[4. Switch Traffic to Green]
-        Switch --> Cleanup[5. Delete Blue Cluster]
+        Test -- "Success" --> Promote[4. Promote Green Voters]
+        Promote --> Demote[5. Demote Blue Non-Voters]
+        Demote --> Switch[6. Cleanup Phase: Switch Traffic to Green]
+        Switch --> Cleanup[7. Remove Blue Peers and Delete Blue Cluster]
 
         classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
         classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
@@ -89,8 +91,16 @@ To upgrade, update `spec.version`. The strategy configured in `spec.upgrade.stra
 
         class Start read;
         class B write;
-        class Deploy,Sync,Test,Switch,Cleanup process;
+        class Deploy,Sync,Test,Promote,Demote,Switch,Cleanup process;
     ```
+
+    **Blue/Green phases (`status.blueGreen.phase`):**
+    1. `DeployingGreen`
+    2. `JoiningMesh`
+    3. `Syncing`
+    4. `Promoting`
+    5. `DemotingBlue`
+    6. `Cleanup`
 
     **Configuration:**
 
@@ -103,7 +113,7 @@ To upgrade, update `spec.version`. The strategy configured in `spec.upgrade.stra
         blueGreen:
           autoPromote: true  # Automatically switch traffic if healthy
           autoRollback:
-            enabled: true  # Revert if Green fails validation or early job failures
+            enabled: true  # Abort early failures, rollback late failures
     ```
 
 ## Advanced Upgrade Options
@@ -125,7 +135,11 @@ spec:
 
 ### Auto-Rollback
 
-If the Green cluster fails validation or upgrade jobs fail during the early upgrade phases, the Operator can automatically roll back.
+If Green validation fails or executor jobs repeatedly fail, the OpenBao Operator can automatically recover:
+
+- In early phases (`DeployingGreen`, `JoiningMesh`, `Syncing`), it aborts the upgrade and removes Green.
+- In later phases (`Promoting`, `DemotingBlue`, `Cleanup`), it triggers rollback (`RollingBack`, `RollbackCleanup`).
+- After Blue has been fully removed in `Cleanup`, rollback is no longer possible.
 
 ```yaml
 spec:
@@ -140,7 +154,7 @@ spec:
 
 ### Gateway API and Blue/Green upgrades
 
-When using **Gateway API**, the Operator creates an `HTTPRoute` that targets the cluster's main external Service (`<cluster>-public`). During cutover, the operator updates that Service's selector to point at the Green revision.
+When using **Gateway API**, the OpenBao Operator creates an `HTTPRoute` that targets the cluster's main external Service (`<cluster>-public`). During `Cleanup`, it updates that Service selector to the Green revision.
 
 ```yaml
 spec:
@@ -168,5 +182,5 @@ Track upgrade status directly on the CR:
 === "Blue/Green"
 
     ```sh
-    kubectl get openbaocluster my-cluster -o jsonpath='{.status.blueGreen}{"\n"}'
+    kubectl get openbaocluster my-cluster -o jsonpath='{.status.blueGreen.phase}{"\n"}{.status.blueGreen.jobFailureCount}{"\n"}{.status.blueGreen.lastJobFailure}{"\n"}'
     ```

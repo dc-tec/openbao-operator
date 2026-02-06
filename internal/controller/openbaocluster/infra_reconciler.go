@@ -26,7 +26,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/revision"
 	security "github.com/dc-tec/openbao-operator/internal/security"
 )
 
@@ -276,28 +275,15 @@ func (r *infraReconciler) computeStatefulSetSpec(
 
 	// Determine revision and skip logic based on update strategy
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		// For BlueGreen, use the BlueRevision from status
-		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
-			spec.Revision = cluster.Status.BlueGreen.BlueRevision
-
-			// Skip StatefulSet creation during DemotingBlue/Cleanup phases.
-			// The BlueGreenManager handles StatefulSet lifecycle during these phases.
-			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
-				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
-				logger.Info("Skipping Blue StatefulSet reconciliation during cleanup phase",
-					"phase", cluster.Status.BlueGreen.Phase,
-					"blueRevision", cluster.Status.BlueGreen.BlueRevision)
-				spec.SkipReconciliation = true
-				return spec
-			}
-		} else {
-			// Bootstrap revision for initial reconciliation before BlueGreen status is initialized.
-			// Use resolved image if spec.Image is empty
-			resolvedImage := cluster.Spec.Image
-			if resolvedImage == "" {
-				resolvedImage = constants.GetOpenBaoImage(cluster.Spec.Version)
-			}
-			spec.Revision = revision.OpenBaoClusterRevision(cluster.Spec.Version, resolvedImage, cluster.Spec.Replicas)
+		spec.Revision = inframanager.BlueGreenStableRevision(cluster)
+		if cluster.Status.BlueGreen != nil &&
+			(cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
+				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup) {
+			logger.Info("Skipping Blue StatefulSet reconciliation during cleanup phase",
+				"phase", cluster.Status.BlueGreen.Phase,
+				"blueRevision", cluster.Status.BlueGreen.BlueRevision)
+			spec.SkipReconciliation = true
+			return spec
 		}
 	} else {
 		// For RollingUpdate or default, use empty revision (cluster name)
@@ -339,69 +325,7 @@ func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger log
 		podReader = r.apiReader
 	}
 
-	// Bootstrap/correct BlueGreen status before selecting the image. This ensures we keep
-	// reconciling the active ("Blue") revision even when spec.version/spec.image has been
-	// updated to start an upgrade.
-	if cluster.Status.BlueGreen == nil {
-		inferred, inferredImage, inferErr := inframanager.InferActiveRevisionFromPods(ctx, podReader, cluster)
-		if inferErr != nil {
-			logger.Error(inferErr, "Failed to infer active revision from pods; falling back to spec-derived revision")
-		}
-		blueRevision := inferred
-		blueImage := strings.TrimSpace(inferredImage)
-
-		if blueRevision == "" {
-			resolvedImage := strings.TrimSpace(cluster.Spec.Image)
-			if resolvedImage == "" {
-				resolvedImage = constants.GetOpenBaoImage(cluster.Spec.Version)
-			}
-			blueRevision = revision.OpenBaoClusterRevision(cluster.Spec.Version, resolvedImage, cluster.Spec.Replicas)
-		}
-
-		// Prefer the currently-running pod image; if we can't infer it, do NOT fall back to
-		// spec.image when an upgrade is pending (spec may already be the target image).
-		if blueImage == "" {
-			if cluster.Status.CurrentVersion != "" && cluster.Status.CurrentVersion != cluster.Spec.Version {
-				blueImage = constants.GetOpenBaoImage(cluster.Status.CurrentVersion)
-			} else {
-				blueImage = strings.TrimSpace(cluster.Spec.Image)
-				if blueImage == "" {
-					blueImage = constants.GetOpenBaoImage(cluster.Spec.Version)
-				}
-			}
-		}
-
-		cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
-			Phase:        openbaov1alpha1.PhaseIdle,
-			BlueRevision: blueRevision,
-			BlueImage:    blueImage,
-		}
-	} else if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle &&
-		(cluster.Status.BlueGreen.BlueRevision == "" || cluster.Status.CurrentVersion != cluster.Spec.Version) {
-		inferred, inferredImage, inferErr := inframanager.InferActiveRevisionFromPods(ctx, podReader, cluster)
-		if inferErr != nil {
-			logger.Error(inferErr, "Failed to infer active revision from pods; keeping existing BlueRevision", "blueRevision", cluster.Status.BlueGreen.BlueRevision)
-		} else if inferred != "" && inferred != cluster.Status.BlueGreen.BlueRevision {
-			logger.Info("Correcting BlueRevision from active pods", "from", cluster.Status.BlueGreen.BlueRevision, "to", inferred)
-			cluster.Status.BlueGreen.BlueRevision = inferred
-		}
-
-		inferredImage = strings.TrimSpace(inferredImage)
-		if inferredImage != "" && (cluster.Status.BlueGreen.BlueImage == "" || cluster.Status.BlueGreen.BlueImage != inferredImage) {
-			logger.Info("Correcting BlueImage from active pods", "from", cluster.Status.BlueGreen.BlueImage, "to", inferredImage)
-			cluster.Status.BlueGreen.BlueImage = inferredImage
-		} else if cluster.Status.BlueGreen.BlueImage == "" {
-			// Backfill BlueImage without accidentally "locking in" the target upgrade image.
-			if cluster.Status.CurrentVersion != "" && cluster.Status.CurrentVersion != cluster.Spec.Version {
-				cluster.Status.BlueGreen.BlueImage = constants.GetOpenBaoImage(cluster.Status.CurrentVersion)
-			} else {
-				cluster.Status.BlueGreen.BlueImage = strings.TrimSpace(cluster.Spec.Image)
-				if cluster.Status.BlueGreen.BlueImage == "" {
-					cluster.Status.BlueGreen.BlueImage = constants.GetOpenBaoImage(cluster.Spec.Version)
-				}
-			}
-		}
-	}
+	inframanager.EnsureBlueGreenStatus(ctx, logger, podReader, cluster)
 
 	if cluster.Status.BlueGreen != nil && strings.TrimSpace(cluster.Status.BlueGreen.BlueImage) != "" {
 		return strings.TrimSpace(cluster.Status.BlueGreen.BlueImage)

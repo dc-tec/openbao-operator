@@ -62,3 +62,7 @@ func hold() phaseOutcome {
 func rollback(reason string) phaseOutcome {
 	return phaseOutcome{kind: phaseOutcomeRollback, reason: reason}
 }
+
+func done() phaseOutcome {
+	return phaseOutcome{kind: phaseOutcomeDone}
+}
