@@ -17,9 +17,9 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/revision"
 )
 
 type storageReconciler struct {
@@ -299,10 +299,7 @@ func (r *storageResizeRestartReconciler) nextPodNeedingFSResizeRestart(ctx conte
 	// Ensure we only restart pods belonging to the active revision when Blue/Green is enabled.
 	var wantRev string
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		wantRev = revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
-		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
-			wantRev = cluster.Status.BlueGreen.BlueRevision
-		}
+		wantRev = inframanager.BlueGreenActiveRevision(cluster)
 	}
 
 	unique := make(map[string]struct{}, len(candidatePodNames))

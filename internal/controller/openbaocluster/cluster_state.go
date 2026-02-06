@@ -15,8 +15,8 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
-	"github.com/dc-tec/openbao-operator/internal/revision"
 )
 
 // clusterState holds the observed state used for status computation.
@@ -129,16 +129,7 @@ func (r *OpenBaoClusterReconciler) gatherStatefulSetState(
 
 	// Compute active revision for blue/green deployments
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		state.ActiveRevision = revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
-		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
-			state.ActiveRevision = cluster.Status.BlueGreen.BlueRevision
-			if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
-				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
-				if cluster.Status.BlueGreen.GreenRevision != "" {
-					state.ActiveRevision = cluster.Status.BlueGreen.GreenRevision
-				}
-			}
-		}
+		state.ActiveRevision = inframanager.BlueGreenActiveRevision(cluster)
 		statefulSetName.Name = fmt.Sprintf("%s-%s", cluster.Name, state.ActiveRevision)
 	}
 
