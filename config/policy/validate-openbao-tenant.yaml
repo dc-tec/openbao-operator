@@ -11,6 +11,10 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["openbaotenants"]
   validations:
+    # API contract: target namespace is immutable after creation.
+    - expression: >-
+        oldObject == null || object.spec.targetNamespace == oldObject.spec.targetNamespace
+      message: "spec.targetNamespace is immutable."
     # Self-Service Constraint: targetNamespace must match metadata.namespace
     # Exception: Tenants in the operator namespace can target any namespace (admin mode)
     - expression: >-

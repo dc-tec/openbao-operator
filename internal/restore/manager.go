@@ -256,6 +256,7 @@ func (m *Manager) handleLockOverride(restore *openbaov1alpha1.OpenBaoRestore, lo
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
 		Type:               constants.ConditionTypeOperationLockOverride,
 		Status:             metav1.ConditionTrue,
+		ObservedGeneration: restore.Generation,
 		LastTransitionTime: metav1.Now(),
 		Reason:             constants.ReasonOperationLockOverridden,
 		Message:            fmt.Sprintf("Cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder),
@@ -453,6 +454,7 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
 		Type:               string(RestoreConditionType),
 		Status:             metav1.ConditionFalse,
+		ObservedGeneration: restore.Generation,
 		Reason:             ReasonRestoreFailed,
 		Message:            message,
 		LastTransitionTime: now,
@@ -486,6 +488,7 @@ func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, resto
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
 		Type:               string(RestoreConditionType),
 		Status:             metav1.ConditionTrue,
+		ObservedGeneration: restore.Generation,
 		Reason:             ReasonRestoreSucceeded,
 		Message:            message,
 		LastTransitionTime: now,

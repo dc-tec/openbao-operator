@@ -139,10 +139,11 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		tenant.Status.LastError = err.Error()
 
 		meta.SetStatusCondition(&tenant.Status.Conditions, metav1.Condition{
-			Type:    constants.ConditionTypeProvisioned,
-			Status:  metav1.ConditionFalse,
-			Reason:  ReasonSecurityViolation,
-			Message: err.Error(),
+			Type:               constants.ConditionTypeProvisioned,
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: tenant.Generation,
+			Reason:             ReasonSecurityViolation,
+			Message:            err.Error(),
 		})
 
 		if patchErr := r.patchStatus(ctx, tenant, original); patchErr != nil {

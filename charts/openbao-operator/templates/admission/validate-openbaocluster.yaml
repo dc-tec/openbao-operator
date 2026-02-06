@@ -22,6 +22,9 @@ spec:
       expression: has(object.spec.upgrade) && has(object.spec.upgrade.blueGreen) && has(object.spec.upgrade.blueGreen.preUpgradeSnapshot) && object.spec.upgrade.blueGreen.preUpgradeSnapshot == true
   validations:
     - expression: >-
+        has(object.spec.profile)
+      message: spec.profile is required and must be explicitly set to Hardened or Development.
+    - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||
         (object.spec.tls.mode in ["External", "ACME"] &&
