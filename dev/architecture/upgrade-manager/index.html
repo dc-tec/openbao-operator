@@ -4282,10 +4282,10 @@
 <li>The Status controller ignores observed pod-label version regressions, so transient stale observations do not restart a completed rolling upgrade.</li>
 </ul>
 <h3 id="image-verification">Image Verification<a class="headerlink" href="#image-verification" title="Permanent link">&para;</a></h3>
-<p>If <code>spec.imageVerification.enabled</code> is <code>true</code>:</p>
 <ul>
-<li><strong>Rolling:</strong> The main StatefulSet image is pinned to the verified digest.</li>
-<li><strong>Blue/Green:</strong> The Green StatefulSet and all executor Jobs are pinned to the verified digest.</li>
+<li><code>spec.imageVerification</code> applies to OpenBao workload images (StatefulSet pods).</li>
+<li><code>spec.operatorImageVerification</code> applies to operator-managed helper images (for example, upgrade executor Jobs).</li>
+<li>Helper image verification does not fall back to <code>spec.imageVerification</code> when <code>spec.operatorImageVerification</code> is unset.</li>
 </ul>
 <h2 id="3-reconciliation-semantics">3. Reconciliation Semantics<a class="headerlink" href="#3-reconciliation-semantics" title="Permanent link">&para;</a></h2>
 <ul>

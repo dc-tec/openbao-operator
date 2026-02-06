@@ -4162,7 +4162,8 @@
 </ul>
 </li>
 <li><strong>Completion:</strong><ul>
-<li>On success, the lock is released.</li>
+<li>On success or failure, the controller attempts to release the cluster operation lock.</li>
+<li>Terminal restores (<code>Completed</code>/<code>Failed</code>) re-run lock cleanup on subsequent reconciles until release succeeds.</li>
 <li>The cluster may need to be unsealed manually or via auto-unseal.</li>
 </ul>
 </li>

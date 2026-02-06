@@ -4184,7 +4184,7 @@
 <p>Before spawning a Job, the Operator verifies the cluster is stable:</p>
 <ol>
 <li><strong>Healthy:</strong> Cluster Phase must be <code>Running</code>.</li>
-<li><strong>Not Upgrading:</strong> No upgrade is in progress (<code>status.upgrade != nil</code>) and no upgrade is pending (for example, <code>spec.version != status.currentVersion</code>).</li>
+<li><strong>Not Upgrading:</strong> No upgrade is in progress (<code>status.upgrade == nil</code>) and no upgrade is pending (for example, <code>spec.version == status.currentVersion</code>).</li>
 <li><strong>Not Restoring:</strong> No <code>OpenBaoRestore</code> is in progress for this cluster (restore resources targeting this cluster that are not <code>Completed</code> or <code>Failed</code>).</li>
 <li><strong>Exclusive:</strong> No other backup Job is currently running.</li>
 </ol>
