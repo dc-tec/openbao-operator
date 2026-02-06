@@ -14,6 +14,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/storageenv"
 )
 
 // JobType distinguishes between scheduled backups and pre-upgrade snapshots.
@@ -196,11 +197,7 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 		statefulSetName = cluster.Name
 	}
 
-	// Determine provider (default to s3)
-	provider := backupCfg.Target.Provider
-	if provider == "" {
-		provider = constants.StorageProviderS3
-	}
+	provider := storageenv.EffectiveProvider(backupCfg.Target.Provider)
 
 	env := []corev1.EnvVar{
 		{Name: constants.EnvClusterNamespace, Value: cluster.Namespace},
@@ -213,42 +210,12 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 		{Name: constants.EnvBackupPathPrefix, Value: backupCfg.Target.PathPrefix},
 	}
 
-	// Provider-specific environment variables
-	if backupCfg.Target.InsecureSkipVerify {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupInsecureSkipVerify,
-			Value: "true",
-		})
-	}
+	env = storageenv.AppendProviderEnvVars(env, backupCfg.Target)
 
-	switch provider {
-	case constants.StorageProviderS3:
-		region := backupCfg.Target.Region
-		if region == "" {
-			region = constants.DefaultS3Region
-		}
-		env = append(env, corev1.EnvVar{Name: constants.EnvBackupRegion, Value: region})
-		env = append(env, corev1.EnvVar{Name: constants.EnvBackupUsePathStyle, Value: fmt.Sprintf("%t", backupCfg.Target.UsePathStyle)})
-
-		// AWS Role ARN for Web Identity (IRSA)
-		if backupCfg.Target.RoleARN != "" {
-			env = append(env, corev1.EnvVar{Name: constants.EnvAWSRoleARN, Value: backupCfg.Target.RoleARN})
-			env = append(env, corev1.EnvVar{Name: constants.EnvAWSWebIdentityTokenFile, Value: awsWebIdentityTokenFile})
-		}
-	case constants.StorageProviderGCS:
-		if backupCfg.Target.GCS != nil && backupCfg.Target.GCS.Project != "" {
-			env = append(env, corev1.EnvVar{Name: constants.EnvBackupGCSProject, Value: backupCfg.Target.GCS.Project})
-		}
-
-	case constants.StorageProviderAzure:
-		if backupCfg.Target.Azure != nil {
-			if backupCfg.Target.Azure.StorageAccount != "" {
-				env = append(env, corev1.EnvVar{Name: constants.EnvBackupAzureStorageAccount, Value: backupCfg.Target.Azure.StorageAccount})
-			}
-			if backupCfg.Target.Azure.Container != "" {
-				env = append(env, corev1.EnvVar{Name: constants.EnvBackupAzureContainer, Value: backupCfg.Target.Azure.Container})
-			}
-		}
+	// AWS Role ARN for Web Identity (IRSA)
+	if provider == constants.StorageProviderS3 && backupCfg.Target.RoleARN != "" {
+		env = append(env, corev1.EnvVar{Name: constants.EnvAWSRoleARN, Value: backupCfg.Target.RoleARN})
+		env = append(env, corev1.EnvVar{Name: constants.EnvAWSWebIdentityTokenFile, Value: awsWebIdentityTokenFile})
 	}
 
 	// Add backup key if provided
@@ -286,16 +253,7 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 
 	// JWT Auth configuration (preferred method)
 	jwtRole := getEffectiveBackupJWTRole(cluster)
-	if jwtRole != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupJWTAuthRole,
-			Value: jwtRole,
-		})
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupAuthMethod,
-			Value: constants.BackupAuthMethodJWT,
-		})
-	}
+	env = storageenv.AppendAuthEnvVars(env, jwtRole, false)
 
 	// Token secret reference (fallback for token-based auth)
 	// SECURITY: Do NOT pass cross-namespace references. Secrets must be in cluster.Namespace.
@@ -304,12 +262,9 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 			Name:  constants.EnvBackupTokenSecretName,
 			Value: backupCfg.TokenSecretRef.Name,
 		})
-		// Only set auth method to token if JWT Auth is not configured
+		// Only set auth method to token if JWT Auth is not configured.
 		if jwtRole == "" {
-			env = append(env, corev1.EnvVar{
-				Name:  constants.EnvBackupAuthMethod,
-				Value: constants.BackupAuthMethodToken,
-			})
+			env = storageenv.AppendAuthEnvVars(env, "", true)
 		}
 	}
 
@@ -492,9 +447,6 @@ func GetBackupExecutorImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, er
 // getEffectiveBackupJWTRole returns the configured JWT role or defaults it
 // if OIDC is enabled and the role is empty.
 func getEffectiveBackupJWTRole(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	role := cluster.Spec.Backup.JWTAuthRole
-	if role == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		return constants.RoleNameBackup
-	}
-	return role
+	oidcEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled
+	return storageenv.EffectiveJWTRole(cluster.Spec.Backup.JWTAuthRole, oidcEnabled, constants.RoleNameBackup)
 }

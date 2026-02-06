@@ -602,10 +602,10 @@ func TestBuildRestoreVolumes(t *testing.T) {
 			expectedVolumeNames: []string{"tls-ca", "restore-token"},
 		},
 		{
-			name:                "with S3 credentials",
+			name:                "with storage credentials",
 			tlsEnabled:          true,
 			credentialsSecret:   &corev1.LocalObjectReference{Name: "s3-creds"},
-			expectedVolumeNames: []string{"tls-ca", "s3-credentials"},
+			expectedVolumeNames: []string{"tls-ca", "storage-credentials"},
 		},
 	}
 
