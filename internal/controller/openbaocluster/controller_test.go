@@ -117,54 +117,9 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 		It("blocks reconciliation when spec.profile is not set", func() {
 			cluster := createMinimalCluster("test-profile-not-set", false)
 			cluster.Spec.Profile = ""
-			Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
-
-			req := reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      cluster.Name,
-					Namespace: cluster.Namespace,
-				},
-			}
-
-			// First reconcile adds the finalizer.
-			_, err := newReconciler().Reconcile(ctx, req)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Second reconcile should refuse to proceed and set status conditions.
-			_, err = newReconciler().Reconcile(ctx, req)
-			Expect(err).NotTo(HaveOccurred())
-
-			updated := &openbaov1alpha1.OpenBaoCluster{}
-			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      cluster.Name,
-				Namespace: cluster.Namespace,
-			}, updated)
-			Expect(err).NotTo(HaveOccurred())
-
-			productionReady := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionProductionReady))
-			Expect(productionReady).NotTo(BeNil())
-			Expect(productionReady.Status).To(Equal(metav1.ConditionFalse))
-			Expect(productionReady.Reason).To(Equal(ReasonProfileNotSet))
-
-			degraded := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
-			Expect(degraded).NotTo(BeNil())
-			Expect(degraded.Status).To(Equal(metav1.ConditionTrue))
-			Expect(degraded.Reason).To(Equal(ReasonProfileNotSet))
-
-			// Ensure we did not create TLS assets.
-			caSecret := &corev1.Secret{}
-			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      cluster.Name + constants.SuffixTLSCA,
-				Namespace: cluster.Namespace,
-			}, caSecret)
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-
-			serverSecret := &corev1.Secret{}
-			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      cluster.Name + constants.SuffixTLSServer,
-				Namespace: cluster.Namespace,
-			}, serverSecret)
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			err := k8sClient.Update(ctx, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(apierrors.IsInvalid(err)).To(BeTrue())
 		})
 
 		It("adds a finalizer to new clusters", func() {

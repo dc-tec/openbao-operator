@@ -42,7 +42,7 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 			Source: openbaov1alpha1.RestoreSource{
 				Key: "backup.enc",
 				Target: openbaov1alpha1.BackupTarget{
-					Endpoint: "http://minio",
+					Endpoint: "http://minio.svc",
 					Bucket:   "backups",
 				},
 			},

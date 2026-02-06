@@ -241,6 +241,9 @@ func createClusterCRForTest(t *testing.T, k8sClient client.Client, cluster *open
 	}
 
 	toCreate := cluster.DeepCopy()
+	if toCreate.Spec.Profile == "" {
+		toCreate.Spec.Profile = openbaov1alpha1.ProfileDevelopment
+	}
 	toCreate.Status = openbaov1alpha1.OpenBaoClusterStatus{}
 	if err := k8sClient.Create(ctx, toCreate); err != nil {
 		t.Fatalf("failed to create OpenBaoCluster for test: %v", err)
