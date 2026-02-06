@@ -4,6 +4,9 @@
 
 It acts as a high-level abstraction over complex stateful infrastructure, managing the entire lifecycle of the cluster.
 
+!!! note "API Contract"
+    `spec.profile` must be explicitly set to `Hardened` or `Development`.
+
 ## Capabilities
 
 <div class="grid cards" markdown>
@@ -78,6 +81,7 @@ flowchart LR
     spec:
       version: "2.0.0"
       replicas: 1
+      profile: Development
       description: "Local dev cluster"
     ```
 
@@ -94,6 +98,7 @@ flowchart LR
     spec:
       version: "2.0.0"
       replicas: 3
+      profile: Hardened
       description: "Production HA Cluster"
       
       resources:

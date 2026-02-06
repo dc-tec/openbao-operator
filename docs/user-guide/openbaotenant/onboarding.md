@@ -84,3 +84,6 @@ The operator uses a **Trust-But-Verify** approach:
 1. **Trust**: The Operator's own namespace (`openbao-operator-system`) is trusted. Resources created there can target *any* namespace.
 2. **Verify**: Resources created in user namespaces are verified. They must target their own namespace (`metadata.namespace == spec.targetNamespace`).
 3. **Isolation**: The Provisioner uses a delegated ServiceAccount with minimal permissions. It cannot list all namespaces in the cluster; it only acts on namespaces explicitly discovered via valid `OpenBaoTenant` CRs.
+
+!!! note "API Contract"
+    `spec.targetNamespace` is immutable after creation. To change the target namespace, delete and recreate the `OpenBaoTenant`.

@@ -51,6 +51,12 @@ graph TD
 
 ## 3. Configuration
 
+### API Contract
+
+- `spec` is required.
+- `spec` is immutable after creation.
+- To change restore parameters, create a new `OpenBaoRestore` resource.
+
 ### Source Configuration
 
 Define where your snapshot is located. The `BackupTarget` structure supports S3, GCS, and Azure storage providers.
