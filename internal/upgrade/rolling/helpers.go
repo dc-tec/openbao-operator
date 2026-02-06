@@ -16,6 +16,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
@@ -92,6 +93,20 @@ func (m *Manager) getPodURL(cluster *openbaov1alpha1.OpenBaoCluster, podName str
 	// Format: <pod-name>.<service-name>.<namespace>.svc:<port>
 	serviceName := cluster.Name + headlessServiceSuffix
 	return upgrade.PodURLForService(cluster.Namespace, serviceName, podName)
+}
+
+// newPodClient builds an OpenBao API client targeting a specific pod.
+func (m *Manager) newPodClient(cluster *openbaov1alpha1.OpenBaoCluster, podName string, caCert []byte) (openbaoapi.ClusterActions, error) {
+	podURL := m.getPodURL(cluster, podName)
+	apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
+		ClusterKey: fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
+		BaseURL:    podURL,
+		CACert:     caCert,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OpenBao client for pod %s: %w", podName, err)
+	}
+	return apiClient, nil
 }
 
 // isPodReady checks if a pod has the Ready condition set to True.

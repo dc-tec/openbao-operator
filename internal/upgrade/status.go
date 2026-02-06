@@ -7,7 +7,7 @@ import (
 )
 
 // SetUpgradeStarted initializes the upgrade progress status when an upgrade begins.
-func SetUpgradeStarted(status *openbaov1alpha1.OpenBaoClusterStatus, from, to string, replicas int32, generation int64) {
+func SetUpgradeStarted(status *openbaov1alpha1.OpenBaoClusterStatus, from, to string, replicas int32) {
 	now := metav1.Now()
 
 	status.Upgrade = &openbaov1alpha1.UpgradeProgress{
@@ -24,7 +24,7 @@ func SetUpgradeStarted(status *openbaov1alpha1.OpenBaoClusterStatus, from, to st
 
 // SetUpgradeProgress updates the upgrade progress during the rolling update.
 // This is called after each pod is successfully upgraded.
-func SetUpgradeProgress(status *openbaov1alpha1.OpenBaoClusterStatus, partition int32, completedPod int32, totalReplicas int32, generation int64) {
+func SetUpgradeProgress(status *openbaov1alpha1.OpenBaoClusterStatus, partition int32, completedPod int32) {
 	if status.Upgrade == nil {
 		return
 	}
@@ -45,7 +45,7 @@ func SetStepDownPerformed(status *openbaov1alpha1.OpenBaoClusterStatus) {
 
 // SetUpgradeComplete finalizes the upgrade status after successful completion.
 // This clears Status.Upgrade and updates the version.
-func SetUpgradeComplete(status *openbaov1alpha1.OpenBaoClusterStatus, version string, generation int64) {
+func SetUpgradeComplete(status *openbaov1alpha1.OpenBaoClusterStatus, version string) {
 	// Clear upgrade progress
 	status.Upgrade = nil
 
@@ -55,7 +55,7 @@ func SetUpgradeComplete(status *openbaov1alpha1.OpenBaoClusterStatus, version st
 
 // SetUpgradeFailed marks an upgrade as failed and sets degraded conditions.
 // The upgrade progress is preserved to allow resume or manual intervention.
-func SetUpgradeFailed(status *openbaov1alpha1.OpenBaoClusterStatus, reason, message string, generation int64) {
+func SetUpgradeFailed(status *openbaov1alpha1.OpenBaoClusterStatus, reason, message string) {
 	now := metav1.Now()
 
 	// Keep upgrade progress so state can be inspected or resumed
@@ -70,7 +70,7 @@ func SetUpgradeFailed(status *openbaov1alpha1.OpenBaoClusterStatus, reason, mess
 
 // ClearUpgrade clears the upgrade status without marking it complete.
 // Used when an upgrade needs to be abandoned (e.g., spec.version changed mid-upgrade).
-func ClearUpgrade(status *openbaov1alpha1.OpenBaoClusterStatus, reason, message string, generation int64) {
+func ClearUpgrade(status *openbaov1alpha1.OpenBaoClusterStatus) {
 	status.Upgrade = nil
 }
 

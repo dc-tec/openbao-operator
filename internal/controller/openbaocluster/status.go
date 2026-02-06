@@ -20,6 +20,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/kube"
 	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/revision"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 // patchStatusSSA updates the cluster status using Server-Side Apply.
@@ -177,7 +178,9 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 
 	r.reconcileCurrentVersion(logger, cluster, state, observedVersion)
 	r.maybeAdvanceCurrentVersionForBlueGreen(logger, cluster, observedVersion)
-	r.maybeAdvanceCurrentVersionForRollingUpdate(logger, cluster, state, observedVersion)
+	// Rolling upgrade completion is finalized by the AdminOps rolling manager.
+	// The status controller must not independently advance CurrentVersion for rolling,
+	// otherwise it can race with in-progress partitioned rollouts.
 
 	// Update per-cluster metrics
 	clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
@@ -216,11 +219,32 @@ func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, c
 		return
 	}
 
-	if state == nil || state.UpgradeInProgress {
+	if state == nil {
+		return
+	}
+
+	// Freeze CurrentVersion correction while either upgrade strategy has status state.
+	// This prevents status churn from fighting an in-progress or failed upgrade flow.
+	if state.RollingUpgradeInProgress || state.BlueGreenInProgress {
 		return
 	}
 
 	if observedVersion == "" || cluster.Status.CurrentVersion == "" || cluster.Status.CurrentVersion == observedVersion {
+		return
+	}
+
+	change, err := upgrade.CompareVersions(cluster.Status.CurrentVersion, observedVersion)
+	if err != nil {
+		logger.V(1).Info("Skipping CurrentVersion correction due to unparsable version",
+			"currentVersion", cluster.Status.CurrentVersion,
+			"observedVersion", observedVersion,
+			"error", err)
+		return
+	}
+	if change == upgrade.VersionChangeDowngrade {
+		logger.V(1).Info("Ignoring CurrentVersion regression from pod labels",
+			"currentVersion", cluster.Status.CurrentVersion,
+			"observedVersion", observedVersion)
 		return
 	}
 
@@ -269,52 +293,6 @@ func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForBlueGreen(logger
 		"fromVersion", from,
 		"toVersion", cluster.Spec.Version,
 		"revision", currentSpecRevision)
-}
-
-func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForRollingUpdate(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState, observedVersion string) {
-	// Detect RollingUpdate upgrade completion: when the StatefulSet reports all
-	// replicas updated and ready (CurrentRevision == UpdateRevision), the workload
-	// has converged to the new spec and we can update CurrentVersion.
-	//
-	// This is intentionally computed from observed StatefulSet status so we don't
-	// incorrectly advance CurrentVersion immediately after a spec change.
-	rollingStrategy := cluster.Spec.Upgrade == nil ||
-		cluster.Spec.Upgrade.Strategy == "" ||
-		cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyRollingUpdate
-
-	if !rollingStrategy ||
-		state == nil ||
-		state.StatefulSet == nil ||
-		cluster.Status.CurrentVersion == "" ||
-		cluster.Status.CurrentVersion == cluster.Spec.Version {
-		return
-	}
-
-	sts := state.StatefulSet.Status
-	rolloutComplete := sts.ReadyReplicas == cluster.Spec.Replicas &&
-		sts.UpdatedReplicas == cluster.Spec.Replicas &&
-		sts.CurrentRevision != "" &&
-		sts.CurrentRevision == sts.UpdateRevision
-	if !rolloutComplete {
-		return
-	}
-
-	// Extra safety: do not advance CurrentVersion unless pods actually report the target version.
-	// This prevents false completion when the StatefulSet is blocked (for example, by a locked partition).
-	if observedVersion != "" && strings.TrimSpace(observedVersion) != strings.TrimSpace(cluster.Spec.Version) {
-		logger.V(1).Info("StatefulSet reports roll-out complete but running pods do not report target version; skipping CurrentVersion update",
-			"observedVersion", observedVersion,
-			"targetVersion", cluster.Spec.Version,
-			"currentRevision", sts.CurrentRevision)
-		return
-	}
-
-	from := cluster.Status.CurrentVersion
-	cluster.Status.CurrentVersion = cluster.Spec.Version
-	logger.Info("Detected RollingUpdate upgrade completion, updated CurrentVersion",
-		"fromVersion", from,
-		"toVersion", cluster.Spec.Version,
-		"currentRevision", sts.CurrentRevision)
 }
 
 func (r *OpenBaoClusterReconciler) warnIfSelfInitDisabled(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
