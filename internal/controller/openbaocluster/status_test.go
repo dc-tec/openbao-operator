@@ -29,8 +29,8 @@ func TestObservedVersionFromPods_UsesLeaderWhenUnambiguous(t *testing.T) {
 	}
 
 	state := &clusterState{
-		Pods:       []corev1.Pod{pod0, leader},
-		Pod0:       &pod0,
+		Pods:        []corev1.Pod{pod0, leader},
+		Pod0:        &pod0,
 		LeaderCount: 1,
 		LeaderName:  "cluster-1",
 	}
@@ -58,8 +58,8 @@ func TestObservedVersionFromPods_IgnoresLeaderVersionWhenAmbiguous(t *testing.T)
 	}
 
 	state := &clusterState{
-		Pods:       []corev1.Pod{pod0, leaderCandidate},
-		Pod0:       &pod0,
+		Pods:        []corev1.Pod{pod0, leaderCandidate},
+		Pod0:        &pod0,
 		LeaderCount: 2,
 		LeaderName:  "cluster-1",
 	}
