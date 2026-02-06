@@ -206,6 +206,55 @@ func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
 	}
 }
 
+func TestVAP_OpenBaoCluster_RejectsDisabledInitContainerOverride(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+	namespace := newTestNamespace(t)
+
+	for attempt := 0; attempt < 25; attempt++ {
+		cluster := &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "openbao.org/v1alpha1",
+				"kind":       "OpenBaoCluster",
+				"metadata": map[string]any{
+					"name":      fmt.Sprintf("cluster-disabled-init-override-%d", attempt),
+					"namespace": namespace,
+				},
+				"spec": map[string]any{
+					"version":  "2.4.4",
+					"image":    "openbao/openbao:2.4.4",
+					"replicas": int64(3),
+					"profile":  "Development",
+					"tls": map[string]any{
+						"enabled":        true,
+						"rotationPeriod": "720h",
+					},
+					"storage": map[string]any{
+						"size": "10Gi",
+					},
+					"initContainer": map[string]any{
+						"enabled": false,
+					},
+				},
+			},
+		}
+
+		err := k8sClient.Create(ctx, cluster)
+		if err == nil {
+			_ = k8sClient.Delete(ctx, cluster)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "spec.initContainer is optional; when set, spec.initContainer.enabled must be true.") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		return
+	}
+
+	t.Fatalf("expected VAP to deny OpenBaoCluster create with disabled initContainer override after retries")
+}
+
 func TestVAP_OpenBaoTenant_RejectsCrossNamespaceSelfService(t *testing.T) {
 	ensureDefaultAdmissionPoliciesApplied(t)
 

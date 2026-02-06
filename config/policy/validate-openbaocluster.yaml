@@ -34,7 +34,6 @@ spec:
       message: Hardened profile requires TLS mode External or ACME, an external unseal (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
     - expression: >-
         !has(object.spec.initContainer) ||
-        !has(object.spec.initContainer.enabled) ||
         object.spec.initContainer.enabled == true
       message: spec.initContainer is optional; when set, spec.initContainer.enabled must be true.
     - expression: >-
