@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 func TestSecretNames(t *testing.T) {
@@ -233,6 +234,12 @@ func TestReconcileCreatesCAAndServerSecrets(t *testing.T) {
 	if len(caSecret.Data[caKeyKey]) == 0 {
 		t.Fatalf("expected CA Secret to contain %q", caKeyKey)
 	}
+	if caSecret.Labels[constants.LabelAppManagedBy] != constants.LabelValueAppManagedByOpenBaoOperator {
+		t.Fatalf("expected CA Secret to include managed-by label")
+	}
+	if caSecret.Labels[constants.LabelOpenBaoCluster] != cluster.Name {
+		t.Fatalf("expected CA Secret to include cluster label %q", cluster.Name)
+	}
 
 	serverSecret := &corev1.Secret{}
 	err = client.Get(context.Background(), types.NamespacedName{
@@ -251,6 +258,117 @@ func TestReconcileCreatesCAAndServerSecrets(t *testing.T) {
 	}
 	if len(serverSecret.Data[caCertKey]) == 0 {
 		t.Fatalf("expected server TLS Secret to contain %q", caCertKey)
+	}
+	if serverSecret.Labels[constants.LabelAppManagedBy] != constants.LabelValueAppManagedByOpenBaoOperator {
+		t.Fatalf("expected server TLS Secret to include managed-by label")
+	}
+	if serverSecret.Labels[constants.LabelOpenBaoCluster] != cluster.Name {
+		t.Fatalf("expected server TLS Secret to include cluster label %q", cluster.Name)
+	}
+}
+
+func TestReconcileBackfillsManagedSecretLabels(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add core scheme: %v", err)
+	}
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add OpenBao scheme: %v", err)
+	}
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "backfill-cluster",
+			Namespace: "security",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Image:    "openbao/openbao:2.4.4",
+			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled:        true,
+				RotationPeriod: "720h",
+			},
+			Storage: openbaov1alpha1.StorageConfig{
+				Size: "10Gi",
+			},
+		},
+	}
+
+	now := time.Now()
+	caCertPEM, caKeyPEM, err := generateCA(cluster, now)
+	if err != nil {
+		t.Fatalf("failed to generate CA: %v", err)
+	}
+	caCert, caKey, _, err := parseCAFromSecret(&corev1.Secret{Data: map[string][]byte{
+		caCertKey: caCertPEM,
+		caKeyKey:  caKeyPEM,
+	}})
+	if err != nil {
+		t.Fatalf("failed to parse generated CA: %v", err)
+	}
+	serverCertPEM, serverKeyPEM, err := issueServerCertificate(cluster, caCert, caKey, now, nil)
+	if err != nil {
+		t.Fatalf("failed to issue server cert: %v", err)
+	}
+
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      caSecretName(cluster),
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			caCertKey: caCertPEM,
+			caKeyKey:  caKeyPEM,
+		},
+	}
+	serverSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serverSecretName(cluster),
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+			},
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			tlsCertKey: serverCertPEM,
+			tlsKeyKey:  serverKeyPEM,
+			caCertKey:  caCertPEM,
+		},
+	}
+
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(caSecret, serverSecret).Build()
+	manager := NewManager(client, scheme)
+
+	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	gotCA := &corev1.Secret{}
+	if err := client.Get(context.Background(), types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      caSecretName(cluster),
+	}, gotCA); err != nil {
+		t.Fatalf("failed to get CA Secret: %v", err)
+	}
+	if gotCA.Labels[constants.LabelOpenBaoCluster] != cluster.Name {
+		t.Fatalf("expected CA Secret to include cluster label %q", cluster.Name)
+	}
+
+	gotServer := &corev1.Secret{}
+	if err := client.Get(context.Background(), types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      serverSecretName(cluster),
+	}, gotServer); err != nil {
+		t.Fatalf("failed to get server Secret: %v", err)
+	}
+	if gotServer.Labels[constants.LabelOpenBaoCluster] != cluster.Name {
+		t.Fatalf("expected server Secret to include cluster label %q", cluster.Name)
 	}
 }
 

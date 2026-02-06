@@ -3,6 +3,6 @@ kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: validate-openbaocluster
 spec:
-  policyName: openbao-operator-validate-openbaocluster
+  policyName: validate-openbaocluster
   validationActions:
     - Deny

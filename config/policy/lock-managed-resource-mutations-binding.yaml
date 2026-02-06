@@ -3,6 +3,6 @@ kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: lock-managed-resource-mutations
 spec:
-  policyName: openbao-operator-lock-managed-resource-mutations
+  policyName: lock-managed-resource-mutations
   validationActions:
     - Deny

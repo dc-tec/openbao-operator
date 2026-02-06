@@ -9,6 +9,7 @@
 ## 1. Design Philosophy
 
 - **CRD-Based**: Restores are modeled as `OpenBaoRestore` objects, not as a mode of `OpenBaoCluster`. This ensures GitOps stability and provides an audit log of restore operations.
+- **Immutable Request**: `OpenBaoRestore.spec` is immutable after creation. To change inputs, create a new restore object.
 - **Stateless Controller**: The controller polls the restore Job rather than watching it, minimizing RBAC requirements.
 - **Safety First**: Restores use a distinct **Operation Lock** to prevent conflicts with Backups or Upgrades.
 

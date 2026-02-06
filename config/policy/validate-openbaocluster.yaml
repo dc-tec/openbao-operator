@@ -19,6 +19,9 @@ spec:
       expression: has(object.spec.upgrade) && has(object.spec.upgrade.blueGreen) && has(object.spec.upgrade.blueGreen.preUpgradeSnapshot) && object.spec.upgrade.blueGreen.preUpgradeSnapshot == true
   validations:
     - expression: >-
+        has(object.spec.profile)
+      message: spec.profile is required and must be explicitly set to Hardened or Development.
+    - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||
         (object.spec.tls.mode in ["External", "ACME"] &&
@@ -30,10 +33,9 @@ spec:
           !(has(object.spec.unseal.kmip) && has(object.spec.unseal.kmip.tlsSkipVerify) && object.spec.unseal.kmip.tlsSkipVerify == true))
       message: Hardened profile requires TLS mode External or ACME, an external unseal (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
     - expression: >-
-        has(object.spec.initContainer) &&
-        object.spec.initContainer.enabled == true &&
-        object.spec.initContainer.image != ""
-      message: spec.initContainer is required, must be enabled, and must specify a non-empty image.
+        !has(object.spec.initContainer) ||
+        object.spec.initContainer.enabled == true
+      message: spec.initContainer is optional; when set, spec.initContainer.enabled must be true.
     - expression: >-
         !has(object.spec.selfInit) ||
         object.spec.selfInit.enabled == false ||

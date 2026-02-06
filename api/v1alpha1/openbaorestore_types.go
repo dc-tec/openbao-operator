@@ -143,6 +143,8 @@ type OpenBaoRestoreStatus struct {
 	Message string `json:"message,omitempty"`
 
 	// Conditions represent the latest available observations of the restore's state.
+	// +listType=map
+	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
@@ -161,7 +163,7 @@ type OpenBaoRestore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OpenBaoRestoreSpec   `json:"spec,omitempty"`
+	Spec   OpenBaoRestoreSpec   `json:"spec"`
 	Status OpenBaoRestoreStatus `json:"status,omitempty"`
 }
 

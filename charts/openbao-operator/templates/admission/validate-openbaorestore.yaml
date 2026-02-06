@@ -14,6 +14,10 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["openbaorestores"]
   validations:
+    # API contract: restore specs are immutable after creation.
+    - expression: >-
+        oldObject == null || object.spec == oldObject.spec
+      message: "spec is immutable; create a new OpenBaoRestore for changed restore parameters."
     # Safety: overrideOperationLock requires force=true (break-glass is explicit).
     - expression: >-
         !has(object.spec.overrideOperationLock) ||
@@ -64,5 +68,4 @@ spec:
   policyName: {{ include "openbao-operator.fullname" . }}-validate-openbaorestore
   validationActions:
     - Deny
-
 {{- end }}

@@ -4,6 +4,9 @@
 
 It is the key to **Multi-Tenancy**, ensuring that different teams can safely share a Kubernetes cluster without accessing each other's secrets.
 
+!!! note "API Contract"
+    `spec.targetNamespace` is immutable after creation.
+
 ## Tenant Isolation Model
 
 When you apply an `OpenBaoTenant`, the Operator creates a "Sandbox" around the target namespace.

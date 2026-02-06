@@ -38,11 +38,37 @@ func ensureDefaultAdmissionPoliciesApplied(t *testing.T) {
 			if gvk.Group != "admissionregistration.k8s.io" {
 				return false
 			}
-			return gvk.Kind == "ValidatingAdmissionPolicy" || gvk.Kind == "ValidatingAdmissionPolicyBinding"
+			switch gvk.Kind {
+			case "ValidatingAdmissionPolicy":
+				return isDefaultIntegrationPolicyNameAllowed(u.GetName())
+			case "ValidatingAdmissionPolicyBinding":
+				policyName, found, err := unstructured.NestedString(u.Object, "spec", "policyName")
+				if err != nil || !found || policyName == "" {
+					return false
+				}
+				return isDefaultIntegrationPolicyNameAllowed(policyName)
+			default:
+				return false
+			}
 		})
 
 		applyUnstructuredObjects(t, objs)
 	})
+}
+
+func isDefaultIntegrationPolicyNameAllowed(policyName string) bool {
+	allowedSuffixes := []string{
+		"validate-openbaocluster",
+		"validate-openbaorestore",
+		"validate-openbao-tenant",
+		"openbao-restrict-provisioner-rbac",
+	}
+	for _, suffix := range allowedSuffixes {
+		if strings.HasSuffix(policyName, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func ensureProvisionerRBACApplied(t *testing.T) {

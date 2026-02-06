@@ -271,6 +271,9 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
               lastError:
                 description: LastError reports any issues finding the namespace or
                   applying RBAC.
@@ -280,6 +283,8 @@ spec:
                   applied to the target namespace.
                 type: boolean
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true
