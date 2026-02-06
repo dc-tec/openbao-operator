@@ -98,6 +98,30 @@ patchesJson6902:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
+      name: openbao-operator-validate-openbaorestore
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-validate-openbaorestore
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-validate-openbao-tenant
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-validate-openbao-tenant
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
       name: openbao-operator-openbao-restrict-provisioner-rbac
     path: policy_strip_namespace_patch.yaml
   - target:
