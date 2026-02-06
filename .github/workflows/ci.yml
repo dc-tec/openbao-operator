@@ -238,7 +238,7 @@ jobs:
           make test-integration
 
   openbao-config-compat:
-    name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.5.0)
+    name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.6.0)
     runs-on: *runner
     timeout-minutes: 25
     steps:
@@ -253,7 +253,7 @@ jobs:
           cache: true
 
       - name: Validate HCL fixtures against upstream OpenBao parser
-        run: bash hack/ci/openbao-config-compat.sh 2.4.0 2.4.4
+        run: bash hack/ci/openbao-config-compat.sh 2.4.4 2.5.0
 
   docs:
     name: Docs Build
@@ -406,7 +406,7 @@ jobs:
           # Default: Skip slow, nightly, and openshift tests
           # Also skip pentest-labeled tests unless explicitly requested via PR labels.
           FILTER="!slow && !nightly && !openshift && !pentest"
-          
+
           # Dynamic inclusions based on PR labels (from labeler.yml)
           if [[ "${{ contains(github.event.pull_request.labels.*.name, 'upgrades') }}" == "true" ]]; then
             FILTER="$FILTER || (upgrade)"
@@ -426,7 +426,7 @@ jobs:
             FILTER="$FILTER || (pentest)"
             echo "::notice::Including PENTEST checks (detected one of: provisioner/admission/controller)"
           fi
-          
+
           # Full override: If ci:full-e2e label is present, include everything except openshift
           if [[ "${{ contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') }}" == "true" ]]; then
             echo "::notice::Running FULL E2E suite (ignoring 'slow' skip)"
@@ -434,9 +434,9 @@ jobs:
           else
             echo "::notice::Running E2E suite with filter: $FILTER"
           fi
-          
+
           echo "E2E_LABEL_FILTER=$FILTER" >> $GITHUB_ENV
-          
+
           # Smart Skip Logic
           # Default: Run if not slow, or if specifically included
           SHOULD_RUN="true"
@@ -452,7 +452,7 @@ jobs:
             if [[ "${{ matrix.name }}" == *"Upgrade"* ]] && [[ "$FILTER" == *"upgrade"* ]]; then SHOULD_RUN="true"; fi
             # Note: Chaos has no specific label trigger yet, relies on full-e2e
           fi
-          
+
           echo "SHOULD_RUN=$SHOULD_RUN" >> $GITHUB_ENV
           echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
           if [[ "$SHOULD_RUN" == "false" ]]; then

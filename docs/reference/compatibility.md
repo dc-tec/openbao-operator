@@ -27,8 +27,9 @@ We run full E2E tests against these versions.
 
 | Version | Status | Notes |
 | :--- | :--- | :--- |
-| **2.4.x** | <span style="color: #22c55e">**Supported**</span> | Primary target |
-| **2.3.x** | <span style="color: #f59e0b">**Deprecated**</span> | Best effort support |
+| **2.5.x** | <span style="color: #22c55e">**Supported**</span> | Primary target |
+| **2.4.x** | <span style="color: #22c55e">**Supported**</span> | Fully Supported
+| **2.3.x** | <span style="color: #f59e0b">**Deprecated**</span> | No Support |
 
 ## 4. CI Validation Matrix
 
@@ -36,8 +37,8 @@ We treat our CI configuration as the source of truth for compatibility.
 
 | Workflow | Scope | Versions Tested |
 | :--- | :--- | :--- |
-| **PR Gate** | Logic & Config | K8s 1.35 + OpenBao 2.4.0 |
-| **Nightly** | Full Coverage | K8s 1.33, 1.34, 1.35 + OpenBao 2.4.x |
+| **PR Gate** | Logic & Config | K8s 1.35 + OpenBao 2.5.0 |
+| **Nightly** | Full Coverage | K8s 1.33, 1.34, 1.35 + OpenBao 2.5.x |
 
 !!! warning "Production Upgrade"
     Always validate new Kubernetes or OpenBao versions in a staging environment before upgrading production, even if they are listed as "Supported".
