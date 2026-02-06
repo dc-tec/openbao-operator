@@ -136,10 +136,9 @@ If the Operator crashes, it reads the Status on startup and **resumes** exactly 
 
 ### Image Verification
 
-If `spec.imageVerification.enabled` is `true`:
-
-- **Rolling:** The main StatefulSet image is pinned to the verified digest.
-- **Blue/Green:** The Green StatefulSet and all executor Jobs are pinned to the verified digest.
+- `spec.imageVerification` applies to OpenBao workload images (StatefulSet pods).
+- `spec.operatorImageVerification` applies to operator-managed helper images (for example, upgrade executor Jobs).
+- Helper image verification does not fall back to `spec.imageVerification` when `spec.operatorImageVerification` is unset.
 
 ## 3. Reconciliation Semantics
 

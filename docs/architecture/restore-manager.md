@@ -69,7 +69,8 @@ graph TD
     - It downloads the snapshot from object storage (S3, GCS, or Azure).
     - It uses a temporary token (or valid credentials) to authenticate and hit the `sys/storage/raft/snapshot-force` endpoint.
 4. **Completion:**
-    - On success, the lock is released.
+    - On success or failure, the controller attempts to release the cluster operation lock.
+    - Terminal restores (`Completed`/`Failed`) re-run lock cleanup on subsequent reconciles until release succeeds.
     - The cluster may need to be unsealed manually or via auto-unseal.
 
 ## 4. Interaction with Other Managers

@@ -43,7 +43,7 @@ graph TD
 Before spawning a Job, the Operator verifies the cluster is stable:
 
 1. **Healthy:** Cluster Phase must be `Running`.
-2. **Not Upgrading:** No upgrade is in progress (`status.upgrade != nil`) and no upgrade is pending (for example, `spec.version != status.currentVersion`).
+2. **Not Upgrading:** No upgrade is in progress (`status.upgrade == nil`) and no upgrade is pending (for example, `spec.version == status.currentVersion`).
 3. **Not Restoring:** No `OpenBaoRestore` is in progress for this cluster (restore resources targeting this cluster that are not `Completed` or `Failed`).
 4. **Exclusive:** No other backup Job is currently running.
 
