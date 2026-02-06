@@ -50,8 +50,12 @@ To upgrade, update `spec.version`. The strategy configured in `spec.upgrade.stra
     **How it works:**
     1.  **Validation**: Checks if the new version is valid.
     2.  **Snapshot** (Optional): Takes a pre-upgrade backup.
-    3.  **Rolling Replace**: Updates Pod 0 -> Pod 1 -> Pod 2.
-    4.  **Leader Handling**: If updating the active leader, triggers `sys/step-down` first.
+    3.  **Partitioned Rollout**: Locks StatefulSet partition, then updates pods in reverse ordinal order (for example, `2 -> 1 -> 0`).
+    4.  **Leader Handling**: If the target pod is leader, runs a `sys/step-down` executor job before restart.
+    5.  **Convergence Gate**: Finalizes only after all pods are updated, Ready, and healthy.
+
+    !!! note
+        You can see multiple step-down Jobs during one rolling upgrade when leadership moves between different target pods. This is expected.
 
 === "Blue/Green (Zero Downtime)"
     **Best for:** Production critical paths, Major version jumps, Instant rollback capability.
@@ -153,8 +157,16 @@ spec:
 
 ### Monitoring Progress
 
-Track the upgrade status directly on the CR:
+Track upgrade status directly on the CR:
 
-```sh
-kubectl get openbaocluster my-cluster -o jsonpath='{.status.blueGreen}'
-```
+=== "Rolling Update"
+
+    ```sh
+    kubectl get openbaocluster my-cluster -o jsonpath='{.status.currentVersion}{"\n"}{.status.upgrade}{"\n"}'
+    ```
+
+=== "Blue/Green"
+
+    ```sh
+    kubectl get openbaocluster my-cluster -o jsonpath='{.status.blueGreen}{"\n"}'
+    ```

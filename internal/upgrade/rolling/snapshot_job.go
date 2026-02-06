@@ -298,6 +298,3 @@ func (m *Manager) deletePreUpgradeBackupJob(ctx context.Context, jobName, namesp
 
 	return nil
 }
-
-// NOTE: buildBackupJob has been removed. Pre-upgrade backup jobs are now built using
-// the shared backup.BuildJob function from internal/backup/job_builder.go.

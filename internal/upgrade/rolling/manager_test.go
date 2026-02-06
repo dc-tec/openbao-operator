@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
@@ -68,6 +69,74 @@ func TestDetectUpgradeState(t *testing.T) {
 						TargetVersion:    "2.5.0",
 						FromVersion:      "2.4.0",
 						CurrentPartition: 2,
+					},
+				},
+			},
+			wantUpgradeNeeded: false,
+			wantResumeUpgrade: true,
+		},
+		{
+			name: "failed upgrade waits for manual retry",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version: "2.5.0",
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					CurrentVersion: "2.4.0",
+					Initialized:    true,
+					Upgrade: &openbaov1alpha1.UpgradeProgress{
+						TargetVersion:    "2.5.0",
+						FromVersion:      "2.4.0",
+						CurrentPartition: 1,
+						LastErrorReason:  upgrade.ReasonUpgradeFailed,
+						LastErrorMessage: "step-down timeout",
+					},
+				},
+			},
+			wantUpgradeNeeded: false,
+			wantResumeUpgrade: false,
+		},
+		{
+			name: "failed upgrade resumes when retry annotation is set",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						constants.AnnotationRetryRollingUpgrade: "retry-1",
+					},
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version: "2.5.0",
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					CurrentVersion: "2.4.0",
+					Initialized:    true,
+					Upgrade: &openbaov1alpha1.UpgradeProgress{
+						TargetVersion:    "2.5.0",
+						FromVersion:      "2.4.0",
+						CurrentPartition: 1,
+						LastErrorReason:  upgrade.ReasonUpgradeFailed,
+						LastErrorMessage: "step-down timeout",
+					},
+				},
+			},
+			wantUpgradeNeeded: false,
+			wantResumeUpgrade: true,
+		},
+		{
+			name: "failed upgrade resumes when target version changes",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version: "2.5.1",
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					CurrentVersion: "2.4.0",
+					Initialized:    true,
+					Upgrade: &openbaov1alpha1.UpgradeProgress{
+						TargetVersion:    "2.5.0",
+						FromVersion:      "2.4.0",
+						CurrentPartition: 1,
+						LastErrorReason:  upgrade.ReasonUpgradeFailed,
+						LastErrorMessage: "step-down timeout",
 					},
 				},
 			},
@@ -641,7 +710,7 @@ func TestVersionMismatchDuringUpgrade(t *testing.T) {
 
 			// If we should clear, verify the clear function works
 			if tt.shouldClearState {
-				upgrade.ClearUpgrade(status, upgrade.ReasonVersionMismatch, "version changed", 1)
+				upgrade.ClearUpgrade(status)
 				if status.Upgrade != nil {
 					t.Error("expected Upgrade to be cleared")
 				}

@@ -41,7 +41,7 @@ func TestSetUpgradeStarted(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			status := &openbaov1alpha1.OpenBaoClusterStatus{}
 
-			SetUpgradeStarted(status, tt.from, tt.to, tt.replicas, tt.generation)
+			SetUpgradeStarted(status, tt.from, tt.to, tt.replicas)
 
 			// Verify upgrade progress is set
 			if status.Upgrade == nil {
@@ -116,7 +116,7 @@ func TestSetUpgradeProgress(t *testing.T) {
 				},
 			}
 
-			SetUpgradeProgress(status, tt.partition, tt.completedPod, tt.totalReplicas, tt.generation)
+			SetUpgradeProgress(status, tt.partition, tt.completedPod)
 
 			if status.Upgrade.CurrentPartition != tt.partition {
 				t.Errorf("CurrentPartition = %d, want %d", status.Upgrade.CurrentPartition, tt.partition)
@@ -134,7 +134,7 @@ func TestSetUpgradeProgress_NilUpgrade(t *testing.T) {
 	}
 
 	// Should not panic when Upgrade is nil
-	SetUpgradeProgress(status, 1, 0, 3, 1)
+	SetUpgradeProgress(status, 1, 0)
 
 	if status.Upgrade != nil {
 		t.Error("expected Upgrade to remain nil")
@@ -198,7 +198,7 @@ func TestSetUpgradeComplete(t *testing.T) {
 				},
 			}
 
-			SetUpgradeComplete(status, tt.version, tt.generation)
+			SetUpgradeComplete(status, tt.version)
 
 			// Verify upgrade is cleared
 			if status.Upgrade != nil {
@@ -252,7 +252,7 @@ func TestSetUpgradeFailed(t *testing.T) {
 				},
 			}
 
-			SetUpgradeFailed(status, tt.reason, tt.message, tt.generation)
+			SetUpgradeFailed(status, tt.reason, tt.message)
 
 			// Verify upgrade is NOT cleared (preserved for inspection)
 			if status.Upgrade == nil {
@@ -303,7 +303,7 @@ func TestClearUpgrade(t *testing.T) {
 				},
 			}
 
-			ClearUpgrade(status, tt.reason, tt.message, tt.generation)
+			ClearUpgrade(status)
 
 			// Verify upgrade is cleared
 			if status.Upgrade != nil {

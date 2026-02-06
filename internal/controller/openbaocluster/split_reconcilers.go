@@ -43,6 +43,8 @@ type openBaoClusterStatusReconciler struct {
 	parent *OpenBaoClusterReconciler
 }
 
+const adminOpsSupportFieldOwner = "openbao-adminops-support-controller"
+
 func reconcileErrorReason(err error) string {
 	if err == nil {
 		return ""
@@ -62,6 +64,15 @@ type autopilotConfigReconciler struct {
 
 // Reconcile reconciles the Raft Autopilot configuration for an initialized cluster.
 func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	// During upgrades we expect transient API instability (pod restarts, leader changes).
+	// Autopilot reconciliation uses authenticated API calls against the stable public
+	// Service and can create unnecessary load and noisy failures while the cluster
+	// is rolling. Skip it until the upgrade finishes.
+	if cluster != nil && cluster.Status.Upgrade != nil {
+		logger.V(1).Info("Skipping autopilot config reconciliation during upgrade")
+		return recon.Result{}, nil
+	}
+
 	if err := r.raftManager.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
 		if operatorerrors.IsTransient(err) {
 			logger.V(1).Info("Transient error reconciling autopilot config; will retry", "error", err)
@@ -161,19 +172,20 @@ func patchWorkloadOwnedFields(ctx context.Context, c client.Client, logger logr.
 	return nil
 }
 
-// patchAdminOpsOwnedFields patches only the status fields owned by the AdminOps controller.
-// This uses a controller-specific field owner to ensure proper SSA ownership tracking.
-// Owned fields: upgrade, blueGreen, backup, operationLock, breakGlass, adminOps
+// patchAdminOpsOwnedFields patches only the admin-ops status fields that are managed
+// directly in this reconcile loop.
+//
+// Important: rolling/bluegreen managers patch status.upgrade and status.operationLock
+// via dedicated helpers. Excluding these fields here prevents stale reconcile snapshots
+// from overwriting newer upgrade progress or lock state.
 func patchAdminOpsOwnedFields(ctx context.Context, c client.Client, logger logr.Logger, original *openbaov1alpha1.OpenBaoCluster, cluster *openbaov1alpha1.OpenBaoCluster, reason string) error {
 	if original == nil || cluster == nil {
 		return nil
 	}
 
 	// Check if any owned field changed
-	if reflect.DeepEqual(original.Status.Upgrade, cluster.Status.Upgrade) &&
-		reflect.DeepEqual(original.Status.BlueGreen, cluster.Status.BlueGreen) &&
+	if reflect.DeepEqual(original.Status.BlueGreen, cluster.Status.BlueGreen) &&
 		reflect.DeepEqual(original.Status.Backup, cluster.Status.Backup) &&
-		reflect.DeepEqual(original.Status.OperationLock, cluster.Status.OperationLock) &&
 		reflect.DeepEqual(original.Status.BreakGlass, cluster.Status.BreakGlass) &&
 		reflect.DeepEqual(original.Status.AdminOps, cluster.Status.AdminOps) {
 		return nil
@@ -195,12 +207,10 @@ func patchAdminOpsOwnedFields(ctx context.Context, c client.Client, logger logr.
 			Namespace: cluster.Namespace,
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			Upgrade:       cluster.Status.Upgrade,
-			BlueGreen:     cluster.Status.BlueGreen,
-			Backup:        cluster.Status.Backup,
-			OperationLock: cluster.Status.OperationLock,
-			BreakGlass:    cluster.Status.BreakGlass,
-			AdminOps:      adminOps,
+			BlueGreen:  cluster.Status.BlueGreen,
+			Backup:     cluster.Status.Backup,
+			BreakGlass: cluster.Status.BreakGlass,
+			AdminOps:   adminOps,
 		},
 	}
 
@@ -209,10 +219,10 @@ func patchAdminOpsOwnedFields(ctx context.Context, c client.Client, logger logr.
 		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
 	}
 
-	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner("openbao-adminops-controller"), client.ForceOwnership); err != nil {
+	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner(adminOpsSupportFieldOwner), client.ForceOwnership); err != nil {
 		return fmt.Errorf("failed to patch adminops status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
-	logger.V(1).Info("Patched OpenBaoCluster adminops status (SSA)", "reason", reason, "fieldOwner", "openbao-adminops-controller")
+	logger.V(1).Info("Patched OpenBaoCluster adminops status (SSA)", "reason", reason, "fieldOwner", adminOpsSupportFieldOwner)
 	return nil
 }
 
