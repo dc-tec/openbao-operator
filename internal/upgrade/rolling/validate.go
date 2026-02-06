@@ -3,6 +3,7 @@ package rolling
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
@@ -19,6 +21,29 @@ import (
 func (m *Manager) detectUpgradeState(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (upgradeNeeded bool, resumeUpgrade bool) {
 	// If upgrade is already in progress, we're resuming
 	if cluster.Status.Upgrade != nil {
+		if strings.TrimSpace(cluster.Status.Upgrade.LastErrorReason) != "" {
+			if cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion {
+				logger.Info("Failed upgrade target differs from spec; resuming to re-evaluate upgrade target",
+					"failedTargetVersion", cluster.Status.Upgrade.TargetVersion,
+					"specVersion", cluster.Spec.Version,
+					"failureReason", cluster.Status.Upgrade.LastErrorReason)
+				return false, true
+			}
+
+			if !rollingRetryToken(cluster) {
+				logger.Info("Upgrade is in failed state; waiting for manual retry annotation",
+					"failureReason", cluster.Status.Upgrade.LastErrorReason,
+					"failureMessage", cluster.Status.Upgrade.LastErrorMessage,
+					"retryAnnotation", constants.AnnotationRetryRollingUpgrade)
+				return false, false
+			}
+
+			logger.Info("Manual retry requested for failed upgrade",
+				"targetVersion", cluster.Status.Upgrade.TargetVersion,
+				"currentPartition", cluster.Status.Upgrade.CurrentPartition)
+			return false, true
+		}
+
 		logger.Info("Resuming in-progress upgrade",
 			"fromVersion", cluster.Status.Upgrade.FromVersion,
 			"targetVersion", cluster.Status.Upgrade.TargetVersion,
@@ -161,12 +186,7 @@ func (m *Manager) checkPodHealth(ctx context.Context, logger logr.Logger, cluste
 			continue
 		}
 
-		podURL := m.getPodURL(cluster, pod.Name)
-		apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
-			ClusterKey: fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
-			BaseURL:    podURL,
-			CACert:     caCert,
-		})
+		apiClient, err := m.newPodClient(cluster, pod.Name, caCert)
 		if err != nil {
 			logger.V(1).Info("Failed to create client for pod", "pod", pod.Name, "error", err)
 			continue

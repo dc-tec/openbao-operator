@@ -132,7 +132,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		if upgrade.IsOperationLockHeld(err) {
 			if cluster.Status.Upgrade != nil {
 				firstFailure := cluster.Status.Upgrade.LastErrorAt == nil
-				upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonUpgradeFailed, "upgrade halted due to concurrent operation lock", cluster.Generation)
+				upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonUpgradeFailed, "upgrade halted due to concurrent operation lock")
 				metrics.SetStatus(upgrade.UpgradeStatusFailed)
 				if firstFailure {
 					metrics.IncrementFailure(strategy)
@@ -152,11 +152,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			logger.Info("Spec.Version changed during upgrade; clearing upgrade state and starting fresh",
 				"previousTarget", cluster.Status.Upgrade.TargetVersion,
 				"newTarget", cluster.Spec.Version)
-			upgrade.ClearUpgrade(&cluster.Status, upgrade.ReasonVersionMismatch,
-				fmt.Sprintf("Target version changed from %s to %s during upgrade",
-					cluster.Status.Upgrade.TargetVersion, cluster.Spec.Version),
-				cluster.Generation)
+			upgrade.ClearUpgrade(&cluster.Status)
 			// Continuing will re-evaluate and start fresh
+		}
+
+		if _, err := m.prepareFailedUpgradeRetry(ctx, logger, cluster); err != nil {
+			return recon.Result{}, err
 		}
 	}
 
@@ -207,10 +208,17 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	// Phase 5: Pod-by-Pod Update
+	alreadyFailed := cluster.Status.Upgrade != nil && cluster.Status.Upgrade.LastErrorAt != nil
 	completed, err := m.performPodByPodUpgrade(ctx, logger, cluster, metrics)
 	if err != nil {
-		firstFailure := cluster.Status.Upgrade == nil || cluster.Status.Upgrade.LastErrorAt == nil
-		upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonUpgradeFailed, err.Error(), cluster.Generation)
+		firstFailure := !alreadyFailed
+
+		// Some upgrade sub-steps (pod ready/health checks, step-down) set a specific
+		// failure reason/message on the status before returning an error. Preserve
+		// that context instead of clobbering it with a generic UpgradeFailed reason.
+		if cluster.Status.Upgrade == nil || cluster.Status.Upgrade.LastErrorReason == "" {
+			upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonUpgradeFailed, err.Error())
+		}
 		metrics.SetStatus(upgrade.UpgradeStatusFailed)
 		if firstFailure {
 			metrics.IncrementFailure(strategy)
@@ -228,6 +236,19 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		// Update status using SSA (eliminates race conditions)
 		if err := m.patchStatusSSA(ctx, cluster); err != nil {
 			return recon.Result{}, fmt.Errorf("failed to update upgrade progress: %w", err)
+		}
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+	}
+
+	// Pod-by-pod logic reached partition 0, but do not finalize until the
+	// StatefulSet and all pods have fully converged to the target revision/health.
+	converged, err := m.waitForFinalizationConverged(ctx, logger, cluster)
+	if err != nil {
+		return recon.Result{}, err
+	}
+	if !converged {
+		if err := m.patchStatusSSA(ctx, cluster); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to persist upgrade progress while waiting for convergence: %w", err)
 		}
 		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
