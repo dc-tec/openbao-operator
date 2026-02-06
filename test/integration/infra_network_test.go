@@ -376,13 +376,27 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 	})
 	spec = newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
-		t.Fatalf("Reconcile() after cutover error = %v", err)
+		t.Fatalf("Reconcile() during demoting blue error = %v", err)
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraPublicServiceSuffix}, mainSvc); err != nil {
-		t.Fatalf("get main Service after cutover: %v", err)
+		t.Fatalf("get main Service during demoting blue: %v", err)
+	}
+	if mainSvc.Spec.Selector[constants.LabelOpenBaoRevision] != "blue123" {
+		t.Fatalf("expected main Service selector revision=blue123 during demoting blue, got %#v", mainSvc.Spec.Selector)
+	}
+
+	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+		status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+	})
+	spec = newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
+		t.Fatalf("Reconcile() during cleanup error = %v", err)
+	}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraPublicServiceSuffix}, mainSvc); err != nil {
+		t.Fatalf("get main Service during cleanup: %v", err)
 	}
 	if mainSvc.Spec.Selector[constants.LabelOpenBaoRevision] != "green456" {
-		t.Fatalf("expected main Service selector revision=green456 got %#v", mainSvc.Spec.Selector)
+		t.Fatalf("expected main Service selector revision=green456 during cleanup, got %#v", mainSvc.Spec.Selector)
 	}
 }
 
