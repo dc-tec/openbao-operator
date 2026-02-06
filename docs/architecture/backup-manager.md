@@ -125,6 +125,7 @@ The BackupManager supports multiple object storage providers:
 - **Retention:** The Operator enforces retention policies configured in `spec.backup.retention`:
   - `maxCount`: Keep only the N most recent backups
   - `maxAge`: Delete backups older than a specified duration
+  - Applied after successful backup execution
   - Applies to all storage providers (S3, GCS, Azure)
 
 ## 5. Naming Convention
