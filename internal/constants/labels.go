@@ -12,6 +12,9 @@ const (
 	LabelOpenBaoBackupType = "openbao.org/backup-type"
 	LabelOpenBaoTenant     = "openbao.org/tenant"
 	LabelOpenBaoRevision   = "openbao.org/revision"
+	LabelOpenBaoProfile    = "openbao.org/profile"
+	// LabelOpenBaoDigestEnforcement indicates whether digest-only image refs are required.
+	LabelOpenBaoDigestEnforcement = "openbao.org/digest-enforcement"
 )
 
 // Common label values used by the operator.
@@ -19,6 +22,7 @@ const (
 	LabelValueAppNameOpenBao              = "openbao"
 	LabelValueAppNameOpenBaoOperator      = "openbao-operator"
 	LabelValueAppManagedByOpenBaoOperator = "openbao-operator"
+	LabelValueDigestEnforcementRequired   = "required"
 
 	LabelValueOpenBaoTenant = "true"
 

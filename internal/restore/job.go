@@ -12,6 +12,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/security"
 	"github.com/dc-tec/openbao-operator/internal/storageenv"
 )
 
@@ -41,6 +42,7 @@ func getRestoreExecutorImage(restore *openbaov1alpha1.OpenBaoRestore, cluster *o
 func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster, verifiedExecutorDigest string) (*batchv1.Job, error) {
 	jobName := restoreJobName(restore)
 	labels := restoreLabels(cluster)
+	security.AddManagedWorkloadSecurityLabels(labels, cluster)
 
 	executorImage, err := getRestoreExecutorImage(restore, cluster)
 	if err != nil {

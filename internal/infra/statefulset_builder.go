@@ -15,6 +15,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 const (
@@ -835,6 +836,8 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 			},
 		},
 	}
+
+	security.AddManagedWorkloadSecurityLabels(statefulSet.Labels, cluster)
 
 	return statefulSet, nil
 }
