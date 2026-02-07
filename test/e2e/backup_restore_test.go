@@ -617,7 +617,18 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			})
 
 			By("triggering a manual backup with invalid credentials")
-			outageTriggerTime := time.Now().UTC()
+			preTriggerJobUIDs := map[types.UID]struct{}{}
+			{
+				var jobs batchv1.JobList
+				Expect(admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
+					"app.kubernetes.io/managed-by": "openbao-operator",
+					"openbao.org/component":        "backup",
+					constants.LabelOpenBaoCluster:  drCluster.Name,
+				})).To(Succeed())
+				for i := range jobs.Items {
+					preTriggerJobUIDs[jobs.Items[i].UID] = struct{}{}
+				}
+			}
 			Expect(triggerManualBackup(ctx, admin, tenantNamespace, drCluster.Name)).To(Succeed())
 			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 
@@ -634,11 +645,10 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				hasNewJob := false
 				for i := range jobs.Items {
 					job := jobs.Items[i]
-					if job.CreationTimestamp.Time.Before(outageTriggerTime) {
-						continue
+					if _, found := preTriggerJobUIDs[job.UID]; !found {
+						hasNewJob = true
+						break
 					}
-					hasNewJob = true
-					break
 				}
 				g.Expect(hasNewJob).To(BeTrue(), "expected backup job after outage trigger")
 			}, 5*time.Minute, 5*time.Second).Should(Succeed())
