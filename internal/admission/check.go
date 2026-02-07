@@ -37,10 +37,22 @@ type Status struct {
 }
 
 const (
-	dependencyProvisionerRBAC      = "provisioner-rbac"
-	dependencyProvisionerNamespace = "provisioner-namespace-mutations"
-	dependencyControllerRBAC       = "controller-rbac"
-	dependencyManagedResourceLocks = "managed-resource-locks"
+	dependencyOpenBaoValidateOpenBaoCluster             = "openbao-validate-openbaocluster"
+	dependencyOpenBaoValidateOpenBaoTenant              = "openbao-validate-openbao-tenant"
+	dependencyOpenBaoValidateOpenBaoRestore             = "openbao-validate-openbaorestore"
+	dependencyOpenBaoLockControllerStatefulSetMutations = "openbao-lock-controller-statefulset-mutations"
+	dependencyOpenBaoLockManagedResourceMutations       = "openbao-lock-managed-resource-mutations"
+	dependencyOpenBaoRestrictProvisionerRBAC            = "openbao-restrict-provisioner-rbac"
+	dependencyOpenBaoRestrictProvisionerNamespace       = "openbao-restrict-provisioner-namespace-mutations"
+	dependencyOpenBaoRestrictControllerRBAC             = "openbao-restrict-controller-rbac"
+	dependencyBindingValidateOpenBaoCluster             = "openbao-validate-openbaocluster-binding"
+	dependencyBindingValidateOpenBaoTenant              = "openbao-validate-openbao-tenant-binding"
+	dependencyBindingValidateOpenBaoRestore             = "openbao-validate-openbaorestore-binding"
+	dependencyBindingLockControllerStatefulSetMutations = "openbao-lock-controller-statefulset-mutations-binding"
+	dependencyBindingLockManagedResourceMutations       = "openbao-lock-managed-resource-mutations-binding"
+	dependencyBindingRestrictProvisionerRBAC            = "openbao-restrict-provisioner-rbac-binding"
+	dependencyBindingRestrictProvisionerNamespace       = "openbao-restrict-provisioner-namespace-mutations-binding"
+	dependencyBindingRestrictControllerRBAC             = "openbao-restrict-controller-rbac-binding"
 )
 
 // DefaultNamePrefixes returns the resource name prefixes to try when resolving
@@ -79,44 +91,44 @@ func DefaultNamePrefixes() []string {
 func DefaultDependencies() []Dependency {
 	return []Dependency{
 		{
-			Name:        "validate-openbaocluster",
-			PolicyName:  "validate-openbaocluster",
-			BindingName: "validate-openbaocluster",
+			Name:        dependencyOpenBaoValidateOpenBaoCluster,
+			PolicyName:  dependencyOpenBaoValidateOpenBaoCluster,
+			BindingName: dependencyBindingValidateOpenBaoCluster,
 		},
 		{
-			Name:        "validate-openbao-tenant",
-			PolicyName:  "validate-openbao-tenant",
-			BindingName: "validate-openbao-tenant",
+			Name:        dependencyOpenBaoValidateOpenBaoTenant,
+			PolicyName:  dependencyOpenBaoValidateOpenBaoTenant,
+			BindingName: dependencyBindingValidateOpenBaoTenant,
 		},
 		{
-			Name:        "validate-openbaorestore",
-			PolicyName:  "validate-openbaorestore",
-			BindingName: "validate-openbaorestore",
+			Name:        dependencyOpenBaoValidateOpenBaoRestore,
+			PolicyName:  dependencyOpenBaoValidateOpenBaoRestore,
+			BindingName: dependencyBindingValidateOpenBaoRestore,
 		},
 		{
-			Name:        "lock-controller-statefulset-mutations",
-			PolicyName:  "lock-controller-statefulset-mutations",
-			BindingName: "lock-controller-statefulset-mutations",
+			Name:        dependencyOpenBaoLockControllerStatefulSetMutations,
+			PolicyName:  dependencyOpenBaoLockControllerStatefulSetMutations,
+			BindingName: dependencyBindingLockControllerStatefulSetMutations,
 		},
 		{
-			Name:        dependencyProvisionerRBAC,
-			PolicyName:  "openbao-restrict-provisioner-rbac",
-			BindingName: "openbao-restrict-provisioner-rbac-binding",
+			Name:        dependencyOpenBaoRestrictProvisionerRBAC,
+			PolicyName:  dependencyOpenBaoRestrictProvisionerRBAC,
+			BindingName: dependencyBindingRestrictProvisionerRBAC,
 		},
 		{
-			Name:        dependencyProvisionerNamespace,
-			PolicyName:  "openbao-restrict-provisioner-namespace-mutations",
-			BindingName: "openbao-restrict-provisioner-namespace-mutations-binding",
+			Name:        dependencyOpenBaoRestrictProvisionerNamespace,
+			PolicyName:  dependencyOpenBaoRestrictProvisionerNamespace,
+			BindingName: dependencyBindingRestrictProvisionerNamespace,
 		},
 		{
-			Name:        dependencyControllerRBAC,
-			PolicyName:  "openbao-restrict-controller-rbac",
-			BindingName: "openbao-restrict-controller-rbac-binding",
+			Name:        dependencyOpenBaoRestrictControllerRBAC,
+			PolicyName:  dependencyOpenBaoRestrictControllerRBAC,
+			BindingName: dependencyBindingRestrictControllerRBAC,
 		},
 		{
-			Name:        dependencyManagedResourceLocks,
-			PolicyName:  "lock-managed-resource-mutations",
-			BindingName: "lock-managed-resource-mutations",
+			Name:        dependencyOpenBaoLockManagedResourceMutations,
+			PolicyName:  dependencyOpenBaoLockManagedResourceMutations,
+			BindingName: dependencyBindingLockManagedResourceMutations,
 		},
 	}
 }

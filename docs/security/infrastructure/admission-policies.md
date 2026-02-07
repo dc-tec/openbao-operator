@@ -11,7 +11,7 @@ The following diagram illustrates how the Operator's policies intercept GitOps s
 graph LR
     User["GitOps Pipeline"]
     API["Kubernetes API"]
-    VAP["ValidatingAdmissionPolicy<br/>(lock-managed-resource-mutations)"]
+    VAP["ValidatingAdmissionPolicy<br/>(openbao-lock-managed-resource-mutations)"]
     Res["Managed Resource<br/>(StatefulSet)"]
 
     User --"Apply Change"--> API
@@ -39,11 +39,11 @@ The Operator ships with a suite of policies to enforce "Least Privilege" and "Gi
 
 | Policy Name | Target | Enforcement | Description |
 | :--- | :--- | :--- | :--- |
-| `lock-managed-resource-mutations` | Operator-managed resources (e.g. `StatefulSet`, `Service`, `Secret`, `Pod`) | **Block** | Prevents users/GitOps from modifying resources managed by the Operator (labeled `app.kubernetes.io/managed-by=openbao-operator`). Allows controlled exceptions for Kubernetes controllers and OpenBao service registration label updates. |
-| `lock-controller-statefulset-mutations` | `StatefulSet` (Controller) | **Block** | Self-protection: prevents the Controller from modifying its own sensitive fields (volumes, args). |
-| `validate-openbaocluster` | `OpenBaoCluster` | **Validate** | Enforces spec invariants (e.g., Hardened profile requirements, TLS configs). |
-| `validate-openbao-tenant` | `OpenBaoTenant` | **Validate** | Enforces tenant spec invariants and multi-tenant guardrails. |
-| `validate-openbaorestore` | `OpenBaoRestore` | **Validate** | Enforces restore spec invariants and safety checks. |
+| `openbao-lock-managed-resource-mutations` | Operator-managed resources (e.g. `StatefulSet`, `Service`, `Secret`, `Pod`) | **Block** | Prevents users/GitOps from modifying resources managed by the Operator (labeled `app.kubernetes.io/managed-by=openbao-operator`). Allows controlled exceptions for Kubernetes controllers and OpenBao service registration label updates. |
+| `openbao-lock-controller-statefulset-mutations` | `StatefulSet` (Controller) | **Block** | Self-protection: prevents the Controller from modifying its own sensitive fields (volumes, args). |
+| `openbao-validate-openbaocluster` | `OpenBaoCluster` | **Validate** | Enforces spec invariants (e.g., Hardened profile requirements, TLS configs). |
+| `openbao-validate-openbao-tenant` | `OpenBaoTenant` | **Validate** | Enforces tenant spec invariants and multi-tenant guardrails. |
+| `openbao-validate-openbaorestore` | `OpenBaoRestore` | **Validate** | Enforces restore spec invariants and safety checks. |
 | `openbao-restrict-provisioner-rbac` | `Role`, `RoleBinding` | **Restrict** | Restricts the Provisioner ServiceAccount to a fixed set of tenant RBAC objects and contents (CREATE/UPDATE/DELETE), and blocks system namespaces. |
 | `openbao-restrict-provisioner-namespace-mutations` | `Namespace` | **Restrict** | Restricts Provisioner Namespace updates to Pod Security Standards label enforcement only (restricted), and blocks system namespaces. |
 | `openbao-restrict-controller-rbac` | `Role`, `RoleBinding` | **Restrict** | Restricts Controller RBAC writes to the narrow per-cluster pod discovery/service registration Role/RoleBinding pattern (prevents RBAC self-escalation). |
@@ -73,14 +73,14 @@ The `openbao-restrict-provisioner-rbac` policy is a defense-in-depth control tha
 
     Required startup dependency set:
 
-    - `validate-openbaocluster`
-    - `validate-openbao-tenant`
-    - `validate-openbaorestore`
-    - `lock-controller-statefulset-mutations`
+    - `openbao-validate-openbaocluster`
+    - `openbao-validate-openbao-tenant`
+    - `openbao-validate-openbaorestore`
+    - `openbao-lock-controller-statefulset-mutations`
     - `openbao-restrict-provisioner-rbac`
     - `openbao-restrict-provisioner-namespace-mutations`
     - `openbao-restrict-controller-rbac`
-    - `lock-managed-resource-mutations`
+    - `openbao-lock-managed-resource-mutations`
 
 !!! warning "Unsafe mode"
     Disabling admission policies is treated as **unsafe mode**. When installing via Helm with `admissionPolicies.enabled=false`, the chart sets `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can start without fail-closed admission dependency enforcement. This is intended only for development/break-glass scenarios.

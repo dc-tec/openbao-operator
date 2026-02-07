@@ -1,8 +1,8 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: lock-managed-resource-mutations
+  name: openbao-lock-controller-statefulset-mutations-binding
 spec:
-  policyName: lock-managed-resource-mutations
+  policyName: openbao-lock-controller-statefulset-mutations
   validationActions:
     - Deny

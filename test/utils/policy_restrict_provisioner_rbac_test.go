@@ -16,7 +16,7 @@ import (
 // accidental removal during future refactors.
 func TestRestrictProvisionerRBACPolicyContainsDangerousVerbGuard(t *testing.T) {
 	const (
-		policyPath = "../../config/policy/restrict-provisioner-rbac.yaml"
+		policyPath = "../../config/policy/openbao-restrict-provisioner-rbac.yaml"
 		required   = "The Provisioner cannot create Roles granting " +
 			"'impersonate', 'bind', 'escalate', or wildcard permissions."
 	)
@@ -33,7 +33,7 @@ func TestRestrictProvisionerRBACPolicyContainsDangerousVerbGuard(t *testing.T) {
 
 func TestRestrictProvisionerRBACPolicyContainsSecretsRoleGuards(t *testing.T) {
 	const (
-		policyPath = "../../config/policy/restrict-provisioner-rbac.yaml"
+		policyPath = "../../config/policy/openbao-restrict-provisioner-rbac.yaml"
 		required   = "The Provisioner can only grant Secrets permissions via the dedicated secrets allowlist Roles."
 	)
 
