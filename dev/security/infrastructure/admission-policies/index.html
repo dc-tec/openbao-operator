@@ -4143,7 +4143,7 @@
 <pre class="mermaid"><code>graph LR
     User["GitOps Pipeline"]
     API["Kubernetes API"]
-    VAP["ValidatingAdmissionPolicy&lt;br/&gt;(lock-managed-resource-mutations)"]
+    VAP["ValidatingAdmissionPolicy&lt;br/&gt;(openbao-lock-managed-resource-mutations)"]
     Res["Managed Resource&lt;br/&gt;(StatefulSet)"]
 
     User --"Apply Change"--&gt; API
@@ -4169,6 +4169,7 @@
 <thead>
 <tr>
 <th style="text-align: left;">Policy Name</th>
+<th style="text-align: left;">Binding Name</th>
 <th style="text-align: left;">Target</th>
 <th style="text-align: left;">Enforcement</th>
 <th style="text-align: left;">Description</th>
@@ -4176,49 +4177,57 @@
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><code>lock-managed-resource-mutations</code></td>
+<td style="text-align: left;"><code>openbao-lock-managed-resource-mutations</code></td>
+<td style="text-align: left;"><code>openbao-lock-managed-resource-mutations-binding</code></td>
 <td style="text-align: left;">Operator-managed resources (e.g. <code>StatefulSet</code>, <code>Service</code>, <code>Secret</code>, <code>Pod</code>)</td>
 <td style="text-align: left;"><strong>Block</strong></td>
 <td style="text-align: left;">Prevents users/GitOps from modifying resources managed by the Operator (labeled <code>app.kubernetes.io/managed-by=openbao-operator</code>). Allows controlled exceptions for Kubernetes controllers and OpenBao service registration label updates.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>lock-controller-statefulset-mutations</code></td>
+<td style="text-align: left;"><code>openbao-lock-controller-statefulset-mutations</code></td>
+<td style="text-align: left;"><code>openbao-lock-controller-statefulset-mutations-binding</code></td>
 <td style="text-align: left;"><code>StatefulSet</code> (Controller)</td>
 <td style="text-align: left;"><strong>Block</strong></td>
 <td style="text-align: left;">Self-protection: prevents the Controller from modifying its own sensitive fields (volumes, args).</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>validate-openbaocluster</code></td>
+<td style="text-align: left;"><code>openbao-validate-openbaocluster</code></td>
+<td style="text-align: left;"><code>openbao-validate-openbaocluster-binding</code></td>
 <td style="text-align: left;"><code>OpenBaoCluster</code></td>
 <td style="text-align: left;"><strong>Validate</strong></td>
 <td style="text-align: left;">Enforces spec invariants (e.g., Hardened profile requirements, TLS configs).</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>validate-openbao-tenant</code></td>
+<td style="text-align: left;"><code>openbao-validate-openbao-tenant</code></td>
+<td style="text-align: left;"><code>openbao-validate-openbao-tenant-binding</code></td>
 <td style="text-align: left;"><code>OpenBaoTenant</code></td>
 <td style="text-align: left;"><strong>Validate</strong></td>
 <td style="text-align: left;">Enforces tenant spec invariants and multi-tenant guardrails.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>validate-openbaorestore</code></td>
+<td style="text-align: left;"><code>openbao-validate-openbaorestore</code></td>
+<td style="text-align: left;"><code>openbao-validate-openbaorestore-binding</code></td>
 <td style="text-align: left;"><code>OpenBaoRestore</code></td>
 <td style="text-align: left;"><strong>Validate</strong></td>
 <td style="text-align: left;">Enforces restore spec invariants and safety checks.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>openbao-restrict-provisioner-rbac</code></td>
+<td style="text-align: left;"><code>openbao-restrict-provisioner-rbac-binding</code></td>
 <td style="text-align: left;"><code>Role</code>, <code>RoleBinding</code></td>
 <td style="text-align: left;"><strong>Restrict</strong></td>
 <td style="text-align: left;">Restricts the Provisioner ServiceAccount to a fixed set of tenant RBAC objects and contents (CREATE/UPDATE/DELETE), and blocks system namespaces.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>openbao-restrict-provisioner-namespace-mutations</code></td>
+<td style="text-align: left;"><code>openbao-restrict-provisioner-namespace-mutations-binding</code></td>
 <td style="text-align: left;"><code>Namespace</code></td>
 <td style="text-align: left;"><strong>Restrict</strong></td>
 <td style="text-align: left;">Restricts Provisioner Namespace updates to Pod Security Standards label enforcement only (restricted), and blocks system namespaces.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>openbao-restrict-controller-rbac</code></td>
+<td style="text-align: left;"><code>openbao-restrict-controller-rbac-binding</code></td>
 <td style="text-align: left;"><code>Role</code>, <code>RoleBinding</code></td>
 <td style="text-align: left;"><strong>Restrict</strong></td>
 <td style="text-align: left;">Restricts Controller RBAC writes to the narrow per-cluster pod discovery/service registration Role/RoleBinding pattern (prevents RBAC self-escalation).</td>
@@ -4248,6 +4257,17 @@
 <div class="admonition note">
 <p class="admonition-title">Startup enforcement</p>
 <p>The OpenBao Operator defaults to fail-closed startup (<code>--admission-enforcement=fail</code>), refusing to run unless required admission policies are installed and enforced.</p>
+<p>Required startup dependency set (Policy / Binding):</p>
+<ul>
+<li><code>openbao-validate-openbaocluster</code> / <code>openbao-validate-openbaocluster-binding</code></li>
+<li><code>openbao-validate-openbao-tenant</code> / <code>openbao-validate-openbao-tenant-binding</code></li>
+<li><code>openbao-validate-openbaorestore</code> / <code>openbao-validate-openbaorestore-binding</code></li>
+<li><code>openbao-lock-controller-statefulset-mutations</code> / <code>openbao-lock-controller-statefulset-mutations-binding</code></li>
+<li><code>openbao-restrict-provisioner-rbac</code> / <code>openbao-restrict-provisioner-rbac-binding</code></li>
+<li><code>openbao-restrict-provisioner-namespace-mutations</code> / <code>openbao-restrict-provisioner-namespace-mutations-binding</code></li>
+<li><code>openbao-restrict-controller-rbac</code> / <code>openbao-restrict-controller-rbac-binding</code></li>
+<li><code>openbao-lock-managed-resource-mutations</code> / <code>openbao-lock-managed-resource-mutations-binding</code></li>
+</ul>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Unsafe mode</p>
