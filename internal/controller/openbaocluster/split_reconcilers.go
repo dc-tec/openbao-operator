@@ -113,14 +113,10 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 	return recon.Result{}, nil
 }
 
-func (r *OpenBaoClusterReconciler) loggerFor(ctx context.Context, req ctrl.Request, _ string) logr.Logger {
-	baseLogger := log.FromContext(ctx)
-	// controller-runtime already injects controller/reconcile identifiers.
-	// Only add cluster aliases that are specific to OpenBaoCluster log queries.
-	return baseLogger.WithValues(
-		"cluster_namespace", req.Namespace,
-		"cluster_name", req.Name,
-	)
+func (r *OpenBaoClusterReconciler) loggerFor(ctx context.Context, _ ctrl.Request, _ string) logr.Logger {
+	// controller-runtime already injects controller/reconcile identifiers, including
+	// namespace/name for the reconciled object.
+	return log.FromContext(ctx)
 }
 
 // patchWorkloadOwnedFields patches only the status fields owned by the Workload controller.
