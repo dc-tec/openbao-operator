@@ -3,10 +3,23 @@ package security
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/go-logr/logr"
+	"github.com/google/go-containerregistry/pkg/name"
+)
+
+const (
+	defaultGitHubOIDCIssuer = "https://token.actions.githubusercontent.com"
+
+	openBaoReleaseSubjectPrefix       = "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/"
+	operatorReleaseSubjectPrefix      = "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/"
+	openBaoOfficialRepository         = "openbao/openbao"
+	operatorInitOfficialRepository    = "ghcr.io/dc-tec/openbao-init"
+	operatorBackupOfficialRepository  = "ghcr.io/dc-tec/openbao-backup"
+	operatorUpgradeOfficialRepository = "ghcr.io/dc-tec/openbao-upgrade"
 )
 
 // VerifyImageForCluster verifies an image reference using the cluster's ImageVerification configuration.
@@ -26,20 +39,21 @@ func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier int
 		return "", fmt.Errorf("image verifier is required")
 	}
 
-	// Validate that either PublicKey OR (Issuer and Subject) are provided.
-	// This matches the validation in ImageVerifier.Verify().
-	if cluster.Spec.ImageVerification.PublicKey == "" &&
-		(cluster.Spec.ImageVerification.Issuer == "" || cluster.Spec.ImageVerification.Subject == "") {
-		return "", fmt.Errorf("image verification is enabled but neither public key nor keyless configuration (issuer and subject) is provided")
-	}
-
 	config := interfaces.VerifyConfig{
-		PublicKey:        cluster.Spec.ImageVerification.PublicKey,
-		Issuer:           cluster.Spec.ImageVerification.Issuer,
-		Subject:          cluster.Spec.ImageVerification.Subject,
+		PublicKey:        strings.TrimSpace(cluster.Spec.ImageVerification.PublicKey),
+		Issuer:           strings.TrimSpace(cluster.Spec.ImageVerification.Issuer),
+		Subject:          strings.TrimSpace(cluster.Spec.ImageVerification.Subject),
 		IgnoreTlog:       cluster.Spec.ImageVerification.IgnoreTlog,
 		ImagePullSecrets: cluster.Spec.ImageVerification.ImagePullSecrets,
 		Namespace:        cluster.Namespace,
+	}
+
+	applyOfficialKeylessDefaults(&config, imageRef, false)
+
+	// Validate that either PublicKey OR (Issuer and Subject) are provided after
+	// applying any official keyless defaults.
+	if !hasKeylessConfig(config) && config.PublicKey == "" {
+		return "", fmt.Errorf("image verification is enabled but neither public key nor keyless configuration (issuer and subject) is provided")
 	}
 
 	digest, err := verifier.Verify(ctx, imageRef, config)
@@ -73,19 +87,21 @@ func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, veri
 		return "", fmt.Errorf("image verifier is required")
 	}
 
-	// Validate that either PublicKey OR (Issuer and Subject) are provided.
-	if verificationConfig.PublicKey == "" &&
-		(verificationConfig.Issuer == "" || verificationConfig.Subject == "") {
-		return "", fmt.Errorf("operator image verification is enabled but neither public key nor keyless configuration (issuer and subject) is provided")
-	}
-
 	config := interfaces.VerifyConfig{
-		PublicKey:        verificationConfig.PublicKey,
-		Issuer:           verificationConfig.Issuer,
-		Subject:          verificationConfig.Subject,
+		PublicKey:        strings.TrimSpace(verificationConfig.PublicKey),
+		Issuer:           strings.TrimSpace(verificationConfig.Issuer),
+		Subject:          strings.TrimSpace(verificationConfig.Subject),
 		IgnoreTlog:       verificationConfig.IgnoreTlog,
 		ImagePullSecrets: verificationConfig.ImagePullSecrets,
 		Namespace:        cluster.Namespace,
+	}
+
+	applyOfficialKeylessDefaults(&config, imageRef, true)
+
+	// Validate that either PublicKey OR (Issuer and Subject) are provided after
+	// applying any official keyless defaults.
+	if !hasKeylessConfig(config) && config.PublicKey == "" {
+		return "", fmt.Errorf("operator image verification is enabled but neither public key nor keyless configuration (issuer and subject) is provided")
 	}
 
 	digest, err := verifier.Verify(ctx, imageRef, config)
@@ -94,4 +110,86 @@ func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, veri
 	}
 
 	return digest, nil
+}
+
+func hasKeylessConfig(config interfaces.VerifyConfig) bool {
+	return strings.TrimSpace(config.Issuer) != "" && strings.TrimSpace(config.Subject) != ""
+}
+
+func applyOfficialKeylessDefaults(config *interfaces.VerifyConfig, imageRef string, isOperatorImage bool) {
+	if config == nil {
+		return
+	}
+	if strings.TrimSpace(config.PublicKey) != "" {
+		return
+	}
+	// Only default keyless identity when both fields are omitted.
+	if strings.TrimSpace(config.Issuer) != "" || strings.TrimSpace(config.Subject) != "" {
+		return
+	}
+
+	repo, tag, ok := imageRepositoryAndTag(imageRef)
+	if !ok {
+		return
+	}
+
+	subject := defaultSubjectForImage(repo, tag, isOperatorImage)
+	if subject == "" {
+		return
+	}
+
+	config.Issuer = defaultGitHubOIDCIssuer
+	config.Subject = subject
+}
+
+func imageRepositoryAndTag(imageRef string) (string, string, bool) {
+	ref, err := name.ParseReference(imageRef)
+	if err != nil {
+		return "", "", false
+	}
+
+	tagRef, ok := ref.(name.Tag)
+	if !ok {
+		return "", "", false
+	}
+
+	repository := normalizeRepository(tagRef.Context().Name())
+	tag := strings.TrimSpace(tagRef.TagStr())
+	if repository == "" || tag == "" {
+		return "", "", false
+	}
+
+	return repository, tag, true
+}
+
+func normalizeRepository(repository string) string {
+	repository = strings.TrimSpace(repository)
+	repository = strings.TrimPrefix(repository, "index.docker.io/")
+	repository = strings.TrimPrefix(repository, "docker.io/")
+	return repository
+}
+
+func defaultSubjectForImage(repository, tag string, isOperatorImage bool) string {
+	if !isOperatorImage {
+		if repository != openBaoOfficialRepository {
+			return ""
+		}
+
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			return ""
+		}
+		if !strings.HasPrefix(tag, "v") {
+			tag = "v" + tag
+		}
+
+		return openBaoReleaseSubjectPrefix + tag
+	}
+
+	switch repository {
+	case operatorInitOfficialRepository, operatorBackupOfficialRepository, operatorUpgradeOfficialRepository:
+		return operatorReleaseSubjectPrefix + tag
+	default:
+		return ""
+	}
 }

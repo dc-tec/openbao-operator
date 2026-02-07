@@ -1,0 +1,128 @@
+package security
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/go-logr/logr"
+
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/interfaces"
+)
+
+type captureVerifier struct {
+	config interfaces.VerifyConfig
+	called bool
+}
+
+func (v *captureVerifier) Verify(_ context.Context, _ string, config interfaces.VerifyConfig) (string, error) {
+	v.called = true
+	v.config = config
+	return "ghcr.io/dc-tec/openbao-operator@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
+}
+
+func TestVerifyImageForCluster_AppliesOfficialOpenBaoKeylessDefaults(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: true,
+			},
+		},
+	}
+	verifier := &captureVerifier{}
+
+	_, err := VerifyImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "openbao/openbao:2.4.4")
+	if err != nil {
+		t.Fatalf("VerifyImageForCluster() unexpected error: %v", err)
+	}
+	if !verifier.called {
+		t.Fatal("expected verifier to be called")
+	}
+	if got := verifier.config.Issuer; got != defaultGitHubOIDCIssuer {
+		t.Fatalf("issuer = %q, want %q", got, defaultGitHubOIDCIssuer)
+	}
+	if got := verifier.config.Subject; got != openBaoReleaseSubjectPrefix+"v2.4.4" {
+		t.Fatalf("subject = %q, want %q", got, openBaoReleaseSubjectPrefix+"v2.4.4")
+	}
+}
+
+func TestVerifyOperatorImageForCluster_AppliesOfficialOperatorKeylessDefaults(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: true,
+			},
+		},
+	}
+	verifier := &captureVerifier{}
+
+	_, err := VerifyOperatorImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "ghcr.io/dc-tec/openbao-init:1.2.4")
+	if err != nil {
+		t.Fatalf("VerifyOperatorImageForCluster() unexpected error: %v", err)
+	}
+	if !verifier.called {
+		t.Fatal("expected verifier to be called")
+	}
+	if got := verifier.config.Issuer; got != defaultGitHubOIDCIssuer {
+		t.Fatalf("issuer = %q, want %q", got, defaultGitHubOIDCIssuer)
+	}
+	if got := verifier.config.Subject; got != operatorReleaseSubjectPrefix+"1.2.4" {
+		t.Fatalf("subject = %q, want %q", got, operatorReleaseSubjectPrefix+"1.2.4")
+	}
+}
+
+func TestVerifyOperatorImageForCluster_MissingIdentityForUnknownImageReturnsError(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: true,
+			},
+		},
+	}
+	verifier := &captureVerifier{}
+
+	_, err := VerifyOperatorImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "example.com/acme/openbao-init:1.0.0")
+	if err == nil {
+		t.Fatal("expected an error for unknown image defaults")
+	}
+	if !strings.Contains(err.Error(), "neither public key nor keyless configuration") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if verifier.called {
+		t.Fatal("verifier should not be called when configuration is incomplete")
+	}
+}
+
+func TestVerifyImageForCluster_DigestReferenceWithoutExplicitIdentityReturnsError(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: true,
+			},
+		},
+	}
+	verifier := &captureVerifier{}
+
+	_, err := VerifyImageForCluster(
+		context.Background(),
+		logr.Discard(),
+		verifier,
+		cluster,
+		"openbao/openbao@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+	)
+	if err == nil {
+		t.Fatal("expected an error when no explicit identity is provided for digest references")
+	}
+	if !strings.Contains(err.Error(), "neither public key nor keyless configuration") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
