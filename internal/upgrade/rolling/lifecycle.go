@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
@@ -41,6 +42,13 @@ func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, clu
 	if metrics != nil {
 		metrics.IncrementTotal(strategy)
 	}
+	logging.LogAuditEvent(logger, logging.EventUpgradeStarted, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"strategy":          strategy,
+		"from_version":      fromVersion,
+		"to_version":        toVersion,
+	})
 
 	logger.Info("Upgrade initialized; StatefulSet partition locked",
 		"partition", cluster.Spec.Replicas)
@@ -75,6 +83,12 @@ func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, clust
 	metrics.SetPodsCompleted(0)
 	metrics.SetTotalPods(0)
 	metrics.SetPartition(0)
+	logging.LogAuditEvent(logger, logging.EventUpgradeCompleted, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"strategy":          strategy,
+		"version":           cluster.Spec.Version,
+	})
 
 	logger.Info("Upgrade completed successfully",
 		"version", cluster.Spec.Version,

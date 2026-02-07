@@ -20,6 +20,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/kube"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/security"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
@@ -72,6 +73,12 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 
 			maxRetries := upgrade.DefaultMaxPreUpgradeBackupRetries
 			if failedCount >= maxRetries {
+				logging.LogAuditEvent(logger, logging.EventPreUpgradeSnapshotFailed, map[string]string{
+					"cluster_namespace": cluster.Namespace,
+					"cluster_name":      cluster.Name,
+					"job":               jobName,
+					"attempts":          fmt.Sprintf("%d", failedCount),
+				})
 				return false, operatorerrors.WithReason(
 					upgrade.ReasonPreUpgradeBackupFailed,
 					fmt.Errorf("pre-upgrade backup failed after %d attempts (max retries exceeded); manual intervention required", failedCount),
@@ -86,6 +93,13 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 			if err := m.deletePreUpgradeBackupJob(ctx, jobName, cluster.Namespace); err != nil {
 				return false, fmt.Errorf("failed to delete failed backup job %s: %w", jobName, err)
 			}
+			logging.LogAuditEvent(logger, logging.EventPreUpgradeSnapshotRetry, map[string]string{
+				"cluster_namespace": cluster.Namespace,
+				"cluster_name":      cluster.Name,
+				"job":               jobName,
+				"attempt":           fmt.Sprintf("%d", failedCount+1),
+				"max_retries":       fmt.Sprintf("%d", maxRetries),
+			})
 
 			// Return false to requeue and create new job on next reconcile
 			return false, nil
@@ -94,6 +108,11 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 		// If job succeeded, we are done
 		if existingJobStatus == "succeeded" {
 			logger.Info("Pre-upgrade backup job completed successfully", "job", jobName)
+			logging.LogAuditEvent(logger, logging.EventPreUpgradeSnapshotCompleted, map[string]string{
+				"cluster_namespace": cluster.Namespace,
+				"cluster_name":      cluster.Name,
+				"job":               jobName,
+			})
 			return true, nil
 		}
 
@@ -166,6 +185,11 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 	}
 
 	logger.Info("Pre-upgrade backup job created", "job", jobName)
+	logging.LogAuditEvent(logger, logging.EventPreUpgradeSnapshotJobCreated, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"job":               jobName,
+	})
 	// Return false to indicate snapshot is not yet complete (it was just created)
 	return false, nil
 }

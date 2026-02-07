@@ -12,7 +12,9 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/operationlock"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
@@ -116,6 +118,13 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		if upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock) {
 			if err := upgrade.ReleaseUpgradeOperationLock(ctx, m.client, cluster); err != nil && !upgrade.IsOperationLockHeld(err) {
 				logger.Error(err, "Failed to release stale upgrade operation lock")
+			} else if err == nil {
+				logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
+					"cluster_namespace": cluster.Namespace,
+					"cluster_name":      cluster.Name,
+					"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
+					"holder":            upgrade.UpgradeOperationLockHolder,
+				})
 			}
 		}
 
@@ -128,14 +137,33 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.TargetVersion != "" {
 		lockMessage = fmt.Sprintf("upgrade to %s (in progress)", cluster.Status.Upgrade.TargetVersion)
 	}
+	lockHeldByUs := upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock)
 	if err := upgrade.AcquireUpgradeOperationLock(ctx, m.client, cluster, lockMessage); err != nil {
 		if upgrade.IsOperationLockHeld(err) {
+			fields := map[string]string{
+				"cluster_namespace": cluster.Namespace,
+				"cluster_name":      cluster.Name,
+				"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
+				"holder":            upgrade.UpgradeOperationLockHolder,
+			}
+			var heldErr *operationlock.HeldError
+			if errors.As(err, &heldErr) {
+				fields["held_by_operation"] = string(heldErr.Operation)
+				fields["held_by_holder"] = heldErr.Holder
+			}
+			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
 			if cluster.Status.Upgrade != nil {
 				firstFailure := cluster.Status.Upgrade.LastErrorAt == nil
 				upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonUpgradeFailed, "upgrade halted due to concurrent operation lock")
 				metrics.SetStatus(upgrade.UpgradeStatusFailed)
 				if firstFailure {
 					metrics.IncrementFailure(strategy)
+					logging.LogAuditEvent(logger, logging.EventUpgradeFailed, map[string]string{
+						"cluster_namespace": cluster.Namespace,
+						"cluster_name":      cluster.Name,
+						"strategy":          strategy,
+						"reason":            upgrade.ReasonUpgradeFailed,
+					})
 				}
 				return recon.Result{}, fmt.Errorf("upgrade in progress but operation lock is held by another operation: %w", err)
 			}
@@ -144,6 +172,14 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 		return recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
+	}
+	if !lockHeldByUs {
+		logging.LogAuditEvent(logger, logging.EventOperationLockAcquired, map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
+			"holder":            upgrade.UpgradeOperationLockHolder,
+		})
 	}
 
 	// Handle resume scenario where spec.version changed mid-upgrade
@@ -222,6 +258,16 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		metrics.SetStatus(upgrade.UpgradeStatusFailed)
 		if firstFailure {
 			metrics.IncrementFailure(strategy)
+			failureReason := upgrade.ReasonUpgradeFailed
+			if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.LastErrorReason != "" {
+				failureReason = cluster.Status.Upgrade.LastErrorReason
+			}
+			logging.LogAuditEvent(logger, logging.EventUpgradeFailed, map[string]string{
+				"cluster_namespace": cluster.Namespace,
+				"cluster_name":      cluster.Name,
+				"strategy":          strategy,
+				"reason":            failureReason,
+			})
 		}
 
 		// Update status using SSA (eliminates race conditions)
