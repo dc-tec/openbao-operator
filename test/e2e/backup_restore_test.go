@@ -149,6 +149,49 @@ func createSelfInitRequests(ctx context.Context, clusterNamespace, clusterName s
 	return []openbaov1alpha1.SelfInitRequest{}, nil
 }
 
+func triggerManualBackup(ctx context.Context, c client.Client, namespace, clusterName string) error {
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	if err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespace}, cluster); err != nil {
+		return fmt.Errorf("get cluster for manual backup trigger: %w", err)
+	}
+
+	original := cluster.DeepCopy()
+	if cluster.Annotations == nil {
+		cluster.Annotations = make(map[string]string)
+	}
+	cluster.Annotations[constants.AnnotationTriggerBackup] = time.Now().UTC().Format(time.RFC3339Nano)
+
+	if err := c.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
+		return fmt.Errorf("patch manual backup trigger annotation: %w", err)
+	}
+
+	return nil
+}
+
+func restartControllerDeployment(ctx context.Context, c client.Client, namespace string) error {
+	deploy := &appsv1.Deployment{}
+	key := types.NamespacedName{Name: "openbao-operator-controller", Namespace: namespace}
+	if err := c.Get(ctx, key, deploy); err != nil {
+		return fmt.Errorf("get controller deployment for restart: %w", err)
+	}
+
+	original := deploy.DeepCopy()
+	if deploy.Spec.Template.Annotations == nil {
+		deploy.Spec.Template.Annotations = make(map[string]string)
+	}
+	deploy.Spec.Template.Annotations["e2e.openbao.org/restarted-at"] = time.Now().UTC().Format(time.RFC3339Nano)
+
+	if err := c.Patch(ctx, deploy, client.MergeFrom(original)); err != nil {
+		return fmt.Errorf("patch controller deployment restart annotation: %w", err)
+	}
+
+	if err := waitForDeploymentsAvailable(namespace, 5*time.Minute); err != nil {
+		return fmt.Errorf("wait for operator deployments after controller restart: %w", err)
+	}
+
+	return nil
+}
+
 // createE2ERequests helper removed in favor of e2ehelpers.CreateE2ERequests
 
 var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup", "restore", "storage-providers", "nightly", "slow"), Ordered, func() {
@@ -551,6 +594,164 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				fmt.Sprintf(`name="%s"`, drCluster.Name),
 			)
 			Expect(metricErr).NotTo(HaveOccurred(), "Last metrics output:\n%s", metricsOutput)
+		})
+
+		It("handles transient S3 auth failure with backup retry after controller restart", Label("failure-injection"), func() {
+			Expect(backupKey).NotTo(BeEmpty(), "backup key should be available before failure injection")
+
+			By("injecting invalid backup credentials")
+			secret := &corev1.Secret{}
+			Expect(admin.Get(ctx, types.NamespacedName{Name: credentialsSecret.Name, Namespace: tenantNamespace}, secret)).To(Succeed())
+			originalSecretData := secret.DeepCopy().Data
+			Expect(originalSecretData).To(HaveKey("secretAccessKey"))
+
+			secretOriginal := secret.DeepCopy()
+			secret.Data["secretAccessKey"] = []byte("invalid-rustfs-key")
+			Expect(admin.Patch(ctx, secret, client.MergeFrom(secretOriginal))).To(Succeed())
+			DeferCleanup(func() {
+				current := &corev1.Secret{}
+				Expect(admin.Get(ctx, types.NamespacedName{Name: credentialsSecret.Name, Namespace: tenantNamespace}, current)).To(Succeed())
+				restoreOriginal := current.DeepCopy()
+				current.Data = originalSecretData
+				Expect(admin.Patch(ctx, current, client.MergeFrom(restoreOriginal))).To(Succeed())
+			})
+
+			By("triggering a manual backup with invalid credentials")
+			outageTriggerTime := time.Now().UTC()
+			Expect(triggerManualBackup(ctx, admin, tenantNamespace, drCluster.Name)).To(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
+
+			By("waiting for backup activity")
+			Eventually(func(g Gomega) {
+				var jobs batchv1.JobList
+				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
+					"app.kubernetes.io/managed-by": "openbao-operator",
+					"openbao.org/component":        "backup",
+					constants.LabelOpenBaoCluster:  drCluster.Name,
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+
+				hasNewJob := false
+				for i := range jobs.Items {
+					job := jobs.Items[i]
+					if job.CreationTimestamp.Time.Before(outageTriggerTime) {
+						continue
+					}
+					hasNewJob = true
+					break
+				}
+				g.Expect(hasNewJob).To(BeTrue(), "expected backup job after outage trigger")
+			}, 5*time.Minute, 5*time.Second).Should(Succeed())
+
+			By("restarting the controller while failed backup status is being reconciled")
+			Expect(restartControllerDeployment(ctx, admin, operatorNamespace)).To(Succeed())
+
+			By("observing failure status with invalid credentials")
+			Eventually(func(g Gomega) {
+				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
+
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.Backup).NotTo(BeNil())
+				g.Expect(updated.Status.Backup.ConsecutiveFailures).To(BeNumerically(">=", 1))
+				g.Expect(updated.Status.Backup.LastFailureReason).NotTo(BeEmpty())
+			}, 10*time.Minute, 10*time.Second).Should(Succeed())
+
+			By("restoring valid credentials and retriggering backup")
+			current := &corev1.Secret{}
+			Expect(admin.Get(ctx, types.NamespacedName{Name: credentialsSecret.Name, Namespace: tenantNamespace}, current)).To(Succeed())
+			restoreOriginal := current.DeepCopy()
+			current.Data = originalSecretData
+			Expect(admin.Patch(ctx, current, client.MergeFrom(restoreOriginal))).To(Succeed())
+
+			time.Sleep(1100 * time.Millisecond)
+			recoveryTriggerTime := time.Now().UTC()
+			Expect(triggerManualBackup(ctx, admin, tenantNamespace, drCluster.Name)).To(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
+
+			By("verifying backup recovery clears stale failure fields")
+			Eventually(func(g Gomega) {
+				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
+
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.Backup).NotTo(BeNil())
+				g.Expect(updated.Status.Backup.LastBackupName).NotTo(BeEmpty())
+				g.Expect(updated.Status.Backup.ConsecutiveFailures).To(Equal(int32(0)))
+				g.Expect(updated.Status.Backup.LastFailureReason).To(BeEmpty())
+				g.Expect(updated.Status.Backup.LastBackupTime).NotTo(BeNil())
+				g.Expect(updated.Status.Backup.LastBackupTime.Time.After(recoveryTriggerTime.Add(-2 * time.Minute))).To(BeTrue())
+				backupKey = updated.Status.Backup.LastBackupName
+			}, 15*time.Minute, 15*time.Second).Should(Succeed())
+
+			By("ensuring backup operation lock is released after recovery")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.OperationLock).To(BeNil())
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		It("completes restore deterministically after controller restart while running", Label("failure-injection"), func() {
+			Expect(backupKey).NotTo(BeEmpty(), "backup key should be available before restore restart test")
+
+			restoreName := "s3-restore-restart"
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      restoreName,
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+					Cluster: drCluster.Name,
+					Source: openbaov1alpha1.RestoreSource{
+						Target: openbaov1alpha1.BackupTarget{
+							Provider:     constants.StorageProviderS3,
+							Endpoint:     rustfsEndpoint,
+							Bucket:       rustfsBucket,
+							UsePathStyle: true,
+							CredentialsSecretRef: &corev1.LocalObjectReference{
+								Name: credentialsSecret.Name,
+							},
+						},
+						Key: backupKey,
+					},
+					JWTAuthRole: "restore",
+					Image:       backupExecutorImage,
+					Force:       true,
+				},
+			}
+			Expect(admin.Create(ctx, restore)).To(Succeed())
+
+			By("waiting for restore to enter Running phase")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoRestore{}
+				err := admin.Get(ctx, types.NamespacedName{Name: restoreName, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.Phase).NotTo(Equal(openbaov1alpha1.RestorePhaseFailed))
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseRunning))
+			}, 5*time.Minute, 5*time.Second).Should(Succeed())
+
+			By("restarting controller deployment during restore execution")
+			Expect(restartControllerDeployment(ctx, admin, operatorNamespace)).To(Succeed())
+
+			By("waiting for restore completion")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoRestore{}
+				err := admin.Get(ctx, types.NamespacedName{Name: restoreName, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseCompleted))
+			}, 15*time.Minute, 15*time.Second).Should(Succeed())
+
+			By("ensuring restore remains terminally completed")
+			Consistently(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoRestore{}
+				err := admin.Get(ctx, types.NamespacedName{Name: restoreName, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseCompleted))
+			}, 1*time.Minute, 10*time.Second).Should(Succeed())
 		})
 	})
 
