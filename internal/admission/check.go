@@ -84,6 +84,16 @@ func DefaultDependencies() []Dependency {
 			BindingName: "validate-openbaocluster",
 		},
 		{
+			Name:        "validate-openbao-tenant",
+			PolicyName:  "validate-openbao-tenant",
+			BindingName: "validate-openbao-tenant",
+		},
+		{
+			Name:        "validate-openbaorestore",
+			PolicyName:  "validate-openbaorestore",
+			BindingName: "validate-openbaorestore",
+		},
+		{
 			Name:        "lock-controller-statefulset-mutations",
 			PolicyName:  "lock-controller-statefulset-mutations",
 			BindingName: "lock-controller-statefulset-mutations",
