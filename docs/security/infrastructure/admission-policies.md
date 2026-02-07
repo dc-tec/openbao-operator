@@ -71,6 +71,17 @@ The `openbao-restrict-provisioner-rbac` policy is a defense-in-depth control tha
 !!! note "Startup enforcement"
     The OpenBao Operator defaults to fail-closed startup (`--admission-enforcement=fail`), refusing to run unless required admission policies are installed and enforced.
 
+    Required startup dependency set:
+
+    - `validate-openbaocluster`
+    - `validate-openbao-tenant`
+    - `validate-openbaorestore`
+    - `lock-controller-statefulset-mutations`
+    - `openbao-restrict-provisioner-rbac`
+    - `openbao-restrict-provisioner-namespace-mutations`
+    - `openbao-restrict-controller-rbac`
+    - `lock-managed-resource-mutations`
+
 !!! warning "Unsafe mode"
     Disabling admission policies is treated as **unsafe mode**. When installing via Helm with `admissionPolicies.enabled=false`, the chart sets `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can start without fail-closed admission dependency enforcement. This is intended only for development/break-glass scenarios.
 
