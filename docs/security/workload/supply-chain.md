@@ -5,7 +5,9 @@
 
 ## Verification Flow
 
-The Operator intercepts Pod creation requests and verifies the image signature against a trusted public key and (optionally) the Rekor transparency log.
+The Operator verifies images during reconciliation before it creates or updates operator-managed workloads
+(StatefulSets and Jobs). Verification checks signatures against a trusted public key or keyless identity and
+(optionally) the Rekor transparency log, then pins the image to an immutable digest.
 
 ```mermaid
 flowchart LR
@@ -14,11 +16,11 @@ flowchart LR
     Rekor[Rekor Log]
     Cluster[Kubernetes Cluster]
 
-    Registry --"1. Pull Image"--> Operator
+    Registry --"1. Resolve Tag to Digest"--> Operator
     Operator --"2. Verify Signature"--> Operator
-    Operator -.->|"3. Verify Log (Optional)"| Rekor
-    
-    Operator --"4. Mutate to Digest"--> Cluster
+    Operator -.->|"3. Verify Rekor (Optional)"| Rekor
+
+    Operator --"4. Reconcile Managed Workload with Verified Digest"--> Cluster
     
     classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
@@ -56,11 +58,24 @@ flowchart LR
 
     To prevent **TOCTOU** (Time-of-Check to Time-of-Use) attacks, the Operator mutates image tags to immutable digests.
 
-    -   **Attack Vector:** An attacker pushes a malicious image to `1.2.3` *after* the admission controller checks it but *before* the Kubelet pulls it.
+    -   **Attack Vector:** An attacker pushes a malicious image to `1.2.3` *after* verification but *before* the Kubelet pulls it.
     -   **Mitigation:** The Operator resolves `openbao:1.2.3` to `openbao@sha256:abc...` during verification and forces the Pod to use the digest.
 
     !!! success "Immutability"
         This ensures that the *exact* bits that were verified are the ones that run in your cluster.
+
+## Admission Guardrails (Optional, Defense-in-Depth)
+
+Use a Kubernetes `ValidatingAdmissionPolicy` to enforce digest-only image references on operator-managed
+resources. This catches bypass attempts where a mutable tag is submitted directly to the API.
+
+By default (when `admissionPolicies.enabled=true`), Hardened managed workloads are marked for digest
+enforcement and mutable tag references are denied for those workloads.
+
+!!! note "Scope of Admission Policy"
+    Admission policy is a guardrail, not a replacement for signature verification.
+    Keep signature and Rekor verification in reconciliation, where the operator performs Cosign checks and
+    pins verified digests.
 
 ## Rekor Transparency Log
 
@@ -81,8 +96,8 @@ By default, the Operator verifies signatures against the [Sigstore Rekor](https:
 
 | Policy | Behavior | Use Case |
 | :--- | :--- | :--- |
-| **Block** (Default) | **Prevents** the Pod from starting. Sets `ConditionDegraded=True`. | Production environments requiring strict security. |
-| **Warn** | Logs an error but **allows** the Pod to start using the original tag. | Testing or during initial rollout of signing infrastructure. |
+| **Block** (Default) | **Prevents** the operator from reconciling managed workloads with unverified images. Sets `ConditionDegraded=True`. | Production environments requiring strict security. |
+| **Warn** | Logs an error but **allows** reconciliation to continue using the original tag/reference. | Testing or during initial rollout of signing infrastructure. |
 
 ## Verified Workloads
 
