@@ -113,13 +113,13 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 	return recon.Result{}, nil
 }
 
-func (r *OpenBaoClusterReconciler) loggerFor(ctx context.Context, req ctrl.Request, controllerName string) logr.Logger {
+func (r *OpenBaoClusterReconciler) loggerFor(ctx context.Context, req ctrl.Request, _ string) logr.Logger {
 	baseLogger := log.FromContext(ctx)
+	// controller-runtime already injects controller/reconcile identifiers.
+	// Only add cluster aliases that are specific to OpenBaoCluster log queries.
 	return baseLogger.WithValues(
 		"cluster_namespace", req.Namespace,
 		"cluster_name", req.Name,
-		"controller", controllerName,
-		"reconcile_id", time.Now().UnixNano(),
 	)
 }
 

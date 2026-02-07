@@ -102,8 +102,6 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	baseLogger := log.FromContext(ctx)
 	logger := baseLogger.WithValues(
 		"tenant", req.NamespacedName,
-		"controller", constants.ControllerNameNamespaceProvisioner,
-		"reconcile_id", time.Now().UnixNano(),
 	)
 
 	// Fetch the OpenBaoTenant CR

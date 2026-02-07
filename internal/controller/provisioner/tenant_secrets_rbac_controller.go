@@ -31,8 +31,7 @@ type TenantSecretsRBACReconciler struct {
 
 func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues(
-		"controller", "tenant-secrets-rbac",
-		"namespace", req.Namespace,
+		"tenant_namespace", req.Namespace,
 	)
 
 	if r.Provisioner == nil {
