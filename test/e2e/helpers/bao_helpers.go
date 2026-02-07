@@ -544,15 +544,15 @@ export BAO_SKIP_VERIFY=true
 				continue
 			fi
 			set +e
-			CLEANUP_DEAD_SERVERS=$(bao read -field=cleanup_dead_servers sys/storage/raft/autopilot/configuration 2>&1 | tr -d '\r\n')
+			DEAD_SERVERS=$(bao read -field=cleanup_dead_servers sys/storage/raft/autopilot/configuration 2>&1 | tr -d '\r\n')
 			READ_EXIT=$?
 			set -e
-			if [ $READ_EXIT -eq 0 ] && [ "$CLEANUP_DEAD_SERVERS" = "true" ]; then
+			if [ $READ_EXIT -eq 0 ] && [ "$DEAD_SERVERS" = "true" ]; then
 				echo "AUTOPILOT_CONFIGURED"
 				exit 0
 			fi
 			echo "Autopilot config not yet propagated or incorrect"
-			echo "cleanup_dead_servers read output: $CLEANUP_DEAD_SERVERS"
+			echo "cleanup_dead_servers read output: $DEAD_SERVERS"
 		else
 			echo "Login failed"
 			echo "Login command output: $LOGIN_OUTPUT"
@@ -562,7 +562,8 @@ export BAO_SKIP_VERIFY=true
 
 	echo "Failed to verify autopilot config after %d attempts"
 	exit 1
-`, baoAddr, jwtAutopilotVerifyAttempts, jwtAutopilotVerifyAttempts, jwtAutopilotVerifySleepSecond, jwtAutopilotVerifySleepSecond, jwtAutopilotVerifyAttempts)
+`, baoAddr, jwtAutopilotVerifyAttempts, jwtAutopilotVerifyAttempts, jwtAutopilotVerifySleepSecond,
+		jwtAutopilotVerifySleepSecond, jwtAutopilotVerifyAttempts)
 
 	if _, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd); err != nil {
 		return fmt.Errorf("failed to verify autopilot via JWT: %w", err)
@@ -627,7 +628,8 @@ export BAO_SKIP_VERIFY=true
 
 echo "Failed to verify min_quorum after %d attempts"
 exit 1
-`, baoAddr, jwtAutopilotVerifyAttempts, jwtAutopilotVerifyAttempts, jwtAutopilotVerifySleepSecond, expectedMinQuorum, jwtAutopilotVerifySleepSecond, jwtAutopilotVerifyAttempts)
+`, baoAddr, jwtAutopilotVerifyAttempts, jwtAutopilotVerifyAttempts, jwtAutopilotVerifySleepSecond,
+		expectedMinQuorum, jwtAutopilotVerifySleepSecond, jwtAutopilotVerifyAttempts)
 
 	if _, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd); err != nil {
 		return fmt.Errorf("failed to verify min_quorum via JWT: %w", err)
