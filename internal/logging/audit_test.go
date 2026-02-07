@@ -37,8 +37,8 @@ func TestLogAuditEvent(t *testing.T) {
 
 	assert.Equal(t, "true", kvMap["audit"])
 	assert.Equal(t, "resource_deletion", kvMap["event_type"])
-	assert.Equal(t, "admin", kvMap["user"])
-	assert.Equal(t, "delete", kvMap["action"])
+	assert.Equal(t, "admin", kvMap["audit_user"])
+	assert.Equal(t, "delete", kvMap["audit_action"])
 }
 
 type sinkData struct {
