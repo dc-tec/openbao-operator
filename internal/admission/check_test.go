@@ -1,0 +1,168 @@
+package admission
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"testing"
+
+	"gopkg.in/yaml.v3"
+)
+
+func TestDefaultDependencies(t *testing.T) {
+	t.Parallel()
+
+	expected := []Dependency{
+		{
+			Name:        "validate-openbaocluster",
+			PolicyName:  "validate-openbaocluster",
+			BindingName: "validate-openbaocluster",
+		},
+		{
+			Name:        "validate-openbao-tenant",
+			PolicyName:  "validate-openbao-tenant",
+			BindingName: "validate-openbao-tenant",
+		},
+		{
+			Name:        "validate-openbaorestore",
+			PolicyName:  "validate-openbaorestore",
+			BindingName: "validate-openbaorestore",
+		},
+		{
+			Name:        "lock-controller-statefulset-mutations",
+			PolicyName:  "lock-controller-statefulset-mutations",
+			BindingName: "lock-controller-statefulset-mutations",
+		},
+		{
+			Name:        dependencyProvisionerRBAC,
+			PolicyName:  "openbao-restrict-provisioner-rbac",
+			BindingName: "openbao-restrict-provisioner-rbac-binding",
+		},
+		{
+			Name:        dependencyProvisionerNamespace,
+			PolicyName:  "openbao-restrict-provisioner-namespace-mutations",
+			BindingName: "openbao-restrict-provisioner-namespace-mutations-binding",
+		},
+		{
+			Name:        dependencyControllerRBAC,
+			PolicyName:  "openbao-restrict-controller-rbac",
+			BindingName: "openbao-restrict-controller-rbac-binding",
+		},
+		{
+			Name:        dependencyManagedResourceLocks,
+			PolicyName:  "lock-managed-resource-mutations",
+			BindingName: "lock-managed-resource-mutations",
+		},
+	}
+
+	got := DefaultDependencies()
+	if !reflect.DeepEqual(expected, got) {
+		t.Fatalf("DefaultDependencies() mismatch\nwant: %#v\ngot:  %#v", expected, got)
+	}
+
+	seen := map[string]struct{}{}
+	for i, dep := range got {
+		if dep.Name == "" {
+			t.Fatalf("DefaultDependencies()[%d] has empty name", i)
+		}
+		if dep.PolicyName == "" {
+			t.Fatalf("DefaultDependencies()[%d] has empty policy name", i)
+		}
+		if dep.BindingName == "" {
+			t.Fatalf("DefaultDependencies()[%d] has empty binding name", i)
+		}
+		if _, exists := seen[dep.Name]; exists {
+			t.Fatalf("DefaultDependencies()[%d] duplicates name %q", i, dep.Name)
+		}
+		seen[dep.Name] = struct{}{}
+	}
+}
+
+func TestDefaultDependenciesCoverConfigPolicyValidatingPolicies(t *testing.T) {
+	t.Parallel()
+
+	configPolicies, err := readConfigPolicyNames(filepath.Join("..", "..", "config", "policy"))
+	if err != nil {
+		t.Fatalf("read config policy names: %v", err)
+	}
+	if len(configPolicies) == 0 {
+		t.Fatal("expected at least one ValidatingAdmissionPolicy in config/policy")
+	}
+
+	dependencyPolicies := make(map[string]struct{}, len(DefaultDependencies()))
+	for _, dep := range DefaultDependencies() {
+		dependencyPolicies[dep.PolicyName] = struct{}{}
+	}
+
+	var missingFromDependencies []string
+	for policyName := range configPolicies {
+		if _, ok := dependencyPolicies[policyName]; !ok {
+			missingFromDependencies = append(missingFromDependencies, policyName)
+		}
+	}
+	sort.Strings(missingFromDependencies)
+
+	var missingFromConfig []string
+	for policyName := range dependencyPolicies {
+		if _, ok := configPolicies[policyName]; !ok {
+			missingFromConfig = append(missingFromConfig, policyName)
+		}
+	}
+	sort.Strings(missingFromConfig)
+
+	if len(missingFromDependencies) > 0 || len(missingFromConfig) > 0 {
+		t.Fatalf(
+			"DefaultDependencies() and config/policy VAP set drifted: missing_from_dependencies=%v missing_from_config=%v",
+			missingFromDependencies,
+			missingFromConfig,
+		)
+	}
+}
+
+type policyKustomization struct {
+	Resources []string `yaml:"resources"`
+}
+
+type manifestHeader struct {
+	Kind     string `yaml:"kind"`
+	Metadata struct {
+		Name string `yaml:"name"`
+	} `yaml:"metadata"`
+}
+
+func readConfigPolicyNames(configPolicyDir string) (map[string]struct{}, error) {
+	out := map[string]struct{}{}
+
+	kustomizationBytes, err := os.ReadFile(filepath.Join(configPolicyDir, "kustomization.yaml"))
+	if err != nil {
+		return nil, err
+	}
+
+	var k policyKustomization
+	if err := yaml.Unmarshal(kustomizationBytes, &k); err != nil {
+		return nil, err
+	}
+
+	for _, resource := range k.Resources {
+		manifestBytes, err := os.ReadFile(filepath.Join(configPolicyDir, resource))
+		if err != nil {
+			return nil, err
+		}
+
+		var header manifestHeader
+		if err := yaml.Unmarshal(manifestBytes, &header); err != nil {
+			return nil, err
+		}
+
+		if header.Kind != "ValidatingAdmissionPolicy" {
+			continue
+		}
+		if header.Metadata.Name == "" {
+			continue
+		}
+		out[header.Metadata.Name] = struct{}{}
+	}
+
+	return out, nil
+}
