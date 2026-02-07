@@ -167,22 +167,22 @@ func ensureHelmKeepAnnotation(lines []string) ([]string, error) {
 
 // Policy file mapping from kustomize to Helm output names.
 var policyFileMapping = map[string]string{
-	"lock-managed-resource-mutations.yaml":                  "lock-managed-resources.yaml",
-	"lock-managed-resource-mutations-binding.yaml":          "lock-managed-resources.yaml", // merged
-	"lock-controller-statefulset-mutations.yaml":            "validating-policies.yaml",
-	"lock-controller-statefulset-mutations-binding.yaml":    "validating-policies.yaml", // merged
-	"restrict-provisioner-rbac.yaml":                        "provisioner-rbac.yaml",
-	"restrict-provisioner-rbac-binding.yaml":                "provisioner-rbac.yaml", // merged
-	"validate-openbaocluster.yaml":                          "validate-openbaocluster.yaml",
-	"validate-openbaocluster-binding.yaml":                  "validate-openbaocluster.yaml", // merged
-	"validate-openbaorestore.yaml":                          "validate-openbaorestore.yaml",
-	"validate-openbaorestore-binding.yaml":                  "validate-openbaorestore.yaml", // merged
-	"validate-openbao-tenant.yaml":                          "validate-openbao-tenant.yaml",
-	"validate-openbao-tenant-binding.yaml":                  "validate-openbao-tenant.yaml", // merged
-	"restrict-controller-rbac-binding.yaml":                 "controller-rbac.yaml",         // merged
-	"restrict-controller-rbac.yaml":                         "controller-rbac.yaml",
-	"restrict-provisioner-namespace-mutations.yaml":         "provisioner-namespace-mutations.yaml",
-	"restrict-provisioner-namespace-mutations-binding.yaml": "provisioner-namespace-mutations.yaml", // merged
+	"openbao-lock-managed-resource-mutations.yaml":                  "lock-managed-resources.yaml",
+	"openbao-lock-managed-resource-mutations-binding.yaml":          "lock-managed-resources.yaml", // merged
+	"openbao-lock-controller-statefulset-mutations.yaml":            "validating-policies.yaml",
+	"openbao-lock-controller-statefulset-mutations-binding.yaml":    "validating-policies.yaml", // merged
+	"openbao-restrict-provisioner-rbac.yaml":                        "provisioner-rbac.yaml",
+	"openbao-restrict-provisioner-rbac-binding.yaml":                "provisioner-rbac.yaml", // merged
+	"openbao-validate-openbaocluster.yaml":                          "validate-openbaocluster.yaml",
+	"openbao-validate-openbaocluster-binding.yaml":                  "validate-openbaocluster.yaml", // merged
+	"openbao-validate-openbaorestore.yaml":                          "validate-openbaorestore.yaml",
+	"openbao-validate-openbaorestore-binding.yaml":                  "validate-openbaorestore.yaml", // merged
+	"openbao-validate-openbao-tenant.yaml":                          "validate-openbao-tenant.yaml",
+	"openbao-validate-openbao-tenant-binding.yaml":                  "validate-openbao-tenant.yaml", // merged
+	"openbao-restrict-controller-rbac-binding.yaml":                 "controller-rbac.yaml",         // merged
+	"openbao-restrict-controller-rbac.yaml":                         "controller-rbac.yaml",
+	"openbao-restrict-provisioner-namespace-mutations.yaml":         "provisioner-namespace-mutations.yaml",
+	"openbao-restrict-provisioner-namespace-mutations-binding.yaml": "provisioner-namespace-mutations.yaml", // merged
 }
 
 // syncPolicies syncs ValidatingAdmissionPolicy YAMLs from config/policy to Helm templates.

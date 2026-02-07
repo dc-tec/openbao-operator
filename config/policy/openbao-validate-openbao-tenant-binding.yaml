@@ -1,8 +1,8 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: validate-openbaorestore
+  name: openbao-validate-openbao-tenant-binding
 spec:
-  policyName: validate-openbaorestore
+  policyName: openbao-validate-openbao-tenant
   validationActions:
     - Deny

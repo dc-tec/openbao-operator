@@ -107,7 +107,7 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 		desired.Spec.VolumeClaimTemplates = existingSTS.Spec.VolumeClaimTemplates
 
 		// POLICY COMPLIANCE: The operator ships an ValidatingAdmissionPolicy
-		// (e.g. openbao-operator-lock-controller-statefulset-mutations) that forbid
+		// (e.g. openbao-operator-openbao-lock-controller-statefulset-mutations) that forbid
 		// the OpenBao controller from mutating specific StatefulSet pod-template fields
 		// (volumes/volumeMounts/securityContext/command/args/automountServiceAccountToken).
 		//

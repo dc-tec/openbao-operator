@@ -58,9 +58,9 @@ func ensureDefaultAdmissionPoliciesApplied(t *testing.T) {
 
 func isDefaultIntegrationPolicyNameAllowed(policyName string) bool {
 	allowedSuffixes := []string{
-		"validate-openbaocluster",
-		"validate-openbaorestore",
-		"validate-openbao-tenant",
+		"openbao-validate-openbaocluster",
+		"openbao-validate-openbaorestore",
+		"openbao-validate-openbao-tenant",
 		"openbao-restrict-provisioner-rbac",
 	}
 	for _, suffix := range allowedSuffixes {

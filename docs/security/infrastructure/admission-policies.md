@@ -11,7 +11,7 @@ The following diagram illustrates how the Operator's policies intercept GitOps s
 graph LR
     User["GitOps Pipeline"]
     API["Kubernetes API"]
-    VAP["ValidatingAdmissionPolicy<br/>(lock-managed-resource-mutations)"]
+    VAP["ValidatingAdmissionPolicy<br/>(openbao-lock-managed-resource-mutations)"]
     Res["Managed Resource<br/>(StatefulSet)"]
 
     User --"Apply Change"--> API
@@ -37,16 +37,16 @@ graph LR
 
 The Operator ships with a suite of policies to enforce "Least Privilege" and "GitOps Safety":
 
-| Policy Name | Target | Enforcement | Description |
-| :--- | :--- | :--- | :--- |
-| `lock-managed-resource-mutations` | Operator-managed resources (e.g. `StatefulSet`, `Service`, `Secret`, `Pod`) | **Block** | Prevents users/GitOps from modifying resources managed by the Operator (labeled `app.kubernetes.io/managed-by=openbao-operator`). Allows controlled exceptions for Kubernetes controllers and OpenBao service registration label updates. |
-| `lock-controller-statefulset-mutations` | `StatefulSet` (Controller) | **Block** | Self-protection: prevents the Controller from modifying its own sensitive fields (volumes, args). |
-| `validate-openbaocluster` | `OpenBaoCluster` | **Validate** | Enforces spec invariants (e.g., Hardened profile requirements, TLS configs). |
-| `validate-openbao-tenant` | `OpenBaoTenant` | **Validate** | Enforces tenant spec invariants and multi-tenant guardrails. |
-| `validate-openbaorestore` | `OpenBaoRestore` | **Validate** | Enforces restore spec invariants and safety checks. |
-| `openbao-restrict-provisioner-rbac` | `Role`, `RoleBinding` | **Restrict** | Restricts the Provisioner ServiceAccount to a fixed set of tenant RBAC objects and contents (CREATE/UPDATE/DELETE), and blocks system namespaces. |
-| `openbao-restrict-provisioner-namespace-mutations` | `Namespace` | **Restrict** | Restricts Provisioner Namespace updates to Pod Security Standards label enforcement only (restricted), and blocks system namespaces. |
-| `openbao-restrict-controller-rbac` | `Role`, `RoleBinding` | **Restrict** | Restricts Controller RBAC writes to the narrow per-cluster pod discovery/service registration Role/RoleBinding pattern (prevents RBAC self-escalation). |
+| Policy Name | Binding Name | Target | Enforcement | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `openbao-lock-managed-resource-mutations` | `openbao-lock-managed-resource-mutations-binding` | Operator-managed resources (e.g. `StatefulSet`, `Service`, `Secret`, `Pod`) | **Block** | Prevents users/GitOps from modifying resources managed by the Operator (labeled `app.kubernetes.io/managed-by=openbao-operator`). Allows controlled exceptions for Kubernetes controllers and OpenBao service registration label updates. |
+| `openbao-lock-controller-statefulset-mutations` | `openbao-lock-controller-statefulset-mutations-binding` | `StatefulSet` (Controller) | **Block** | Self-protection: prevents the Controller from modifying its own sensitive fields (volumes, args). |
+| `openbao-validate-openbaocluster` | `openbao-validate-openbaocluster-binding` | `OpenBaoCluster` | **Validate** | Enforces spec invariants (e.g., Hardened profile requirements, TLS configs). |
+| `openbao-validate-openbao-tenant` | `openbao-validate-openbao-tenant-binding` | `OpenBaoTenant` | **Validate** | Enforces tenant spec invariants and multi-tenant guardrails. |
+| `openbao-validate-openbaorestore` | `openbao-validate-openbaorestore-binding` | `OpenBaoRestore` | **Validate** | Enforces restore spec invariants and safety checks. |
+| `openbao-restrict-provisioner-rbac` | `openbao-restrict-provisioner-rbac-binding` | `Role`, `RoleBinding` | **Restrict** | Restricts the Provisioner ServiceAccount to a fixed set of tenant RBAC objects and contents (CREATE/UPDATE/DELETE), and blocks system namespaces. |
+| `openbao-restrict-provisioner-namespace-mutations` | `openbao-restrict-provisioner-namespace-mutations-binding` | `Namespace` | **Restrict** | Restricts Provisioner Namespace updates to Pod Security Standards label enforcement only (restricted), and blocks system namespaces. |
+| `openbao-restrict-controller-rbac` | `openbao-restrict-controller-rbac-binding` | `Role`, `RoleBinding` | **Restrict** | Restricts Controller RBAC writes to the narrow per-cluster pod discovery/service registration Role/RoleBinding pattern (prevents RBAC self-escalation). |
 
 ## Provisioner RBAC Hardening
 
@@ -70,6 +70,17 @@ The `openbao-restrict-provisioner-rbac` policy is a defense-in-depth control tha
 
 !!! note "Startup enforcement"
     The OpenBao Operator defaults to fail-closed startup (`--admission-enforcement=fail`), refusing to run unless required admission policies are installed and enforced.
+
+    Required startup dependency set (Policy / Binding):
+
+    - `openbao-validate-openbaocluster` / `openbao-validate-openbaocluster-binding`
+    - `openbao-validate-openbao-tenant` / `openbao-validate-openbao-tenant-binding`
+    - `openbao-validate-openbaorestore` / `openbao-validate-openbaorestore-binding`
+    - `openbao-lock-controller-statefulset-mutations` / `openbao-lock-controller-statefulset-mutations-binding`
+    - `openbao-restrict-provisioner-rbac` / `openbao-restrict-provisioner-rbac-binding`
+    - `openbao-restrict-provisioner-namespace-mutations` / `openbao-restrict-provisioner-namespace-mutations-binding`
+    - `openbao-restrict-controller-rbac` / `openbao-restrict-controller-rbac-binding`
+    - `openbao-lock-managed-resource-mutations` / `openbao-lock-managed-resource-mutations-binding`
 
 !!! warning "Unsafe mode"
     Disabling admission policies is treated as **unsafe mode**. When installing via Helm with `admissionPolicies.enabled=false`, the chart sets `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can start without fail-closed admission dependency enforcement. This is intended only for development/break-glass scenarios.

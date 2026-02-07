@@ -1,8 +1,8 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: validate-openbao-tenant
+  name: openbao-lock-managed-resource-mutations-binding
 spec:
-  policyName: validate-openbao-tenant
+  policyName: openbao-lock-managed-resource-mutations
   validationActions:
     - Deny

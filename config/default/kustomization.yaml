@@ -62,61 +62,61 @@ patchesJson6902:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-lock-controller-statefulset-mutations
+      name: openbao-operator-openbao-lock-controller-statefulset-mutations
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicyBinding
-      name: openbao-operator-lock-controller-statefulset-mutations
+      name: openbao-operator-openbao-lock-controller-statefulset-mutations-binding
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-lock-managed-resource-mutations
+      name: openbao-operator-openbao-lock-managed-resource-mutations
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicyBinding
-      name: openbao-operator-lock-managed-resource-mutations
+      name: openbao-operator-openbao-lock-managed-resource-mutations-binding
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-validate-openbaocluster
+      name: openbao-operator-openbao-validate-openbaocluster
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicyBinding
-      name: openbao-operator-validate-openbaocluster
+      name: openbao-operator-openbao-validate-openbaocluster-binding
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-validate-openbaorestore
+      name: openbao-operator-openbao-validate-openbaorestore
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicyBinding
-      name: openbao-operator-validate-openbaorestore
+      name: openbao-operator-openbao-validate-openbaorestore-binding
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-validate-openbao-tenant
+      name: openbao-operator-openbao-validate-openbao-tenant
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicyBinding
-      name: openbao-operator-validate-openbao-tenant
+      name: openbao-operator-openbao-validate-openbao-tenant-binding
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
@@ -162,28 +162,28 @@ replacements:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-lock-controller-statefulset-mutations
+      name: openbao-operator-openbao-lock-controller-statefulset-mutations
       fieldPath: metadata.name
     targets:
       - select:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicyBinding
-          name: openbao-operator-lock-controller-statefulset-mutations
+          name: openbao-operator-openbao-lock-controller-statefulset-mutations-binding
         fieldPaths:
           - spec.policyName
   - source:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-lock-managed-resource-mutations
+      name: openbao-operator-openbao-lock-managed-resource-mutations
       fieldPath: metadata.name
     targets:
       - select:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicyBinding
-          name: openbao-operator-lock-managed-resource-mutations
+          name: openbao-operator-openbao-lock-managed-resource-mutations-binding
         fieldPaths:
           - spec.policyName
   - source:
@@ -232,42 +232,42 @@ replacements:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-validate-openbao-tenant
+      name: openbao-operator-openbao-validate-openbao-tenant
       fieldPath: metadata.name
     targets:
       - select:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicyBinding
-          name: openbao-operator-validate-openbao-tenant
+          name: openbao-operator-openbao-validate-openbao-tenant-binding
         fieldPaths:
           - spec.policyName
   - source:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-validate-openbaocluster
+      name: openbao-operator-openbao-validate-openbaocluster
       fieldPath: metadata.name
     targets:
       - select:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicyBinding
-          name: openbao-operator-validate-openbaocluster
+          name: openbao-operator-openbao-validate-openbaocluster-binding
         fieldPaths:
           - spec.policyName
   - source:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
-      name: openbao-operator-validate-openbaorestore
+      name: openbao-operator-openbao-validate-openbaorestore
       fieldPath: metadata.name
     targets:
       - select:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicyBinding
-          name: openbao-operator-validate-openbaorestore
+          name: openbao-operator-openbao-validate-openbaorestore-binding
         fieldPaths:
           - spec.policyName
   # - source: # Uncomment the following block to enable certificates for metrics

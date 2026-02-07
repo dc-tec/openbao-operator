@@ -1294,6 +1294,18 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			status, err := admission.CheckDependencies(checkCtx, admin, admission.DefaultDependencies(), []string{"openbao-operator-", ""})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.OverallReady).To(BeTrue(), status.SummaryMessage())
+
+			dependencyNames := make([]string, 0, len(status.Dependencies))
+			for _, dep := range status.Dependencies {
+				dependencyNames = append(dependencyNames, dep.Dependency.Name)
+			}
+
+			expectedDependencyNames := make([]string, 0, len(admission.DefaultDependencies()))
+			for _, dep := range admission.DefaultDependencies() {
+				expectedDependencyNames = append(expectedDependencyNames, dep.Name)
+			}
+
+			Expect(dependencyNames).To(ConsistOf(expectedDependencyNames))
 		})
 	})
 })

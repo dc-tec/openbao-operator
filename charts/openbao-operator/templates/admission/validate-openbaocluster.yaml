@@ -2,7 +2,7 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: {{ include "openbao-operator.fullname" . }}-validate-openbaocluster
+  name: {{ include "openbao-operator.fullname" . }}-openbao-validate-openbaocluster
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
 spec:
@@ -176,11 +176,11 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: {{ include "openbao-operator.fullname" . }}-validate-openbaocluster
+  name: {{ include "openbao-operator.fullname" . }}-openbao-validate-openbaocluster-binding
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
 spec:
-  policyName: {{ include "openbao-operator.fullname" . }}-validate-openbaocluster
+  policyName: {{ include "openbao-operator.fullname" . }}-openbao-validate-openbaocluster
   validationActions:
     - Deny
 {{- end }}

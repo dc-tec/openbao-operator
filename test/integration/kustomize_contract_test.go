@@ -109,11 +109,11 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 		gvk := u.GroupVersionKind()
 		return gvk.Group == "admissionregistration.k8s.io" &&
 			gvk.Kind == "ValidatingAdmissionPolicy" &&
-			strings.HasSuffix(u.GetName(), "lock-managed-resource-mutations")
+			strings.HasSuffix(u.GetName(), "openbao-lock-managed-resource-mutations")
 	})
 
 	if len(objs) != 1 {
-		t.Fatalf("expected exactly one lock-managed-resource-mutations policy, got %d", len(objs))
+		t.Fatalf("expected exactly one openbao-lock-managed-resource-mutations policy, got %d", len(objs))
 	}
 
 	variables, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "variables")
@@ -121,7 +121,7 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 		t.Fatalf("read spec.variables: %v", err)
 	}
 	if !found {
-		t.Fatal("lock-managed-resource-mutations policy missing spec.variables")
+		t.Fatal("openbao-lock-managed-resource-mutations policy missing spec.variables")
 	}
 
 	var hasOpenBaoLabelExpression string
