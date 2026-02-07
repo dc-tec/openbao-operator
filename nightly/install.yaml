@@ -2789,6 +2789,7 @@ spec:
                     type: boolean
                 type: object
             required:
+            - profile
             - replicas
             - storage
             - tls
@@ -3523,6 +3524,9 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
               message:
                 description: Message provides additional details about the current
                   phase.
@@ -3550,6 +3554,8 @@ spec:
                 format: date-time
                 type: string
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true
@@ -3828,6 +3834,9 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
               lastError:
                 description: LastError reports any issues finding the namespace or
                   applying RBAC.
@@ -3837,6 +3846,8 @@ spec:
                   applied to the target namespace.
                 type: boolean
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true
@@ -4378,7 +4389,7 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:54b0ac464fc0ef8c1ea5bc4b505def2c9e7c288d54b742413b0b19f95df5f138
+        image: ghcr.io/dc-tec/openbao-operator@sha256:f0dddeedd898fbba0fc237245a92df3f4a04d9ed177aad4be244825481fe44f7
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4492,7 +4503,7 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:54b0ac464fc0ef8c1ea5bc4b505def2c9e7c288d54b742413b0b19f95df5f138
+        image: ghcr.io/dc-tec/openbao-operator@sha256:f0dddeedd898fbba0fc237245a92df3f4a04d9ed177aad4be244825481fe44f7
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4551,81 +4562,6 @@ spec:
               - fieldRef:
                   fieldPath: metadata.namespace
                 path: namespace
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: openbao-operator-validate-openbao-tenant
-  namespace: openbao-operator-system
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    resourceRules:
-    - apiGroups:
-      - openbao.org
-      apiVersions:
-      - v1alpha1
-      operations:
-      - CREATE
-      - UPDATE
-      resources:
-      - openbaotenants
-  validations:
-  - expression: object.metadata.namespace == 'openbao-operator-system' || !has(object.spec.targetNamespace)
-      || object.spec.targetNamespace == '' || object.spec.targetNamespace == object.metadata.namespace
-    message: OpenBaoTenant can only target its own namespace (self-service mode).
-      Create the OpenBaoTenant in the operator namespace for cross-namespace targeting.
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: openbao-operator-validate-openbaorestore
-  namespace: openbao-operator-system
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    resourceRules:
-    - apiGroups:
-      - openbao.org
-      apiVersions:
-      - v1alpha1
-      operations:
-      - CREATE
-      - UPDATE
-      resources:
-      - openbaorestores
-  validations:
-  - expression: '!has(object.spec.overrideOperationLock) || object.spec.overrideOperationLock
-      == false || object.spec.force == true'
-    message: spec.overrideOperationLock requires spec.force=true.
-  - expression: |-
-      !has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint == "" || !(
-
-        object.spec.source.target.endpoint.contains("localhost") ||
-        object.spec.source.target.endpoint.contains("127.0.0.1") ||
-        object.spec.source.target.endpoint.contains("::1") ||
-        object.spec.source.target.endpoint.matches("^https?://[0-9]+[:/].*")
-      )
-    message: Restore endpoint cannot point to localhost or use numeric IP encoding
-      (SSRF protection).
-  - expression: '!has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint
-      == "" || !object.spec.source.target.endpoint.matches("^https?://169\\.254\\..*")'
-    message: Restore endpoint cannot point to link-local addresses (SSRF protection
-      against cloud metadata services).
-  - expression: '!has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint
-      == "" || object.spec.source.target.endpoint.startsWith("https://") || object.spec.source.target.endpoint.startsWith("s3://")
-      || object.spec.source.target.endpoint.matches("^http://[^/]+\\.svc(\\.|:|/|$).*")'
-    message: Restore endpoint must use HTTPS or S3 scheme, unless it targets an in-cluster
-      Service (*.svc).
-  - expression: |-
-      (!has(object.spec.source.target.credentialsSecretRef) ||
-
-        !object.spec.source.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
-      (!has(object.spec.tokenSecretRef) ||
-
-        !object.spec.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
-    message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
-      are prohibited in restore configuration to prevent confused deputy attacks.
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -4795,6 +4731,24 @@ spec:
             has(oldObject.metadata.labels) &&
             ("app.kubernetes.io/managed-by" in oldObject.metadata.labels) &&
             oldObject.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator"))
+    name: is_openbao_managed_by_operator
+  - expression: |-
+      request.operation == "DELETE" ?
+
+        (oldObject != null &&
+          has(oldObject.metadata) &&
+          has(oldObject.metadata.labels) &&
+          oldObject.metadata.labels.exists(k, v, k.startsWith("openbao.org/"))) :
+        ((object != null &&
+            has(object.metadata) &&
+            has(object.metadata.labels) &&
+            object.metadata.labels.exists(k, v, k.startsWith("openbao.org/"))) ||
+          (oldObject != null &&
+            has(oldObject.metadata) &&
+            has(oldObject.metadata.labels) &&
+            oldObject.metadata.labels.exists(k, v, k.startsWith("openbao.org/"))))
+    name: has_openbao_specific_label
+  - expression: variables.is_openbao_managed_by_operator && variables.has_openbao_specific_label
     name: is_managed
   - expression: request.userInfo.username == "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
     name: is_operator_controller
@@ -5500,6 +5454,31 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  name: openbao-operator-validate-openbao-tenant
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - openbao.org
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - openbaotenants
+  validations:
+  - expression: oldObject == null || object.spec.targetNamespace == oldObject.spec.targetNamespace
+    message: spec.targetNamespace is immutable.
+  - expression: object.metadata.namespace == 'openbao-operator-system' || !has(object.spec.targetNamespace)
+      || object.spec.targetNamespace == '' || object.spec.targetNamespace == object.metadata.namespace
+    message: OpenBaoTenant can only target its own namespace (self-service mode).
+      Create the OpenBaoTenant in the operator namespace for cross-namespace targeting.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
   name: openbao-operator-validate-openbaocluster
 spec:
   failurePolicy: Fail
@@ -5515,6 +5494,8 @@ spec:
       resources:
       - openbaoclusters
   validations:
+  - expression: has(object.spec.profile)
+    message: spec.profile is required and must be explicitly set to Hardened or Development.
   - expression: |-
       !has(object.spec.profile) || object.spec.profile != "Hardened" || (object.spec.tls.mode in ["External", "ACME"] &&
 
@@ -5526,10 +5507,10 @@ spec:
         !(has(object.spec.unseal.kmip) && has(object.spec.unseal.kmip.tlsSkipVerify) && object.spec.unseal.kmip.tlsSkipVerify == true))
     message: Hardened profile requires TLS mode External or ACME, an external unseal
       (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
-  - expression: has(object.spec.initContainer) && object.spec.initContainer.enabled
-      == true && object.spec.initContainer.image != ""
-    message: spec.initContainer is required, must be enabled, and must specify a non-empty
-      image.
+  - expression: '!has(object.spec.initContainer) || object.spec.initContainer.enabled
+      == true'
+    message: spec.initContainer is optional; when set, spec.initContainer.enabled
+      must be true.
   - expression: '!has(object.spec.selfInit) || object.spec.selfInit.enabled == false
       || (has(object.spec.selfInit.requests) && size(object.spec.selfInit.requests)
       > 0)'
@@ -5652,24 +5633,56 @@ spec:
     name: has_bluegreen_pre_upgrade_snapshot
 ---
 apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicyBinding
-metadata:
-  name: openbao-operator-validate-openbao-tenant
-  namespace: openbao-operator-system
-spec:
-  policyName: openbao-operator-validate-openbao-tenant
-  validationActions:
-  - Deny
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicyBinding
+kind: ValidatingAdmissionPolicy
 metadata:
   name: openbao-operator-validate-openbaorestore
-  namespace: openbao-operator-system
 spec:
-  policyName: openbao-operator-validate-openbaorestore
-  validationActions:
-  - Deny
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - openbao.org
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - openbaorestores
+  validations:
+  - expression: oldObject == null || object.spec == oldObject.spec
+    message: spec is immutable; create a new OpenBaoRestore for changed restore parameters.
+  - expression: '!has(object.spec.overrideOperationLock) || object.spec.overrideOperationLock
+      == false || object.spec.force == true'
+    message: spec.overrideOperationLock requires spec.force=true.
+  - expression: |-
+      !has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint == "" || !(
+
+        object.spec.source.target.endpoint.contains("localhost") ||
+        object.spec.source.target.endpoint.contains("127.0.0.1") ||
+        object.spec.source.target.endpoint.contains("::1") ||
+        object.spec.source.target.endpoint.matches("^https?://[0-9]+[:/].*")
+      )
+    message: Restore endpoint cannot point to localhost or use numeric IP encoding
+      (SSRF protection).
+  - expression: '!has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint
+      == "" || !object.spec.source.target.endpoint.matches("^https?://169\\.254\\..*")'
+    message: Restore endpoint cannot point to link-local addresses (SSRF protection
+      against cloud metadata services).
+  - expression: '!has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint
+      == "" || object.spec.source.target.endpoint.startsWith("https://") || object.spec.source.target.endpoint.startsWith("s3://")
+      || object.spec.source.target.endpoint.matches("^http://[^/]+\\.svc(\\.|:|/|$).*")'
+    message: Restore endpoint must use HTTPS or S3 scheme, unless it targets an in-cluster
+      Service (*.svc).
+  - expression: |-
+      (!has(object.spec.source.target.credentialsSecretRef) ||
+
+        !object.spec.source.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
+      (!has(object.spec.tokenSecretRef) ||
+
+        !object.spec.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
+    message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
+      are prohibited in restore configuration to prevent confused deputy attacks.
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -5755,8 +5768,26 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
+  name: openbao-operator-validate-openbao-tenant
+spec:
+  policyName: openbao-operator-validate-openbao-tenant
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
   name: openbao-operator-validate-openbaocluster
 spec:
   policyName: openbao-operator-validate-openbaocluster
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-validate-openbaorestore
+spec:
+  policyName: openbao-operator-validate-openbaorestore
   validationActions:
   - Deny
