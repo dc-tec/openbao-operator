@@ -218,7 +218,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	logger.Info("Attempting to initialize OpenBao cluster using HTTP API")
 
 	// Audit log: Cluster initialization operation
-	logging.LogAuditEvent(logger, "Init", map[string]string{
+	logging.LogAuditEvent(logger, logging.EventInitStarted, map[string]string{
 		"cluster_namespace": cluster.Namespace,
 		"cluster_name":      cluster.Name,
 		"self_init_enabled": fmt.Sprintf("%t", selfInitEnabled),
@@ -233,7 +233,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		}
 
 		logger.Error(err, "Failed to initialize OpenBao cluster")
-		logging.LogAuditEvent(logger, "InitFailed", map[string]string{
+		logging.LogAuditEvent(logger, logging.EventInitFailed, map[string]string{
 			"cluster_namespace": cluster.Namespace,
 			"cluster_name":      cluster.Name,
 			"error":             err.Error(),
@@ -247,7 +247,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	logger.Info("OpenBao cluster initialized successfully via HTTP API")
 
 	// Audit log: Cluster initialization completed
-	logging.LogAuditEvent(logger, "InitCompleted", map[string]string{
+	logging.LogAuditEvent(logger, logging.EventInitCompleted, map[string]string{
 		"cluster_namespace": cluster.Namespace,
 		"cluster_name":      cluster.Name,
 		"self_init_enabled": fmt.Sprintf("%t", selfInitEnabled),

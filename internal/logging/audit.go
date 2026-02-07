@@ -2,6 +2,7 @@ package logging
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/go-logr/logr"
 )
@@ -18,7 +19,22 @@ func LogAuditEvent(logger logr.Logger, eventType string, fields map[string]strin
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		auditLogger = auditLogger.WithValues(key, fields[key])
+		prefixedKey := auditFieldKey(key)
+		if prefixedKey == "" {
+			continue
+		}
+		auditLogger = auditLogger.WithValues(prefixedKey, fields[key])
 	}
 	auditLogger.Info("Operator audit event")
+}
+
+func auditFieldKey(key string) string {
+	trimmed := strings.TrimSpace(key)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.HasPrefix(trimmed, "audit_") {
+		return trimmed
+	}
+	return "audit_" + trimmed
 }

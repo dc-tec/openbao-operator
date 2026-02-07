@@ -20,7 +20,9 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/infra"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/operationlock"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
@@ -307,8 +309,21 @@ func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logge
 	if !upgradeActive && !upgradeNeeded {
 		return false, recon.Result{}, nil
 	}
+	lockHeldByUs := upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock)
 	if err := upgrade.AcquireUpgradeOperationLock(ctx, m.client, cluster, fmt.Sprintf("blue/green upgrade phase %s", cluster.Status.BlueGreen.Phase)); err != nil {
 		if upgrade.IsOperationLockHeld(err) {
+			fields := map[string]string{
+				"cluster_namespace": cluster.Namespace,
+				"cluster_name":      cluster.Name,
+				"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
+				"holder":            upgrade.UpgradeOperationLockHolder,
+			}
+			var heldErr *operationlock.HeldError
+			if errors.As(err, &heldErr) {
+				fields["held_by_operation"] = string(heldErr.Operation)
+				fields["held_by_holder"] = heldErr.Holder
+			}
+			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
 			if upgradeActive {
 				return true, recon.Result{}, fmt.Errorf("blue/green upgrade in progress but operation lock is held by another operation: %w", err)
 			}
@@ -317,6 +332,14 @@ func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logge
 			return true, recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
 		return true, recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
+	}
+	if !lockHeldByUs {
+		logging.LogAuditEvent(logger, logging.EventOperationLockAcquired, map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
+			"holder":            upgrade.UpgradeOperationLockHolder,
+		})
 	}
 	return false, recon.Result{}, nil
 }
@@ -377,6 +400,12 @@ func (m *Manager) releaseUpgradeLockIfHeld(ctx context.Context, logger logr.Logg
 		}
 		return fmt.Errorf("failed to release upgrade operation lock: %w", err)
 	}
+	logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
+		"holder":            upgrade.UpgradeOperationLockHolder,
+	})
 	return nil
 }
 
@@ -435,7 +464,8 @@ func (m *Manager) calculateRevision(cluster *openbaov1alpha1.OpenBaoCluster) str
 // transitionToPhase is a helper that sets the phase and restarts the StartTime timer.
 // This reduces boilerplate in phase handlers.
 // It also resets the job failure count when transitioning phases.
-func (m *Manager) transitionToPhase(cluster *openbaov1alpha1.OpenBaoCluster, phase openbaov1alpha1.BlueGreenPhase) {
+func (m *Manager) transitionToPhase(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, phase openbaov1alpha1.BlueGreenPhase) {
+	previousPhase := cluster.Status.BlueGreen.Phase
 	cluster.Status.BlueGreen.Phase = phase
 	if phase == openbaov1alpha1.PhaseIdle {
 		cluster.Status.BlueGreen.StartTime = nil
@@ -446,6 +476,14 @@ func (m *Manager) transitionToPhase(cluster *openbaov1alpha1.OpenBaoCluster, pha
 	// Reset job failure count on phase transition
 	cluster.Status.BlueGreen.JobFailureCount = 0
 	cluster.Status.BlueGreen.LastJobFailure = ""
+	if previousPhase != phase {
+		logging.LogAuditEvent(logger, logging.EventBlueGreenPhaseTransition, map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"phase_from":        string(previousPhase),
+			"phase_to":          string(phase),
+		})
+	}
 }
 
 // executeStateMachine runs the blue/green upgrade state machine.
@@ -491,7 +529,7 @@ func (m *Manager) applyOutcome(ctx context.Context, logger logr.Logger, cluster 
 
 	switch outcome.kind {
 	case phaseOutcomeAdvance:
-		m.transitionToPhase(cluster, outcome.nextPhase)
+		m.transitionToPhase(logger, cluster, outcome.nextPhase)
 		if outcome.nextPhase == openbaov1alpha1.PhaseIdle {
 			return recon.Result{}, nil
 		}
@@ -519,6 +557,13 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 	logger.Info("Starting blue/green upgrade",
 		"fromVersion", cluster.Status.CurrentVersion,
 		"targetVersion", cluster.Spec.Version)
+	logging.LogAuditEvent(logger, logging.EventUpgradeStarted, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"strategy":          string(openbaov1alpha1.UpdateStrategyBlueGreen),
+		"from_version":      cluster.Status.CurrentVersion,
+		"to_version":        cluster.Spec.Version,
+	})
 
 	// Pre-upgrade snapshot (if enabled)
 	preUpgradeSnapshotEnabled := cluster.Spec.Upgrade.PreUpgradeSnapshot ||
@@ -983,6 +1028,12 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 	}
 
 	logger.Info("Blue/green upgrade completed", "newVersion", cluster.Spec.Version)
+	logging.LogAuditEvent(logger, logging.EventUpgradeCompleted, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"strategy":          string(openbaov1alpha1.UpdateStrategyBlueGreen),
+		"version":           cluster.Spec.Version,
+	})
 
 	// Return a requeue to trigger another reconcile cycle so dependent reconcilers
 	// can observe the new steady-state and clean up any upgrade-time resources.
@@ -1085,6 +1136,12 @@ func isEarlyPhase(phase openbaov1alpha1.BlueGreenPhase) bool {
 // triggerRollbackOrAbort decides whether to abort (early phases) or trigger full rollback (late phases).
 func (m *Manager) triggerRollbackOrAbort(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, reason string) (recon.Result, error) {
 	phase := cluster.Status.BlueGreen.Phase
+	logging.LogAuditEvent(logger, logging.EventUpgradeFailed, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"strategy":          string(openbaov1alpha1.UpdateStrategyBlueGreen),
+		"reason":            reason,
+	})
 
 	if isEarlyPhase(phase) {
 		// Early phase: simple abort (delete Green, reset to Idle)
@@ -1108,6 +1165,11 @@ func (m *Manager) triggerRollback(logger logr.Logger, cluster *openbaov1alpha1.O
 	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseRollingBack
 
 	logger.Info("Rollback initiated", "reason", reason)
+	logging.LogAuditEvent(logger, logging.EventRollbackInitiated, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"reason":            reason,
+	})
 
 	return requeueShort(), nil // Requeue to process rollback
 }
@@ -1149,7 +1211,7 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 		// This is an expected failure path that intentionally halts automation. Avoid Error-level
 		// logging here to prevent confusing stack traces in controller logs.
 		logger.Info("Rollback consensus repair job failed; entering break glass mode", "job", result.Name)
-		m.enterBreakGlassRollbackConsensusRepairFailed(cluster, result.Name)
+		m.enterBreakGlassRollbackConsensusRepairFailed(logger, cluster, result.Name)
 		return hold(), nil
 	}
 
@@ -1235,6 +1297,11 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 	}
 
 	logger.Info("Blue/green rollback completed", "reason", rollbackReason)
+	logging.LogAuditEvent(logger, logging.EventRollbackCompleted, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"reason":            rollbackReason,
+	})
 
 	return done(), nil
 }

@@ -121,7 +121,6 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 		"profile", cluster.Spec.Profile,
 		"replicas", cluster.Spec.Replicas,
 		"cluster", cluster.Name,
-		"namespace", cluster.Namespace,
 	)
 
 	// Build desired Autopilot configuration

@@ -202,7 +202,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		metrics.IncrementStepDownTotal()
 
 		// Audit log: Leader step-down operation
-		logging.LogAuditEvent(logger, "StepDown", map[string]string{
+		logging.LogAuditEvent(logger, logging.EventStepDownStarted, map[string]string{
 			"cluster_namespace": cluster.Namespace,
 			"cluster_name":      cluster.Name,
 			"pod":               podName,
@@ -272,7 +272,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	if present && !stillLeader {
 		logger.Info("Leadership transferred successfully", "previousLeader", podName)
 		upgrade.SetStepDownPerformed(&cluster.Status)
-		logging.LogAuditEvent(logger, "StepDownCompleted", map[string]string{
+		logging.LogAuditEvent(logger, logging.EventStepDownCompleted, map[string]string{
 			"cluster_namespace": cluster.Namespace,
 			"cluster_name":      cluster.Name,
 			"pod":               podName,
@@ -304,7 +304,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	if !isLeader {
 		logger.Info("Leadership transferred successfully (verified via API)", "previousLeader", podName)
 		upgrade.SetStepDownPerformed(&cluster.Status)
-		logging.LogAuditEvent(logger, "StepDownCompleted", map[string]string{
+		logging.LogAuditEvent(logger, logging.EventStepDownCompleted, map[string]string{
 			"cluster_namespace": cluster.Namespace,
 			"cluster_name":      cluster.Name,
 			"pod":               podName,

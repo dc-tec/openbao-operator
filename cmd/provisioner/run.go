@@ -44,6 +44,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
 	provisionercontroller "github.com/dc-tec/openbao-operator/internal/controller/provisioner"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
@@ -115,7 +116,7 @@ func Run(args []string) {
 			"This provides stronger assurance that enforcement is active.")
 
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -180,6 +181,10 @@ func Run(args []string) {
 			"UNSAFE MODE: admission policy enforcement disabled; " +
 				"skipping dependency checks and allowing provisioning without guardrails",
 		)
+		logging.LogAuditEvent(setupLog, logging.EventAdmissionUnsafeModeEnabled, map[string]string{
+			"component":             "provisioner",
+			"admission_enforcement": admissionEnforcement,
+		})
 		admission.SetAdmissionDependenciesReady(true)
 	} else {
 		switch admissionEnforcement {
@@ -198,6 +203,11 @@ func Run(args []string) {
 				if err == nil {
 					err = fmt.Errorf("admission policy dependencies not ready")
 				}
+				logging.LogAuditEvent(setupLog, logging.EventAdmissionStartupBlocked, map[string]string{
+					"component":             "provisioner",
+					"admission_enforcement": admissionEnforcement,
+					"summary":               status.SummaryMessage(),
+				})
 				setupLog.Error(
 					err,
 					"Admission policy dependencies not ready; refusing to start",
@@ -207,11 +217,19 @@ func Run(args []string) {
 				os.Exit(1)
 			}
 			setupLog.Info("Admission policy dependencies ready")
+			logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesReady, map[string]string{
+				"component":             "provisioner",
+				"admission_enforcement": admissionEnforcement,
+			})
 
 			if admissionCanary {
 				// Verify enforcement via a dry-run forbidden RBAC request.
 				clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
 				if err != nil {
+					logging.LogAuditEvent(setupLog, logging.EventAdmissionCanaryFailed, map[string]string{
+						"component": "provisioner",
+						"reason":    "clientset_creation_failed",
+					})
 					setupLog.Error(err, "Failed to create Kubernetes clientset for admission canary; refusing to start")
 					os.Exit(1)
 				}
@@ -220,10 +238,17 @@ func Run(args []string) {
 				// Use a commonly-present namespace that is typically not considered a system namespace.
 				// This makes the canary assert the Role name restriction, not just the system namespace restriction.
 				if err := admission.VerifyProvisionerRBACEnforcement(canaryCtx, clientset, "default"); err != nil {
+					logging.LogAuditEvent(setupLog, logging.EventAdmissionCanaryFailed, map[string]string{
+						"component": "provisioner",
+						"reason":    "policy_not_enforced",
+					})
 					setupLog.Error(err, "Admission canary failed; refusing to start")
 					os.Exit(1)
 				}
 				setupLog.Info("Admission canary succeeded")
+				logging.LogAuditEvent(setupLog, logging.EventAdmissionCanaryPassed, map[string]string{
+					"component": "provisioner",
+				})
 			}
 		default: // warn
 			checkCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -241,8 +266,17 @@ func Run(args []string) {
 			admission.SetAdmissionDependenciesReady(status.OverallReady)
 			if status.OverallReady {
 				setupLog.Info("Admission policy dependencies ready")
+				logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesReady, map[string]string{
+					"component":             "provisioner",
+					"admission_enforcement": admissionEnforcement,
+				})
 			} else {
 				setupLog.Info("Admission policy dependencies not ready", "summary", status.SummaryMessage())
+				logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesNotReady, map[string]string{
+					"component":             "provisioner",
+					"admission_enforcement": admissionEnforcement,
+					"summary":               status.SummaryMessage(),
+				})
 			}
 		}
 	}

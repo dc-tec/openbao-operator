@@ -11,6 +11,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
@@ -41,6 +42,11 @@ func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alph
 	cluster.Status.BreakGlass.AcknowledgedAt = &now
 
 	logger.Info("Break glass acknowledged; resuming automation", "reason", cluster.Status.BreakGlass.Reason)
+	logging.LogAuditEvent(logger, logging.EventBreakGlassAcknowledged, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"reason":            string(cluster.Status.BreakGlass.Reason),
+	})
 
 	if cluster.Status.BlueGreen != nil &&
 		cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollingBack &&
@@ -63,7 +69,7 @@ func rollbackRunID(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return fmt.Sprintf("rollback-retry-%d", cluster.Status.BlueGreen.RollbackAttempt)
 }
 
-func (m *Manager) enterBreakGlassRollbackConsensusRepairFailed(cluster *openbaov1alpha1.OpenBaoCluster, jobName string) {
+func (m *Manager) enterBreakGlassRollbackConsensusRepairFailed(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) {
 	if cluster.Status.BreakGlass != nil && cluster.Status.BreakGlass.Active {
 		return
 	}
@@ -89,6 +95,12 @@ func (m *Manager) enterBreakGlassRollbackConsensusRepairFailed(cluster *openbaov
 		EnteredAt: &now,
 		Steps:     steps,
 	}
+	logging.LogAuditEvent(logger, logging.EventBreakGlassEntered, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"reason":            string(openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed),
+		"job":               jobName,
+	})
 }
 
 func newBreakGlassNonce() string {

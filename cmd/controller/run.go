@@ -56,6 +56,7 @@ import (
 	openbaoclustercontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
 	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
 	initmanager "github.com/dc-tec/openbao-operator/internal/init"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
@@ -173,7 +174,7 @@ func Run(args []string) {
 		"Maximum time to wait for required admission policies at startup when --admission-enforcement=fail.")
 
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -403,6 +404,10 @@ func Run(args []string) {
 	var admissionStatus admission.Status
 	if admission.UnsafeAdmissionDisabled() {
 		setupLog.Info("UNSAFE MODE: admission policy enforcement disabled; skipping dependency checks")
+		logging.LogAuditEvent(setupLog, logging.EventAdmissionUnsafeModeEnabled, map[string]string{
+			"component":             "controller",
+			"admission_enforcement": admissionEnforcement,
+		})
 		admissionStatus.OverallReady = true
 		admission.SetAdmissionDependenciesReady(true)
 	} else {
@@ -422,6 +427,11 @@ func Run(args []string) {
 				if err == nil {
 					err = fmt.Errorf("admission policy dependencies not ready")
 				}
+				logging.LogAuditEvent(setupLog, logging.EventAdmissionStartupBlocked, map[string]string{
+					"component":             "controller",
+					"admission_enforcement": admissionEnforcement,
+					"summary":               admissionStatus.SummaryMessage(),
+				})
 				setupLog.Error(
 					err,
 					"Admission policy dependencies not ready; refusing to start",
@@ -448,8 +458,17 @@ func Run(args []string) {
 		admission.SetAdmissionDependenciesReady(admissionStatus.OverallReady)
 		if admissionStatus.OverallReady {
 			setupLog.Info("Admission policy dependencies ready")
+			logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesReady, map[string]string{
+				"component":             "controller",
+				"admission_enforcement": admissionEnforcement,
+			})
 		} else {
 			setupLog.Info("Admission policy dependencies not ready", "summary", admissionStatus.SummaryMessage())
+			logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesNotReady, map[string]string{
+				"component":             "controller",
+				"admission_enforcement": admissionEnforcement,
+				"summary":               admissionStatus.SummaryMessage(),
+			})
 		}
 	}
 
