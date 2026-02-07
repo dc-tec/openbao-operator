@@ -9,6 +9,11 @@ const (
 	EventAdmissionCanaryPassed         = "AdmissionCanaryPassed"
 	EventAdmissionCanaryFailed         = "AdmissionCanaryFailed"
 
+	// Initialization lifecycle events.
+	EventInitStarted   = "Init"
+	EventInitFailed    = "InitFailed"
+	EventInitCompleted = "InitCompleted"
+
 	// Cross-controller operation lock lifecycle events.
 	EventOperationLockAcquired      = "OperationLockAcquired"
 	EventOperationLockBlocked       = "OperationLockBlocked"
@@ -33,6 +38,8 @@ const (
 	EventUpgradeStarted               = "UpgradeStarted"
 	EventUpgradeCompleted             = "UpgradeCompleted"
 	EventUpgradeFailed                = "UpgradeFailed"
+	EventStepDownStarted              = "StepDown"
+	EventStepDownCompleted            = "StepDownCompleted"
 	EventPreUpgradeSnapshotJobCreated = "PreUpgradeSnapshotJobCreated"
 	EventPreUpgradeSnapshotCompleted  = "PreUpgradeSnapshotCompleted"
 	EventPreUpgradeSnapshotRetry      = "PreUpgradeSnapshotRetry"

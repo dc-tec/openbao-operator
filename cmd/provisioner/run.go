@@ -116,7 +116,7 @@ func Run(args []string) {
 			"This provides stronger assurance that enforcement is active.")
 
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()

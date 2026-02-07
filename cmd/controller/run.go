@@ -174,7 +174,7 @@ func Run(args []string) {
 		"Maximum time to wait for required admission policies at startup when --admission-enforcement=fail.")
 
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
