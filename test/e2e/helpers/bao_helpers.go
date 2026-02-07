@@ -19,6 +19,11 @@ import (
 	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
+const (
+	jwtAutopilotVerifyAttempts    = 30
+	jwtAutopilotVerifySleepSecond = 3
+)
+
 // executePod creates a pod to execute a command with standard environment variables.
 func executePod(
 	ctx context.Context,
@@ -490,7 +495,7 @@ func executeJWTPod(
 		},
 	}
 
-	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 2*time.Minute)
+	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 4*time.Minute)
 	if err != nil {
 		return "", err
 	}
@@ -524,30 +529,40 @@ export BAO_ADDR=%s
 export BAO_SKIP_VERIFY=true
 
 # Retry loop for login and verification
-for i in $(seq 1 10); do
-	echo "Attempt $i/10..."
-	set +e
-	LOGIN_OUTPUT=$(bao write -field=token auth/jwt-operator/login \
-		role=test-verifier jwt=@/var/run/secrets/openbao/token 2>&1)
-	LOGIN_EXIT=$?
-	set -e
-	if [ $LOGIN_EXIT -eq 0 ] && [ -n "$LOGIN_OUTPUT" ] && [ "$LOGIN_OUTPUT" != "null" ]; then
-		export BAO_TOKEN=$LOGIN_OUTPUT
-		if bao read sys/storage/raft/autopilot/configuration 2>&1 | grep -q "cleanup_dead_servers.*true"; then
-			echo "AUTOPILOT_CONFIGURED"
-			exit 0
+	for i in $(seq 1 %d); do
+		echo "Attempt $i/%d..."
+		set +e
+		LOGIN_OUTPUT=$(bao write -field=token auth/jwt-operator/login \
+			role=test-verifier jwt=@/var/run/secrets/openbao/token 2>&1)
+		LOGIN_EXIT=$?
+		set -e
+		if [ $LOGIN_EXIT -eq 0 ] && [ -n "$LOGIN_OUTPUT" ] && [ "$LOGIN_OUTPUT" != "null" ]; then
+			export BAO_TOKEN=$LOGIN_OUTPUT
+			if ! bao status >/dev/null 2>&1; then
+				echo "OpenBao not ready yet"
+				sleep %d
+				continue
+			fi
+			set +e
+			CLEANUP_DEAD_SERVERS=$(bao read -field=cleanup_dead_servers sys/storage/raft/autopilot/configuration 2>&1 | tr -d '\r\n')
+			READ_EXIT=$?
+			set -e
+			if [ $READ_EXIT -eq 0 ] && [ "$CLEANUP_DEAD_SERVERS" = "true" ]; then
+				echo "AUTOPILOT_CONFIGURED"
+				exit 0
+			fi
+			echo "Autopilot config not yet propagated or incorrect"
+			echo "cleanup_dead_servers read output: $CLEANUP_DEAD_SERVERS"
+		else
+			echo "Login failed"
+			echo "Login command output: $LOGIN_OUTPUT"
 		fi
-		echo "Autopilot config not yet propagated or incorrect"
-	else
-		echo "Login failed"
-		echo "Login command output: $LOGIN_OUTPUT"
-	fi
-	sleep 2
-done
+		sleep %d
+	done
 
-echo "Failed to verify autopilot config after 10 attempts"
-exit 1
-`, baoAddr)
+	echo "Failed to verify autopilot config after %d attempts"
+	exit 1
+`, baoAddr, jwtAutopilotVerifyAttempts, jwtAutopilotVerifyAttempts, jwtAutopilotVerifySleepSecond, jwtAutopilotVerifySleepSecond, jwtAutopilotVerifyAttempts)
 
 	if _, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd); err != nil {
 		return fmt.Errorf("failed to verify autopilot via JWT: %w", err)
@@ -579,8 +594,8 @@ export BAO_ADDR=%s
 export BAO_SKIP_VERIFY=true
 
 	# Retry loop for login and verification
-	for i in $(seq 1 10); do
-		echo "Attempt $i/10..."
+	for i in $(seq 1 %d); do
+		echo "Attempt $i/%d..."
 		set +e
 		LOGIN_OUTPUT=$(bao write -field=token auth/jwt-operator/login \
 			role=test-verifier jwt=@/var/run/secrets/openbao/token 2>&1)
@@ -588,22 +603,31 @@ export BAO_SKIP_VERIFY=true
 		set -e
 		if [ $LOGIN_EXIT -eq 0 ] && [ -n "$LOGIN_OUTPUT" ] && [ "$LOGIN_OUTPUT" != "null" ]; then
 			export BAO_TOKEN=$LOGIN_OUTPUT
-			# Use grep to find the min_quorum line and extract the number
-			if bao read sys/storage/raft/autopilot/configuration 2>&1 | grep -q "min_quorum.*%d"; then
+			if ! bao status >/dev/null 2>&1; then
+				echo "OpenBao not ready yet"
+				sleep %d
+				continue
+			fi
+			set +e
+			MIN_QUORUM=$(bao read -field=min_quorum sys/storage/raft/autopilot/configuration 2>&1 | tr -d '\r\n')
+			READ_EXIT=$?
+			set -e
+			if [ $READ_EXIT -eq 0 ] && [ "$MIN_QUORUM" = "%d" ]; then
 				echo "MIN_QUORUM_VERIFIED"
 				exit 0
 			fi
 			echo "Autopilot config not yet propagated or incorrect"
+			echo "min_quorum read output: $MIN_QUORUM"
 		else
 			echo "Login failed"
 			echo "Login command output: $LOGIN_OUTPUT"
 		fi
-		sleep 2
+		sleep %d
 	done
 
-echo "Failed to verify min_quorum after 10 attempts"
+echo "Failed to verify min_quorum after %d attempts"
 exit 1
-`, baoAddr, expectedMinQuorum)
+`, baoAddr, jwtAutopilotVerifyAttempts, jwtAutopilotVerifyAttempts, jwtAutopilotVerifySleepSecond, expectedMinQuorum, jwtAutopilotVerifySleepSecond, jwtAutopilotVerifyAttempts)
 
 	if _, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd); err != nil {
 		return fmt.Errorf("failed to verify min_quorum via JWT: %w", err)
