@@ -16,6 +16,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/kube"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 )
 
 const (
@@ -144,6 +145,11 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 		}
 
 		logger.Info("Backup Job created", "job", jobName, "backupKey", backupKey)
+		logging.LogAuditEvent(logger, logging.EventBackupJobCreated, map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"job":               jobName,
+		})
 		return true, nil
 	}
 
@@ -222,6 +228,11 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		}
 
 		logger.Info("Backup Job completed successfully, status updated", "job", jobName, "lastBackupTime", now, "backupKey", backupKey)
+		logging.LogAuditEvent(logger, logging.EventBackupJobSucceeded, map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"job":               jobName,
+		})
 		return true, nil // Status was updated - request requeue to persist
 	}
 
@@ -252,6 +263,12 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		logger.Error(fmt.Errorf("backup job failed"), "Backup Job failed, status updated",
 			"job", jobName,
 			"consecutiveFailures", cluster.Status.Backup.ConsecutiveFailures)
+		logging.LogAuditEvent(logger, logging.EventBackupJobFailed, map[string]string{
+			"cluster_namespace":    cluster.Namespace,
+			"cluster_name":         cluster.Name,
+			"job":                  jobName,
+			"consecutive_failures": fmt.Sprintf("%d", cluster.Status.Backup.ConsecutiveFailures),
+		})
 		return true, nil // Status was updated - request requeue to persist
 	}
 

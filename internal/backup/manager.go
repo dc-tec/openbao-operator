@@ -26,6 +26,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/kube"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
@@ -97,6 +98,13 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			if !hasActiveJob {
 				if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
 					logger.Error(err, "Failed to release backup operation lock while restore is in progress")
+				} else if err == nil {
+					logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
+						"cluster_namespace": cluster.Namespace,
+						"cluster_name":      cluster.Name,
+						"operation":         string(openbaov1alpha1.ClusterOperationBackup),
+						"holder":            constants.ControllerNameOpenBaoCluster + "/backup",
+					})
 				}
 			}
 		}
@@ -204,6 +212,11 @@ func (m *Manager) handleManualTrigger(
 	}
 
 	logger.Info("Manual backup trigger detected", "annotation", val)
+	logging.LogAuditEvent(logger, logging.EventBackupManualTriggerDetected, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"trigger":           "manual_annotation",
+	})
 
 	// Check if there's already a backup job in progress
 	hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
@@ -212,6 +225,11 @@ func (m *Manager) handleManualTrigger(
 	}
 	if hasActiveJob {
 		logger.Info("Manual backup triggered but job already in progress, skipping duplicate")
+		logging.LogAuditEvent(logger, logging.EventBackupManualTriggerSkipped, map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"reason":            "active_job_in_progress",
+		})
 		m.clearTriggerAnnotation(ctx, logger, cluster, triggerAnnotation)
 		return false, time.Time{}, nil
 	}
@@ -293,6 +311,13 @@ func (m *Manager) checkBackupDue(
 			cluster.Status.OperationLock.Holder == constants.ControllerNameOpenBaoCluster+"/backup" {
 			if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
 				logger.Error(err, "Failed to release backup operation lock after completed Job processing")
+			} else if err == nil {
+				logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
+					"cluster_namespace": cluster.Namespace,
+					"cluster_name":      cluster.Name,
+					"operation":         string(openbaov1alpha1.ClusterOperationBackup),
+					"holder":            constants.ControllerNameOpenBaoCluster + "/backup",
+				})
 			}
 		}
 		return true, recon.Result{RequeueAfter: constants.RequeueShort}, nil
@@ -324,6 +349,9 @@ func (m *Manager) executeAndProcessBackup(
 		logger.Info("Backup is due, ensuring backup Job", "job", jobName)
 	}
 	metrics.SetInProgress(true)
+	lockHeldByUs := cluster.Status.OperationLock != nil &&
+		cluster.Status.OperationLock.Operation == openbaov1alpha1.ClusterOperationBackup &&
+		cluster.Status.OperationLock.Holder == constants.ControllerNameOpenBaoCluster+"/backup"
 
 	if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
 		Holder:    constants.ControllerNameOpenBaoCluster + "/backup",
@@ -331,10 +359,30 @@ func (m *Manager) executeAndProcessBackup(
 		Message:   fmt.Sprintf("backup job %s", jobName),
 	}); err != nil {
 		if errors.Is(err, operationlock.ErrLockHeld) {
+			fields := map[string]string{
+				"cluster_namespace": cluster.Namespace,
+				"cluster_name":      cluster.Name,
+				"operation":         string(openbaov1alpha1.ClusterOperationBackup),
+				"holder":            constants.ControllerNameOpenBaoCluster + "/backup",
+			}
+			var heldErr *operationlock.HeldError
+			if errors.As(err, &heldErr) {
+				fields["held_by_operation"] = string(heldErr.Operation)
+				fields["held_by_holder"] = heldErr.Holder
+			}
+			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
 			logger.Info("Backup blocked by operation lock", "error", err.Error())
 			return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
 		}
 		return recon.Result{}, fmt.Errorf("failed to acquire backup operation lock: %w", err)
+	}
+	if !lockHeldByUs {
+		logging.LogAuditEvent(logger, logging.EventOperationLockAcquired, map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"operation":         string(openbaov1alpha1.ClusterOperationBackup),
+			"holder":            constants.ControllerNameOpenBaoCluster + "/backup",
+		})
 	}
 
 	// Create or check backup Job
@@ -342,6 +390,13 @@ func (m *Manager) executeAndProcessBackup(
 	if err != nil {
 		if releaseErr := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); releaseErr != nil && !errors.Is(releaseErr, operationlock.ErrLockHeld) {
 			logger.Error(releaseErr, "Failed to release backup operation lock after job ensure failure")
+		} else if releaseErr == nil {
+			logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
+				"cluster_namespace": cluster.Namespace,
+				"cluster_name":      cluster.Name,
+				"operation":         string(openbaov1alpha1.ClusterOperationBackup),
+				"holder":            constants.ControllerNameOpenBaoCluster + "/backup",
+			})
 		}
 		return recon.Result{}, fmt.Errorf("failed to ensure backup Job: %w", err)
 	}
@@ -389,6 +444,13 @@ func (m *Manager) executeAndProcessBackup(
 
 	if err := operationlock.Release(ctx, m.client, cluster, constants.ControllerNameOpenBaoCluster+"/backup", openbaov1alpha1.ClusterOperationBackup); err != nil && !errors.Is(err, operationlock.ErrLockHeld) {
 		logger.Error(err, "Failed to release backup operation lock after completion")
+	} else if err == nil {
+		logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"operation":         string(openbaov1alpha1.ClusterOperationBackup),
+			"holder":            constants.ControllerNameOpenBaoCluster + "/backup",
+		})
 	}
 
 	if statusUpdated {
