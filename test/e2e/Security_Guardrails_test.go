@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +31,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
@@ -644,6 +646,48 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Hardened profile requires"))
+		})
+
+		It("enforces digest-pinned images for managed workloads when digest enforcement is required", func() {
+			newManagedJob := func(name, image string) *batchv1.Job {
+				return &batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      name,
+						Namespace: guardrailsNamespace,
+						Labels: map[string]string{
+							constants.LabelAppManagedBy:             constants.LabelValueAppManagedByOpenBaoOperator,
+							constants.LabelOpenBaoCluster:           "admission-e2e",
+							constants.LabelOpenBaoComponent:         "admission-test",
+							constants.LabelOpenBaoDigestEnforcement: constants.LabelValueDigestEnforcementRequired,
+						},
+					},
+					Spec: batchv1.JobSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								RestartPolicy: corev1.RestartPolicyNever,
+								Containers: []corev1.Container{
+									{
+										Name:    "test",
+										Image:   image,
+										Command: []string{"sh", "-c", "echo ok"},
+									},
+								},
+							},
+						},
+					},
+				}
+			}
+
+			tagJob := newManagedJob(fmt.Sprintf("digest-deny-%d", time.Now().UnixNano()), "ghcr.io/dc-tec/openbao-backup:dev")
+			err := admin.Create(ctx, tagJob, client.DryRunAll)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must use digest-pinned images"))
+
+			digestJob := newManagedJob(
+				fmt.Sprintf("digest-allow-%d", time.Now().UnixNano()),
+				"ghcr.io/dc-tec/openbao-backup@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			)
+			Expect(admin.Create(ctx, digestJob, client.DryRunAll)).To(Succeed())
 		})
 
 		It("blocks decimal IP encoding in backup endpoint (SSRF protection)", func() {
