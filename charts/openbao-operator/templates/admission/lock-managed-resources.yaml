@@ -2,7 +2,7 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: {{ include "openbao-operator.fullname" . }}-lock-managed-resource-mutations
+  name: {{ include "openbao-operator.fullname" . }}-openbao-lock-managed-resource-mutations
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
 spec:
@@ -263,11 +263,11 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: {{ include "openbao-operator.fullname" . }}-lock-managed-resource-mutations
+  name: {{ include "openbao-operator.fullname" . }}-openbao-lock-managed-resource-mutations-binding
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
 spec:
-  policyName: {{ include "openbao-operator.fullname" . }}-lock-managed-resource-mutations
+  policyName: {{ include "openbao-operator.fullname" . }}-openbao-lock-managed-resource-mutations
   validationActions:
     - Deny
 {{- end }}
