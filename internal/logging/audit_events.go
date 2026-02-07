@@ -42,4 +42,10 @@ const (
 	EventRollbackCompleted            = "RollbackCompleted"
 	EventBreakGlassEntered            = "BreakGlassEntered"
 	EventBreakGlassAcknowledged       = "BreakGlassAcknowledged"
+
+	// Control-plane privilege mutation events.
+	EventTenantSecurityViolationBlocked = "TenantSecurityViolationBlocked"
+	EventTenantRBACProvisioned          = "TenantRBACProvisioned"
+	EventTenantRBACCleaned              = "TenantRBACCleaned"
+	EventRetentionSecretOrphaned        = "RetentionSecretOrphaned"
 )

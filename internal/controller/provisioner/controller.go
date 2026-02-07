@@ -38,6 +38,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
 )
 
@@ -132,6 +133,12 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 
 		recordError(err)
 		logger.Error(err, "Blocking provisioning attempt")
+		logging.LogAuditEvent(logger, logging.EventTenantSecurityViolationBlocked, map[string]string{
+			"tenant_namespace": tenant.Namespace,
+			"tenant_name":      tenant.Name,
+			"target_namespace": tenant.Spec.TargetNamespace,
+			"reason":           ReasonSecurityViolation,
+		})
 
 		// Update status to reflect failure
 		original := tenant.DeepCopy()
@@ -186,6 +193,11 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 			if err := r.Provisioner.CleanupTenantRBAC(ctx, targetNS); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to cleanup tenant RBAC for namespace %s: %w", targetNS, err)
 			}
+			logging.LogAuditEvent(logger, logging.EventTenantRBACCleaned, map[string]string{
+				"tenant_namespace": tenant.Namespace,
+				"tenant_name":      tenant.Name,
+				"target_namespace": targetNS,
+			})
 
 			// Remove finalizer
 			tenant.Finalizers = removeFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer)
@@ -282,6 +294,11 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	logger.Info("Successfully provisioned tenant RBAC", "target_namespace", targetNS)
+	logging.LogAuditEvent(logger, logging.EventTenantRBACProvisioned, map[string]string{
+		"tenant_namespace": tenant.Namespace,
+		"tenant_name":      tenant.Name,
+		"target_namespace": targetNS,
+	})
 	return ctrl.Result{}, nil
 }
 

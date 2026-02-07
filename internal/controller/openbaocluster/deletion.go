@@ -15,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
+	"github.com/dc-tec/openbao-operator/internal/logging"
 )
 
 func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -92,6 +93,12 @@ func (r *OpenBaoClusterReconciler) orphanRetentionSecrets(ctx context.Context, l
 			"secret", secretName,
 			"cluster_namespace", cluster.Namespace,
 			"cluster_name", cluster.Name)
+		logging.LogAuditEvent(logger, logging.EventRetentionSecretOrphaned, map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"secret_name":       secretName,
+			"deletion_policy":   string(cluster.Spec.DeletionPolicy),
+		})
 	}
 
 	return nil
