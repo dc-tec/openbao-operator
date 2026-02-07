@@ -1223,6 +1223,18 @@ type ImageVerificationConfig struct {
 	// +optional
 	Subject string `json:"subject,omitempty"`
 
+	// IssuerRegExp is a regular expression for the OIDC issuer when using keyless verification.
+	// Use this to allow a controlled set of issuers instead of a single exact issuer string.
+	// Requires SubjectRegExp when PublicKey is not provided.
+	// +optional
+	IssuerRegExp string `json:"issuerRegExp,omitempty"`
+
+	// SubjectRegExp is a regular expression for the OIDC subject when using keyless verification.
+	// Use this to allow a controlled set of workflow identities instead of a single exact subject.
+	// Requires IssuerRegExp when PublicKey is not provided.
+	// +optional
+	SubjectRegExp string `json:"subjectRegExp,omitempty"`
+
 	// FailurePolicy defines behavior on verification failure.
 	// "Block" blocks reconciliation of the affected workload when verification fails.
 	// "Warn" logs an error and emits a Kubernetes Event but proceeds.

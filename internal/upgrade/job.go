@@ -119,13 +119,16 @@ func ensureUpgradeExecutorJob(
 		verifiedExecutorDigest := ""
 		if cluster.Spec.Upgrade != nil {
 			executorImage := strings.TrimSpace(cluster.Spec.Upgrade.Image)
-			if executorImage != "" && cluster.Spec.OperatorImageVerification != nil && cluster.Spec.OperatorImageVerification.Enabled {
+			if executorImage != "" && security.IsOperatorImageVerificationEnabled(cluster) {
 				verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 				defer cancel()
 
 				digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, operatorImageVerifier, cluster, executorImage)
 				if err != nil {
-					failurePolicy := cluster.Spec.OperatorImageVerification.FailurePolicy
+					failurePolicy := ""
+					if cluster.Spec.OperatorImageVerification != nil {
+						failurePolicy = cluster.Spec.OperatorImageVerification.FailurePolicy
+					}
 					if failurePolicy == "" {
 						failurePolicy = constants.ImageVerificationFailurePolicyBlock
 					}

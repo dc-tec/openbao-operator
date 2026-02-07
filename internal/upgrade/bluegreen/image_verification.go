@@ -43,7 +43,7 @@ func initContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) string {
 }
 
 func (m *Manager) verifyImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
-	if cluster.Spec.ImageVerification == nil || !cluster.Spec.ImageVerification.Enabled {
+	if !security.IsMainImageVerificationEnabled(cluster) {
 		return "", nil
 	}
 	if imageRef == "" {
@@ -69,9 +69,7 @@ func (m *Manager) verifyImageDigest(ctx context.Context, logger logr.Logger, clu
 }
 
 func (m *Manager) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
-	// Use OperatorImageVerification only - no fallback to ImageVerification
-	verificationConfig := cluster.Spec.OperatorImageVerification
-	if verificationConfig == nil || !verificationConfig.Enabled {
+	if !security.IsOperatorImageVerificationEnabled(cluster) {
 		return "", nil
 	}
 	if imageRef == "" {

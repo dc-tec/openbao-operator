@@ -9,11 +9,13 @@ import (
 )
 
 // VerifyConfig holds the configuration for image verification.
-// Provide PublicKey for static verification OR Issuer/Subject for keyless.
+// Provide PublicKey for static verification OR keyless identity fields.
 type VerifyConfig struct {
 	PublicKey        string
 	Issuer           string
 	Subject          string
+	IssuerRegExp     string
+	SubjectRegExp    string
 	IgnoreTlog       bool
 	ImagePullSecrets []corev1.LocalObjectReference
 	Namespace        string

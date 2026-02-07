@@ -74,9 +74,9 @@ func NewImageVerifier(logger logr.Logger, k8sClient client.Client, trustedRootCo
 // Returns the resolved image digest (e.g., "openbao/openbao@sha256:abc...") and an error if verification fails.
 // The digest can be used to pin the image in StatefulSets to prevent TOCTOU attacks.
 func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config interfaces.VerifyConfig) (string, error) {
-	// Validate that either PublicKey OR (Issuer and Subject) are provided
-	if config.PublicKey == "" && (config.Issuer == "" || config.Subject == "") {
-		return "", fmt.Errorf("either PublicKey OR (Issuer and Subject) must be provided for image verification")
+	// Validate that either PublicKey OR keyless identity is provided.
+	if config.PublicKey == "" && !hasKeylessConfig(config) {
+		return "", fmt.Errorf("either PublicKey OR keyless identity (Issuer/Subject or IssuerRegExp/SubjectRegExp) must be provided for image verification")
 	}
 
 	// Step 1: Resolve tag to digest
@@ -247,12 +247,15 @@ func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef stri
 			return fmt.Errorf("failed to load trusted root material for keyless verification: %w", err)
 		}
 		co.TrustedMaterial = trustedRoot
-		co.Identities = []cosign.Identity{
-			{
-				Issuer:  config.Issuer,
-				Subject: config.Subject,
-			},
+		identity := cosign.Identity{}
+		if hasStrictKeylessConfig(config) {
+			identity.Issuer = config.Issuer
+			identity.Subject = config.Subject
+		} else {
+			identity.IssuerRegExp = config.IssuerRegExp
+			identity.SubjectRegExp = config.SubjectRegExp
 		}
+		co.Identities = []cosign.Identity{identity}
 		// IMPORTANT: For keyless, we MUST verify against the Transparency Log (Rekor).
 		// Do NOT set IgnoreTlog = true here, as it would bypass the security guarantees of keyless verification.
 		co.IgnoreTlog = false
@@ -508,6 +511,9 @@ func (v *ImageVerifier) cacheKey(digest string, config interfaces.VerifyConfig) 
 		}
 		return fmt.Sprintf("%s@key:%x", digest, keyHash)
 	}
-	// Keyless mode: use issuer and subject
-	return fmt.Sprintf("%s@oidc:%s|%s", digest, config.Issuer, config.Subject)
+	// Keyless mode: include strict or regexp identity fields.
+	if hasStrictKeylessConfig(config) {
+		return fmt.Sprintf("%s@oidc:%s|%s", digest, config.Issuer, config.Subject)
+	}
+	return fmt.Sprintf("%s@oidc-re:%s|%s", digest, config.IssuerRegExp, config.SubjectRegExp)
 }

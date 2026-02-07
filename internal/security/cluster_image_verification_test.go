@@ -126,3 +126,79 @@ func TestVerifyImageForCluster_DigestReferenceWithoutExplicitIdentityReturnsErro
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestVerifyImageForCluster_HardenedWithOmittedConfigAppliesDefaults(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+		},
+	}
+	verifier := &captureVerifier{}
+
+	_, err := VerifyImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "openbao/openbao:2.4.4")
+	if err != nil {
+		t.Fatalf("VerifyImageForCluster() unexpected error: %v", err)
+	}
+	if !verifier.called {
+		t.Fatal("expected verifier to be called")
+	}
+	if got := verifier.config.Issuer; got != defaultGitHubOIDCIssuer {
+		t.Fatalf("issuer = %q, want %q", got, defaultGitHubOIDCIssuer)
+	}
+}
+
+func TestVerifyOperatorImageForCluster_HardenedWithOmittedConfigAppliesDefaults(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+		},
+	}
+	verifier := &captureVerifier{}
+
+	_, err := VerifyOperatorImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "ghcr.io/dc-tec/openbao-backup:1.2.4")
+	if err != nil {
+		t.Fatalf("VerifyOperatorImageForCluster() unexpected error: %v", err)
+	}
+	if !verifier.called {
+		t.Fatal("expected verifier to be called")
+	}
+	if got := verifier.config.Issuer; got != defaultGitHubOIDCIssuer {
+		t.Fatalf("issuer = %q, want %q", got, defaultGitHubOIDCIssuer)
+	}
+}
+
+func TestIsImageVerificationEnabledHelpers(t *testing.T) {
+	t.Parallel()
+
+	hardenedImplicit := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{Profile: openbaov1alpha1.ProfileHardened},
+	}
+	if !IsMainImageVerificationEnabled(hardenedImplicit) {
+		t.Fatal("expected main image verification to be enabled for Hardened by default")
+	}
+	if !IsOperatorImageVerificationEnabled(hardenedImplicit) {
+		t.Fatal("expected operator image verification to be enabled for Hardened by default")
+	}
+
+	hardenedExplicitDisabled := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+			ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: false,
+			},
+			OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: false,
+			},
+		},
+	}
+	if IsMainImageVerificationEnabled(hardenedExplicitDisabled) {
+		t.Fatal("expected explicit disable to keep main image verification disabled")
+	}
+	if IsOperatorImageVerificationEnabled(hardenedExplicitDisabled) {
+		t.Fatal("expected explicit disable to keep operator image verification disabled")
+	}
+}
