@@ -421,76 +421,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 	}, job)
 
 	if apierrors.IsNotFound(err) {
-		// Create the restore job
-		executorImage, err := getRestoreExecutorImage(restore, cluster)
-		if err != nil {
-			return m.failRestore(ctx, logger, restore, fmt.Sprintf("failed to determine restore executor image: %v", err))
-		}
-
-		verifiedExecutorDigest := ""
-		// Use OperatorImageVerification only - no fallback to ImageVerification
-		verificationConfig := cluster.Spec.OperatorImageVerification
-		if executorImage != "" && verificationConfig != nil && verificationConfig.Enabled {
-			verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
-			defer cancel()
-
-			digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.operatorImageVerifier, cluster, executorImage)
-			if err != nil {
-				failurePolicy := verificationConfig.FailurePolicy
-				if failurePolicy == "" {
-					failurePolicy = constants.ImageVerificationFailurePolicyBlock
-				}
-				if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-					if operatorerrors.IsTransient(err) {
-						original := restore.DeepCopy()
-						restore.Status.Message = fmt.Sprintf("Waiting for restore executor image verification: %v", err)
-						if statusErr := m.patchStatus(ctx, restore, original); statusErr != nil {
-							return ctrl.Result{}, fmt.Errorf("failed to patch restore status after transient image verification failure: %w", statusErr)
-						}
-						return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
-					}
-					return m.failRestore(ctx, logger, restore, fmt.Sprintf("restore executor image verification failed: %v", err))
-				}
-				logger.Error(err, "Restore executor image verification failed but proceeding due to Warn policy", "image", executorImage)
-			} else {
-				verifiedExecutorDigest = digest
-				logger.Info("Restore executor image verified successfully", "digest", digest)
-			}
-		}
-
-		job, err = m.buildRestoreJob(restore, cluster, verifiedExecutorDigest)
-		if err != nil {
-			return m.failRestore(ctx, logger, restore, fmt.Sprintf("failed to build restore job: %v", err))
-		}
-
-		// Set owner reference
-		if err := controllerutil.SetControllerReference(restore, job, m.scheme); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set controller reference: %w", err)
-		}
-
-		if err := m.client.Create(ctx, job); err != nil {
-			if apierrors.IsAlreadyExists(err) {
-				logger.V(1).Info("Restore job already exists after create attempt; proceeding", "job", jobName)
-				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-			}
-			return ctrl.Result{}, fmt.Errorf("failed to create restore job: %w", err)
-		}
-
-		logger.Info("Created restore job", "job", jobName)
-		logging.LogAuditEvent(logger, logging.EventRestoreJobCreated, map[string]string{
-			"cluster_namespace": restore.Namespace,
-			"cluster_name":      restore.Spec.Cluster,
-			"restore_name":      restore.Name,
-			"job":               jobName,
-		})
-		original := restore.DeepCopy()
-		restore.Status.Message = "Restore job running"
-		if err := m.patchStatus(ctx, restore, original); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to patch restore status after job creation: %w", err)
-		}
-
-		// Requeue to check job status
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		return m.createRestoreJob(ctx, logger, restore, cluster, jobName)
 	} else if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get restore job: %w", err)
 	}
@@ -525,6 +456,84 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 	}
 
 	return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+}
+
+func (m *Manager) createRestoreJob(
+	ctx context.Context,
+	logger logr.Logger,
+	restore *openbaov1alpha1.OpenBaoRestore,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	jobName string,
+) (ctrl.Result, error) {
+	executorImage, err := getRestoreExecutorImage(restore, cluster)
+	if err != nil {
+		return m.failRestore(ctx, logger, restore, fmt.Sprintf("failed to determine restore executor image: %v", err))
+	}
+
+	verifiedExecutorDigest := ""
+	// Use OperatorImageVerification only - no fallback to ImageVerification.
+	verificationConfig := cluster.Spec.OperatorImageVerification
+	if executorImage != "" && verificationConfig != nil && verificationConfig.Enabled {
+		verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+		defer cancel()
+
+		digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.operatorImageVerifier, cluster, executorImage)
+		if err != nil {
+			failurePolicy := verificationConfig.FailurePolicy
+			if failurePolicy == "" {
+				failurePolicy = constants.ImageVerificationFailurePolicyBlock
+			}
+			if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+				if operatorerrors.IsTransient(err) {
+					original := restore.DeepCopy()
+					restore.Status.Message = fmt.Sprintf("Waiting for restore executor image verification: %v", err)
+					if statusErr := m.patchStatus(ctx, restore, original); statusErr != nil {
+						return ctrl.Result{}, fmt.Errorf("failed to patch restore status after transient image verification failure: %w", statusErr)
+					}
+					return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+				}
+				return m.failRestore(ctx, logger, restore, fmt.Sprintf("restore executor image verification failed: %v", err))
+			}
+			logger.Error(err, "Restore executor image verification failed but proceeding due to Warn policy", "image", executorImage)
+		} else {
+			verifiedExecutorDigest = digest
+			logger.Info("Restore executor image verified successfully", "digest", digest)
+		}
+	}
+
+	job, err := m.buildRestoreJob(restore, cluster, verifiedExecutorDigest)
+	if err != nil {
+		return m.failRestore(ctx, logger, restore, fmt.Sprintf("failed to build restore job: %v", err))
+	}
+
+	// Set owner reference.
+	if err := controllerutil.SetControllerReference(restore, job, m.scheme); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to set controller reference: %w", err)
+	}
+
+	if err := m.client.Create(ctx, job); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			logger.V(1).Info("Restore job already exists after create attempt; proceeding", "job", jobName)
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+		return ctrl.Result{}, fmt.Errorf("failed to create restore job: %w", err)
+	}
+
+	logger.Info("Created restore job", "job", jobName)
+	logging.LogAuditEvent(logger, logging.EventRestoreJobCreated, map[string]string{
+		"cluster_namespace": restore.Namespace,
+		"cluster_name":      restore.Spec.Cluster,
+		"restore_name":      restore.Name,
+		"job":               jobName,
+	})
+	original := restore.DeepCopy()
+	restore.Status.Message = "Restore job running"
+	if err := m.patchStatus(ctx, restore, original); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to patch restore status after job creation: %w", err)
+	}
+
+	// Requeue to check job status.
+	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 }
 
 // failRestore transitions the restore to Failed phase.
