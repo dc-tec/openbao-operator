@@ -59,11 +59,15 @@ flowchart LR
         (`issuer`/`subject` or `issuerRegExp`/`subjectRegExp`),
         the operator auto-fills keyless identity defaults for official release images:
 
-        - `openbao/openbao:<tag>` -> OpenBao release workflow identity
+        - `openbao/openbao:<tag>`, `ghcr.io/openbao/openbao:<tag>`, `quay.io/openbao/openbao:<tag>` -> OpenBao release workflow identity
         - `ghcr.io/dc-tec/openbao-{init,backup,upgrade}:<tag>` -> OpenBao Operator release workflow identity
 
         Custom registries/forks should set explicit `publicKey`, `issuer`+`subject`, or
         `issuerRegExp`+`subjectRegExp`.
+
+    !!! note "Legacy + Bundle Support"
+        During migration, runtime verification accepts both legacy Cosign signatures and Sigstore bundle-format signatures.
+        The verifier first checks legacy signatures and automatically falls back to bundle verification when needed.
 
 === ":material-pin: Digest Pinning"
 
@@ -132,12 +136,12 @@ Verification applies to all images managed by the Operator:
 
 ## Separate Signers for OpenBao and Operator Images
 
-The OpenBao main image (`openbao/openbao`) is signed by the **OpenBao project**, while helper images (init container, backup/restore executors, upgrade jobs) are signed by the **operator project**. Use `operatorImageVerification` to specify different signing credentials:
+The OpenBao main image (`openbao/openbao`, `ghcr.io/openbao/openbao`, `quay.io/openbao/openbao`) is signed by the **OpenBao project**, while helper images (init container, backup/restore executors, upgrade jobs) are signed by the **operator project**. Use `operatorImageVerification` to specify different signing credentials:
 
 ```yaml
 spec:
-  # Main OpenBao image (signed by openbao/openbao)
-  image: "openbao/openbao:2.4.4"
+  # Main OpenBao image (signed by openbao/openbao workflows)
+  image: "ghcr.io/openbao/openbao:2.4.4"
   imageVerification:
     enabled: true
     issuer: "https://token.actions.githubusercontent.com"
@@ -179,6 +183,7 @@ The operator project publishes release artifacts with a "build once, promote by 
 
     ```sh
     cosign verify \
+      --new-bundle-format=true \
       --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       ghcr.io/dc-tec/openbao-operator:0.1.0
@@ -190,6 +195,7 @@ The operator project publishes release artifacts with a "build once, promote by 
     crane digest ghcr.io/dc-tec/charts/openbao-operator:0.1.0
 
     cosign verify \
+      --new-bundle-format=true \
       --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       ghcr.io/dc-tec/charts/openbao-operator@sha256:...
@@ -199,8 +205,8 @@ The operator project publishes release artifacts with a "build once, promote by 
 
     ```sh
     cosign verify-blob \
-      --certificate checksums.txt.crt \
-      --signature checksums.txt.sig \
+      --new-bundle-format=true \
+      --bundle checksums.txt.bundle \
       --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       checksums.txt

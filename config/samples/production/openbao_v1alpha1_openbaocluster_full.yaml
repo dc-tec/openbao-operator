@@ -135,10 +135,8 @@ spec:
   imageVerification:
     enabled: true
     issuer: "https://token.actions.githubusercontent.com"
-    # For official OpenBao images, use the OpenBao project's workflow:
-    # subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4"
-    # For development/testing with operator-signed images:
-    subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/2.4.4"
+    # For official OpenBao images, use the OpenBao project's workflow identity.
+    subject: "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4"
     # PEM-encoded Cosign public key for signature verification.
     # Download the official OpenBao public key from: https://openbao.org/docs/install/#cosign-and-rekor
     # publicKey: |

@@ -16,11 +16,16 @@ const (
 
 	openBaoReleaseSubjectPrefix       = "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/"
 	operatorReleaseSubjectPrefix      = "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/"
-	openBaoOfficialRepository         = "openbao/openbao"
 	operatorInitOfficialRepository    = "ghcr.io/dc-tec/openbao-init"
 	operatorBackupOfficialRepository  = "ghcr.io/dc-tec/openbao-backup"
 	operatorUpgradeOfficialRepository = "ghcr.io/dc-tec/openbao-upgrade"
 )
+
+var openBaoOfficialRepositories = map[string]struct{}{
+	"openbao/openbao":         {},
+	"ghcr.io/openbao/openbao": {},
+	"quay.io/openbao/openbao": {},
+}
 
 // VerifyImageForCluster verifies an image reference using the cluster's ImageVerification configuration.
 // It returns an image digest reference (e.g., "repo@sha256:...") when verification is enabled and succeeds.
@@ -199,7 +204,7 @@ func normalizeRepository(repository string) string {
 
 func defaultSubjectForImage(repository, tag string, isOperatorImage bool) string {
 	if !isOperatorImage {
-		if repository != openBaoOfficialRepository {
+		if _, ok := openBaoOfficialRepositories[repository]; !ok {
 			return ""
 		}
 

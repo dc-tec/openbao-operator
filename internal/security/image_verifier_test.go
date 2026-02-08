@@ -2,9 +2,14 @@ package security
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/go-logr/logr"
+	"github.com/sigstore/cosign/v3/pkg/oci"
+	"github.com/sigstore/cosign/v3/pkg/oci/static"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
@@ -518,7 +523,151 @@ func TestImageVerifier_CacheKey_DifferentModes(t *testing.T) {
 	}
 }
 
+func TestShouldAttemptBundleFallback(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "explicit no signatures found",
+			err:  fmt.Errorf("no signatures found"),
+			want: true,
+		},
+		{
+			name: "wrapped no signatures found",
+			err:  fmt.Errorf("legacy verification failed: %w", fmt.Errorf("no signatures found")),
+			want: true,
+		},
+		{
+			name: "different verification failure",
+			err:  fmt.Errorf("signature verification failed"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldAttemptBundleFallback(tt.err); got != tt.want {
+				t.Fatalf("shouldAttemptBundleFallback() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBundlePredicateType(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		attestation oci.Signature
+		want        string
+		wantErr     bool
+	}{
+		{
+			name:        "valid signature predicate",
+			attestation: mustNewBundleAttestation(t, dsseInTotoPayloadType, cosignSignaturePredicateTypeV1),
+			want:        cosignSignaturePredicateTypeV1,
+			wantErr:     false,
+		},
+		{
+			name:        "invalid payload type",
+			attestation: mustNewBundleAttestation(t, "application/json", cosignSignaturePredicateTypeV1),
+			wantErr:     true,
+		},
+		{
+			name:        "empty predicate type",
+			attestation: mustNewBundleAttestation(t, dsseInTotoPayloadType, ""),
+			wantErr:     true,
+		},
+		{
+			name:        "invalid dsse payload",
+			attestation: mustNewRawAttestation(t, []byte(`{"payloadType":"application/vnd.in-toto+json","payload":"%%%","signatures":[]}`)),
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := bundlePredicateType(tt.attestation)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("bundlePredicateType() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("bundlePredicateType() unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("bundlePredicateType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCountBundleSignaturePredicates(t *testing.T) {
+	t.Parallel()
+
+	attestations := []oci.Signature{
+		mustNewBundleAttestation(t, dsseInTotoPayloadType, cosignSignaturePredicateTypeV1),
+		mustNewBundleAttestation(t, dsseInTotoPayloadType, "https://slsa.dev/provenance/v1"),
+	}
+
+	signatureCount, observedPredicates, err := countBundleSignaturePredicates(attestations)
+	if err != nil {
+		t.Fatalf("countBundleSignaturePredicates() unexpected error: %v", err)
+	}
+	if signatureCount != 1 {
+		t.Fatalf("countBundleSignaturePredicates() signatureCount = %d, want 1", signatureCount)
+	}
+	if len(observedPredicates) != 2 {
+		t.Fatalf("countBundleSignaturePredicates() observedPredicates len = %d, want 2", len(observedPredicates))
+	}
+}
+
 // startsWith is a helper function to check if a string starts with a prefix
 func startsWith(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+func mustNewBundleAttestation(t *testing.T, payloadType, predicateType string) oci.Signature {
+	t.Helper()
+
+	statement := inTotoStatement{
+		PredicateType: predicateType,
+	}
+	statementJSON, err := json.Marshal(statement)
+	if err != nil {
+		t.Fatalf("json.Marshal(statement) failed: %v", err)
+	}
+
+	envelope := dsseEnvelope{
+		PayloadType: payloadType,
+		Payload:     base64.StdEncoding.EncodeToString(statementJSON),
+	}
+	envelopeJSON, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatalf("json.Marshal(envelope) failed: %v", err)
+	}
+
+	return mustNewRawAttestation(t, envelopeJSON)
+}
+
+func mustNewRawAttestation(t *testing.T, payload []byte) oci.Signature {
+	t.Helper()
+
+	attestation, err := static.NewAttestation(payload)
+	if err != nil {
+		t.Fatalf("static.NewAttestation() failed: %v", err)
+	}
+
+	return attestation
 }
