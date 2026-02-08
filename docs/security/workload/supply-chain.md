@@ -54,6 +54,17 @@ flowchart LR
           -----END PUBLIC KEY-----
     ```
 
+    !!! tip "Keyless Defaults for Official Images"
+        When verification is enabled and no `publicKey`/keyless identity fields are provided
+        (`issuer`/`subject` or `issuerRegExp`/`subjectRegExp`),
+        the operator auto-fills keyless identity defaults for official release images:
+
+        - `openbao/openbao:<tag>` -> OpenBao release workflow identity
+        - `ghcr.io/dc-tec/openbao-{init,backup,upgrade}:<tag>` -> OpenBao Operator release workflow identity
+
+        Custom registries/forks should set explicit `publicKey`, `issuer`+`subject`, or
+        `issuerRegExp`+`subjectRegExp`.
+
 === ":material-pin: Digest Pinning"
 
     To prevent **TOCTOU** (Time-of-Check to Time-of-Use) attacks, the Operator mutates image tags to immutable digests.
@@ -89,6 +100,11 @@ By default, the Operator verifies signatures against the [Sigstore Rekor](https:
     ```yaml
     spec:
       imageVerification:
+        enabled: true
+        publicKey: |
+          -----BEGIN PUBLIC KEY-----
+          ...
+          -----END PUBLIC KEY-----
         ignoreTlog: true
     ```
 
@@ -98,6 +114,10 @@ By default, the Operator verifies signatures against the [Sigstore Rekor](https:
 | :--- | :--- | :--- |
 | **Block** (Default) | **Prevents** the operator from reconciling managed workloads with unverified images. Sets `ConditionDegraded=True`. | Production environments requiring strict security. |
 | **Warn** | Logs an error but **allows** reconciliation to continue using the original tag/reference. | Testing or during initial rollout of signing infrastructure. |
+
+!!! warning "Hardened Profile Guardrails"
+    Hardened profile rejects explicit `enabled=false` and `failurePolicy=Warn` for image verification blocks.
+    Omitted verification blocks are still allowed, and are implicitly treated as enabled in Hardened.
 
 ## Verified Workloads
 
@@ -139,7 +159,11 @@ spec:
 
 !!! important "No Fallback Behavior"
     `operatorImageVerification` and `imageVerification` are completely independent configurations.
-    If `operatorImageVerification` is not configured, helper images are **not verified** (even if `imageVerification` is set).
+    In `Development`, omitted blocks are treated as disabled.
+    In `Hardened`, omitted blocks are treated as enabled and verification defaults are applied for known
+    official image repositories/tags.
+    If `operatorImageVerification` is omitted in `Development`, helper images are **not verified** (even if
+    `imageVerification` is set).
     This prevents confusing failures when the main image and helper images have different signers.
 
 ## Release Supply Chain

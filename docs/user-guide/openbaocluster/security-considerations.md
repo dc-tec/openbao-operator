@@ -171,6 +171,10 @@ spec:
       -----END PUBLIC KEY-----
 ```
 
+For official release images, you can also use keyless verification without explicitly setting identity fields.
+When `enabled: true` and `publicKey`/`issuer`/`subject`/`issuerRegExp`/`subjectRegExp` are omitted, the operator applies GitHub OIDC defaults
+for known OpenBao/OpenBao-Operator release image repositories.
+
 ### Private Registries
 
 If your images are in a private registry, provide the necessary pull secrets:

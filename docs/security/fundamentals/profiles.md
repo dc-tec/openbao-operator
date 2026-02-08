@@ -13,6 +13,7 @@
 | **Replicas** | Minimum 3 (HA Required) | Any (1+) |
 | **Self-Init** | Required (`enabled=true`) | Optional |
 | **Admission Check** | Strict Validation | Relaxed Validation |
+| **Supply Chain** | Verification blocks cannot be disabled; digest-only admission applies to managed workloads | Verification optional |
 | **Use Case** | **Production** | Proof of Concept, Local Dev |
 
 ## Detailed Configuration
@@ -28,6 +29,7 @@
     2.  **External KMS:** You must provide a KMS key (AWS, GCP, Azure, or Vault Transit) for auto-unseal.
     3.  **Valid TLS:** You must provide valid TLS certificates; insecure TLS verification skips are rejected.
     4.  **Self-Initialization:** You must enable self-init to avoid persisting a root token Secret.
+    5.  **Image Verification Guardrails:** You cannot set `spec.imageVerification.enabled=false`, `spec.operatorImageVerification.enabled=false`, or use `failurePolicy: Warn`.
 
     ```yaml
     apiVersion: openbao.org/v1alpha1
@@ -45,6 +47,10 @@
       unseal:
         type: awskms # or gcpckms, azurekeyvault, transit
     ```
+
+    If image verification blocks are omitted in `Hardened`, the operator still treats verification as enabled.
+    Official release images receive default keyless identity settings; custom/air-gapped registries should
+    provide explicit `publicKey` or keyless identity fields.
 
 === ":material-test-tube: Development Profile"
 
