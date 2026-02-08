@@ -4389,7 +4389,7 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:f0dddeedd898fbba0fc237245a92df3f4a04d9ed177aad4be244825481fe44f7
+        image: ghcr.io/dc-tec/openbao-operator@sha256:c1dbe9562ca8c6818880b1eb0c5ec293114e9c5409870451e25591e37b4041c6
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4503,7 +4503,7 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:f0dddeedd898fbba0fc237245a92df3f4a04d9ed177aad4be244825481fe44f7
+        image: ghcr.io/dc-tec/openbao-operator@sha256:c1dbe9562ca8c6818880b1eb0c5ec293114e9c5409870451e25591e37b4041c6
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4566,7 +4566,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: openbao-operator-lock-controller-statefulset-mutations
+  name: openbao-operator-openbao-lock-controller-statefulset-mutations
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -4615,7 +4615,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: openbao-operator-lock-managed-resource-mutations
+  name: openbao-operator-openbao-lock-managed-resource-mutations
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -5454,7 +5454,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: openbao-operator-validate-openbao-tenant
+  name: openbao-operator-openbao-validate-openbao-tenant
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -5479,7 +5479,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: openbao-operator-validate-openbaocluster
+  name: openbao-operator-openbao-validate-openbaocluster
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -5635,7 +5635,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: openbao-operator-validate-openbaorestore
+  name: openbao-operator-openbao-validate-openbaorestore
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -5687,18 +5687,18 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: openbao-operator-lock-controller-statefulset-mutations
+  name: openbao-operator-openbao-lock-controller-statefulset-mutations-binding
 spec:
-  policyName: openbao-operator-lock-controller-statefulset-mutations
+  policyName: openbao-operator-openbao-lock-controller-statefulset-mutations
   validationActions:
   - Deny
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: openbao-operator-lock-managed-resource-mutations
+  name: openbao-operator-openbao-lock-managed-resource-mutations-binding
 spec:
-  policyName: openbao-operator-lock-managed-resource-mutations
+  policyName: openbao-operator-openbao-lock-managed-resource-mutations
   validationActions:
   - Deny
 ---
@@ -5768,26 +5768,26 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: openbao-operator-validate-openbao-tenant
+  name: openbao-operator-openbao-validate-openbao-tenant-binding
 spec:
-  policyName: openbao-operator-validate-openbao-tenant
+  policyName: openbao-operator-openbao-validate-openbao-tenant
   validationActions:
   - Deny
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: openbao-operator-validate-openbaocluster
+  name: openbao-operator-openbao-validate-openbaocluster-binding
 spec:
-  policyName: openbao-operator-validate-openbaocluster
+  policyName: openbao-operator-openbao-validate-openbaocluster
   validationActions:
   - Deny
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: openbao-operator-validate-openbaorestore
+  name: openbao-operator-openbao-validate-openbaorestore-binding
 spec:
-  policyName: openbao-operator-validate-openbaorestore
+  policyName: openbao-operator-openbao-validate-openbaorestore
   validationActions:
   - Deny
