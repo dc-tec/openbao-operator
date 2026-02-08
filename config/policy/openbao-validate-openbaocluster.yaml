@@ -33,6 +33,58 @@ spec:
           !(has(object.spec.unseal.kmip) && has(object.spec.unseal.kmip.tlsSkipVerify) && object.spec.unseal.kmip.tlsSkipVerify == true))
       message: Hardened profile requires TLS mode External or ACME, an external unseal (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
     - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.imageVerification) ||
+        object.spec.imageVerification.enabled == true
+      message: Hardened profile does not allow spec.imageVerification.enabled=false.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.operatorImageVerification) ||
+        object.spec.operatorImageVerification.enabled == true
+      message: Hardened profile does not allow spec.operatorImageVerification.enabled=false.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.imageVerification) ||
+        !has(object.spec.imageVerification.failurePolicy) ||
+        object.spec.imageVerification.failurePolicy != "Warn"
+      message: Hardened profile does not allow spec.imageVerification.failurePolicy=Warn.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.imageVerification) ||
+        object.spec.imageVerification.enabled != true ||
+        (
+          (has(object.spec.imageVerification.publicKey) && object.spec.imageVerification.publicKey != "") ||
+          ((has(object.spec.imageVerification.issuer) && object.spec.imageVerification.issuer != "") &&
+            (has(object.spec.imageVerification.subject) && object.spec.imageVerification.subject != "")) ||
+          ((has(object.spec.imageVerification.issuerRegExp) && object.spec.imageVerification.issuerRegExp != "") &&
+            (has(object.spec.imageVerification.subjectRegExp) && object.spec.imageVerification.subjectRegExp != ""))
+        )
+      message: When enabled in Hardened profile, spec.imageVerification must provide publicKey, issuer+subject, or issuerRegExp+subjectRegExp.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.operatorImageVerification) ||
+        !has(object.spec.operatorImageVerification.failurePolicy) ||
+        object.spec.operatorImageVerification.failurePolicy != "Warn"
+      message: Hardened profile does not allow spec.operatorImageVerification.failurePolicy=Warn.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.operatorImageVerification) ||
+        object.spec.operatorImageVerification.enabled != true ||
+        (
+          (has(object.spec.operatorImageVerification.publicKey) && object.spec.operatorImageVerification.publicKey != "") ||
+          ((has(object.spec.operatorImageVerification.issuer) && object.spec.operatorImageVerification.issuer != "") &&
+            (has(object.spec.operatorImageVerification.subject) && object.spec.operatorImageVerification.subject != "")) ||
+          ((has(object.spec.operatorImageVerification.issuerRegExp) && object.spec.operatorImageVerification.issuerRegExp != "") &&
+            (has(object.spec.operatorImageVerification.subjectRegExp) && object.spec.operatorImageVerification.subjectRegExp != ""))
+        )
+      message: When enabled in Hardened profile, spec.operatorImageVerification must provide publicKey, issuer+subject, or issuerRegExp+subjectRegExp.
+    - expression: >-
         !has(object.spec.initContainer) ||
         object.spec.initContainer.enabled == true
       message: spec.initContainer is optional; when set, spec.initContainer.enabled must be true.

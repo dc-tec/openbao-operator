@@ -100,7 +100,8 @@ The Manager automatically configures the `seal` stanza based on `spec.unseal`.
 
 ## 4. Image Verification (Cosign)
 
-When `spec.imageVerification.enabled` is `true`, we enforce supply chain security.
+When image verification is enabled (or implicitly enabled by the Hardened profile when verification blocks are omitted),
+we enforce supply chain security.
 
 ```mermaid
 sequenceDiagram

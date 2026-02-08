@@ -14,6 +14,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/security"
 	"github.com/dc-tec/openbao-operator/internal/storageenv"
 )
 
@@ -105,18 +106,31 @@ func BuildJob(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) (*batchv
 		podSecurityContext.FSGroup = ptr.To(constants.GroupBackup)
 	}
 
+	jobLabels := map[string]string{
+		constants.LabelAppName:           constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:       cluster.Name,
+		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:    cluster.Name,
+		constants.LabelOpenBaoComponent:  ComponentBackup,
+		constants.LabelOpenBaoBackupType: backupType,
+	}
+	security.AddManagedWorkloadSecurityLabels(jobLabels, cluster)
+
+	podTemplateLabels := map[string]string{
+		constants.LabelAppName:           constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:       cluster.Name,
+		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:    cluster.Name,
+		constants.LabelOpenBaoComponent:  ComponentBackup,
+		constants.LabelOpenBaoBackupType: backupType,
+	}
+	security.AddManagedWorkloadSecurityLabels(podTemplateLabels, cluster)
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      opts.JobName,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:           constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:       cluster.Name,
-				constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:    cluster.Name,
-				constants.LabelOpenBaoComponent:  ComponentBackup,
-				constants.LabelOpenBaoBackupType: backupType,
-			},
+			Name:        opts.JobName,
+			Namespace:   cluster.Namespace,
+			Labels:      jobLabels,
 			Annotations: map[string]string{},
 		},
 		Spec: batchv1.JobSpec{
@@ -124,14 +138,7 @@ func BuildJob(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) (*batchv
 			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						constants.LabelAppName:           constants.LabelValueAppNameOpenBao,
-						constants.LabelAppInstance:       cluster.Name,
-						constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
-						constants.LabelOpenBaoCluster:    cluster.Name,
-						constants.LabelOpenBaoComponent:  ComponentBackup,
-						constants.LabelOpenBaoBackupType: backupType,
-					},
+					Labels: podTemplateLabels,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           serviceAccountName,

@@ -169,6 +169,8 @@ func ensureHelmKeepAnnotation(lines []string) ([]string, error) {
 var policyFileMapping = map[string]string{
 	"openbao-lock-managed-resource-mutations.yaml":                  "lock-managed-resources.yaml",
 	"openbao-lock-managed-resource-mutations-binding.yaml":          "lock-managed-resources.yaml", // merged
+	"openbao-enforce-managed-image-digests.yaml":                    "enforce-managed-image-digests.yaml",
+	"openbao-enforce-managed-image-digests-binding.yaml":            "enforce-managed-image-digests.yaml", // merged
 	"openbao-lock-controller-statefulset-mutations.yaml":            "validating-policies.yaml",
 	"openbao-lock-controller-statefulset-mutations-binding.yaml":    "validating-policies.yaml", // merged
 	"openbao-restrict-provisioner-rbac.yaml":                        "provisioner-rbac.yaml",
@@ -283,7 +285,7 @@ func transformPolicyToHelm(content string) string {
 	// Also supports "openbao-"-prefixed policy names (e.g. openbao-restrict-provisioner-rbac).
 	policyNamePattern := regexp.MustCompile(
 		"(policyName:\\s*)(openbao-operator-)?" +
-			"((?:openbao-)?(?:lock-|restrict-|validate-))" +
+			"((?:openbao-)?(?:lock-|restrict-|validate-|enforce-))" +
 			"([\\w-]+)",
 	)
 	content = policyNamePattern.ReplaceAllStringFunc(content, func(match string) string {

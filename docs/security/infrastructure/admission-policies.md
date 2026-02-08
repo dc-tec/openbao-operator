@@ -44,6 +44,7 @@ The Operator ships with a suite of policies to enforce "Least Privilege" and "Gi
 | `openbao-validate-openbaocluster` | `openbao-validate-openbaocluster-binding` | `OpenBaoCluster` | **Validate** | Enforces spec invariants (e.g., Hardened profile requirements, TLS configs). |
 | `openbao-validate-openbao-tenant` | `openbao-validate-openbao-tenant-binding` | `OpenBaoTenant` | **Validate** | Enforces tenant spec invariants and multi-tenant guardrails. |
 | `openbao-validate-openbaorestore` | `openbao-validate-openbaorestore-binding` | `OpenBaoRestore` | **Validate** | Enforces restore spec invariants and safety checks. |
+| `openbao-enforce-managed-image-digests` | `openbao-enforce-managed-image-digests-binding` | Operator-managed `StatefulSet` / `Job` | **Block** | Denies mutable tag-based image refs for workloads marked as requiring digest enforcement (Hardened-managed workloads by default). |
 | `openbao-restrict-provisioner-rbac` | `openbao-restrict-provisioner-rbac-binding` | `Role`, `RoleBinding` | **Restrict** | Restricts the Provisioner ServiceAccount to a fixed set of tenant RBAC objects and contents (CREATE/UPDATE/DELETE), and blocks system namespaces. |
 | `openbao-restrict-provisioner-namespace-mutations` | `openbao-restrict-provisioner-namespace-mutations-binding` | `Namespace` | **Restrict** | Restricts Provisioner Namespace updates to Pod Security Standards label enforcement only (restricted), and blocks system namespaces. |
 | `openbao-restrict-controller-rbac` | `openbao-restrict-controller-rbac-binding` | `Role`, `RoleBinding` | **Restrict** | Restricts Controller RBAC writes to the narrow per-cluster pod discovery/service registration Role/RoleBinding pattern (prevents RBAC self-escalation). |
@@ -81,6 +82,7 @@ The `openbao-restrict-provisioner-rbac` policy is a defense-in-depth control tha
     - `openbao-restrict-provisioner-namespace-mutations` / `openbao-restrict-provisioner-namespace-mutations-binding`
     - `openbao-restrict-controller-rbac` / `openbao-restrict-controller-rbac-binding`
     - `openbao-lock-managed-resource-mutations` / `openbao-lock-managed-resource-mutations-binding`
+    - `openbao-enforce-managed-image-digests` / `openbao-enforce-managed-image-digests-binding`
 
 !!! warning "Unsafe mode"
     Disabling admission policies is treated as **unsafe mode**. When installing via Helm with `admissionPolicies.enabled=false`, the chart sets `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can start without fail-closed admission dependency enforcement. This is intended only for development/break-glass scenarios.

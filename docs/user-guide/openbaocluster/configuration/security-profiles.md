@@ -15,6 +15,7 @@ The Operator supports two distinct security profiles via `spec.profile`.
 | **Root Token** | Stored in a Secret when self-init is disabled | Auto-revoked (not stored in a Secret) |
 | **Unseal** | Static (Kubernetes Secret) | **External KMS** (AWS, GCP, Azure, etc.) |
 | **TLS** | Optional / Self-Signed | **Mandatory** (External or ACME) |
+| **Image Verification** | Optional | Enforced guardrails; omitted blocks still verify |
 | **Status** | `ConditionSecurityRisk=True` | Secure by Default |
 
 ```mermaid
@@ -82,6 +83,11 @@ flowchart LR
     - :material-check: **Self-Initialization**: `spec.selfInit.enabled` MUST be `true`.
     - :material-check: **High Availability**: `spec.replicas` MUST be at least `3` for Raft quorum.
     - :material-check: **Secure Network**: If backups are enabled, explicit egress rules are required (fail-closed networking).
+    - :material-check: **Supply Chain Guardrails**: `spec.imageVerification` and `spec.operatorImageVerification` cannot be disabled and cannot use `failurePolicy: Warn`.
+
+    If verification blocks are omitted in Hardened, verification is still applied. For official release image
+    repositories/tags, default GitHub keyless identity values are used. For mirrored/private registries, provide
+    explicit `publicKey` or keyless identity fields in the verification config.
 
     ### Benefits
 

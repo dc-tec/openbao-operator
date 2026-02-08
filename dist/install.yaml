@@ -4566,6 +4566,57 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  name: openbao-operator-openbao-enforce-managed-image-digests
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - apps
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - statefulsets
+    - apiGroups:
+      - batch
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - jobs
+  validations:
+  - expression: '!variables.is_openbao_managed || !variables.digest_enforcement_required
+      || (variables.all_container_images_are_digests && variables.all_init_container_images_are_digests)'
+    message: Operator-managed workloads with openbao.org/digest-enforcement=required
+      must use digest-pinned images (repo@sha256:...) for all containers and initContainers.
+  variables:
+  - expression: object != null && has(object.metadata) && has(object.metadata.labels)
+      && ("app.kubernetes.io/managed-by" in object.metadata.labels) && object.metadata.labels["app.kubernetes.io/managed-by"]
+      == "openbao-operator"
+    name: is_openbao_managed
+  - expression: object != null && has(object.metadata) && has(object.metadata.labels)
+      && ("openbao.org/digest-enforcement" in object.metadata.labels) && object.metadata.labels["openbao.org/digest-enforcement"]
+      == "required"
+    name: digest_enforcement_required
+  - expression: |-
+      !has(object.spec.template.spec.containers) || object.spec.template.spec.containers.all(c,
+
+        c.image.matches("^.+@sha256:[a-f0-9]{64}$"))
+    name: all_container_images_are_digests
+  - expression: |-
+      !has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.all(c,
+
+        c.image.matches("^.+@sha256:[a-f0-9]{64}$"))
+    name: all_init_container_images_are_digests
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
   name: openbao-operator-openbao-lock-controller-statefulset-mutations
 spec:
   failurePolicy: Fail
@@ -5507,6 +5558,22 @@ spec:
         !(has(object.spec.unseal.kmip) && has(object.spec.unseal.kmip.tlsSkipVerify) && object.spec.unseal.kmip.tlsSkipVerify == true))
     message: Hardened profile requires TLS mode External or ACME, an external unseal
       (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.imageVerification) || object.spec.imageVerification.enabled
+      == true'
+    message: Hardened profile does not allow spec.imageVerification.enabled=false.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.operatorImageVerification) || object.spec.operatorImageVerification.enabled
+      == true'
+    message: Hardened profile does not allow spec.operatorImageVerification.enabled=false.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.imageVerification) || !has(object.spec.imageVerification.failurePolicy)
+      || object.spec.imageVerification.failurePolicy != "Warn"'
+    message: Hardened profile does not allow spec.imageVerification.failurePolicy=Warn.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.operatorImageVerification) || !has(object.spec.operatorImageVerification.failurePolicy)
+      || object.spec.operatorImageVerification.failurePolicy != "Warn"'
+    message: Hardened profile does not allow spec.operatorImageVerification.failurePolicy=Warn.
   - expression: '!has(object.spec.initContainer) || object.spec.initContainer.enabled
       == true'
     message: spec.initContainer is optional; when set, spec.initContainer.enabled
@@ -5683,6 +5750,15 @@ spec:
         !object.spec.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
     message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
       are prohibited in restore configuration to prevent confused deputy attacks.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-openbao-enforce-managed-image-digests-binding
+spec:
+  policyName: openbao-operator-openbao-enforce-managed-image-digests
+  validationActions:
+  - Deny
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

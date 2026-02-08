@@ -54,6 +54,11 @@ func TestDefaultDependencies(t *testing.T) {
 			PolicyName:  dependencyOpenBaoLockManagedResourceMutations,
 			BindingName: dependencyBindingLockManagedResourceMutations,
 		},
+		{
+			Name:        dependencyOpenBaoEnforceManagedImageDigests,
+			PolicyName:  dependencyOpenBaoEnforceManagedImageDigests,
+			BindingName: dependencyBindingEnforceManagedImageDigests,
+		},
 	}
 
 	got := DefaultDependencies()

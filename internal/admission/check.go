@@ -42,6 +42,7 @@ const (
 	dependencyOpenBaoValidateOpenBaoRestore             = "openbao-validate-openbaorestore"
 	dependencyOpenBaoLockControllerStatefulSetMutations = "openbao-lock-controller-statefulset-mutations"
 	dependencyOpenBaoLockManagedResourceMutations       = "openbao-lock-managed-resource-mutations"
+	dependencyOpenBaoEnforceManagedImageDigests         = "openbao-enforce-managed-image-digests"
 	dependencyOpenBaoRestrictProvisionerRBAC            = "openbao-restrict-provisioner-rbac"
 	dependencyOpenBaoRestrictProvisionerNamespace       = "openbao-restrict-provisioner-namespace-mutations"
 	dependencyOpenBaoRestrictControllerRBAC             = "openbao-restrict-controller-rbac"
@@ -50,6 +51,7 @@ const (
 	dependencyBindingValidateOpenBaoRestore             = "openbao-validate-openbaorestore-binding"
 	dependencyBindingLockControllerStatefulSetMutations = "openbao-lock-controller-statefulset-mutations-binding"
 	dependencyBindingLockManagedResourceMutations       = "openbao-lock-managed-resource-mutations-binding"
+	dependencyBindingEnforceManagedImageDigests         = "openbao-enforce-managed-image-digests-binding"
 	dependencyBindingRestrictProvisionerRBAC            = "openbao-restrict-provisioner-rbac-binding"
 	dependencyBindingRestrictProvisionerNamespace       = "openbao-restrict-provisioner-namespace-mutations-binding"
 	dependencyBindingRestrictControllerRBAC             = "openbao-restrict-controller-rbac-binding"
@@ -129,6 +131,11 @@ func DefaultDependencies() []Dependency {
 			Name:        dependencyOpenBaoLockManagedResourceMutations,
 			PolicyName:  dependencyOpenBaoLockManagedResourceMutations,
 			BindingName: dependencyBindingLockManagedResourceMutations,
+		},
+		{
+			Name:        dependencyOpenBaoEnforceManagedImageDigests,
+			PolicyName:  dependencyOpenBaoEnforceManagedImageDigests,
+			BindingName: dependencyBindingEnforceManagedImageDigests,
 		},
 	}
 }

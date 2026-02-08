@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 func (m *Manager) ensureValidationHookJob(
@@ -37,23 +38,38 @@ func (m *Manager) ensureValidationHookJob(
 	ttlSeconds := ptr.To(int32(jobTTLSeconds))
 
 	return ensureJob(ctx, m.client, m.scheme, logger, cluster, jobName, func(jobName string) (*batchv1.Job, error) {
+		jobLabels := map[string]string{
+			constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+			constants.LabelAppInstance:      cluster.Name,
+			constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+			constants.LabelOpenBaoCluster:   cluster.Name,
+			constants.LabelOpenBaoComponent: component,
+		}
+		security.AddManagedWorkloadSecurityLabels(jobLabels, cluster)
+
+		podTemplateLabels := map[string]string{
+			constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+			constants.LabelAppInstance:      cluster.Name,
+			constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+			constants.LabelOpenBaoCluster:   cluster.Name,
+			constants.LabelOpenBaoComponent: component,
+		}
+		security.AddManagedWorkloadSecurityLabels(podTemplateLabels, cluster)
+
 		return &batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      jobName,
 				Namespace: cluster.Namespace,
-				Labels: map[string]string{
-					constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-					constants.LabelAppInstance:      cluster.Name,
-					constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-					constants.LabelOpenBaoCluster:   cluster.Name,
-					constants.LabelOpenBaoComponent: component,
-				},
+				Labels:    jobLabels,
 			},
 			Spec: batchv1.JobSpec{
 				BackoffLimit:            &backoffLimit,
 				ActiveDeadlineSeconds:   ptr.To(int64(timeout)),
 				TTLSecondsAfterFinished: ttlSeconds,
 				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: podTemplateLabels,
+					},
 					Spec: corev1.PodSpec{
 						RestartPolicy: corev1.RestartPolicyNever,
 						Containers: []corev1.Container{

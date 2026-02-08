@@ -3,10 +3,23 @@ package security
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/go-logr/logr"
+	"github.com/google/go-containerregistry/pkg/name"
+)
+
+const (
+	defaultGitHubOIDCIssuer = "https://token.actions.githubusercontent.com"
+
+	openBaoReleaseSubjectPrefix       = "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/"
+	operatorReleaseSubjectPrefix      = "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/"
+	openBaoOfficialRepository         = "openbao/openbao"
+	operatorInitOfficialRepository    = "ghcr.io/dc-tec/openbao-init"
+	operatorBackupOfficialRepository  = "ghcr.io/dc-tec/openbao-backup"
+	operatorUpgradeOfficialRepository = "ghcr.io/dc-tec/openbao-upgrade"
 )
 
 // VerifyImageForCluster verifies an image reference using the cluster's ImageVerification configuration.
@@ -16,7 +29,8 @@ func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier int
 	if cluster == nil {
 		return "", fmt.Errorf("cluster is required")
 	}
-	if cluster.Spec.ImageVerification == nil || !cluster.Spec.ImageVerification.Enabled {
+	verificationConfig, enabled := effectiveMainImageVerificationConfig(cluster)
+	if !enabled {
 		return "", nil
 	}
 	if imageRef == "" {
@@ -26,20 +40,23 @@ func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier int
 		return "", fmt.Errorf("image verifier is required")
 	}
 
-	// Validate that either PublicKey OR (Issuer and Subject) are provided.
-	// This matches the validation in ImageVerifier.Verify().
-	if cluster.Spec.ImageVerification.PublicKey == "" &&
-		(cluster.Spec.ImageVerification.Issuer == "" || cluster.Spec.ImageVerification.Subject == "") {
-		return "", fmt.Errorf("image verification is enabled but neither public key nor keyless configuration (issuer and subject) is provided")
+	config := interfaces.VerifyConfig{
+		PublicKey:        strings.TrimSpace(verificationConfig.PublicKey),
+		Issuer:           strings.TrimSpace(verificationConfig.Issuer),
+		Subject:          strings.TrimSpace(verificationConfig.Subject),
+		IssuerRegExp:     strings.TrimSpace(verificationConfig.IssuerRegExp),
+		SubjectRegExp:    strings.TrimSpace(verificationConfig.SubjectRegExp),
+		IgnoreTlog:       verificationConfig.IgnoreTlog,
+		ImagePullSecrets: verificationConfig.ImagePullSecrets,
+		Namespace:        cluster.Namespace,
 	}
 
-	config := interfaces.VerifyConfig{
-		PublicKey:        cluster.Spec.ImageVerification.PublicKey,
-		Issuer:           cluster.Spec.ImageVerification.Issuer,
-		Subject:          cluster.Spec.ImageVerification.Subject,
-		IgnoreTlog:       cluster.Spec.ImageVerification.IgnoreTlog,
-		ImagePullSecrets: cluster.Spec.ImageVerification.ImagePullSecrets,
-		Namespace:        cluster.Namespace,
+	applyOfficialKeylessDefaults(&config, imageRef, false)
+
+	// Validate that either PublicKey OR keyless identity is provided after
+	// applying any official keyless defaults.
+	if !hasKeylessConfig(config) && config.PublicKey == "" {
+		return "", fmt.Errorf("image verification is enabled but neither public key nor keyless configuration (issuer/subject or issuerRegExp/subjectRegExp) is provided")
 	}
 
 	digest, err := verifier.Verify(ctx, imageRef, config)
@@ -62,10 +79,8 @@ func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, veri
 		return "", fmt.Errorf("image reference is required")
 	}
 
-	// Use OperatorImageVerification only - no fallback to ImageVerification
-	// This prevents confusing failures when the main image and helper images have different signers
-	verificationConfig := cluster.Spec.OperatorImageVerification
-	if verificationConfig == nil || !verificationConfig.Enabled {
+	verificationConfig, enabled := effectiveOperatorImageVerificationConfig(cluster)
+	if !enabled {
 		return "", nil
 	}
 
@@ -73,19 +88,23 @@ func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, veri
 		return "", fmt.Errorf("image verifier is required")
 	}
 
-	// Validate that either PublicKey OR (Issuer and Subject) are provided.
-	if verificationConfig.PublicKey == "" &&
-		(verificationConfig.Issuer == "" || verificationConfig.Subject == "") {
-		return "", fmt.Errorf("operator image verification is enabled but neither public key nor keyless configuration (issuer and subject) is provided")
-	}
-
 	config := interfaces.VerifyConfig{
-		PublicKey:        verificationConfig.PublicKey,
-		Issuer:           verificationConfig.Issuer,
-		Subject:          verificationConfig.Subject,
+		PublicKey:        strings.TrimSpace(verificationConfig.PublicKey),
+		Issuer:           strings.TrimSpace(verificationConfig.Issuer),
+		Subject:          strings.TrimSpace(verificationConfig.Subject),
+		IssuerRegExp:     strings.TrimSpace(verificationConfig.IssuerRegExp),
+		SubjectRegExp:    strings.TrimSpace(verificationConfig.SubjectRegExp),
 		IgnoreTlog:       verificationConfig.IgnoreTlog,
 		ImagePullSecrets: verificationConfig.ImagePullSecrets,
 		Namespace:        cluster.Namespace,
+	}
+
+	applyOfficialKeylessDefaults(&config, imageRef, true)
+
+	// Validate that either PublicKey OR keyless identity is provided after
+	// applying any official keyless defaults.
+	if !hasKeylessConfig(config) && config.PublicKey == "" {
+		return "", fmt.Errorf("operator image verification is enabled but neither public key nor keyless configuration (issuer/subject or issuerRegExp/subjectRegExp) is provided")
 	}
 
 	digest, err := verifier.Verify(ctx, imageRef, config)
@@ -94,4 +113,149 @@ func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, veri
 	}
 
 	return digest, nil
+}
+
+// IsMainImageVerificationEnabled reports whether main image verification should
+// run for the cluster. Hardened profile defaults to verification enabled when
+// the block is omitted, while explicit enabled=false keeps verification off.
+func IsMainImageVerificationEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	_, enabled := effectiveMainImageVerificationConfig(cluster)
+	return enabled
+}
+
+// IsOperatorImageVerificationEnabled reports whether operator helper image
+// verification should run for the cluster. Hardened profile defaults to
+// verification enabled when the block is omitted, while explicit enabled=false
+// keeps verification off.
+func IsOperatorImageVerificationEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	_, enabled := effectiveOperatorImageVerificationConfig(cluster)
+	return enabled
+}
+
+func hasStrictKeylessConfig(config interfaces.VerifyConfig) bool {
+	return strings.TrimSpace(config.Issuer) != "" && strings.TrimSpace(config.Subject) != ""
+}
+
+func hasRegexKeylessConfig(config interfaces.VerifyConfig) bool {
+	return strings.TrimSpace(config.IssuerRegExp) != "" && strings.TrimSpace(config.SubjectRegExp) != ""
+}
+
+func hasKeylessConfig(config interfaces.VerifyConfig) bool {
+	return hasStrictKeylessConfig(config) || hasRegexKeylessConfig(config)
+}
+
+func applyOfficialKeylessDefaults(config *interfaces.VerifyConfig, imageRef string, isOperatorImage bool) {
+	if config == nil {
+		return
+	}
+	if strings.TrimSpace(config.PublicKey) != "" {
+		return
+	}
+	// Only default keyless identity when keyless fields are fully omitted.
+	if hasKeylessConfig(*config) {
+		return
+	}
+
+	repo, tag, ok := imageRepositoryAndTag(imageRef)
+	if !ok {
+		return
+	}
+
+	subject := defaultSubjectForImage(repo, tag, isOperatorImage)
+	if subject == "" {
+		return
+	}
+
+	config.Issuer = defaultGitHubOIDCIssuer
+	config.Subject = subject
+}
+
+func imageRepositoryAndTag(imageRef string) (string, string, bool) {
+	ref, err := name.ParseReference(imageRef)
+	if err != nil {
+		return "", "", false
+	}
+
+	tagRef, ok := ref.(name.Tag)
+	if !ok {
+		return "", "", false
+	}
+
+	repository := normalizeRepository(tagRef.Context().Name())
+	tag := strings.TrimSpace(tagRef.TagStr())
+	if repository == "" || tag == "" {
+		return "", "", false
+	}
+
+	return repository, tag, true
+}
+
+func normalizeRepository(repository string) string {
+	repository = strings.TrimSpace(repository)
+	repository = strings.TrimPrefix(repository, "index.docker.io/")
+	repository = strings.TrimPrefix(repository, "docker.io/")
+	return repository
+}
+
+func defaultSubjectForImage(repository, tag string, isOperatorImage bool) string {
+	if !isOperatorImage {
+		if repository != openBaoOfficialRepository {
+			return ""
+		}
+
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			return ""
+		}
+		if !strings.HasPrefix(tag, "v") {
+			tag = "v" + tag
+		}
+
+		return openBaoReleaseSubjectPrefix + tag
+	}
+
+	switch repository {
+	case operatorInitOfficialRepository, operatorBackupOfficialRepository, operatorUpgradeOfficialRepository:
+		return operatorReleaseSubjectPrefix + tag
+	default:
+		return ""
+	}
+}
+
+func effectiveMainImageVerificationConfig(cluster *openbaov1alpha1.OpenBaoCluster) (*openbaov1alpha1.ImageVerificationConfig, bool) {
+	if cluster == nil {
+		return nil, false
+	}
+
+	if cluster.Spec.ImageVerification != nil {
+		if !cluster.Spec.ImageVerification.Enabled {
+			return nil, false
+		}
+		return cluster.Spec.ImageVerification, true
+	}
+
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened {
+		return &openbaov1alpha1.ImageVerificationConfig{Enabled: true}, true
+	}
+
+	return nil, false
+}
+
+func effectiveOperatorImageVerificationConfig(cluster *openbaov1alpha1.OpenBaoCluster) (*openbaov1alpha1.ImageVerificationConfig, bool) {
+	if cluster == nil {
+		return nil, false
+	}
+
+	if cluster.Spec.OperatorImageVerification != nil {
+		if !cluster.Spec.OperatorImageVerification.Enabled {
+			return nil, false
+		}
+		return cluster.Spec.OperatorImageVerification, true
+	}
+
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened {
+		return &openbaov1alpha1.ImageVerificationConfig{Enabled: true}, true
+	}
+
+	return nil, false
 }

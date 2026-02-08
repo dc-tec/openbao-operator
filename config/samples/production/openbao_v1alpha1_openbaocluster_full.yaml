@@ -131,8 +131,7 @@ spec:
   #
   # imageVerification: Verifies the main OpenBao server image (openbao/openbao).
   # operatorImageVerification: Verifies operator-provided helper images (init container,
-  #   backup executor, upgrade executor, etc.). If not specified, falls back
-  #   to imageVerification.
+  #   backup executor, upgrade executor, etc.). This is independent from imageVerification.
   imageVerification:
     enabled: true
     issuer: "https://token.actions.githubusercontent.com"
@@ -151,7 +150,8 @@ spec:
     # imagePullSecrets:  # Optional: List of ImagePullSecrets for private registry authentication
     #   - name: registry-credentials  # Secret type: kubernetes.io/dockerconfigjson
   # Separate verification for operator images (independent - no fallback to imageVerification)
-  # If not configured, helper images are NOT verified even if imageVerification is set.
+  # In Development, omitted means helper images are not verified.
+  # In Hardened, omitted still enables verification defaults for official signed images.
   # operatorImageVerification:
   #   enabled: true
   #   issuer: "https://token.actions.githubusercontent.com"

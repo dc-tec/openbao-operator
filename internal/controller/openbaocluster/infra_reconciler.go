@@ -200,7 +200,7 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 
 func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	opts := imageVerificationOptions{
-		enabled:              cluster.Spec.ImageVerification != nil && cluster.Spec.ImageVerification.Enabled,
+		enabled:              security.IsMainImageVerificationEnabled(cluster),
 		imageRef:             imageRef,
 		failurePolicy:        imageVerificationFailurePolicy(cluster),
 		failureReason:        constants.ReasonImageVerificationFailed,
@@ -219,8 +219,7 @@ func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr
 
 func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
 	// Use OperatorImageVerification only - no fallback to ImageVerification
-	verificationConfig := cluster.Spec.OperatorImageVerification
-	if verificationConfig == nil || !verificationConfig.Enabled {
+	if !security.IsOperatorImageVerificationEnabled(cluster) {
 		return "", nil
 	}
 

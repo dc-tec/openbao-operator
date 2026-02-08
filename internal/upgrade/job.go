@@ -119,13 +119,16 @@ func ensureUpgradeExecutorJob(
 		verifiedExecutorDigest := ""
 		if cluster.Spec.Upgrade != nil {
 			executorImage := strings.TrimSpace(cluster.Spec.Upgrade.Image)
-			if executorImage != "" && cluster.Spec.OperatorImageVerification != nil && cluster.Spec.OperatorImageVerification.Enabled {
+			if executorImage != "" && security.IsOperatorImageVerificationEnabled(cluster) {
 				verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
 				defer cancel()
 
 				digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, operatorImageVerifier, cluster, executorImage)
 				if err != nil {
-					failurePolicy := cluster.Spec.OperatorImageVerification.FailurePolicy
+					failurePolicy := ""
+					if cluster.Spec.OperatorImageVerification != nil {
+						failurePolicy = cluster.Spec.OperatorImageVerification.FailurePolicy
+					}
 					if failurePolicy == "" {
 						failurePolicy = constants.ImageVerificationFailurePolicyBlock
 					}
@@ -277,17 +280,29 @@ func buildUpgradeExecutorJob(
 		podSecurityContext.FSGroup = ptr.To(constants.GroupBackup)
 	}
 
+	jobLabels := map[string]string{
+		constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:      cluster.Name,
+		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:   cluster.Name,
+		constants.LabelOpenBaoComponent: ComponentUpgrade,
+	}
+	security.AddManagedWorkloadSecurityLabels(jobLabels, cluster)
+
+	podTemplateLabels := map[string]string{
+		constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:      cluster.Name,
+		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:   cluster.Name,
+		constants.LabelOpenBaoComponent: ComponentUpgrade,
+	}
+	security.AddManagedWorkloadSecurityLabels(podTemplateLabels, cluster)
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:      cluster.Name,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: ComponentUpgrade,
-			},
+			Name:        jobName,
+			Namespace:   cluster.Namespace,
+			Labels:      jobLabels,
 			Annotations: buildUpgradeExecutorJobAnnotations(action, runID),
 		},
 		Spec: batchv1.JobSpec{
@@ -295,13 +310,7 @@ func buildUpgradeExecutorJob(
 			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-						constants.LabelAppInstance:      cluster.Name,
-						constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-						constants.LabelOpenBaoCluster:   cluster.Name,
-						constants.LabelOpenBaoComponent: ComponentUpgrade,
-					},
+					Labels: podTemplateLabels,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           cluster.Name + constants.SuffixUpgradeServiceAccount,

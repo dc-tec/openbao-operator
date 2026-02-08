@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 concurrency:
   group: publish-nightly
@@ -118,6 +119,49 @@ jobs:
           docker buildx imagetools create -t "${CONFIG_INIT_IMAGE}:dev" "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
           docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:dev" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:dev" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+        with:
+          cosign-release: v2.6.1
+
+      - name: Sign images (keyless)
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          cosign sign --yes "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          cosign sign --yes "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          cosign sign --yes "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+
+      - name: Verify signatures (keyless)
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          issuer="https://token.actions.githubusercontent.com"
+          identity="https://github.com/${REPO}/.github/workflows/publish-nightly.yml@refs/heads/main"
+
+          verify_signed() {
+            local image_ref="$1"
+            local attempts=5
+            local delay=3
+            local i
+
+            for i in $(seq 1 "${attempts}"); do
+              if cosign verify --certificate-identity "${identity}" --certificate-oidc-issuer "${issuer}" "${image_ref}" >/dev/null; then
+                return 0
+              fi
+              if [[ "${i}" -eq "${attempts}" ]]; then
+                return 1
+              fi
+              sleep "${delay}"
+            done
+          }
+
+          verify_signed "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          verify_signed "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          verify_signed "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          verify_signed "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
   release:
     name: Build Nightly Manifests

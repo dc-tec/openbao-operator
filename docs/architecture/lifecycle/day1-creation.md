@@ -62,7 +62,7 @@ Day 1 involves the instantiation and initialization of the OpenBao cluster itsel
 
     1. User creates an `OpenBaoCluster` CR in a namespace (without `spec.selfInit`).
     2. Cert Manager (workload controller) bootstraps PKI (CA + leaf certs).
-    3. If image verification is enabled (`spec.imageVerification.enabled`), the operator verifies the container image signature using Cosign before proceeding.
+    3. If image verification is enabled (`spec.imageVerification.enabled`) or implicitly enabled by `spec.profile: Hardened` with omitted verification blocks, the operator verifies the container image signature using Cosign before proceeding.
     4. Infrastructure Manager (workload controller) ensures a per-cluster auto-unseal configuration:
        - If `spec.unseal` is omitted or `spec.unseal.type` is `"static"`, creates a static auto-unseal key Secret (`<cluster>-unseal-key`) if missing.
        - If `spec.unseal.type` is an external KMS provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`), configures the seal with the provided options and credentials (if specified).

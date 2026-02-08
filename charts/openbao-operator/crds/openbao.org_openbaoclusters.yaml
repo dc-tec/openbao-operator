@@ -763,6 +763,12 @@ spec:
                       Required for keyless verification when PublicKey is not provided.
                       For GitHub Actions keyless verification, use: https://token.actions.githubusercontent.com
                     type: string
+                  issuerRegExp:
+                    description: |-
+                      IssuerRegExp is a regular expression for the OIDC issuer when using keyless verification.
+                      Use this to allow a controlled set of issuers instead of a single exact issuer string.
+                      Requires SubjectRegExp when PublicKey is not provided.
+                    type: string
                   publicKey:
                     description: |-
                       PublicKey is the Cosign public key content used to verify the signature.
@@ -775,6 +781,12 @@ spec:
                       Required for keyless verification when PublicKey is not provided.
                       Example (GitHub Actions): https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/<VERSION>
                       The version in the subject MUST match the image tag version.
+                    type: string
+                  subjectRegExp:
+                    description: |-
+                      SubjectRegExp is a regular expression for the OIDC subject when using keyless verification.
+                      Use this to allow a controlled set of workflow identities instead of a single exact subject.
+                      Requires IssuerRegExp when PublicKey is not provided.
                     type: string
                 required:
                 - enabled
@@ -1387,6 +1399,12 @@ spec:
                       Required for keyless verification when PublicKey is not provided.
                       For GitHub Actions keyless verification, use: https://token.actions.githubusercontent.com
                     type: string
+                  issuerRegExp:
+                    description: |-
+                      IssuerRegExp is a regular expression for the OIDC issuer when using keyless verification.
+                      Use this to allow a controlled set of issuers instead of a single exact issuer string.
+                      Requires SubjectRegExp when PublicKey is not provided.
+                    type: string
                   publicKey:
                     description: |-
                       PublicKey is the Cosign public key content used to verify the signature.
@@ -1399,6 +1417,12 @@ spec:
                       Required for keyless verification when PublicKey is not provided.
                       Example (GitHub Actions): https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/<VERSION>
                       The version in the subject MUST match the image tag version.
+                    type: string
+                  subjectRegExp:
+                    description: |-
+                      SubjectRegExp is a regular expression for the OIDC subject when using keyless verification.
+                      Use this to allow a controlled set of workflow identities instead of a single exact subject.
+                      Requires IssuerRegExp when PublicKey is not provided.
                     type: string
                 required:
                 - enabled

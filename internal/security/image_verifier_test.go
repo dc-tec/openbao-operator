@@ -57,7 +57,7 @@ func TestImageVerifier_Verify_EmptyConfig(t *testing.T) {
 		t.Error("Verify() with empty config should return error")
 	}
 
-	expectedError := "either PublicKey OR (Issuer and Subject) must be provided for image verification"
+	expectedError := "either PublicKey OR keyless identity (Issuer/Subject or IssuerRegExp/SubjectRegExp) must be provided for image verification"
 	if err.Error() != expectedError {
 		t.Errorf("Verify() error = %v, want '%s'", err, expectedError)
 	}
@@ -92,6 +92,27 @@ func TestImageVerifier_Verify_KeylessMissingSubject(t *testing.T) {
 
 	if err == nil {
 		t.Error("Verify() with keyless config missing subject should return error")
+	}
+}
+
+func TestImageVerifier_Verify_KeylessRegExpCacheHit(t *testing.T) {
+	logger := logr.Discard()
+	client := fake.NewClientBuilder().Build()
+	verifier := NewImageVerifier(logger, client, nil)
+
+	config := interfaces.VerifyConfig{
+		IssuerRegExp:  "^https://token\\.actions\\.githubusercontent\\.com$",
+		SubjectRegExp: "^https://github\\.com/dc-tec/openbao-operator/.+@refs/tags/.+$",
+	}
+	cacheKey := verifier.cacheKey(testImageDigest, config)
+	verifier.cache.markVerifiedByKey(cacheKey)
+
+	result, err := verifier.Verify(context.Background(), testImageDigest, config)
+	if err != nil {
+		t.Fatalf("Verify() with cached regexp keyless config should succeed: %v", err)
+	}
+	if result != testImageDigest {
+		t.Fatalf("Verify() = %q, want %q", result, testImageDigest)
 	}
 }
 
@@ -449,6 +470,24 @@ func TestImageVerifier_CacheKey_Keyless(t *testing.T) {
 	}
 }
 
+func TestImageVerifier_CacheKey_KeylessRegExp(t *testing.T) {
+	logger := logr.Discard()
+	client := fake.NewClientBuilder().Build()
+	verifier := NewImageVerifier(logger, client, nil)
+
+	digest := testImageDigest
+	config := interfaces.VerifyConfig{
+		IssuerRegExp:  "^https://token\\.actions\\.githubusercontent\\.com$",
+		SubjectRegExp: "^https://github\\.com/openbao/openbao/.+@refs/tags/.+$",
+	}
+
+	key := verifier.cacheKey(digest, config)
+	expected := testImageDigest + "@oidc-re:" + config.IssuerRegExp + "|" + config.SubjectRegExp
+	if key != expected {
+		t.Errorf("cacheKey() = %v, want %v", key, expected)
+	}
+}
+
 func TestImageVerifier_CacheKey_DifferentModes(t *testing.T) {
 	logger := logr.Discard()
 	client := fake.NewClientBuilder().Build()
@@ -462,12 +501,20 @@ func TestImageVerifier_CacheKey_DifferentModes(t *testing.T) {
 		Issuer:  testOIDCIssuer,
 		Subject: testOIDCSubject,
 	}
+	keylessRegexpConfig := interfaces.VerifyConfig{
+		IssuerRegExp:  "^https://token\\.actions\\.githubusercontent\\.com$",
+		SubjectRegExp: "^https://github\\.com/openbao/openbao/.+@refs/tags/.+$",
+	}
 
 	key1 := verifier.cacheKey(digest, staticKeyConfig)
 	key2 := verifier.cacheKey(digest, keylessConfig)
+	key3 := verifier.cacheKey(digest, keylessRegexpConfig)
 
 	if key1 == key2 {
 		t.Error("cacheKey() should generate different keys for static key vs keyless modes")
+	}
+	if key2 == key3 {
+		t.Error("cacheKey() should generate different keys for strict keyless vs regexp keyless modes")
 	}
 }
 

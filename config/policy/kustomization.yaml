@@ -3,6 +3,8 @@ resources:
   - openbao-lock-controller-statefulset-mutations-binding.yaml
   - openbao-lock-managed-resource-mutations.yaml
   - openbao-lock-managed-resource-mutations-binding.yaml
+  - openbao-enforce-managed-image-digests.yaml
+  - openbao-enforce-managed-image-digests-binding.yaml
   - openbao-restrict-controller-rbac.yaml
   - openbao-restrict-controller-rbac-binding.yaml
   - openbao-validate-openbaocluster.yaml
