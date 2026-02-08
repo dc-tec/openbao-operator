@@ -9,9 +9,9 @@ We follow a strict "Build Once, Promote Everywhere" philosophy. Releases are aut
 
 We publish multiple channels:
 
-- **Stable / SemVer**: `MAJOR.MINOR.PATCH` (and prereleases like `X.Y.Z-rc.1`, `X.Y.Z-beta.1`, `X.Y.Z-alpha.1`).
-- **Edge** (main): published automatically after CI passes on `main` (tags: `edge`, `edge-<shortsha>`).
-- **Nightly dev**: published automatically after nightly E2E passes (tags: `dev`, `dev-YYYYMMDD`, `dev-YYYYMMDD-<shortsha>`), and published as mutable manifests on GitHub Pages under `/nightly/`.
+- **Stable / SemVer**: `MAJOR.MINOR.PATCH` (and prereleases like `X.Y.Z-rc.1`, `X.Y.Z-beta.1`, `X.Y.Z-alpha.1`). This is the only channel that publishes OCI Helm charts and GitHub Release assets.
+- **Edge** (main): published automatically after CI passes on `main` (tags: `edge`, `edge-<shortsha>`). No OCI Helm chart publication.
+- **Nightly**: published automatically after nightly E2E passes (tags: `nightly`, `nightly-YYYYMMDD`, `nightly-YYYYMMDD-<shortsha>`), and published as mutable manifests on GitHub Pages under `/nightly/`. No OCI Helm chart publication.
 
 ## 0.1 Release-Please (Versioning + Release PRs)
 
@@ -49,12 +49,14 @@ We use **release-please** as the source of truth for:
 
     - After CI success on `main`, `.github/workflows/publish-edge.yml` publishes:
         - Images: `:edge` and `:edge-<shortsha>`
+        - No Helm chart publication (release-only)
 
-=== "Nightly dev"
+=== "Nightly"
 
     - After nightly E2E success, `.github/workflows/publish-nightly.yml` publishes:
-        - Images: `:dev`, `:dev-YYYYMMDD`, `:dev-YYYYMMDD-<shortsha>`
+        - Images: `:nightly`, `:nightly-YYYYMMDD`, `:nightly-YYYYMMDD-<shortsha>`
         - Manifests to GitHub Pages: `/nightly/install.yaml`, `/nightly/crds.yaml` (+ checksums, checksums bundle, metadata)
+        - No Helm chart publication (release-only)
 
 ## 1. Stable/Prerelease Release Flow
 
@@ -160,7 +162,7 @@ When a ad-hoc prerelease is needed (for example `0.2.0-beta.1` or `0.2.0-rc.1`),
 !!! note "Iterating prereleases"
     Repeat the same process for `0.2.0-beta.2`, then `0.2.0-rc.1`, and finally `0.2.0`.
 
-## 3. Published Artifacts
+## 3. Published Artifacts (Stable/Prerelease Only)
 
 The stable/prerelease release produces the following artifacts:
 

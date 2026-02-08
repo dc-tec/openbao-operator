@@ -1,4 +1,4 @@
-name: Publish Nightly (dev)
+name: Publish Nightly
 
 on:
   workflow_run:
@@ -48,7 +48,7 @@ jobs:
           sha="$(git rev-parse HEAD)"
           short_sha="$(git rev-parse --short=12 HEAD)"
           date_utc="$(date -u +%Y%m%d)"
-          version="dev-${date_utc}-${short_sha}"
+          version="nightly-${date_utc}-${short_sha}"
           build_tag="nightly-build-${sha}"
 
           owner="${GITHUB_REPOSITORY_OWNER}"
@@ -79,7 +79,7 @@ jobs:
     env:
       BUILD_TAG: ${{ needs.prepare.outputs.build_tag }}
       VERSION: ${{ needs.prepare.outputs.version }}
-      DATE_TAG: dev-${{ needs.prepare.outputs.date_utc }}
+      DATE_TAG: nightly-${{ needs.prepare.outputs.date_utc }}
       MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
       CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
       BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
@@ -108,17 +108,17 @@ jobs:
           docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:${VERSION}" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:${VERSION}" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
-          # Date-stable tag (can be overwritten if re-run same day; acceptable for dev)
+          # Date-stable tag (can be overwritten if re-run same day; acceptable for nightly)
           docker buildx imagetools create -t "${MANAGER_IMAGE}:${DATE_TAG}" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
           docker buildx imagetools create -t "${CONFIG_INIT_IMAGE}:${DATE_TAG}" "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
           docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:${DATE_TAG}" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:${DATE_TAG}" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
-          # Moving dev tag (latest nightly)
-          docker buildx imagetools create -t "${MANAGER_IMAGE}:dev" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
-          docker buildx imagetools create -t "${CONFIG_INIT_IMAGE}:dev" "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
-          docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:dev" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
-          docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:dev" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+          # Moving nightly tag (latest nightly)
+          docker buildx imagetools create -t "${MANAGER_IMAGE}:nightly" "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          docker buildx imagetools create -t "${CONFIG_INIT_IMAGE}:nightly" "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          docker buildx imagetools create -t "${BACKUP_EXECUTOR_IMAGE}:nightly" "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:nightly" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
       - name: Install cosign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
