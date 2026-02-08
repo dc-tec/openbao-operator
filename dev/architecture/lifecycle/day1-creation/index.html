@@ -4063,7 +4063,7 @@
 <ol>
 <li>User creates an <code>OpenBaoCluster</code> CR in a namespace (without <code>spec.selfInit</code>).</li>
 <li>Cert Manager (workload controller) bootstraps PKI (CA + leaf certs).</li>
-<li>If image verification is enabled (<code>spec.imageVerification.enabled</code>), the operator verifies the container image signature using Cosign before proceeding.</li>
+<li>If image verification is enabled (<code>spec.imageVerification.enabled</code>) or implicitly enabled by <code>spec.profile: Hardened</code> with omitted verification blocks, the operator verifies the container image signature using Cosign before proceeding.</li>
 <li>Infrastructure Manager (workload controller) ensures a per-cluster auto-unseal configuration:</li>
 <li>If <code>spec.unseal</code> is omitted or <code>spec.unseal.type</code> is <code>"static"</code>, creates a static auto-unseal key Secret (<code>&lt;cluster&gt;-unseal-key</code>) if missing.</li>
 <li>If <code>spec.unseal.type</code> is an external KMS provider (<code>awskms</code>, <code>gcpckms</code>, <code>azurekeyvault</code>, <code>transit</code>), configures the seal with the provided options and credentials (if specified).</li>

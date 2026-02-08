@@ -3042,6 +3042,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#admission-guardrails-optional-defense-in-depth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admission Guardrails (Optional, Defense-in-Depth)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rekor-transparency-log" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4059,6 +4070,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#admission-guardrails-optional-defense-in-depth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admission Guardrails (Optional, Defense-in-Depth)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rekor-transparency-log" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4139,18 +4161,20 @@
 <p>The Operator implements container image signature verification to protect against compromised registries, man-in-the-middle attacks, and TOCTOU (Time-of-Check to Time-of-Use) vulnerabilities.</p>
 </div>
 <h2 id="verification-flow">Verification Flow<a class="headerlink" href="#verification-flow" title="Permanent link">&para;</a></h2>
-<p>The Operator intercepts Pod creation requests and verifies the image signature against a trusted public key and (optionally) the Rekor transparency log.</p>
+<p>The Operator verifies images during reconciliation before it creates or updates operator-managed workloads
+(StatefulSets and Jobs). Verification checks signatures against a trusted public key or keyless identity and
+(optionally) the Rekor transparency log, then pins the image to an immutable digest.</p>
 <pre class="mermaid"><code>flowchart LR
     Registry[(Container Registry)]
     Operator{{OpenBao Operator}}
     Rekor[Rekor Log]
     Cluster[Kubernetes Cluster]
 
-    Registry --"1. Pull Image"--&gt; Operator
+    Registry --"1. Resolve Tag to Digest"--&gt; Operator
     Operator --"2. Verify Signature"--&gt; Operator
-    Operator -.-&gt;|"3. Verify Log (Optional)"| Rekor
+    Operator -.-&gt;|"3. Verify Rekor (Optional)"| Rekor
 
-    Operator --"4. Mutate to Digest"--&gt; Cluster
+    Operator --"4. Reconcile Managed Workload with Verified Digest"--&gt; Cluster
 
     classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
@@ -4181,11 +4205,23 @@
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="no">...</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span><span class="no">-----END PUBLIC KEY-----</span>
 </span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Keyless Defaults for Official Images</p>
+<p>When verification is enabled and no <code>publicKey</code>/keyless identity fields are provided
+(<code>issuer</code>/<code>subject</code> or <code>issuerRegExp</code>/<code>subjectRegExp</code>),
+the operator auto-fills keyless identity defaults for official release images:</p>
+<ul>
+<li><code>openbao/openbao:&lt;tag&gt;</code> -&gt; OpenBao release workflow identity</li>
+<li><code>ghcr.io/dc-tec/openbao-{init,backup,upgrade}:&lt;tag&gt;</code> -&gt; OpenBao Operator release workflow identity</li>
+</ul>
+<p>Custom registries/forks should set explicit <code>publicKey</code>, <code>issuer</code>+<code>subject</code>, or
+<code>issuerRegExp</code>+<code>subjectRegExp</code>.</p>
+</div>
 </div>
 <div class="tabbed-block">
 <p>To prevent <strong>TOCTOU</strong> (Time-of-Check to Time-of-Use) attacks, the Operator mutates image tags to immutable digests.</p>
 <ul>
-<li><strong>Attack Vector:</strong> An attacker pushes a malicious image to <code>1.2.3</code> <em>after</em> the admission controller checks it but <em>before</em> the Kubelet pulls it.</li>
+<li><strong>Attack Vector:</strong> An attacker pushes a malicious image to <code>1.2.3</code> <em>after</em> verification but <em>before</em> the Kubelet pulls it.</li>
 <li><strong>Mitigation:</strong> The Operator resolves <code>openbao:1.2.3</code> to <code>openbao@sha256:abc...</code> during verification and forces the Pod to use the digest.</li>
 </ul>
 <div class="admonition success">
@@ -4194,6 +4230,17 @@
 </div>
 </div>
 </div>
+</div>
+<h2 id="admission-guardrails-optional-defense-in-depth">Admission Guardrails (Optional, Defense-in-Depth)<a class="headerlink" href="#admission-guardrails-optional-defense-in-depth" title="Permanent link">&para;</a></h2>
+<p>Use a Kubernetes <code>ValidatingAdmissionPolicy</code> to enforce digest-only image references on operator-managed
+resources. This catches bypass attempts where a mutable tag is submitted directly to the API.</p>
+<p>By default (when <code>admissionPolicies.enabled=true</code>), Hardened managed workloads are marked for digest
+enforcement and mutable tag references are denied for those workloads.</p>
+<div class="admonition note">
+<p class="admonition-title">Scope of Admission Policy</p>
+<p>Admission policy is a guardrail, not a replacement for signature verification.
+Keep signature and Rekor verification in reconciliation, where the operator performs Cosign checks and
+pins verified digests.</p>
 </div>
 <h2 id="rekor-transparency-log">Rekor Transparency Log<a class="headerlink" href="#rekor-transparency-log" title="Permanent link">&para;</a></h2>
 <p>By default, the Operator verifies signatures against the <a href="https://docs.sigstore.dev/rekor/overview/" target="_blank">Sigstore Rekor</a> transparency log.</p>
@@ -4206,7 +4253,12 @@
 <p>In disconnected environments where reaching the public Rekor log is impossible, you can disable this check:
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">imageVerification</span><span class="p">:</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">ignoreTlog</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">publicKey</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">      </span><span class="no">-----BEGIN PUBLIC KEY-----</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">      </span><span class="no">...</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">      </span><span class="no">-----END PUBLIC KEY-----</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">ignoreTlog</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div></p>
 </div>
 <h2 id="failure-policies">Failure Policies<a class="headerlink" href="#failure-policies" title="Permanent link">&para;</a></h2>
@@ -4221,16 +4273,21 @@
 <tbody>
 <tr>
 <td style="text-align: left;"><strong>Block</strong> (Default)</td>
-<td style="text-align: left;"><strong>Prevents</strong> the Pod from starting. Sets <code>ConditionDegraded=True</code>.</td>
+<td style="text-align: left;"><strong>Prevents</strong> the operator from reconciling managed workloads with unverified images. Sets <code>ConditionDegraded=True</code>.</td>
 <td style="text-align: left;">Production environments requiring strict security.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Warn</strong></td>
-<td style="text-align: left;">Logs an error but <strong>allows</strong> the Pod to start using the original tag.</td>
+<td style="text-align: left;">Logs an error but <strong>allows</strong> reconciliation to continue using the original tag/reference.</td>
 <td style="text-align: left;">Testing or during initial rollout of signing infrastructure.</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition warning">
+<p class="admonition-title">Hardened Profile Guardrails</p>
+<p>Hardened profile rejects explicit <code>enabled=false</code> and <code>failurePolicy=Warn</code> for image verification blocks.
+Omitted verification blocks are still allowed, and are implicitly treated as enabled in Hardened.</p>
+</div>
 <h2 id="verified-workloads">Verified Workloads<a class="headerlink" href="#verified-workloads" title="Permanent link">&para;</a></h2>
 <p>Verification applies to all images managed by the Operator:</p>
 <table>
@@ -4290,7 +4347,11 @@
 <div class="admonition important">
 <p class="admonition-title">No Fallback Behavior</p>
 <p><code>operatorImageVerification</code> and <code>imageVerification</code> are completely independent configurations.
-If <code>operatorImageVerification</code> is not configured, helper images are <strong>not verified</strong> (even if <code>imageVerification</code> is set).
+In <code>Development</code>, omitted blocks are treated as disabled.
+In <code>Hardened</code>, omitted blocks are treated as enabled and verification defaults are applied for known
+official image repositories/tags.
+If <code>operatorImageVerification</code> is omitted in <code>Development</code>, helper images are <strong>not verified</strong> (even if
+<code>imageVerification</code> is set).
 This prevents confusing failures when the main image and helper images have different signers.</p>
 </div>
 <h2 id="release-supply-chain">Release Supply Chain<a class="headerlink" href="#release-supply-chain" title="Permanent link">&para;</a></h2>

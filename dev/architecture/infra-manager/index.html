@@ -4179,7 +4179,8 @@
 </div>
 </div>
 <h2 id="4-image-verification-cosign">4. Image Verification (Cosign)<a class="headerlink" href="#4-image-verification-cosign" title="Permanent link">&para;</a></h2>
-<p>When <code>spec.imageVerification.enabled</code> is <code>true</code>, we enforce supply chain security.</p>
+<p>When image verification is enabled (or implicitly enabled by the Hardened profile when verification blocks are omitted),
+we enforce supply chain security.</p>
 <pre class="mermaid"><code>sequenceDiagram
     participant Op as Operator
     participant Reg as Registry (OCI)

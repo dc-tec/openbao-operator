@@ -4254,6 +4254,7 @@
 <li><strong>Helpers</strong>: automated <code>openbao-backup</code>, <code>openbao-upgrade</code>.</li>
 <li><strong>Storage</strong>: The suite installs the CSI hostpath test driver and applies an expandable StorageClass <code>openbao-e2e-hostpath</code>.
   Tests may consume this via <code>E2E_STORAGE_CLASS</code> (set automatically in Kind mode).</li>
+<li><strong>Hardened Init Image Override</strong>: set <code>E2E_HARDENED_CONFIG_INIT_IMAGE</code> to run Hardened-profile scenarios with a signed helper image while keeping the default local helper image for development lanes.</li>
 </ul>
 <p><strong>Core Scenarios</strong>:</p>
 <ol>

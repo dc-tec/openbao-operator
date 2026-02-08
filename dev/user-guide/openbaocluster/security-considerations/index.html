@@ -4350,6 +4350,9 @@ This is convenient for development but risky for production.</p>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">      </span><span class="no">...</span>
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">      </span><span class="no">-----END PUBLIC KEY-----</span>
 </span></code></pre></div>
+<p>For official release images, you can also use keyless verification without explicitly setting identity fields.
+When <code>enabled: true</code> and <code>publicKey</code>/<code>issuer</code>/<code>subject</code>/<code>issuerRegExp</code>/<code>subjectRegExp</code> are omitted, the operator applies GitHub OIDC defaults
+for known OpenBao/OpenBao-Operator release image repositories.</p>
 <h3 id="private-registries">Private Registries<a class="headerlink" href="#private-registries" title="Permanent link">&para;</a></h3>
 <p>If your images are in a private registry, provide the necessary pull secrets:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">spec</span><span class="p">:</span>

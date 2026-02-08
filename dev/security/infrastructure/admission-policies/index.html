@@ -4212,6 +4212,13 @@
 <td style="text-align: left;">Enforces restore spec invariants and safety checks.</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>openbao-enforce-managed-image-digests</code></td>
+<td style="text-align: left;"><code>openbao-enforce-managed-image-digests-binding</code></td>
+<td style="text-align: left;">Operator-managed <code>StatefulSet</code> / <code>Job</code></td>
+<td style="text-align: left;"><strong>Block</strong></td>
+<td style="text-align: left;">Denies mutable tag-based image refs for workloads marked as requiring digest enforcement (Hardened-managed workloads by default).</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>openbao-restrict-provisioner-rbac</code></td>
 <td style="text-align: left;"><code>openbao-restrict-provisioner-rbac-binding</code></td>
 <td style="text-align: left;"><code>Role</code>, <code>RoleBinding</code></td>
@@ -4267,6 +4274,7 @@
 <li><code>openbao-restrict-provisioner-namespace-mutations</code> / <code>openbao-restrict-provisioner-namespace-mutations-binding</code></li>
 <li><code>openbao-restrict-controller-rbac</code> / <code>openbao-restrict-controller-rbac-binding</code></li>
 <li><code>openbao-lock-managed-resource-mutations</code> / <code>openbao-lock-managed-resource-mutations-binding</code></li>
+<li><code>openbao-enforce-managed-image-digests</code> / <code>openbao-enforce-managed-image-digests-binding</code></li>
 </ul>
 </div>
 <div class="admonition warning">
