@@ -10,7 +10,7 @@ We follow a strict "Build Once, Promote Everywhere" philosophy. Releases are aut
 We publish multiple channels:
 
 - **Stable / SemVer**: `MAJOR.MINOR.PATCH` (and prereleases like `X.Y.Z-rc.1`, `X.Y.Z-beta.1`, `X.Y.Z-alpha.1`). This is the only channel that publishes OCI Helm charts and GitHub Release assets.
-- **Edge** (main): published automatically after CI passes on `main` (tags: `edge`, `edge-<shortsha>`). No OCI Helm chart publication.
+- **Edge** (main): published automatically after CI passes on `main` (tags: `edge`, `edge-<shortsha>`), with signed manifests published to GitHub Pages under `/edge/<shortsha>/` and `/edge/latest/`. No OCI Helm chart publication. Edge is for pre-release validation and is not supported for production.
 - **Nightly**: published automatically after nightly E2E passes (tags: `nightly`, `nightly-YYYYMMDD`, `nightly-YYYYMMDD-<shortsha>`), and published as mutable manifests on GitHub Pages under `/nightly/`. No OCI Helm chart publication.
 
 ## 0.1 Release-Please (Versioning + Release PRs)
@@ -49,6 +49,10 @@ We use **release-please** as the source of truth for:
 
     - After CI success on `main`, `.github/workflows/publish-edge.yml` publishes:
         - Images: `:edge` and `:edge-<shortsha>`
+        - Manifests to GitHub Pages:
+          - immutable per-commit: `/edge/<shortsha>/install.yaml` and `/edge/<shortsha>/crds.yaml`
+          - moving pointer: `/edge/latest/install.yaml` and `/edge/latest/crds.yaml`
+          - plus checksums, checksums bundle, and metadata in both paths
         - No Helm chart publication (release-only)
 
 === "Nightly"
