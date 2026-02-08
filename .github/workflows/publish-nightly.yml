@@ -123,15 +123,15 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
         with:
-          cosign-release: v2.6.1
+          cosign-release: v3.0.4
 
       - name: Sign images (keyless)
         run: |
           set -euo pipefail
-          cosign sign --yes "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
-          cosign sign --yes "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
-          cosign sign --yes "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
-          cosign sign --yes "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
       - name: Verify signatures (keyless)
         env:
@@ -148,7 +148,7 @@ jobs:
             local i
 
             for i in $(seq 1 "${attempts}"); do
-              if cosign verify --certificate-identity "${identity}" --certificate-oidc-issuer "${issuer}" "${image_ref}" >/dev/null; then
+              if cosign verify --new-bundle-format=true --certificate-identity "${identity}" --certificate-oidc-issuer "${issuer}" "${image_ref}" >/dev/null; then
                 return 0
               fi
               if [[ "${i}" -eq "${attempts}" ]]; then
@@ -180,6 +180,11 @@ jobs:
           go-version-file: go.mod
           check-latest: true
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+        with:
+          cosign-release: v3.0.4
+
       - name: Login to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
@@ -197,6 +202,15 @@ jobs:
           make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${VERSION}"
           make build-crds
           sha256sum dist/install.yaml dist/crds.yaml > dist/checksums.txt
+
+      - name: Sign nightly checksums (keyless, bundle format)
+        run: |
+          set -euo pipefail
+          cosign sign-blob \
+            --yes \
+            --new-bundle-format=true \
+            --bundle dist/checksums.txt.bundle \
+            dist/checksums.txt
 
       - name: Upload manifests artifact (for Pages publish)
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -254,6 +268,7 @@ jobs:
           cp dist/install.yaml "${dest}/install.yaml"
           cp dist/crds.yaml "${dest}/crds.yaml"
           cp dist/checksums.txt "${dest}/checksums.txt"
+          cp dist/checksums.txt.bundle "${dest}/checksums.txt.bundle"
 
           generated_at="$(date -u +%FT%TZ)"
           export GENERATED_AT="${generated_at}"
@@ -269,6 +284,7 @@ jobs:
                   "install_yaml": "install.yaml",
                   "crds_yaml": "crds.yaml",
                   "checksums_txt": "checksums.txt",
+                  "checksums_bundle": "checksums.txt.bundle",
               },
               "images": {
                   "manager": {"ref": os.environ["MANAGER_IMAGE"], "digest": os.environ["MANAGER_DIGEST"]},
@@ -303,6 +319,7 @@ jobs:
                 <li><a href="install.yaml">install.yaml</a></li>
                 <li><a href="crds.yaml">crds.yaml</a></li>
                 <li><a href="checksums.txt">checksums.txt</a></li>
+                <li><a href="checksums.txt.bundle">checksums.txt.bundle</a></li>
                 <li><a href="metadata.json">metadata.json</a></li>
               </ul>
               <p>To install: <code>kubectl apply -f install.yaml</code></p>
@@ -311,7 +328,7 @@ jobs:
           HTML
 
           pushd "${worktree}/gh-pages"
-          git add nightly/install.yaml nightly/crds.yaml nightly/checksums.txt nightly/metadata.json nightly/index.html
+          git add nightly/install.yaml nightly/crds.yaml nightly/checksums.txt nightly/checksums.txt.bundle nightly/metadata.json nightly/index.html
 
           if git diff --cached --quiet; then
             echo "No changes to publish."

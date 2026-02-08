@@ -54,7 +54,7 @@ We use **release-please** as the source of truth for:
 
     - After nightly E2E success, `.github/workflows/publish-nightly.yml` publishes:
         - Images: `:dev`, `:dev-YYYYMMDD`, `:dev-YYYYMMDD-<shortsha>`
-        - Manifests to GitHub Pages: `/nightly/install.yaml`, `/nightly/crds.yaml` (+ checksums + metadata)
+        - Manifests to GitHub Pages: `/nightly/install.yaml`, `/nightly/crds.yaml` (+ checksums, checksums bundle, metadata)
 
 ## 1. Stable/Prerelease Release Flow
 
@@ -169,7 +169,7 @@ The stable/prerelease release produces the following artifacts:
     - `install.yaml` (digest-pinned installer manifest)
     - `crds.yaml` (CRDs only)
     - `checksums.txt` (sha256 of `install.yaml`, `crds.yaml`, and SBOMs)
-    - `checksums.txt.sig` and `checksums.txt.crt` (keyless signature + certificate for `checksums.txt`)
+    - `checksums.txt.bundle` (keyless Sigstore bundle for `checksums.txt`)
     - `sbom-openbao-operator.spdx.json`
     - `sbom-openbao-init.spdx.json`
     - `sbom-openbao-backup.spdx.json`
@@ -211,6 +211,7 @@ All artifacts are signed using Sigstore (Keyless).
 
     ```sh
     cosign verify \
+      --new-bundle-format=true \
       --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       ghcr.io/dc-tec/openbao-operator:0.1.0
@@ -233,18 +234,19 @@ All artifacts are signed using Sigstore (Keyless).
     crane digest ghcr.io/dc-tec/charts/openbao-operator:0.1.0
 
     cosign verify \
+      --new-bundle-format=true \
       --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       ghcr.io/dc-tec/charts/openbao-operator@sha256:...
     ```
 
 === ":material-file-lock: Verify Release Checksums"
-    Verify `checksums.txt` using the signature and certificate uploaded to the GitHub Release.
+    Verify `checksums.txt` using the Sigstore bundle uploaded to the GitHub Release.
 
     ```sh
     cosign verify-blob \
-      --certificate dist/checksums.txt.crt \
-      --signature dist/checksums.txt.sig \
+      --new-bundle-format=true \
+      --bundle dist/checksums.txt.bundle \
       --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       dist/checksums.txt
