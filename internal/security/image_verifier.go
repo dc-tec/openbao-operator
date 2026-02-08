@@ -17,6 +17,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/sigstore/cosign/v3/pkg/cosign"
+	"github.com/sigstore/cosign/v3/pkg/oci"
 	ociremote "github.com/sigstore/cosign/v3/pkg/oci/remote"
 	"github.com/sigstore/cosign/v3/pkg/signature"
 	"github.com/sigstore/sigstore-go/pkg/root"
@@ -30,6 +31,12 @@ import (
 
 //go:embed trusted_root.json
 var embeddedTrustedRootJSON []byte
+
+const (
+	noSignaturesFoundErrorFragment = "no signatures found"
+	dsseInTotoPayloadType          = "application/vnd.in-toto+json"
+	cosignSignaturePredicateTypeV1 = "https://sigstore.dev/cosign/sign/v1"
+)
 
 // ImageVerifier verifies container image signatures using Cosign.
 // It implements two caches to minimize network I/O:
@@ -215,16 +222,57 @@ func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef stri
 		}
 	}
 
-	// Create CheckOpts based on verification mode
+	legacyCheckOpts, err := v.buildCheckOpts(ctx, config, remoteOpts, false)
+	if err != nil {
+		return err
+	}
+
+	// Verify image signatures
+	sigs, bundleVerified, legacyErr := cosign.VerifyImageSignatures(ctx, ref, legacyCheckOpts)
+	if legacyErr == nil && len(sigs) > 0 {
+		v.logger.V(1).Info("Image signature verification completed",
+			"digest", digestRef,
+			"signatures", len(sigs),
+			"bundleVerified", bundleVerified,
+			"rekorVerified", !legacyCheckOpts.IgnoreTlog,
+			"format", "legacy")
+		return nil
+	}
+	if legacyErr == nil {
+		legacyErr = fmt.Errorf("no signatures found for image %q", digestRef)
+	}
+
+	if !shouldAttemptBundleFallback(legacyErr) {
+		// Wrap connection/network errors as transient (registry connection issues)
+		if operatorerrors.IsTransientConnection(legacyErr) {
+			return operatorerrors.WrapTransientConnection(fmt.Errorf("image signature verification failed: %w", legacyErr))
+		}
+		return fmt.Errorf("image signature verification failed: %w", legacyErr)
+	}
+
+	if err := v.verifyImageSignatureWithBundles(ctx, ref, digestRef, config, remoteOpts); err != nil {
+		return fmt.Errorf("image signature verification failed (legacy+bundle): legacy=%v; bundle=%v", legacyErr, err)
+	}
+
+	return nil
+}
+
+func (v *ImageVerifier) buildCheckOpts(
+	ctx context.Context,
+	config interfaces.VerifyConfig,
+	remoteOpts []ociremote.Option,
+	newBundleFormat bool,
+) (*cosign.CheckOpts, error) {
 	co := &cosign.CheckOpts{
 		RegistryClientOpts: remoteOpts,
+		NewBundleFormat:    newBundleFormat,
 	}
 
 	// Mode 1: Static Public Key (Custom Images)
 	if config.PublicKey != "" {
 		verifier, err := signature.LoadPublicKeyRaw([]byte(config.PublicKey), crypto.SHA256)
 		if err != nil {
-			return fmt.Errorf("failed to load public key: %w", err)
+			return nil, fmt.Errorf("failed to load public key: %w", err)
 		}
 		co.SigVerifier = verifier
 		co.IgnoreTlog = config.IgnoreTlog
@@ -233,7 +281,7 @@ func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef stri
 			// so Cosign does not need to fetch/update roots via TUF at runtime.
 			trustedRoot, err := v.loadTrustedRoot(ctx)
 			if err != nil {
-				return fmt.Errorf("failed to load trusted root material for transparency log verification: %w", err)
+				return nil, fmt.Errorf("failed to load trusted root material for transparency log verification: %w", err)
 			}
 			co.TrustedMaterial = trustedRoot
 		}
@@ -244,7 +292,7 @@ func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef stri
 		// trusted_root.json which is compiled into the binary at build time.
 		trustedRoot, err := v.loadTrustedRoot(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to load trusted root material for keyless verification: %w", err)
+			return nil, fmt.Errorf("failed to load trusted root material for keyless verification: %w", err)
 		}
 		co.TrustedMaterial = trustedRoot
 		identity := cosign.Identity{}
@@ -261,27 +309,124 @@ func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef stri
 		co.IgnoreTlog = false
 	}
 
-	// Verify image signatures
-	sigs, bundleVerified, err := cosign.VerifyImageSignatures(ctx, ref, co)
-	if err != nil {
-		// Wrap connection/network errors as transient (registry connection issues)
-		if operatorerrors.IsTransientConnection(err) {
-			return operatorerrors.WrapTransientConnection(fmt.Errorf("image signature verification failed: %w", err))
-		}
-		return fmt.Errorf("image signature verification failed: %w", err)
+	if newBundleFormat {
+		co.ClaimVerifier = cosign.IntotoSubjectClaimVerifier
 	}
 
-	if len(sigs) == 0 {
-		return fmt.Errorf("no signatures found for image %q", digestRef)
+	return co, nil
+}
+
+func shouldAttemptBundleFallback(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return strings.Contains(err.Error(), noSignaturesFoundErrorFragment)
+}
+
+func (v *ImageVerifier) verifyImageSignatureWithBundles(
+	ctx context.Context,
+	ref name.Reference,
+	digestRef string,
+	config interfaces.VerifyConfig,
+	remoteOpts []ociremote.Option,
+) error {
+	bundleCheckOpts, err := v.buildCheckOpts(ctx, config, remoteOpts, true)
+	if err != nil {
+		return err
+	}
+
+	attestations, bundleVerified, err := cosign.VerifyImageAttestations(ctx, ref, bundleCheckOpts)
+	if err != nil {
+		return err
+	}
+	if len(attestations) == 0 {
+		return fmt.Errorf("no bundle attestations found for image %q", digestRef)
+	}
+
+	signatureCount, observedPredicates, err := countBundleSignaturePredicates(attestations)
+	if err != nil {
+		return fmt.Errorf("failed to inspect bundle attestations: %w", err)
+	}
+	if signatureCount == 0 {
+		return fmt.Errorf(
+			"no signature bundle attestations found for image %q (expected predicate %q, observed=%s)",
+			digestRef,
+			cosignSignaturePredicateTypeV1,
+			strings.Join(observedPredicates, ","),
+		)
 	}
 
 	v.logger.V(1).Info("Image signature verification completed",
 		"digest", digestRef,
-		"signatures", len(sigs),
+		"attestations", len(attestations),
+		"signatureAttestations", signatureCount,
 		"bundleVerified", bundleVerified,
-		"rekorVerified", !co.IgnoreTlog)
+		"rekorVerified", !bundleCheckOpts.IgnoreTlog,
+		"format", "bundle")
 
 	return nil
+}
+
+type dsseEnvelope struct {
+	PayloadType string `json:"payloadType"`
+	Payload     string `json:"payload"`
+}
+
+type inTotoStatement struct {
+	PredicateType string `json:"predicateType"`
+}
+
+func countBundleSignaturePredicates(attestations []oci.Signature) (int, []string, error) {
+	signatureCount := 0
+	observedPredicates := make([]string, 0, len(attestations))
+	for _, attestation := range attestations {
+		predicateType, err := bundlePredicateType(attestation)
+		if err != nil {
+			return 0, nil, err
+		}
+		observedPredicates = append(observedPredicates, predicateType)
+		if predicateType == cosignSignaturePredicateTypeV1 {
+			signatureCount++
+		}
+	}
+
+	return signatureCount, observedPredicates, nil
+}
+
+func bundlePredicateType(attestation oci.Signature) (string, error) {
+	payload, err := attestation.Payload()
+	if err != nil {
+		return "", fmt.Errorf("failed to read attestation payload: %w", err)
+	}
+
+	envelope := dsseEnvelope{}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return "", fmt.Errorf("failed to parse DSSE envelope: %w", err)
+	}
+	if strings.TrimSpace(envelope.PayloadType) != dsseInTotoPayloadType {
+		return "", fmt.Errorf("unexpected DSSE payload type %q", envelope.PayloadType)
+	}
+	if strings.TrimSpace(envelope.Payload) == "" {
+		return "", fmt.Errorf("DSSE envelope payload is empty")
+	}
+
+	statementBytes, err := base64.StdEncoding.DecodeString(envelope.Payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode DSSE payload: %w", err)
+	}
+
+	statement := inTotoStatement{}
+	if err := json.Unmarshal(statementBytes, &statement); err != nil {
+		return "", fmt.Errorf("failed to parse in-toto statement payload: %w", err)
+	}
+
+	predicateType := strings.TrimSpace(statement.PredicateType)
+	if predicateType == "" {
+		return "", fmt.Errorf("in-toto statement predicateType is empty")
+	}
+
+	return predicateType, nil
 }
 
 // loadTrustedRoot loads the trusted root material for keyless verification.

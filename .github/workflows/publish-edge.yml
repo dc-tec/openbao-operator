@@ -120,15 +120,15 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
         with:
-          cosign-release: v2.6.1
+          cosign-release: v3.0.4
 
       - name: Sign images (keyless)
         run: |
           set -euo pipefail
-          cosign sign --yes "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
-          cosign sign --yes "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
-          cosign sign --yes "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
-          cosign sign --yes "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
       - name: Verify signatures (keyless)
         env:
@@ -145,7 +145,7 @@ jobs:
             local i
 
             for i in $(seq 1 "${attempts}"); do
-              if cosign verify --certificate-identity "${identity}" --certificate-oidc-issuer "${issuer}" "${image_ref}" >/dev/null; then
+              if cosign verify --new-bundle-format=true --certificate-identity "${identity}" --certificate-oidc-issuer "${issuer}" "${image_ref}" >/dev/null; then
                 return 0
               fi
               if [[ "${i}" -eq "${attempts}" ]]; then
@@ -176,6 +176,16 @@ jobs:
           set -euo pipefail
           make build-crds
 
+      - name: Generate and sign manifest checksums (bundle)
+        run: |
+          set -euo pipefail
+          sha256sum dist/install.yaml dist/crds.yaml > dist/checksums.txt
+          cosign sign-blob \
+            --yes \
+            --new-bundle-format=true \
+            --bundle dist/checksums.txt.bundle \
+            dist/checksums.txt
+
       - name: Upload manifests as artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
@@ -183,4 +193,6 @@ jobs:
           path: |
             dist/install.yaml
             dist/crds.yaml
+            dist/checksums.txt
+            dist/checksums.txt.bundle
           retention-days: 5

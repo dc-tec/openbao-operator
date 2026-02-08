@@ -272,7 +272,7 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
         with:
-          cosign-release: v2.6.1
+          cosign-release: v3.0.4
 
       - name: Sign images (keyless)
         env:
@@ -286,10 +286,10 @@ jobs:
           UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
         run: |
           set -euo pipefail
-          cosign sign --yes "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
-          cosign sign --yes "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
-          cosign sign --yes "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
-          cosign sign --yes "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${MANAGER_IMAGE}@${MANAGER_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${CONFIG_INIT_IMAGE}@${CONFIG_INIT_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
+          cosign sign --yes --new-bundle-format=true "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
       - name: Attest build provenance (GitHub) - manager
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
@@ -350,7 +350,22 @@ jobs:
           go install github.com/google/go-containerregistry/cmd/crane@v0.20.7
           chart_ref="ghcr.io/${OWNER}/charts/openbao-operator:${CHART_VERSION}"
           chart_digest="$(crane digest "${chart_ref}")"
-          cosign sign --yes "ghcr.io/${OWNER}/charts/openbao-operator@${chart_digest}"
+          cosign sign --yes --new-bundle-format=true "ghcr.io/${OWNER}/charts/openbao-operator@${chart_digest}"
+
+      - name: Verify Helm chart signature (bundle format)
+        env:
+          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          chart_ref="ghcr.io/${OWNER}/charts/openbao-operator:${CHART_VERSION}"
+          chart_digest="$(crane digest "${chart_ref}")"
+          cosign verify \
+            --new-bundle-format=true \
+            --certificate-identity "https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${CHART_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "ghcr.io/${OWNER}/charts/openbao-operator@${chart_digest}" >/dev/null
 
       - name: Generate digest-pinned installer manifest
         env:
@@ -417,14 +432,26 @@ jobs:
           set -euo pipefail
           sha256sum dist/install.yaml dist/crds.yaml dist/sbom-*.spdx.json > dist/checksums.txt
 
-      - name: Sign release checksums (keyless)
+      - name: Sign release checksums (keyless, bundle format)
         run: |
           set -euo pipefail
           cosign sign-blob \
             --yes \
-            --output-signature dist/checksums.txt.sig \
-            --output-certificate dist/checksums.txt.crt \
+            --new-bundle-format=true \
+            --bundle dist/checksums.txt.bundle \
             dist/checksums.txt
+
+      - name: Verify release checksums signature (bundle format)
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cosign verify-blob \
+            --new-bundle-format=true \
+            --bundle dist/checksums.txt.bundle \
+            --certificate-identity "https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${{ needs.prepare.outputs.version }}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            dist/checksums.txt >/dev/null
 
       - name: Publish GitHub Release
         env:
@@ -450,8 +477,7 @@ jobs:
             dist/install.yaml
             dist/crds.yaml
             dist/checksums.txt
-            dist/checksums.txt.sig
-            dist/checksums.txt.crt
+            dist/checksums.txt.bundle
             dist/sbom-openbao-operator.spdx.json
             dist/sbom-openbao-init.spdx.json
             dist/sbom-openbao-backup.spdx.json

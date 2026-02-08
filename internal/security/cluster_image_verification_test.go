@@ -49,6 +49,33 @@ func TestVerifyImageForCluster_AppliesOfficialOpenBaoKeylessDefaults(t *testing.
 	}
 }
 
+func TestVerifyImageForCluster_AppliesOfficialOpenBaoKeylessDefaultsForGHCR(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: true,
+			},
+		},
+	}
+	verifier := &captureVerifier{}
+
+	_, err := VerifyImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "ghcr.io/openbao/openbao:2.5.0")
+	if err != nil {
+		t.Fatalf("VerifyImageForCluster() unexpected error: %v", err)
+	}
+	if !verifier.called {
+		t.Fatal("expected verifier to be called")
+	}
+	if got := verifier.config.Issuer; got != defaultGitHubOIDCIssuer {
+		t.Fatalf("issuer = %q, want %q", got, defaultGitHubOIDCIssuer)
+	}
+	if got := verifier.config.Subject; got != openBaoReleaseSubjectPrefix+"v2.5.0" {
+		t.Fatalf("subject = %q, want %q", got, openBaoReleaseSubjectPrefix+"v2.5.0")
+	}
+}
+
 func TestVerifyOperatorImageForCluster_AppliesOfficialOperatorKeylessDefaults(t *testing.T) {
 	t.Parallel()
 
