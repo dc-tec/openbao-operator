@@ -654,6 +654,9 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      name,
 						Namespace: guardrailsNamespace,
+						Annotations: map[string]string{
+							constants.AnnotationMaintenance: "true",
+						},
 						Labels: map[string]string{
 							constants.LabelAppManagedBy:             constants.LabelValueAppManagedByOpenBaoOperator,
 							constants.LabelOpenBaoCluster:           "admission-e2e",
@@ -678,8 +681,21 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				}
 			}
 
+			createManagedDryRunAsBreakGlass := func(job *batchv1.Job) error {
+				return e2ehelpers.RunWithImpersonation(
+					ctx,
+					cfg,
+					scheme,
+					"e2e-break-glass",
+					[]string{"system:masters"},
+					func(c client.Client) error {
+						return c.Create(ctx, job, client.DryRunAll)
+					},
+				)
+			}
+
 			tagJob := newManagedJob(fmt.Sprintf("digest-deny-%d", time.Now().UnixNano()), "ghcr.io/dc-tec/openbao-backup:dev")
-			err := admin.Create(ctx, tagJob, client.DryRunAll)
+			err := createManagedDryRunAsBreakGlass(tagJob)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must use digest-pinned images"))
 
@@ -687,7 +703,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				fmt.Sprintf("digest-allow-%d", time.Now().UnixNano()),
 				"ghcr.io/dc-tec/openbao-backup@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			)
-			Expect(admin.Create(ctx, digestJob, client.DryRunAll)).To(Succeed())
+			Expect(createManagedDryRunAsBreakGlass(digestJob)).To(Succeed())
 		})
 
 		It("blocks decimal IP encoding in backup endpoint (SSRF protection)", func() {
