@@ -53,6 +53,7 @@ const (
 	defaultConfigInitImage      = "openbao-init:dev"
 	defaultBackupExecutorImage  = "openbao-backup:dev"
 	defaultUpgradeExecutorImage = "openbao-upgrade:dev"
+	defaultHardenedConfigInit   = ""
 )
 
 type suiteBootstrap struct {
@@ -95,6 +96,11 @@ var (
 	// It must be resolvable inside the kind cluster; in E2E we build it locally
 	// and load it into kind.
 	upgradeExecutorImage = defaultUpgradeExecutorImage
+
+	// hardenedConfigInitImage optionally overrides the init image for Hardened profile
+	// scenarios. This supports running Hardened tests with signed helper images while
+	// keeping local dev tests on unsigned local helper images.
+	hardenedConfigInitImage = defaultHardenedConfigInit
 
 	// skipCleanup controls whether to clean up resources after the suite finishes.
 	// Set E2E_SKIP_CLEANUP=true environment variable to preserve the cluster state for debugging.
@@ -228,6 +234,10 @@ func TestE2E(t *testing.T) {
 	configInitImage = envOrDefault("E2E_CONFIG_INIT_IMAGE", configInitImage)
 	backupExecutorImage = envOrDefault("E2E_BACKUP_EXECUTOR_IMAGE", backupExecutorImage)
 	upgradeExecutorImage = envOrDefault("E2E_UPGRADE_EXECUTOR_IMAGE", upgradeExecutorImage)
+	hardenedConfigInitImage = envOrDefault("E2E_HARDENED_CONFIG_INIT_IMAGE", hardenedConfigInitImage)
+	if hardenedConfigInitImage == "" {
+		hardenedConfigInitImage = configInitImage
+	}
 	RegisterFailHandler(Fail)
 	_, _ = fmt.Fprintf(GinkgoWriter, "Starting openbao-operator integration test suite\n")
 	RunSpecs(t, "e2e suite")
@@ -526,6 +536,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 				openBaoImage,
 				fmt.Sprintf("openbao/openbao:%s", defaultUpgradeFromVersion),
 				fmt.Sprintf("openbao/openbao:%s", defaultUpgradeToVersion),
+				hardenedConfigInitImage,
 			}
 			seen := make(map[string]struct{}, len(openBaoImages))
 			for _, img := range openBaoImages {

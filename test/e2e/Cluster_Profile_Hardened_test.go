@@ -319,7 +319,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 				Replicas: 3,
 				InitContainer: &openbaov1alpha1.InitContainerConfig{
 					Enabled: true,
-					Image:   configInitImage,
+					Image:   hardenedConfigInitImage,
 				},
 				SelfInit: &openbaov1alpha1.SelfInitConfig{
 					Enabled: true,

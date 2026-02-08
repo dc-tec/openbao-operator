@@ -248,7 +248,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 				Replicas: 3, // Minimum for Hardened profile (VAP rule)
 				InitContainer: &openbaov1alpha1.InitContainerConfig{
 					Enabled: true,
-					Image:   configInitImage,
+					Image:   hardenedConfigInitImage,
 				},
 				SelfInit: &openbaov1alpha1.SelfInitConfig{
 					Enabled: true,
