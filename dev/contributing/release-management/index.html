@@ -3839,10 +3839,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-published-artifacts" class="md-nav__link">
+  <a href="#3-published-artifacts-stableprerelease-only" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Published Artifacts
+        3. Published Artifacts (Stable/Prerelease Only)
       
     </span>
   </a>
@@ -4153,10 +4153,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-published-artifacts" class="md-nav__link">
+  <a href="#3-published-artifacts-stableprerelease-only" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Published Artifacts
+        3. Published Artifacts (Stable/Prerelease Only)
       
     </span>
   </a>
@@ -4242,9 +4242,9 @@
 <h2 id="0-channels">0. Channels<a class="headerlink" href="#0-channels" title="Permanent link">&para;</a></h2>
 <p>We publish multiple channels:</p>
 <ul>
-<li><strong>Stable / SemVer</strong>: <code>MAJOR.MINOR.PATCH</code> (and prereleases like <code>X.Y.Z-rc.1</code>, <code>X.Y.Z-beta.1</code>, <code>X.Y.Z-alpha.1</code>).</li>
-<li><strong>Edge</strong> (main): published automatically after CI passes on <code>main</code> (tags: <code>edge</code>, <code>edge-&lt;shortsha&gt;</code>).</li>
-<li><strong>Nightly dev</strong>: published automatically after nightly E2E passes (tags: <code>dev</code>, <code>dev-YYYYMMDD</code>, <code>dev-YYYYMMDD-&lt;shortsha&gt;</code>), and published as mutable manifests on GitHub Pages under <code>/nightly/</code>.</li>
+<li><strong>Stable / SemVer</strong>: <code>MAJOR.MINOR.PATCH</code> (and prereleases like <code>X.Y.Z-rc.1</code>, <code>X.Y.Z-beta.1</code>, <code>X.Y.Z-alpha.1</code>). This is the only channel that publishes OCI Helm charts and GitHub Release assets.</li>
+<li><strong>Edge</strong> (main): published automatically after CI passes on <code>main</code> (tags: <code>edge</code>, <code>edge-&lt;shortsha&gt;</code>). No OCI Helm chart publication.</li>
+<li><strong>Nightly</strong>: published automatically after nightly E2E passes (tags: <code>nightly</code>, <code>nightly-YYYYMMDD</code>, <code>nightly-YYYYMMDD-&lt;shortsha&gt;</code>), and published as mutable manifests on GitHub Pages under <code>/nightly/</code>. No OCI Helm chart publication.</li>
 </ul>
 <h2 id="01-release-please-versioning-release-prs">0.1 Release-Please (Versioning + Release PRs)<a class="headerlink" href="#01-release-please-versioning-release-prs" title="Permanent link">&para;</a></h2>
 <p>We use <strong>release-please</strong> as the source of truth for:</p>
@@ -4272,7 +4272,7 @@ and update <code>.github/workflows/release-please.yml</code> to use it.</p>
 GitHub often excludes self-approvals from required reviews. Prefer a bot account or GitHub App.</p>
 </div>
 <h2 id="02-automation-workflows">0.2 Automation Workflows<a class="headerlink" href="#02-automation-workflows" title="Permanent link">&para;</a></h2>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Stable / prerelease</label><label for="__tabbed_1_2">Edge (main)</label><label for="__tabbed_1_3">Nightly dev</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Stable / prerelease</label><label for="__tabbed_1_2">Edge (main)</label><label for="__tabbed_1_3">Nightly</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <ul>
@@ -4284,6 +4284,7 @@ GitHub often excludes self-approvals from required reviews. Prefer a bot account
 <ul>
 <li>After CI success on <code>main</code>, <code>.github/workflows/publish-edge.yml</code> publishes:<ul>
 <li>Images: <code>:edge</code> and <code>:edge-&lt;shortsha&gt;</code></li>
+<li>No Helm chart publication (release-only)</li>
 </ul>
 </li>
 </ul>
@@ -4291,8 +4292,9 @@ GitHub often excludes self-approvals from required reviews. Prefer a bot account
 <div class="tabbed-block">
 <ul>
 <li>After nightly E2E success, <code>.github/workflows/publish-nightly.yml</code> publishes:<ul>
-<li>Images: <code>:dev</code>, <code>:dev-YYYYMMDD</code>, <code>:dev-YYYYMMDD-&lt;shortsha&gt;</code></li>
-<li>Manifests to GitHub Pages: <code>/nightly/install.yaml</code>, <code>/nightly/crds.yaml</code> (+ checksums + metadata)</li>
+<li>Images: <code>:nightly</code>, <code>:nightly-YYYYMMDD</code>, <code>:nightly-YYYYMMDD-&lt;shortsha&gt;</code></li>
+<li>Manifests to GitHub Pages: <code>/nightly/install.yaml</code>, <code>/nightly/crds.yaml</code> (+ checksums, checksums bundle, metadata)</li>
+<li>No Helm chart publication (release-only)</li>
 </ul>
 </li>
 </ul>
@@ -4403,7 +4405,7 @@ For out-of-band release, prefer cutting a dedicated PR on <code>main</code> and 
 <p class="admonition-title">Iterating prereleases</p>
 <p>Repeat the same process for <code>0.2.0-beta.2</code>, then <code>0.2.0-rc.1</code>, and finally <code>0.2.0</code>.</p>
 </div>
-<h2 id="3-published-artifacts">3. Published Artifacts<a class="headerlink" href="#3-published-artifacts" title="Permanent link">&para;</a></h2>
+<h2 id="3-published-artifacts-stableprerelease-only">3. Published Artifacts (Stable/Prerelease Only)<a class="headerlink" href="#3-published-artifacts-stableprerelease-only" title="Permanent link">&para;</a></h2>
 <p>The stable/prerelease release produces the following artifacts:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="4:3"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><input id="__tabbed_4_3" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">GitHub Release assets</label><label for="__tabbed_4_2">Container images</label><label for="__tabbed_4_3">Helm chart (OCI)</label></div>
 <div class="tabbed-content">
@@ -4412,7 +4414,7 @@ For out-of-band release, prefer cutting a dedicated PR on <code>main</code> and 
 <li><code>install.yaml</code> (digest-pinned installer manifest)</li>
 <li><code>crds.yaml</code> (CRDs only)</li>
 <li><code>checksums.txt</code> (sha256 of <code>install.yaml</code>, <code>crds.yaml</code>, and SBOMs)</li>
-<li><code>checksums.txt.sig</code> and <code>checksums.txt.crt</code> (keyless signature + certificate for <code>checksums.txt</code>)</li>
+<li><code>checksums.txt.bundle</code> (keyless Sigstore bundle for <code>checksums.txt</code>)</li>
 <li><code>sbom-openbao-operator.spdx.json</code></li>
 <li><code>sbom-openbao-init.spdx.json</code></li>
 <li><code>sbom-openbao-backup.spdx.json</code></li>
@@ -4455,9 +4457,10 @@ For out-of-band release, prefer cutting a dedicated PR on <code>main</code> and 
 <div class="tabbed-block">
 <p>Using <code>cosign</code> to verify the image was built by our release workflow.</p>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>ghcr.io/dc-tec/openbao-operator:0.1.0
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>ghcr.io/dc-tec/openbao-operator:0.1.0
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -4473,16 +4476,17 @@ For out-of-band release, prefer cutting a dedicated PR on <code>main</code> and 
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>crane<span class="w"> </span>digest<span class="w"> </span>ghcr.io/dc-tec/charts/openbao-operator:0.1.0
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>ghcr.io/dc-tec/charts/openbao-operator@sha256:...
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>ghcr.io/dc-tec/charts/openbao-operator@sha256:...
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>Verify <code>checksums.txt</code> using the signature and certificate uploaded to the GitHub Release.</p>
+<p>Verify <code>checksums.txt</code> using the Sigstore bundle uploaded to the GitHub Release.</p>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--certificate<span class="w"> </span>dist/checksums.txt.crt<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--signature<span class="w"> </span>dist/checksums.txt.sig<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--bundle<span class="w"> </span>dist/checksums.txt.bundle<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>dist/checksums.txt

@@ -4211,11 +4211,16 @@
 (<code>issuer</code>/<code>subject</code> or <code>issuerRegExp</code>/<code>subjectRegExp</code>),
 the operator auto-fills keyless identity defaults for official release images:</p>
 <ul>
-<li><code>openbao/openbao:&lt;tag&gt;</code> -&gt; OpenBao release workflow identity</li>
+<li><code>openbao/openbao:&lt;tag&gt;</code>, <code>ghcr.io/openbao/openbao:&lt;tag&gt;</code>, <code>quay.io/openbao/openbao:&lt;tag&gt;</code> -&gt; OpenBao release workflow identity</li>
 <li><code>ghcr.io/dc-tec/openbao-{init,backup,upgrade}:&lt;tag&gt;</code> -&gt; OpenBao Operator release workflow identity</li>
 </ul>
 <p>Custom registries/forks should set explicit <code>publicKey</code>, <code>issuer</code>+<code>subject</code>, or
 <code>issuerRegExp</code>+<code>subjectRegExp</code>.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Legacy + Bundle Support</p>
+<p>During migration, runtime verification accepts both legacy Cosign signatures and Sigstore bundle-format signatures.
+The verifier first checks legacy signatures and automatically falls back to bundle verification when needed.</p>
 </div>
 </div>
 <div class="tabbed-block">
@@ -4322,10 +4327,10 @@ Omitted verification blocks are still allowed, and are implicitly treated as ena
 </tbody>
 </table>
 <h2 id="separate-signers-for-openbao-and-operator-images">Separate Signers for OpenBao and Operator Images<a class="headerlink" href="#separate-signers-for-openbao-and-operator-images" title="Permanent link">&para;</a></h2>
-<p>The OpenBao main image (<code>openbao/openbao</code>) is signed by the <strong>OpenBao project</strong>, while helper images (init container, backup/restore executors, upgrade jobs) are signed by the <strong>operator project</strong>. Use <code>operatorImageVerification</code> to specify different signing credentials:</p>
+<p>The OpenBao main image (<code>openbao/openbao</code>, <code>ghcr.io/openbao/openbao</code>, <code>quay.io/openbao/openbao</code>) is signed by the <strong>OpenBao project</strong>, while helper images (init container, backup/restore executors, upgrade jobs) are signed by the <strong>operator project</strong>. Use <code>operatorImageVerification</code> to specify different signing credentials:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="c1"># Main OpenBao image (signed by openbao/openbao)</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;openbao/openbao:2.4.4&quot;</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="c1"># Main OpenBao image (signed by openbao/openbao workflows)</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ghcr.io/openbao/openbao:2.4.4&quot;</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">imageVerification</span><span class="p">:</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="nt">issuer</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://token.actions.githubusercontent.com&quot;</span>
@@ -4366,24 +4371,26 @@ This prevents confusing failures when the main image and helper images have diff
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>ghcr.io/dc-tec/openbao-operator:0.1.0
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>ghcr.io/dc-tec/openbao-operator:0.1.0
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>crane<span class="w"> </span>digest<span class="w"> </span>ghcr.io/dc-tec/charts/openbao-operator:0.1.0
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>ghcr.io/dc-tec/charts/openbao-operator@sha256:...
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>ghcr.io/dc-tec/charts/openbao-operator@sha256:...
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--certificate<span class="w"> </span>checksums.txt.crt<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--signature<span class="w"> </span>checksums.txt.sig<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--bundle<span class="w"> </span>checksums.txt.bundle<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>checksums.txt
