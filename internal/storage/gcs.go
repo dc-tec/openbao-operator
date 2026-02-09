@@ -137,7 +137,7 @@ func OpenGCSBucket(ctx context.Context, cfg GCSClientConfig) (interfaces.BlobSto
 
 func buildGCSCredentials(ctx context.Context, credsJSON []byte) (*google.Credentials, error) {
 	if len(credsJSON) > 0 {
-		return google.CredentialsFromJSON(ctx, credsJSON, gcsRWScope)
+		return google.CredentialsFromJSONWithType(ctx, credsJSON, google.ServiceAccount, gcsRWScope)
 	}
 	adc, err := google.FindDefaultCredentials(ctx, gcsRWScope)
 	if err != nil {
