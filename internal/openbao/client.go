@@ -562,7 +562,7 @@ func (c *Client) Init(ctx context.Context, req InitRequest) (*InitResponse, erro
 	// /v1/sys/init is unauthenticated; no token header is required.
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, respBody, err := c.doAndReadAll(httpReq, nil, "failed to execute init request")
+	resp, respBody, err := c.doAndReadAll(httpReq, c.clientForContextDeadline(ctx), "failed to execute init request")
 	if err != nil {
 		return nil, err
 	}

@@ -543,8 +543,17 @@ export BAO_SKIP_VERIFY=true
 				sleep %d
 				continue
 			fi
+			READ_ADDR="$BAO_ADDR"
 			set +e
-			DEAD_SERVERS=$(bao read -field=cleanup_dead_servers sys/storage/raft/autopilot/configuration 2>&1 | tr -d '\r\n')
+			LEADER_ADDR=$(bao read -field=leader_address sys/leader 2>/dev/null | tr -d '\r\n')
+			LEADER_EXIT=$?
+			set -e
+			if [ $LEADER_EXIT -eq 0 ] && [ -n "$LEADER_ADDR" ] && [ "$LEADER_ADDR" != "null" ]; then
+				READ_ADDR="$LEADER_ADDR"
+			fi
+			set +e
+			DEAD_SERVERS=$(BAO_ADDR="$READ_ADDR" \
+				bao read -field=cleanup_dead_servers sys/storage/raft/autopilot/configuration 2>&1 | tr -d '\r\n')
 			READ_EXIT=$?
 			set -e
 			if [ $READ_EXIT -eq 0 ] && [ "$DEAD_SERVERS" = "true" ]; then
@@ -609,8 +618,17 @@ export BAO_SKIP_VERIFY=true
 				sleep %d
 				continue
 			fi
+			READ_ADDR="$BAO_ADDR"
 			set +e
-			MIN_QUORUM=$(bao read -field=min_quorum sys/storage/raft/autopilot/configuration 2>&1 | tr -d '\r\n')
+			LEADER_ADDR=$(bao read -field=leader_address sys/leader 2>/dev/null | tr -d '\r\n')
+			LEADER_EXIT=$?
+			set -e
+			if [ $LEADER_EXIT -eq 0 ] && [ -n "$LEADER_ADDR" ] && [ "$LEADER_ADDR" != "null" ]; then
+				READ_ADDR="$LEADER_ADDR"
+			fi
+			set +e
+			MIN_QUORUM=$(BAO_ADDR="$READ_ADDR" \
+				bao read -field=min_quorum sys/storage/raft/autopilot/configuration 2>&1 | tr -d '\r\n')
 			READ_EXIT=$?
 			set -e
 			if [ $READ_EXIT -eq 0 ] && [ "$MIN_QUORUM" = "%d" ]; then

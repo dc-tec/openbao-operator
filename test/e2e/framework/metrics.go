@@ -4,9 +4,12 @@
 package framework
 
 import (
-	"crypto/rand"
-	"encoding/hex"
+	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os/exec"
 	"strings"
 	"time"
@@ -25,12 +28,20 @@ const (
 	metricsReaderBindingName     = "openbao-operator-metrics-binding"
 )
 
-func randomHex(nbytes int) (string, error) {
-	b := make([]byte, nbytes)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
+func findFreeLocalPort() (int, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
 	}
-	return hex.EncodeToString(b), nil
+	defer func() {
+		_ = listener.Close()
+	}()
+
+	addr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		return 0, fmt.Errorf("unexpected listener address type %T", listener.Addr())
+	}
+	return addr.Port, nil
 }
 
 func ensureMetricsReaderClusterRoleBinding(operatorNamespace string) error {
@@ -98,12 +109,6 @@ func createServiceAccountToken(operatorNamespace string) (string, error) {
 	return "", lastErr
 }
 
-func escapeForSingleQuotes(s string) string {
-	// Safely embed arbitrary text inside a single-quoted POSIX shell string.
-	// Example: abc'def -> 'abc'"'"'def'
-	return strings.ReplaceAll(s, "'", `'"'"'`)
-}
-
 // WaitForControllerMetricSubstring fetches the controller /metrics endpoint until the provided
 // substring is observed or the timeout elapses. It returns the last fetched metrics output.
 func WaitForControllerMetricSubstring(operatorNamespace, substring string, timeout time.Duration) (string, error) {
@@ -138,110 +143,116 @@ func WaitForControllerMetricSubstrings(operatorNamespace string, timeout time.Du
 		return "", err
 	}
 
-	suffix, err := randomHex(4)
+	localPort, err := findFreeLocalPort()
 	if err != nil {
 		return "", err
 	}
-	podName := fmt.Sprintf("curl-metrics-%s", suffix)
 
 	// Keep each attempt bounded so the overall shell loop duration roughly tracks the provided timeout.
 	const (
-		curlConnectTimeoutSeconds = 2
-		curlMaxTimeSeconds        = 3
-		sleepSeconds              = 1
+		connectTimeoutSeconds = 2
+		maxTimeSeconds        = 3
+		sleepSeconds          = 1
 	)
-	perAttemptBudget := time.Duration(curlMaxTimeSeconds+sleepSeconds) * time.Second
+	perAttemptBudget := time.Duration(maxTimeSeconds+sleepSeconds) * time.Second
 	attempts := int(timeout / perAttemptBudget)
 	if attempts < 1 {
 		attempts = 1
 	}
 
-	var checks []string
-	for _, s := range substrings {
-		needle := escapeForSingleQuotes(s)
-		checks = append(checks, fmt.Sprintf(`echo "$out" | grep -Fq '%s'`, needle))
+	serviceRef := fmt.Sprintf("service/%s", controllerMetricsServiceName)
+	portForwardArg := fmt.Sprintf("%d:8443", localPort)
+	portForwardCmd := exec.Command("kubectl", "port-forward", "--namespace", operatorNamespace, serviceRef, portForwardArg)
+	portForwardCmd.Stdout = io.Discard
+	portForwardCmd.Stderr = io.Discard
+
+	if err := portForwardCmd.Start(); err != nil {
+		return "", err
 	}
-	condition := strings.Join(checks, " && ")
 
-	script := fmt.Sprintf(
-		`attempts=%d; i=0; while [ "$i" -lt "$attempts" ]; do `+
-			`out="$(curl -sfk --connect-timeout %d --max-time %d -H 'Authorization: Bearer %s' https://%s.%s.svc.cluster.local:8443/metrics 2>/dev/null || true)"; `+
-			`%s && { echo "$out"; exit 0; }; `+
-			`i=$((i+1)); sleep %d; `+
-			`done; echo "$out"; exit 1`,
-		attempts,
-		curlConnectTimeoutSeconds,
-		curlMaxTimeSeconds,
-		token,
-		controllerMetricsServiceName,
-		operatorNamespace,
-		condition,
-		sleepSeconds,
-	)
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- portForwardCmd.Wait()
+	}()
+	defer func() {
+		if portForwardCmd.Process != nil {
+			_ = portForwardCmd.Process.Kill()
+		}
+		select {
+		case <-waitCh:
+		case <-time.After(2 * time.Second):
+		}
+	}()
 
-	cmd := exec.Command("kubectl", "run", podName, "--restart=Never",
-		"--namespace", operatorNamespace,
-		"--image=curlimages/curl:latest",
-		"--overrides",
-		fmt.Sprintf(`{
-			"spec": {
-				"containers": [{
-					"name": "curl",
-					"image": "curlimages/curl:latest",
-					"imagePullPolicy": "IfNotPresent",
-					"command": ["/bin/sh", "-c"],
-					"args": [%q],
-					"securityContext": {
-						"readOnlyRootFilesystem": true,
-						"allowPrivilegeEscalation": false,
-						"capabilities": {
-							"drop": ["ALL"]
-						},
-						"runAsNonRoot": true,
-						"runAsUser": 1000,
-						"seccompProfile": {
-							"type": "RuntimeDefault"
+	forwardReadyDeadline := time.Now().Add(20 * time.Second)
+	forwardReady := false
+	for time.Now().Before(forwardReadyDeadline) {
+		select {
+		case waitErr := <-waitCh:
+			if waitErr != nil {
+				return "", fmt.Errorf("kubectl port-forward exited early: %w", waitErr)
+			}
+			return "", fmt.Errorf("kubectl port-forward exited before becoming ready")
+		default:
+		}
+
+		conn, dialErr := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", localPort), 500*time.Millisecond)
+		if dialErr == nil {
+			_ = conn.Close()
+			forwardReady = true
+			break
+		}
+
+		time.Sleep(200 * time.Millisecond)
+	}
+	if !forwardReady {
+		return "", fmt.Errorf("timed out waiting for kubectl port-forward to become ready on localhost:%d", localPort)
+	}
+
+	metricsURL := fmt.Sprintf("https://127.0.0.1:%d/metrics", localPort)
+	httpClient := &http.Client{
+		Timeout: time.Duration(connectTimeoutSeconds+maxTimeSeconds) * time.Second,
+		Transport: &http.Transport{
+			//nolint:gosec // E2E port-forward targets localhost while cert SANs are service DNS names.
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	var lastOutput string
+	for i := 0; i < attempts; i++ {
+		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, metricsURL, nil)
+		if reqErr != nil {
+			return "", reqErr
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		resp, reqErr := httpClient.Do(req)
+		if reqErr == nil {
+			body, readErr := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if readErr == nil {
+				lastOutput = string(body)
+				if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+					matched := true
+					for _, s := range substrings {
+						if !strings.Contains(lastOutput, s) {
+							matched = false
+							break
 						}
 					}
-				}],
-				"serviceAccountName": "%s"
-			}
-		}`, script, controllerServiceAccountName),
-	)
-
-	_, runErr := utils.Run(cmd)
-	defer func() {
-		_, _ = utils.Run(exec.Command("kubectl", "delete", "pod", podName, "-n", operatorNamespace, "--ignore-not-found"))
-	}()
-	if runErr != nil {
-		return "", runErr
-	}
-
-	deadline := time.Now().Add(timeout + 30*time.Second)
-	for time.Now().Before(deadline) {
-		cmd = exec.Command("kubectl", "get", "pod", podName,
-			"-o", "jsonpath={.status.phase}",
-			"-n", operatorNamespace,
-		)
-		phase, err := utils.Run(cmd)
-		if err == nil {
-			phase = strings.TrimSpace(phase)
-			if phase == "Succeeded" {
-				logs, logsErr := utils.Run(exec.Command("kubectl", "logs", podName, "-n", operatorNamespace))
-				if logsErr != nil {
-					return "", logsErr
+					if matched {
+						return lastOutput, nil
+					}
 				}
-				return logs, nil
-			}
-			if phase == "Failed" {
-				logs, _ := utils.Run(exec.Command("kubectl", "logs", podName, "-n", operatorNamespace))
-				return logs, fmt.Errorf("metrics curl pod %q failed", podName)
 			}
 		}
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(time.Duration(sleepSeconds) * time.Second)
 	}
 
-	logs, _ := utils.Run(exec.Command("kubectl", "logs", podName, "-n", operatorNamespace))
-	return logs, fmt.Errorf("timed out waiting for metrics curl pod %q to complete", podName)
+	return lastOutput, fmt.Errorf(
+		"timed out waiting for metrics endpoint %q to contain expected substrings after %d attempts",
+		metricsURL,
+		attempts,
+	)
 }

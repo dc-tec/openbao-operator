@@ -276,3 +276,32 @@ func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op str
 	}
 	return resp, body, nil
 }
+
+// clientForContextDeadline returns a clone of the default HTTP client with a timeout
+// extended to match the remaining context deadline when that deadline is longer.
+// This is used for operations like init where the caller deliberately provides a
+// longer per-call timeout than the global default request timeout.
+func (c *Client) clientForContextDeadline(ctx context.Context) *http.Client {
+	if c == nil || c.httpClient == nil || ctx == nil {
+		return nil
+	}
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return nil
+	}
+
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return nil
+	}
+
+	if c.httpClient.Timeout == 0 || c.httpClient.Timeout >= remaining {
+		return nil
+	}
+
+	return &http.Client{
+		Transport: c.httpClient.Transport,
+		Timeout:   remaining,
+	}
+}

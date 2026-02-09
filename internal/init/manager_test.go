@@ -2,6 +2,7 @@ package init
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -9,6 +10,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
@@ -16,6 +18,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
@@ -276,4 +279,75 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEnsureRootTokenSecretPresent(t *testing.T) {
+	newCluster := func() *openbaov1alpha1.OpenBaoCluster {
+		return &openbaov1alpha1.OpenBaoCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cluster",
+				Namespace: "default",
+			},
+		}
+	}
+
+	t.Run("returns nil when root token Secret exists", func(t *testing.T) {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cluster-root-token",
+				Namespace: "default",
+			},
+		}
+		clientset := kubernetesfake.NewClientset(secret)
+		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+
+		if err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster()); err != nil {
+			t.Fatalf("ensureRootTokenSecretPresent() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("returns transient error when root token Secret is missing", func(t *testing.T) {
+		clientset := kubernetesfake.NewClientset()
+		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+
+		err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster())
+		if err == nil {
+			t.Fatalf("ensureRootTokenSecretPresent() error = nil, want non-nil")
+		}
+		if !operatorerrors.IsTransient(err) {
+			t.Fatalf("ensureRootTokenSecretPresent() error = %v, want transient", err)
+		}
+	})
+
+	t.Run("returns transient error on forbidden Secret get", func(t *testing.T) {
+		clientset := kubernetesfake.NewClientset()
+		clientset.PrependReactor("get", "secrets", func(clienttesting.Action) (bool, runtime.Object, error) {
+			return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, "cluster-root-token", fmt.Errorf("forbidden"))
+		})
+		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+
+		err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster())
+		if err == nil {
+			t.Fatalf("ensureRootTokenSecretPresent() error = nil, want non-nil")
+		}
+		if !operatorerrors.IsTransient(err) {
+			t.Fatalf("ensureRootTokenSecretPresent() error = %v, want transient", err)
+		}
+	})
+
+	t.Run("returns non-transient error on unexpected Secret get error", func(t *testing.T) {
+		clientset := kubernetesfake.NewClientset()
+		clientset.PrependReactor("get", "secrets", func(clienttesting.Action) (bool, runtime.Object, error) {
+			return true, nil, fmt.Errorf("boom")
+		})
+		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+
+		err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster())
+		if err == nil {
+			t.Fatalf("ensureRootTokenSecretPresent() error = nil, want non-nil")
+		}
+		if operatorerrors.IsTransient(err) {
+			t.Fatalf("ensureRootTokenSecretPresent() error = %v, want non-transient", err)
+		}
+	})
 }

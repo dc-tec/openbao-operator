@@ -55,17 +55,17 @@ func patchSingleTenantMode(namespace string) error {
 }
 
 // restoreMultiTenantMode removes the WATCH_NAMESPACE env var to restore multi-tenant mode.
-func restoreMultiTenantMode() {
+func restoreMultiTenantMode() error {
 	cmd := exec.Command("kubectl", "set", "env", "deployment/openbao-operator-controller",
 		"WATCH_NAMESPACE-",
 		"-n", operatorNamespace,
 	)
 	output, err := utils.Run(cmd)
 	if err != nil {
-		_, _ = fmt.Fprintf(GinkgoWriter, "Note: restore multi-tenant mode returned: %v\nOutput: %s\n", err, output)
-		return
+		return fmt.Errorf("failed to restore multi-tenant mode: %w\nOutput: %s", err, output)
 	}
 	_, _ = fmt.Fprintf(GinkgoWriter, "Removed WATCH_NAMESPACE from controller deployment\nOutput: %s\n", output)
+	return nil
 }
 
 func waitForControllerRolloutAndLeader(watchNamespace string) {
@@ -77,7 +77,7 @@ func waitForControllerRolloutAndLeader(watchNamespace string) {
 	output, err := utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to wait for controller rollout\nOutput: %s", output))
 
-	By("waiting for controller pod to be Ready and configured for single-tenant mode")
+	By("waiting for controller pod to be Ready and configured with the expected WATCH_NAMESPACE")
 	Eventually(func(g Gomega) {
 		cmd := exec.Command("kubectl", "get",
 			"pods",
@@ -287,7 +287,8 @@ var _ = Describe("Tenant Isolation", Label("security", "tenant", "tenancy"), Ord
 
 			// Restore the operator to multi-tenant mode
 			By("restoring operator to multi-tenant mode")
-			restoreMultiTenantMode()
+			Expect(restoreMultiTenantMode()).To(Succeed())
+			waitForControllerRolloutAndLeader("")
 		})
 
 		It("sets up single-tenant mode environment", func() {

@@ -600,6 +600,53 @@ func TestClient_Init(t *testing.T) {
 	}
 }
 
+func TestClient_Init_UsesContextDeadlineBeyondDefaultRequestTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != constants.APIPathSysInit {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPut {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+
+		// Simulate init taking longer than the client's default request timeout.
+		time.Sleep(150 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(InitResponse{
+			UnsealKeysB64: []string{"key1"},
+			RootToken:     "s.root-token",
+		}); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		BaseURL:        server.URL,
+		RequestTimeout: 50 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+
+	resp, err := client.Init(ctx, InitRequest{
+		SecretShares:    ptr.To(1),
+		SecretThreshold: ptr.To(1),
+	})
+	if err != nil {
+		t.Fatalf("Init() error = %v, want nil", err)
+	}
+	if resp == nil {
+		t.Fatal("Init() response is nil")
+	}
+	if resp.RootToken != "s.root-token" {
+		t.Fatalf("Init().RootToken = %q, want %q", resp.RootToken, "s.root-token")
+	}
+}
+
 func containsError(err error, substr string) bool {
 	if err == nil {
 		return false

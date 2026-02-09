@@ -342,12 +342,9 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 		// If already initialized, we shouldn't be here (should have been caught earlier), but handle it gracefully
 		if healthResp.Initialized {
 			logger.Info("OpenBao cluster is already initialized (detected via health check)", "cluster", cluster.Name)
-			// Verify root token secret exists - if not, we cannot retrieve it after initialization
-			secretName := cluster.Name + constants.SuffixRootToken
-			_, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, secretName, metav1.GetOptions{})
-			if apierrors.IsNotFound(err) {
-				logger.Error(nil, "OpenBao is already initialized but root token Secret does not exist. The root token cannot be retrieved after initialization. This may indicate the cluster was initialized externally or the Secret was deleted.", "cluster", cluster.Name, "secret", secretName)
-				// Still return nil to avoid blocking - the cluster is initialized, we just can't provide the root token
+			if err := m.ensureRootTokenSecretPresent(ctx, cluster); err != nil {
+				logger.Info("OpenBao is initialized but root token Secret is not available yet; will retry", "cluster", cluster.Name, "error", err)
+				return err
 			}
 			return nil
 		}
@@ -370,12 +367,9 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 		// case via the error message and treat it as a no-op.
 		if contains(err.Error(), "already initialized") {
 			logger.Info("OpenBao cluster is already initialized (detected during HTTP init attempt)", "cluster", cluster.Name)
-			// Verify root token secret exists - if not, we cannot retrieve it after initialization
-			secretName := cluster.Name + constants.SuffixRootToken
-			_, secretErr := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, secretName, metav1.GetOptions{})
-			if apierrors.IsNotFound(secretErr) {
-				logger.Error(nil, "OpenBao is already initialized but root token Secret does not exist. The root token cannot be retrieved after initialization. This may indicate the cluster was initialized externally or the Secret was deleted.", "cluster", cluster.Name, "secret", secretName)
-				// Still return nil to avoid blocking - the cluster is initialized, we just can't provide the root token
+			if secretErr := m.ensureRootTokenSecretPresent(ctx, cluster); secretErr != nil {
+				logger.Info("OpenBao is initialized but root token Secret is not available yet; will retry", "cluster", cluster.Name, "error", secretErr)
+				return secretErr
 			}
 			return nil
 		}
@@ -406,6 +400,27 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 
 	logger.Info("OpenBao cluster initialized successfully via HTTP API")
 	return nil
+}
+
+func (m *Manager) ensureRootTokenSecretPresent(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	secretName := cluster.Name + constants.SuffixRootToken
+	_, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err == nil {
+		return nil
+	}
+
+	if apierrors.IsNotFound(err) {
+		return operatorerrors.WrapTransientKubernetesAPI(
+			fmt.Errorf("root token Secret %s/%s not found while cluster is already initialized: %w", cluster.Namespace, secretName, err),
+		)
+	}
+	if apierrors.IsForbidden(err) || apierrors.IsTimeout(err) || apierrors.IsServerTimeout(err) || apierrors.IsTooManyRequests(err) || apierrors.IsInternalError(err) {
+		return operatorerrors.WrapTransientKubernetesAPI(
+			fmt.Errorf("failed to read root token Secret %s/%s while cluster is already initialized: %w", cluster.Namespace, secretName, err),
+		)
+	}
+
+	return fmt.Errorf("failed to read root token Secret %s/%s while cluster is already initialized: %w", cluster.Namespace, secretName, err)
 }
 
 // preflightRootTokenStorage ensures that root token Secret writes are permitted before we
