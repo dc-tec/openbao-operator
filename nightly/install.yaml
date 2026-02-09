@@ -761,6 +761,12 @@ spec:
                       Required for keyless verification when PublicKey is not provided.
                       For GitHub Actions keyless verification, use: https://token.actions.githubusercontent.com
                     type: string
+                  issuerRegExp:
+                    description: |-
+                      IssuerRegExp is a regular expression for the OIDC issuer when using keyless verification.
+                      Use this to allow a controlled set of issuers instead of a single exact issuer string.
+                      Requires SubjectRegExp when PublicKey is not provided.
+                    type: string
                   publicKey:
                     description: |-
                       PublicKey is the Cosign public key content used to verify the signature.
@@ -773,6 +779,12 @@ spec:
                       Required for keyless verification when PublicKey is not provided.
                       Example (GitHub Actions): https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/<VERSION>
                       The version in the subject MUST match the image tag version.
+                    type: string
+                  subjectRegExp:
+                    description: |-
+                      SubjectRegExp is a regular expression for the OIDC subject when using keyless verification.
+                      Use this to allow a controlled set of workflow identities instead of a single exact subject.
+                      Requires IssuerRegExp when PublicKey is not provided.
                     type: string
                 required:
                 - enabled
@@ -1385,6 +1397,12 @@ spec:
                       Required for keyless verification when PublicKey is not provided.
                       For GitHub Actions keyless verification, use: https://token.actions.githubusercontent.com
                     type: string
+                  issuerRegExp:
+                    description: |-
+                      IssuerRegExp is a regular expression for the OIDC issuer when using keyless verification.
+                      Use this to allow a controlled set of issuers instead of a single exact issuer string.
+                      Requires SubjectRegExp when PublicKey is not provided.
+                    type: string
                   publicKey:
                     description: |-
                       PublicKey is the Cosign public key content used to verify the signature.
@@ -1397,6 +1415,12 @@ spec:
                       Required for keyless verification when PublicKey is not provided.
                       Example (GitHub Actions): https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/<VERSION>
                       The version in the subject MUST match the image tag version.
+                    type: string
+                  subjectRegExp:
+                    description: |-
+                      SubjectRegExp is a regular expression for the OIDC subject when using keyless verification.
+                      Use this to allow a controlled set of workflow identities instead of a single exact subject.
+                      Requires IssuerRegExp when PublicKey is not provided.
                     type: string
                 required:
                 - enabled
@@ -4389,7 +4413,7 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:c1dbe9562ca8c6818880b1eb0c5ec293114e9c5409870451e25591e37b4041c6
+        image: ghcr.io/dc-tec/openbao-operator@sha256:be729c6f6626657ba50652f97ca1385e4b1b985ea7c80b434067f0fbc6a6cde0
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4503,7 +4527,7 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:c1dbe9562ca8c6818880b1eb0c5ec293114e9c5409870451e25591e37b4041c6
+        image: ghcr.io/dc-tec/openbao-operator@sha256:be729c6f6626657ba50652f97ca1385e4b1b985ea7c80b434067f0fbc6a6cde0
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4562,6 +4586,57 @@ spec:
               - fieldRef:
                   fieldPath: metadata.namespace
                 path: namespace
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-operator-openbao-enforce-managed-image-digests
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - apps
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - statefulsets
+    - apiGroups:
+      - batch
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - jobs
+  validations:
+  - expression: '!variables.is_openbao_managed || !variables.digest_enforcement_required
+      || (variables.all_container_images_are_digests && variables.all_init_container_images_are_digests)'
+    message: Operator-managed workloads with openbao.org/digest-enforcement=required
+      must use digest-pinned images (repo@sha256:...) for all containers and initContainers.
+  variables:
+  - expression: object != null && has(object.metadata) && has(object.metadata.labels)
+      && ("app.kubernetes.io/managed-by" in object.metadata.labels) && object.metadata.labels["app.kubernetes.io/managed-by"]
+      == "openbao-operator"
+    name: is_openbao_managed
+  - expression: object != null && has(object.metadata) && has(object.metadata.labels)
+      && ("openbao.org/digest-enforcement" in object.metadata.labels) && object.metadata.labels["openbao.org/digest-enforcement"]
+      == "required"
+    name: digest_enforcement_required
+  - expression: |-
+      !has(object.spec.template.spec.containers) || object.spec.template.spec.containers.all(c,
+
+        c.image.matches("^.+@sha256:[a-f0-9]{64}$"))
+    name: all_container_images_are_digests
+  - expression: |-
+      !has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.all(c,
+
+        c.image.matches("^.+@sha256:[a-f0-9]{64}$"))
+    name: all_init_container_images_are_digests
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -5507,6 +5582,44 @@ spec:
         !(has(object.spec.unseal.kmip) && has(object.spec.unseal.kmip.tlsSkipVerify) && object.spec.unseal.kmip.tlsSkipVerify == true))
     message: Hardened profile requires TLS mode External or ACME, an external unseal
       (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.imageVerification) || object.spec.imageVerification.enabled
+      == true'
+    message: Hardened profile does not allow spec.imageVerification.enabled=false.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.operatorImageVerification) || object.spec.operatorImageVerification.enabled
+      == true'
+    message: Hardened profile does not allow spec.operatorImageVerification.enabled=false.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.imageVerification) || !has(object.spec.imageVerification.failurePolicy)
+      || object.spec.imageVerification.failurePolicy != "Warn"'
+    message: Hardened profile does not allow spec.imageVerification.failurePolicy=Warn.
+  - expression: |-
+      !has(object.spec.profile) || object.spec.profile != "Hardened" || !has(object.spec.imageVerification) || object.spec.imageVerification.enabled != true || (
+
+        (has(object.spec.imageVerification.publicKey) && object.spec.imageVerification.publicKey != "") ||
+        ((has(object.spec.imageVerification.issuer) && object.spec.imageVerification.issuer != "") &&
+          (has(object.spec.imageVerification.subject) && object.spec.imageVerification.subject != "")) ||
+        ((has(object.spec.imageVerification.issuerRegExp) && object.spec.imageVerification.issuerRegExp != "") &&
+          (has(object.spec.imageVerification.subjectRegExp) && object.spec.imageVerification.subjectRegExp != ""))
+      )
+    message: When enabled in Hardened profile, spec.imageVerification must provide
+      publicKey, issuer+subject, or issuerRegExp+subjectRegExp.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.operatorImageVerification) || !has(object.spec.operatorImageVerification.failurePolicy)
+      || object.spec.operatorImageVerification.failurePolicy != "Warn"'
+    message: Hardened profile does not allow spec.operatorImageVerification.failurePolicy=Warn.
+  - expression: |-
+      !has(object.spec.profile) || object.spec.profile != "Hardened" || !has(object.spec.operatorImageVerification) || object.spec.operatorImageVerification.enabled != true || (
+
+        (has(object.spec.operatorImageVerification.publicKey) && object.spec.operatorImageVerification.publicKey != "") ||
+        ((has(object.spec.operatorImageVerification.issuer) && object.spec.operatorImageVerification.issuer != "") &&
+          (has(object.spec.operatorImageVerification.subject) && object.spec.operatorImageVerification.subject != "")) ||
+        ((has(object.spec.operatorImageVerification.issuerRegExp) && object.spec.operatorImageVerification.issuerRegExp != "") &&
+          (has(object.spec.operatorImageVerification.subjectRegExp) && object.spec.operatorImageVerification.subjectRegExp != ""))
+      )
+    message: When enabled in Hardened profile, spec.operatorImageVerification must
+      provide publicKey, issuer+subject, or issuerRegExp+subjectRegExp.
   - expression: '!has(object.spec.initContainer) || object.spec.initContainer.enabled
       == true'
     message: spec.initContainer is optional; when set, spec.initContainer.enabled
@@ -5683,6 +5796,15 @@ spec:
         !object.spec.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
     message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
       are prohibited in restore configuration to prevent confused deputy attacks.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-openbao-enforce-managed-image-digests-binding
+spec:
+  policyName: openbao-operator-openbao-enforce-managed-image-digests
+  validationActions:
+  - Deny
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
