@@ -378,15 +378,33 @@ jobs:
           - name: "Lifecycle & Core"
             focus: "Cluster Lifecycle|Manager|GitOps"
             slow: "false"
+            hardened_signed: "false"
+            openbao_image: ""
+            hardened_init_image: ""
           - name: "Backup & Restore"
             focus: "Backup & Restore"
             slow: "true"
+            hardened_signed: "false"
+            openbao_image: ""
+            hardened_init_image: ""
           - name: "Upgrades & Chaos"
             focus: "Upgrade|Chaos"
             slow: "true"
+            hardened_signed: "false"
+            openbao_image: ""
+            hardened_init_image: ""
           - name: "Security & Tenants"
             focus: "Security|TLS|Tenant Isolation|Hardened|Platform"
             slow: "false"
+            hardened_signed: "false"
+            openbao_image: ""
+            hardened_init_image: ""
+          - name: "Hardened & ACME (Signed)"
+            focus: "Hardened profile|ACME TLS|GitOps contract"
+            slow: "true"
+            hardened_signed: "true"
+            openbao_image: "ghcr.io/openbao/openbao:2.5.0"
+            hardened_init_image: "ghcr.io/dc-tec/openbao-init:edge"
     env:
       KIND_NODE_IMAGE: kindest/node:v1.34.3
     steps:
@@ -403,56 +421,61 @@ jobs:
       - name: Determine E2E Filter
         id: filter
         run: |
-          # Default: Skip slow, nightly, and openshift tests
-          # Also skip pentest-labeled tests unless explicitly requested via PR labels.
-          FILTER="!slow && !nightly && !openshift && !pentest"
-
-          # Dynamic inclusions based on PR labels (from labeler.yml)
-          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'upgrades') }}" == "true" ]]; then
-            FILTER="$FILTER || (upgrade)"
-            echo "::notice::Including UPGRADE tests (detected 'upgrades' label)"
-          fi
-
-          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'backup') }}" == "true" ]]; then
-            FILTER="$FILTER || (backup)"
-            echo "::notice::Including BACKUP tests (detected 'backup' label)"
-          fi
-
-          # Trigger pentest-labeled checks for hardening-related changes.
-          # Labels are applied via .github/labeler.yml and/or manually.
-          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'provisioner') }}" == "true" ]] || \
-             [[ "${{ contains(github.event.pull_request.labels.*.name, 'admission') }}" == "true" ]] || \
-             [[ "${{ contains(github.event.pull_request.labels.*.name, 'controller') }}" == "true" ]]; then
-            FILTER="$FILTER || (pentest)"
-            echo "::notice::Including PENTEST checks (detected one of: provisioner/admission/controller)"
-          fi
-
-          # Full override: If ci:full-e2e label is present, include everything except openshift
-          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') }}" == "true" ]]; then
-            echo "::notice::Running FULL E2E suite (ignoring 'slow' skip)"
-            FILTER="!openshift"
+          if [[ "${{ matrix.hardened_signed }}" == "true" ]]; then
+            FILTER="!nightly && !openshift && !pentest"
+            SHOULD_RUN="true"
+            echo "::notice::Running signed Hardened/ACME lane with filter: $FILTER"
           else
-            echo "::notice::Running E2E suite with filter: $FILTER"
+            # Default: Skip slow, nightly, and openshift tests
+            # Also skip pentest-labeled tests unless explicitly requested via PR labels.
+            FILTER="!slow && !nightly && !openshift && !pentest"
+
+            # Dynamic inclusions based on PR labels (from labeler.yml)
+            if [[ "${{ contains(github.event.pull_request.labels.*.name, 'upgrades') }}" == "true" ]]; then
+              FILTER="$FILTER || (upgrade)"
+              echo "::notice::Including UPGRADE tests (detected 'upgrades' label)"
+            fi
+
+            if [[ "${{ contains(github.event.pull_request.labels.*.name, 'backup') }}" == "true" ]]; then
+              FILTER="$FILTER || (backup)"
+              echo "::notice::Including BACKUP tests (detected 'backup' label)"
+            fi
+
+            # Trigger pentest-labeled checks for hardening-related changes.
+            # Labels are applied via .github/labeler.yml and/or manually.
+            if [[ "${{ contains(github.event.pull_request.labels.*.name, 'provisioner') }}" == "true" ]] || \
+               [[ "${{ contains(github.event.pull_request.labels.*.name, 'admission') }}" == "true" ]] || \
+               [[ "${{ contains(github.event.pull_request.labels.*.name, 'controller') }}" == "true" ]]; then
+              FILTER="$FILTER || (pentest)"
+              echo "::notice::Including PENTEST checks (detected one of: provisioner/admission/controller)"
+            fi
+
+            # Full override: If ci:full-e2e label is present, include everything except openshift
+            if [[ "${{ contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') }}" == "true" ]]; then
+              echo "::notice::Running FULL E2E suite (ignoring 'slow' skip)"
+              FILTER="!openshift"
+            else
+              echo "::notice::Running E2E suite with filter: $FILTER"
+            fi
+
+            # Smart Skip Logic
+            # Default: Run if not slow, or if specifically included
+            SHOULD_RUN="true"
+            if [[ "${{ matrix.slow }}" == "true" ]]; then
+              # Start assuming skip for slow shards
+              SHOULD_RUN="false"
+
+              # If full suite is requested
+              if [[ "$FILTER" == "!openshift" ]]; then SHOULD_RUN="true"; fi
+
+              # If explicit dynamic inclusion matches this shard
+              if [[ "${{ matrix.name }}" == *"Backup"* ]] && [[ "$FILTER" == *"backup"* ]]; then SHOULD_RUN="true"; fi
+              if [[ "${{ matrix.name }}" == *"Upgrade"* ]] && [[ "$FILTER" == *"upgrade"* ]]; then SHOULD_RUN="true"; fi
+              # Note: Chaos has no specific label trigger yet, relies on full-e2e
+            fi
           fi
 
           echo "E2E_LABEL_FILTER=$FILTER" >> $GITHUB_ENV
-
-          # Smart Skip Logic
-          # Default: Run if not slow, or if specifically included
-          SHOULD_RUN="true"
-          if [[ "${{ matrix.slow }}" == "true" ]]; then
-            # Start assuming skip for slow shards
-            SHOULD_RUN="false"
-            
-            # If full suite is requested
-            if [[ "$FILTER" == "!openshift" ]]; then SHOULD_RUN="true"; fi
-            
-            # If explicit dynamic inclusion matches this shard
-            if [[ "${{ matrix.name }}" == *"Backup"* ]] && [[ "$FILTER" == *"backup"* ]]; then SHOULD_RUN="true"; fi
-            if [[ "${{ matrix.name }}" == *"Upgrade"* ]] && [[ "$FILTER" == *"upgrade"* ]]; then SHOULD_RUN="true"; fi
-            # Note: Chaos has no specific label trigger yet, relies on full-e2e
-          fi
-
           echo "SHOULD_RUN=$SHOULD_RUN" >> $GITHUB_ENV
           echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
           if [[ "$SHOULD_RUN" == "false" ]]; then
@@ -564,8 +587,11 @@ jobs:
           E2E_PARALLEL_NODES: "1"
           E2E_TIMEOUT: 40m
           E2E_SKIP_IMAGE_BUILD: "true"
+          E2E_ENABLE_HARDENED_SIGNED_SUITE: ${{ matrix.hardened_signed }}
           E2E_OPERATOR_IMAGE: openbao-operator:e2e
+          E2E_OPENBAO_IMAGE: ${{ matrix.openbao_image }}
           E2E_CONFIG_INIT_IMAGE: openbao-init:e2e
+          E2E_HARDENED_CONFIG_INIT_IMAGE: ${{ matrix.hardened_init_image }}
           E2E_BACKUP_EXECUTOR_IMAGE: openbao-backup:e2e
           E2E_UPGRADE_EXECUTOR_IMAGE: openbao-upgrade:e2e
           KIND_CLUSTER: kind

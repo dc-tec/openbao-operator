@@ -349,6 +349,7 @@ E2E_NO_COLOR ?= false
 E2E_FOCUS ?=
 # E2E_LABEL_FILTER runs only tests whose Ginkgo v2 labels match the filter expression.
 # Example: make test-e2e E2E_LABEL_FILTER='smoke && critical'
+# Example: make test-e2e E2E_LABEL_FILTER='(profile-hardened || tls) && security'
 E2E_LABEL_FILTER ?=
 # E2E_SKIP_CLEANUP skips the Kind cluster cleanup after tests (useful for debugging).
 # Set to true to keep the cluster running. Example: make test-e2e E2E_SKIP_CLEANUP=true
@@ -379,7 +380,7 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=$(E2E_FOCUS)"; \
 	fi; \
 	if [ -n "$(E2E_LABEL_FILTER)" ]; then \
-		GINKGO_FLAGS="$$GINKGO_FLAGS --label-filter=$(E2E_LABEL_FILTER)"; \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --label-filter=\"$(E2E_LABEL_FILTER)\""; \
 	fi; \
 	if [ "$(E2E_TRACE)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --trace"; \

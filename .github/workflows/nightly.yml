@@ -219,8 +219,11 @@ jobs:
           E2E_PARALLEL_NODES: "1"
           E2E_TIMEOUT: 90m
           E2E_SKIP_IMAGE_BUILD: "true"
+          E2E_ENABLE_HARDENED_SIGNED_SUITE: "true"
           E2E_OPERATOR_IMAGE: openbao-operator:e2e
+          E2E_OPENBAO_IMAGE: ghcr.io/openbao/openbao:2.5.0
           E2E_CONFIG_INIT_IMAGE: openbao-init:e2e
+          E2E_HARDENED_CONFIG_INIT_IMAGE: ghcr.io/dc-tec/openbao-init:edge
           E2E_BACKUP_EXECUTOR_IMAGE: openbao-backup:e2e
           E2E_UPGRADE_EXECUTOR_IMAGE: openbao-upgrade:e2e
         run: make test-e2e-ci

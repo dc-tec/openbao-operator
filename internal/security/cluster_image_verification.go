@@ -12,10 +12,12 @@ import (
 )
 
 const (
-	defaultGitHubOIDCIssuer = "https://token.actions.githubusercontent.com"
+	defaultGitHubOIDCIssuer       = "https://token.actions.githubusercontent.com"
+	defaultGitHubOIDCIssuerRegExp = "^https://token\\.actions\\.githubusercontent\\.com$"
 
-	openBaoReleaseSubjectPrefix       = "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/"
-	operatorReleaseSubjectPrefix      = "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/"
+	openBaoReleaseSubjectRegExp = "^https://github\\.com/openbao/openbao/\\.github/workflows/release\\.yml@refs/tags/v?[0-9A-Za-z][0-9A-Za-z._+-]*$"
+	operatorSubjectRegExp       = "^https://github\\.com/dc-tec/openbao-operator/\\.github/workflows/(release\\.yml@refs/tags/.+|publish-edge\\.yml@refs/heads/main|publish-nightly\\.yml@refs/heads/main)$"
+
 	operatorInitOfficialRepository    = "ghcr.io/dc-tec/openbao-init"
 	operatorBackupOfficialRepository  = "ghcr.io/dc-tec/openbao-backup"
 	operatorUpgradeOfficialRepository = "ghcr.io/dc-tec/openbao-upgrade"
@@ -161,38 +163,32 @@ func applyOfficialKeylessDefaults(config *interfaces.VerifyConfig, imageRef stri
 		return
 	}
 
-	repo, tag, ok := imageRepositoryAndTag(imageRef)
+	repository, ok := imageRepository(imageRef)
 	if !ok {
 		return
 	}
 
-	subject := defaultSubjectForImage(repo, tag, isOperatorImage)
-	if subject == "" {
+	subjectRegExp := defaultSubjectRegExpForImage(repository, isOperatorImage)
+	if subjectRegExp == "" {
 		return
 	}
 
-	config.Issuer = defaultGitHubOIDCIssuer
-	config.Subject = subject
+	config.IssuerRegExp = defaultGitHubOIDCIssuerRegExp
+	config.SubjectRegExp = subjectRegExp
 }
 
-func imageRepositoryAndTag(imageRef string) (string, string, bool) {
+func imageRepository(imageRef string) (string, bool) {
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
-		return "", "", false
+		return "", false
 	}
 
-	tagRef, ok := ref.(name.Tag)
-	if !ok {
-		return "", "", false
+	repository := normalizeRepository(ref.Context().Name())
+	if repository == "" {
+		return "", false
 	}
 
-	repository := normalizeRepository(tagRef.Context().Name())
-	tag := strings.TrimSpace(tagRef.TagStr())
-	if repository == "" || tag == "" {
-		return "", "", false
-	}
-
-	return repository, tag, true
+	return repository, true
 }
 
 func normalizeRepository(repository string) string {
@@ -202,26 +198,17 @@ func normalizeRepository(repository string) string {
 	return repository
 }
 
-func defaultSubjectForImage(repository, tag string, isOperatorImage bool) string {
+func defaultSubjectRegExpForImage(repository string, isOperatorImage bool) string {
 	if !isOperatorImage {
 		if _, ok := openBaoOfficialRepositories[repository]; !ok {
 			return ""
 		}
-
-		tag = strings.TrimSpace(tag)
-		if tag == "" {
-			return ""
-		}
-		if !strings.HasPrefix(tag, "v") {
-			tag = "v" + tag
-		}
-
-		return openBaoReleaseSubjectPrefix + tag
+		return openBaoReleaseSubjectRegExp
 	}
 
 	switch repository {
 	case operatorInitOfficialRepository, operatorBackupOfficialRepository, operatorUpgradeOfficialRepository:
-		return operatorReleaseSubjectPrefix + tag
+		return operatorSubjectRegExp
 	default:
 		return ""
 	}
