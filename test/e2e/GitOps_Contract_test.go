@@ -50,6 +50,8 @@ var _ = Describe("GitOps contract (Argo-like apply)", Label("gitops", "contract"
 	BeforeAll(func() {
 		var err error
 
+		requireHardenedSignedSuite()
+
 		cfg, err = ctrlconfig.GetConfig()
 		Expect(err).NotTo(HaveOccurred())
 

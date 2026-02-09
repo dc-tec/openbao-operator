@@ -41,11 +41,11 @@ func TestVerifyImageForCluster_AppliesOfficialOpenBaoKeylessDefaults(t *testing.
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.Issuer; got != defaultGitHubOIDCIssuer {
-		t.Fatalf("issuer = %q, want %q", got, defaultGitHubOIDCIssuer)
+	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
+		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
 	}
-	if got := verifier.config.Subject; got != openBaoReleaseSubjectPrefix+"v2.4.4" {
-		t.Fatalf("subject = %q, want %q", got, openBaoReleaseSubjectPrefix+"v2.4.4")
+	if got := verifier.config.SubjectRegExp; got != openBaoReleaseSubjectRegExp {
+		t.Fatalf("subjectRegExp = %q, want %q", got, openBaoReleaseSubjectRegExp)
 	}
 }
 
@@ -68,11 +68,11 @@ func TestVerifyImageForCluster_AppliesOfficialOpenBaoKeylessDefaultsForGHCR(t *t
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.Issuer; got != defaultGitHubOIDCIssuer {
-		t.Fatalf("issuer = %q, want %q", got, defaultGitHubOIDCIssuer)
+	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
+		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
 	}
-	if got := verifier.config.Subject; got != openBaoReleaseSubjectPrefix+"v2.5.0" {
-		t.Fatalf("subject = %q, want %q", got, openBaoReleaseSubjectPrefix+"v2.5.0")
+	if got := verifier.config.SubjectRegExp; got != openBaoReleaseSubjectRegExp {
+		t.Fatalf("subjectRegExp = %q, want %q", got, openBaoReleaseSubjectRegExp)
 	}
 }
 
@@ -95,11 +95,38 @@ func TestVerifyOperatorImageForCluster_AppliesOfficialOperatorKeylessDefaults(t 
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.Issuer; got != defaultGitHubOIDCIssuer {
-		t.Fatalf("issuer = %q, want %q", got, defaultGitHubOIDCIssuer)
+	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
+		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
 	}
-	if got := verifier.config.Subject; got != operatorReleaseSubjectPrefix+"1.2.4" {
-		t.Fatalf("subject = %q, want %q", got, operatorReleaseSubjectPrefix+"1.2.4")
+	if got := verifier.config.SubjectRegExp; got != operatorSubjectRegExp {
+		t.Fatalf("subjectRegExp = %q, want %q", got, operatorSubjectRegExp)
+	}
+}
+
+func TestVerifyOperatorImageForCluster_AppliesDefaultsForEdgeTag(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: true,
+			},
+		},
+	}
+	verifier := &captureVerifier{}
+
+	_, err := VerifyOperatorImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "ghcr.io/dc-tec/openbao-init:edge")
+	if err != nil {
+		t.Fatalf("VerifyOperatorImageForCluster() unexpected error: %v", err)
+	}
+	if !verifier.called {
+		t.Fatal("expected verifier to be called")
+	}
+	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
+		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
+	}
+	if got := verifier.config.SubjectRegExp; got != operatorSubjectRegExp {
+		t.Fatalf("subjectRegExp = %q, want %q", got, operatorSubjectRegExp)
 	}
 }
 
@@ -127,7 +154,7 @@ func TestVerifyOperatorImageForCluster_MissingIdentityForUnknownImageReturnsErro
 	}
 }
 
-func TestVerifyImageForCluster_DigestReferenceWithoutExplicitIdentityReturnsError(t *testing.T) {
+func TestVerifyImageForCluster_DigestReferenceAppliesOfficialDefaults(t *testing.T) {
 	t.Parallel()
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{
@@ -146,11 +173,17 @@ func TestVerifyImageForCluster_DigestReferenceWithoutExplicitIdentityReturnsErro
 		cluster,
 		"openbao/openbao@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 	)
-	if err == nil {
-		t.Fatal("expected an error when no explicit identity is provided for digest references")
+	if err != nil {
+		t.Fatalf("VerifyImageForCluster() unexpected error for digest ref: %v", err)
 	}
-	if !strings.Contains(err.Error(), "neither public key nor keyless configuration") {
-		t.Fatalf("unexpected error: %v", err)
+	if !verifier.called {
+		t.Fatal("expected verifier to be called")
+	}
+	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
+		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
+	}
+	if got := verifier.config.SubjectRegExp; got != openBaoReleaseSubjectRegExp {
+		t.Fatalf("subjectRegExp = %q, want %q", got, openBaoReleaseSubjectRegExp)
 	}
 }
 
@@ -171,8 +204,8 @@ func TestVerifyImageForCluster_HardenedWithOmittedConfigAppliesDefaults(t *testi
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.Issuer; got != defaultGitHubOIDCIssuer {
-		t.Fatalf("issuer = %q, want %q", got, defaultGitHubOIDCIssuer)
+	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
+		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
 	}
 }
 
@@ -193,8 +226,8 @@ func TestVerifyOperatorImageForCluster_HardenedWithOmittedConfigAppliesDefaults(
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.Issuer; got != defaultGitHubOIDCIssuer {
-		t.Fatalf("issuer = %q, want %q", got, defaultGitHubOIDCIssuer)
+	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
+		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
 	}
 }
 

@@ -58,6 +58,8 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 	BeforeAll(func() {
 		var err error
 
+		requireHardenedSignedSuite()
+
 		By("setting up test client and scheme")
 		cfg, err = ctrlconfig.GetConfig()
 		Expect(err).NotTo(HaveOccurred())

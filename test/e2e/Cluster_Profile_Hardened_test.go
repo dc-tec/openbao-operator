@@ -56,6 +56,8 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 	BeforeAll(func() {
 		var err error
 
+		requireHardenedSignedSuite()
+
 		By("setting up test client and scheme")
 		cfg, err = ctrlconfig.GetConfig()
 		Expect(err).NotTo(HaveOccurred())
@@ -184,10 +186,6 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 	})
 
 	It("creates a Hardened cluster that self-initializes and stays unsealed across restarts", func() {
-		if !strings.Contains(hardenedConfigInitImage, "@sha256:") {
-			Skip(fmt.Sprintf("requires signed digest-pinned init image via E2E_HARDENED_CONFIG_INIT_IMAGE (got %q); deferred to release reproducibility lane", hardenedConfigInitImage))
-		}
-
 		By("creating external TLS secrets required for TLS mode External")
 		Expect(e2ehelpers.EnsureExternalTLSSecrets(ctx, c, f.Namespace, clusterName, 1)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created external TLS secrets for cluster %q\n", clusterName)
@@ -611,10 +609,6 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 	})
 
 	It("verifies Raft Autopilot is configured with cleanup_dead_servers enabled", func() {
-		if !strings.Contains(hardenedConfigInitImage, "@sha256:") {
-			Skip(fmt.Sprintf("requires signed digest-pinned init image via E2E_HARDENED_CONFIG_INIT_IMAGE (got %q); deferred to release reproducibility lane", hardenedConfigInitImage))
-		}
-
 		By("ensuring public service exists before creating verification pod")
 		// Wait for the public service to be created by the operator
 		svc := &corev1.Service{}
