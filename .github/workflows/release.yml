@@ -384,7 +384,7 @@ jobs:
           make build-crds
 
       - name: Generate SBOMs (SPDX JSON)
-        uses: anchore/sbom-action@deef08a0db64bfad603422135db61477b16cef56 # v0.22.1
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
         with:
           image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.build.outputs.manager_digest }}
           format: spdx-json
@@ -395,7 +395,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOMs (SPDX JSON) - config-init
-        uses: anchore/sbom-action@deef08a0db64bfad603422135db61477b16cef56 # v0.22.1
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
         with:
           image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.build.outputs.config_init_digest }}
           format: spdx-json
@@ -406,7 +406,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOMs (SPDX JSON) - backup executor
-        uses: anchore/sbom-action@deef08a0db64bfad603422135db61477b16cef56 # v0.22.1
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
         with:
           image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.build.outputs.backup_executor_digest }}
           format: spdx-json
@@ -417,7 +417,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOMs (SPDX JSON) - upgrade executor
-        uses: anchore/sbom-action@deef08a0db64bfad603422135db61477b16cef56 # v0.22.1
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
         with:
           image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.build.outputs.upgrade_executor_digest }}
           format: spdx-json
@@ -551,7 +551,7 @@ jobs:
           python-version: "3.x"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@803947b9bd8e9f986429fa0c5a41c367cd732b41 # v7.2.1
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
 
       - name: Install dependencies
         run: uv pip install --system mkdocs-material mike
