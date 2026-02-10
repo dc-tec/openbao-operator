@@ -59,9 +59,31 @@ Run these locally to debug CI failures.
 | **Unit Tests** | `make test-ci` | Runs unit + integration tests |
 | **Compatibility** | `make verify-openbao-config-compat` | Checks HCL against upstream OpenBao |
 
+## 2.1 Pull Request Standards Gates
+
+We enforce PR metadata and commit standards in CI (`.github/workflows/pr-standards.yml`):
+
+- PR title must follow Conventional Commits.
+- PR description must include required sections from `.github/pull_request_template.md`.
+- Commit-subject checks are informational only (not enforced).
+
+Because this repository uses squash merge, the PR title gate is the effective release-facing commit message gate for `main`.
+
 ## 3. End-to-End Testing
 
 We use [Kind](https://kind.sigs.k8s.io/) for E2E tests.
+
+CI optimization model:
+
+- Build once, reuse many: CI builds fast E2E images once per workflow and reuses pinned digest refs across shards.
+- Trusted PR requirement: the optimized E2E lane runs for same-repository PRs and branch pushes (it pushes temporary images to GHCR).
+- Hybrid routing:
+  - Path-driven by default (`changes` job decides whether E2E is needed, and whether backup/upgrade/hardened lanes are relevant).
+  - PR labels can expand scope:
+    - `backup` includes backup/restore slow lane.
+    - `upgrades` includes upgrade/chaos slow lane.
+    - `ci:full-e2e` forces the full suite (except OpenShift lane).
+- Hardened PR lane focuses on hardened/GitOps coverage (ACME-focused checks are left to main/nightly/release).
 
 ### Prerequisites
 
@@ -140,3 +162,21 @@ make docs-build
 
 !!! tip "Preview Deployment"
     Every PR deploys a temporary preview environment URL directly in the GitHub comment.
+
+## 6. Performance Baseline Capture (GitHub Runners)
+
+Use the dedicated workflow to capture baseline evidence on the same runner class used by CI.
+
+1. Open **Actions** -> **Performance Baseline Capture**.
+2. Run the workflow on `main` (or the target release branch) with default inputs unless you intentionally want a different run count/timeout.
+3. Download the uploaded artifact containing:
+   - `hack/perf/baseline/kind-v1.34.3-baseline.json`
+   - `hack/perf/thresholds/kind-v1.34.3.yaml`
+4. Commit those files in a normal PR and use release/weekly perf workflows to validate thresholds (`verify-perf`).
+
+## 7. Weekly Performance Regression Gate
+
+The `Performance Regression Weekly` workflow runs full `make verify-perf` weekly and can also be run manually.
+
+- Scheduled failures automatically open (or update) an issue titled `Weekly performance regression detected`.
+- Release workflow still enforces full `verify-perf` as a hard gate.

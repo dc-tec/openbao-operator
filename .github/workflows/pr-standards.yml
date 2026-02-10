@@ -1,0 +1,101 @@
+name: PR Standards
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-standards-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title-conventional:
+    name: PR Title Uses Conventional Commits
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate PR title format
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          regex='^(revert: )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9][a-z0-9()./_-]*\))?(!)?: .+'
+
+          if [[ -z "${PR_TITLE}" ]]; then
+            echo "PR title must not be empty." >&2
+            exit 1
+          fi
+
+          if ! [[ "${PR_TITLE}" =~ ${regex} ]]; then
+            echo "PR title must follow Conventional Commits:" >&2
+            echo "  <type>(<scope>): <description>" >&2
+            echo "" >&2
+            echo "Examples:" >&2
+            echo "  feat(controller): add status condition for backup reconciliation" >&2
+            echo "  ci(ci): optimize e2e image reuse" >&2
+            echo "  fix(api)!: remove deprecated field" >&2
+            echo "Current title: ${PR_TITLE}" >&2
+            exit 1
+          fi
+
+  pr-template-check:
+    name: PR Description Matches Template
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate PR description sections
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+
+          body="${PR_BODY:-}"
+          if [[ "${body}" == "null" ]]; then
+            body=""
+          fi
+
+          if [[ -z "${body//[[:space:]]/}" ]]; then
+            echo "PR description must not be empty." >&2
+            exit 1
+          fi
+
+          required_headers=(
+            "## Description"
+            "## Related Issues"
+            "## Type of Change"
+            "## Checklist"
+            "## Verification Process"
+          )
+
+          missing=0
+          for header in "${required_headers[@]}"; do
+            if ! grep -Fq "${header}" <<<"${body}"; then
+              echo "Missing required section: ${header}" >&2
+              missing=1
+            fi
+          done
+          if [[ "${missing}" -ne 0 ]]; then
+            exit 1
+          fi
+
+          if ! grep -Eq '^- \[[xX]\] ' <<<"${body}"; then
+            echo "At least one checkbox must be checked in the PR template." >&2
+            exit 1
+          fi
+
+  commit-messages-conventional:
+    name: PR Commits Use Conventional Commits
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Informational only (squash-merge model)
+        run: |
+          set -euo pipefail
+          echo "Commit-subject enforcement is disabled."
+          echo "Repository uses squash merge, so PR title is the release-facing Conventional Commit."
