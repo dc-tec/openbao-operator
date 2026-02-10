@@ -59,6 +59,16 @@ Run these locally to debug CI failures.
 | **Unit Tests** | `make test-ci` | Runs unit + integration tests |
 | **Compatibility** | `make verify-openbao-config-compat` | Checks HCL against upstream OpenBao |
 
+## 2.1 Pull Request Standards Gates
+
+We enforce PR metadata and commit standards in CI (`.github/workflows/pr-standards.yml`):
+
+- PR title must follow Conventional Commits.
+- PR description must include required sections from `.github/pull_request_template.md`.
+- All commit subjects in the PR must follow Conventional Commits.
+
+Because this repository uses squash merge, the PR title gate is the effective release-facing commit message gate for `main`.
+
 ## 3. End-to-End Testing
 
 We use [Kind](https://kind.sigs.k8s.io/) for E2E tests.

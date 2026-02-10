@@ -100,3 +100,12 @@ feat(api): remove deprecated v1alpha1 fields
 
 BREAKING CHANGE: The `autoUnseal` field has been removed in favor of `unsealConfig`.
 ```
+
+## CI Enforcement
+
+Conventional Commit format is validated in CI for:
+
+- PR title (required for squash-merge workflow)
+- Individual commit subjects in each PR
+
+See `.github/workflows/pr-standards.yml`.
