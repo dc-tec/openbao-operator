@@ -172,4 +172,11 @@ Use the dedicated workflow to capture baseline evidence on the same runner class
 3. Download the uploaded artifact containing:
    - `hack/perf/baseline/kind-v1.34.3-baseline.json`
    - `hack/perf/thresholds/kind-v1.34.3.yaml`
-4. Commit those files in a normal PR and let CI validate with `verify-perf-smoke` (PR) and `verify-perf` (main/nightly/release).
+4. Commit those files in a normal PR and use release/weekly perf workflows to validate thresholds (`verify-perf`).
+
+## 7. Weekly Performance Regression Gate
+
+The `Performance Regression Weekly` workflow runs full `make verify-perf` weekly and can also be run manually.
+
+- Scheduled failures automatically open (or update) an issue titled `Weekly performance regression detected`.
+- Release workflow still enforces full `verify-perf` as a hard gate.

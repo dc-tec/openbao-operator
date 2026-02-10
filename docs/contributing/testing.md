@@ -219,8 +219,9 @@ graph BT
 
     CI usage:
 
-    - PRs: run `verify-perf-smoke`.
-    - `main`, nightly, and release workflows: run full `verify-perf`.
+    - Weekly schedule and on-demand dispatch: run full `verify-perf` (`Performance Regression Weekly` workflow).
+    - Release workflow: run full `verify-perf`.
+    - Baseline capture is on-demand via `Performance Baseline Capture`.
 
     ### OpenShift Local / Existing Cluster
 
