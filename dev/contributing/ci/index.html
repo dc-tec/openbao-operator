@@ -3767,6 +3767,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#21-pull-request-standards-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Pull Request Standards Gates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#3-end-to-end-testing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3821,6 +3832,28 @@
     <span class="md-ellipsis">
       
         5. Documentation Build
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-performance-baseline-capture-github-runners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Performance Baseline Capture (GitHub Runners)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-weekly-performance-regression-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Weekly Performance Regression Gate
       
     </span>
   </a>
@@ -4065,6 +4098,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#21-pull-request-standards-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Pull Request Standards Gates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#3-end-to-end-testing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4119,6 +4163,28 @@
     <span class="md-ellipsis">
       
         5. Documentation Build
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-performance-baseline-capture-github-runners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Performance Baseline Capture (GitHub Runners)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-weekly-performance-regression-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Weekly Performance Regression Gate
       
     </span>
   </a>
@@ -4233,8 +4299,30 @@
 </tr>
 </tbody>
 </table>
+<h2 id="21-pull-request-standards-gates">2.1 Pull Request Standards Gates<a class="headerlink" href="#21-pull-request-standards-gates" title="Permanent link">&para;</a></h2>
+<p>We enforce PR metadata and commit standards in CI (<code>.github/workflows/pr-standards.yml</code>):</p>
+<ul>
+<li>PR title must follow Conventional Commits.</li>
+<li>PR description must include required sections from <code>.github/pull_request_template.md</code>.</li>
+<li>Commit-subject checks are informational only (not enforced).</li>
+</ul>
+<p>Because this repository uses squash merge, the PR title gate is the effective release-facing commit message gate for <code>main</code>.</p>
 <h2 id="3-end-to-end-testing">3. End-to-End Testing<a class="headerlink" href="#3-end-to-end-testing" title="Permanent link">&para;</a></h2>
 <p>We use <a href="https://kind.sigs.k8s.io/">Kind</a> for E2E tests.</p>
+<p>CI optimization model:</p>
+<ul>
+<li>Build once, reuse many: CI builds fast E2E images once per workflow and reuses pinned digest refs across shards.</li>
+<li>Trusted PR requirement: the optimized E2E lane runs for same-repository PRs and branch pushes (it pushes temporary images to GHCR).</li>
+<li>Hybrid routing:</li>
+<li>Path-driven by default (<code>changes</code> job decides whether E2E is needed, and whether backup/upgrade/hardened lanes are relevant).</li>
+<li>PR labels can expand scope:<ul>
+<li><code>backup</code> includes backup/restore slow lane.</li>
+<li><code>upgrades</code> includes upgrade/chaos slow lane.</li>
+<li><code>ci:full-e2e</code> forces the full suite (except OpenShift lane).</li>
+</ul>
+</li>
+<li>Hardened PR lane focuses on hardened/GitOps coverage (ACME-focused checks are left to main/nightly/release).</li>
+</ul>
 <h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
 <ul class="task-list">
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Docker running</li>
@@ -4306,6 +4394,22 @@ update the skip list in:</p>
 <p class="admonition-title">Preview Deployment</p>
 <p>Every PR deploys a temporary preview environment URL directly in the GitHub comment.</p>
 </div>
+<h2 id="6-performance-baseline-capture-github-runners">6. Performance Baseline Capture (GitHub Runners)<a class="headerlink" href="#6-performance-baseline-capture-github-runners" title="Permanent link">&para;</a></h2>
+<p>Use the dedicated workflow to capture baseline evidence on the same runner class used by CI.</p>
+<ol>
+<li>Open <strong>Actions</strong> -&gt; <strong>Performance Baseline Capture</strong>.</li>
+<li>Run the workflow on <code>main</code> (or the target release branch) with default inputs unless you intentionally want a different run count/timeout.</li>
+<li>Download the uploaded artifact containing:</li>
+<li><code>hack/perf/baseline/kind-v1.34.3-baseline.json</code></li>
+<li><code>hack/perf/thresholds/kind-v1.34.3.yaml</code></li>
+<li>Commit those files in a normal PR and use release/weekly perf workflows to validate thresholds (<code>verify-perf</code>).</li>
+</ol>
+<h2 id="7-weekly-performance-regression-gate">7. Weekly Performance Regression Gate<a class="headerlink" href="#7-weekly-performance-regression-gate" title="Permanent link">&para;</a></h2>
+<p>The <code>Performance Regression Weekly</code> workflow runs full <code>make verify-perf</code> weekly and can also be run manually.</p>
+<ul>
+<li>Scheduled failures automatically open (or update) an issue titled <code>Weekly performance regression detected</code>.</li>
+<li>Release workflow still enforces full <code>verify-perf</code> as a hard gate.</li>
+</ul>
 
 
 

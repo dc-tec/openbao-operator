@@ -4449,7 +4449,7 @@ For out-of-band release, prefer cutting a dedicated PR on <code>main</code> and 
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Docs</strong>: Ensure documentation is consistent with new features.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Compatibility</strong>: Verify <code>docs/reference/compatibility.md</code> covers the supported versions.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Clean CI</strong>: Ensure the latest commit on main is green.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Performance Gate</strong>: Ensure <code>make verify-perf</code> passes and thresholds in <code>hack/perf/thresholds/kind-v1.34.3.yaml</code> reflect current baseline evidence.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Performance Gate</strong>: Run the <strong>Performance Baseline Capture</strong> workflow on <code>main</code> (or release branch), then ensure <code>hack/perf/baseline/kind-v1.34.3-baseline.json</code> and <code>hack/perf/thresholds/kind-v1.34.3.yaml</code> in-repo match captured evidence and <code>make verify-perf</code> passes.</li>
 </ul>
 <h3 id="post-release">Post-Release<a class="headerlink" href="#post-release" title="Permanent link">&para;</a></h3>
 <ul class="task-list">

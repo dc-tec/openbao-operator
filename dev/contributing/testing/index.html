@@ -4336,8 +4336,9 @@
 </ul>
 <p>CI usage:</p>
 <ul>
-<li>PRs: run <code>verify-perf-smoke</code>.</li>
-<li><code>main</code>, nightly, and release workflows: run full <code>verify-perf</code>.</li>
+<li>Weekly schedule and on-demand dispatch: run full <code>verify-perf</code> (<code>Performance Regression Weekly</code> workflow).</li>
+<li>Release workflow: run full <code>verify-perf</code>.</li>
+<li>Baseline capture is on-demand via <code>Performance Baseline Capture</code>.</li>
 </ul>
 <h3 id="openshift-local-existing-cluster">OpenShift Local / Existing Cluster<a class="headerlink" href="#openshift-local-existing-cluster" title="Permanent link">&para;</a></h3>
 <p>To validate OpenShift compatibility, run a focused subset of E2E tests against an existing cluster
