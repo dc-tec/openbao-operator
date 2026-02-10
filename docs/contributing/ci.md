@@ -63,6 +63,18 @@ Run these locally to debug CI failures.
 
 We use [Kind](https://kind.sigs.k8s.io/) for E2E tests.
 
+CI optimization model:
+
+- Build once, reuse many: CI builds fast E2E images once per workflow and reuses pinned digest refs across shards.
+- Trusted PR requirement: the optimized E2E lane runs for same-repository PRs and branch pushes (it pushes temporary images to GHCR).
+- Hybrid routing:
+  - Path-driven by default (`changes` job decides whether E2E is needed, and whether backup/upgrade/hardened lanes are relevant).
+  - PR labels can expand scope:
+    - `backup` includes backup/restore slow lane.
+    - `upgrades` includes upgrade/chaos slow lane.
+    - `ci:full-e2e` forces the full suite (except OpenShift lane).
+- Hardened PR lane focuses on hardened/GitOps coverage (ACME-focused checks are left to main/nightly/release).
+
 ### Prerequisites
 
 - [x] Docker running
