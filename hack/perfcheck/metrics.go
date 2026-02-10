@@ -80,12 +80,11 @@ func histogramDelta(before, after metricsSnapshot, metric string) map[float64]fl
 	return out
 }
 
-func histogramQuantileUpperBound(q float64, cumulative map[float64]float64) float64 {
-	if len(cumulative) == 0 || q <= 0 {
+func histogramP95UpperBound(cumulative map[float64]float64) float64 {
+	const quantile = 0.95
+
+	if len(cumulative) == 0 {
 		return 0
-	}
-	if q > 1 {
-		q = 1
 	}
 
 	finiteBounds := make([]float64, 0, len(cumulative))
@@ -114,7 +113,7 @@ func histogramQuantileUpperBound(q float64, cumulative map[float64]float64) floa
 		return 0
 	}
 
-	target := total * q
+	target := total * quantile
 	for _, le := range finiteBounds {
 		if cumulative[le] >= target {
 			return le
@@ -126,11 +125,19 @@ func histogramQuantileUpperBound(q float64, cumulative map[float64]float64) floa
 
 func computeScenarioMetrics(before, after metricsSnapshot) map[string]float64 {
 	metrics := make(map[string]float64, len(metricKeys))
-	metrics[metricReconcileP95] = histogramQuantileUpperBound(0.95, histogramDelta(before, after, "openbao_reconcile_duration_seconds"))
+	metrics[metricReconcileP95] = histogramP95UpperBound(
+		histogramDelta(before, after, "openbao_reconcile_duration_seconds"),
+	)
 	metrics[metricBackupLastMax] = after.GaugeMax["openbao_backup_last_duration_seconds"]
-	metrics[metricRestoreP95] = histogramQuantileUpperBound(0.95, histogramDelta(before, after, "openbao_restore_duration_seconds"))
-	metrics[metricUpgradeP95] = histogramQuantileUpperBound(0.95, histogramDelta(before, after, "openbao_upgrade_duration_seconds"))
-	metrics[metricUpgradePodP95] = histogramQuantileUpperBound(0.95, histogramDelta(before, after, "openbao_upgrade_pod_duration_seconds"))
+	metrics[metricRestoreP95] = histogramP95UpperBound(
+		histogramDelta(before, after, "openbao_restore_duration_seconds"),
+	)
+	metrics[metricUpgradeP95] = histogramP95UpperBound(
+		histogramDelta(before, after, "openbao_upgrade_duration_seconds"),
+	)
+	metrics[metricUpgradePodP95] = histogramP95UpperBound(
+		histogramDelta(before, after, "openbao_upgrade_pod_duration_seconds"),
+	)
 	metrics[metricWorkqueueRetries] = counterDelta(before, after, "workqueue_retries_total")
 
 	errDelta := counterDelta(before, after, "openbao_reconcile_errors_total")

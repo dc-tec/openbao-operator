@@ -284,7 +284,12 @@ func emptySnapshot() metricsSnapshot {
 	}
 }
 
-func scrapeMetricsSnapshot(ctx context.Context, opts options, cluster string, allowMissing bool) (metricsSnapshot, bool, error) {
+func scrapeMetricsSnapshot(
+	ctx context.Context,
+	opts options,
+	cluster string,
+	allowMissing bool,
+) (metricsSnapshot, bool, error) {
 	clusterContext := fmt.Sprintf("kind-%s", cluster)
 	if err := ensureMetricsRoleBinding(ctx, opts, clusterContext); err != nil {
 		if allowMissing && looksLikeMissingResource(err) {

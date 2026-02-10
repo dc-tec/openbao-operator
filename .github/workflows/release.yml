@@ -262,7 +262,6 @@ jobs:
       - name: Verify performance thresholds
         env:
           GOFLAGS: -mod=readonly
-          KIND: bin/kind
           PERF_NODE_IMAGE: kindest/node:v1.34.3
           PERF_SCENARIO_TIMEOUT: 90m
           PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml

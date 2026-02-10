@@ -49,14 +49,23 @@ func parseCaptureFlags(args []string) (options, error) {
 	fs := flag.NewFlagSet("capture", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
+	const (
+		defaultBaselinePath   = "hack/perf/baseline/kind-v1.34.3-baseline.json"
+		defaultThresholdsPath = "hack/perf/thresholds/kind-v1.34.3.yaml"
+	)
+
 	var (
-		runs            = fs.Int("runs", 5, "number of runs per scenario")
-		scenarios       = fs.String("scenarios", "all", "comma-separated scenarios (all|lifecycle|backup-restore|rolling-upgrade)")
+		runs      = fs.Int("runs", 5, "number of runs per scenario")
+		scenarios = fs.String(
+			"scenarios",
+			"all",
+			"comma-separated scenarios (all|lifecycle|backup-restore|rolling-upgrade)",
+		)
 		nodeImage       = fs.String("node-image", "kindest/node:v1.34.3", "kind node image")
 		kindBin         = fs.String("kind", "kind", "path to kind binary")
 		makeBin         = fs.String("make", "make", "path to make binary")
-		baselinePath    = fs.String("baseline-out", "hack/perf/baseline/kind-v1.34.3-baseline.json", "output path for baseline JSON")
-		thresholdsPath  = fs.String("thresholds-out", "hack/perf/thresholds/kind-v1.34.3.yaml", "output path for thresholds YAML")
+		baselinePath    = fs.String("baseline-out", defaultBaselinePath, "output path for baseline JSON")
+		thresholdsPath  = fs.String("thresholds-out", defaultThresholdsPath, "output path for thresholds YAML")
 		scenarioTimeout = fs.Duration("scenario-timeout", 90*time.Minute, "per-scenario timeout")
 		clusterTimeout  = fs.Duration("cluster-timeout", 20*time.Minute, "kind setup timeout")
 		cleanupTimeout  = fs.Duration("cleanup-timeout", 10*time.Minute, "kind cleanup timeout")
@@ -79,7 +88,15 @@ func parseCaptureFlags(args []string) (options, error) {
 		return options{}, err
 	}
 
-	return baseOptions(*nodeImage, *kindBin, *makeBin, *scenarioTimeout, *clusterTimeout, *cleanupTimeout, *keepOnFailure).
+	return baseOptions(
+		*nodeImage,
+		*kindBin,
+		*makeBin,
+		*scenarioTimeout,
+		*clusterTimeout,
+		*cleanupTimeout,
+		*keepOnFailure,
+	).
 		withCapture(*runs, selected, *baselinePath, *thresholdsPath, *p95Mult, *maxMult), nil
 }
 
@@ -87,12 +104,18 @@ func parseVerifyFlags(args []string) (options, error) {
 	fs := flag.NewFlagSet("verify", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
+	const defaultThresholdsPath = "hack/perf/thresholds/kind-v1.34.3.yaml"
+
 	var (
-		scenarios       = fs.String("scenarios", "all", "comma-separated scenarios (all|lifecycle|backup-restore|rolling-upgrade)")
+		scenarios = fs.String(
+			"scenarios",
+			"all",
+			"comma-separated scenarios (all|lifecycle|backup-restore|rolling-upgrade)",
+		)
 		nodeImage       = fs.String("node-image", "kindest/node:v1.34.3", "kind node image")
 		kindBin         = fs.String("kind", "kind", "path to kind binary")
 		makeBin         = fs.String("make", "make", "path to make binary")
-		thresholdsInput = fs.String("thresholds", "hack/perf/thresholds/kind-v1.34.3.yaml", "input thresholds YAML path")
+		thresholdsInput = fs.String("thresholds", defaultThresholdsPath, "input thresholds YAML path")
 		scenarioTimeout = fs.Duration("scenario-timeout", 90*time.Minute, "per-scenario timeout")
 		clusterTimeout  = fs.Duration("cluster-timeout", 20*time.Minute, "kind setup timeout")
 		cleanupTimeout  = fs.Duration("cleanup-timeout", 10*time.Minute, "kind cleanup timeout")
@@ -107,14 +130,26 @@ func parseVerifyFlags(args []string) (options, error) {
 		return options{}, err
 	}
 
-	base := baseOptions(*nodeImage, *kindBin, *makeBin, *scenarioTimeout, *clusterTimeout, *cleanupTimeout, *keepOnFailure)
+	base := baseOptions(
+		*nodeImage,
+		*kindBin,
+		*makeBin,
+		*scenarioTimeout,
+		*clusterTimeout,
+		*cleanupTimeout,
+		*keepOnFailure,
+	)
 	base.Mode = "verify"
 	base.ScenarioNames = selected
 	base.ThresholdsInput = *thresholdsInput
 	return base, nil
 }
 
-func baseOptions(nodeImage, kindBin, makeBin string, scenarioTimeout, clusterTimeout, cleanupTimeout time.Duration, keepOnFailure bool) options {
+func baseOptions(
+	nodeImage, kindBin, makeBin string,
+	scenarioTimeout, clusterTimeout, cleanupTimeout time.Duration,
+	keepOnFailure bool,
+) options {
 	return options{
 		Mode:            "",
 		NodeImage:       nodeImage,
@@ -131,7 +166,12 @@ func baseOptions(nodeImage, kindBin, makeBin string, scenarioTimeout, clusterTim
 	}
 }
 
-func (o options) withCapture(runs int, scenarios []string, baselinePath, thresholdsPath string, p95Mult, maxMult float64) options {
+func (o options) withCapture(
+	runs int,
+	scenarios []string,
+	baselinePath, thresholdsPath string,
+	p95Mult, maxMult float64,
+) options {
 	o.Mode = "capture"
 	o.Runs = runs
 	o.ScenarioNames = scenarios

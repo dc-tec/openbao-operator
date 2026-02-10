@@ -379,7 +379,6 @@ jobs:
       - name: Verify performance smoke thresholds
         env:
           GOFLAGS: -mod=readonly
-          KIND: bin/kind
           PERF_NODE_IMAGE: kindest/node:v1.34.3
           PERF_SMOKE_SCENARIO_TIMEOUT: 45m
           PERF_SMOKE_SCENARIOS: lifecycle
@@ -418,7 +417,6 @@ jobs:
       - name: Verify full performance thresholds
         env:
           GOFLAGS: -mod=readonly
-          KIND: bin/kind
           PERF_NODE_IMAGE: kindest/node:v1.34.3
           PERF_SCENARIO_TIMEOUT: 90m
           PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml

@@ -15,9 +15,9 @@ func TestHistogramQuantileUpperBound(t *testing.T) {
 		math.Inf(1): 20,
 	}
 
-	got := histogramQuantileUpperBound(0.95, buckets)
+	got := histogramP95UpperBound(buckets)
 	if got != 10 {
-		t.Fatalf("histogramQuantileUpperBound() = %v, want 10", got)
+		t.Fatalf("histogramP95UpperBound() = %v, want 10", got)
 	}
 }
 
