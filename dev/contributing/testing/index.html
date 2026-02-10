@@ -3754,6 +3754,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#performance-baseline-regression-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Baseline + Regression Gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#openshift-local-existing-cluster" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4077,6 +4088,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#performance-baseline-regression-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Baseline + Regression Gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#openshift-local-existing-cluster" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4272,20 +4294,65 @@
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Run only upgrade scenarios</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>make<span class="w"> </span>test-e2e<span class="w"> </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;upgrade&#39;</span>
 </span></code></pre></div>
+<h3 id="performance-baseline-regression-gate">Performance Baseline + Regression Gate<a class="headerlink" href="#performance-baseline-regression-gate" title="Permanent link">&para;</a></h3>
+<p>Performance baselines run on Kind and reuse existing E2E flows and controller metrics.</p>
+<ul>
+<li>Baseline capture (default: 5 runs per scenario):</li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>perf-baseline
+</span></code></pre></div>
+<ul>
+<li>Regression verification against committed thresholds:</li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>verify-perf
+</span></code></pre></div>
+<ul>
+<li>Lightweight PR smoke check (lifecycle-only):</li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>verify-perf-smoke
+</span></code></pre></div>
+<p>Baseline/threshold artifacts:</p>
+<ul>
+<li><code>hack/perf/baseline/kind-v1.34.3-baseline.json</code></li>
+<li><code>hack/perf/thresholds/kind-v1.34.3.yaml</code></li>
+</ul>
+<p>Scenarios covered by the gate:</p>
+<ul>
+<li><code>lifecycle &amp;&amp; critical &amp;&amp; tenant &amp;&amp; !slow &amp;&amp; !openshift &amp;&amp; !pentest</code></li>
+<li><code>dr &amp;&amp; backup &amp;&amp; restore &amp;&amp; !failure-injection</code></li>
+<li><code>upgrade &amp;&amp; rolling &amp;&amp; !failure &amp;&amp; !bluegreen</code></li>
+</ul>
+<p>Metric contract:</p>
+<ul>
+<li>p95 latency/duration:</li>
+<li><code>openbao_reconcile_duration_seconds</code></li>
+<li><code>openbao_restore_duration_seconds</code></li>
+<li><code>openbao_upgrade_duration_seconds</code></li>
+<li><code>openbao_upgrade_pod_duration_seconds</code></li>
+<li>max/churn:</li>
+<li><code>openbao_backup_last_duration_seconds</code> (max)</li>
+<li><code>workqueue_retries_total</code> (delta)</li>
+<li><code>openbao_reconcile_errors_total / controller_runtime_reconcile_total</code> (delta ratio)</li>
+</ul>
+<p>CI usage:</p>
+<ul>
+<li>PRs: run <code>verify-perf-smoke</code>.</li>
+<li><code>main</code>, nightly, and release workflows: run full <code>verify-perf</code>.</li>
+</ul>
 <h3 id="openshift-local-existing-cluster">OpenShift Local / Existing Cluster<a class="headerlink" href="#openshift-local-existing-cluster" title="Permanent link">&para;</a></h3>
 <p>To validate OpenShift compatibility, run a focused subset of E2E tests against an existing cluster
 (for example OpenShift Local / CRC).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">KUBECONFIG</span><span class="o">=</span>/path/to/your/kubeconfig
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Operator image must be pullable by the cluster (push it to a registry accessible from CRC).</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">export</span><span class="w"> </span><span class="nv">E2E_OPERATOR_IMAGE</span><span class="o">=</span>quay.io/your-org/openbao-operator:dev
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># For non-kind clusters, configure the API server CIDR used in NetworkPolicies.</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># A permissive value works for smoke testing if you don&#39;t know the exact CIDR:</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nb">export</span><span class="w"> </span><span class="nv">E2E_API_SERVER_CIDR</span><span class="o">=</span><span class="m">0</span>.0.0.0/0
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Run only OpenShift platform checks</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>make<span class="w"> </span>test-e2e-existing<span class="w"> </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;openshift&#39;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">KUBECONFIG</span><span class="o">=</span>/path/to/your/kubeconfig
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Operator image must be pullable by the cluster (push it to a registry accessible from CRC).</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nb">export</span><span class="w"> </span><span class="nv">E2E_OPERATOR_IMAGE</span><span class="o">=</span>quay.io/your-org/openbao-operator:dev
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># For non-kind clusters, configure the API server CIDR used in NetworkPolicies.</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># A permissive value works for smoke testing if you don&#39;t know the exact CIDR:</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="nb">export</span><span class="w"> </span><span class="nv">E2E_API_SERVER_CIDR</span><span class="o">=</span><span class="m">0</span>.0.0.0/0
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Run only OpenShift platform checks</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>make<span class="w"> </span>test-e2e-existing<span class="w"> </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;openshift&#39;</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Cleanup behavior</p>

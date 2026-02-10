@@ -4321,6 +4321,7 @@ GitHub often excludes self-approvals from required reviews. Prefer a bot account
         Vuln[govulncheck]
         Scan[Trivy image scan]
         Test[E2E matrix]
+        Perf[Performance gate]
     end
 
     subgraph Promote ["Promote + Publish (No Rebuild)"]
@@ -4352,7 +4353,7 @@ GitHub often excludes self-approvals from required reviews. Prefer a bot account
     class GitTag git;
     class Img,Retag,Sign,Chart,Manifests,SBOM,GH,Assets,Docs write;
     class Vuln,Scan security;
-    class Test read;</code></pre>
+    class Test,Perf read;</code></pre>
 <h2 id="2-triggers">2. Triggers<a class="headerlink" href="#2-triggers" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:1"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Release-please</label></div>
 <div class="tabbed-content">
@@ -4448,6 +4449,7 @@ For out-of-band release, prefer cutting a dedicated PR on <code>main</code> and 
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Docs</strong>: Ensure documentation is consistent with new features.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Compatibility</strong>: Verify <code>docs/reference/compatibility.md</code> covers the supported versions.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Clean CI</strong>: Ensure the latest commit on main is green.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Performance Gate</strong>: Ensure <code>make verify-perf</code> passes and thresholds in <code>hack/perf/thresholds/kind-v1.34.3.yaml</code> reflect current baseline evidence.</li>
 </ul>
 <h3 id="post-release">Post-Release<a class="headerlink" href="#post-release" title="Permanent link">&para;</a></h3>
 <ul class="task-list">
