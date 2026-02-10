@@ -466,6 +466,7 @@ perf-baseline: ## Capture performance baseline (5 runs/scenario by default) and 
 	go run ./hack/perfcheck capture \
 		--runs="$(PERF_RUNS)" \
 		--scenarios=all \
+		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
 		--baseline-out="$(PERF_BASELINE_OUT)" \
 		--thresholds-out="$(PERF_THRESHOLDS_OUT)" \
@@ -475,6 +476,7 @@ perf-baseline: ## Capture performance baseline (5 runs/scenario by default) and 
 verify-perf: ## Run performance regression gate against committed thresholds.
 	go run ./hack/perfcheck verify \
 		--scenarios=all \
+		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
 		--thresholds="$(PERF_THRESHOLDS_OUT)" \
 		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)"
@@ -483,10 +485,10 @@ verify-perf: ## Run performance regression gate against committed thresholds.
 verify-perf-smoke: ## Run a lightweight performance smoke gate (PR-focused).
 	go run ./hack/perfcheck verify \
 		--scenarios="$(PERF_SMOKE_SCENARIOS)" \
+		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
 		--thresholds="$(PERF_THRESHOLDS_OUT)" \
 		--scenario-timeout="$(PERF_SMOKE_SCENARIO_TIMEOUT)"
-
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@command -v $(KIND) >/dev/null 2>&1 || { \
