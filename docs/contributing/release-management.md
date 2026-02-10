@@ -82,6 +82,7 @@ graph TD
         Vuln[govulncheck]
         Scan[Trivy image scan]
         Test[E2E matrix]
+        Perf[Performance gate]
     end
 
     subgraph Promote ["Promote + Publish (No Rebuild)"]
@@ -113,7 +114,7 @@ graph TD
     class GitTag git;
     class Img,Retag,Sign,Chart,Manifests,SBOM,GH,Assets,Docs write;
     class Vuln,Scan security;
-    class Test read;
+    class Test,Perf read;
 ```
 
 ## 2. Triggers
@@ -202,6 +203,7 @@ For Release Managers.
 - [ ] **Docs**: Ensure documentation is consistent with new features.
 - [ ] **Compatibility**: Verify `docs/reference/compatibility.md` covers the supported versions.
 - [ ] **Clean CI**: Ensure the latest commit on main is green.
+- [ ] **Performance Gate**: Ensure `make verify-perf` passes and thresholds in `hack/perf/thresholds/kind-v1.34.3.yaml` reflect current baseline evidence.
 
 ### Post-Release
 

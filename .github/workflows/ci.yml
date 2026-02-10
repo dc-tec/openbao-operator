@@ -20,6 +20,7 @@ jobs:
     runs-on: &runner ubuntu-24.04
     outputs:
       chart: ${{ steps.diff.outputs.chart }}
+      perf: ${{ steps.diff.outputs.perf }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -53,6 +54,12 @@ jobs:
             echo "chart=true" >> "${GITHUB_OUTPUT}"
           else
             echo "chart=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if echo "${changed}" | grep -qE '^(internal/controller/|internal/backup/|internal/restore/|internal/upgrade/|internal/openbao/|cmd/controller/|cmd/bao-backup/|cmd/bao-upgrade/|test/e2e/|hack/perfcheck/|hack/perf/|\.github/workflows/ci\.yml|Makefile)'; then
+            echo "perf=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "perf=false" >> "${GITHUB_OUTPUT}"
           fi
 
   security:
@@ -339,6 +346,83 @@ jobs:
         env:
           GOFLAGS: -mod=readonly
         run: make helm-e2e-smoke
+
+  perf-gate:
+    name: Performance Smoke Gate (kind)
+    runs-on: *runner
+    timeout-minutes: 90
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.perf == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: bin/
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+
+      - name: Install kind (pinned)
+        uses: ./.github/actions/install-kind
+        with:
+          install-dir: bin/
+
+      - name: Verify performance smoke thresholds
+        env:
+          GOFLAGS: -mod=readonly
+          KIND: bin/kind
+          PERF_NODE_IMAGE: kindest/node:v1.34.3
+          PERF_SMOKE_SCENARIO_TIMEOUT: 45m
+          PERF_SMOKE_SCENARIOS: lifecycle
+          PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml
+        run: make verify-perf-smoke
+
+  perf-gate-main:
+    name: Performance Gate Main (kind)
+    runs-on: *runner
+    timeout-minutes: 180
+    needs: changes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.perf == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: bin/
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+
+      - name: Install kind (pinned)
+        uses: ./.github/actions/install-kind
+        with:
+          install-dir: bin/
+
+      - name: Verify full performance thresholds
+        env:
+          GOFLAGS: -mod=readonly
+          KIND: bin/kind
+          PERF_NODE_IMAGE: kindest/node:v1.34.3
+          PERF_SCENARIO_TIMEOUT: 90m
+          PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml
+        run: make verify-perf
 
   build-artifacts:
     name: Build Artifacts

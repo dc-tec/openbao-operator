@@ -1,0 +1,63 @@
+# TYPE openbao_reconcile_duration_seconds histogram
+openbao_reconcile_duration_seconds_bucket{controller="openbaocluster-status",le="0.5"} 10
+openbao_reconcile_duration_seconds_bucket{controller="openbaocluster-status",le="1"} 20
+openbao_reconcile_duration_seconds_bucket{controller="openbaocluster-status",le="2"} 30
+openbao_reconcile_duration_seconds_bucket{controller="openbaocluster-status",le="5"} 40
+openbao_reconcile_duration_seconds_bucket{controller="openbaocluster-status",le="10"} 45
+openbao_reconcile_duration_seconds_bucket{controller="openbaocluster-status",le="20"} 48
+openbao_reconcile_duration_seconds_bucket{controller="openbaocluster-status",le="30"} 49
+openbao_reconcile_duration_seconds_bucket{controller="openbaocluster-status",le="60"} 50
+openbao_reconcile_duration_seconds_bucket{controller="openbaocluster-status",le="+Inf"} 50
+openbao_reconcile_duration_seconds_sum{controller="openbaocluster-status"} 100
+openbao_reconcile_duration_seconds_count{controller="openbaocluster-status"} 50
+
+# TYPE openbao_restore_duration_seconds histogram
+openbao_restore_duration_seconds_bucket{le="10"} 0
+openbao_restore_duration_seconds_bucket{le="30"} 1
+openbao_restore_duration_seconds_bucket{le="60"} 2
+openbao_restore_duration_seconds_bucket{le="120"} 3
+openbao_restore_duration_seconds_bucket{le="300"} 4
+openbao_restore_duration_seconds_bucket{le="600"} 5
+openbao_restore_duration_seconds_bucket{le="1200"} 5
+openbao_restore_duration_seconds_bucket{le="+Inf"} 5
+openbao_restore_duration_seconds_sum 100
+openbao_restore_duration_seconds_count 5
+
+# TYPE openbao_upgrade_duration_seconds histogram
+openbao_upgrade_duration_seconds_bucket{le="60"} 0
+openbao_upgrade_duration_seconds_bucket{le="120"} 0
+openbao_upgrade_duration_seconds_bucket{le="300"} 0
+openbao_upgrade_duration_seconds_bucket{le="600"} 0
+openbao_upgrade_duration_seconds_bucket{le="900"} 0
+openbao_upgrade_duration_seconds_bucket{le="1200"} 0
+openbao_upgrade_duration_seconds_bucket{le="1800"} 0
+openbao_upgrade_duration_seconds_bucket{le="3600"} 0
+openbao_upgrade_duration_seconds_bucket{le="+Inf"} 0
+openbao_upgrade_duration_seconds_sum 0
+openbao_upgrade_duration_seconds_count 0
+
+# TYPE openbao_upgrade_pod_duration_seconds histogram
+openbao_upgrade_pod_duration_seconds_bucket{le="10"} 0
+openbao_upgrade_pod_duration_seconds_bucket{le="30"} 0
+openbao_upgrade_pod_duration_seconds_bucket{le="60"} 0
+openbao_upgrade_pod_duration_seconds_bucket{le="120"} 0
+openbao_upgrade_pod_duration_seconds_bucket{le="180"} 0
+openbao_upgrade_pod_duration_seconds_bucket{le="300"} 0
+openbao_upgrade_pod_duration_seconds_bucket{le="600"} 0
+openbao_upgrade_pod_duration_seconds_bucket{le="+Inf"} 0
+openbao_upgrade_pod_duration_seconds_sum 0
+openbao_upgrade_pod_duration_seconds_count 0
+
+# TYPE openbao_backup_last_duration_seconds gauge
+openbao_backup_last_duration_seconds{namespace="a",name="cluster-a"} 100
+
+# TYPE workqueue_retries_total counter
+workqueue_retries_total{controller="openbaocluster-status",name="default"} 3
+workqueue_retries_total{controller="openbaocluster-status",name="priority"} 2
+
+# TYPE openbao_reconcile_errors_total counter
+openbao_reconcile_errors_total{namespace="a",name="cluster-a",controller="openbaocluster-status",reason="KubernetesAPIError"} 2
+
+# TYPE controller_runtime_reconcile_total counter
+controller_runtime_reconcile_total{controller="openbaocluster-status",result="success"} 30
+controller_runtime_reconcile_total{controller="openbaocluster-status",result="error"} 10
