@@ -162,3 +162,14 @@ make docs-build
 
 !!! tip "Preview Deployment"
     Every PR deploys a temporary preview environment URL directly in the GitHub comment.
+
+## 6. Performance Baseline Capture (GitHub Runners)
+
+Use the dedicated workflow to capture baseline evidence on the same runner class used by CI.
+
+1. Open **Actions** -> **Performance Baseline Capture**.
+2. Run the workflow on `main` (or the target release branch) with default inputs unless you intentionally want a different run count/timeout.
+3. Download the uploaded artifact containing:
+   - `hack/perf/baseline/kind-v1.34.3-baseline.json`
+   - `hack/perf/thresholds/kind-v1.34.3.yaml`
+4. Commit those files in a normal PR and let CI validate with `verify-perf-smoke` (PR) and `verify-perf` (main/nightly/release).

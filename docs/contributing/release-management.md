@@ -203,7 +203,7 @@ For Release Managers.
 - [ ] **Docs**: Ensure documentation is consistent with new features.
 - [ ] **Compatibility**: Verify `docs/reference/compatibility.md` covers the supported versions.
 - [ ] **Clean CI**: Ensure the latest commit on main is green.
-- [ ] **Performance Gate**: Ensure `make verify-perf` passes and thresholds in `hack/perf/thresholds/kind-v1.34.3.yaml` reflect current baseline evidence.
+- [ ] **Performance Gate**: Run the **Performance Baseline Capture** workflow on `main` (or release branch), then ensure `hack/perf/baseline/kind-v1.34.3-baseline.json` and `hack/perf/thresholds/kind-v1.34.3.yaml` in-repo match captured evidence and `make verify-perf` passes.
 
 ### Post-Release
 
