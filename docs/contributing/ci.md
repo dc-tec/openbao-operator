@@ -65,7 +65,7 @@ We enforce PR metadata and commit standards in CI (`.github/workflows/pr-standar
 
 - PR title must follow Conventional Commits.
 - PR description must include required sections from `.github/pull_request_template.md`.
-- All commit subjects in the PR must follow Conventional Commits.
+- Commit-subject checks are informational only (not enforced).
 
 Because this repository uses squash merge, the PR title gate is the effective release-facing commit message gate for `main`.
 

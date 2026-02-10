@@ -106,6 +106,6 @@ BREAKING CHANGE: The `autoUnseal` field has been removed in favor of `unsealConf
 Conventional Commit format is validated in CI for:
 
 - PR title (required for squash-merge workflow)
-- Individual commit subjects in each PR
+- PR commit-subject check is informational only (non-blocking)
 
 See `.github/workflows/pr-standards.yml`.

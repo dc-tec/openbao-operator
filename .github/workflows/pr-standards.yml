@@ -94,47 +94,8 @@ jobs:
     name: PR Commits Use Conventional Commits
     runs-on: ubuntu-24.04
     steps:
-      - name: Validate all commit subjects in the PR
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+      - name: Informational only (squash-merge model)
         run: |
           set -euo pipefail
-          regex='^(revert: )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9][a-z0-9()./_-]*\))?(!)?: .+'
-
-          page=1
-          failures=0
-          while :; do
-            url="https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/commits?per_page=100&page=${page}"
-            response="$(curl -fsSL \
-              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              "${url}")"
-
-            count="$(jq 'length' <<<"${response}")"
-            if [[ "${count}" -eq 0 ]]; then
-              break
-            fi
-
-            while IFS= read -r encoded; do
-              message="$(printf '%s' "${encoded}" | base64 -d)"
-              subject="$(sed -n '1p' <<<"${message}")"
-              if [[ -z "${subject}" ]]; then
-                echo "Empty commit subject found." >&2
-                failures=$((failures + 1))
-                continue
-              fi
-              if ! [[ "${subject}" =~ ${regex} ]]; then
-                echo "Non-conventional commit subject: ${subject}" >&2
-                failures=$((failures + 1))
-              fi
-            done < <(jq -r '.[].commit.message | @base64' <<<"${response}")
-
-            page=$((page + 1))
-          done
-
-          if [[ "${failures}" -ne 0 ]]; then
-            echo "Found ${failures} commit message(s) that do not follow Conventional Commits." >&2
-            exit 1
-          fi
+          echo "Commit-subject enforcement is disabled."
+          echo "Repository uses squash merge, so PR title is the release-facing Conventional Commit."
