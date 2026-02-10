@@ -67,11 +67,11 @@ jobs:
             echo "perf=false" >> "${GITHUB_OUTPUT}"
           fi
 
-      if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|test/e2e/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|\.github/workflows/ci\.yml|Makefile)'; then
-        echo "e2e=true" >> "${GITHUB_OUTPUT}"
-      else
-        echo "e2e=false" >> "${GITHUB_OUTPUT}"
-      fi
+          if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|test/e2e/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|\.github/workflows/ci\.yml|Makefile)'; then
+            echo "e2e=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "e2e=false" >> "${GITHUB_OUTPUT}"
+          fi
 
           if echo "${changed}" | grep -qE '^(internal/backup/|internal/restore/|cmd/bao-backup/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
             echo "e2e_backup=true" >> "${GITHUB_OUTPUT}"
@@ -85,11 +85,11 @@ jobs:
             echo "e2e_upgrade=false" >> "${GITHUB_OUTPUT}"
           fi
 
-      if echo "${changed}" | grep -qE '^(internal/security/|internal/admission/|internal/provisioner/|cmd/provisioner/|config/policy/|internal/controller/|cmd/controller/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
-        echo "e2e_hardened=true" >> "${GITHUB_OUTPUT}"
-      else
-        echo "e2e_hardened=false" >> "${GITHUB_OUTPUT}"
-      fi
+          if echo "${changed}" | grep -qE '^(internal/security/|internal/admission/|internal/provisioner/|cmd/provisioner/|config/policy/|internal/controller/|cmd/controller/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
+            echo "e2e_hardened=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "e2e_hardened=false" >> "${GITHUB_OUTPUT}"
+          fi
   security:
     name: Security (vulncheck + Trivy FS)
     runs-on: *runner
