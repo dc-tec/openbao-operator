@@ -172,6 +172,56 @@ graph BT
     make test-e2e E2E_LABEL_FILTER='upgrade'
     ```
 
+    ### Performance Baseline + Regression Gate
+
+    Performance baselines run on Kind and reuse existing E2E flows and controller metrics.
+
+    - Baseline capture (default: 5 runs per scenario):
+
+      ```bash
+      make perf-baseline
+      ```
+
+    - Regression verification against committed thresholds:
+
+      ```bash
+      make verify-perf
+      ```
+
+    - Lightweight PR smoke check (lifecycle-only):
+
+      ```bash
+      make verify-perf-smoke
+      ```
+
+    Baseline/threshold artifacts:
+
+    - `hack/perf/baseline/kind-v1.34.3-baseline.json`
+    - `hack/perf/thresholds/kind-v1.34.3.yaml`
+
+    Scenarios covered by the gate:
+
+    - `lifecycle && critical && tenant && !slow && !openshift && !pentest`
+    - `dr && backup && restore && !failure-injection`
+    - `upgrade && rolling && !failure && !bluegreen`
+
+    Metric contract:
+
+    - p95 latency/duration:
+      - `openbao_reconcile_duration_seconds`
+      - `openbao_restore_duration_seconds`
+      - `openbao_upgrade_duration_seconds`
+      - `openbao_upgrade_pod_duration_seconds`
+    - max/churn:
+      - `openbao_backup_last_duration_seconds` (max)
+      - `workqueue_retries_total` (delta)
+      - `openbao_reconcile_errors_total / controller_runtime_reconcile_total` (delta ratio)
+
+    CI usage:
+
+    - PRs: run `verify-perf-smoke`.
+    - `main`, nightly, and release workflows: run full `verify-perf`.
+
     ### OpenShift Local / Existing Cluster
 
     To validate OpenShift compatibility, run a focused subset of E2E tests against an existing cluster
