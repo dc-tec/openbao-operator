@@ -117,8 +117,9 @@ jobs:
               break
             fi
 
-            while IFS= read -r message; do
-              subject="$(head -n1 <<<"${message}")"
+            while IFS= read -r encoded; do
+              message="$(printf '%s' "${encoded}" | base64 -d)"
+              subject="$(sed -n '1p' <<<"${message}")"
               if [[ -z "${subject}" ]]; then
                 echo "Empty commit subject found." >&2
                 failures=$((failures + 1))
@@ -128,7 +129,7 @@ jobs:
                 echo "Non-conventional commit subject: ${subject}" >&2
                 failures=$((failures + 1))
               fi
-            done < <(jq -r '.[].commit.message' <<<"${response}")
+            done < <(jq -r '.[].commit.message | @base64' <<<"${response}")
 
             page=$((page + 1))
           done
