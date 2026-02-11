@@ -4307,7 +4307,7 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>verify-perf
 </span></code></pre></div>
 <ul>
-<li>Lightweight PR smoke check (lifecycle-only):</li>
+<li>Optional local smoke verification (lifecycle-only):</li>
 </ul>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>verify-perf-smoke
 </span></code></pre></div>
@@ -4336,9 +4336,10 @@
 </ul>
 <p>CI usage:</p>
 <ul>
-<li>Weekly schedule and on-demand dispatch: run full <code>verify-perf</code> (<code>Performance Regression Weekly</code> workflow).</li>
-<li>Release workflow: run full <code>verify-perf</code>.</li>
-<li>Baseline capture is on-demand via <code>Performance Baseline Capture</code>.</li>
+<li>PR/Main/Nightly CI does <strong>not</strong> run performance verification by default.</li>
+<li>Weekly schedule and on-demand dispatch run full <code>verify-perf</code> (<code>Performance Regression Weekly</code> workflow).</li>
+<li>Release workflow runs full <code>verify-perf</code>.</li>
+<li>Baseline capture is on-demand via <code>Performance Baseline Capture</code> (<code>workflow_dispatch</code>).</li>
 </ul>
 <h3 id="openshift-local-existing-cluster">OpenShift Local / Existing Cluster<a class="headerlink" href="#openshift-local-existing-cluster" title="Permanent link">&para;</a></h3>
 <p>To validate OpenShift compatibility, run a focused subset of E2E tests against an existing cluster
