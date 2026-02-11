@@ -188,7 +188,7 @@ graph BT
       make verify-perf
       ```
 
-    - Lightweight PR smoke check (lifecycle-only):
+    - Optional local smoke verification (lifecycle-only):
 
       ```bash
       make verify-perf-smoke
@@ -219,9 +219,10 @@ graph BT
 
     CI usage:
 
-    - Weekly schedule and on-demand dispatch: run full `verify-perf` (`Performance Regression Weekly` workflow).
-    - Release workflow: run full `verify-perf`.
-    - Baseline capture is on-demand via `Performance Baseline Capture`.
+    - PR/Main/Nightly CI does **not** run performance verification by default.
+    - Weekly schedule and on-demand dispatch run full `verify-perf` (`Performance Regression Weekly` workflow).
+    - Release workflow runs full `verify-perf`.
+    - Baseline capture is on-demand via `Performance Baseline Capture` (`workflow_dispatch`).
 
     ### OpenShift Local / Existing Cluster
 
