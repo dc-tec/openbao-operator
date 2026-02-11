@@ -503,7 +503,7 @@ jobs:
 
   e2e:
     needs: [changes, build-e2e-images]
-    if: (needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e'))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     name: E2E (${{ matrix.name }})
     runs-on: *runner
     timeout-minutes: 45
@@ -559,6 +559,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          TRIGGER_E2E="${{ needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}"
           FULL_E2E="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') }}"
           PR_BACKUP="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'backup') }}"
           PR_UPGRADE="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upgrades') }}"
@@ -566,6 +567,14 @@ jobs:
 
           FILTER="!slow && !nightly && !openshift && !pentest"
           SHOULD_RUN="true"
+
+          if [[ "${TRIGGER_E2E}" != "true" ]]; then
+            SHOULD_RUN="false"
+            echo "E2E_LABEL_FILTER=$FILTER" >> "${GITHUB_ENV}"
+            echo "SHOULD_RUN=$SHOULD_RUN" >> "${GITHUB_ENV}"
+            echo "::notice::Skipping ${{ matrix.name }} shard (no E2E-triggering changes/labels)"
+            exit 0
+          fi
 
           if [[ "${{ matrix.hardened_signed }}" == "true" ]]; then
             FILTER="!nightly && !openshift && !pentest"
