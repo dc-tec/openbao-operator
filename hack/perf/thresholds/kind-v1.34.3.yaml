@@ -1,5 +1,5 @@
 version: v1
-generatedAt: 2026-02-10T00:00:00Z
+generatedAt: 2026-02-10T23:58:53.347433812Z
 nodeImage: kindest/node:v1.34.3
 multipliers:
     p95: 1.25
@@ -16,30 +16,30 @@ scenarios:
     backup-restore:
         labelFilter: dr && backup && restore && !failure-injection
         metrics:
-            backup_last_duration_seconds_max: 308
-            reconcile_error_ratio: 1
-            reconcile_p95_seconds: 75
-            restore_p95_seconds: 1500
+            backup_last_duration_seconds_max: 6
+            reconcile_error_ratio: 0.05
+            reconcile_p95_seconds: 1
+            restore_p95_seconds: 38
             upgrade_p95_seconds: 0
             upgrade_pod_p95_seconds: 0
-            workqueue_retries_delta: 196
+            workqueue_retries_delta: 426
     lifecycle:
         labelFilter: lifecycle && critical && tenant && !slow && !openshift && !pentest
         metrics:
             backup_last_duration_seconds_max: 0
-            reconcile_error_ratio: 1
-            reconcile_p95_seconds: 38
+            reconcile_error_ratio: 0.46
+            reconcile_p95_seconds: 1
             restore_p95_seconds: 0
             upgrade_p95_seconds: 0
             upgrade_pod_p95_seconds: 0
-            workqueue_retries_delta: 62
+            workqueue_retries_delta: 75
     rolling-upgrade:
         labelFilter: upgrade && rolling && !failure && !bluegreen
         metrics:
             backup_last_duration_seconds_max: 0
-            reconcile_error_ratio: 1
-            reconcile_p95_seconds: 82
+            reconcile_error_ratio: 0.42
+            reconcile_p95_seconds: 1
             restore_p95_seconds: 0
-            upgrade_p95_seconds: 2250
-            upgrade_pod_p95_seconds: 750
-            workqueue_retries_delta: 140
+            upgrade_p95_seconds: 75
+            upgrade_pod_p95_seconds: 13
+            workqueue_retries_delta: 159
