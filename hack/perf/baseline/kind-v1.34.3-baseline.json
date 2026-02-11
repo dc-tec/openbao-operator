@@ -1,6 +1,6 @@
 {
   "version": "v1",
-  "capturedAt": "2026-02-10T00:00:00Z",
+  "capturedAt": "2026-02-10T22:35:20.438272046Z",
   "nodeImage": "kindest/node:v1.34.3",
   "runsPerCase": 5,
   "multipliers": {
@@ -8,316 +8,316 @@
     "max": 1.4
   },
   "scenarios": {
-    "lifecycle": {
-      "labelFilter": "lifecycle && critical && tenant && !slow && !openshift && !pentest",
+    "backup-restore": {
+      "labelFilter": "dr \u0026\u0026 backup \u0026\u0026 restore \u0026\u0026 !failure-injection",
       "runs": [
         {
-          "scenario": "lifecycle",
-          "labelFilter": "lifecycle && critical && tenant && !slow && !openshift && !pentest",
+          "scenario": "backup-restore",
+          "labelFilter": "dr \u0026\u0026 backup \u0026\u0026 restore \u0026\u0026 !failure-injection",
           "run": 1,
-          "cluster": "perf-lifecycle-1",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
+          "cluster": "perf-backup-restore-1",
+          "startedAt": "2026-02-10T23:02:50.790219032Z",
+          "duration": 449617961341,
           "metrics": {
-            "reconcile_p95_seconds": 20,
-            "backup_last_duration_seconds_max": 0,
-            "restore_p95_seconds": 0,
+            "backup_last_duration_seconds_max": 4,
+            "reconcile_error_ratio": 0.022950819672131147,
+            "reconcile_p95_seconds": 0.5,
+            "restore_p95_seconds": 30,
             "upgrade_p95_seconds": 0,
             "upgrade_pod_p95_seconds": 0,
-            "workqueue_retries_delta": 40,
-            "reconcile_error_ratio": 0.03
+            "workqueue_retries_delta": 296
           },
           "beforePresent": false
         },
         {
-          "scenario": "lifecycle",
-          "labelFilter": "lifecycle && critical && tenant && !slow && !openshift && !pentest",
+          "scenario": "backup-restore",
+          "labelFilter": "dr \u0026\u0026 backup \u0026\u0026 restore \u0026\u0026 !failure-injection",
           "run": 2,
-          "cluster": "perf-lifecycle-2",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
+          "cluster": "perf-backup-restore-2",
+          "startedAt": "2026-02-10T23:10:24.558516808Z",
+          "duration": 430356385029,
           "metrics": {
-            "reconcile_p95_seconds": 30,
-            "backup_last_duration_seconds_max": 0,
-            "restore_p95_seconds": 0,
+            "backup_last_duration_seconds_max": 3,
+            "reconcile_error_ratio": 0.02181818181818182,
+            "reconcile_p95_seconds": 0.5,
+            "restore_p95_seconds": 30,
             "upgrade_p95_seconds": 0,
             "upgrade_pod_p95_seconds": 0,
-            "workqueue_retries_delta": 35,
-            "reconcile_error_ratio": 0.04
+            "workqueue_retries_delta": 266
           },
           "beforePresent": false
         },
         {
-          "scenario": "lifecycle",
-          "labelFilter": "lifecycle && critical && tenant && !slow && !openshift && !pentest",
+          "scenario": "backup-restore",
+          "labelFilter": "dr \u0026\u0026 backup \u0026\u0026 restore \u0026\u0026 !failure-injection",
           "run": 3,
-          "cluster": "perf-lifecycle-3",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
+          "cluster": "perf-backup-restore-3",
+          "startedAt": "2026-02-10T23:17:38.725892027Z",
+          "duration": 441057324502,
           "metrics": {
-            "reconcile_p95_seconds": 25,
-            "backup_last_duration_seconds_max": 0,
-            "restore_p95_seconds": 0,
+            "backup_last_duration_seconds_max": 4,
+            "reconcile_error_ratio": 0.022364217252396165,
+            "reconcile_p95_seconds": 0.5,
+            "restore_p95_seconds": 30,
             "upgrade_p95_seconds": 0,
             "upgrade_pod_p95_seconds": 0,
-            "workqueue_retries_delta": 42,
-            "reconcile_error_ratio": 0.02
+            "workqueue_retries_delta": 304
           },
           "beforePresent": false
         },
         {
-          "scenario": "lifecycle",
-          "labelFilter": "lifecycle && critical && tenant && !slow && !openshift && !pentest",
+          "scenario": "backup-restore",
+          "labelFilter": "dr \u0026\u0026 backup \u0026\u0026 restore \u0026\u0026 !failure-injection",
           "run": 4,
-          "cluster": "perf-lifecycle-4",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
+          "cluster": "perf-backup-restore-4",
+          "startedAt": "2026-02-10T23:25:03.827141819Z",
+          "duration": 429960889462,
           "metrics": {
-            "reconcile_p95_seconds": 30,
-            "backup_last_duration_seconds_max": 0,
-            "restore_p95_seconds": 0,
+            "backup_last_duration_seconds_max": 4,
+            "reconcile_error_ratio": 0.02456140350877193,
+            "reconcile_p95_seconds": 0.5,
+            "restore_p95_seconds": 30,
             "upgrade_p95_seconds": 0,
             "upgrade_pod_p95_seconds": 0,
-            "workqueue_retries_delta": 38,
-            "reconcile_error_ratio": 0.05
+            "workqueue_retries_delta": 276
           },
           "beforePresent": false
         },
         {
-          "scenario": "lifecycle",
-          "labelFilter": "lifecycle && critical && tenant && !slow && !openshift && !pentest",
+          "scenario": "backup-restore",
+          "labelFilter": "dr \u0026\u0026 backup \u0026\u0026 restore \u0026\u0026 !failure-injection",
           "run": 5,
-          "cluster": "perf-lifecycle-5",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
+          "cluster": "perf-backup-restore-5",
+          "startedAt": "2026-02-10T23:32:17.988907777Z",
+          "duration": 433313731398,
           "metrics": {
-            "reconcile_p95_seconds": 20,
-            "backup_last_duration_seconds_max": 0,
-            "restore_p95_seconds": 0,
+            "backup_last_duration_seconds_max": 4,
+            "reconcile_error_ratio": 0.030821917808219176,
+            "reconcile_p95_seconds": 0.5,
+            "restore_p95_seconds": 30,
             "upgrade_p95_seconds": 0,
             "upgrade_pod_p95_seconds": 0,
-            "workqueue_retries_delta": 44,
-            "reconcile_error_ratio": 0.04
+            "workqueue_retries_delta": 283
           },
           "beforePresent": false
         }
       ],
       "maxMetrics": {
-        "reconcile_p95_seconds": 30,
+        "backup_last_duration_seconds_max": 4,
+        "reconcile_error_ratio": 0.030821917808219176,
+        "reconcile_p95_seconds": 0.5,
+        "restore_p95_seconds": 30,
+        "upgrade_p95_seconds": 0,
+        "upgrade_pod_p95_seconds": 0,
+        "workqueue_retries_delta": 304
+      }
+    },
+    "lifecycle": {
+      "labelFilter": "lifecycle \u0026\u0026 critical \u0026\u0026 tenant \u0026\u0026 !slow \u0026\u0026 !openshift \u0026\u0026 !pentest",
+      "runs": [
+        {
+          "scenario": "lifecycle",
+          "labelFilter": "lifecycle \u0026\u0026 critical \u0026\u0026 tenant \u0026\u0026 !slow \u0026\u0026 !openshift \u0026\u0026 !pentest",
+          "run": 1,
+          "cluster": "perf-lifecycle-1",
+          "startedAt": "2026-02-10T22:35:20.438275493Z",
+          "duration": 763960618155,
+          "metrics": {
+            "backup_last_duration_seconds_max": 0,
+            "reconcile_error_ratio": 0.29545454545454547,
+            "reconcile_p95_seconds": 0.5,
+            "restore_p95_seconds": 0,
+            "upgrade_p95_seconds": 0,
+            "upgrade_pod_p95_seconds": 0,
+            "workqueue_retries_delta": 42
+          },
+          "beforePresent": false
+        },
+        {
+          "scenario": "lifecycle",
+          "labelFilter": "lifecycle \u0026\u0026 critical \u0026\u0026 tenant \u0026\u0026 !slow \u0026\u0026 !openshift \u0026\u0026 !pentest",
+          "run": 2,
+          "cluster": "perf-lifecycle-2",
+          "startedAt": "2026-02-10T22:48:05.872629289Z",
+          "duration": 205172085171,
+          "metrics": {
+            "backup_last_duration_seconds_max": 0,
+            "reconcile_error_ratio": 0.30434782608695654,
+            "reconcile_p95_seconds": 0.5,
+            "restore_p95_seconds": 0,
+            "upgrade_p95_seconds": 0,
+            "upgrade_pod_p95_seconds": 0,
+            "workqueue_retries_delta": 43
+          },
+          "beforePresent": false
+        },
+        {
+          "scenario": "lifecycle",
+          "labelFilter": "lifecycle \u0026\u0026 critical \u0026\u0026 tenant \u0026\u0026 !slow \u0026\u0026 !openshift \u0026\u0026 !pentest",
+          "run": 3,
+          "cluster": "perf-lifecycle-3",
+          "startedAt": "2026-02-10T22:51:32.534320394Z",
+          "duration": 223664860869,
+          "metrics": {
+            "backup_last_duration_seconds_max": 0,
+            "reconcile_error_ratio": 0.32727272727272727,
+            "reconcile_p95_seconds": 0.5,
+            "restore_p95_seconds": 0,
+            "upgrade_p95_seconds": 0,
+            "upgrade_pod_p95_seconds": 0,
+            "workqueue_retries_delta": 52
+          },
+          "beforePresent": false
+        },
+        {
+          "scenario": "lifecycle",
+          "labelFilter": "lifecycle \u0026\u0026 critical \u0026\u0026 tenant \u0026\u0026 !slow \u0026\u0026 !openshift \u0026\u0026 !pentest",
+          "run": 4,
+          "cluster": "perf-lifecycle-4",
+          "startedAt": "2026-02-10T22:55:17.625880118Z",
+          "duration": 217768277506,
+          "metrics": {
+            "backup_last_duration_seconds_max": 0,
+            "reconcile_error_ratio": 0.3269230769230769,
+            "reconcile_p95_seconds": 0.5,
+            "restore_p95_seconds": 0,
+            "upgrade_p95_seconds": 0,
+            "upgrade_pod_p95_seconds": 0,
+            "workqueue_retries_delta": 49
+          },
+          "beforePresent": false
+        },
+        {
+          "scenario": "lifecycle",
+          "labelFilter": "lifecycle \u0026\u0026 critical \u0026\u0026 tenant \u0026\u0026 !slow \u0026\u0026 !openshift \u0026\u0026 !pentest",
+          "run": 5,
+          "cluster": "perf-lifecycle-5",
+          "startedAt": "2026-02-10T22:58:56.794037167Z",
+          "duration": 232562866534,
+          "metrics": {
+            "backup_last_duration_seconds_max": 0,
+            "reconcile_error_ratio": 0.32142857142857145,
+            "reconcile_p95_seconds": 0.5,
+            "restore_p95_seconds": 0,
+            "upgrade_p95_seconds": 0,
+            "upgrade_pod_p95_seconds": 0,
+            "workqueue_retries_delta": 53
+          },
+          "beforePresent": false
+        }
+      ],
+      "maxMetrics": {
         "backup_last_duration_seconds_max": 0,
+        "reconcile_error_ratio": 0.32727272727272727,
+        "reconcile_p95_seconds": 0.5,
         "restore_p95_seconds": 0,
         "upgrade_p95_seconds": 0,
         "upgrade_pod_p95_seconds": 0,
-        "workqueue_retries_delta": 44,
-        "reconcile_error_ratio": 0.05
-      }
-    },
-    "backup-restore": {
-      "labelFilter": "dr && backup && restore && !failure-injection",
-      "runs": [
-        {
-          "scenario": "backup-restore",
-          "labelFilter": "dr && backup && restore && !failure-injection",
-          "run": 1,
-          "cluster": "perf-backup-restore-1",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
-          "metrics": {
-            "reconcile_p95_seconds": 60,
-            "backup_last_duration_seconds_max": 180,
-            "restore_p95_seconds": 600,
-            "upgrade_p95_seconds": 0,
-            "upgrade_pod_p95_seconds": 0,
-            "workqueue_retries_delta": 120,
-            "reconcile_error_ratio": 0.15
-          },
-          "beforePresent": false
-        },
-        {
-          "scenario": "backup-restore",
-          "labelFilter": "dr && backup && restore && !failure-injection",
-          "run": 2,
-          "cluster": "perf-backup-restore-2",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
-          "metrics": {
-            "reconcile_p95_seconds": 50,
-            "backup_last_duration_seconds_max": 200,
-            "restore_p95_seconds": 900,
-            "upgrade_p95_seconds": 0,
-            "upgrade_pod_p95_seconds": 0,
-            "workqueue_retries_delta": 100,
-            "reconcile_error_ratio": 0.1
-          },
-          "beforePresent": false
-        },
-        {
-          "scenario": "backup-restore",
-          "labelFilter": "dr && backup && restore && !failure-injection",
-          "run": 3,
-          "cluster": "perf-backup-restore-3",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
-          "metrics": {
-            "reconcile_p95_seconds": 60,
-            "backup_last_duration_seconds_max": 220,
-            "restore_p95_seconds": 1200,
-            "upgrade_p95_seconds": 0,
-            "upgrade_pod_p95_seconds": 0,
-            "workqueue_retries_delta": 140,
-            "reconcile_error_ratio": 0.12
-          },
-          "beforePresent": false
-        },
-        {
-          "scenario": "backup-restore",
-          "labelFilter": "dr && backup && restore && !failure-injection",
-          "run": 4,
-          "cluster": "perf-backup-restore-4",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
-          "metrics": {
-            "reconcile_p95_seconds": 45,
-            "backup_last_duration_seconds_max": 210,
-            "restore_p95_seconds": 900,
-            "upgrade_p95_seconds": 0,
-            "upgrade_pod_p95_seconds": 0,
-            "workqueue_retries_delta": 130,
-            "reconcile_error_ratio": 0.2
-          },
-          "beforePresent": false
-        },
-        {
-          "scenario": "backup-restore",
-          "labelFilter": "dr && backup && restore && !failure-injection",
-          "run": 5,
-          "cluster": "perf-backup-restore-5",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
-          "metrics": {
-            "reconcile_p95_seconds": 55,
-            "backup_last_duration_seconds_max": 190,
-            "restore_p95_seconds": 600,
-            "upgrade_p95_seconds": 0,
-            "upgrade_pod_p95_seconds": 0,
-            "workqueue_retries_delta": 110,
-            "reconcile_error_ratio": 0.18
-          },
-          "beforePresent": false
-        }
-      ],
-      "maxMetrics": {
-        "reconcile_p95_seconds": 60,
-        "backup_last_duration_seconds_max": 220,
-        "restore_p95_seconds": 1200,
-        "upgrade_p95_seconds": 0,
-        "upgrade_pod_p95_seconds": 0,
-        "workqueue_retries_delta": 140,
-        "reconcile_error_ratio": 0.2
+        "workqueue_retries_delta": 53
       }
     },
     "rolling-upgrade": {
-      "labelFilter": "upgrade && rolling && !failure && !bluegreen",
+      "labelFilter": "upgrade \u0026\u0026 rolling \u0026\u0026 !failure \u0026\u0026 !bluegreen",
       "runs": [
         {
           "scenario": "rolling-upgrade",
-          "labelFilter": "upgrade && rolling && !failure && !bluegreen",
+          "labelFilter": "upgrade \u0026\u0026 rolling \u0026\u0026 !failure \u0026\u0026 !bluegreen",
           "run": 1,
           "cluster": "perf-rolling-upgrade-1",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
+          "startedAt": "2026-02-10T23:39:35.25423594Z",
+          "duration": 228001186877,
           "metrics": {
-            "reconcile_p95_seconds": 50,
             "backup_last_duration_seconds_max": 0,
+            "reconcile_error_ratio": 0.24175824175824176,
+            "reconcile_p95_seconds": 0.5,
             "restore_p95_seconds": 0,
-            "upgrade_p95_seconds": 1200,
-            "upgrade_pod_p95_seconds": 300,
-            "workqueue_retries_delta": 90,
-            "reconcile_error_ratio": 0.08
+            "upgrade_p95_seconds": 60,
+            "upgrade_pod_p95_seconds": 10,
+            "workqueue_retries_delta": 87
           },
           "beforePresent": false
         },
         {
           "scenario": "rolling-upgrade",
-          "labelFilter": "upgrade && rolling && !failure && !bluegreen",
+          "labelFilter": "upgrade \u0026\u0026 rolling \u0026\u0026 !failure \u0026\u0026 !bluegreen",
           "run": 2,
           "cluster": "perf-rolling-upgrade-2",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
+          "startedAt": "2026-02-10T23:43:24.687092673Z",
+          "duration": 240315696588,
           "metrics": {
-            "reconcile_p95_seconds": 60,
             "backup_last_duration_seconds_max": 0,
+            "reconcile_error_ratio": 0.29914529914529914,
+            "reconcile_p95_seconds": 0.5,
             "restore_p95_seconds": 0,
-            "upgrade_p95_seconds": 1800,
-            "upgrade_pod_p95_seconds": 600,
-            "workqueue_retries_delta": 85,
-            "reconcile_error_ratio": 0.1
+            "upgrade_p95_seconds": 60,
+            "upgrade_pod_p95_seconds": 10,
+            "workqueue_retries_delta": 113
           },
           "beforePresent": false
         },
         {
           "scenario": "rolling-upgrade",
-          "labelFilter": "upgrade && rolling && !failure && !bluegreen",
+          "labelFilter": "upgrade \u0026\u0026 rolling \u0026\u0026 !failure \u0026\u0026 !bluegreen",
           "run": 3,
           "cluster": "perf-rolling-upgrade-3",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
+          "startedAt": "2026-02-10T23:47:26.483279772Z",
+          "duration": 225780209586,
           "metrics": {
-            "reconcile_p95_seconds": 55,
             "backup_last_duration_seconds_max": 0,
+            "reconcile_error_ratio": 0.25773195876288657,
+            "reconcile_p95_seconds": 0.5,
             "restore_p95_seconds": 0,
-            "upgrade_p95_seconds": 1800,
-            "upgrade_pod_p95_seconds": 600,
-            "workqueue_retries_delta": 95,
-            "reconcile_error_ratio": 0.12
+            "upgrade_p95_seconds": 60,
+            "upgrade_pod_p95_seconds": 10,
+            "workqueue_retries_delta": 93
           },
           "beforePresent": false
         },
         {
           "scenario": "rolling-upgrade",
-          "labelFilter": "upgrade && rolling && !failure && !bluegreen",
+          "labelFilter": "upgrade \u0026\u0026 rolling \u0026\u0026 !failure \u0026\u0026 !bluegreen",
           "run": 4,
           "cluster": "perf-rolling-upgrade-4",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
+          "startedAt": "2026-02-10T23:51:13.75726682Z",
+          "duration": 227083988095,
           "metrics": {
-            "reconcile_p95_seconds": 50,
             "backup_last_duration_seconds_max": 0,
+            "reconcile_error_ratio": 0.24731182795698925,
+            "reconcile_p95_seconds": 0.5,
             "restore_p95_seconds": 0,
-            "upgrade_p95_seconds": 1200,
-            "upgrade_pod_p95_seconds": 300,
-            "workqueue_retries_delta": 100,
-            "reconcile_error_ratio": 0.09
+            "upgrade_p95_seconds": 60,
+            "upgrade_pod_p95_seconds": 10,
+            "workqueue_retries_delta": 89
           },
           "beforePresent": false
         },
         {
           "scenario": "rolling-upgrade",
-          "labelFilter": "upgrade && rolling && !failure && !bluegreen",
+          "labelFilter": "upgrade \u0026\u0026 rolling \u0026\u0026 !failure \u0026\u0026 !bluegreen",
           "run": 5,
           "cluster": "perf-rolling-upgrade-5",
-          "startedAt": "2026-02-10T00:00:00Z",
-          "duration": 0,
+          "startedAt": "2026-02-10T23:55:02.31162634Z",
+          "duration": 229549990944,
           "metrics": {
-            "reconcile_p95_seconds": 65,
             "backup_last_duration_seconds_max": 0,
+            "reconcile_error_ratio": 0.25274725274725274,
+            "reconcile_p95_seconds": 0.5,
             "restore_p95_seconds": 0,
-            "upgrade_p95_seconds": 900,
-            "upgrade_pod_p95_seconds": 300,
-            "workqueue_retries_delta": 88,
-            "reconcile_error_ratio": 0.07
+            "upgrade_p95_seconds": 60,
+            "upgrade_pod_p95_seconds": 10,
+            "workqueue_retries_delta": 87
           },
           "beforePresent": false
         }
       ],
       "maxMetrics": {
-        "reconcile_p95_seconds": 65,
         "backup_last_duration_seconds_max": 0,
+        "reconcile_error_ratio": 0.29914529914529914,
+        "reconcile_p95_seconds": 0.5,
         "restore_p95_seconds": 0,
-        "upgrade_p95_seconds": 1800,
-        "upgrade_pod_p95_seconds": 600,
-        "workqueue_retries_delta": 100,
-        "reconcile_error_ratio": 0.12
+        "upgrade_p95_seconds": 60,
+        "upgrade_pod_p95_seconds": 10,
+        "workqueue_retries_delta": 113
       }
     }
   },
