@@ -200,14 +200,14 @@ jobs:
           cache-from: type=gha,scope=openbao-upgrade
           cache-to: type=gha,mode=max,scope=openbao-upgrade
 
-      - name: Publish digest refs
+      - name: Publish image refs
         id: refs
         run: |
           set -euo pipefail
-          echo "manager_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-operator@${{ steps.build-manager.outputs.digest }}" >> "${GITHUB_OUTPUT}"
-          echo "config_init_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-init@${{ steps.build-init.outputs.digest }}" >> "${GITHUB_OUTPUT}"
-          echo "backup_executor_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-backup@${{ steps.build-backup.outputs.digest }}" >> "${GITHUB_OUTPUT}"
-          echo "upgrade_executor_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-upgrade@${{ steps.build-upgrade.outputs.digest }}" >> "${GITHUB_OUTPUT}"
+          echo "manager_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-operator:${{ steps.tag.outputs.value }}" >> "${GITHUB_OUTPUT}"
+          echo "config_init_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-init:${{ steps.tag.outputs.value }}" >> "${GITHUB_OUTPUT}"
+          echo "backup_executor_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-backup:${{ steps.tag.outputs.value }}" >> "${GITHUB_OUTPUT}"
+          echo "upgrade_executor_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-upgrade:${{ steps.tag.outputs.value }}" >> "${GITHUB_OUTPUT}"
 
   e2e:
     name: E2E (kind ${{ matrix.k8s }})
