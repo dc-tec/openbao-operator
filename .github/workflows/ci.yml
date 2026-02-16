@@ -110,7 +110,7 @@ jobs:
         run: make vulncheck
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
+        uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # 0.34.0
         with:
           scan-type: fs
           scan-ref: .
@@ -435,7 +435,7 @@ jobs:
 
       - name: Build operator image
         id: build-manager
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: hack/ci/Dockerfile.fast.manager
@@ -452,7 +452,7 @@ jobs:
 
       - name: Build init image
         id: build-init
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: hack/ci/Dockerfile.fast.init
@@ -466,7 +466,7 @@ jobs:
 
       - name: Build backup image
         id: build-backup
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: hack/ci/Dockerfile.fast.backup
@@ -480,7 +480,7 @@ jobs:
 
       - name: Build upgrade image
         id: build-upgrade
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: hack/ci/Dockerfile.fast.upgrade
