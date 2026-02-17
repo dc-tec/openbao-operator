@@ -19,13 +19,16 @@ package utils
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
+	gcrname "github.com/google/go-containerregistry/pkg/name"
 	. "github.com/onsi/ginkgo/v2" // nolint:revive,staticcheck
 )
 
@@ -35,6 +38,8 @@ const (
 
 	defaultKindBinary  = "kind"
 	defaultKindCluster = "kind"
+
+	kindFallbackPlatformOS = "linux"
 )
 
 func warnError(err error) {
@@ -275,20 +280,127 @@ func UninstallCSIHostPathDriver() {
 	_, _ = Run(cmd)
 }
 
-// LoadImageToKindClusterWithName loads a local docker image to the kind cluster
-func LoadImageToKindClusterWithName(name string) error {
+type dockerManifestList struct {
+	Manifests []dockerManifest `json:"manifests"`
+}
+
+type dockerManifest struct {
+	Digest   string         `json:"digest"`
+	Platform dockerPlatform `json:"platform"`
+}
+
+type dockerPlatform struct {
+	OS           string `json:"os"`
+	Architecture string `json:"architecture"`
+}
+
+func loadImageToKindCluster(kindBinary, cluster, imageName string) error {
+	kindOptions := []string{"load", "docker-image", imageName, "--name", cluster}
+	cmd := exec.Command(kindBinary, kindOptions...) // #nosec G204 -- Test utility, command and arguments are controlled
+	_, err := Run(cmd)
+	return err
+}
+
+func shouldRetryKindLoadWithPlatformDigest(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "content digest") &&
+		strings.Contains(msg, "not found") &&
+		strings.Contains(msg, "--all-platforms")
+}
+
+func selectManifestDigestForPlatform(rawManifest, osName, arch string) (string, error) {
+	var manifestList dockerManifestList
+	if err := json.Unmarshal([]byte(rawManifest), &manifestList); err != nil {
+		return "", fmt.Errorf("parse manifest list: %w", err)
+	}
+	if len(manifestList.Manifests) == 0 {
+		return "", fmt.Errorf("manifest list has no manifests")
+	}
+
+	for _, manifest := range manifestList.Manifests {
+		if manifest.Digest == "" {
+			continue
+		}
+		if manifest.Platform.OS == osName && manifest.Platform.Architecture == arch {
+			return manifest.Digest, nil
+		}
+	}
+
+	return "", fmt.Errorf("no %s/%s manifest found", osName, arch)
+}
+
+func resolveManifestDigestRefForPlatform(imageName, osName, arch string) (string, error) {
+	cmd := exec.Command("docker", "manifest", "inspect", imageName) // #nosec G204 -- Test utility, command and arguments are controlled
+	out, err := Run(cmd)
+	if err != nil {
+		return "", fmt.Errorf("inspect manifest for %q: %w", imageName, err)
+	}
+
+	digest, err := selectManifestDigestForPlatform(out, osName, arch)
+	if err != nil {
+		return "", fmt.Errorf("select %s/%s digest for %q: %w", osName, arch, imageName, err)
+	}
+
+	ref, err := gcrname.ParseReference(imageName, gcrname.WeakValidation)
+	if err != nil {
+		return "", fmt.Errorf("parse image reference %q: %w", imageName, err)
+	}
+	return fmt.Sprintf("%s@%s", ref.Context().Name(), digest), nil
+}
+
+// LoadImageToKindClusterWithName loads a local docker image to the kind cluster.
+// If kind fails due missing platform digests on multi-arch image indexes, retry by
+// resolving and pulling the linux/<host-arch> manifest digest, retagging, and loading again.
+func LoadImageToKindClusterWithName(imageName string) error {
 	cluster := defaultKindCluster
 	if v, ok := os.LookupEnv("KIND_CLUSTER"); ok {
 		cluster = v
 	}
-	kindOptions := []string{"load", "docker-image", name, "--name", cluster}
 	kindBinary := defaultKindBinary
 	if v, ok := os.LookupEnv("KIND"); ok {
 		kindBinary = v
 	}
-	cmd := exec.Command(kindBinary, kindOptions...) // #nosec G204 -- Test utility, command and arguments are controlled
-	_, err := Run(cmd)
-	return err
+
+	if err := loadImageToKindCluster(kindBinary, cluster, imageName); err == nil {
+		return nil
+	} else if !shouldRetryKindLoadWithPlatformDigest(err) {
+		return err
+	} else {
+		originalErr := err
+		fallbackArch := runtime.GOARCH
+
+		fallbackRef, resolveErr := resolveManifestDigestRefForPlatform(imageName, kindFallbackPlatformOS, fallbackArch)
+		if resolveErr != nil {
+			return fmt.Errorf("load image %q into kind failed and digest fallback resolution failed: %w",
+				imageName, errors.Join(originalErr, resolveErr))
+		}
+
+		pullCmd := exec.Command("docker", "pull", fallbackRef) // #nosec G204 -- Test utility, command and arguments are controlled
+		if _, pullErr := Run(pullCmd); pullErr != nil {
+			return fmt.Errorf("load image %q into kind failed and digest fallback pull %q failed: %w",
+				imageName, fallbackRef, errors.Join(originalErr, pullErr))
+		}
+
+		tagCmd := exec.Command("docker", "tag", fallbackRef, imageName) // #nosec G204 -- Test utility, command and arguments are controlled
+		if _, tagErr := Run(tagCmd); tagErr != nil {
+			return fmt.Errorf("load image %q into kind failed and digest fallback retag %q -> %q failed: %w",
+				imageName, fallbackRef, imageName, errors.Join(originalErr, tagErr))
+		}
+
+		if retryErr := loadImageToKindCluster(kindBinary, cluster, imageName); retryErr != nil {
+			return fmt.Errorf("load image %q into kind failed and digest fallback reload failed: %w",
+				imageName, errors.Join(originalErr, retryErr))
+		}
+
+		_, _ = fmt.Fprintf(GinkgoWriter,
+			"kind load fallback succeeded for %q using %s/%s digest %q\n",
+			imageName, kindFallbackPlatformOS, fallbackArch, fallbackRef,
+		)
+		return nil
+	}
 }
 
 // GetNonEmptyLines converts given command output string into individual objects
