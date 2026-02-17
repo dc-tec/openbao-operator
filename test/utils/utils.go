@@ -333,7 +333,8 @@ func selectManifestDigestForPlatform(rawManifest, osName, arch string) (string, 
 }
 
 func resolveManifestDigestRefForPlatform(imageName, osName, arch string) (string, error) {
-	cmd := exec.Command("docker", "manifest", "inspect", imageName) // #nosec G204 -- Test utility, command and arguments are controlled
+	// #nosec G204 -- Test utility, command and arguments are controlled
+	cmd := exec.Command("docker", "manifest", "inspect", imageName)
 	out, err := Run(cmd)
 	if err != nil {
 		return "", fmt.Errorf("inspect manifest for %q: %w", imageName, err)
@@ -378,13 +379,15 @@ func LoadImageToKindClusterWithName(imageName string) error {
 				imageName, errors.Join(originalErr, resolveErr))
 		}
 
-		pullCmd := exec.Command("docker", "pull", fallbackRef) // #nosec G204 -- Test utility, command and arguments are controlled
+		// #nosec G204 -- Test utility, command and arguments are controlled
+		pullCmd := exec.Command("docker", "pull", fallbackRef)
 		if _, pullErr := Run(pullCmd); pullErr != nil {
 			return fmt.Errorf("load image %q into kind failed and digest fallback pull %q failed: %w",
 				imageName, fallbackRef, errors.Join(originalErr, pullErr))
 		}
 
-		tagCmd := exec.Command("docker", "tag", fallbackRef, imageName) // #nosec G204 -- Test utility, command and arguments are controlled
+		// #nosec G204 -- Test utility, command and arguments are controlled
+		tagCmd := exec.Command("docker", "tag", fallbackRef, imageName)
 		if _, tagErr := Run(tagCmd); tagErr != nil {
 			return fmt.Errorf("load image %q into kind failed and digest fallback retag %q -> %q failed: %w",
 				imageName, fallbackRef, imageName, errors.Join(originalErr, tagErr))
