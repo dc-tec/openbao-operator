@@ -4413,7 +4413,7 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:c3eb187d6de97b634fe94faa06535631af06b8c347a86d191d5563952a0653f8
+        image: ghcr.io/dc-tec/openbao-operator@sha256:0104f296ca1e0dc89100eb528b021d5a0b04871f58e55ad2dd430d3fd736476a
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4527,7 +4527,7 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:c3eb187d6de97b634fe94faa06535631af06b8c347a86d191d5563952a0653f8
+        image: ghcr.io/dc-tec/openbao-operator@sha256:0104f296ca1e0dc89100eb528b021d5a0b04871f58e55ad2dd430d3fd736476a
         livenessProbe:
           httpGet:
             path: /healthz
