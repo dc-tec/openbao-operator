@@ -21,6 +21,7 @@ jobs:
   pr-title-conventional:
     name: PR Title Uses Conventional Commits
     runs-on: ubuntu-24.04
+    if: ${{ !endsWith(github.actor, '[bot]') }}
     steps:
       - name: Validate PR title format
         env:
@@ -49,6 +50,7 @@ jobs:
   pr-template-check:
     name: PR Description Matches Template
     runs-on: ubuntu-24.04
+    if: ${{ !endsWith(github.actor, '[bot]') }}
     steps:
       - name: Validate PR description sections
         env:
@@ -93,6 +95,7 @@ jobs:
   commit-messages-conventional:
     name: PR Commits Use Conventional Commits
     runs-on: ubuntu-24.04
+    if: ${{ !endsWith(github.actor, '[bot]') }}
     steps:
       - name: Informational only (squash-merge model)
         run: |
