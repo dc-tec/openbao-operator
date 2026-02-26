@@ -26,7 +26,7 @@ Day 2 operations cover the ongoing management of the cluster, including version 
     6. On completion, `status.currentVersion` is updated and `status.upgrade` is cleared (rolling), or `status.blueGreen.phase` returns to `Idle` (blue/green).
 
     !!! note "Upgrade Policy"
-        Upgrades are designed to be safe and resumable. Downgrades are blocked by default. If an upgrade fails, it halts and sets `Degraded=True`; automated rollback is not supported. Root tokens are not used for upgrade operations.
+        Upgrades are designed to be safe and resumable. Downgrades are blocked by default. Rolling upgrades halt on failure and require manual intervention; Blue/Green can perform automatic rollback when `spec.upgrade.blueGreen.autoRollback.enabled=true`. Root tokens are not used for upgrade operations.
 
     ### Sequence Diagram (Rolling Updates)
 

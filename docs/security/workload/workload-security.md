@@ -35,7 +35,7 @@ The Operator places default resource limits on ephemeral jobs to protect the nod
 The Operator minimizes the attack surface of the Kubernetes JWT token:
 
 1. **No Automounting:** `automountServiceAccountToken: false` is set on the Pod spec.
-2. **Projected Volume:** A short-lived, audience-bound token is projected *only* into the OpenBao container (not init containers).
+2. **Projected Volume:** A short-lived projected token is mounted *only* into the OpenBao container (not init containers). If needed, an explicit audience can be configured.
 
 **Token Usage:**
 
@@ -47,7 +47,7 @@ The Operator minimizes the attack surface of the Kubernetes JWT token:
 An init container (`bao-config-init`) is used to render the OpenBao configuration (`config.hcl`) at runtime.
 
 - **Purpose:** Injects dynamic environment variables (Pod IP, Hostname) into the config template securely.
-- **Security:** Runs with the *exact same* non-root restrictions (`1000:1000`) as the main container. It has **no** network access.
+- **Security:** Runs with the *exact same* non-root restrictions (`1000:1000`) as the main container and does not receive the Kubernetes API token mount.
 
 ## Pod Security Standards (PSS)
 

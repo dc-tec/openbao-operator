@@ -127,7 +127,7 @@ sequenceDiagram
 | :--- | :--- |
 | `openbao_cluster_ready_replicas` | Number of Ready replicas |
 | `openbao_reconcile_duration_seconds` | Reconciliation duration |
-| `openbao_upgrade_status` | Upgrade status (0=Idle, 1=Upgrading) |
+| `openbao_upgrade_status` | Upgrade status (0=None, 1=Running, 2=Success, 3=Failed) |
 
 ## API Specification
 
