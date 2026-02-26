@@ -276,10 +276,10 @@ How the Restore Job authenticates to the OpenBao cluster leader.
 Check the phases (`Pending` -> `Running` -> `Completed`).
 
 ```bash
-kubectl get OBrestore -w
+kubectl get obrestore -w
 ```
 
-*(Shortname `OBrestore` available)*
+*(Shortname `obrestore` available)*
 
 ### Troubleshooting
 
@@ -300,7 +300,7 @@ kubectl get OBrestore -w
 
 ### Operation Lock
 
-The Operator ensures **Mutal Exclusion**. You cannot run a Restore while an Upgrade or Backup is in progress.
+The Operator ensures **Mutual Exclusion**. You cannot run a Restore while an Upgrade or Backup is in progress.
 
 ### Break Glass
 

@@ -4,13 +4,14 @@ This guide covers maintenance operations for OpenBao clusters, including node dr
 
 ## Pod Disruption Budgets
 
-The Operator automatically creates a `PodDisruptionBudget` (PDB) for each cluster with 2 or more replicas. This protects against accidental quorum loss during voluntary disruptions.
+The Operator automatically creates a `PodDisruptionBudget` (PDB) for clusters with **3 or more replicas**. This protects against accidental quorum loss during voluntary disruptions.
 
 ### Default Behavior
 
 | Replicas | PDB Created | Max Unavailable | Notes |
 |----------|-------------|-----------------|-------|
 | 1 | No | N/A | Single-replica clusters have no redundancy |
+| 2 | No | N/A | Raft quorum is 2/2; `maxUnavailable: 1` would break quorum |
 | 3 | Yes | 1 | Ensures quorum (2/3) is always maintained |
 | 5 | Yes | 1 | Conservative setting; 4 pods remain available |
 

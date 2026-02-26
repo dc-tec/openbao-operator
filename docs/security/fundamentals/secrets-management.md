@@ -8,8 +8,8 @@ The Operator manages the lifecycle of several critical secrets, from the Root To
 | :--- | :--- | :--- | :--- |
 | **Root Token** | `<cluster>-root-token` | Manual Revocation | :material-alert: Critical |
 | **Unseal Keys** | `<cluster>-unseal-key` | Manual Rotation | :material-alert: Critical |
-| **Cluster CA** | `<cluster>-ca` | 1 Year (Auto) | :material-alert: High |
-| **TLS Certs** | `<cluster>-tls` | 90 Days (Auto) | :material-alert: High |
+| **Cluster CA** | `<cluster>-tls-ca` | Long-lived (10-year cert), not auto-rotated | :material-alert: High |
+| **Server TLS Cert** | `<cluster>-tls-server` | Auto-reissued when within `spec.tls.rotationPeriod` | :material-alert: High |
 | **Backup Creds** | User Defined | User Managed | :material-alert: High |
 
 ## Auto-Unseal Configuration

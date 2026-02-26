@@ -11,7 +11,7 @@ This guide describes how to **Force Restore** a cluster that is stuck in a locke
 
 Use this procedure **ONLY** if:
 
-1. Use are recovering from a **Failed Rollback** where the cluster state is corrupted.
+1. You are recovering from a **Failed Rollback** where the cluster state is corrupted.
 2. The Operator is blocking your standard `OpenBaoRestore` with a "Cluster is locked" error.
 3. You accept **Total Data Loss** of the current cluster state (replacing it with the snapshot).
 
@@ -38,15 +38,15 @@ spec:
   # Standard Source Config (see Restore Guide)
   source:
     target:
-      type: s3
-      s3:
-        bucket: openbao-backups
-        region: us-east-1
-        credentialsSecretRef:
-          name: s3-credentials
+      provider: s3
+      endpoint: https://s3.amazonaws.com
+      bucket: openbao-backups
+      region: us-east-1
+      credentialsSecretRef:
+        name: s3-credentials
     key: clusters/prod/last-good-snapshot.snap
   
-  jwtAuthRole: restore
+  jwtAuthRole: openbao-operator-restore
   
   # --- BREAK GLASS CONFIGURATION ---
   force: true                  # (1)!

@@ -161,7 +161,8 @@ make docs-build
 ```
 
 !!! tip "Preview Deployment"
-    Every PR deploys a temporary preview environment URL directly in the GitHub comment.
+    CI currently validates docs with `make docs-build` but does not publish a per-PR preview URL.
+    Use `make docs-serve` locally for interactive preview.
 
 ## 6. Performance Baseline Capture (GitHub Runners)
 

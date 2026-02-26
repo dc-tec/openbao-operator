@@ -70,7 +70,7 @@ sequenceDiagram
     **Best for:** Most users, development, and self-contained environments.
 
     1.  **Bootstrap:** Checks for `Secret/<cluster>-tls-ca`. If missing, generates a 10-year ECDSA P-256 Root CA.
-    2.  **Issuance:** Checks `Secret/<cluster>-tls-server`. If missing or near expiry (default < 24h), signs a new certificate using the CA.
+    2.  **Issuance:** Checks `Secret/<cluster>-tls-server`. If missing or within the configured rotation window (`spec.tls.rotationPeriod`), signs a new certificate using the CA.
     3.  **Trust:** The CA is automatically mounted to all OpenBao pods and exported to a `ConfigMap` for clients.
 
 === "External"

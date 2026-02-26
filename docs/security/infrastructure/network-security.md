@@ -67,26 +67,25 @@ flowchart TB
 
 ## Controller Network Security
 
-The OpenBao Operator Controller itself runs in a highly restricted network environment to minimize its attack surface.
+The OpenBao Operator Controller itself uses restrictive **ingress** policies when operator network policies are enabled.
 
 === ":material-shield-lock: Ingress"
 
-    **Default Deny:** All incoming traffic to the controller is blocked by default.
+    **Default Deny:** All incoming traffic to controller pods is blocked by default, then explicit allow rules are added.
 
     | Source | Port | Reason |
     | :--- | :--- | :--- |
     | **Monitoring** | `8080` / `8443` | Metrics endpoint (Prometheus). |
     | **Kubelet** | `8081` | healthz/readyz probes. |
-    | **Webhook**| `9443` | Kubernetes API Server admission (validating/mutating) webhook requests. |
 
 === ":material-logout: Egress"
 
-    The controller is permitted to initiate connections only to essential services:
+    No dedicated controller egress-deny policy is currently shipped by default.
+    In practice, controller traffic is primarily to essential control-plane services:
 
     | Destination | Reason |
     | :--- | :--- |
     | **Kubernetes API** | Watching and reconciling resources. |
-    | **Webhooks** | Self-calls for admission webhooks (if applicable). |
 
 ## See Also
 

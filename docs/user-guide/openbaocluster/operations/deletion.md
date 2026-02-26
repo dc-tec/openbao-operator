@@ -42,6 +42,25 @@ Control what happens to critical data (Persistent Volumes) and external backups 
     - **Deleted:** Pods, StatefulSets, Services, ConfigMaps, Secrets, **PVCs (Data)**
     - **Retained:** S3 Backups
 
+=== "DeleteAll"
+    **Best for:** Explicit full teardown requests where PVC data must be removed.
+
+    The Operator deletes compute resources and PVCs, similar to `DeletePVCs`.
+
+    ```yaml
+    spec:
+      deletionPolicy: DeleteAll
+    ```
+
+    !!! warning "External backup deletion status"
+        `DeleteAll` is accepted by the API and deletes PVCs, but external backup object deletion is not yet implemented.
+        Backups in S3/GCS/Azure are currently left untouched.
+
+    **Cleanup Scope (current behavior):**
+
+    - **Deleted:** Pods, StatefulSets, Services, ConfigMaps, Secrets, **PVCs (Data)**
+    - **Retained:** External object-storage backups
+
 ## Performing Deletion
 
 To delete a cluster:
