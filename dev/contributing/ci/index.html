@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -4392,7 +4392,8 @@ update the skip list in:</p>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Preview Deployment</p>
-<p>Every PR deploys a temporary preview environment URL directly in the GitHub comment.</p>
+<p>CI currently validates docs with <code>make docs-build</code> but does not publish a per-PR preview URL.
+Use <code>make docs-serve</code> locally for interactive preview.</p>
 </div>
 <h2 id="6-performance-baseline-capture-github-runners">6. Performance Baseline Capture (GitHub Runners)<a class="headerlink" href="#6-performance-baseline-capture-github-runners" title="Permanent link">&para;</a></h2>
 <p>Use the dedicated workflow to capture baseline evidence on the same runner class used by CI.</p>

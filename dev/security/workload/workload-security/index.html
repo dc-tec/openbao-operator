@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -4170,7 +4170,7 @@
 <p>The Operator minimizes the attack surface of the Kubernetes JWT token:</p>
 <ol>
 <li><strong>No Automounting:</strong> <code>automountServiceAccountToken: false</code> is set on the Pod spec.</li>
-<li><strong>Projected Volume:</strong> A short-lived, audience-bound token is projected <em>only</em> into the OpenBao container (not init containers).</li>
+<li><strong>Projected Volume:</strong> A short-lived projected token is mounted <em>only</em> into the OpenBao container (not init containers). If needed, an explicit audience can be configured.</li>
 </ol>
 <p><strong>Token Usage:</strong></p>
 <ul>
@@ -4181,7 +4181,7 @@
 <p>An init container (<code>bao-config-init</code>) is used to render the OpenBao configuration (<code>config.hcl</code>) at runtime.</p>
 <ul>
 <li><strong>Purpose:</strong> Injects dynamic environment variables (Pod IP, Hostname) into the config template securely.</li>
-<li><strong>Security:</strong> Runs with the <em>exact same</em> non-root restrictions (<code>1000:1000</code>) as the main container. It has <strong>no</strong> network access.</li>
+<li><strong>Security:</strong> Runs with the <em>exact same</em> non-root restrictions (<code>1000:1000</code>) as the main container and does not receive the Kubernetes API token mount.</li>
 </ul>
 <h2 id="pod-security-standards-pss">Pod Security Standards (PSS)<a class="headerlink" href="#pod-security-standards-pss" title="Permanent link">&para;</a></h2>
 <p>The Provisioner automatically applies PSS labels to any Tenant namespace it creates:</p>

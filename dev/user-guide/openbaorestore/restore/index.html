@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -4559,9 +4559,9 @@ when you use a custom role name.</p>
 <h2 id="5-operations">5. Operations<a class="headerlink" href="#5-operations" title="Permanent link">&para;</a></h2>
 <h3 id="monitoring-status">Monitoring Status<a class="headerlink" href="#monitoring-status" title="Permanent link">&para;</a></h3>
 <p>Check the phases (<code>Pending</code> -&gt; <code>Running</code> -&gt; <code>Completed</code>).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>OBrestore<span class="w"> </span>-w
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>obrestore<span class="w"> </span>-w
 </span></code></pre></div>
-<p><em>(Shortname <code>OBrestore</code> available)</em></p>
+<p><em>(Shortname <code>obrestore</code> available)</em></p>
 <h3 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -4617,7 +4617,7 @@ when you use a custom role name.</p>
 <hr />
 <h2 id="6-safety-mechanics">6. Safety Mechanics<a class="headerlink" href="#6-safety-mechanics" title="Permanent link">&para;</a></h2>
 <h3 id="operation-lock">Operation Lock<a class="headerlink" href="#operation-lock" title="Permanent link">&para;</a></h3>
-<p>The Operator ensures <strong>Mutal Exclusion</strong>. You cannot run a Restore while an Upgrade or Backup is in progress.</p>
+<p>The Operator ensures <strong>Mutual Exclusion</strong>. You cannot run a Restore while an Upgrade or Backup is in progress.</p>
 <h3 id="break-glass">Break Glass<a class="headerlink" href="#break-glass" title="Permanent link">&para;</a></h3>
 <p>If the cluster is stuck in a locked state (e.g., a failed upgrade) and you MUST restore:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">spec</span><span class="p">:</span>

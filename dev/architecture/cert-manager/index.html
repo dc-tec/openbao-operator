@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -4184,7 +4184,7 @@
 <p><strong>Best for:</strong> Most users, development, and self-contained environments.</p>
 <ol>
 <li><strong>Bootstrap:</strong> Checks for <code>Secret/&lt;cluster&gt;-tls-ca</code>. If missing, generates a 10-year ECDSA P-256 Root CA.</li>
-<li><strong>Issuance:</strong> Checks <code>Secret/&lt;cluster&gt;-tls-server</code>. If missing or near expiry (default &lt; 24h), signs a new certificate using the CA.</li>
+<li><strong>Issuance:</strong> Checks <code>Secret/&lt;cluster&gt;-tls-server</code>. If missing or within the configured rotation window (<code>spec.tls.rotationPeriod</code>), signs a new certificate using the CA.</li>
 <li><strong>Trust:</strong> The CA is automatically mounted to all OpenBao pods and exported to a <code>ConfigMap</code> for clients.</li>
 </ol>
 </div>

@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -4204,7 +4204,7 @@
 <h1 id="cluster-maintenance">Cluster Maintenance<a class="headerlink" href="#cluster-maintenance" title="Permanent link">&para;</a></h1>
 <p>This guide covers maintenance operations for OpenBao clusters, including node drains, voluntary disruptions, and cluster scaling.</p>
 <h2 id="pod-disruption-budgets">Pod Disruption Budgets<a class="headerlink" href="#pod-disruption-budgets" title="Permanent link">&para;</a></h2>
-<p>The Operator automatically creates a <code>PodDisruptionBudget</code> (PDB) for each cluster with 2 or more replicas. This protects against accidental quorum loss during voluntary disruptions.</p>
+<p>The Operator automatically creates a <code>PodDisruptionBudget</code> (PDB) for clusters with <strong>3 or more replicas</strong>. This protects against accidental quorum loss during voluntary disruptions.</p>
 <h3 id="default-behavior">Default Behavior<a class="headerlink" href="#default-behavior" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -4221,6 +4221,12 @@
 <td>No</td>
 <td>N/A</td>
 <td>Single-replica clusters have no redundancy</td>
+</tr>
+<tr>
+<td>2</td>
+<td>No</td>
+<td>N/A</td>
+<td>Raft quorum is 2/2; <code>maxUnavailable: 1</code> would break quorum</td>
 </tr>
 <tr>
 <td>3</td>

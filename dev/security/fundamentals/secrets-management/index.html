@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -4172,14 +4172,14 @@
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Cluster CA</strong></td>
-<td style="text-align: left;"><code>&lt;cluster&gt;-ca</code></td>
-<td style="text-align: left;">1 Year (Auto)</td>
+<td style="text-align: left;"><code>&lt;cluster&gt;-tls-ca</code></td>
+<td style="text-align: left;">Long-lived (10-year cert), not auto-rotated</td>
 <td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> High</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>TLS Certs</strong></td>
-<td style="text-align: left;"><code>&lt;cluster&gt;-tls</code></td>
-<td style="text-align: left;">90 Days (Auto)</td>
+<td style="text-align: left;"><strong>Server TLS Cert</strong></td>
+<td style="text-align: left;"><code>&lt;cluster&gt;-tls-server</code></td>
+<td style="text-align: left;">Auto-reissued when within <code>spec.tls.rotationPeriod</code></td>
 <td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> High</td>
 </tr>
 <tr>
