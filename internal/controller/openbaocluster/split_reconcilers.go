@@ -107,16 +107,34 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 			platform:              r.parent.Platform,
 			smartClientConfig:     r.parent.SmartClientConfig,
 		},
-		&storageReconciler{
-			client:   r.parent.Client,
-			recorder: r.parent.Recorder,
-		},
-		&storageResizeRestartReconciler{
-			client:            r.parent.Client,
-			apiReader:         r.parent.APIReader,
-			recorder:          r.parent.Recorder,
-			smartClientConfig: r.parent.SmartClientConfig,
-		},
+		appopenbaocluster.NewStorageReconciler(
+			appopenbaocluster.StorageDependencies{
+				Client:   r.parent.Client,
+				Recorder: r.parent.Recorder,
+			},
+			appopenbaocluster.StorageReasonPolicy{
+				InvalidSize:             ReasonStorageInvalidSize,
+				ShrinkNotSupported:      ReasonStorageShrinkNotSupported,
+				ResizeNotSupported:      ReasonStorageResizeNotSupported,
+				StorageClassChangeError: ReasonStorageClassChangeNotSupported,
+				RestartRequired:         ReasonStorageRestartRequired,
+			},
+		),
+		appopenbaocluster.NewStorageResizeRestartReconciler(
+			appopenbaocluster.StorageResizeRestartDependencies{
+				Client:            r.parent.Client,
+				APIReader:         r.parent.APIReader,
+				Recorder:          r.parent.Recorder,
+				SmartClientConfig: r.parent.SmartClientConfig,
+			},
+			appopenbaocluster.StorageReasonPolicy{
+				InvalidSize:             ReasonStorageInvalidSize,
+				ShrinkNotSupported:      ReasonStorageShrinkNotSupported,
+				ResizeNotSupported:      ReasonStorageResizeNotSupported,
+				StorageClassChangeError: ReasonStorageClassChangeNotSupported,
+				RestartRequired:         ReasonStorageRestartRequired,
+			},
+		),
 	}
 	reconcilers = appopenbaocluster.AppendInitAndAutopilotReconcilers(reconcilers, r.parent.InitManager, r.parent.Recorder, constants.RequeueShort)
 

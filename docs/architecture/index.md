@@ -93,13 +93,13 @@ The runtime code is organized into layered packages to keep controller plumbing,
 | Layer | Purpose | Package examples |
 | :--- | :--- | :--- |
 | `L0` | API types | `api/v1alpha1` |
-| `L1` | Entrypoints | `cmd/controller`, `cmd/provisioner`, helper binaries |
-| `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore` |
+| `L1` | Entrypoints/bootstrap | `cmd/controller`, `cmd/provisioner`, `internal/entrypoint` |
+| `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore`, controller-local adapters such as `internal/controller/openbaocluster/deps` |
 | `L3` | App orchestration | `internal/app/openbaocluster`, `internal/app/openbaorestore`, `internal/app/provisioner` |
-| `L4` | Services/managers | `internal/backup`, `internal/restore`, `internal/upgrade`, `internal/infra`, `internal/certs`, `internal/init` |
+| `L4` | Services/managers | `internal/backup`, `internal/restore`, `internal/upgrade`, `internal/infra`, `internal/certs`, `internal/init`, `internal/opslifecycle` |
 | `L5` | Ports/contracts | `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/initmanager` |
 | `L6` | Adapters/integrations | `internal/storage`, `internal/openbao`, `internal/kube`, `internal/security`, `internal/raft` |
-| `L7` | Cross-cutting utilities | `internal/errors`, `internal/logging`, `internal/reconcile`, `internal/observability`, `internal/predicates` |
+| `L7` | Cross-cutting utilities | `internal/errors`, `internal/logging`, `internal/reconcile`, `internal/observability`, `internal/predicates`, `internal/admission` |
 
 Dependency intent is top-down across layers: higher layers depend on lower layers through narrow contracts, and adapters do not import controller packages.
 
