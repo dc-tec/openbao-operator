@@ -89,7 +89,7 @@ func requeueAfter(duration time.Duration) recon.Result {
 }
 
 // Reconcile manages the blue/green upgrade state machine.
-// This implements the SubReconciler interface.
+// This implements the controller workload sub-reconciler contract.
 // Returns (result, error) where result indicates whether (and when) reconciliation should be requeued.
 //
 // Note: Image verification for the Blue StatefulSet is handled by the infra reconciler which runs before this.
