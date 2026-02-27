@@ -13,7 +13,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
+	operatorpredicates "github.com/dc-tec/openbao-operator/internal/predicates"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
@@ -69,7 +69,7 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 		Owns(&corev1.Secret{}).
 		Owns(&batchv1.Job{}).
 		Owns(&corev1.ServiceAccount{}).
-		WithEventFilter(controllerutil.OpenBaoClusterPredicateWithOptions(controllerutil.OpenBaoClusterPredicateOptions{
+		WithEventFilter(operatorpredicates.OpenBaoClusterPredicateWithOptions(operatorpredicates.OpenBaoClusterPredicateOptions{
 			ReconcileOnBlueGreenStatus: true,
 		})).
 		WithOptions(controller.Options{
@@ -84,7 +84,7 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 	// AdminOps controller for upgrades/backups
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoCluster{}).
-		WithEventFilter(controllerutil.OpenBaoClusterPredicateWithOptions(controllerutil.OpenBaoClusterPredicateOptions{
+		WithEventFilter(operatorpredicates.OpenBaoClusterPredicateWithOptions(operatorpredicates.OpenBaoClusterPredicateOptions{
 			ReconcileOnUpgradeStatus: true,
 			ReconcileOnBackupStatus:  true,
 		})).
@@ -101,7 +101,7 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 	// Status controller for finalizer and condition aggregation
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoCluster{}).
-		WithEventFilter(controllerutil.OpenBaoClusterPredicateWithOptions(controllerutil.OpenBaoClusterPredicateOptions{
+		WithEventFilter(operatorpredicates.OpenBaoClusterPredicateWithOptions(operatorpredicates.OpenBaoClusterPredicateOptions{
 			ReconcileOnUpgradeStatus:   true,
 			ReconcileOnBackupStatus:    true,
 			ReconcileOnBlueGreenStatus: true,
@@ -142,7 +142,7 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 	// to clean up temporary services after upgrades.
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoCluster{}).
-		WithEventFilter(controllerutil.OpenBaoClusterPredicateWithOptions(controllerutil.OpenBaoClusterPredicateOptions{
+		WithEventFilter(operatorpredicates.OpenBaoClusterPredicateWithOptions(operatorpredicates.OpenBaoClusterPredicateOptions{
 			ReconcileOnBlueGreenStatus: true,
 		})).
 		WithOptions(controller.Options{
@@ -157,7 +157,7 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 	// AdminOps controller: runs upgrades and backups.
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoCluster{}).
-		WithEventFilter(controllerutil.OpenBaoClusterPredicateWithOptions(controllerutil.OpenBaoClusterPredicateOptions{
+		WithEventFilter(operatorpredicates.OpenBaoClusterPredicateWithOptions(operatorpredicates.OpenBaoClusterPredicateOptions{
 			ReconcileOnUpgradeStatus: true,
 			ReconcileOnBackupStatus:  true,
 		})).
@@ -173,7 +173,7 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 	// Status controller: owns finalizer and condition/status aggregation.
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoCluster{}).
-		WithEventFilter(controllerutil.OpenBaoClusterPredicateWithOptions(controllerutil.OpenBaoClusterPredicateOptions{
+		WithEventFilter(operatorpredicates.OpenBaoClusterPredicateWithOptions(operatorpredicates.OpenBaoClusterPredicateOptions{
 			ReconcileOnUpgradeStatus:   true,
 			ReconcileOnBackupStatus:    true,
 			ReconcileOnBlueGreenStatus: true,
