@@ -3372,6 +3372,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#internal-dependency-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal Dependency Report
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4037,6 +4048,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#internal-dependency-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal Dependency Report
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4199,6 +4221,11 @@
 <td style="text-align: left;">Run integration tests (envtest).</td>
 </tr>
 <tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make report-internal-deps</code></td>
+<td style="text-align: left;">Generate local internal dependency graph/report artifacts.</td>
+</tr>
+<tr>
 <td style="text-align: left;"><strong>Generate</strong></td>
 <td style="text-align: left;"><code>make manifests</code></td>
 <td style="text-align: left;">Regenerate CRD YAMLs and RBAC.</td>
@@ -4210,11 +4237,27 @@
 </tr>
 </tbody>
 </table>
+<h2 id="internal-dependency-report">Internal Dependency Report<a class="headerlink" href="#internal-dependency-report" title="Permanent link">&para;</a></h2>
+<p>Use the local architecture report tooling to inspect internal package dependencies.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>report-internal-deps
+</span></code></pre></div>
+<p>Artifacts are written to <code>dist/architecture/</code>:</p>
+<ul>
+<li><code>internal-dependency-report.md</code></li>
+<li><code>internal-dependency-edges.tsv</code></li>
+<li><code>internal-dependency-graph.dot</code></li>
+<li><code>internal-dependency-graph.mmd</code></li>
+</ul>
+<p>The command is report-only and does not fail on policy findings.</p>
+<p>Intentional policy exceptions are tracked in:</p>
+<ul>
+<li><code>hack/architecture/dependency-policy-exceptions.tsv</code></li>
+</ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <details class="question">
 <summary>RBAC Errors during <code>make deploy</code>?</summary>
 <p>Ensure your current kubeconfig user has <code>cluster-admin</code> privileges.
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>clusterrolebinding<span class="w"> </span>my-admin<span class="w"> </span>--clusterrole<span class="o">=</span>cluster-admin<span class="w"> </span>--user<span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>config<span class="w"> </span>get-value<span class="w"> </span>account<span class="k">)</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>clusterrolebinding<span class="w"> </span>my-admin<span class="w"> </span>--clusterrole<span class="o">=</span>cluster-admin<span class="w"> </span>--user<span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>config<span class="w"> </span>get-value<span class="w"> </span>account<span class="k">)</span>
 </span></code></pre></div></p>
 </details>
 <details class="question">
