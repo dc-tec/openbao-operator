@@ -14,7 +14,6 @@ import (
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	observability "github.com/dc-tec/openbao-operator/internal/observability"
 )
 
 type openBaoClusterWorkloadReconciler struct {
@@ -41,7 +40,7 @@ func (r *OpenBaoClusterReconciler) loggerFor(ctx context.Context, _ ctrl.Request
 
 func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterWorkload)
+	reconcileMetrics := appopenbaocluster.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterWorkload)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -149,7 +148,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 
 func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterAdminOps)
+	reconcileMetrics := appopenbaocluster.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterAdminOps)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -198,7 +197,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 
 func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterStatus)
+	reconcileMetrics := appopenbaocluster.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterStatus)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {

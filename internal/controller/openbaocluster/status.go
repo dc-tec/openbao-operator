@@ -15,12 +15,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/kube"
-	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
-	"github.com/dc-tec/openbao-operator/internal/revision"
-	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 // patchStatusSSA updates the cluster status using Server-Side Apply.
@@ -183,7 +181,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	// otherwise it can race with in-progress partitioned rollouts.
 
 	// Update per-cluster metrics
-	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
+	clusterMetrics := appopenbaocluster.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.SetReadyReplicas(state.ReadyReplicas)
 	clusterMetrics.SetPhase(cluster.Status.Phase)
 
@@ -233,7 +231,7 @@ func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, c
 		return
 	}
 
-	change, err := upgrade.CompareVersions(cluster.Status.CurrentVersion, observedVersion)
+	isDowngrade, err := appopenbaocluster.IsVersionDowngrade(cluster.Status.CurrentVersion, observedVersion)
 	if err != nil {
 		logger.V(1).Info("Skipping CurrentVersion correction due to unparsable version",
 			"currentVersion", cluster.Status.CurrentVersion,
@@ -241,7 +239,7 @@ func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, c
 			"error", err)
 		return
 	}
-	if change == upgrade.VersionChangeDowngrade {
+	if isDowngrade {
 		logger.V(1).Info("Ignoring CurrentVersion regression from pod labels",
 			"currentVersion", cluster.Status.CurrentVersion,
 			"observedVersion", observedVersion)
@@ -272,7 +270,7 @@ func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForBlueGreen(logger
 	// CRITICAL CHECK: Verify that the upgrade actually happened.
 	// PhaseIdle can mean "Before Upgrade" OR "After Upgrade".
 	// We distinguish them by checking if the active BlueRevision matches the current Spec.
-	currentSpecRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+	currentSpecRevision := appopenbaocluster.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
 	if cluster.Status.BlueGreen.BlueRevision != currentSpecRevision {
 		return
 	}
