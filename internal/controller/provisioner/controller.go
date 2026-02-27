@@ -18,15 +18,9 @@ package provisioner
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,10 +28,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/admission"
+	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	"github.com/dc-tec/openbao-operator/internal/logging"
 	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	operatorpredicates "github.com/dc-tec/openbao-operator/internal/predicates"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
@@ -61,18 +54,6 @@ type NamespaceProvisionerReconciler struct {
 	Scheme            *runtime.Scheme
 	Provisioner       *provisioner.Manager
 	OperatorNamespace string
-}
-
-// SECURITY: RBAC is manually maintained in config/rbac/provisioner_minimal_role.yaml.
-// We do NOT use kubebuilder RBAC annotations because:
-// 1. The RBAC is security-critical and must be explicitly controlled and reviewed
-// 2. The Provisioner is designed for least privilege (no namespace list/watch, no Secret access)
-// 3. The Provisioner includes bind/escalate only for specific, operator-defined Role names
-// 4. ValidatingAdmissionPolicy provides defense-in-depth by restricting the exact RBAC objects
-//    the Provisioner may create/update.
-
-func (r *NamespaceProvisionerReconciler) patchStatus(ctx context.Context, tenant *openbaov1alpha1.OpenBaoTenant, original *openbaov1alpha1.OpenBaoTenant) error {
-	return r.Status().Patch(ctx, tenant, client.MergeFrom(original))
 }
 
 // Reconcile is part of the main Kubernetes reconciliation loop which watches
@@ -105,221 +86,17 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		"tenant", req.NamespacedName,
 	)
 
-	// Fetch the OpenBaoTenant CR
-	tenant := &openbaov1alpha1.OpenBaoTenant{}
-	if err := r.Get(ctx, req.NamespacedName, tenant); err != nil {
-		if apierrors.IsNotFound(err) {
-			// OpenBaoTenant deleted - nothing to do
-			return ctrl.Result{}, nil
-		}
-		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoTenant %s: %w", req.NamespacedName, err)
-	}
-
-	// SECURITY: Self-Service Validation
-	// To prevent cross-tenant attacks ("Confused Deputy"), we enforce that
-	// OpenBaoTenant resources created in user namespaces can ONLY target
-	// their own namespace. Only the Operator namespace is trusted to
-	// target arbitrary namespaces.
-	//
-	// Note: We check r.OperatorNamespace != "" to allow local testing/development
-	// where the env var might not be set, though properly it should always be set.
-	isTrustedNamespace := tenant.Namespace == r.OperatorNamespace
-	isSelfTargeting := tenant.Namespace == tenant.Spec.TargetNamespace
-
-	if !isTrustedNamespace && !isSelfTargeting {
-		err := fmt.Errorf("security violation: OpenBaoTenant in namespace %q cannot target namespace %q",
-			tenant.Namespace, tenant.Spec.TargetNamespace)
-
-		recordError(err)
-		logger.Error(err, "Blocking provisioning attempt")
-		logging.LogAuditEvent(logger, logging.EventTenantSecurityViolationBlocked, map[string]string{
-			"tenant_namespace": tenant.Namespace,
-			"tenant_name":      tenant.Name,
-			"target_namespace": tenant.Spec.TargetNamespace,
-			"reason":           ReasonSecurityViolation,
-		})
-
-		// Update status to reflect failure
-		original := tenant.DeepCopy()
-		tenant.Status.Provisioned = false
-		tenant.Status.LastError = err.Error()
-
-		meta.SetStatusCondition(&tenant.Status.Conditions, metav1.Condition{
-			Type:               constants.ConditionTypeProvisioned,
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: tenant.Generation,
-			Reason:             ReasonSecurityViolation,
-			Message:            err.Error(),
-		})
-
-		if patchErr := r.patchStatus(ctx, tenant, original); patchErr != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to patch status for security violation: %w", patchErr)
-		}
-
-		// Do not requeue. User must fix the CR.
-		return ctrl.Result{}, nil
-	}
-
-	targetNS := tenant.Spec.TargetNamespace
-	logger = logger.WithValues("target_namespace", targetNS)
-
-	// Handle deletion
-	if !tenant.DeletionTimestamp.IsZero() {
-		if containsFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
-			logger.Info("OpenBaoTenant is being deleted", "target_namespace", targetNS)
-
-			// 1. Check if any active OpenBaoCluster resources still exist in the target namespace.
-			// If they do, we must NOT remove the RBAC yet, because the OpenBaoCluster finalizers
-			// depend on these permissions (e.g. to delete PVCs or orphan secrets).
-			// If we remove RBAC too early, the OpenBaoCluster finalizers will fail with Forbidden errors
-			// and the cluster deletion will get stuck.
-			clusterList := &openbaov1alpha1.OpenBaoClusterList{}
-			if err := r.List(ctx, clusterList, client.InNamespace(targetNS)); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to list keys in namespace %s: %w", targetNS, err)
-			}
-
-			if len(clusterList.Items) > 0 {
-				logger.Info("Waiting for OpenBaoClusters to be deleted before cleaning up RBAC",
-					"target_namespace", targetNS,
-					"cluster_count", len(clusterList.Items))
-				// Requeue to check again later.
-				// We use a slightly longer requeue time to avoid spamming the API server while waiting.
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-			}
-
-			// 2. All clusters are gone, now it is safe to clean up RBAC.
-			logger.Info("No OpenBaoClusters found; cleaning up tenant RBAC", "target_namespace", targetNS)
-			if err := r.Provisioner.CleanupTenantRBAC(ctx, targetNS); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to cleanup tenant RBAC for namespace %s: %w", targetNS, err)
-			}
-			logging.LogAuditEvent(logger, logging.EventTenantRBACCleaned, map[string]string{
-				"tenant_namespace": tenant.Namespace,
-				"tenant_name":      tenant.Name,
-				"target_namespace": targetNS,
-			})
-
-			// Remove finalizer
-			tenant.Finalizers = removeFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer)
-			if err := r.Update(ctx, tenant); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from OpenBaoTenant %s: %w", req.NamespacedName, err)
-			}
-		}
-		return ctrl.Result{}, nil
-	}
-
-	// Add finalizer if not present
-	if !containsFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
-		tenant.Finalizers = append(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer)
-		if err := r.Update(ctx, tenant); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to add finalizer to OpenBaoTenant %s: %w", req.NamespacedName, err)
-		}
-		// Requeue to observe the resource with the finalizer attached
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
-	}
-
-	// Verify target namespace exists
-	ns := &corev1.Namespace{}
-	if err := r.Get(ctx, types.NamespacedName{Name: targetNS}, ns); err != nil {
-		if apierrors.IsNotFound(err) {
-			// Namespace not found - update status and requeue
-			original := tenant.DeepCopy()
-			tenant.Status.Provisioned = false
-			tenant.Status.LastError = fmt.Sprintf("target namespace %s not found", targetNS)
-			if err := r.patchStatus(ctx, tenant, original); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
-			}
-			logger.Info("Target namespace not found; will retry", "target_namespace", targetNS)
-			return ctrl.Result{RequeueAfter: constants.RequeueStandard}, nil
-		}
-		return ctrl.Result{}, fmt.Errorf("failed to get namespace %s: %w", targetNS, err)
-	}
-
-	// SECURITY: If admission policies are not ready, do not create/update tenant RBAC or other tenant-scoped resources.
-	// This keeps --admission-enforcement=warn safe: the process may run, but it will not perform privileged actions
-	// until the ValidatingAdmissionPolicies are confirmed to be installed and enforced.
-	if admission.UnsafeAdmissionDisabled() {
-		// UNSAFE MODE: Caller explicitly disabled admission policies; proceed without fail-closed gating.
-		admission.SetAdmissionDependenciesReady(true)
-	} else if !admission.AdmissionDependenciesReady() {
-		reader := r.APIReader
-		if reader == nil {
-			reader = r.Client
-		}
-
-		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		status, err := admission.CheckDependencies(
-			checkCtx,
-			reader,
-			admission.DefaultDependencies(),
-			admission.DefaultNamePrefixes(),
-		)
-		cancel()
-		if err != nil {
-			admission.SetAdmissionDependenciesReady(false)
-			logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "error", err)
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-		}
-
-		admission.SetAdmissionDependenciesReady(status.OverallReady)
-		if !status.OverallReady {
-			original := tenant.DeepCopy()
-			tenant.Status.Provisioned = false
-			tenant.Status.LastError = status.SummaryMessage()
-			_ = r.patchStatus(ctx, tenant, original)
-
-			logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "summary", status.SummaryMessage())
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-		}
-	}
-
-	// Provision RBAC
-	logger.Info("Provisioning tenant RBAC", "target_namespace", targetNS)
-	if err := r.Provisioner.EnsureTenantRBAC(ctx, tenant); err != nil {
-		original := tenant.DeepCopy()
-		tenant.Status.Provisioned = false
-		tenant.Status.LastError = err.Error()
-		if statusErr := r.patchStatus(ctx, tenant, original); statusErr != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w (original error: %w)", statusErr, err)
-		}
-		return ctrl.Result{}, fmt.Errorf("failed to ensure tenant RBAC for namespace %s: %w", targetNS, err)
-	}
-
-	// Update status to success
-	original := tenant.DeepCopy()
-	tenant.Status.Provisioned = true
-	tenant.Status.LastError = ""
-	if err := r.patchStatus(ctx, tenant, original); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
-	}
-
-	logger.Info("Successfully provisioned tenant RBAC", "target_namespace", targetNS)
-	logging.LogAuditEvent(logger, logging.EventTenantRBACProvisioned, map[string]string{
-		"tenant_namespace": tenant.Namespace,
-		"tenant_name":      tenant.Name,
-		"target_namespace": targetNS,
+	result, err = appprovisioner.ReconcileOpenBaoTenant(ctx, req, logger, appprovisioner.TenantRuntime{
+		Client:            r.Client,
+		APIReader:         r.APIReader,
+		Provisioner:       r.Provisioner,
+		OperatorNamespace: r.OperatorNamespace,
 	})
-	return ctrl.Result{}, nil
-}
-
-// containsFinalizer checks if a finalizer is present in the slice.
-func containsFinalizer(finalizers []string, value string) bool {
-	for _, f := range finalizers {
-		if f == value {
-			return true
-		}
+	if err != nil {
+		recordError(err)
 	}
-	return false
-}
 
-// removeFinalizer removes a finalizer from the slice.
-func removeFinalizer(finalizers []string, value string) []string {
-	result := make([]string, 0, len(finalizers))
-	for _, f := range finalizers {
-		if f != value {
-			result = append(result, f)
-		}
-	}
-	return result
+	return result, err
 }
 
 // SetupWithManager sets up the controller with the Manager.
