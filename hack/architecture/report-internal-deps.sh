@@ -50,6 +50,8 @@ trap 'rm -rf "${TMP_DIR}"' EXIT
 TOP_IN_FILE="${TMP_DIR}/top-in.txt"
 TOP_OUT_FILE="${TMP_DIR}/top-out.txt"
 WARNINGS_FILE="${TMP_DIR}/warnings.txt"
+ACTIVE_EXCEPTIONS_FILE="${TMP_DIR}/active-policy-exceptions.tsv"
+POLICY_EXCEPTIONS_FILE="${SCRIPT_DIR}/dependency-policy-exceptions.tsv"
 
 awk -F'\t' -v mod="${MODULE_PATH}" '
   function rel(p) {
@@ -84,10 +86,27 @@ awk -F'\t' -v mod="${MODULE_PATH}" '
 ' "${EDGE_FILE}" | sort -nr | head -n 15 > "${TOP_OUT_FILE}"
 
 # Policy warnings (report-only)
-awk -F'\t' -v mod="${MODULE_PATH}" '
+awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FILE}" -v active_exceptions="${ACTIVE_EXCEPTIONS_FILE}" '
   function rel(p) {
     sub(mod "/", "", p)
     return p
+  }
+  BEGIN {
+    while ((getline line < policy_exceptions) > 0) {
+      if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) {
+        continue
+      }
+      fields = split(line, parts, "\t")
+      if (fields < 2) {
+        continue
+      }
+      key = parts[1] SUBSEP parts[2]
+      adapter_adapter_exception[key] = 1
+      if (fields >= 3) {
+        adapter_adapter_exception_reason[key] = parts[3]
+      }
+    }
+    close(policy_exceptions)
   }
   function is_service_pkg(p) {
     return p ~ /^internal\/(backup|restore|upgrade|upgrade\/bluegreen|upgrade\/rolling|infra|certs|init|provisioner)$/
@@ -110,6 +129,18 @@ awk -F'\t' -v mod="${MODULE_PATH}" '
     }
     if (is_adapter_pkg(src) && is_service_pkg(dep)) {
       print "[adapter->service] " src " -> " dep
+    }
+    if (is_adapter_pkg(src) && is_adapter_pkg(dep) && src != dep) {
+      key = src SUBSEP dep
+      if (adapter_adapter_exception[key]) {
+        if (!seen_exception[key]) {
+          seen_exception[key] = 1
+          reason = adapter_adapter_exception_reason[key]
+          printf "%s\t%s\t%s\n", src, dep, reason >> active_exceptions
+        }
+      } else {
+        print "[adapter->adapter] " src " -> " dep
+      }
     }
     if (dep == "internal/interfaces") {
       print "[deprecated-interfaces] " src " -> " dep
@@ -282,6 +313,25 @@ GENERATED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo
   if [ -s "${WARNINGS_FILE}" ]; then
     sed 's/^/- /' "${WARNINGS_FILE}"
+  else
+    echo "- None"
+  fi
+  echo
+  echo "## Intentional Policy Exceptions"
+  echo
+  if [ -s "${ACTIVE_EXCEPTIONS_FILE}" ]; then
+    echo "| Edge | Reason |"
+    echo "| :--- | :--- |"
+    awk -F'\t' '
+      {
+        reason = $3
+        if (reason == "") {
+          reason = "(unspecified)"
+        }
+        gsub(/\|/, "\\|", reason)
+        printf "| `%s -> %s` | %s |\n", $1, $2, reason
+      }
+    ' "${ACTIVE_EXCEPTIONS_FILE}"
   else
     echo "- None"
   fi

@@ -9,14 +9,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/dc-tec/openbao-operator/internal/storage"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
 // LoadStorageCredentials loads storage credentials from a Kubernetes Secret.
 // If secretRef is nil, returns nil (indicating default credential chain should be used).
 // The namespace parameter specifies the namespace where the Secret must exist.
 // Cross-namespace references are not allowed for security reasons.
-func LoadStorageCredentials(ctx context.Context, c client.Client, secretRef *corev1.LocalObjectReference, namespace string) (*storage.Credentials, error) {
+func LoadStorageCredentials(ctx context.Context, c client.Client, secretRef *corev1.LocalObjectReference, namespace string) (*blobstore.Credentials, error) {
 	if secretRef == nil {
 		return nil, nil
 	}
@@ -29,13 +29,13 @@ func LoadStorageCredentials(ctx context.Context, c client.Client, secretRef *cor
 		return nil, fmt.Errorf("failed to get credentials Secret %s/%s: %w", namespace, secretRef.Name, err)
 	}
 
-	creds := &storage.Credentials{}
+	creds := &blobstore.Credentials{}
 
 	// Load required credentials (if present - they might use workload identity)
-	if v, ok := secret.Data[storage.SecretKeyAccessKeyID]; ok {
+	if v, ok := secret.Data[blobstore.SecretKeyAccessKeyID]; ok {
 		creds.AccessKeyID = string(v)
 	}
-	if v, ok := secret.Data[storage.SecretKeySecretAccessKey]; ok {
+	if v, ok := secret.Data[blobstore.SecretKeySecretAccessKey]; ok {
 		creds.SecretAccessKey = string(v)
 	}
 
@@ -43,17 +43,17 @@ func LoadStorageCredentials(ctx context.Context, c client.Client, secretRef *cor
 	if (creds.AccessKeyID != "" && creds.SecretAccessKey == "") ||
 		(creds.AccessKeyID == "" && creds.SecretAccessKey != "") {
 		return nil, fmt.Errorf("credentials Secret %s/%s must contain both %s and %s, or neither",
-			namespace, secretRef.Name, storage.SecretKeyAccessKeyID, storage.SecretKeySecretAccessKey)
+			namespace, secretRef.Name, blobstore.SecretKeyAccessKeyID, blobstore.SecretKeySecretAccessKey)
 	}
 
 	// Load optional fields
-	if v, ok := secret.Data[storage.SecretKeySessionToken]; ok {
+	if v, ok := secret.Data[blobstore.SecretKeySessionToken]; ok {
 		creds.SessionToken = string(v)
 	}
-	if v, ok := secret.Data[storage.SecretKeyRegion]; ok {
+	if v, ok := secret.Data[blobstore.SecretKeyRegion]; ok {
 		creds.Region = string(v)
 	}
-	if v, ok := secret.Data[storage.SecretKeyCACert]; ok {
+	if v, ok := secret.Data[blobstore.SecretKeyCACert]; ok {
 		creds.CACert = v
 	}
 
