@@ -116,9 +116,9 @@ func ReconcileOpenBaoTenant(ctx context.Context, req ctrl.Request, logger logr.L
 		return ctrl.Result{}, fmt.Errorf("failed to get namespace %s: %w", targetNS, err)
 	}
 
-	ready, result, err := ensureAdmissionDependenciesReady(ctx, logger, runtime, tenant)
-	if err != nil || !ready {
-		return result, err
+	ready, result := ensureAdmissionDependenciesReady(ctx, logger, runtime, tenant)
+	if !ready {
+		return result, nil
 	}
 
 	logger.Info("Provisioning tenant RBAC", "target_namespace", targetNS)
@@ -197,14 +197,14 @@ func ensureAdmissionDependenciesReady(
 	logger logr.Logger,
 	runtime TenantRuntime,
 	tenant *openbaov1alpha1.OpenBaoTenant,
-) (bool, ctrl.Result, error) {
+) (bool, ctrl.Result) {
 	// Fail-closed privileged actions when admission policies are not ready.
 	if admission.UnsafeAdmissionDisabled() {
 		admission.SetAdmissionDependenciesReady(true)
-		return true, ctrl.Result{}, nil
+		return true, ctrl.Result{}
 	}
 	if admission.AdmissionDependenciesReady() {
-		return true, ctrl.Result{}, nil
+		return true, ctrl.Result{}
 	}
 
 	reader := runtime.APIReader
@@ -223,12 +223,12 @@ func ensureAdmissionDependenciesReady(
 	if err != nil {
 		admission.SetAdmissionDependenciesReady(false)
 		logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "error", err)
-		return false, ctrl.Result{RequeueAfter: admissionDependencyRequeueAfter}, nil
+		return false, ctrl.Result{RequeueAfter: admissionDependencyRequeueAfter}
 	}
 
 	admission.SetAdmissionDependenciesReady(status.OverallReady)
 	if status.OverallReady {
-		return true, ctrl.Result{}, nil
+		return true, ctrl.Result{}
 	}
 
 	original := tenant.DeepCopy()
@@ -238,7 +238,7 @@ func ensureAdmissionDependenciesReady(
 	_ = patchStatus(ctx, runtime.Client, tenant, original)
 
 	logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "summary", status.SummaryMessage())
-	return false, ctrl.Result{RequeueAfter: admissionDependencyRequeueAfter}, nil
+	return false, ctrl.Result{RequeueAfter: admissionDependencyRequeueAfter}
 }
 
 func patchStatus(ctx context.Context, c client.Client, tenant *openbaov1alpha1.OpenBaoTenant, original *openbaov1alpha1.OpenBaoTenant) error {

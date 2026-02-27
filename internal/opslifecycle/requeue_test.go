@@ -17,8 +17,6 @@ func TestRequeueDelay(t *testing.T) {
 	}
 
 	for class, expected := range cases {
-		class := class
-		expected := expected
 		t.Run(string(class), func(t *testing.T) {
 			t.Parallel()
 			got := RequeueDelay(class)
