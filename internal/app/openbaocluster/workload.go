@@ -12,7 +12,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	initmanager "github.com/dc-tec/openbao-operator/internal/init"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
@@ -25,10 +24,18 @@ type WorkloadResultPolicy struct {
 	PrerequisitesMissingReason   string
 	GatewayAPIMissingReason      string
 	PermanentConfigurationReason map[string]struct{}
+	RequeueShort                 time.Duration
+	RequeueSafetyNetBase         time.Duration
+	RequeueSafetyNetJitter       time.Duration
 }
 
 // AppendInitAndAutopilotReconcilers appends init and optional autopilot reconcilers.
-func AppendInitAndAutopilotReconcilers(reconcilers []SubReconciler, initMgr initmanagerport.Manager, recorder events.EventRecorder) []SubReconciler {
+func AppendInitAndAutopilotReconcilers(
+	reconcilers []SubReconciler,
+	initMgr initmanagerport.Manager,
+	recorder events.EventRecorder,
+	requeueShort time.Duration,
+) []SubReconciler {
 	if initMgr == nil {
 		return reconcilers
 	}
@@ -45,6 +52,12 @@ func AppendInitAndAutopilotReconcilers(reconcilers []SubReconciler, initMgr init
 		reconcilers = append(reconcilers, &autopilotConfigReconciler{
 			raftManager: raftMgr,
 			recorder:    recorder,
+			requeueShort: func() time.Duration {
+				if requeueShort > 0 {
+					return requeueShort
+				}
+				return 5 * time.Second
+			}(),
 		})
 	}
 
@@ -111,10 +124,11 @@ func workloadResultForError(
 	if lastError != nil {
 		switch lastError.Reason {
 		case policy.PrerequisitesMissingReason:
-			return ctrl.Result{RequeueAfter: constants.RequeueShort}, true
+			return ctrl.Result{RequeueAfter: workloadRequeueShort(policy)}, true
 		case policy.GatewayAPIMissingReason:
-			jitterNanos := time.Now().UnixNano() % int64(constants.RequeueSafetyNetJitter)
-			requeueAfter := constants.RequeueSafetyNetBase + time.Duration(jitterNanos)
+			safetyNetJitter := workloadRequeueSafetyNetJitter(policy)
+			jitterNanos := time.Now().UnixNano() % int64(safetyNetJitter)
+			requeueAfter := workloadRequeueSafetyNetBase(policy) + time.Duration(jitterNanos)
 			return ctrl.Result{RequeueAfter: requeueAfter}, true
 		default:
 			if _, ok := policy.PermanentConfigurationReason[lastError.Reason]; ok {
@@ -130,7 +144,7 @@ func workloadResultForError(
 			if requeueAfter > 0 {
 				return ctrl.Result{RequeueAfter: requeueAfter}, true
 			}
-			return ctrl.Result{RequeueAfter: constants.RequeueShort}, true
+			return ctrl.Result{RequeueAfter: workloadRequeueShort(policy)}, true
 		}
 	}
 
@@ -140,8 +154,9 @@ func workloadResultForError(
 // autopilotConfigReconciler reconciles Raft Autopilot configuration for initialized clusters.
 // This handles Day 2 operations like scaling replicas or changing autopilot settings.
 type autopilotConfigReconciler struct {
-	raftManager *raft.Manager
-	recorder    events.EventRecorder
+	raftManager  *raft.Manager
+	recorder     events.EventRecorder
+	requeueShort time.Duration
 }
 
 // Reconcile reconciles the Raft Autopilot configuration for an initialized cluster.
@@ -158,7 +173,7 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 	if err := r.raftManager.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
 		if operatorerrors.IsTransient(err) {
 			logger.V(1).Info("Transient error reconciling autopilot config; will retry", "error", err)
-			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+			return recon.Result{RequeueAfter: r.requeueShort}, nil
 		}
 
 		// Check if this is a permanent prerequisites missing error.
@@ -193,4 +208,25 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 	}
 
 	return recon.Result{}, nil
+}
+
+func workloadRequeueShort(policy WorkloadResultPolicy) time.Duration {
+	if policy.RequeueShort > 0 {
+		return policy.RequeueShort
+	}
+	return 5 * time.Second
+}
+
+func workloadRequeueSafetyNetBase(policy WorkloadResultPolicy) time.Duration {
+	if policy.RequeueSafetyNetBase > 0 {
+		return policy.RequeueSafetyNetBase
+	}
+	return 20 * time.Minute
+}
+
+func workloadRequeueSafetyNetJitter(policy WorkloadResultPolicy) time.Duration {
+	if policy.RequeueSafetyNetJitter > 0 {
+		return policy.RequeueSafetyNetJitter
+	}
+	return 5 * time.Minute
 }
