@@ -16,7 +16,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	controllerdeps "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster/deps"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
@@ -63,9 +63,9 @@ func (r *storageReconciler) Reconcile(ctx context.Context, logger logr.Logger, c
 func desiredStorageSpec(cluster *openbaov1alpha1.OpenBaoCluster) (resource.Quantity, string, error) {
 	desiredQty, err := resource.ParseQuantity(cluster.Spec.Storage.Size)
 	if err != nil {
-		return resource.Quantity{}, "", operatorerrors.WithReason(
+		return resource.Quantity{}, "", controllerdeps.WithReason(
 			ReasonStorageInvalidSize,
-			operatorerrors.WrapPermanentConfig(fmt.Errorf("invalid spec.storage.size %q: %w", cluster.Spec.Storage.Size, err)),
+			controllerdeps.WrapPermanentConfig(fmt.Errorf("invalid spec.storage.size %q: %w", cluster.Spec.Storage.Size, err)),
 		)
 	}
 
@@ -83,8 +83,8 @@ func (r *storageReconciler) listClusterPVCs(ctx context.Context, cluster *openba
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabels(map[string]string{constants.LabelOpenBaoCluster: cluster.Name}),
 	); err != nil {
-		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-			return nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
+		if controllerdeps.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+			return nil, controllerdeps.WrapTransientKubernetesAPI(fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
 		}
 		return nil, fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
@@ -97,9 +97,9 @@ func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageCl
 		pvc := &pvcs[i]
 
 		if desiredStorageClassName != "" && pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != desiredStorageClassName {
-			return operatorerrors.WithReason(
+			return controllerdeps.WithReason(
 				ReasonStorageClassChangeNotSupported,
-				operatorerrors.WrapPermanentConfig(fmt.Errorf(
+				controllerdeps.WrapPermanentConfig(fmt.Errorf(
 					"spec.storage.storageClassName cannot be changed for an existing cluster (PVC %s has %q, desired %q)",
 					pvc.Name, *pvc.Spec.StorageClassName, desiredStorageClassName,
 				)),
@@ -111,9 +111,9 @@ func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageCl
 			continue
 		}
 		if desiredQty.Cmp(curr) < 0 {
-			return operatorerrors.WithReason(
+			return controllerdeps.WithReason(
 				ReasonStorageShrinkNotSupported,
-				operatorerrors.WrapPermanentConfig(fmt.Errorf(
+				controllerdeps.WrapPermanentConfig(fmt.Errorf(
 					"spec.storage.size cannot be decreased (requested %s but PVC %s already requests %s); revert the change",
 					desiredQty.String(), pvc.Name, curr.String(),
 				)),
@@ -148,13 +148,13 @@ func (r *storageReconciler) expandPVCs(ctx context.Context, cluster *openbaov1al
 			if apierrors.IsNotFound(err) {
 				continue
 			}
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return patched, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to patch PVC %s/%s for resize: %w", pvc.Namespace, pvc.Name, err))
+			if controllerdeps.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+				return patched, controllerdeps.WrapTransientKubernetesAPI(fmt.Errorf("failed to patch PVC %s/%s for resize: %w", pvc.Namespace, pvc.Name, err))
 			}
 			if apierrors.IsInvalid(err) || apierrors.IsForbidden(err) {
-				return patched, operatorerrors.WithReason(
+				return patched, controllerdeps.WithReason(
 					ReasonStorageResizeNotSupported,
-					operatorerrors.WrapPermanentConfig(fmt.Errorf("PVC %s cannot be expanded to %s: %w", pvc.Name, desiredQty.String(), err)),
+					controllerdeps.WrapPermanentConfig(fmt.Errorf("PVC %s cannot be expanded to %s: %w", pvc.Name, desiredQty.String(), err)),
 				)
 			}
 			return patched, fmt.Errorf("failed to patch PVC %s/%s for resize: %w", pvc.Namespace, pvc.Name, err)
@@ -190,17 +190,17 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabels(map[string]string{constants.LabelOpenBaoCluster: cluster.Name}),
 	); err != nil {
-		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-			return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
+		if controllerdeps.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+			return recon.Result{}, controllerdeps.WrapTransientKubernetesAPI(fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
 		}
 		return recon.Result{}, fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
 	if cluster.Spec.Maintenance == nil || !cluster.Spec.Maintenance.Enabled {
 		if anyPVCFileSystemResizePending(pvcList.Items) {
-			return recon.Result{}, operatorerrors.WithReason(
+			return recon.Result{}, controllerdeps.WithReason(
 				ReasonStorageRestartRequired,
-				operatorerrors.WrapPermanentPrerequisitesMissing(fmt.Errorf(
+				controllerdeps.WrapPermanentPrerequisitesMissing(fmt.Errorf(
 					"PVC filesystem resize is pending and requires a pod restart; enable spec.maintenance.enabled=true to allow the operator to perform controlled restarts, or restart the pods manually",
 				)),
 			)
@@ -230,12 +230,12 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 	actions, err := r.clientForPod(cluster, targetPod.Name)
 	if err != nil {
 		// If we can't talk to the pod, deleting it might be disruptive. Retry instead.
-		return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client for pod %s: %w", targetPod.Name, err))
+		return recon.Result{}, controllerdeps.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client for pod %s: %w", targetPod.Name, err))
 	}
 
 	isLeader, err := actions.IsLeader(ctx)
 	if err != nil {
-		return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to check leadership for pod %s: %w", targetPod.Name, err))
+		return recon.Result{}, controllerdeps.WrapTransientConnection(fmt.Errorf("failed to check leadership for pod %s: %w", targetPod.Name, err))
 	}
 
 	if isLeader {
@@ -244,7 +244,7 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 		if cluster.Spec.Replicas > 1 {
 			logger.Info("Pod requires filesystem resize restart but is leader; stepping down first", "pod", targetPod.Name)
 			if err := actions.StepDownLeader(ctx); err != nil {
-				return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to step down leader %s before restart: %w", targetPod.Name, err))
+				return recon.Result{}, controllerdeps.WrapTransientConnection(fmt.Errorf("failed to step down leader %s before restart: %w", targetPod.Name, err))
 			}
 			if r.recorder != nil {
 				r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "PVCResizeLeaderStepDown", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
@@ -256,8 +256,8 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 
 	logger.Info("Restarting pod to complete filesystem resize", "pod", targetPod.Name)
 	if err := r.client.Delete(ctx, targetPod); err != nil && !apierrors.IsNotFound(err) {
-		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-			return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to delete pod %s/%s for filesystem resize restart: %w", targetPod.Namespace, targetPod.Name, err))
+		if controllerdeps.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+			return recon.Result{}, controllerdeps.WrapTransientKubernetesAPI(fmt.Errorf("failed to delete pod %s/%s for filesystem resize restart: %w", targetPod.Namespace, targetPod.Name, err))
 		}
 		return recon.Result{}, fmt.Errorf("failed to delete pod %s/%s for filesystem resize restart: %w", targetPod.Namespace, targetPod.Name, err)
 	}
@@ -338,8 +338,8 @@ func (r *storageResizeRestartReconciler) nextPodNeedingFSResizeRestart(ctx conte
 			if apierrors.IsNotFound(err) {
 				continue
 			}
-			if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-				return nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to get pod %s/%s for filesystem resize restart: %w", cluster.Namespace, candidatePodName, err))
+			if controllerdeps.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
+				return nil, controllerdeps.WrapTransientKubernetesAPI(fmt.Errorf("failed to get pod %s/%s for filesystem resize restart: %w", cluster.Namespace, candidatePodName, err))
 			}
 			return nil, fmt.Errorf("failed to get pod %s/%s for filesystem resize restart: %w", cluster.Namespace, candidatePodName, err)
 		}

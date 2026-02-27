@@ -10,8 +10,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	controllerdeps "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster/deps"
 	"github.com/dc-tec/openbao-operator/internal/kube"
-	"github.com/dc-tec/openbao-operator/internal/observability"
 )
 
 // patchStatusSSA updates the cluster status using Server-Side Apply.
@@ -81,7 +81,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	// otherwise it can race with in-progress partitioned rollouts.
 
 	// Update per-cluster metrics.
-	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
+	clusterMetrics := controllerdeps.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.SetReadyReplicas(state.ReadyReplicas)
 	clusterMetrics.SetPhase(cluster.Status.Phase)
 

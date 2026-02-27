@@ -19,14 +19,12 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
-	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	controllerdeps "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster/deps"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 // infraReconciler wraps InfraManager to implement the controller's sub-reconciler contract.
@@ -47,7 +45,7 @@ type infraReconciler struct {
 	platform                string
 	smartClientConfig       openbao.ClientConfig
 	clientForPodFunc        func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (*openbao.Client, error)
-	discoverOIDCConfigFunc  func(ctx context.Context, cfg *rest.Config) (*auth.OIDCConfig, error)
+	discoverOIDCConfigFunc  func(ctx context.Context, cfg *rest.Config) (*controllerdeps.OIDCConfig, error)
 }
 
 func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
@@ -62,10 +60,10 @@ func oidcDiscoveryError(err error) error {
 		return nil
 	}
 
-	if statusCode, ok := oidcDiscoveryStatusCode(err); ok {
+	if statusCode, ok := controllerdeps.OIDCDiscoveryStatusCode(err); ok {
 		switch statusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
-			return operatorerrors.WrapPermanentConfig(fmt.Errorf(
+			return controllerdeps.WrapPermanentConfig(fmt.Errorf(
 				"OIDC discovery blocked by Kubernetes API RBAC (%d). Ensure the operator ServiceAccount can GET %q and %q on the Kubernetes API server (nonResourceURLs RBAC): %w",
 				statusCode,
 				"/.well-known/openid-configuration",
@@ -73,27 +71,19 @@ func oidcDiscoveryError(err error) error {
 				err,
 			))
 		case http.StatusNotFound:
-			return operatorerrors.WrapPermanentConfig(fmt.Errorf(
+			return controllerdeps.WrapPermanentConfig(fmt.Errorf(
 				"OIDC discovery endpoint not found (404). Ensure the Kubernetes API server exposes OIDC discovery and JWKS endpoints: %w",
 				err,
 			))
 		default:
 			if statusCode == http.StatusTooManyRequests || statusCode >= 500 {
-				return operatorerrors.WrapTransientKubernetesAPI(err)
+				return controllerdeps.WrapTransientKubernetesAPI(err)
 			}
-			return operatorerrors.WrapPermanentConfig(err)
+			return controllerdeps.WrapPermanentConfig(err)
 		}
 	}
 
-	return operatorerrors.WrapTransientKubernetesAPI(operatorerrors.WrapTransientConnection(err))
-}
-
-func oidcDiscoveryStatusCode(err error) (int, bool) {
-	var statusErr *auth.HTTPStatusError
-	if errors.As(err, &statusErr) {
-		return statusErr.StatusCode, true
-	}
-	return 0, false
+	return controllerdeps.WrapTransientKubernetesAPI(controllerdeps.WrapTransientConnection(err))
 }
 
 func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, []string, error) {
@@ -105,14 +95,12 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 	}
 
 	if r.restConfig == nil {
-		return "", nil, operatorerrors.WrapPermanentConfig(fmt.Errorf("OIDC discovery required but controller rest.Config is not available"))
+		return "", nil, controllerdeps.WrapPermanentConfig(fmt.Errorf("OIDC discovery required but controller rest.Config is not available"))
 	}
 
 	discover := r.discoverOIDCConfigFunc
 	if discover == nil {
-		discover = func(ctx context.Context, cfg *rest.Config) (*auth.OIDCConfig, error) {
-			return auth.DiscoverConfig(ctx, cfg, "")
-		}
+		discover = controllerdeps.DiscoverOIDCConfig
 	}
 
 	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -123,10 +111,10 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 		return "", nil, oidcDiscoveryError(err)
 	}
 	if discovered == nil || strings.TrimSpace(discovered.IssuerURL) == "" {
-		return "", nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned empty issuer"))
+		return "", nil, controllerdeps.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned empty issuer"))
 	}
 	if len(discovered.JWKSKeys) == 0 {
-		return "", nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned no JWKS keys"))
+		return "", nil, controllerdeps.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned no JWKS keys"))
 	}
 
 	return discovered.IssuerURL, discovered.JWKSKeys, nil
@@ -194,7 +182,7 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 	}
 
 	if opts.failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-		return "", operatorerrors.WithReason(opts.failureReason, fmt.Errorf("%s (policy=Block): %w", opts.failureMessagePrefix, err))
+		return "", controllerdeps.WithReason(opts.failureReason, fmt.Errorf("%s (policy=Block): %w", opts.failureMessagePrefix, err))
 	}
 
 	logger.Error(err, opts.failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
@@ -206,7 +194,7 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 
 func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	opts := imageVerificationOptions{
-		enabled:              security.IsMainImageVerificationEnabled(cluster),
+		enabled:              controllerdeps.IsMainImageVerificationEnabled(cluster),
 		imageRef:             imageRef,
 		failurePolicy:        imageVerificationFailurePolicy(cluster),
 		failureReason:        constants.ReasonImageVerificationFailed,
@@ -225,7 +213,7 @@ func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr
 
 func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
 	// Use OperatorImageVerification only - no fallback to ImageVerification
-	if !security.IsOperatorImageVerificationEnabled(cluster) {
+	if !controllerdeps.IsOperatorImageVerificationEnabled(cluster) {
 		return "", nil
 	}
 
@@ -241,7 +229,7 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 
 	verifyFunc := r.verifyOperatorImageFunc
 	if verifyFunc == nil {
-		verifyFunc = security.VerifyOperatorImageForCluster
+		verifyFunc = controllerdeps.VerifyOperatorImageForCluster
 	}
 
 	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
@@ -394,16 +382,16 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	}
 	if err := manager.Reconcile(ctx, logger, cluster, spec); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
-			return recon.Result{}, operatorerrors.WithReason(ReasonGatewayAPIMissing, err)
+			return recon.Result{}, controllerdeps.WithReason(ReasonGatewayAPIMissing, err)
 		}
 		if errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing) {
-			return recon.Result{}, operatorerrors.WithReason(ReasonPrerequisitesMissing, err)
+			return recon.Result{}, controllerdeps.WithReason(ReasonPrerequisitesMissing, err)
 		}
 		if errors.Is(err, inframanager.ErrACMEDomainNotResolvable) {
-			return recon.Result{}, operatorerrors.WithReason(ReasonACMEDomainNotResolvable, err)
+			return recon.Result{}, controllerdeps.WithReason(ReasonACMEDomainNotResolvable, err)
 		}
 		if errors.Is(err, inframanager.ErrACMEGatewayNotConfiguredForPassthrough) {
-			return recon.Result{}, operatorerrors.WithReason(ReasonACMEGatewayNotConfiguredForPassthrough, err)
+			return recon.Result{}, controllerdeps.WithReason(ReasonACMEGatewayNotConfiguredForPassthrough, err)
 		}
 		return recon.Result{}, err
 	}
