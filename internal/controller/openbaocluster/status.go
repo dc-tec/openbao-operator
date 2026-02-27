@@ -3,31 +3,24 @@ package openbaocluster
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/kube"
-	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 // patchStatusSSA updates the cluster status using Server-Side Apply.
 // SSA eliminates race conditions by having the API server merge changes,
 // rather than requiring the client to refresh and merge manually.
 // This function patches only the fields owned by the Status controller:
-// phase, activeLeader, readyReplicas, currentVersion, conditions, lastBackupTime
+// phase, activeLeader, readyReplicas, currentVersion, conditions, lastBackupTime.
 func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	// Create an apply configuration with just the status fields owned by Status controller
+	// Create an apply configuration with just the status fields owned by Status controller.
 	applyCluster := &openbaov1alpha1.OpenBaoCluster{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: openbaov1alpha1.GroupVersion.String(),
@@ -57,107 +50,14 @@ func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *
 	)
 }
 
-func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	if cluster.Status.Phase == "" {
-		cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
-	}
-
-	now := metav1.Now()
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionAvailable),
-		Status:             metav1.ConditionUnknown,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             constants.ReasonPaused,
-		Message:            "Reconciliation is paused; availability is not being evaluated",
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionDegraded),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             constants.ReasonPaused,
-		Message:            "Cluster is paused; no new degradation has been evaluated",
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionTLSReady),
-		Status:             metav1.ConditionUnknown,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             constants.ReasonPaused,
-		Message:            "TLS readiness is not being evaluated while reconciliation is paused",
-	})
-
-	if err := r.patchStatusSSA(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to update status for paused OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	logger.Info("Updated status for paused OpenBaoCluster")
-
-	return nil
-}
-
-func (r *OpenBaoClusterReconciler) updateStatusForProfileNotSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	now := metav1.Now()
-	if cluster.Status.Phase == "" {
-		cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
-	}
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionAvailable),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonProfileNotSet,
-		Message:            "spec.profile must be explicitly set to Hardened or Development; reconciliation is blocked until set",
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionDegraded),
-		Status:             metav1.ConditionTrue,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonProfileNotSet,
-		Message:            "spec.profile is not set; defaults may be inappropriate for production and could lead to insecure deployment",
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionTLSReady),
-		Status:             metav1.ConditionUnknown,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonProfileNotSet,
-		Message:            "TLS readiness is not being evaluated until spec.profile is set",
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionProductionReady),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonProfileNotSet,
-		Message:            "Cluster cannot be considered production-ready until spec.profile is explicitly set",
-	})
-
-	if err := r.patchStatusSSA(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to update status for missing profile on OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	logger.Info("Updated status for OpenBaoCluster missing profile")
-	return nil
-}
-
 func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
-	// Capture original state to check for changes (e.g. ReadyReplicas), but NOT for patching merge
+	// Capture original state to check for changes (e.g. ReadyReplicas), but NOT for patching merge.
 	original := cluster.DeepCopy()
 
-	// Set TLSReady early (evaluated separately from clusterState)
+	// Set TLSReady early (evaluated separately from clusterState).
 	r.setTLSReadyCondition(ctx, cluster)
 
-	// 1. Gather all observed state (API calls)
+	// 1. Gather all observed state (API calls).
 	state, err := r.gatherClusterState(ctx, logger, cluster)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -165,11 +65,11 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 
 	observedVersion := observedVersionFromPods(state)
 
-	// 2. Compute and set all conditions (pure logic)
+	// 2. Compute and set all conditions (pure logic).
 	now := metav1.Now()
 	applyAllConditions(cluster, state, r.AdmissionStatus, now)
 
-	// 3. Update status fields (computed locally)
+	// 3. Update status fields (computed locally).
 	cluster.Status.ReadyReplicas = state.ReadyReplicas
 	cluster.Status.ActiveLeader = state.LeaderName
 	cluster.Status.Phase = computePhase(state)
@@ -180,14 +80,14 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	// The status controller must not independently advance CurrentVersion for rolling,
 	// otherwise it can race with in-progress partitioned rollouts.
 
-	// Update per-cluster metrics
+	// Update per-cluster metrics.
 	clusterMetrics := appopenbaocluster.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.SetReadyReplicas(state.ReadyReplicas)
 	clusterMetrics.SetPhase(cluster.Status.Phase)
 
 	r.warnIfSelfInitDisabled(logger, cluster)
 
-	// 4. Persist status (single API call via SSA)
+	// 4. Persist status (single API call via SSA).
 	if err := r.patchStatusSSA(ctx, cluster); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update status for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
@@ -197,285 +97,6 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		"phase", cluster.Status.Phase,
 		"currentVersion", cluster.Status.CurrentVersion)
 
-	// 5. Determine requeue
+	// 5. Determine requeue.
 	return r.determineStatusRequeue(logger, state, original, cluster), nil
-}
-
-func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState, observedVersion string) {
-	// Initialize (or correct) CurrentVersion from observed running pods.
-	//
-	// RATIONALE: spec.version can be updated ahead of the actual workload rollout
-	// (for example, RollingUpdate with a locked partition). Status must reflect the
-	// currently-running OpenBao version to drive safe upgrade orchestration.
-	if !cluster.Status.Initialized {
-		return
-	}
-
-	if cluster.Status.CurrentVersion == "" && observedVersion != "" {
-		cluster.Status.CurrentVersion = observedVersion
-		logger.Info("Set initial CurrentVersion from running pod labels", "version", observedVersion)
-		return
-	}
-
-	if state == nil {
-		return
-	}
-
-	// Freeze CurrentVersion correction while either upgrade strategy has status state.
-	// This prevents status churn from fighting an in-progress or failed upgrade flow.
-	if state.RollingUpgradeInProgress || state.BlueGreenInProgress {
-		return
-	}
-
-	if observedVersion == "" || cluster.Status.CurrentVersion == "" || cluster.Status.CurrentVersion == observedVersion {
-		return
-	}
-
-	isDowngrade, err := appopenbaocluster.IsVersionDowngrade(cluster.Status.CurrentVersion, observedVersion)
-	if err != nil {
-		logger.V(1).Info("Skipping CurrentVersion correction due to unparsable version",
-			"currentVersion", cluster.Status.CurrentVersion,
-			"observedVersion", observedVersion,
-			"error", err)
-		return
-	}
-	if isDowngrade {
-		logger.V(1).Info("Ignoring CurrentVersion regression from pod labels",
-			"currentVersion", cluster.Status.CurrentVersion,
-			"observedVersion", observedVersion)
-		return
-	}
-
-	from := cluster.Status.CurrentVersion
-	cluster.Status.CurrentVersion = observedVersion
-	logger.Info("Corrected CurrentVersion from running pod labels",
-		"fromVersion", from,
-		"toVersion", observedVersion)
-}
-
-func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForBlueGreen(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, observedVersion string) {
-	// Detect BlueGreen upgrade completion: if BlueGreen is Idle and CurrentVersion
-	// doesn't match Spec.Version, the upgrade completed and we should update.
-	// This allows Status controller to own currentVersion while BlueGreen manager
-	// signals completion via phase transition.
-	if cluster.Status.BlueGreen == nil ||
-		cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle ||
-		cluster.Status.CurrentVersion == "" ||
-		cluster.Status.CurrentVersion == cluster.Spec.Version ||
-		cluster.Spec.Upgrade == nil ||
-		cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen {
-		return
-	}
-
-	// CRITICAL CHECK: Verify that the upgrade actually happened.
-	// PhaseIdle can mean "Before Upgrade" OR "After Upgrade".
-	// We distinguish them by checking if the active BlueRevision matches the current Spec.
-	currentSpecRevision := appopenbaocluster.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
-	if cluster.Status.BlueGreen.BlueRevision != currentSpecRevision {
-		return
-	}
-
-	// Extra safety: only advance the version if pods are actually reporting the target version.
-	// If the label is missing, fall back to the revision-based check above.
-	if observedVersion != "" && strings.TrimSpace(observedVersion) != strings.TrimSpace(cluster.Spec.Version) {
-		logger.V(1).Info("BlueGreen revision matches but running pods do not report target version; skipping CurrentVersion update",
-			"observedVersion", observedVersion,
-			"targetVersion", cluster.Spec.Version,
-			"revision", currentSpecRevision)
-		return
-	}
-
-	from := cluster.Status.CurrentVersion
-	cluster.Status.CurrentVersion = cluster.Spec.Version
-	logger.Info("Detected BlueGreen upgrade completion, updated CurrentVersion",
-		"fromVersion", from,
-		"toVersion", cluster.Spec.Version,
-		"revision", currentSpecRevision)
-}
-
-func (r *OpenBaoClusterReconciler) warnIfSelfInitDisabled(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
-	// SECURITY: Warn when SelfInit is disabled - the operator will store the root token.
-	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
-	if selfInitEnabled {
-		return
-	}
-
-	logger.Info("SECURITY WARNING: SelfInit is disabled - root token will be stored in Secret",
-		"cluster_namespace", cluster.Namespace,
-		"cluster_name", cluster.Name,
-		"secret_name", cluster.Name+"-root-token")
-}
-
-func (r *OpenBaoClusterReconciler) determineStatusRequeue(logger logr.Logger, state *clusterState, original, cluster *openbaov1alpha1.OpenBaoCluster) ctrl.Result {
-	if state == nil || original == nil || cluster == nil {
-		return ctrl.Result{}
-	}
-
-	previousReadyReplicas := original.Status.ReadyReplicas
-	readyReplicasChanged := state.ReadyReplicas != previousReadyReplicas
-
-	if state.StatusStale {
-		logger.V(1).Info("StatefulSet status may be stale; requeuing to check status")
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}
-	}
-
-	if !state.Available && state.ReadyReplicas > 0 {
-		logger.V(1).Info("Not all replicas are ready; requeuing to check status",
-			"readyReplicas", state.ReadyReplicas,
-			"desiredReplicas", cluster.Spec.Replicas)
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}
-	}
-
-	if state.Available && readyReplicasChanged {
-		logger.V(1).Info("All replicas became ready; requeuing once to ensure status is persisted",
-			"readyReplicas", state.ReadyReplicas,
-			"previousReadyReplicas", previousReadyReplicas)
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}
-	}
-
-	return ctrl.Result{}
-}
-
-func observedVersionFromPods(state *clusterState) string {
-	if state == nil || len(state.Pods) == 0 {
-		return ""
-	}
-
-	// Prefer the leader's reported version only when leadership is unambiguous.
-	if state.LeaderCount == 1 && strings.TrimSpace(state.LeaderName) != "" {
-		for i := range state.Pods {
-			pod := &state.Pods[i]
-			if pod.Name == state.LeaderName {
-				if pod.Labels != nil {
-					if raw, ok := pod.Labels[openbaolabels.LabelVersion]; ok {
-						v := strings.TrimSpace(raw)
-						if v != "" {
-							return v
-						}
-					}
-				}
-				break
-			}
-		}
-	}
-
-	// Next, prefer pod0 (stable identity).
-	if state.Pod0 != nil && state.Pod0.Labels != nil {
-		if raw, ok := state.Pod0.Labels[openbaolabels.LabelVersion]; ok {
-			v := strings.TrimSpace(raw)
-			if v != "" {
-				return v
-			}
-		}
-	}
-
-	// Finally, if all pods report the same non-empty version, use it.
-	var candidate string
-	for i := range state.Pods {
-		pod := &state.Pods[i]
-		if pod.Labels == nil {
-			return ""
-		}
-		raw, ok := pod.Labels[openbaolabels.LabelVersion]
-		if !ok {
-			return ""
-		}
-		v := strings.TrimSpace(raw)
-		if v == "" {
-			return ""
-		}
-		if candidate == "" {
-			candidate = v
-			continue
-		}
-		if candidate != v {
-			return ""
-		}
-	}
-	return candidate
-}
-
-// setTLSReadyCondition evaluates and sets the TLSReady condition.
-func (r *OpenBaoClusterReconciler) setTLSReadyCondition(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) {
-	now := metav1.Now()
-
-	if !cluster.Spec.TLS.Enabled {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionTrue,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             ReasonDisabled,
-			Message:            "TLS is disabled",
-		})
-		return
-	}
-
-	tlsMode := cluster.Spec.TLS.Mode
-	if tlsMode == "" {
-		tlsMode = openbaov1alpha1.TLSModeOperatorManaged
-	}
-
-	if tlsMode == openbaov1alpha1.TLSModeACME {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             constants.ReasonUnknown,
-			Message:            "TLS is managed by OpenBao via ACME; the operator does not evaluate certificate readiness",
-		})
-		return
-	}
-
-	// Check for server TLS secret
-	serverSecret := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      cluster.Name + constants.SuffixTLSServer,
-	}, serverSecret); err != nil {
-		if apierrors.IsNotFound(err) {
-			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-				Type:               string(openbaov1alpha1.ConditionTLSReady),
-				Status:             metav1.ConditionFalse,
-				ObservedGeneration: cluster.Generation,
-				LastTransitionTime: now,
-				Reason:             ReasonTLSSecretMissing,
-				Message:            "Server TLS Secret is not present yet",
-			})
-			return
-		}
-		// For other errors, mark as unknown
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             constants.ReasonUnknown,
-			Message:            "Failed to get TLS secret",
-		})
-		return
-	}
-
-	hasCert := len(serverSecret.Data["tls.crt"]) > 0
-	hasKey := len(serverSecret.Data["tls.key"]) > 0
-	if hasCert && hasKey {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionTrue,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             constants.ReasonReady,
-			Message:            "TLS assets are provisioned",
-		})
-	} else {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             ReasonTLSSecretInvalid,
-			Message:            "Server TLS Secret is missing required keys (tls.crt/tls.key)",
-		})
-	}
 }
