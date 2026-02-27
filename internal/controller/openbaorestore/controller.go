@@ -32,8 +32,8 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	observability "github.com/dc-tec/openbao-operator/internal/observability"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	"github.com/dc-tec/openbao-operator/internal/restore"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
@@ -44,7 +44,7 @@ type OpenBaoRestoreReconciler struct {
 	Scheme                *runtime.Scheme
 	RestoreManager        *restore.Manager
 	Recorder              events.EventRecorder
-	OperatorImageVerifier interfaces.ImageVerifier
+	OperatorImageVerifier imageverify.Verifier
 	Platform              string
 }
 

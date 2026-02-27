@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/name"
 )
@@ -32,7 +32,7 @@ var openBaoOfficialRepositories = map[string]struct{}{
 // VerifyImageForCluster verifies an image reference using the cluster's ImageVerification configuration.
 // It returns an image digest reference (e.g., "repo@sha256:...") when verification is enabled and succeeds.
 // When image verification is disabled, it returns an empty digest and a nil error.
-func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier interfaces.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
+func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier imageverify.Verifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	if cluster == nil {
 		return "", fmt.Errorf("cluster is required")
 	}
@@ -47,7 +47,7 @@ func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier int
 		return "", fmt.Errorf("image verifier is required")
 	}
 
-	config := interfaces.VerifyConfig{
+	config := imageverify.VerifyConfig{
 		PublicKey:        strings.TrimSpace(verificationConfig.PublicKey),
 		Issuer:           strings.TrimSpace(verificationConfig.Issuer),
 		Subject:          strings.TrimSpace(verificationConfig.Subject),
@@ -78,7 +78,7 @@ func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier int
 // backup/upgrade/restore executors) using the cluster's OperatorImageVerification config.
 // Unlike VerifyImageForCluster, this function does NOT fall back to ImageVerification.
 // If OperatorImageVerification is not configured, verification is skipped for helper images.
-func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, verifier interfaces.ImageVerifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
+func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, verifier imageverify.Verifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	if cluster == nil {
 		return "", fmt.Errorf("cluster is required")
 	}
@@ -95,7 +95,7 @@ func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, veri
 		return "", fmt.Errorf("image verifier is required")
 	}
 
-	config := interfaces.VerifyConfig{
+	config := imageverify.VerifyConfig{
 		PublicKey:        strings.TrimSpace(verificationConfig.PublicKey),
 		Issuer:           strings.TrimSpace(verificationConfig.Issuer),
 		Subject:          strings.TrimSpace(verificationConfig.Subject),
@@ -139,19 +139,19 @@ func IsOperatorImageVerificationEnabled(cluster *openbaov1alpha1.OpenBaoCluster)
 	return enabled
 }
 
-func hasStrictKeylessConfig(config interfaces.VerifyConfig) bool {
+func hasStrictKeylessConfig(config imageverify.VerifyConfig) bool {
 	return strings.TrimSpace(config.Issuer) != "" && strings.TrimSpace(config.Subject) != ""
 }
 
-func hasRegexKeylessConfig(config interfaces.VerifyConfig) bool {
+func hasRegexKeylessConfig(config imageverify.VerifyConfig) bool {
 	return strings.TrimSpace(config.IssuerRegExp) != "" && strings.TrimSpace(config.SubjectRegExp) != ""
 }
 
-func hasKeylessConfig(config interfaces.VerifyConfig) bool {
+func hasKeylessConfig(config imageverify.VerifyConfig) bool {
 	return hasStrictKeylessConfig(config) || hasRegexKeylessConfig(config)
 }
 
-func applyOfficialKeylessDefaults(config *interfaces.VerifyConfig, imageRef string, isOperatorImage bool) {
+func applyOfficialKeylessDefaults(config *imageverify.VerifyConfig, imageRef string, isOperatorImage bool) {
 	if config == nil {
 		return
 	}

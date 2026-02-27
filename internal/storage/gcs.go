@@ -20,7 +20,7 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
 const gcsRWScope = "https://www.googleapis.com/auth/devstorage.read_write"
@@ -52,7 +52,7 @@ type GCSClientConfig struct {
 // option.WithEndpoint() is always used to ensure consistent routing for all operations.
 // The UseEmulator flag controls authentication: when true, anonymous access is used;
 // otherwise, credentials are required.
-func OpenGCSBucket(ctx context.Context, cfg GCSClientConfig) (interfaces.BlobStore, error) {
+func OpenGCSBucket(ctx context.Context, cfg GCSClientConfig) (blobstore.BlobStore, error) {
 	if cfg.Bucket == "" {
 		return nil, fmt.Errorf("bucket is required")
 	}

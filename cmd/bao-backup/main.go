@@ -11,8 +11,8 @@ import (
 
 	backupconfig "github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 	"github.com/dc-tec/openbao-operator/internal/storage"
 )
 
@@ -446,7 +446,7 @@ func parseDuration(s string) time.Duration {
 }
 
 // openStorageClient creates a storage client based on the configured provider.
-func openStorageClient(ctx context.Context, cfg *backupconfig.ExecutorConfig) (interfaces.BlobStore, error) {
+func openStorageClient(ctx context.Context, cfg *backupconfig.ExecutorConfig) (blobstore.BlobStore, error) {
 	storageConfig := storage.Config{
 		Provider: storage.ProviderType(cfg.BackupProvider),
 		Bucket:   cfg.BackupBucket,

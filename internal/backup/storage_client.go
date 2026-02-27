@@ -10,13 +10,13 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 	"github.com/dc-tec/openbao-operator/internal/storage"
 )
 
 var openBlobStoreFn = storage.OpenBlobStore
 
-func (m *Manager) openBackupStorageClient(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, ensureExists bool) (interfaces.BlobStore, error) {
+func (m *Manager) openBackupStorageClient(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, ensureExists bool) (blobstore.BlobStore, error) {
 	if cluster == nil || cluster.Spec.Backup == nil {
 		return nil, fmt.Errorf("cluster backup configuration is required")
 	}

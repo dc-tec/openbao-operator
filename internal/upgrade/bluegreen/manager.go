@@ -19,10 +19,10 @@ import (
 	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/infra"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
@@ -43,13 +43,13 @@ type Manager struct {
 	clientFactory         upgrade.OpenBaoClientFactory
 	clusterOps            ClusterOps
 	clientConfig          openbaoapi.ClientConfig
-	imageVerifier         interfaces.ImageVerifier
-	operatorImageVerifier interfaces.ImageVerifier
+	imageVerifier         imageverify.Verifier
+	operatorImageVerifier imageverify.Verifier
 	Platform              string
 }
 
 // NewManager constructs a Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientConfig openbaoapi.ClientConfig, imageVerifier interfaces.ImageVerifier, operatorImageVerifier interfaces.ImageVerifier, platform string) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientConfig openbaoapi.ClientConfig, imageVerifier imageverify.Verifier, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
 	mgr := &Manager{
 		client:                c,
 		scheme:                scheme,
@@ -64,7 +64,7 @@ func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Man
 	return mgr
 }
 
-func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, imageVerifier interfaces.ImageVerifier, operatorImageVerifier interfaces.ImageVerifier, platform string) *Manager {
+func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, imageVerifier imageverify.Verifier, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
 	mgr := NewManager(c, scheme, infraManager, clientConfig, imageVerifier, operatorImageVerifier, platform)
 	if clientFactory != nil {
 		mgr.clientFactory = clientFactory

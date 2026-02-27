@@ -27,7 +27,7 @@ import (
 	"gocloud.dev/gcerrors"
 
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
 const (
@@ -49,9 +49,9 @@ const (
 	SecretKeyCACert = "caCert"
 )
 
-// ObjectInfo is an alias for interfaces.ObjectInfo.
-// This type is provided for convenience; new code should use interfaces.ObjectInfo directly.
-type ObjectInfo = interfaces.ObjectInfo
+// ObjectInfo is an alias for blobstore.ObjectInfo.
+// This type is provided for convenience; new code should use blobstore.ObjectInfo directly.
+type ObjectInfo = blobstore.ObjectInfo
 
 // Bucket wraps a Go CDK blob.Bucket with a simplified interface.
 // It implements the common operations needed for backup/restore functionality.
@@ -202,7 +202,7 @@ type Credentials struct {
 
 // OpenS3Bucket opens an S3-compatible bucket using Go CDK.
 // It returns a BlobStore interface that provides standardized blob operations.
-func OpenS3Bucket(ctx context.Context, cfg S3ClientConfig) (interfaces.BlobStore, error) {
+func OpenS3Bucket(ctx context.Context, cfg S3ClientConfig) (blobstore.BlobStore, error) {
 	if cfg.Bucket == "" {
 		return nil, fmt.Errorf("bucket is required")
 	}

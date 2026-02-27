@@ -8,8 +8,9 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/admission"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 )
 
 // OpenBaoClusterReconciler reconciles a OpenBaoCluster object.
@@ -19,7 +20,7 @@ type OpenBaoClusterReconciler struct {
 	Scheme            *runtime.Scheme
 	RestConfig        *rest.Config
 	TLSReload         certmanager.ReloadSignaler
-	InitManager       interfaces.InitManager
+	InitManager       initmanagerport.Manager
 	OperatorNamespace string
 	OIDCIssuer        string // OIDC issuer URL discovered at startup (best-effort warmup)
 	OIDCJWTKeys       []string
@@ -30,7 +31,7 @@ type OpenBaoClusterReconciler struct {
 	// and caching is enabled for the watched namespace.
 	SingleTenantMode      bool
 	SmartClientConfig     openbao.ClientConfig
-	ImageVerifier         interfaces.ImageVerifier
-	OperatorImageVerifier interfaces.ImageVerifier
+	ImageVerifier         imageverify.Verifier
+	OperatorImageVerifier imageverify.Verifier
 	Platform              string
 }

@@ -8,15 +8,15 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 )
 
 type captureVerifier struct {
-	config interfaces.VerifyConfig
+	config imageverify.VerifyConfig
 	called bool
 }
 
-func (v *captureVerifier) Verify(_ context.Context, _ string, config interfaces.VerifyConfig) (string, error) {
+func (v *captureVerifier) Verify(_ context.Context, _ string, config imageverify.VerifyConfig) (string, error) {
 	v.called = true
 	v.config = config
 	return "ghcr.io/dc-tec/openbao-operator@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
