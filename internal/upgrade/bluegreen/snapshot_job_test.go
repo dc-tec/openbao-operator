@@ -16,12 +16,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 func TestBuildSnapshotJob_PodSecurityContext_Platform(t *testing.T) {
+	testScheme := runtime.NewScheme()
+	fakeClient := fake.NewClientBuilder().WithScheme(testScheme).Build()
+
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
@@ -48,7 +52,10 @@ func TestBuildSnapshotJob_PodSecurityContext_Platform(t *testing.T) {
 	)
 
 	t.Run("openshift omits pinned IDs", func(t *testing.T) {
-		mgr := &Manager{Platform: constants.PlatformOpenShift}
+		mgr := &Manager{
+			Platform:      constants.PlatformOpenShift,
+			backupRuntime: backup.NewUpgradeStrategyRuntime(fakeClient, testScheme),
+		}
 		job, err := mgr.buildSnapshotJob(cluster, jobName, phase, image)
 		require.NoError(t, err)
 
@@ -68,7 +75,10 @@ func TestBuildSnapshotJob_PodSecurityContext_Platform(t *testing.T) {
 	})
 
 	t.Run("kubernetes pins IDs", func(t *testing.T) {
-		mgr := &Manager{Platform: constants.PlatformKubernetes}
+		mgr := &Manager{
+			Platform:      constants.PlatformKubernetes,
+			backupRuntime: backup.NewUpgradeStrategyRuntime(fakeClient, testScheme),
+		}
 		job, err := mgr.buildSnapshotJob(cluster, jobName, phase, image)
 		require.NoError(t, err)
 
@@ -105,7 +115,7 @@ func TestEnsurePreUpgradeSnapshotJob_RequiresBackupAuthUnlessOIDC(t *testing.T) 
 	}
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
-	mgr := NewManager(fakeClient, scheme, nil, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
+	mgr := NewManager(fakeClient, scheme, nil, backup.NewUpgradeStrategyRuntime(fakeClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
 
 	_, err := mgr.ensurePreUpgradeSnapshotJob(context.Background(), testLogger(), cluster, "pre-upgrade-snapshot")
 	require.Error(t, err)
@@ -143,7 +153,7 @@ func TestEnsurePreUpgradeSnapshotJob_AllowsOIDCDefaultRole(t *testing.T) {
 	}
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
-	mgr := NewManager(fakeClient, scheme, nil, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
+	mgr := NewManager(fakeClient, scheme, nil, backup.NewUpgradeStrategyRuntime(fakeClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
 
 	result, err := mgr.ensurePreUpgradeSnapshotJob(context.Background(), testLogger(), cluster, "pre-upgrade-snapshot")
 	require.NoError(t, err)
@@ -198,7 +208,7 @@ func TestHandlePhaseIdle_BlocksOnFailedSnapshot(t *testing.T) {
 	// Let's create the manager first to calculate the name, then inject the job.
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
-	mgr := NewManager(fakeClient, scheme, nil, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
+	mgr := NewManager(fakeClient, scheme, nil, backup.NewUpgradeStrategyRuntime(fakeClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
 
 	jobName := preUpgradeSnapshotJobName(cluster)
 
@@ -274,7 +284,7 @@ func TestHandlePhaseIdle_RespectsTopLevelPreUpgradeSnapshot(t *testing.T) {
 	}
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
-	mgr := NewManager(fakeClient, scheme, nil, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
+	mgr := NewManager(fakeClient, scheme, nil, backup.NewUpgradeStrategyRuntime(fakeClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), fakeClient, nil), nil, "kubernetes")
 
 	jobName := preUpgradeSnapshotJobName(cluster)
 	cluster.Status.BlueGreen.PreUpgradeSnapshotJobName = jobName

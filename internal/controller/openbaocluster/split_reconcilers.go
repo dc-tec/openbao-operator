@@ -455,11 +455,12 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 
 	var reconcilers []subReconciler
 	infraMgr := inframanager.NewManagerWithReader(r.parent.Client, r.parent.APIReader, r.parent.Scheme, r.parent.OperatorNamespace, r.parent.OIDCIssuer, r.parent.OIDCJWTKeys, r.parent.Platform)
+	backupRuntime := backupmanager.NewUpgradeStrategyRuntime(r.parent.Client, r.parent.Scheme)
 	// Blue/green upgrade strategy
-	reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr, r.parent.SmartClientConfig, r.parent.ImageVerifier, r.parent.OperatorImageVerifier, r.parent.Platform))
+	reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr, backupRuntime, r.parent.SmartClientConfig, r.parent.ImageVerifier, r.parent.OperatorImageVerifier, r.parent.Platform))
 
 	// Rolling upgrade strategy
-	reconcilers = append(reconcilers, rollingupgrade.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig, r.parent.OperatorImageVerifier, r.parent.Platform))
+	reconcilers = append(reconcilers, rollingupgrade.NewManager(r.parent.Client, r.parent.Scheme, backupRuntime, r.parent.SmartClientConfig, r.parent.OperatorImageVerifier, r.parent.Platform))
 
 	// Backup
 	reconcilers = append(reconcilers, backupmanager.NewManager(r.parent.Client, r.parent.Scheme, r.parent.SmartClientConfig, r.parent.OperatorImageVerifier, r.parent.Platform))

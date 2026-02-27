@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 )
@@ -55,7 +56,7 @@ func TestWaitForFinalizationConverged_WaitsForStatefulSetConvergence(t *testing.
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
 	}, openbaoapi.ClientConfig{}, nil, "")
 
@@ -145,7 +146,7 @@ func TestWaitForFinalizationConverged_SucceedsWhenStatefulSetPodsAndHealthConver
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod0, pod1, pod2, caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsHealthyFunc: func(ctx context.Context) (bool, error) {
 				return true, nil
@@ -189,7 +190,7 @@ func TestPatchFinalizedUpgradeStatus_PersistsCurrentVersionAndClearsUpgrade(t *t
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
 		Build()
-	mgr := NewManagerWithClientFactory(c, scheme, nil, openbaoapi.ClientConfig{}, nil, "")
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, openbaoapi.ClientConfig{}, nil, "")
 
 	if err := mgr.patchFinalizedUpgradeStatus(context.Background(), cluster); err != nil {
 		t.Fatalf("expected no error, got %v", err)

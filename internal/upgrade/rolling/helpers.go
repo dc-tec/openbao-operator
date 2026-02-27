@@ -14,7 +14,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
@@ -39,12 +38,12 @@ func (m *Manager) getClusterPods(ctx context.Context, cluster *openbaov1alpha1.O
 
 	// Filter out backup job pods and other non-StatefulSet pods
 	// StatefulSet pods have a name pattern: <cluster-name>-<ordinal>
-	// Backup job pods have labels like "openbao.org/component": backup.ComponentBackup
+	// Backup job pods have labels like "openbao.org/component": backup
 	filteredPods := make([]corev1.Pod, 0, len(podList.Items))
 	statefulSetPrefix := cluster.Name + "-"
 	for _, pod := range podList.Items {
 		// Skip backup job pods (they have the backup component label)
-		if pod.Labels[constants.LabelOpenBaoComponent] == backup.ComponentBackup {
+		if pod.Labels[constants.LabelOpenBaoComponent] == constants.ComponentBackup {
 			continue
 		}
 		// Only include pods that match the StatefulSet naming pattern
