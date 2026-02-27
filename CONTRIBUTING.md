@@ -21,7 +21,7 @@ We welcome AI-assisted contributions. However, all code must meet our quality st
 - **Follow standards** — See [Coding Standards](docs/contributing/standards/index.md)
 - **Test your changes** — PRs must pass CI
 
-> **Tip**: Configure your AI tool to use `.agent/rules/` for project-specific rules.
+> **Tip**: Configure your AI tool to use `.agents/rules/` for project-specific rules.
 
 ## Local Checks (PR-equivalent)
 
