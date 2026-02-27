@@ -3,6 +3,7 @@ package openbaocluster
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -11,7 +12,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	backupmanager "github.com/dc-tec/openbao-operator/internal/backup"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
@@ -31,6 +31,7 @@ type AdminOpsDependencies struct {
 	SmartClientConfig     openbao.ClientConfig
 	ImageVerifier         imageverify.Verifier
 	OperatorImageVerifier imageverify.Verifier
+	RequeueShort          time.Duration
 	Platform              string
 }
 
@@ -104,7 +105,7 @@ func ReconcileAdminOps(
 					if requeueAfter > 0 {
 						return ctrl.Result{RequeueAfter: requeueAfter}, nil
 					}
-					return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+					return ctrl.Result{RequeueAfter: resolveRequeueShort(deps.RequeueShort)}, nil
 				}
 			}
 			if operatorerrors.IsPermanent(err) {
@@ -128,4 +129,11 @@ func ReconcileAdminOps(
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func resolveRequeueShort(d time.Duration) time.Duration {
+	if d > 0 {
+		return d
+	}
+	return 5 * time.Second
 }

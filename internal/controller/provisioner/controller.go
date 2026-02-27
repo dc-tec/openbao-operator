@@ -87,10 +87,13 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	)
 
 	result, err = appprovisioner.ReconcileOpenBaoTenant(ctx, req, logger, appprovisioner.TenantRuntime{
-		Client:            r.Client,
-		APIReader:         r.APIReader,
-		Provisioner:       r.Provisioner,
-		OperatorNamespace: r.OperatorNamespace,
+		Client:                   r.Client,
+		APIReader:                r.APIReader,
+		Provisioner:              r.Provisioner,
+		OperatorNamespace:        r.OperatorNamespace,
+		ConditionTypeProvisioned: constants.ConditionTypeProvisioned,
+		RequeueShort:             constants.RequeueShort,
+		RequeueStandard:          constants.RequeueStandard,
 	})
 	if err != nil {
 		recordError(err)

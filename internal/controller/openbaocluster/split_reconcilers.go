@@ -118,11 +118,14 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 			smartClientConfig: r.parent.SmartClientConfig,
 		},
 	}
-	reconcilers = appopenbaocluster.AppendInitAndAutopilotReconcilers(reconcilers, r.parent.InitManager, r.parent.Recorder)
+	reconcilers = appopenbaocluster.AppendInitAndAutopilotReconcilers(reconcilers, r.parent.InitManager, r.parent.Recorder, constants.RequeueShort)
 
 	policy := appopenbaocluster.WorkloadResultPolicy{
 		PrerequisitesMissingReason: ReasonPrerequisitesMissing,
 		GatewayAPIMissingReason:    ReasonGatewayAPIMissing,
+		RequeueShort:               constants.RequeueShort,
+		RequeueSafetyNetBase:       constants.RequeueSafetyNetBase,
+		RequeueSafetyNetJitter:     constants.RequeueSafetyNetJitter,
 		PermanentConfigurationReason: map[string]struct{}{
 			ReasonStorageInvalidSize:             {},
 			ReasonStorageShrinkNotSupported:      {},
@@ -188,6 +191,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 		SmartClientConfig:     r.parent.SmartClientConfig,
 		ImageVerifier:         r.parent.ImageVerifier,
 		OperatorImageVerifier: r.parent.OperatorImageVerifier,
+		RequeueShort:          constants.RequeueShort,
 		Platform:              r.parent.Platform,
 	}, original, cluster, recordError)
 }
