@@ -11,13 +11,13 @@ See [Architecture Documentation](docs/architecture/index.md).
 ## Layer Model (L0-L7)
 
 - `L0` API types: `api/v1alpha1`
-- `L1` Entrypoints: `cmd/*`
+- `L1` Entrypoints/bootstrap: `cmd/*`, `internal/entrypoint`
 - `L2` Controller plumbing: `internal/controller/*`
 - `L3` App orchestration: `internal/app/*`
-- `L4` Services/managers: `internal/{backup,restore,upgrade,infra,certs,init,provisioner}`
+- `L4` Services/managers: `internal/{backup,restore,upgrade,infra,certs,init,provisioner,opslifecycle}`
 - `L5` Ports/contracts: `internal/port/*`
 - `L6` Adapters/integrations: `internal/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}`
-- `L7` Cross-cutting utilities: `internal/{errors,logging,reconcile,constants,predicates,observability}`
+- `L7` Cross-cutting utilities: `internal/{errors,logging,reconcile,constants,predicates,observability,admission}`
 
 ## Separation of Concerns
 
@@ -31,6 +31,7 @@ Reconcilers should do only:
 4. Apply final patch/result handling
 
 Do not embed broad business orchestration directly in controllers.
+Controller-local dependency adapters are allowed for import-surface management, but they must not become a business-logic layer.
 
 ### App Orchestration (`internal/app/*`, L3)
 

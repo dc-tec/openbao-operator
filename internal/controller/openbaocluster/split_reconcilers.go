@@ -92,31 +92,58 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 	original := cluster.DeepCopy()
 	reconcilers := []appopenbaocluster.SubReconciler{
 		certmanager.NewManagerWithReloader(r.parent.Client, r.parent.Scheme, r.parent.TLSReload),
-		&infraReconciler{
-			client:                r.parent.Client,
-			apiReader:             r.parent.APIReader,
-			scheme:                r.parent.Scheme,
-			restConfig:            r.parent.RestConfig,
-			operatorNamespace:     r.parent.OperatorNamespace,
-			oidcIssuer:            r.parent.OIDCIssuer,
-			oidcJWTKeys:           r.parent.OIDCJWTKeys,
-			operatorImageVerifier: r.parent.OperatorImageVerifier,
-			verifyImageFunc:       r.parent.verifyImageRef,
-			recorder:              r.parent.Recorder,
-			admissionStatus:       r.parent.AdmissionStatus,
-			platform:              r.parent.Platform,
-			smartClientConfig:     r.parent.SmartClientConfig,
-		},
-		&storageReconciler{
-			client:   r.parent.Client,
-			recorder: r.parent.Recorder,
-		},
-		&storageResizeRestartReconciler{
-			client:            r.parent.Client,
-			apiReader:         r.parent.APIReader,
-			recorder:          r.parent.Recorder,
-			smartClientConfig: r.parent.SmartClientConfig,
-		},
+		appopenbaocluster.NewInfraReconciler(
+			appopenbaocluster.InfraDependencies{
+				Client:                r.parent.Client,
+				APIReader:             r.parent.APIReader,
+				Scheme:                r.parent.Scheme,
+				RestConfig:            r.parent.RestConfig,
+				OperatorNamespace:     r.parent.OperatorNamespace,
+				OIDCIssuer:            r.parent.OIDCIssuer,
+				OIDCJWTKeys:           r.parent.OIDCJWTKeys,
+				OperatorImageVerifier: r.parent.OperatorImageVerifier,
+				VerifyImageFunc:       r.parent.verifyImageRef,
+				Recorder:              r.parent.Recorder,
+				Platform:              r.parent.Platform,
+				SmartClientConfig:     r.parent.SmartClientConfig,
+			},
+			appopenbaocluster.InfraReasonPolicy{
+				GatewayAPIMissing:                   ReasonGatewayAPIMissing,
+				PrerequisitesMissing:                ReasonPrerequisitesMissing,
+				ACMEDomainNotResolvable:             ReasonACMEDomainNotResolvable,
+				ACMEGatewayNotConfiguredPassthrough: ReasonACMEGatewayNotConfiguredForPassthrough,
+				ImageVerificationFailed:             constants.ReasonImageVerificationFailed,
+				InitContainerImageVerification:      constants.ReasonInitContainerImageVerificationFailed,
+			},
+		),
+		appopenbaocluster.NewStorageReconciler(
+			appopenbaocluster.StorageDependencies{
+				Client:   r.parent.Client,
+				Recorder: r.parent.Recorder,
+			},
+			appopenbaocluster.StorageReasonPolicy{
+				InvalidSize:             ReasonStorageInvalidSize,
+				ShrinkNotSupported:      ReasonStorageShrinkNotSupported,
+				ResizeNotSupported:      ReasonStorageResizeNotSupported,
+				StorageClassChangeError: ReasonStorageClassChangeNotSupported,
+				RestartRequired:         ReasonStorageRestartRequired,
+			},
+		),
+		appopenbaocluster.NewStorageResizeRestartReconciler(
+			appopenbaocluster.StorageResizeRestartDependencies{
+				Client:            r.parent.Client,
+				APIReader:         r.parent.APIReader,
+				Recorder:          r.parent.Recorder,
+				SmartClientConfig: r.parent.SmartClientConfig,
+			},
+			appopenbaocluster.StorageReasonPolicy{
+				InvalidSize:             ReasonStorageInvalidSize,
+				ShrinkNotSupported:      ReasonStorageShrinkNotSupported,
+				ResizeNotSupported:      ReasonStorageResizeNotSupported,
+				StorageClassChangeError: ReasonStorageClassChangeNotSupported,
+				RestartRequired:         ReasonStorageRestartRequired,
+			},
+		),
 	}
 	reconcilers = appopenbaocluster.AppendInitAndAutopilotReconcilers(reconcilers, r.parent.InitManager, r.parent.Recorder, constants.RequeueShort)
 
@@ -228,7 +255,15 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 	if !cluster.DeletionTimestamp.IsZero() {
 		logger.Info("OpenBaoCluster is marked for deletion")
 		if containsFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer) {
-			if err := r.parent.handleDeletion(ctx, logger, cluster); err != nil {
+			if err := appopenbaocluster.HandleDeletion(ctx, logger, appopenbaocluster.DeletionDependencies{
+				Client:            r.parent.Client,
+				APIReader:         r.parent.APIReader,
+				Scheme:            r.parent.Scheme,
+				OperatorNamespace: r.parent.OperatorNamespace,
+				OIDCIssuer:        r.parent.OIDCIssuer,
+				OIDCJWTKeys:       r.parent.OIDCJWTKeys,
+				Platform:          r.parent.Platform,
+			}, cluster); err != nil {
 				return ctrl.Result{}, err
 			}
 			cluster.Finalizers = removeFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer)

@@ -9,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 )
 
 func TestBuildAvailableCondition(t *testing.T) {
@@ -358,7 +359,6 @@ func TestEvaluateProductionReady(t *testing.T) {
 }
 
 func TestReconcileCurrentVersion_SkipsWhenRollingUpgradeStatusExists(t *testing.T) {
-	reconciler := &OpenBaoClusterReconciler{}
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Initialized:    true,
@@ -376,12 +376,11 @@ func TestReconcileCurrentVersion_SkipsWhenRollingUpgradeStatusExists(t *testing.
 		UpgradeFailed:            true,
 	}
 
-	reconciler.reconcileCurrentVersion(logr.Discard(), cluster, state, "2.4.4")
+	appopenbaocluster.ReconcileCurrentVersion(logr.Discard(), cluster, state, "2.4.4")
 	assert.Equal(t, "2.4.3", cluster.Status.CurrentVersion)
 }
 
 func TestReconcileCurrentVersion_DoesNotRegressWhenObservedVersionIsLower(t *testing.T) {
-	reconciler := &OpenBaoClusterReconciler{}
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Initialized:    true,
@@ -395,12 +394,11 @@ func TestReconcileCurrentVersion_DoesNotRegressWhenObservedVersionIsLower(t *tes
 		UpgradeInProgress:        false,
 	}
 
-	reconciler.reconcileCurrentVersion(logr.Discard(), cluster, state, "2.4.3")
+	appopenbaocluster.ReconcileCurrentVersion(logr.Discard(), cluster, state, "2.4.3")
 	assert.Equal(t, "2.4.4", cluster.Status.CurrentVersion)
 }
 
 func TestReconcileCurrentVersion_AdvancesWhenObservedVersionIsHigher(t *testing.T) {
-	reconciler := &OpenBaoClusterReconciler{}
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Initialized:    true,
@@ -414,6 +412,6 @@ func TestReconcileCurrentVersion_AdvancesWhenObservedVersionIsHigher(t *testing.
 		UpgradeInProgress:        false,
 	}
 
-	reconciler.reconcileCurrentVersion(logr.Discard(), cluster, state, "2.4.4")
+	appopenbaocluster.ReconcileCurrentVersion(logr.Discard(), cluster, state, "2.4.4")
 	assert.Equal(t, "2.4.4", cluster.Status.CurrentVersion)
 }

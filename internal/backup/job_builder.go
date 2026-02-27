@@ -11,11 +11,10 @@ import (
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/auth"
+	"github.com/dc-tec/openbao-operator/internal/backup/jobenv"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/security"
-	"github.com/dc-tec/openbao-operator/internal/storageenv"
 )
 
 // JobType distinguishes between scheduled backups and pre-upgrade snapshots.
@@ -194,114 +193,12 @@ func BuildJob(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) (*batchv
 
 // BuildEnvVars builds the environment variables for a backup job.
 func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []corev1.EnvVar {
-	backupCfg := cluster.Spec.Backup
-
-	// Use provided StatefulSet name or default to cluster.Name.
-	// This allows callers (e.g., upgrade managers) to specify the correct StatefulSet
-	// without embedding upgrade-strategy-specific logic in the backup builder.
-	statefulSetName := opts.TargetStatefulSetName
-	if statefulSetName == "" {
-		statefulSetName = cluster.Name
-	}
-
-	provider := storageenv.EffectiveProvider(backupCfg.Target.Provider)
-
-	env := []corev1.EnvVar{
-		{Name: constants.EnvClusterNamespace, Value: cluster.Namespace},
-		{Name: constants.EnvClusterName, Value: cluster.Name},
-		{Name: constants.EnvStatefulSetName, Value: statefulSetName},
-		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
-		{Name: constants.EnvBackupProvider, Value: provider},
-		{Name: constants.EnvBackupEndpoint, Value: backupCfg.Target.Endpoint},
-		{Name: constants.EnvBackupBucket, Value: backupCfg.Target.Bucket},
-		{Name: constants.EnvBackupPathPrefix, Value: backupCfg.Target.PathPrefix},
-	}
-
-	env = storageenv.AppendProviderEnvVars(env, backupCfg.Target)
-
-	// AWS Role ARN for Web Identity (IRSA)
-	if provider == constants.StorageProviderS3 && backupCfg.Target.RoleARN != "" {
-		env = append(env, corev1.EnvVar{Name: constants.EnvAWSRoleARN, Value: backupCfg.Target.RoleARN})
-		env = append(env, corev1.EnvVar{Name: constants.EnvAWSWebIdentityTokenFile, Value: awsWebIdentityTokenFile})
-	}
-
-	// Add backup key if provided
-	if opts.BackupKey != "" {
-		env = append(env, corev1.EnvVar{Name: constants.EnvBackupKey, Value: opts.BackupKey})
-	}
-
-	// Add filename prefix for pre-upgrade backups (or custom prefix)
-	if opts.FilenamePrefix != "" {
-		env = append(env, corev1.EnvVar{Name: constants.EnvBackupFilenamePrefix, Value: opts.FilenamePrefix})
-	}
-
-	// S3 upload configuration (PartSize and Concurrency apply to all providers)
-	if backupCfg.Target.PartSize > 0 {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupPartSize,
-			Value: fmt.Sprintf("%d", backupCfg.Target.PartSize),
-		})
-	}
-	if backupCfg.Target.Concurrency > 0 {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupConcurrency,
-			Value: fmt.Sprintf("%d", backupCfg.Target.Concurrency),
-		})
-	}
-
-	// Credentials secret reference
-	// SECURITY: Do NOT pass cross-namespace references. Secrets must be in cluster.Namespace.
-	if backupCfg.Target.CredentialsSecretRef != nil {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupCredentialsSecretName,
-			Value: backupCfg.Target.CredentialsSecretRef.Name,
-		})
-	}
-
-	// JWT Auth configuration (preferred method)
-	jwtRole := getEffectiveBackupJWTRole(cluster)
-	env = storageenv.AppendAuthEnvVars(env, jwtRole, false)
-
-	// Token secret reference (fallback for token-based auth)
-	// SECURITY: Do NOT pass cross-namespace references. Secrets must be in cluster.Namespace.
-	if backupCfg.TokenSecretRef != nil {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvBackupTokenSecretName,
-			Value: backupCfg.TokenSecretRef.Name,
-		})
-		// Only set auth method to token if JWT Auth is not configured.
-		if jwtRole == "" {
-			env = storageenv.AppendAuthEnvVars(env, "", true)
-		}
-	}
-
-	// Smart Client Limits
-	if opts.ClientConfig.RateLimitQPS > 0 {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvClientQPS,
-			Value: fmt.Sprintf("%f", opts.ClientConfig.RateLimitQPS),
-		})
-	}
-	if opts.ClientConfig.RateLimitBurst > 0 {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvClientBurst,
-			Value: fmt.Sprintf("%d", opts.ClientConfig.RateLimitBurst),
-		})
-	}
-	if opts.ClientConfig.CircuitBreakerFailureThreshold > 0 {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvClientCircuitBreakerFailureThreshold,
-			Value: fmt.Sprintf("%d", opts.ClientConfig.CircuitBreakerFailureThreshold),
-		})
-	}
-	if opts.ClientConfig.CircuitBreakerOpenDuration > 0 {
-		env = append(env, corev1.EnvVar{
-			Name:  constants.EnvClientCircuitBreakerOpenDuration,
-			Value: opts.ClientConfig.CircuitBreakerOpenDuration.String(),
-		})
-	}
-
-	return env
+	return jobenv.BuildEnvVars(cluster, jobenv.Options{
+		BackupKey:             opts.BackupKey,
+		FilenamePrefix:        opts.FilenamePrefix,
+		ClientConfig:          opts.ClientConfig,
+		TargetStatefulSetName: opts.TargetStatefulSetName,
+	}, awsWebIdentityTokenFile)
 }
 
 // BuildBackupJobVolumeMounts builds the volume mounts for a backup job.
@@ -333,7 +230,7 @@ func BuildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster) []corev
 	}
 
 	// Mount JWT token from projected volume (preferred method)
-	if getEffectiveBackupJWTRole(cluster) != "" {
+	if jobenv.EffectiveBackupJWTRole(cluster) != "" {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      openBaoTokenVolumeName,
 			MountPath: openBaoTokenMountPath,
@@ -403,8 +300,8 @@ func BuildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Vol
 	}
 
 	// JWT token from projected volume (preferred method)
-	if getEffectiveBackupJWTRole(cluster) != "" {
-		audience := auth.OpenBaoJWTAudience()
+	if jobenv.EffectiveBackupJWTRole(cluster) != "" {
+		audience := jobenv.OpenBaoJWTAudience()
 		volumes = append(volumes, corev1.Volume{
 			Name: openBaoTokenVolumeName,
 			VolumeSource: corev1.VolumeSource{
@@ -449,11 +346,4 @@ func GetBackupExecutorImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, er
 		return cluster.Spec.Backup.Image, nil
 	}
 	return constants.DefaultBackupImage()
-}
-
-// getEffectiveBackupJWTRole returns the configured JWT role or defaults it
-// if OIDC is enabled and the role is empty.
-func getEffectiveBackupJWTRole(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	oidcEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled
-	return storageenv.EffectiveJWTRole(cluster.Spec.Backup.JWTAuthRole, oidcEnabled, constants.RoleNameBackup)
 }
