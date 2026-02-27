@@ -1,22 +1,10 @@
 package opslifecycle
 
 import (
-	"os"
 	"time"
-)
 
-var (
-	requeueShort    = 5 * time.Second
-	requeueStandard = 1 * time.Minute
+	"github.com/dc-tec/openbao-operator/internal/constants"
 )
-
-func init() {
-	if val := os.Getenv("OPENBAO_REQUEUE_STANDARD"); val != "" {
-		if d, err := time.ParseDuration(val); err == nil {
-			requeueStandard = d
-		}
-	}
-}
 
 // RetryClass classifies reconcile retries for long-running operations.
 type RetryClass string
@@ -31,10 +19,10 @@ const (
 func RequeueDelay(class RetryClass) time.Duration {
 	switch class {
 	case RetryClassLockContention, RetryClassProgressPoll:
-		return requeueShort
+		return constants.RequeueShort
 	case RetryClassStandard:
-		return requeueStandard
+		return constants.RequeueStandard
 	default:
-		return requeueStandard
+		return constants.RequeueStandard
 	}
 }
