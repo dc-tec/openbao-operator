@@ -1,4 +1,4 @@
-package openbaocluster
+package statusops
 
 import (
 	"strings"
@@ -11,12 +11,9 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
-func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState, observedVersion string) {
-	// Initialize (or correct) CurrentVersion from observed running pods.
-	//
-	// RATIONALE: spec.version can be updated ahead of the actual workload rollout
-	// (for example, RollingUpdate with a locked partition). Status must reflect the
-	// currently-running OpenBao version to drive safe upgrade orchestration.
+// ReconcileCurrentVersion aligns CurrentVersion with observed workload version
+// while preserving upgrade safety guards.
+func ReconcileCurrentVersion(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, state *StatusState, observedVersion string) {
 	if !cluster.Status.Initialized {
 		return
 	}
@@ -31,8 +28,6 @@ func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, c
 		return
 	}
 
-	// Freeze CurrentVersion correction while either upgrade strategy has status state.
-	// This prevents status churn from fighting an in-progress or failed upgrade flow.
 	if state.RollingUpgradeInProgress || state.BlueGreenInProgress {
 		return
 	}
@@ -63,11 +58,9 @@ func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, c
 		"toVersion", observedVersion)
 }
 
-func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForBlueGreen(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, observedVersion string) {
-	// Detect BlueGreen upgrade completion: if BlueGreen is Idle and CurrentVersion
-	// doesn't match Spec.Version, the upgrade completed and we should update.
-	// This allows Status controller to own currentVersion while BlueGreen manager
-	// signals completion via phase transition.
+// MaybeAdvanceCurrentVersionForBlueGreen updates CurrentVersion when blue/green
+// status indicates completion and observed version checks pass.
+func MaybeAdvanceCurrentVersionForBlueGreen(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, observedVersion string) {
 	if cluster.Status.BlueGreen == nil ||
 		cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle ||
 		cluster.Status.CurrentVersion == "" ||
@@ -77,16 +70,11 @@ func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForBlueGreen(logger
 		return
 	}
 
-	// CRITICAL CHECK: Verify that the upgrade actually happened.
-	// PhaseIdle can mean "Before Upgrade" OR "After Upgrade".
-	// We distinguish them by checking if the active BlueRevision matches the current Spec.
 	currentSpecRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
 	if cluster.Status.BlueGreen.BlueRevision != currentSpecRevision {
 		return
 	}
 
-	// Extra safety: only advance the version if pods are actually reporting the target version.
-	// If the label is missing, fall back to the revision-based check above.
 	if observedVersion != "" && strings.TrimSpace(observedVersion) != strings.TrimSpace(cluster.Spec.Version) {
 		logger.V(1).Info("BlueGreen revision matches but running pods do not report target version; skipping CurrentVersion update",
 			"observedVersion", observedVersion,
@@ -103,25 +91,19 @@ func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForBlueGreen(logger
 		"revision", currentSpecRevision)
 }
 
-func (r *OpenBaoClusterReconciler) warnIfSelfInitDisabled(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
-	// SECURITY: Warn when SelfInit is disabled - the operator will store the root token.
-	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
-	if selfInitEnabled {
-		return
-	}
-
-	logger.Info("SECURITY WARNING: SelfInit is disabled - root token will be stored in Secret",
-		"cluster_namespace", cluster.Namespace,
-		"cluster_name", cluster.Name,
-		"secret_name", cluster.Name+"-root-token")
+// ShouldWarnSelfInitDisabled reports whether status reconciliation should emit
+// the root-token warning.
+func ShouldWarnSelfInitDisabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return cluster.Spec.SelfInit == nil || !cluster.Spec.SelfInit.Enabled
 }
 
-func observedVersionFromPods(state *clusterState) string {
+// ObservedVersionFromPods derives an observed OpenBao version from pod labels.
+func ObservedVersionFromPods(state *StatusState) string {
 	if state == nil || len(state.Pods) == 0 {
 		return ""
 	}
 
-	// Prefer the leader's reported version only when leadership is unambiguous.
+	// Prefer leader version when leadership is unambiguous.
 	if state.LeaderCount == 1 && strings.TrimSpace(state.LeaderName) != "" {
 		for i := range state.Pods {
 			pod := &state.Pods[i]
@@ -139,7 +121,6 @@ func observedVersionFromPods(state *clusterState) string {
 		}
 	}
 
-	// Next, prefer pod0 (stable identity).
 	if state.Pod0 != nil && state.Pod0.Labels != nil {
 		if raw, ok := state.Pod0.Labels[openbaolabels.LabelVersion]; ok {
 			v := strings.TrimSpace(raw)
@@ -149,7 +130,6 @@ func observedVersionFromPods(state *clusterState) string {
 		}
 	}
 
-	// Finally, if all pods report the same non-empty version, use it.
 	var candidate string
 	for i := range state.Pods {
 		pod := &state.Pods[i]
