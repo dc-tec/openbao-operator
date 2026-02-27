@@ -88,6 +88,8 @@ Use `make help` to see all available commands, or refer to this cheatsheet:
 | | `make test` | Run unit tests. |
 | | `make test-integration` | Run integration tests (envtest). |
 | | `make report-internal-deps` | Generate local internal dependency graph/report artifacts. |
+| | `make report-internal-deps-snapshot` | Generate report and save/update a local baseline snapshot. |
+| | `make report-internal-deps-diff` | Compare baseline snapshot vs current report (delta output). |
 | **Generate**| `make manifests` | Regenerate CRD YAMLs and RBAC. |
 | | `make generate` | Regenerate `deepcopy` code. |
 
@@ -111,6 +113,20 @@ The command is report-only and does not fail on policy findings.
 Intentional policy exceptions are tracked in:
 
 - `hack/architecture/dependency-policy-exceptions.tsv`
+
+To track trends locally across refactors, save a baseline snapshot and compare against it:
+
+```sh
+make report-internal-deps-snapshot
+make report-internal-deps
+make report-internal-deps-diff
+```
+
+You can override the compared files when needed:
+
+```sh
+BASELINE_REPORT=/path/to/old-report.md CURRENT_REPORT=/path/to/new-report.md make report-internal-deps-diff
+```
 
 ## Troubleshooting
 

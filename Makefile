@@ -164,6 +164,18 @@ report-openbao-operator-schema-drift: ## Report operator-vs-upstream OpenBao con
 report-internal-deps: ## Generate internal runtime dependency graph/report locally (report-only; non-failing).
 	@bash hack/architecture/report-internal-deps.sh
 
+.PHONY: report-internal-deps-snapshot
+report-internal-deps-snapshot: report-internal-deps ## Save current internal dependency report as local baseline snapshot.
+	@cp dist/architecture/internal-dependency-report.md dist/architecture/internal-dependency-report.baseline.md
+	@echo "Saved baseline snapshot:"
+	@echo "  dist/architecture/internal-dependency-report.baseline.md"
+
+.PHONY: report-internal-deps-diff
+report-internal-deps-diff: ## Compare internal dependency report against local baseline snapshot (report-only; non-failing).
+	@bash hack/architecture/diff-internal-deps.sh \
+		"$${BASELINE_REPORT:-dist/architecture/internal-dependency-report.baseline.md}" \
+		"$${CURRENT_REPORT:-dist/architecture/internal-dependency-report.md}"
+
 .PHONY: helm-sync
 helm-sync: manifests ## Sync Helm chart from config/ (CRDs, admission policies).
 	@go run ./hack/helmchart
