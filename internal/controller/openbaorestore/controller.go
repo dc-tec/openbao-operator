@@ -28,7 +28,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
@@ -46,6 +45,8 @@ type OpenBaoRestoreReconciler struct {
 	Platform              string
 }
 
+const controllerNameOpenBaoRestore = "openbaorestore"
+
 // SECURITY: RBAC is provided via namespace-scoped tenant Roles, not cluster-wide.
 // The controller uses direct API calls for Jobs (GET, not list/watch) to check status,
 // similar to the backup controller pattern. No cluster-wide permissions are needed.
@@ -53,7 +54,7 @@ type OpenBaoRestoreReconciler struct {
 // Reconcile is part of the main Kubernetes reconciliation loop.
 func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoRestore)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, controllerNameOpenBaoRestore)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -106,6 +107,6 @@ func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoRestore{}).
-		Named("openbaorestore").
+		Named(controllerNameOpenBaoRestore).
 		Complete(r)
 }
