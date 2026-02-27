@@ -4,6 +4,18 @@ Release notes are generated and maintained via **release-please** based on **Con
 
 ## Unreleased
 
+## [0.1.0-rc.2](https://github.com/dc-tec/openbao-operator/compare/0.1.0-rc.1...0.1.0-rc.2) (2026-02-27)
+
+
+### Bug Fixes
+
+* **ci:** create kind cluster in release e2e gate ([#135](https://github.com/dc-tec/openbao-operator/issues/135)) ([838fe67](https://github.com/dc-tec/openbao-operator/commit/838fe6744cdde4346fe000c092c8059700de0664))
+
+
+### Miscellaneous Chores
+
+* **release:** set release target to 0.1.0-rc.2 ([#136](https://github.com/dc-tec/openbao-operator/issues/136)) ([624238d](https://github.com/dc-tec/openbao-operator/commit/624238df4f561709ce0390f3332c0737685d7a67))
+
 ## 0.1.0-rc.1 (2026-02-26)
 
 

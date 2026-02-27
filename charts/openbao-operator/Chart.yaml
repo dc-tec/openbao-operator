@@ -4,8 +4,8 @@ description: >-
   OpenBao Operator installs the OpenBao Kubernetes operator and its required
   cluster-scoped resources.
 type: application
-version: 0.1.0-rc.1
-appVersion: 0.1.0-rc.1
+version: 0.1.0-rc.2
+appVersion: 0.1.0-rc.2
 icon: https://openbao.org/img/logo.svg
 home: https://github.com/dc-tec/openbao-operator
 sources:
