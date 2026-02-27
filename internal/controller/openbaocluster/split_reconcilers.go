@@ -92,21 +92,30 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 	original := cluster.DeepCopy()
 	reconcilers := []appopenbaocluster.SubReconciler{
 		certmanager.NewManagerWithReloader(r.parent.Client, r.parent.Scheme, r.parent.TLSReload),
-		&infraReconciler{
-			client:                r.parent.Client,
-			apiReader:             r.parent.APIReader,
-			scheme:                r.parent.Scheme,
-			restConfig:            r.parent.RestConfig,
-			operatorNamespace:     r.parent.OperatorNamespace,
-			oidcIssuer:            r.parent.OIDCIssuer,
-			oidcJWTKeys:           r.parent.OIDCJWTKeys,
-			operatorImageVerifier: r.parent.OperatorImageVerifier,
-			verifyImageFunc:       r.parent.verifyImageRef,
-			recorder:              r.parent.Recorder,
-			admissionStatus:       r.parent.AdmissionStatus,
-			platform:              r.parent.Platform,
-			smartClientConfig:     r.parent.SmartClientConfig,
-		},
+		appopenbaocluster.NewInfraReconciler(
+			appopenbaocluster.InfraDependencies{
+				Client:                r.parent.Client,
+				APIReader:             r.parent.APIReader,
+				Scheme:                r.parent.Scheme,
+				RestConfig:            r.parent.RestConfig,
+				OperatorNamespace:     r.parent.OperatorNamespace,
+				OIDCIssuer:            r.parent.OIDCIssuer,
+				OIDCJWTKeys:           r.parent.OIDCJWTKeys,
+				OperatorImageVerifier: r.parent.OperatorImageVerifier,
+				VerifyImageFunc:       r.parent.verifyImageRef,
+				Recorder:              r.parent.Recorder,
+				Platform:              r.parent.Platform,
+				SmartClientConfig:     r.parent.SmartClientConfig,
+			},
+			appopenbaocluster.InfraReasonPolicy{
+				GatewayAPIMissing:                   ReasonGatewayAPIMissing,
+				PrerequisitesMissing:                ReasonPrerequisitesMissing,
+				ACMEDomainNotResolvable:             ReasonACMEDomainNotResolvable,
+				ACMEGatewayNotConfiguredPassthrough: ReasonACMEGatewayNotConfiguredForPassthrough,
+				ImageVerificationFailed:             constants.ReasonImageVerificationFailed,
+				InitContainerImageVerification:      constants.ReasonInitContainerImageVerificationFailed,
+			},
+		),
 		appopenbaocluster.NewStorageReconciler(
 			appopenbaocluster.StorageDependencies{
 				Client:   r.parent.Client,

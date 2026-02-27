@@ -18,8 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	controllerdeps "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster/deps"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
@@ -106,7 +104,7 @@ func TestHandleScaleDownSafety(t *testing.T) {
 				Build()
 
 			// Mock OpenBao Client for victim pod
-			clientFunc := func(c *openbaov1alpha1.OpenBaoCluster, podName string) (*openbao.Client, error) {
+			clientFunc := func(c *openbaov1alpha1.OpenBaoCluster, podName string) (openbao.ClusterActions, error) {
 				if tt.victimError {
 					return nil, fmt.Errorf("network error")
 				}
@@ -145,12 +143,12 @@ func TestHandleScaleDownSafety(t *testing.T) {
 				return openbao.NewClient(clientConfig)
 			}
 
-			r := &infraReconciler{
-				client:           k8sClient,
-				scheme:           scheme,
-				recorder:         nil, // not needed for this test part
-				clientForPodFunc: clientFunc,
-			}
+			r := &infraReconciler{deps: InfraDependencies{
+				Client:           k8sClient,
+				Scheme:           scheme,
+				Recorder:         nil, // not needed for this test part
+				ClientForPodFunc: clientFunc,
+			}}
 
 			err := r.handleScaleDownSafety(context.Background(), cluster, tt.desiredReplicas, sts)
 			if tt.expectedError == "" {
@@ -176,18 +174,18 @@ func TestInfraReconciler_ResolveOIDC_LazyDiscoveryForSelfInit(t *testing.T) {
 	}
 
 	var called int
-	r := &infraReconciler{
-		restConfig:  &rest.Config{Host: "https://kubernetes.default.svc"},
-		oidcIssuer:  "",
-		oidcJWTKeys: nil,
-		discoverOIDCConfigFunc: func(ctx context.Context, cfg *rest.Config) (*controllerdeps.OIDCConfig, error) {
+	r := &infraReconciler{deps: InfraDependencies{
+		RestConfig:  &rest.Config{Host: "https://kubernetes.default.svc"},
+		OIDCIssuer:  "",
+		OIDCJWTKeys: nil,
+		DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
 			called++
-			return &controllerdeps.OIDCConfig{
+			return &OIDCConfig{
 				IssuerURL: "https://issuer.example",
 				JWKSKeys:  []string{"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw==\n-----END PUBLIC KEY-----\n"},
 			}, nil
 		},
-	}
+	}}
 
 	issuer, keys, err := r.resolveOIDC(context.Background(), cluster)
 	assert.NoError(t, err)
@@ -232,11 +230,11 @@ func TestInfraReconciler_ResolveTargetMainImage_BlueGreenPrefersActivePods(t *te
 			Name:      "test-cluster-rev-old-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:     "test-cluster",
-				constants.LabelAppManagedBy:    constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:  "test-cluster",
-				constants.LabelOpenBaoRevision: "rev-old",
+				"app.kubernetes.io/name":       "openbao",
+				"app.kubernetes.io/instance":   "test-cluster",
+				"app.kubernetes.io/managed-by": "openbao-operator",
+				"openbao.org/cluster":          "test-cluster",
+				"openbao.org/revision":         "rev-old",
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -257,10 +255,10 @@ func TestInfraReconciler_ResolveTargetMainImage_BlueGreenPrefersActivePods(t *te
 		WithObjects(cluster, activePod).
 		Build()
 
-	r := &infraReconciler{
-		client: k8sClient,
-		scheme: scheme,
-	}
+	r := &infraReconciler{deps: InfraDependencies{
+		Client: k8sClient,
+		Scheme: scheme,
+	}}
 
 	got := r.resolveTargetMainImage(context.Background(), logr.Discard(), cluster)
 	assert.Equal(t, "openbao/openbao:2.4.3", got)
