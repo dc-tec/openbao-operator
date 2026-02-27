@@ -58,6 +58,7 @@ Run these locally to debug CI failures.
 | **Helm Sync** | `make verify-helm` | Checks drift in `charts/` (including values/schema validation) |
 | **Unit Tests** | `make test-ci` | Runs unit + integration tests |
 | **Compatibility** | `make verify-openbao-config-compat` | Checks HCL against upstream OpenBao |
+| **Architecture Report (local)** | `make report-internal-deps` | Generates internal package dependency report and graphs (report-only warnings) |
 
 ## 2.1 Pull Request Standards Gates
 
