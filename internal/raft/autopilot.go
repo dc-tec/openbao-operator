@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
@@ -21,6 +20,10 @@ import (
 const (
 	// rootTokenSecretKey is the key used to store the root token in the Secret data.
 	rootTokenSecretKey = "token"
+	suffixRootToken    = "-root-token"
+	suffixTLSCA        = "-tls-ca"
+	roleNameOperator   = "openbao-operator"
+	portAPI            = 8200
 )
 
 // Manager handles Raft Autopilot configuration for OpenBao clusters.
@@ -149,7 +152,7 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 		}
 	} else {
 		// Use root token from Secret (non-SelfInit)
-		secretName := cluster.Name + constants.SuffixRootToken
+		secretName := cluster.Name + suffixRootToken
 		secret, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, secretName, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -251,7 +254,7 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, clus
 	}
 
 	// Create authenticated client
-	client, err := factory.NewWithJWT(ctx, baseURL, constants.RoleNameOperator, jwtToken)
+	client, err := factory.NewWithJWT(ctx, baseURL, roleNameOperator, jwtToken)
 	if err != nil {
 		return nil, m.handleJWTAuthError(cluster, err)
 	}
@@ -261,7 +264,7 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, clus
 
 // getTLSCACert retrieves the CA certificate from the cluster's TLS CA secret.
 func (m *Manager) getTLSCACert(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) ([]byte, error) {
-	caSecretName := cluster.Name + constants.SuffixTLSCA
+	caSecretName := cluster.Name + suffixTLSCA
 	secret, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, caSecretName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsForbidden(err) {
@@ -309,7 +312,7 @@ func (m *Manager) handleJWTAuthError(cluster *openbaov1alpha1.OpenBaoCluster, er
 		)
 	}
 	if strings.Contains(err.Error(), "status 400") {
-		guidance := fmt.Sprintf("Ensure JWT role '%s' is configured", constants.RoleNameOperator)
+		guidance := fmt.Sprintf("Ensure JWT role '%s' is configured", roleNameOperator)
 		if cluster.Status.Initialized {
 			guidance = "Manually configure JWT role via OpenBao API/CLI"
 		}
@@ -329,7 +332,7 @@ func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openba
 
 	baseURL := autopilotBaseURL(cluster)
 
-	caSecretName := cluster.Name + constants.SuffixTLSCA
+	caSecretName := cluster.Name + suffixTLSCA
 	secret, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, caSecretName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsForbidden(err) {
@@ -367,5 +370,5 @@ func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openba
 func autopilotBaseURL(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	// Use the (clusterIP) public Service, which is stable across rolling and blue/green strategies.
 	// Service name: "<cluster>-public", DNS: "<service>.<namespace>.svc".
-	return fmt.Sprintf("https://%s-public.%s.svc:%d", cluster.Name, cluster.Namespace, constants.PortAPI)
+	return fmt.Sprintf("https://%s-public.%s.svc:%d", cluster.Name, cluster.Namespace, portAPI)
 }

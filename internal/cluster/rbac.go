@@ -2,7 +2,13 @@ package cluster
 
 import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
+)
+
+const (
+	suffixTLSCA     = "-tls-ca"
+	suffixTLSServer = "-tls-server"
+	suffixRootToken = "-root-token"
+	suffixUnsealKey = "-unseal-key"
 )
 
 // SecretPermission describes access requirements for a named Secret.
@@ -32,8 +38,8 @@ func GetRequiredSecretPermissions(c *openbaov1alpha1.OpenBaoCluster) []SecretPer
 	var perms []SecretPermission
 
 	// TLS secrets: writer if OperatorManaged, reader otherwise
-	tlsCA := c.Name + constants.SuffixTLSCA
-	tlsServer := c.Name + constants.SuffixTLSServer
+	tlsCA := c.Name + suffixTLSCA
+	tlsServer := c.Name + suffixTLSServer
 
 	if c.Spec.TLS.Mode == "" || c.Spec.TLS.Mode == openbaov1alpha1.TLSModeOperatorManaged {
 		perms = append(perms,
@@ -51,7 +57,7 @@ func GetRequiredSecretPermissions(c *openbaov1alpha1.OpenBaoCluster) []SecretPer
 	selfInitEnabled := c.Spec.SelfInit != nil && c.Spec.SelfInit.Enabled
 	if !selfInitEnabled {
 		perms = append(perms, SecretPermission{
-			Name:       c.Name + constants.SuffixRootToken,
+			Name:       c.Name + suffixRootToken,
 			Permission: PermissionWrite,
 		})
 	}
@@ -59,7 +65,7 @@ func GetRequiredSecretPermissions(c *openbaov1alpha1.OpenBaoCluster) []SecretPer
 	// Unseal key: writer if static unseal
 	if IsStaticUnseal(c) {
 		perms = append(perms, SecretPermission{
-			Name:       c.Name + constants.SuffixUnsealKey,
+			Name:       c.Name + suffixUnsealKey,
 			Permission: PermissionWrite,
 		})
 	}

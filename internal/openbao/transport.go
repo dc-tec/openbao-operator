@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"golang.org/x/time/rate"
 )
@@ -260,7 +259,7 @@ func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op str
 
 	// The health endpoint encodes state in HTTP status codes (sealed, standby, etc.),
 	// so we must not classify 429/5xx responses as overload.
-	if req.URL != nil && req.URL.Path != constants.APIPathSysHealth {
+	if req.URL != nil && req.URL.Path != apiPathSysHealth {
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			if c.state != nil {
 				c.state.after(req, false)

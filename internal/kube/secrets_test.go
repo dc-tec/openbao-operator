@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/dc-tec/openbao-operator/internal/storage"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
 var testScheme = func() *runtime.Scheme {
@@ -51,8 +51,8 @@ func TestLoadStorageCredentials_ValidCredentials(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			storage.SecretKeyAccessKeyID:     []byte("test-access-key"),
-			storage.SecretKeySecretAccessKey: []byte("test-secret-key"),
+			blobstore.SecretKeyAccessKeyID:     []byte("test-access-key"),
+			blobstore.SecretKeySecretAccessKey: []byte("test-secret-key"),
 		},
 	}
 
@@ -87,11 +87,11 @@ func TestLoadStorageCredentials_WithOptionalFields(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			storage.SecretKeyAccessKeyID:     []byte("test-access-key"),
-			storage.SecretKeySecretAccessKey: []byte("test-secret-key"),
-			storage.SecretKeySessionToken:    []byte("test-session-token"),
-			storage.SecretKeyRegion:          []byte("us-west-2"),
-			storage.SecretKeyCACert:          []byte("test-ca-cert"),
+			blobstore.SecretKeyAccessKeyID:     []byte("test-access-key"),
+			blobstore.SecretKeySecretAccessKey: []byte("test-secret-key"),
+			blobstore.SecretKeySessionToken:    []byte("test-session-token"),
+			blobstore.SecretKeyRegion:          []byte("us-west-2"),
+			blobstore.SecretKeyCACert:          []byte("test-ca-cert"),
 		},
 	}
 
@@ -128,8 +128,8 @@ func TestLoadStorageCredentials_NamespaceRequired(t *testing.T) {
 			Namespace: "other-ns",
 		},
 		Data: map[string][]byte{
-			storage.SecretKeyAccessKeyID:     []byte("test-access-key"),
-			storage.SecretKeySecretAccessKey: []byte("test-secret-key"),
+			blobstore.SecretKeyAccessKeyID:     []byte("test-access-key"),
+			blobstore.SecretKeySecretAccessKey: []byte("test-secret-key"),
 		},
 	}
 
@@ -179,7 +179,7 @@ func TestLoadStorageCredentials_MissingAccessKeyID(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			storage.SecretKeySecretAccessKey: []byte("test-secret-key"),
+			blobstore.SecretKeySecretAccessKey: []byte("test-secret-key"),
 			// Missing AccessKeyID
 		},
 	}
@@ -220,7 +220,7 @@ func TestLoadStorageCredentials_PartialCredentialsError(t *testing.T) {
 					Namespace: "default",
 				},
 				Data: map[string][]byte{
-					storage.SecretKeyAccessKeyID: []byte("test-access-key"),
+					blobstore.SecretKeyAccessKeyID: []byte("test-access-key"),
 					// Missing SecretAccessKey
 				},
 			},
@@ -234,7 +234,7 @@ func TestLoadStorageCredentials_PartialCredentialsError(t *testing.T) {
 					Namespace: "default",
 				},
 				Data: map[string][]byte{
-					storage.SecretKeySecretAccessKey: []byte("test-secret-key"),
+					blobstore.SecretKeySecretAccessKey: []byte("test-secret-key"),
 					// Missing AccessKeyID
 				},
 			},
@@ -248,8 +248,8 @@ func TestLoadStorageCredentials_PartialCredentialsError(t *testing.T) {
 					Namespace: "default",
 				},
 				Data: map[string][]byte{
-					storage.SecretKeyAccessKeyID:     []byte("test-access-key"),
-					storage.SecretKeySecretAccessKey: []byte("test-secret-key"),
+					blobstore.SecretKeyAccessKeyID:     []byte("test-access-key"),
+					blobstore.SecretKeySecretAccessKey: []byte("test-secret-key"),
 				},
 			},
 			wantErr: false,
@@ -286,7 +286,7 @@ func TestLoadStorageCredentials_PartialCredentialsError(t *testing.T) {
 				return
 			}
 
-			if creds == nil && (tt.secret.Data[storage.SecretKeyAccessKeyID] != nil || tt.secret.Data[storage.SecretKeySecretAccessKey] != nil) {
+			if creds == nil && (tt.secret.Data[blobstore.SecretKeyAccessKeyID] != nil || tt.secret.Data[blobstore.SecretKeySecretAccessKey] != nil) {
 				t.Error("LoadStorageCredentials() should return credentials when keys are present")
 			}
 		})

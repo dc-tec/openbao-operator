@@ -36,17 +36,13 @@ const (
 )
 
 // SecretKey constants define the expected keys in credentials Secrets.
+// Kept as aliases for compatibility; new code should use port/blobstore.
 const (
-	// SecretKeyAccessKeyID is the key for the access key ID.
-	SecretKeyAccessKeyID = "accessKeyId"
-	// SecretKeySecretAccessKey is the key for the secret access key.
-	SecretKeySecretAccessKey = "secretAccessKey"
-	// SecretKeySessionToken is the optional key for session tokens.
-	SecretKeySessionToken = "sessionToken"
-	// SecretKeyRegion is the optional key for region override.
-	SecretKeyRegion = "region"
-	// SecretKeyCACert is the optional key for a custom CA certificate.
-	SecretKeyCACert = "caCert"
+	SecretKeyAccessKeyID     = blobstore.SecretKeyAccessKeyID
+	SecretKeySecretAccessKey = blobstore.SecretKeySecretAccessKey
+	SecretKeySessionToken    = blobstore.SecretKeySessionToken
+	SecretKeyRegion          = blobstore.SecretKeyRegion
+	SecretKeyCACert          = blobstore.SecretKeyCACert
 )
 
 // ObjectInfo is an alias for blobstore.ObjectInfo.
@@ -186,19 +182,9 @@ type S3ClientConfig struct {
 	EnsureExists bool
 }
 
-// Credentials holds the parsed credentials from a Kubernetes Secret.
-type Credentials struct {
-	// AccessKeyID is the access key for authentication.
-	AccessKeyID string
-	// SecretAccessKey is the secret key for authentication.
-	SecretAccessKey string
-	// SessionToken is an optional session token for temporary credentials.
-	SessionToken string
-	// Region is an optional region override.
-	Region string
-	// CACert is an optional PEM-encoded CA certificate.
-	CACert []byte
-}
+// Credentials aliases the shared blobstore credential contract.
+// New code should import internal/port/blobstore directly.
+type Credentials = blobstore.Credentials
 
 // OpenS3Bucket opens an S3-compatible bucket using Go CDK.
 // It returns a BlobStore interface that provides standardized blob operations.

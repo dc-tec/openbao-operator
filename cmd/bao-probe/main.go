@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/probe"
 )
 
@@ -16,8 +15,12 @@ const (
 	modeLiveness  = "liveness"
 	modeReadiness = "readiness"
 
-	livenessPath  = constants.APIPathSysHealth + "?standbyok=true&sealedcode=204&uninitcode=204"
-	readinessPath = constants.APIPathSysHealth + "?standbyok=true"
+	apiPathSysHealth = "/v1/sys/health"
+	portAPI          = 8200
+	pathTLSCACert    = "/etc/bao/tls/ca.crt"
+
+	livenessPath  = apiPathSysHealth + "?standbyok=true&sealedcode=204&uninitcode=204"
+	readinessPath = apiPathSysHealth + "?standbyok=true"
 
 	loopbackHost = "localhost"
 
@@ -34,10 +37,10 @@ func run(ctx context.Context) error {
 	)
 
 	flag.StringVar(&mode, "mode", "", "Probe mode: startup, liveness, or readiness")
-	defaultAddr := fmt.Sprintf("https://%s:%d", loopbackHost, constants.PortAPI)
+	defaultAddr := fmt.Sprintf("https://%s:%d", loopbackHost, portAPI)
 	flag.StringVar(&addr, "addr", defaultAddr,
 		"Base address for OpenBao (must be reachable from inside the pod)")
-	flag.StringVar(&caFile, "ca-file", constants.PathTLSCACert, caFileUsage)
+	flag.StringVar(&caFile, "ca-file", pathTLSCACert, caFileUsage)
 	flag.StringVar(&serverName, "servername", "", "TLS SNI server name (overrides hostname from addr)")
 	flag.DurationVar(&timeout, "timeout", 4*time.Second,
 		"Timeout for the HTTP request (should be less than the Kubernetes probe timeoutSeconds)")

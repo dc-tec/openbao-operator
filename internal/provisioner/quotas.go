@@ -7,8 +7,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 const (
@@ -45,11 +43,7 @@ func GenerateTenantResourceQuota(namespace string, spec *corev1.ResourceQuotaSpe
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantResourceQuotaName,
 			Namespace: namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: constants.LabelValueAppComponentProvisioner,
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-			},
+			Labels:    provisionerManagedLabels(),
 		},
 	}
 
@@ -79,11 +73,7 @@ func GenerateTenantLimitRange(namespace string, spec *corev1.LimitRangeSpec) *co
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TenantLimitRangeName,
 			Namespace: namespace,
-			Labels: map[string]string{
-				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: constants.LabelValueAppComponentProvisioner,
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-			},
+			Labels:    provisionerManagedLabels(),
 		},
 	}
 

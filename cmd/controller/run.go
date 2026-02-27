@@ -52,7 +52,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/admission"
 	"github.com/dc-tec/openbao-operator/internal/auth"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbaoclustercontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
 	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
 	initmanager "github.com/dc-tec/openbao-operator/internal/init"
@@ -72,26 +71,31 @@ const (
 	admissionEnforcementFail        = "fail"
 	admissionEnforcementWarn        = "warn"
 	admissionEnforcementExpectedMsg = "expected --admission-enforcement=fail or warn"
+	platformAuto                    = "auto"
+	platformKubernetes              = "kubernetes"
+	platformOpenShift               = "openshift"
+	controllerNameOpenBaoCluster    = "openbaocluster"
+	controllerNameOpenBaoRestore    = "openbaorestore"
 )
 
 func detectPlatform(cfg *rest.Config) string {
 	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		return constants.PlatformKubernetes
+		return platformKubernetes
 	}
 
 	groups, err := clientset.Discovery().ServerGroups()
 	if err != nil {
-		return constants.PlatformKubernetes
+		return platformKubernetes
 	}
 
 	for _, g := range groups.Groups {
 		if g.Name == "security.openshift.io" {
-			return constants.PlatformOpenShift
+			return platformOpenShift
 		}
 	}
 
-	return constants.PlatformKubernetes
+	return platformKubernetes
 }
 
 func normalizeAdmissionEnforcement(in string) (string, error) {
@@ -196,10 +200,10 @@ func Run(args []string) {
 	}
 
 	if platform == "" {
-		platform = constants.PlatformAuto
+		platform = platformAuto
 	}
 
-	if platform == constants.PlatformAuto {
+	if platform == platformAuto {
 		detected := detectPlatform(ctrl.GetConfigOrDie())
 		setupLog.Info("Auto-detected target platform", "platform", detected)
 		platform = detected
@@ -484,7 +488,7 @@ func Run(args []string) {
 		OIDCIssuer:        oidcConfig.IssuerURL,
 		OIDCJWTKeys:       oidcConfig.JWKSKeys,
 		AdmissionStatus:   &admissionStatus,
-		Recorder:          mgr.GetEventRecorder(constants.ControllerNameOpenBaoCluster),
+		Recorder:          mgr.GetEventRecorder(controllerNameOpenBaoCluster),
 		SingleTenantMode:  singleTenantMode,
 		SmartClientConfig: smartClientConfig,
 		Platform:          platform,
@@ -497,7 +501,7 @@ func Run(args []string) {
 	if err := (&openbaorestorecontroller.OpenBaoRestoreReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorder(constants.ControllerNameOpenBaoRestore),
+		Recorder: mgr.GetEventRecorder(controllerNameOpenBaoRestore),
 		Platform: platform,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoRestore")
