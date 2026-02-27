@@ -14,6 +14,10 @@ mkdir -p "${OUT_DIR}"
 
 cd "${REPO_ROOT}"
 MODULE_PATH="$(go list -m)"
+root_controller_pkg_present="false"
+if go list ./... | grep -qx "${MODULE_PATH}/internal/controller"; then
+  root_controller_pkg_present="true"
+fi
 
 # Runtime scope only: api/v1alpha1, cmd/*, internal/*
 go list -f '{{.ImportPath}}|{{join .Imports ","}}' ./... \
@@ -88,8 +92,8 @@ awk -F'\t' -v mod="${MODULE_PATH}" '
   function is_service_pkg(p) {
     return p ~ /^internal\/(backup|restore|upgrade|upgrade\/bluegreen|upgrade\/rolling|infra|certs|init|provisioner)$/
   }
-  function is_controller_pkg(p) {
-    return p == "internal/controller" || p ~ /^internal\/controller\//
+  function is_controller_impl_pkg(p) {
+    return p ~ /^internal\/controller\//
   }
   function is_adapter_pkg(p) {
     return p ~ /^internal\/(kube|openbao|storage|auth|cluster|config|raft|security|storageenv|operationlock|revision|probe)$/
@@ -98,10 +102,10 @@ awk -F'\t' -v mod="${MODULE_PATH}" '
     src = rel($1)
     dep = rel($2)
 
-    if (is_service_pkg(src) && dep == "internal/controller") {
-      print "[service->controller] " src " -> " dep
+    if (dep == "internal/controller" && !is_controller_impl_pkg(src) && src != "internal/controller") {
+      print "[shared-controller-import] " src " -> " dep
     }
-    if (is_adapter_pkg(src) && is_controller_pkg(dep)) {
+    if (is_adapter_pkg(src) && is_controller_impl_pkg(dep)) {
       print "[adapter->controller] " src " -> " dep
     }
     if (is_adapter_pkg(src) && is_service_pkg(dep)) {
@@ -112,6 +116,10 @@ awk -F'\t' -v mod="${MODULE_PATH}" '
     }
   }
 ' "${EDGE_FILE}" | sort -u > "${WARNINGS_FILE}"
+
+if [ "${root_controller_pkg_present}" = "true" ]; then
+  printf '[shared-controller-package-present] internal/controller package exists; keep shared helpers in internal/predicates or internal/observability\n' >> "${WARNINGS_FILE}"
+fi
 
 constants_in="$(awk -F'\t' -v mod="${MODULE_PATH}" '$2 == mod "/internal/constants" {count++} END {print count + 0}' "${EDGE_FILE}")"
 openbaocluster_out="$(awk -F'\t' -v mod="${MODULE_PATH}" '$1 == mod "/internal/controller/openbaocluster" {count++} END {print count + 0}' "${EDGE_FILE}")"
@@ -242,6 +250,7 @@ GENERATED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo "- Nodes: ${node_count}"
   echo "- Edges: ${edge_count}"
   echo "- Cycle check: ${cycle_status}"
+  echo "- Shared controller package present: ${root_controller_pkg_present}"
   echo
   echo "## Artifacts"
   echo
