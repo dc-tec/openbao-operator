@@ -59,3 +59,27 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## 5. Architecture Boundaries First
+
+For runtime code changes, apply the layer model from `AGENT_REFACTOR_PLAN.md` section 6:
+
+- `L2` controllers: `internal/controller/*`
+- `L3` app orchestration: `internal/app/*`
+- `L4` services/managers: `internal/{backup,restore,upgrade,infra,certs,init,provisioner}`
+- `L5` ports: `internal/port/*`
+- `L6` adapters: `internal/{kube,openbao,storage,auth,raft,security,storageenv,...}`
+- `L7` cross-cutting: `internal/{errors,logging,reconcile,constants,predicates,observability}`
+
+Guardrails:
+
+- Keep controllers as plumbing/delegation, not orchestration hubs.
+- Prefer port interfaces over concrete cross-package dependencies.
+- Do not introduce `service -> controller` or `adapter -> service/controller` imports.
+- Do not reintroduce a generic `internal/interfaces` bucket.
+
+For structural changes, verify:
+
+```sh
+make report-internal-deps
+```

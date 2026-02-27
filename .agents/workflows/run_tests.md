@@ -1,19 +1,33 @@
 ---
 description: Run unit and E2E tests for the OpenBao Operator
 ---
-This workflow guides you through running unit tests and End-to-End (E2E) tests for the OpenBao Operator.
+This workflow guides local test execution for standard changes and refactors.
 
-# Unit Tests
+# Fast Local Tests
 
-To run the standard unit tests (excluding E2E), use the following command:
+Run standard local tests:
 
 ```bash
 make test
 ```
 
+# CI-Equivalent Unit + Integration
+
+Run the CI-style non-E2E test lane:
+
+```bash
+make test-ci
+```
+
+# Integration Tests (envtest)
+
+```bash
+make test-integration
+```
+
 # E2E Tests
 
-E2E tests require a Kubernetes cluster (Kind). The Makefile handles the setup automatically.
+E2E tests require a Kubernetes cluster (typically Kind).
 
 To run all E2E tests:
 
@@ -37,4 +51,12 @@ To run E2E tests in parallel (e.g., 4 nodes):
 
 ```bash
 make test-e2e E2E_PARALLEL_NODES=4
+```
+
+# Architecture Dependency Sanity (for refactors)
+
+After structural/package-boundary changes:
+
+```bash
+make report-internal-deps
 ```

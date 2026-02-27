@@ -17,3 +17,22 @@ Use this skill for a focused review of operator changes that affect Hardened/ACM
 5. **Docs and tests**
    - User guide recipes match current behavior.
    - Unit/golden/e2e coverage exists for new logic.
+6. **Architecture boundaries (section 6 model)**
+   - Controllers (`internal/controller/*`) remain plumbing and delegate orchestration to `internal/app/*`.
+   - Services/managers do not import controller packages.
+   - Adapters do not import services/controllers.
+   - Ports (`internal/port/*`) are used for service-adapter seams where applicable.
+   - No reintroduction of `internal/interfaces`.
+
+## Architecture Evidence
+
+When the PR touches package boundaries/imports, request or generate:
+
+```sh
+make report-internal-deps
+```
+
+Review:
+
+- `dist/architecture/internal-dependency-report.md`
+- `hack/architecture/dependency-policy-exceptions.tsv`

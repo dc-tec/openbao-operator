@@ -38,7 +38,7 @@ Welcome! We are glad you want to contribute to the OpenBao Operator. Whether you
     We welcome contributions that leverage AI tools! However, you **must** verify all generated code.
 
     *   **Responsibility:** You are responsible for the code you submit. "The AI wrote it" is not a valid excuse for bugs or security issues.
-    *   **Context:** Use our `.agent/rules/` to ensure your AI assistant follows our project conventions.
+    *   **Context:** Use our `.agents/rules/` to ensure your AI assistant follows our project conventions.
     *   **Quality:** PRs that appear to be low-effort AI dumps ("slop PRs") without proper understanding or testing will be closed.
 
 ## Submitting Changes
