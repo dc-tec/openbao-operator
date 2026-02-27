@@ -13,7 +13,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
-	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	"github.com/dc-tec/openbao-operator/internal/opslifecycle"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
@@ -165,11 +165,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 				"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
 				"holder":            upgrade.UpgradeOperationLockHolder,
 			}
-			var heldErr *operationlock.HeldError
-			if errors.As(err, &heldErr) {
-				fields["held_by_operation"] = string(heldErr.Operation)
-				fields["held_by_holder"] = heldErr.Holder
-			}
+			opslifecycle.AddHeldAuditFields(fields, err)
 			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
 			if cluster.Status.Upgrade != nil {
 				firstFailure := cluster.Status.Upgrade.LastErrorAt == nil
@@ -188,7 +184,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			}
 			logger.Info("Upgrade blocked by operation lock", "error", err.Error())
 			// Use RequeueShort to check more frequently when waiting for backup/restore to complete
-			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+			return recon.Result{RequeueAfter: opslifecycle.RequeueDelay(opslifecycle.RetryClassLockContention)}, nil
 		}
 		return recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 	}
