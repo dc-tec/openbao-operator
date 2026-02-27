@@ -10,14 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
 	// configFileMode is the file mode used for rendered configuration files.
 	// Configuration is not secret material, so 0644 is appropriate.
-	configFileMode = 0o644
+	configFileMode    = 0o644
+	envPodIP          = "POD_IP"
+	envHostname       = "HOSTNAME"
+	pathWrapperBinary = "/utils/bao-wrapper"
+	pathProbeBinary   = "/utils/bao-probe"
 )
 
 // renderConfig reads a template file, substitutes environment-driven placeholders,
@@ -44,7 +47,7 @@ func renderConfig(templatePath, outputPath, hostname, podIP, selfInitPath string
 	if strings.TrimSpace(podIP) == "" {
 		pollCtx := context.Background()
 		pollFn := func(ctx context.Context) (bool, error) {
-			podIP = strings.TrimSpace(os.Getenv(constants.EnvPodIP))
+			podIP = strings.TrimSpace(os.Getenv(envPodIP))
 			return podIP != "", nil
 		}
 		err := wait.PollUntilContextTimeout(pollCtx, 500*time.Millisecond, 5*time.Second, true, pollFn)
@@ -167,8 +170,8 @@ func main() {
 	if err := renderConfig(
 		*templatePath,
 		*outputPath,
-		os.Getenv(constants.EnvHostname),
-		os.Getenv(constants.EnvPodIP),
+		os.Getenv(envHostname),
+		os.Getenv(envPodIP),
 		*selfInitPath,
 	); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "bao-config-init error: %v\n", err)
@@ -181,7 +184,7 @@ func main() {
 // in the init container, allowing it to use a distroless/static image (no shell).
 func copyWrapper(sourcePath string) error {
 	const (
-		wrapperDestPath = constants.PathWrapperBinary
+		wrapperDestPath = pathWrapperBinary
 	)
 
 	return copyBinary(sourcePath, wrapperDestPath)
@@ -189,7 +192,7 @@ func copyWrapper(sourcePath string) error {
 
 func copyProbe(sourcePath string) error {
 	const (
-		probeDestPath = constants.PathProbeBinary
+		probeDestPath = pathProbeBinary
 	)
 
 	return copyBinary(sourcePath, probeDestPath)

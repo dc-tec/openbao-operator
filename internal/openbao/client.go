@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 )
 
@@ -259,7 +258,7 @@ func newClientWithState(config ClientConfig, state *clientState) (*Client, error
 // We parse the response body regardless of status code since it contains
 // the health information we need.
 func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
-	req, err := c.newRequest(ctx, http.MethodGet, constants.APIPathSysHealth, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, apiPathSysHealth, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create health request: %w", err)
 	}
@@ -316,7 +315,7 @@ func (c *Client) StepDown(ctx context.Context) error {
 		return fmt.Errorf("authentication token required for step-down operation")
 	}
 
-	req, err := c.newRequest(ctx, http.MethodPut, constants.APIPathSysStepDown, nil)
+	req, err := c.newRequest(ctx, http.MethodPut, apiPathSysStepDown, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create step-down request: %w", err)
 	}
@@ -348,7 +347,7 @@ type LeaderStatusResponse struct {
 // LeaderStatus queries the OpenBao leader endpoint and returns the leader status.
 // This endpoint does not require authentication by default.
 func (c *Client) LeaderStatus(ctx context.Context) (*LeaderStatusResponse, error) {
-	req, err := c.newRequest(ctx, http.MethodGet, constants.APIPathSysLeader, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, apiPathSysLeader, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create leader status request: %w", err)
 	}
@@ -445,7 +444,7 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 		return fmt.Errorf("authentication token required for snapshot operation")
 	}
 
-	req, err := c.newRequest(ctx, http.MethodGet, constants.APIPathRaftSnapshot, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, apiPathRaftSnapshot, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot request: %w", err)
 	}
@@ -513,7 +512,7 @@ func (c *Client) Restore(ctx context.Context, reader io.Reader) error {
 		return fmt.Errorf("authentication token required for restore operation")
 	}
 
-	req, err := c.newRequest(ctx, http.MethodPost, constants.APIPathRaftSnapshotForceRestore, reader)
+	req, err := c.newRequest(ctx, http.MethodPost, apiPathRaftSnapshotForceRestore, reader)
 	if err != nil {
 		return fmt.Errorf("failed to create restore request: %w", err)
 	}
@@ -554,7 +553,7 @@ func (c *Client) Init(ctx context.Context, req InitRequest) (*InitResponse, erro
 		return nil, fmt.Errorf("failed to marshal init request: %w", err)
 	}
 
-	httpReq, err := c.newRequest(ctx, http.MethodPut, constants.APIPathSysInit, bytes.NewReader(body))
+	httpReq, err := c.newRequest(ctx, http.MethodPut, apiPathSysInit, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create init request: %w", err)
 	}
@@ -625,7 +624,7 @@ func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, i
 		return "", 0, fmt.Errorf("failed to marshal JWT auth request: %w", err)
 	}
 
-	req, err := c.newRequest(ctx, http.MethodPost, constants.APIPathAuthJWTLogin, bytes.NewReader(bodyBytes))
+	req, err := c.newRequest(ctx, http.MethodPost, apiPathAuthJWTLogin, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to create JWT auth request: %w", err)
 	}
@@ -700,7 +699,7 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 		return fmt.Errorf("failed to marshal raft join request: %w", err)
 	}
 
-	httpReq, err := c.newRequest(ctx, http.MethodPut, constants.APIPathRaftJoin, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPut, apiPathRaftJoin, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create raft join request: %w", err)
 	}
@@ -777,7 +776,7 @@ func (c *Client) ReadRaftConfiguration(ctx context.Context) (*RaftConfigurationR
 		return nil, fmt.Errorf("authentication token required for raft configuration read")
 	}
 
-	req, err := c.newRequest(ctx, http.MethodGet, constants.APIPathRaftConfiguration, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, apiPathRaftConfiguration, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create raft configuration request: %w", err)
 	}
@@ -845,7 +844,7 @@ func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*RaftAutopilotStat
 		return nil, fmt.Errorf("authentication token required for raft autopilot state read")
 	}
 
-	req, err := c.newRequest(ctx, http.MethodGet, constants.APIPathRaftAutopilotState, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, apiPathRaftAutopilotState, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create raft autopilot state request: %w", err)
 	}
@@ -920,7 +919,7 @@ func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config AutopilotCon
 		return fmt.Errorf("failed to marshal autopilot config: %w", err)
 	}
 
-	httpReq, err := c.newRequest(ctx, http.MethodPost, constants.APIPathRaftAutopilotConfig, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPost, apiPathRaftAutopilotConfig, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create autopilot config request: %w", err)
 	}
@@ -970,7 +969,7 @@ func (c *Client) RemoveRaftPeer(ctx context.Context, serverID string) error {
 		return fmt.Errorf("failed to marshal raft remove-peer request: %w", err)
 	}
 
-	httpReq, err := c.newRequest(ctx, http.MethodPost, constants.APIPathRaftRemovePeer, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPost, apiPathRaftRemovePeer, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create raft remove-peer request: %w", err)
 	}
@@ -1020,7 +1019,7 @@ func (c *Client) PromoteRaftPeer(ctx context.Context, serverID string) error {
 		return fmt.Errorf("failed to marshal raft promote request: %w", err)
 	}
 
-	httpReq, err := c.newRequest(ctx, http.MethodPost, constants.APIPathRaftPromotePeer, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPost, apiPathRaftPromotePeer, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create raft promote request: %w", err)
 	}
@@ -1070,7 +1069,7 @@ func (c *Client) DemoteRaftPeer(ctx context.Context, serverID string) error {
 		return fmt.Errorf("failed to marshal raft demote request: %w", err)
 	}
 
-	httpReq, err := c.newRequest(ctx, http.MethodPost, constants.APIPathRaftDemotePeer, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPost, apiPathRaftDemotePeer, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create raft demote request: %w", err)
 	}
@@ -1120,7 +1119,7 @@ func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []RaftServ
 		return fmt.Errorf("failed to marshal raft configuration update request: %w", err)
 	}
 
-	httpReq, err := c.newRequest(ctx, http.MethodPut, constants.APIPathRaftUpdateConfig, bytes.NewReader(bodyBytes))
+	httpReq, err := c.newRequest(ctx, http.MethodPut, apiPathRaftUpdateConfig, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create raft configuration update request: %w", err)
 	}
