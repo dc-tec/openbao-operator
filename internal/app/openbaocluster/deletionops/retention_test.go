@@ -1,4 +1,4 @@
-package openbaocluster
+package deletionops
 
 import (
 	"context"
@@ -37,7 +37,6 @@ func TestOrphanRetentionSecrets(t *testing.T) {
 		},
 	}
 
-	// Build OwnerReference that would be set by the controller
 	ownerRef := metav1.OwnerReference{
 		APIVersion: "openbao.org/v1alpha1",
 		Kind:       "OpenBaoCluster",
@@ -80,7 +79,6 @@ func TestOrphanRetentionSecrets(t *testing.T) {
 		{
 			name: "handles missing secrets gracefully",
 			existingSecrets: []*corev1.Secret{
-				// Only unseal-key exists, root-token is missing
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "test-cluster" + constants.SuffixUnsealKey,
@@ -101,7 +99,7 @@ func TestOrphanRetentionSecrets(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "test-cluster" + constants.SuffixUnsealKey,
 						Namespace:       "default",
-						OwnerReferences: nil, // Already orphaned
+						OwnerReferences: nil,
 					},
 					Data: map[string][]byte{"key": []byte("unseal-key-data")},
 				},
@@ -113,7 +111,6 @@ func TestOrphanRetentionSecrets(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Build fake client with existing secrets
 			objects := make([]runtime.Object, 0, len(tt.existingSecrets)+1)
 			objects = append(objects, cluster)
 			for _, s := range tt.existingSecrets {
@@ -125,18 +122,15 @@ func TestOrphanRetentionSecrets(t *testing.T) {
 				WithRuntimeObjects(objects...).
 				Build()
 
-			reconciler := &OpenBaoClusterReconciler{
-				Client: fakeClient,
-				Scheme: scheme,
-			}
-
 			ctx := context.Background()
 			logger := log.FromContext(ctx)
 
-			err := reconciler.orphanRetentionSecrets(ctx, logger, cluster)
+			err := OrphanRetentionSecrets(ctx, logger, fakeClient, cluster, []string{
+				"test-cluster" + constants.SuffixUnsealKey,
+				"test-cluster" + constants.SuffixRootToken,
+			})
 			require.NoError(t, err)
 
-			// Verify orphaned secrets have no OwnerReferences
 			for _, secretName := range tt.expectOrphanedSecrets {
 				secret := &corev1.Secret{}
 				err := fakeClient.Get(ctx, types.NamespacedName{
@@ -147,7 +141,6 @@ func TestOrphanRetentionSecrets(t *testing.T) {
 				assert.Empty(t, secret.OwnerReferences, "expected secret %s to have no OwnerReferences", secretName)
 			}
 
-			// Verify remaining secrets still exist
 			for _, secretName := range tt.expectRemainingSecrets {
 				secret := &corev1.Secret{}
 				err := fakeClient.Get(ctx, types.NamespacedName{
@@ -196,7 +189,7 @@ func TestHasOwnerReference(t *testing.T) {
 					OwnerReferences: tt.refs,
 				},
 			}
-			assert.Equal(t, tt.expected, hasOwnerReference(secret, tt.uid))
+			assert.Equal(t, tt.expected, HasOwnerReference(secret, tt.uid))
 		})
 	}
 }

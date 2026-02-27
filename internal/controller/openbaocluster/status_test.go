@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
@@ -35,7 +36,7 @@ func TestObservedVersionFromPods_UsesLeaderWhenUnambiguous(t *testing.T) {
 		LeaderName:  "cluster-1",
 	}
 
-	got := observedVersionFromPods(state)
+	got := appopenbaocluster.ObservedVersionFromPods(state)
 	assert.Equal(t, "2.1.0", got)
 }
 
@@ -64,6 +65,6 @@ func TestObservedVersionFromPods_IgnoresLeaderVersionWhenAmbiguous(t *testing.T)
 		LeaderName:  "cluster-1",
 	}
 
-	got := observedVersionFromPods(state)
+	got := appopenbaocluster.ObservedVersionFromPods(state)
 	assert.Equal(t, "2.0.0", got)
 }

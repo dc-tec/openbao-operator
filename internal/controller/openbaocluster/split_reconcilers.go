@@ -255,7 +255,15 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 	if !cluster.DeletionTimestamp.IsZero() {
 		logger.Info("OpenBaoCluster is marked for deletion")
 		if containsFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer) {
-			if err := r.parent.handleDeletion(ctx, logger, cluster); err != nil {
+			if err := appopenbaocluster.HandleDeletion(ctx, logger, appopenbaocluster.DeletionDependencies{
+				Client:            r.parent.Client,
+				APIReader:         r.parent.APIReader,
+				Scheme:            r.parent.Scheme,
+				OperatorNamespace: r.parent.OperatorNamespace,
+				OIDCIssuer:        r.parent.OIDCIssuer,
+				OIDCJWTKeys:       r.parent.OIDCJWTKeys,
+				Platform:          r.parent.Platform,
+			}, cluster); err != nil {
 				return ctrl.Result{}, err
 			}
 			cluster.Finalizers = removeFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer)
