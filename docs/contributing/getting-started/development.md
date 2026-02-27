@@ -119,7 +119,6 @@ The adapter boundary audit classifies runtime adapter-to-adapter edges as:
 
 - `exception`: edge is explicitly tracked in `hack/architecture/dependency-policy-exceptions.tsv`.
 - `untracked`: edge is not tracked and should be reviewed before merge.
-
 To track trends locally across refactors, save a baseline snapshot and compare against it:
 
 ```sh
