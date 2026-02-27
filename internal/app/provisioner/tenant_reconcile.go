@@ -16,7 +16,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	provisionermanager "github.com/dc-tec/openbao-operator/internal/provisioner"
 )
@@ -30,10 +29,13 @@ const (
 
 // TenantRuntime captures dependencies needed for OpenBaoTenant provisioning orchestration.
 type TenantRuntime struct {
-	Client            client.Client
-	APIReader         client.Reader
-	Provisioner       *provisionermanager.Manager
-	OperatorNamespace string
+	Client                   client.Client
+	APIReader                client.Reader
+	Provisioner              *provisionermanager.Manager
+	OperatorNamespace        string
+	ConditionTypeProvisioned string
+	RequeueShort             time.Duration
+	RequeueStandard          time.Duration
 }
 
 // ReconcileOpenBaoTenant runs the business flow for namespace provisioning.
@@ -74,7 +76,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, req ctrl.Request, logger logr.L
 		tenant.Status.Provisioned = false
 		tenant.Status.LastError = err.Error()
 		meta.SetStatusCondition(&tenant.Status.Conditions, metav1.Condition{
-			Type:               constants.ConditionTypeProvisioned,
+			Type:               conditionTypeProvisioned(runtime),
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: tenant.Generation,
 			Reason:             ReasonSecurityViolation,
@@ -98,7 +100,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, req ctrl.Request, logger logr.L
 			return ctrl.Result{}, fmt.Errorf("failed to add finalizer to OpenBaoTenant %s: %w", req.NamespacedName, err)
 		}
 		// Requeue to observe the resource with the finalizer attached.
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
+		return ctrl.Result{RequeueAfter: resolveRequeueShort(runtime)}, nil
 	}
 
 	ns := &corev1.Namespace{}
@@ -111,7 +113,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, req ctrl.Request, logger logr.L
 				return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", patchErr)
 			}
 			logger.Info("Target namespace not found; will retry", "target_namespace", targetNS)
-			return ctrl.Result{RequeueAfter: constants.RequeueStandard}, nil
+			return ctrl.Result{RequeueAfter: resolveRequeueStandard(runtime)}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get namespace %s: %w", targetNS, err)
 	}
@@ -262,4 +264,25 @@ func removeFinalizer(finalizers []string, value string) []string {
 		}
 	}
 	return result
+}
+
+func conditionTypeProvisioned(runtime TenantRuntime) string {
+	if runtime.ConditionTypeProvisioned != "" {
+		return runtime.ConditionTypeProvisioned
+	}
+	return "Provisioned"
+}
+
+func resolveRequeueShort(runtime TenantRuntime) time.Duration {
+	if runtime.RequeueShort > 0 {
+		return runtime.RequeueShort
+	}
+	return 5 * time.Second
+}
+
+func resolveRequeueStandard(runtime TenantRuntime) time.Duration {
+	if runtime.RequeueStandard > 0 {
+		return runtime.RequeueStandard
+	}
+	return 1 * time.Minute
 }
