@@ -160,6 +160,10 @@ report-openbao-config-schema-drift: ## Report upstream OpenBao config schema dri
 report-openbao-operator-schema-drift: ## Report operator-vs-upstream OpenBao config schema drift (non-failing).
 	@go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
 
+.PHONY: report-internal-deps
+report-internal-deps: ## Generate internal runtime dependency graph/report locally (report-only; non-failing).
+	@bash hack/architecture/report-internal-deps.sh
+
 .PHONY: helm-sync
 helm-sync: manifests ## Sync Helm chart from config/ (CRDs, admission policies).
 	@go run ./hack/helmchart

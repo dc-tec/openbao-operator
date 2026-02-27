@@ -39,6 +39,7 @@ import (
 	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/logging"
+	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
 )
 
@@ -79,7 +80,7 @@ func (r *NamespaceProvisionerReconciler) patchStatus(ctx context.Context, tenant
 // specified in the CRD.
 func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := controllerutil.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameNamespaceProvisioner)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameNamespaceProvisioner)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {

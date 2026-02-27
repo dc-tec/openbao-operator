@@ -20,11 +20,11 @@ import (
 	backupmanager "github.com/dc-tec/openbao-operator/internal/backup"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	controllermetrics "github.com/dc-tec/openbao-operator/internal/controller"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	initmanager "github.com/dc-tec/openbao-operator/internal/init"
 	"github.com/dc-tec/openbao-operator/internal/kube"
+	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	"github.com/dc-tec/openbao-operator/internal/raft"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/upgrade/bluegreen"
@@ -238,7 +238,7 @@ func controllerErrorStatus(err error) *openbaov1alpha1.ControllerErrorStatus {
 
 func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := controllermetrics.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterWorkload)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterWorkload)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -417,7 +417,7 @@ func workloadResultForError(err error, lastError *openbaov1alpha1.ControllerErro
 
 func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := controllermetrics.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterAdminOps)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterAdminOps)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -509,7 +509,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 
 func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := controllermetrics.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterStatus)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterStatus)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {

@@ -48,3 +48,4 @@ site/*
 dist/crds.yaml
 dist/checksums.txt
 dist/sbom-*.spdx.json
+dist/architecture/
