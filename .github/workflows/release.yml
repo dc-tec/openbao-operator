@@ -200,6 +200,12 @@ jobs:
           docker pull "${{ needs.prepare.outputs.backup_executor_image }}:${{ needs.prepare.outputs.build_tag }}"
           docker pull "${{ needs.prepare.outputs.upgrade_executor_image }}:${{ needs.prepare.outputs.build_tag }}"
 
+      - name: Create Kind Cluster
+        run: |
+          if ! kind get clusters | grep -q "kind"; then
+            kind create cluster --name kind --image "${KIND_NODE_IMAGE}"
+          fi
+
       - name: Run full E2E
         env:
           GOFLAGS: -mod=readonly
