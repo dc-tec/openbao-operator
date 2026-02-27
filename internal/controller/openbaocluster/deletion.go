@@ -12,8 +12,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/observability"
 )
@@ -39,21 +39,16 @@ func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger lo
 	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.Clear()
 
-	if err := appopenbaocluster.CleanupInfraOnDeletion(
-		ctx,
-		logger,
-		appopenbaocluster.InfraCleanupDependencies{
-			Client:            r.Client,
-			APIReader:         r.APIReader,
-			Scheme:            r.Scheme,
-			OperatorNamespace: r.OperatorNamespace,
-			OIDCIssuer:        r.OIDCIssuer,
-			OIDCJWTKeys:       r.OIDCJWTKeys,
-			Platform:          r.Platform,
-		},
-		cluster,
-		policy,
-	); err != nil {
+	infraMgr := inframanager.NewManagerWithReader(
+		r.Client,
+		r.APIReader,
+		r.Scheme,
+		r.OperatorNamespace,
+		r.OIDCIssuer,
+		r.OIDCJWTKeys,
+		r.Platform,
+	)
+	if err := infraMgr.Cleanup(ctx, logger, cluster, policy); err != nil {
 		return err
 	}
 

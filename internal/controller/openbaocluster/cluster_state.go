@@ -14,8 +14,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
+	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 // clusterState holds the observed state used for status computation.
@@ -134,7 +135,7 @@ func (r *OpenBaoClusterReconciler) gatherStatefulSetState(
 
 	// Compute active revision for blue/green deployments
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		state.ActiveRevision = appopenbaocluster.BlueGreenActiveRevision(cluster)
+		state.ActiveRevision = inframanager.BlueGreenActiveRevision(cluster)
 		statefulSetName.Name = fmt.Sprintf("%s-%s", cluster.Name, state.ActiveRevision)
 	}
 
@@ -214,14 +215,14 @@ func (r *OpenBaoClusterReconciler) gatherPodState(
 			state.Pod0 = pod
 
 			// Parse initialized label
-			initialized, present, err := appopenbaocluster.ParseOpenBaoBoolLabel(pod.Labels, appopenbaocluster.OpenBaoLabelInitialized)
+			initialized, present, err := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelInitialized)
 			if err == nil {
 				state.Initialized = initialized
 				state.InitializedKnown = present
 			}
 
 			// Parse sealed label
-			sealed, present, err := appopenbaocluster.ParseOpenBaoBoolLabel(pod.Labels, appopenbaocluster.OpenBaoLabelSealed)
+			sealed, present, err := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelSealed)
 			if err == nil {
 				state.Sealed = sealed
 				state.SealedKnown = present
@@ -229,7 +230,7 @@ func (r *OpenBaoClusterReconciler) gatherPodState(
 		}
 
 		// Check for active leader
-		active, present, err := appopenbaocluster.ParseOpenBaoBoolLabel(pod.Labels, appopenbaocluster.OpenBaoLabelActive)
+		active, present, err := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelActive)
 		if err == nil && present && active {
 			state.LeaderCount++
 			if state.LeaderCount == 1 {
