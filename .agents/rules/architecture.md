@@ -12,7 +12,7 @@ See [Architecture Documentation](docs/architecture/index.md).
 
 - `L0` API types: `api/v1alpha1`
 - `L1` Entrypoints/bootstrap: `cmd/*`, `internal/entrypoint`
-- `L2` Controller plumbing: `internal/controller/*` (including controller-local boundary adapters such as `internal/controller/openbaocluster/deps`)
+- `L2` Controller plumbing: `internal/controller/*`
 - `L3` App orchestration: `internal/app/*`
 - `L4` Services/managers: `internal/{backup,restore,upgrade,infra,certs,init,provisioner,opslifecycle}`
 - `L5` Ports/contracts: `internal/port/*`

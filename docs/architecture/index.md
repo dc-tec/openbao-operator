@@ -94,7 +94,7 @@ The runtime code is organized into layered packages to keep controller plumbing,
 | :--- | :--- | :--- |
 | `L0` | API types | `api/v1alpha1` |
 | `L1` | Entrypoints/bootstrap | `cmd/controller`, `cmd/provisioner`, `internal/entrypoint` |
-| `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore`, controller-local adapters such as `internal/controller/openbaocluster/deps` |
+| `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore` |
 | `L3` | App orchestration | `internal/app/openbaocluster`, `internal/app/openbaorestore`, `internal/app/provisioner` |
 | `L4` | Services/managers | `internal/backup`, `internal/restore`, `internal/upgrade`, `internal/infra`, `internal/certs`, `internal/init`, `internal/opslifecycle` |
 | `L5` | Ports/contracts | `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/initmanager` |
