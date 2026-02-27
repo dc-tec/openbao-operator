@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
@@ -61,7 +62,7 @@ func TestStepDownLeader_DoesNotTimeoutFromUpgradeStart(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
 	}, openbaoapi.ClientConfig{}, nil, "")
 
@@ -110,7 +111,7 @@ func TestStepDownLeader_TimesOutBasedOnJobAge(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
 	}, openbaoapi.ClientConfig{}, nil, "")
 
@@ -188,7 +189,7 @@ func TestStepDownLeader_DeletesStaleSucceededJobWhenTargetStillLeader(t *testing
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job, pod, caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {
 				return true, nil
@@ -275,7 +276,7 @@ func TestStepDownLeader_VerifiesTransferViaAPIWhenLabelsLag(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job, pod, caSecret).Build()
 
 	var gotConfig openbaoapi.ClientConfig
-	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		gotConfig = config
 		return &openbaoapi.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {
@@ -336,7 +337,7 @@ func TestStepDownLeader_SkipsJobWhenTargetPodIsNotLeader(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {
 				return false, nil
@@ -405,7 +406,7 @@ func TestWaitForPodRevisionUpdated_WaitsUntilRevisionMatches(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
 	}, openbaoapi.ClientConfig{}, nil, "")
 
@@ -462,7 +463,7 @@ func TestWaitForPodRevisionUpdated_SucceedsWhenRevisionMatches(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
 	}, openbaoapi.ClientConfig{}, nil, "")
 

@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/infra"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
@@ -74,7 +75,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	}
 
 	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
-	manager := bluegreen.NewManager(k8sClient, k8sScheme, infraMgr, openbaoapi.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := bluegreen.NewManager(k8sClient, k8sScheme, infraMgr, backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	// Phase: JoiningMesh -> create join job
 	latestCluster := &openbaov1alpha1.OpenBaoCluster{}
@@ -241,7 +242,7 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 	}
 
 	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
-	mgr := bluegreen.NewManagerWithClientFactory(k8sClient, k8sScheme, infraMgr, func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := bluegreen.NewManagerWithClientFactory(k8sClient, k8sScheme, infraMgr, backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {
 				return true, nil

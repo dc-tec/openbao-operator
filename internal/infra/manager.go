@@ -104,6 +104,11 @@ func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Sche
 	return m
 }
 
+// EnsureBlueGreenStatus exposes blue/green status bootstrap/repair for strategy consumers.
+func (m *Manager) EnsureBlueGreenStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
+	EnsureBlueGreenStatus(ctx, logger, m.client, cluster)
+}
+
 // Reconcile ensures infrastructure resources are aligned with the desired state for the given OpenBaoCluster.
 //
 // The current implementation focuses on:

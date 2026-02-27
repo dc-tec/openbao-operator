@@ -10,10 +10,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
@@ -57,10 +57,14 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 	}
 
 	// Image defaults to constants.DefaultBackupImage() when not specified
-	if err := backup.EnsureBackupServiceAccount(ctx, m.client, m.scheme, cluster); err != nil {
+	if m.backupRuntime == nil {
+		return nil, fmt.Errorf("backup runtime is not configured")
+	}
+
+	if err := m.backupRuntime.EnsureServiceAccount(ctx, cluster); err != nil {
 		return nil, fmt.Errorf("failed to ensure backup ServiceAccount for snapshot job: %w", err)
 	}
-	if err := backup.EnsureBackupRBAC(ctx, m.client, m.scheme, cluster); err != nil {
+	if err := m.backupRuntime.EnsureRBAC(ctx, cluster); err != nil {
 		return nil, fmt.Errorf("failed to ensure backup RBAC for snapshot job: %w", err)
 	}
 
@@ -89,9 +93,8 @@ func (m *Manager) buildSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, jobN
 		statefulSetName = fmt.Sprintf("%s-%s", cluster.Name, cluster.Status.BlueGreen.BlueRevision)
 	}
 
-	job, err := backup.BuildJob(cluster, backup.JobOptions{
+	job, err := m.backupRuntime.BuildPreUpgradeJob(cluster, portbackup.JobBuildOptions{
 		JobName:                jobName,
-		JobType:                backup.JobTypePreUpgrade,
 		VerifiedExecutorDigest: verifiedExecutorDigest,
 		FilenamePrefix:         phase,
 		ClientConfig:           m.clientConfig,

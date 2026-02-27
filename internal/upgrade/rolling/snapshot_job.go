@@ -16,11 +16,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/backup"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/logging"
+	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/security"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
@@ -125,10 +125,14 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 	jobName = m.backupJobName(cluster)
 	logger.Info("Creating pre-upgrade backup job", "job", jobName)
 
-	if err := backup.EnsureBackupServiceAccount(ctx, m.client, m.scheme, cluster); err != nil {
+	if m.backupRuntime == nil {
+		return false, fmt.Errorf("backup runtime is not configured")
+	}
+
+	if err := m.backupRuntime.EnsureServiceAccount(ctx, cluster); err != nil {
 		return false, operatorerrors.WithReason(upgrade.ReasonPreUpgradeBackupFailed, fmt.Errorf("failed to ensure backup ServiceAccount: %w", err))
 	}
-	if err := backup.EnsureBackupRBAC(ctx, m.client, m.scheme, cluster); err != nil {
+	if err := m.backupRuntime.EnsureRBAC(ctx, cluster); err != nil {
 		return false, operatorerrors.WithReason(upgrade.ReasonPreUpgradeBackupFailed, fmt.Errorf("failed to ensure backup RBAC: %w", err))
 	}
 
@@ -160,9 +164,8 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 
 	// For rolling upgrades, target the base StatefulSet (no revision suffix).
 	// TargetStatefulSetName defaults to cluster.Name when empty.
-	job, err := backup.BuildJob(cluster, backup.JobOptions{
+	job, err := m.backupRuntime.BuildPreUpgradeJob(cluster, portbackup.JobBuildOptions{
 		JobName:                jobName,
-		JobType:                backup.JobTypePreUpgrade,
 		FilenamePrefix:         constants.BackupTypePreUpgrade,
 		VerifiedExecutorDigest: verifiedExecutorDigest,
 		// TargetStatefulSetName left empty - defaults to cluster.Name for rolling upgrades
@@ -288,7 +291,7 @@ func (m *Manager) countFailedPreUpgradeBackupJobs(ctx context.Context, cluster *
 		constants.LabelAppInstance:       cluster.Name,
 		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
 		constants.LabelOpenBaoCluster:    cluster.Name,
-		constants.LabelOpenBaoComponent:  backup.ComponentBackup,
+		constants.LabelOpenBaoComponent:  constants.ComponentBackup,
 		constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
 	})
 

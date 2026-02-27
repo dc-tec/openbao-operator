@@ -18,11 +18,12 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/infra"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	portinfra "github.com/dc-tec/openbao-operator/internal/port/infra"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
@@ -39,7 +40,8 @@ var (
 type Manager struct {
 	client                client.Client
 	scheme                *runtime.Scheme
-	infraManager          *infra.Manager
+	infraRuntime          portinfra.BlueGreenRuntime
+	backupRuntime         portbackup.PreUpgradeSnapshotRuntime
 	clientFactory         upgrade.OpenBaoClientFactory
 	clusterOps            ClusterOps
 	clientConfig          openbaoapi.ClientConfig
@@ -49,11 +51,21 @@ type Manager struct {
 }
 
 // NewManager constructs a Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientConfig openbaoapi.ClientConfig, imageVerifier imageverify.Verifier, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
+func NewManager(
+	c client.Client,
+	scheme *runtime.Scheme,
+	infraRuntime portinfra.BlueGreenRuntime,
+	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
+	clientConfig openbaoapi.ClientConfig,
+	imageVerifier imageverify.Verifier,
+	operatorImageVerifier imageverify.Verifier,
+	platform string,
+) *Manager {
 	mgr := &Manager{
 		client:                c,
 		scheme:                scheme,
-		infraManager:          infraManager,
+		infraRuntime:          infraRuntime,
+		backupRuntime:         backupRuntime,
 		clientFactory:         upgrade.DefaultOpenBaoClientFactory,
 		clientConfig:          clientConfig,
 		imageVerifier:         imageVerifier,
@@ -64,8 +76,18 @@ func NewManager(c client.Client, scheme *runtime.Scheme, infraManager *infra.Man
 	return mgr
 }
 
-func NewManagerWithClientFactory(c client.Client, scheme *runtime.Scheme, infraManager *infra.Manager, clientFactory upgrade.OpenBaoClientFactory, clientConfig openbaoapi.ClientConfig, imageVerifier imageverify.Verifier, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
-	mgr := NewManager(c, scheme, infraManager, clientConfig, imageVerifier, operatorImageVerifier, platform)
+func NewManagerWithClientFactory(
+	c client.Client,
+	scheme *runtime.Scheme,
+	infraRuntime portinfra.BlueGreenRuntime,
+	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
+	clientFactory upgrade.OpenBaoClientFactory,
+	clientConfig openbaoapi.ClientConfig,
+	imageVerifier imageverify.Verifier,
+	operatorImageVerifier imageverify.Verifier,
+	platform string,
+) *Manager {
+	mgr := NewManager(c, scheme, infraRuntime, backupRuntime, clientConfig, imageVerifier, operatorImageVerifier, platform)
 	if clientFactory != nil {
 		mgr.clientFactory = clientFactory
 	}
@@ -302,7 +324,10 @@ func (m *Manager) shouldReconcileBlueGreen(logger logr.Logger, cluster *openbaov
 }
 
 func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
-	infra.EnsureBlueGreenStatus(ctx, logger, m.client, cluster)
+	if m.infraRuntime == nil {
+		return
+	}
+	m.infraRuntime.EnsureBlueGreenStatus(ctx, logger, cluster)
 }
 
 func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, upgradeActive, upgradeNeeded bool) (bool, recon.Result, error) {
@@ -699,7 +724,10 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 			imageForGreen = verifiedGreenDigest
 		}
 
-		if err := m.infraManager.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, imageForGreen, verifiedInitContainerDigest, greenRevision, true); err != nil {
+		if m.infraRuntime == nil {
+			return phaseOutcome{}, fmt.Errorf("infra runtime is not configured")
+		}
+		if err := m.infraRuntime.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, imageForGreen, verifiedInitContainerDigest, greenRevision, true); err != nil {
 			return phaseOutcome{}, fmt.Errorf("failed to create Green StatefulSet: %w", err)
 		}
 
