@@ -87,8 +87,30 @@ Use `make help` to see all available commands, or refer to this cheatsheet:
 | **Verify** | `make lint` | Run code linters. |
 | | `make test` | Run unit tests. |
 | | `make test-integration` | Run integration tests (envtest). |
+| | `make report-internal-deps` | Generate local internal dependency graph/report artifacts. |
 | **Generate**| `make manifests` | Regenerate CRD YAMLs and RBAC. |
 | | `make generate` | Regenerate `deepcopy` code. |
+
+## Internal Dependency Report
+
+Use the local architecture report tooling to inspect internal package dependencies.
+
+```sh
+make report-internal-deps
+```
+
+Artifacts are written to `dist/architecture/`:
+
+- `internal-dependency-report.md`
+- `internal-dependency-edges.tsv`
+- `internal-dependency-graph.dot`
+- `internal-dependency-graph.mmd`
+
+The command is report-only and does not fail on policy findings.
+
+Intentional policy exceptions are tracked in:
+
+- `hack/architecture/dependency-policy-exceptions.tsv`
 
 ## Troubleshooting
 
