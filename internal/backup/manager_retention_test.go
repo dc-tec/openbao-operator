@@ -14,14 +14,14 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 	"github.com/dc-tec/openbao-operator/internal/security"
 	"github.com/dc-tec/openbao-operator/internal/storage"
 )
 
 type fakeBlobStore struct {
-	objects    []interfaces.ObjectInfo
+	objects    []blobstore.ObjectInfo
 	deleted    []string
 	closeCount int
 }
@@ -43,11 +43,11 @@ func (f *fakeBlobStore) DeleteBatch(_ context.Context, keys []string) error {
 	return nil
 }
 
-func (f *fakeBlobStore) List(_ context.Context, _ string) ([]interfaces.ObjectInfo, error) {
+func (f *fakeBlobStore) List(_ context.Context, _ string) ([]blobstore.ObjectInfo, error) {
 	return f.objects, nil
 }
 
-func (f *fakeBlobStore) Head(_ context.Context, _ string) (*interfaces.ObjectInfo, error) {
+func (f *fakeBlobStore) Head(_ context.Context, _ string) (*blobstore.ObjectInfo, error) {
 	return nil, nil
 }
 
@@ -200,7 +200,7 @@ func TestApplyRetention_UsesProviderAndDeletesOldBackups(t *testing.T) {
 				Build()
 
 			store := &fakeBlobStore{
-				objects: []interfaces.ObjectInfo{
+				objects: []blobstore.ObjectInfo{
 					{Key: "clusters/default/retention-cluster/2025-01-01T03-00-00Z-aaaaaaaa.snap", LastModified: time.Date(2025, 1, 1, 3, 0, 0, 0, time.UTC)},
 					{Key: "clusters/default/retention-cluster/2025-01-02T03-00-00Z-bbbbbbbb.snap", LastModified: time.Date(2025, 1, 2, 3, 0, 0, 0, time.UTC)},
 					{Key: "clusters/default/retention-cluster/2025-01-03T03-00-00Z-cccccccc.snap", LastModified: time.Date(2025, 1, 3, 3, 0, 0, 0, time.UTC)},
@@ -209,7 +209,7 @@ func TestApplyRetention_UsesProviderAndDeletesOldBackups(t *testing.T) {
 
 			var capturedConfig storage.Config
 			originalOpenBlobStoreFn := openBlobStoreFn
-			openBlobStoreFn = func(_ context.Context, cfg storage.Config) (interfaces.BlobStore, error) {
+			openBlobStoreFn = func(_ context.Context, cfg storage.Config) (blobstore.BlobStore, error) {
 				capturedConfig = cfg
 				return store, nil
 			}

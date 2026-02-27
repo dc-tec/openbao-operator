@@ -19,7 +19,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"gocloud.dev/blob/azureblob"
 
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
 // AzureClientConfig holds configuration for Azure Blob Storage.
@@ -48,7 +48,7 @@ type AzureClientConfig struct {
 
 // OpenAzureContainer opens an Azure blob container using Go CDK.
 // It returns a BlobStore interface that provides standardized blob operations.
-func OpenAzureContainer(ctx context.Context, cfg AzureClientConfig) (interfaces.BlobStore, error) {
+func OpenAzureContainer(ctx context.Context, cfg AzureClientConfig) (blobstore.BlobStore, error) {
 	if cfg.Container == "" {
 		return nil, fmt.Errorf("container is required")
 	}

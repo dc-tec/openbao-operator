@@ -21,9 +21,9 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
@@ -67,7 +67,7 @@ func EnsureExecutorJob(
 	blueRevision string,
 	greenRevision string,
 	clientConfig openbao.ClientConfig,
-	operatorImageVerifier interfaces.ImageVerifier,
+	operatorImageVerifier imageverify.Verifier,
 	platform string,
 ) (*JobResult, error) {
 	result, err := ensureUpgradeExecutorJob(ctx, c, scheme, logger, cluster, action, runID, blueRevision, greenRevision, clientConfig, operatorImageVerifier, platform)
@@ -100,7 +100,7 @@ func ensureUpgradeExecutorJob(
 	blueRevision string,
 	greenRevision string,
 	clientConfig openbao.ClientConfig,
-	operatorImageVerifier interfaces.ImageVerifier,
+	operatorImageVerifier imageverify.Verifier,
 	platform string,
 ) (*executorJobResult, error) {
 	if cluster == nil {

@@ -24,10 +24,10 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
@@ -49,12 +49,12 @@ type Manager struct {
 	client                client.Client
 	scheme                *runtime.Scheme
 	recorder              events.EventRecorder
-	operatorImageVerifier interfaces.ImageVerifier
+	operatorImageVerifier imageverify.Verifier
 	Platform              string
 }
 
 // NewManager creates a new restore Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme, recorder events.EventRecorder, operatorImageVerifier interfaces.ImageVerifier, platform string) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, recorder events.EventRecorder, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
 	return &Manager{
 		client:                c,
 		scheme:                scheme,

@@ -12,7 +12,7 @@ import (
 	"github.com/sigstore/cosign/v3/pkg/oci/static"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 )
 
 const (
@@ -55,7 +55,7 @@ func TestImageVerifier_Verify_EmptyConfig(t *testing.T) {
 	verifier := NewImageVerifier(logger, client, nil)
 
 	ctx := context.Background()
-	config := interfaces.VerifyConfig{}
+	config := imageverify.VerifyConfig{}
 	_, err := verifier.Verify(ctx, "test-image:latest", config)
 
 	if err == nil {
@@ -74,7 +74,7 @@ func TestImageVerifier_Verify_KeylessMissingIssuer(t *testing.T) {
 	verifier := NewImageVerifier(logger, client, nil)
 
 	ctx := context.Background()
-	config := interfaces.VerifyConfig{
+	config := imageverify.VerifyConfig{
 		Subject: testOIDCSubject,
 	}
 	_, err := verifier.Verify(ctx, "test-image:latest", config)
@@ -90,7 +90,7 @@ func TestImageVerifier_Verify_KeylessMissingSubject(t *testing.T) {
 	verifier := NewImageVerifier(logger, client, nil)
 
 	ctx := context.Background()
-	config := interfaces.VerifyConfig{
+	config := imageverify.VerifyConfig{
 		Issuer: "https://token.actions.githubusercontent.com",
 	}
 	_, err := verifier.Verify(ctx, "test-image:latest", config)
@@ -105,7 +105,7 @@ func TestImageVerifier_Verify_KeylessRegExpCacheHit(t *testing.T) {
 	client := fake.NewClientBuilder().Build()
 	verifier := NewImageVerifier(logger, client, nil)
 
-	config := interfaces.VerifyConfig{
+	config := imageverify.VerifyConfig{
 		IssuerRegExp:  "^https://token\\.actions\\.githubusercontent\\.com$",
 		SubjectRegExp: "^https://github\\.com/dc-tec/openbao-operator/.+@refs/tags/.+$",
 	}
@@ -128,7 +128,7 @@ func TestImageVerifier_Verify_CacheHit(t *testing.T) {
 
 	// Use a digest for cache key (cache lookup happens before verification now)
 	digest := testImageDigest
-	config := interfaces.VerifyConfig{
+	config := imageverify.VerifyConfig{
 		PublicKey: "test-public-key",
 	}
 
@@ -161,7 +161,7 @@ func TestImageVerifier_Verify_CacheMiss(t *testing.T) {
 	verifier := NewImageVerifier(logger, client, nil)
 
 	imageRef := "test-image:latest"
-	config := interfaces.VerifyConfig{
+	config := imageverify.VerifyConfig{
 		PublicKey: "invalid-public-key",
 	}
 
@@ -186,7 +186,7 @@ func TestImageVerifier_Verify_ContextCancellation(t *testing.T) {
 	verifier := NewImageVerifier(logger, client, nil)
 
 	imageRef := "test-image:latest"
-	config := interfaces.VerifyConfig{
+	config := imageverify.VerifyConfig{
 		PublicKey: "test-public-key",
 	}
 
@@ -404,13 +404,13 @@ func TestImageVerifier_CacheKey_StaticKey(t *testing.T) {
 	tests := []struct {
 		name       string
 		digest     string
-		config     interfaces.VerifyConfig
+		config     imageverify.VerifyConfig
 		wantPrefix string
 	}{
 		{
 			name:   "simple digest and key",
 			digest: testImageDigest,
-			config: interfaces.VerifyConfig{
+			config: imageverify.VerifyConfig{
 				PublicKey: "test-key",
 			},
 			wantPrefix: testImageDigest + "@key:",
@@ -418,7 +418,7 @@ func TestImageVerifier_CacheKey_StaticKey(t *testing.T) {
 		{
 			name:   "digest with full hash",
 			digest: "test-image@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-			config: interfaces.VerifyConfig{
+			config: imageverify.VerifyConfig{
 				PublicKey: "test-key",
 			},
 			wantPrefix: "test-image@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890@key:",
@@ -426,7 +426,7 @@ func TestImageVerifier_CacheKey_StaticKey(t *testing.T) {
 		{
 			name:   "long public key",
 			digest: testImageDigest,
-			config: interfaces.VerifyConfig{
+			config: imageverify.VerifyConfig{
 				PublicKey: "very-long-public-key-that-should-be-truncated-in-cache-key",
 			},
 			wantPrefix: testImageDigest + "@key:",
@@ -456,7 +456,7 @@ func TestImageVerifier_CacheKey_Keyless(t *testing.T) {
 	verifier := NewImageVerifier(logger, client, nil)
 
 	digest := testImageDigest
-	config := interfaces.VerifyConfig{
+	config := imageverify.VerifyConfig{
 		Issuer:  testOIDCIssuer,
 		Subject: testOIDCSubject,
 	}
@@ -481,7 +481,7 @@ func TestImageVerifier_CacheKey_KeylessRegExp(t *testing.T) {
 	verifier := NewImageVerifier(logger, client, nil)
 
 	digest := testImageDigest
-	config := interfaces.VerifyConfig{
+	config := imageverify.VerifyConfig{
 		IssuerRegExp:  "^https://token\\.actions\\.githubusercontent\\.com$",
 		SubjectRegExp: "^https://github\\.com/openbao/openbao/.+@refs/tags/.+$",
 	}
@@ -499,14 +499,14 @@ func TestImageVerifier_CacheKey_DifferentModes(t *testing.T) {
 	verifier := NewImageVerifier(logger, client, nil)
 
 	digest := testImageDigest
-	staticKeyConfig := interfaces.VerifyConfig{
+	staticKeyConfig := imageverify.VerifyConfig{
 		PublicKey: "test-key",
 	}
-	keylessConfig := interfaces.VerifyConfig{
+	keylessConfig := imageverify.VerifyConfig{
 		Issuer:  testOIDCIssuer,
 		Subject: testOIDCSubject,
 	}
-	keylessRegexpConfig := interfaces.VerifyConfig{
+	keylessRegexpConfig := imageverify.VerifyConfig{
 		IssuerRegExp:  "^https://token\\.actions\\.githubusercontent\\.com$",
 		SubjectRegExp: "^https://github\\.com/openbao/openbao/.+@refs/tags/.+$",
 	}

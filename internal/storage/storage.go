@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
 // ProviderType identifies the storage provider.
@@ -111,7 +111,7 @@ type AzureOptions struct {
 
 // OpenBlobStore opens a storage backend based on the provider configuration.
 // This is the preferred entry point for provider-agnostic storage access.
-func OpenBlobStore(ctx context.Context, cfg Config) (interfaces.BlobStore, error) {
+func OpenBlobStore(ctx context.Context, cfg Config) (blobstore.BlobStore, error) {
 	if cfg.Bucket == "" {
 		return nil, fmt.Errorf("bucket is required")
 	}
@@ -129,7 +129,7 @@ func OpenBlobStore(ctx context.Context, cfg Config) (interfaces.BlobStore, error
 }
 
 // openS3 opens an S3-compatible bucket using the unified Config.
-func openS3(ctx context.Context, cfg Config) (interfaces.BlobStore, error) {
+func openS3(ctx context.Context, cfg Config) (blobstore.BlobStore, error) {
 	var accessKeyID, secretAccessKey, sessionToken string
 	var caCert []byte
 	var usePathStyle, insecureSkipVerify, ensureExists bool
@@ -162,7 +162,7 @@ func openS3(ctx context.Context, cfg Config) (interfaces.BlobStore, error) {
 }
 
 // openGCS opens a GCS bucket using the unified Config.
-func openGCS(ctx context.Context, cfg Config) (interfaces.BlobStore, error) {
+func openGCS(ctx context.Context, cfg Config) (blobstore.BlobStore, error) {
 	gcsCfg := GCSClientConfig{
 		Bucket:       cfg.Bucket,
 		Endpoint:     cfg.Endpoint,
@@ -181,7 +181,7 @@ func openGCS(ctx context.Context, cfg Config) (interfaces.BlobStore, error) {
 }
 
 // openAzure opens an Azure blob container using the unified Config.
-func openAzure(ctx context.Context, cfg Config) (interfaces.BlobStore, error) {
+func openAzure(ctx context.Context, cfg Config) (blobstore.BlobStore, error) {
 	azureCfg := AzureClientConfig{
 		Container:    cfg.Bucket,
 		Endpoint:     cfg.Endpoint,

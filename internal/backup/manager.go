@@ -24,11 +24,11 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
@@ -42,13 +42,13 @@ type Manager struct {
 	client                client.Client
 	scheme                *runtime.Scheme
 	clientConfig          openbao.ClientConfig
-	operatorImageVerifier interfaces.ImageVerifier
+	operatorImageVerifier imageverify.Verifier
 	Platform              string
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
-func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbao.ClientConfig, operatorImageVerifier interfaces.ImageVerifier, platform string) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbao.ClientConfig, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
 	return &Manager{
 		client:                c,
 		scheme:                scheme,
