@@ -6,8 +6,9 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/revision"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState, observedVersion string) {
@@ -40,7 +41,7 @@ func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, c
 		return
 	}
 
-	isDowngrade, err := appopenbaocluster.IsVersionDowngrade(cluster.Status.CurrentVersion, observedVersion)
+	isDowngrade, err := isVersionDowngrade(cluster.Status.CurrentVersion, observedVersion)
 	if err != nil {
 		logger.V(1).Info("Skipping CurrentVersion correction due to unparsable version",
 			"currentVersion", cluster.Status.CurrentVersion,
@@ -79,7 +80,7 @@ func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForBlueGreen(logger
 	// CRITICAL CHECK: Verify that the upgrade actually happened.
 	// PhaseIdle can mean "Before Upgrade" OR "After Upgrade".
 	// We distinguish them by checking if the active BlueRevision matches the current Spec.
-	currentSpecRevision := appopenbaocluster.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+	currentSpecRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
 	if cluster.Status.BlueGreen.BlueRevision != currentSpecRevision {
 		return
 	}
@@ -172,4 +173,12 @@ func observedVersionFromPods(state *clusterState) string {
 		}
 	}
 	return candidate
+}
+
+func isVersionDowngrade(from, to string) (bool, error) {
+	change, err := upgrade.CompareVersions(from, to)
+	if err != nil {
+		return false, err
+	}
+	return change == upgrade.VersionChangeDowngrade, nil
 }

@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 )
@@ -180,9 +180,9 @@ func TestInfraReconciler_ResolveOIDC_LazyDiscoveryForSelfInit(t *testing.T) {
 		restConfig:  &rest.Config{Host: "https://kubernetes.default.svc"},
 		oidcIssuer:  "",
 		oidcJWTKeys: nil,
-		discoverOIDCConfigFunc: func(ctx context.Context, cfg *rest.Config) (*appopenbaocluster.OIDCConfig, error) {
+		discoverOIDCConfigFunc: func(ctx context.Context, cfg *rest.Config) (*auth.OIDCConfig, error) {
 			called++
-			return &appopenbaocluster.OIDCConfig{
+			return &auth.OIDCConfig{
 				IssuerURL: "https://issuer.example",
 				JWKSKeys:  []string{"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw==\n-----END PUBLIC KEY-----\n"},
 			}, nil

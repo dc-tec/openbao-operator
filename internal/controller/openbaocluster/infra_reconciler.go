@@ -19,13 +19,14 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 // infraReconciler wraps InfraManager to implement the controller's sub-reconciler contract.
@@ -46,7 +47,7 @@ type infraReconciler struct {
 	platform                string
 	smartClientConfig       openbao.ClientConfig
 	clientForPodFunc        func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (*openbao.Client, error)
-	discoverOIDCConfigFunc  func(ctx context.Context, cfg *rest.Config) (*appopenbaocluster.OIDCConfig, error)
+	discoverOIDCConfigFunc  func(ctx context.Context, cfg *rest.Config) (*auth.OIDCConfig, error)
 }
 
 func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
@@ -61,7 +62,7 @@ func oidcDiscoveryError(err error) error {
 		return nil
 	}
 
-	if statusCode, ok := appopenbaocluster.OIDCDiscoveryStatusCode(err); ok {
+	if statusCode, ok := oidcDiscoveryStatusCode(err); ok {
 		switch statusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
 			return operatorerrors.WrapPermanentConfig(fmt.Errorf(
@@ -87,6 +88,14 @@ func oidcDiscoveryError(err error) error {
 	return operatorerrors.WrapTransientKubernetesAPI(operatorerrors.WrapTransientConnection(err))
 }
 
+func oidcDiscoveryStatusCode(err error) (int, bool) {
+	var statusErr *auth.HTTPStatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.StatusCode, true
+	}
+	return 0, false
+}
+
 func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, []string, error) {
 	effectiveIssuer := r.oidcIssuer
 	effectiveKeys := r.oidcJWTKeys
@@ -101,7 +110,9 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 
 	discover := r.discoverOIDCConfigFunc
 	if discover == nil {
-		discover = appopenbaocluster.DiscoverOIDCConfig
+		discover = func(ctx context.Context, cfg *rest.Config) (*auth.OIDCConfig, error) {
+			return auth.DiscoverConfig(ctx, cfg, "")
+		}
 	}
 
 	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -195,7 +206,7 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 
 func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	opts := imageVerificationOptions{
-		enabled:              appopenbaocluster.IsMainImageVerificationEnabled(cluster),
+		enabled:              security.IsMainImageVerificationEnabled(cluster),
 		imageRef:             imageRef,
 		failurePolicy:        imageVerificationFailurePolicy(cluster),
 		failureReason:        constants.ReasonImageVerificationFailed,
@@ -214,7 +225,7 @@ func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr
 
 func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
 	// Use OperatorImageVerification only - no fallback to ImageVerification
-	if !appopenbaocluster.IsOperatorImageVerificationEnabled(cluster) {
+	if !security.IsOperatorImageVerificationEnabled(cluster) {
 		return "", nil
 	}
 
@@ -230,7 +241,7 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 
 	verifyFunc := r.verifyOperatorImageFunc
 	if verifyFunc == nil {
-		verifyFunc = appopenbaocluster.VerifyOperatorImageForCluster
+		verifyFunc = security.VerifyOperatorImageForCluster
 	}
 
 	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
