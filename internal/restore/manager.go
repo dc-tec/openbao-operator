@@ -23,10 +23,10 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	controllermetrics "github.com/dc-tec/openbao-operator/internal/controller"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
 	"github.com/dc-tec/openbao-operator/internal/logging"
+	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	"github.com/dc-tec/openbao-operator/internal/operationlock"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
@@ -129,7 +129,7 @@ func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore
 		"phase_to":          string(openbaov1alpha1.RestorePhaseValidating),
 	})
 
-	controllermetrics.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordStarted()
+	observability.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordStarted()
 
 	return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
 }
@@ -569,7 +569,7 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 	if restore.Status.StartTime != nil {
 		durationSeconds = now.Time.Sub(restore.Status.StartTime.Time).Seconds()
 	}
-	controllermetrics.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordFailureWithDuration(durationSeconds)
+	observability.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordFailureWithDuration(durationSeconds)
 
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
 		logger.Error(err, "Failed to release cluster operation lock after restore failure")
@@ -608,7 +608,7 @@ func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, resto
 	if restore.Status.StartTime != nil {
 		durationSeconds = now.Time.Sub(restore.Status.StartTime.Time).Seconds()
 	}
-	controllermetrics.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordSuccess(durationSeconds)
+	observability.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordSuccess(durationSeconds)
 
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
 		logger.Error(err, "Failed to release cluster operation lock after restore completion")

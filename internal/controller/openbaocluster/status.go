@@ -16,8 +16,8 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
 	"github.com/dc-tec/openbao-operator/internal/kube"
+	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/revision"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
@@ -183,7 +183,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	// otherwise it can race with in-progress partitioned rollouts.
 
 	// Update per-cluster metrics
-	clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
+	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.SetReadyReplicas(state.ReadyReplicas)
 	clusterMetrics.SetPhase(cluster.Status.Phase)
 

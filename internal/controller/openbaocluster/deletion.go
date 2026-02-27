@@ -13,9 +13,9 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	controllerutil "github.com/dc-tec/openbao-operator/internal/controller"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	"github.com/dc-tec/openbao-operator/internal/logging"
+	observability "github.com/dc-tec/openbao-operator/internal/observability"
 )
 
 func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -36,7 +36,7 @@ func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger lo
 	}
 
 	// Clear per-cluster metrics to avoid leaving stale series after deletion.
-	clusterMetrics := controllerutil.NewClusterMetrics(cluster.Namespace, cluster.Name)
+	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.Clear()
 
 	infraMgr := inframanager.NewManagerWithReader(r.Client, r.APIReader, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys, r.Platform)

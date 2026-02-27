@@ -31,9 +31,9 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	controllermetrics "github.com/dc-tec/openbao-operator/internal/controller"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/interfaces"
+	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	"github.com/dc-tec/openbao-operator/internal/restore"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
@@ -55,7 +55,7 @@ type OpenBaoRestoreReconciler struct {
 // Reconcile is part of the main Kubernetes reconciliation loop.
 func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := controllermetrics.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoRestore)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoRestore)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
