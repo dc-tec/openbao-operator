@@ -29,7 +29,7 @@ import (
 	security "github.com/dc-tec/openbao-operator/internal/security"
 )
 
-// infraReconciler wraps InfraManager to implement SubReconciler interface.
+// infraReconciler wraps InfraManager to implement the controller's sub-reconciler contract.
 // It handles image verification and injects the verified digest into InfraManager.
 type infraReconciler struct {
 	client                  client.Client
@@ -332,7 +332,7 @@ func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger log
 	return targetImage
 }
 
-// Reconcile implements SubReconciler for infrastructure reconciliation.
+// Reconcile implements the controller's sub-reconciler contract for infrastructure reconciliation.
 // TODO: split this function into smaller functions
 // nolint:gocyclo
 func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {

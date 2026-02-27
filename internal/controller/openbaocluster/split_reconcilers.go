@@ -291,7 +291,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 		cluster.Status.Workload = &openbaov1alpha1.WorkloadControllerStatus{}
 	}
 
-	reconcilers := []SubReconciler{
+	reconcilers := []subReconciler{
 		certmanager.NewManagerWithReloader(r.parent.Client, r.parent.Scheme, r.parent.TLSReload),
 		&infraReconciler{
 			client:                r.parent.Client,
@@ -353,7 +353,7 @@ func (r *openBaoClusterWorkloadReconciler) runWorkloadReconcilers(
 	ctx context.Context,
 	logger logr.Logger,
 	original, cluster *openbaov1alpha1.OpenBaoCluster,
-	reconcilers []SubReconciler,
+	reconcilers []subReconciler,
 	recordError func(error),
 ) (ctrl.Result, error) {
 	for _, rec := range reconcilers {
@@ -453,7 +453,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 		cluster.Status.AdminOps = &openbaov1alpha1.AdminOpsControllerStatus{}
 	}
 
-	var reconcilers []SubReconciler
+	var reconcilers []subReconciler
 	infraMgr := inframanager.NewManagerWithReader(r.parent.Client, r.parent.APIReader, r.parent.Scheme, r.parent.OperatorNamespace, r.parent.OIDCIssuer, r.parent.OIDCJWTKeys, r.parent.Platform)
 	// Blue/green upgrade strategy
 	reconcilers = append(reconcilers, bluegreen.NewManager(r.parent.Client, r.parent.Scheme, infraMgr, r.parent.SmartClientConfig, r.parent.ImageVerifier, r.parent.OperatorImageVerifier, r.parent.Platform))
