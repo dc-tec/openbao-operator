@@ -2,18 +2,16 @@ package opslifecycle
 
 import (
 	"testing"
-
-	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 func TestRequeueDelay(t *testing.T) {
 	t.Parallel()
 
 	cases := map[RetryClass]int64{
-		RetryClassLockContention: int64(constants.RequeueShort),
-		RetryClassProgressPoll:   int64(constants.RequeueShort),
-		RetryClassStandard:       int64(constants.RequeueStandard),
-		RetryClass("unknown"):    int64(constants.RequeueStandard),
+		RetryClassLockContention: int64(requeueShort),
+		RetryClassProgressPoll:   int64(requeueShort),
+		RetryClassStandard:       int64(requeueStandard),
+		RetryClass("unknown"):    int64(requeueStandard),
 	}
 
 	for class, expected := range cases {
