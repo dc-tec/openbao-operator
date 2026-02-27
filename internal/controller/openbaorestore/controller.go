@@ -18,11 +18,8 @@ package openbaorestore
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -30,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	observability "github.com/dc-tec/openbao-operator/internal/observability"
@@ -77,41 +75,15 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	logger := log.FromContext(ctx).WithName("openbaorestore")
 
-	// Fetch the OpenBaoRestore resource
-	restoreResource := &openbaov1alpha1.OpenBaoRestore{}
-	if err := r.Get(ctx, req.NamespacedName, restoreResource); err != nil {
-		if apierrors.IsNotFound(err) {
-			// Resource deleted - nothing to do
-			return ctrl.Result{}, nil
-		}
-		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoRestore: %w", err)
-	}
-
-	// Add context fields for logging
-	logger = logger.WithValues(
-		"restore", req.Name,
-		"namespace", req.Namespace,
-		"cluster", restoreResource.Spec.Cluster,
-		"phase", restoreResource.Status.Phase,
-	)
-
-	logger.Info("Reconciling OpenBaoRestore")
-
 	// Create restore manager if not set
 	if r.RestoreManager == nil {
 		r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder, r.OperatorImageVerifier, r.Platform)
 	}
 
-	// Delegate to restore manager
-	result, err = r.RestoreManager.Reconcile(ctx, logger, restoreResource)
+	result, err = appopenbaorestore.ReconcileOpenBaoRestore(ctx, r.Client, req, logger, r.RestoreManager)
 	if err != nil {
 		recordError(err)
-		logger.Error(err, "Reconciliation failed")
 		return result, err
-	}
-
-	if result.RequeueAfter > 0 {
-		logger.V(1).Info("Requeuing reconciliation", "requeueAfter", result.RequeueAfter)
 	}
 
 	return result, nil
@@ -136,9 +108,4 @@ func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&openbaov1alpha1.OpenBaoRestore{}).
 		Named("openbaorestore").
 		Complete(r)
-}
-
-// logr returns a logger for the reconciler.
-func (r *OpenBaoRestoreReconciler) _(logger logr.Logger) logr.Logger {
-	return logger.WithName("openbaorestore-controller")
 }
