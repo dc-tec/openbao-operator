@@ -54,6 +54,7 @@ import (
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
 	openbaoclustercontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
 	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
+	"github.com/dc-tec/openbao-operator/internal/entrypoint"
 	initmanager "github.com/dc-tec/openbao-operator/internal/init"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -68,14 +69,11 @@ var (
 )
 
 const (
-	admissionEnforcementFail        = "fail"
-	admissionEnforcementWarn        = "warn"
-	admissionEnforcementExpectedMsg = "expected --admission-enforcement=fail or warn"
-	platformAuto                    = "auto"
-	platformKubernetes              = "kubernetes"
-	platformOpenShift               = "openshift"
-	controllerNameOpenBaoCluster    = "openbaocluster"
-	controllerNameOpenBaoRestore    = "openbaorestore"
+	platformAuto                 = "auto"
+	platformKubernetes           = "kubernetes"
+	platformOpenShift            = "openshift"
+	controllerNameOpenBaoCluster = "openbaocluster"
+	controllerNameOpenBaoRestore = "openbaorestore"
 )
 
 func detectPlatform(cfg *rest.Config) string {
@@ -96,17 +94,6 @@ func detectPlatform(cfg *rest.Config) string {
 	}
 
 	return platformKubernetes
-}
-
-func normalizeAdmissionEnforcement(in string) (string, error) {
-	normalized := strings.ToLower(strings.TrimSpace(in))
-	if normalized == "" {
-		normalized = admissionEnforcementFail
-	}
-	if normalized != admissionEnforcementFail && normalized != admissionEnforcementWarn {
-		return "", fmt.Errorf("invalid admission enforcement mode %q", normalized)
-	}
-	return normalized, nil
 }
 
 func init() {
@@ -144,13 +131,7 @@ func Run(args []string) {
 	var admissionEnforcement string
 	var admissionStartupTimeout time.Duration
 
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metrics endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&secureMetrics, "metrics-secure", true,
-		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
+	entrypoint.BindManagerFlags(flag.CommandLine, &metricsAddr, &probeAddr, &enableLeaderElection, &secureMetrics)
 	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
@@ -171,11 +152,7 @@ func Run(args []string) {
 	flag.DurationVar(&clientCBOpenDuration, "openbao-client-cb-open-duration", 30*time.Second,
 		"The duration the circuit breaker remains open before testing the connection.")
 
-	flag.StringVar(&admissionEnforcement, "admission-enforcement", admissionEnforcementFail,
-		"Admission dependency enforcement mode: fail or warn. "+
-			"In fail mode the operator refuses to start unless required ValidatingAdmissionPolicies are present and enforced.")
-	flag.DurationVar(&admissionStartupTimeout, "admission-startup-timeout", 60*time.Second,
-		"Maximum time to wait for required admission policies at startup when --admission-enforcement=fail.")
+	entrypoint.BindAdmissionFlags(flag.CommandLine, &admissionEnforcement, &admissionStartupTimeout)
 
 	opts := zap.Options{
 		Development: false,
@@ -188,9 +165,9 @@ func Run(args []string) {
 	var err error
 
 	platform = strings.ToLower(strings.TrimSpace(platform))
-	admissionEnforcement, err = normalizeAdmissionEnforcement(admissionEnforcement)
+	admissionEnforcement, err = entrypoint.NormalizeAdmissionEnforcement(admissionEnforcement)
 	if err != nil {
-		setupLog.Error(err, admissionEnforcementExpectedMsg)
+		setupLog.Error(err, entrypoint.AdmissionEnforcementExpectedMsg)
 		os.Exit(2)
 	}
 
@@ -416,7 +393,7 @@ func Run(args []string) {
 		admission.SetAdmissionDependenciesReady(true)
 	} else {
 		switch admissionEnforcement {
-		case admissionEnforcementFail:
+		case entrypoint.AdmissionEnforcementFail:
 			setupLog.Info("Waiting for admission policy dependencies", "timeout", admissionStartupTimeout)
 			status, err := admission.WaitForDependencies(
 				context.Background(),

@@ -19,14 +19,13 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
-	"github.com/dc-tec/openbao-operator/internal/auth"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	security "github.com/dc-tec/openbao-operator/internal/security"
 )
 
 // infraReconciler wraps InfraManager to implement the controller's sub-reconciler contract.
@@ -47,7 +46,7 @@ type infraReconciler struct {
 	platform                string
 	smartClientConfig       openbao.ClientConfig
 	clientForPodFunc        func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (*openbao.Client, error)
-	discoverOIDCConfigFunc  func(ctx context.Context, cfg *rest.Config) (*auth.OIDCConfig, error)
+	discoverOIDCConfigFunc  func(ctx context.Context, cfg *rest.Config) (*appopenbaocluster.OIDCConfig, error)
 }
 
 func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
@@ -62,13 +61,12 @@ func oidcDiscoveryError(err error) error {
 		return nil
 	}
 
-	var statusErr *auth.HTTPStatusError
-	if errors.As(err, &statusErr) {
-		switch statusErr.StatusCode {
+	if statusCode, ok := appopenbaocluster.OIDCDiscoveryStatusCode(err); ok {
+		switch statusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
 			return operatorerrors.WrapPermanentConfig(fmt.Errorf(
 				"OIDC discovery blocked by Kubernetes API RBAC (%d). Ensure the operator ServiceAccount can GET %q and %q on the Kubernetes API server (nonResourceURLs RBAC): %w",
-				statusErr.StatusCode,
+				statusCode,
 				"/.well-known/openid-configuration",
 				"/openid/v1/jwks",
 				err,
@@ -79,7 +77,7 @@ func oidcDiscoveryError(err error) error {
 				err,
 			))
 		default:
-			if statusErr.StatusCode == http.StatusTooManyRequests || statusErr.StatusCode >= 500 {
+			if statusCode == http.StatusTooManyRequests || statusCode >= 500 {
 				return operatorerrors.WrapTransientKubernetesAPI(err)
 			}
 			return operatorerrors.WrapPermanentConfig(err)
@@ -103,10 +101,7 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 
 	discover := r.discoverOIDCConfigFunc
 	if discover == nil {
-		discover = func(ctx context.Context, cfg *rest.Config) (*auth.OIDCConfig, error) {
-			// Security: never use any CR-provided URL as the discovery target.
-			return auth.DiscoverConfig(ctx, cfg, "")
-		}
+		discover = appopenbaocluster.DiscoverOIDCConfig
 	}
 
 	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -200,7 +195,7 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 
 func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	opts := imageVerificationOptions{
-		enabled:              security.IsMainImageVerificationEnabled(cluster),
+		enabled:              appopenbaocluster.IsMainImageVerificationEnabled(cluster),
 		imageRef:             imageRef,
 		failurePolicy:        imageVerificationFailurePolicy(cluster),
 		failureReason:        constants.ReasonImageVerificationFailed,
@@ -219,7 +214,7 @@ func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr
 
 func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
 	// Use OperatorImageVerification only - no fallback to ImageVerification
-	if !security.IsOperatorImageVerificationEnabled(cluster) {
+	if !appopenbaocluster.IsOperatorImageVerificationEnabled(cluster) {
 		return "", nil
 	}
 
@@ -235,7 +230,7 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 
 	verifyFunc := r.verifyOperatorImageFunc
 	if verifyFunc == nil {
-		verifyFunc = security.VerifyOperatorImageForCluster
+		verifyFunc = appopenbaocluster.VerifyOperatorImageForCluster
 	}
 
 	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
