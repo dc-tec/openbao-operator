@@ -10,8 +10,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	controllerdeps "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster/deps"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/kube"
+	"github.com/dc-tec/openbao-operator/internal/observability"
 )
 
 // patchStatusSSA updates the cluster status using Server-Side Apply.
@@ -58,12 +59,14 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	r.setTLSReadyCondition(ctx, cluster)
 
 	// 1. Gather all observed state (API calls).
-	state, err := r.gatherClusterState(ctx, logger, cluster)
+	state, err := appopenbaocluster.GatherStatusState(ctx, logger, appopenbaocluster.StatusDependencies{
+		Reader: r.Client,
+	}, cluster)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	observedVersion := observedVersionFromPods(state)
+	observedVersion := appopenbaocluster.ObservedVersionFromPods(state)
 
 	// 2. Compute and set all conditions (pure logic).
 	now := metav1.Now()
@@ -74,18 +77,23 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	cluster.Status.ActiveLeader = state.LeaderName
 	cluster.Status.Phase = computePhase(state)
 
-	r.reconcileCurrentVersion(logger, cluster, state, observedVersion)
-	r.maybeAdvanceCurrentVersionForBlueGreen(logger, cluster, observedVersion)
+	appopenbaocluster.ReconcileCurrentVersion(logger, cluster, state, observedVersion)
+	appopenbaocluster.MaybeAdvanceCurrentVersionForBlueGreen(logger, cluster, observedVersion)
 	// Rolling upgrade completion is finalized by the AdminOps rolling manager.
 	// The status controller must not independently advance CurrentVersion for rolling,
 	// otherwise it can race with in-progress partitioned rollouts.
 
 	// Update per-cluster metrics.
-	clusterMetrics := controllerdeps.NewClusterMetrics(cluster.Namespace, cluster.Name)
+	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.SetReadyReplicas(state.ReadyReplicas)
 	clusterMetrics.SetPhase(cluster.Status.Phase)
 
-	r.warnIfSelfInitDisabled(logger, cluster)
+	if appopenbaocluster.ShouldWarnSelfInitDisabled(cluster) {
+		logger.Info("SECURITY WARNING: SelfInit is disabled - root token will be stored in Secret",
+			"cluster_namespace", cluster.Namespace,
+			"cluster_name", cluster.Name,
+			"secret_name", cluster.Name+"-root-token")
+	}
 
 	// 4. Persist status (single API call via SSA).
 	if err := r.patchStatusSSA(ctx, cluster); err != nil {

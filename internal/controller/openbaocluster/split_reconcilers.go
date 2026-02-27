@@ -14,7 +14,7 @@ import (
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	controllerdeps "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster/deps"
+	"github.com/dc-tec/openbao-operator/internal/observability"
 )
 
 type openBaoClusterWorkloadReconciler struct {
@@ -41,7 +41,7 @@ func (r *OpenBaoClusterReconciler) loggerFor(ctx context.Context, _ ctrl.Request
 
 func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := controllerdeps.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterWorkload)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterWorkload)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -176,7 +176,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 
 func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := controllerdeps.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterAdminOps)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterAdminOps)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -225,7 +225,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 
 func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := controllerdeps.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterStatus)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterStatus)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -255,7 +255,15 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 	if !cluster.DeletionTimestamp.IsZero() {
 		logger.Info("OpenBaoCluster is marked for deletion")
 		if containsFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer) {
-			if err := r.parent.handleDeletion(ctx, logger, cluster); err != nil {
+			if err := appopenbaocluster.HandleDeletion(ctx, logger, appopenbaocluster.DeletionDependencies{
+				Client:            r.parent.Client,
+				APIReader:         r.parent.APIReader,
+				Scheme:            r.parent.Scheme,
+				OperatorNamespace: r.parent.OperatorNamespace,
+				OIDCIssuer:        r.parent.OIDCIssuer,
+				OIDCJWTKeys:       r.parent.OIDCJWTKeys,
+				Platform:          r.parent.Platform,
+			}, cluster); err != nil {
 				return ctrl.Result{}, err
 			}
 			cluster.Finalizers = removeFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer)

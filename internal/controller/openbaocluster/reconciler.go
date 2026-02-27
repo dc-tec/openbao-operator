@@ -8,7 +8,7 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/admission"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
-	"github.com/dc-tec/openbao-operator/internal/openbao"
+	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 )
