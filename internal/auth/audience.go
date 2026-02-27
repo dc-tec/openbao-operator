@@ -3,16 +3,19 @@ package auth
 import (
 	"os"
 	"strings"
+)
 
-	"github.com/dc-tec/openbao-operator/internal/constants"
+const (
+	envOpenBaoJWTAudience        = "OPENBAO_JWT_AUDIENCE"
+	tokenAudienceOpenBaoInternal = "openbao-internal"
 )
 
 // OpenBaoJWTAudience returns the configured JWT audience for OpenBao auth tokens.
-// Defaults to constants.TokenAudienceOpenBaoInternal when unset.
+// Defaults to tokenAudienceOpenBaoInternal when unset.
 func OpenBaoJWTAudience() string {
-	raw := strings.TrimSpace(os.Getenv(constants.EnvOpenBaoJWTAudience))
+	raw := strings.TrimSpace(os.Getenv(envOpenBaoJWTAudience))
 	if raw == "" {
-		return constants.TokenAudienceOpenBaoInternal
+		return tokenAudienceOpenBaoInternal
 	}
 	return raw
 }
