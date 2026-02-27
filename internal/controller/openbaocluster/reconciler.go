@@ -7,8 +7,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/dc-tec/openbao-operator/internal/admission"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
-	"github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 )
@@ -30,7 +30,7 @@ type OpenBaoClusterReconciler struct {
 	// When true, the controller uses Owns() watches for event-driven reconciliation
 	// and caching is enabled for the watched namespace.
 	SingleTenantMode      bool
-	SmartClientConfig     openbao.ClientConfig
+	SmartClientConfig     appopenbaocluster.SmartClientConfig
 	ImageVerifier         imageverify.Verifier
 	OperatorImageVerifier imageverify.Verifier
 	Platform              string

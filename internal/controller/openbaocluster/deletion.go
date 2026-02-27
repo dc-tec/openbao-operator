@@ -12,9 +12,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/constants"
-	controllerdeps "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster/deps"
-	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
+	"github.com/dc-tec/openbao-operator/internal/logging"
+	"github.com/dc-tec/openbao-operator/internal/observability"
 )
 
 func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -35,11 +36,24 @@ func (r *OpenBaoClusterReconciler) handleDeletion(ctx context.Context, logger lo
 	}
 
 	// Clear per-cluster metrics to avoid leaving stale series after deletion.
-	clusterMetrics := controllerdeps.NewClusterMetrics(cluster.Namespace, cluster.Name)
+	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.Clear()
 
-	infraMgr := inframanager.NewManagerWithReader(r.Client, r.APIReader, r.Scheme, r.OperatorNamespace, r.OIDCIssuer, r.OIDCJWTKeys, r.Platform)
-	if err := infraMgr.Cleanup(ctx, logger, cluster, policy); err != nil {
+	if err := appopenbaocluster.CleanupInfraOnDeletion(
+		ctx,
+		logger,
+		appopenbaocluster.InfraCleanupDependencies{
+			Client:            r.Client,
+			APIReader:         r.APIReader,
+			Scheme:            r.Scheme,
+			OperatorNamespace: r.OperatorNamespace,
+			OIDCIssuer:        r.OIDCIssuer,
+			OIDCJWTKeys:       r.OIDCJWTKeys,
+			Platform:          r.Platform,
+		},
+		cluster,
+		policy,
+	); err != nil {
 		return err
 	}
 
@@ -92,7 +106,12 @@ func (r *OpenBaoClusterReconciler) orphanRetentionSecrets(ctx context.Context, l
 			"secret", secretName,
 			"cluster_namespace", cluster.Namespace,
 			"cluster_name", cluster.Name)
-		controllerdeps.LogRetentionSecretOrphaned(logger, cluster.Namespace, cluster.Name, secretName, string(cluster.Spec.DeletionPolicy))
+		logging.LogAuditEvent(logger, logging.EventRetentionSecretOrphaned, map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+			"secret_name":       secretName,
+			"deletion_policy":   string(cluster.Spec.DeletionPolicy),
+		})
 	}
 
 	return nil

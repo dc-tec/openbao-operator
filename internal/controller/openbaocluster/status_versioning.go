@@ -6,8 +6,7 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	controllerdeps "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster/deps"
-	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 )
 
 func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState, observedVersion string) {
@@ -40,7 +39,7 @@ func (r *OpenBaoClusterReconciler) reconcileCurrentVersion(logger logr.Logger, c
 		return
 	}
 
-	isDowngrade, err := controllerdeps.IsVersionDowngrade(cluster.Status.CurrentVersion, observedVersion)
+	isDowngrade, err := appopenbaocluster.IsVersionDowngrade(cluster.Status.CurrentVersion, observedVersion)
 	if err != nil {
 		logger.V(1).Info("Skipping CurrentVersion correction due to unparsable version",
 			"currentVersion", cluster.Status.CurrentVersion,
@@ -79,7 +78,7 @@ func (r *OpenBaoClusterReconciler) maybeAdvanceCurrentVersionForBlueGreen(logger
 	// CRITICAL CHECK: Verify that the upgrade actually happened.
 	// PhaseIdle can mean "Before Upgrade" OR "After Upgrade".
 	// We distinguish them by checking if the active BlueRevision matches the current Spec.
-	currentSpecRevision := controllerdeps.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+	currentSpecRevision := appopenbaocluster.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
 	if cluster.Status.BlueGreen.BlueRevision != currentSpecRevision {
 		return
 	}
@@ -126,7 +125,7 @@ func observedVersionFromPods(state *clusterState) string {
 			pod := &state.Pods[i]
 			if pod.Name == state.LeaderName {
 				if pod.Labels != nil {
-					if raw, ok := pod.Labels[openbaolabels.LabelVersion]; ok {
+					if raw, ok := pod.Labels[appopenbaocluster.OpenBaoLabelVersion]; ok {
 						v := strings.TrimSpace(raw)
 						if v != "" {
 							return v
@@ -140,7 +139,7 @@ func observedVersionFromPods(state *clusterState) string {
 
 	// Next, prefer pod0 (stable identity).
 	if state.Pod0 != nil && state.Pod0.Labels != nil {
-		if raw, ok := state.Pod0.Labels[openbaolabels.LabelVersion]; ok {
+		if raw, ok := state.Pod0.Labels[appopenbaocluster.OpenBaoLabelVersion]; ok {
 			v := strings.TrimSpace(raw)
 			if v != "" {
 				return v
@@ -155,7 +154,7 @@ func observedVersionFromPods(state *clusterState) string {
 		if pod.Labels == nil {
 			return ""
 		}
-		raw, ok := pod.Labels[openbaolabels.LabelVersion]
+		raw, ok := pod.Labels[appopenbaocluster.OpenBaoLabelVersion]
 		if !ok {
 			return ""
 		}
