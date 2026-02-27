@@ -9,6 +9,7 @@ EDGE_FILE="${OUT_DIR}/internal-dependency-edges.tsv"
 DOT_FILE="${OUT_DIR}/internal-dependency-graph.dot"
 MMD_FILE="${OUT_DIR}/internal-dependency-graph.mmd"
 REPORT_FILE="${OUT_DIR}/internal-dependency-report.md"
+ADAPTER_AUDIT_FILE="${OUT_DIR}/adapter-boundary-audit.md"
 
 mkdir -p "${OUT_DIR}"
 
@@ -50,6 +51,7 @@ trap 'rm -rf "${TMP_DIR}"' EXIT
 TOP_IN_FILE="${TMP_DIR}/top-in.txt"
 TOP_OUT_FILE="${TMP_DIR}/top-out.txt"
 WARNINGS_FILE="${TMP_DIR}/warnings.txt"
+ADAPTER_AUDIT_TMP_FILE="${TMP_DIR}/adapter-boundary-audit.tsv"
 ACTIVE_EXCEPTIONS_FILE="${TMP_DIR}/active-policy-exceptions.tsv"
 POLICY_EXCEPTIONS_FILE="${SCRIPT_DIR}/dependency-policy-exceptions.tsv"
 
@@ -147,6 +149,49 @@ awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FIL
     }
   }
 ' "${EDGE_FILE}" | sort -u > "${WARNINGS_FILE}"
+
+# Adapter-to-adapter edge audit (report-only)
+awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FILE}" '
+  function rel(p) {
+    sub(mod "/", "", p)
+    return p
+  }
+  function is_adapter_pkg(p) {
+    return p ~ /^internal\/(kube|openbao|storage|auth|cluster|config|raft|security|storageenv|operationlock|revision|probe)$/
+  }
+  BEGIN {
+    while ((getline line < policy_exceptions) > 0) {
+      if (line ~ /^[[:space:]]*#/ || line ~ /^[[:space:]]*$/) {
+        continue
+      }
+      fields = split(line, parts, "\t")
+      if (fields < 2) {
+        continue
+      }
+      key = parts[1] SUBSEP parts[2]
+      adapter_adapter_exception[key] = 1
+      if (fields >= 3) {
+        adapter_adapter_exception_reason[key] = parts[3]
+      }
+    }
+    close(policy_exceptions)
+  }
+  {
+    src = rel($1)
+    dep = rel($2)
+    if (!is_adapter_pkg(src) || !is_adapter_pkg(dep) || src == dep) {
+      next
+    }
+    key = src SUBSEP dep
+    status = "untracked"
+    reason = ""
+    if (adapter_adapter_exception[key]) {
+      status = "exception"
+      reason = adapter_adapter_exception_reason[key]
+    }
+    printf "%s\t%s\t%s\t%s\n", status, src, dep, reason
+  }
+' "${EDGE_FILE}" | sort -u > "${ADAPTER_AUDIT_TMP_FILE}"
 
 if [ "${root_controller_pkg_present}" = "true" ]; then
   printf '[shared-controller-package-present] internal/controller package exists; keep shared helpers in internal/predicates or internal/observability\n' >> "${WARNINGS_FILE}"
@@ -288,6 +333,7 @@ GENERATED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo "- Edge list: ${EDGE_FILE}"
   echo "- Graphviz DOT: ${DOT_FILE}"
   echo "- Mermaid: ${MMD_FILE}"
+  echo "- Adapter boundary audit: ${ADAPTER_AUDIT_FILE}"
   echo
   echo "## Top Fan-In"
   echo
@@ -337,11 +383,38 @@ GENERATED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   fi
 } > "${REPORT_FILE}"
 
+{
+  echo "# Adapter Boundary Audit"
+  echo
+  echo "Generated: ${GENERATED_AT}"
+  echo 'Scope: adapter-to-adapter runtime edges (`internal/* -> internal/*`).'
+  echo
+  echo "## Findings"
+  echo
+  if [ -s "${ADAPTER_AUDIT_TMP_FILE}" ]; then
+    echo "| Status | Edge | Reason |"
+    echo "| :--- | :--- | :--- |"
+    awk -F'\t' '
+      {
+        reason = $4
+        if (reason == "") {
+          reason = "-"
+        }
+        gsub(/\|/, "\\|", reason)
+        printf "| %s | `%s -> %s` | %s |\n", $1, $2, $3, reason
+      }
+    ' "${ADAPTER_AUDIT_TMP_FILE}"
+  else
+    echo "- None"
+  fi
+} > "${ADAPTER_AUDIT_FILE}"
+
 echo "Internal dependency report generated:"
 echo "  ${REPORT_FILE}"
 echo "  ${EDGE_FILE}"
 echo "  ${DOT_FILE}"
 echo "  ${MMD_FILE}"
+echo "  ${ADAPTER_AUDIT_FILE}"
 echo ""
 echo "Warnings are report-only; this command does not fail on policy findings."
 
