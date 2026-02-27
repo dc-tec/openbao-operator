@@ -4,7 +4,6 @@ package restore
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -26,7 +25,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	observability "github.com/dc-tec/openbao-operator/internal/observability"
-	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	"github.com/dc-tec/openbao-operator/internal/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	"github.com/dc-tec/openbao-operator/internal/security"
 )
@@ -99,6 +98,17 @@ func (m *Manager) patchStatus(ctx context.Context, restore *openbaov1alpha1.Open
 	return m.client.Status().Patch(ctx, restore, client.MergeFrom(original))
 }
 
+func restoreOperationLock(restore *openbaov1alpha1.OpenBaoRestore) opslifecycle.OperationLock {
+	return opslifecycle.OperationLock{
+		Holder:    fmt.Sprintf("%s/%s", constants.ControllerNameOpenBaoRestore, restore.Name),
+		Operation: openbaov1alpha1.ClusterOperationRestore,
+	}
+}
+
+func restoreLockMessage(restore *openbaov1alpha1.OpenBaoRestore) string {
+	return fmt.Sprintf("restore %s/%s", restore.Namespace, restore.Name)
+}
+
 func (m *Manager) ensureTerminalLockReleased(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to release cluster operation lock for terminal restore %s/%s: %w", restore.Namespace, restore.Name, err)
@@ -121,12 +131,10 @@ func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore
 	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
 	}
-	logging.LogAuditEvent(logger, logging.EventRestorePhaseTransition, map[string]string{
+	opslifecycle.LogPhaseTransition(logger, logging.EventRestorePhaseTransition, string(openbaov1alpha1.RestorePhasePending), string(openbaov1alpha1.RestorePhaseValidating), map[string]string{
 		"cluster_namespace": restore.Namespace,
 		"cluster_name":      restore.Spec.Cluster,
 		"restore_name":      restore.Name,
-		"phase_from":        string(openbaov1alpha1.RestorePhasePending),
-		"phase_to":          string(openbaov1alpha1.RestorePhaseValidating),
 	})
 
 	observability.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordStarted()
@@ -192,12 +200,10 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)
 	}
-	logging.LogAuditEvent(logger, logging.EventRestorePhaseTransition, map[string]string{
+	opslifecycle.LogPhaseTransition(logger, logging.EventRestorePhaseTransition, string(openbaov1alpha1.RestorePhaseValidating), string(openbaov1alpha1.RestorePhaseRunning), map[string]string{
 		"cluster_namespace": restore.Namespace,
 		"cluster_name":      restore.Spec.Cluster,
 		"restore_name":      restore.Name,
-		"phase_from":        string(openbaov1alpha1.RestorePhaseValidating),
-		"phase_to":          string(openbaov1alpha1.RestorePhaseRunning),
 	})
 
 	logger.Info("Restore validation passed, transitioning to Running phase")
@@ -232,8 +238,7 @@ func (m *Manager) validateCluster(ctx context.Context, logger logr.Logger, resto
 // acquireOperationLock acquires the cluster operation lock for the restore operation.
 // Returns (lockBefore, forceAcquired, result, error) where result is non-nil if lock acquisition failed and should return early.
 func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (*openbaov1alpha1.OperationLockStatus, bool, *ctrl.Result, error) {
-	lockHolder := fmt.Sprintf("%s/%s", constants.ControllerNameOpenBaoRestore, restore.Name)
-	lockMessage := fmt.Sprintf("restore %s/%s", restore.Namespace, restore.Name)
+	lock := restoreOperationLock(restore)
 	forceAcquire := false
 
 	if restore.Spec.OverrideOperationLock {
@@ -247,29 +252,22 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 	}
 
 	lockBefore := cluster.Status.OperationLock
-	if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
-		Holder:    lockHolder,
-		Operation: openbaov1alpha1.ClusterOperationRestore,
-		Message:   lockMessage,
-		Force:     forceAcquire,
+	if err := opslifecycle.Acquire(ctx, m.client, cluster, lock, opslifecycle.AcquireOptions{
+		Message: restoreLockMessage(restore),
+		Force:   forceAcquire,
 	}); err != nil {
-		if errors.Is(err, operationlock.ErrLockHeld) {
+		if opslifecycle.IsLockHeld(err) {
 			fields := map[string]string{
 				"cluster_namespace": restore.Namespace,
 				"cluster_name":      restore.Spec.Cluster,
 				"restore_name":      restore.Name,
 				"operation":         string(openbaov1alpha1.ClusterOperationRestore),
-				"holder":            lockHolder,
+				"holder":            lock.Holder,
 			}
-			var heldErr *operationlock.HeldError
-			if errors.As(err, &heldErr) {
-				fields["held_by_operation"] = string(heldErr.Operation)
-				fields["held_by_holder"] = heldErr.Holder
-			}
+			opslifecycle.AddHeldAuditFields(fields, err)
 			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
 			original := restore.DeepCopy()
-			var held *operationlock.HeldError
-			if errors.As(err, &held) {
+			if held, ok := opslifecycle.HeldError(err); ok {
 				restore.Status.Message = fmt.Sprintf("Waiting for cluster operation lock: operation=%s holder=%s", held.Operation, held.Holder)
 			} else {
 				restore.Status.Message = "Waiting for cluster operation lock"
@@ -277,7 +275,7 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 			if statusErr := m.patchStatus(ctx, restore, original); statusErr != nil {
 				return nil, false, nil, fmt.Errorf("failed to patch restore status after lock contention: %w", statusErr)
 			}
-			result := ctrl.Result{RequeueAfter: constants.RequeueShort}
+			result := ctrl.Result{RequeueAfter: opslifecycle.RequeueDelay(opslifecycle.RetryClassLockContention)}
 			return nil, false, &result, nil
 		}
 		return nil, false, nil, fmt.Errorf("failed to acquire cluster operation lock: %w", err)
@@ -289,17 +287,17 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 			"cluster_name":       restore.Spec.Cluster,
 			"restore_name":       restore.Name,
 			"operation":          string(openbaov1alpha1.ClusterOperationRestore),
-			"holder":             lockHolder,
+			"holder":             lock.Holder,
 			"replaced_operation": string(lockBefore.Operation),
 			"replaced_holder":    lockBefore.Holder,
 		})
-	} else if lockBefore == nil || lockBefore.Operation != openbaov1alpha1.ClusterOperationRestore || lockBefore.Holder != lockHolder {
+	} else if !lock.IsHeldBy(lockBefore) {
 		logging.LogAuditEvent(logger, logging.EventOperationLockAcquired, map[string]string{
 			"cluster_namespace": restore.Namespace,
 			"cluster_name":      restore.Spec.Cluster,
 			"restore_name":      restore.Name,
 			"operation":         string(openbaov1alpha1.ClusterOperationRestore),
-			"holder":            lockHolder,
+			"holder":            lock.Holder,
 		})
 	}
 
@@ -382,17 +380,12 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 		return ctrl.Result{}, fmt.Errorf("failed to get target cluster: %w", err)
 	}
 
-	lockHolder := fmt.Sprintf("%s/%s", constants.ControllerNameOpenBaoRestore, restore.Name)
-	lockMessage := fmt.Sprintf("restore %s/%s", restore.Namespace, restore.Name)
-	lockHeldByUs := cluster.Status.OperationLock != nil &&
-		cluster.Status.OperationLock.Operation == openbaov1alpha1.ClusterOperationRestore &&
-		cluster.Status.OperationLock.Holder == lockHolder
-	if err := operationlock.Acquire(ctx, m.client, cluster, operationlock.AcquireOptions{
-		Holder:    lockHolder,
-		Operation: openbaov1alpha1.ClusterOperationRestore,
-		Message:   lockMessage,
+	lock := restoreOperationLock(restore)
+	lockHeldByUs := lock.IsHeldBy(cluster.Status.OperationLock)
+	if err := opslifecycle.Acquire(ctx, m.client, cluster, lock, opslifecycle.AcquireOptions{
+		Message: restoreLockMessage(restore),
 	}); err != nil {
-		if errors.Is(err, operationlock.ErrLockHeld) {
+		if opslifecycle.IsLockHeld(err) {
 			logging.LogAuditEvent(logger, logging.EventRestoreLockLost, map[string]string{
 				"cluster_namespace": restore.Namespace,
 				"cluster_name":      restore.Spec.Cluster,
@@ -408,7 +401,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 			"cluster_name":      restore.Spec.Cluster,
 			"restore_name":      restore.Name,
 			"operation":         string(openbaov1alpha1.ClusterOperationRestore),
-			"holder":            lockHolder,
+			"holder":            lock.Holder,
 		})
 	}
 
@@ -664,9 +657,9 @@ func (m *Manager) releaseClusterLock(ctx context.Context, logger logr.Logger, re
 		return fmt.Errorf("failed to get target cluster for lock release: %w", err)
 	}
 
-	holder := fmt.Sprintf("%s/%s", constants.ControllerNameOpenBaoRestore, restore.Name)
-	if err := operationlock.Release(ctx, m.client, cluster, holder, openbaov1alpha1.ClusterOperationRestore); err != nil {
-		if errors.Is(err, operationlock.ErrLockHeld) {
+	lock := restoreOperationLock(restore)
+	if err := opslifecycle.Release(ctx, m.client, cluster, lock); err != nil {
+		if opslifecycle.IsLockHeld(err) {
 			return nil
 		}
 		return err
@@ -676,7 +669,7 @@ func (m *Manager) releaseClusterLock(ctx context.Context, logger logr.Logger, re
 		"cluster_name":      restore.Spec.Cluster,
 		"restore_name":      restore.Name,
 		"operation":         string(openbaov1alpha1.ClusterOperationRestore),
-		"holder":            holder,
+		"holder":            lock.Holder,
 	})
 
 	logger.V(1).Info("Released cluster operation lock for restore", "cluster", cluster.Name)

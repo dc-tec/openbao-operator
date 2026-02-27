@@ -20,7 +20,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
-	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	"github.com/dc-tec/openbao-operator/internal/opslifecycle"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portinfra "github.com/dc-tec/openbao-operator/internal/port/infra"
@@ -343,18 +343,14 @@ func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logge
 				"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
 				"holder":            upgrade.UpgradeOperationLockHolder,
 			}
-			var heldErr *operationlock.HeldError
-			if errors.As(err, &heldErr) {
-				fields["held_by_operation"] = string(heldErr.Operation)
-				fields["held_by_holder"] = heldErr.Holder
-			}
+			opslifecycle.AddHeldAuditFields(fields, err)
 			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
 			if upgradeActive {
 				return true, recon.Result{}, fmt.Errorf("blue/green upgrade in progress but operation lock is held by another operation: %w", err)
 			}
 			logger.Info("Blue/green upgrade blocked by operation lock", "error", err.Error())
 			// Use RequeueShort to check more frequently when waiting for backup/restore to complete
-			return true, recon.Result{RequeueAfter: constants.RequeueShort}, nil
+			return true, recon.Result{RequeueAfter: opslifecycle.RequeueDelay(opslifecycle.RetryClassLockContention)}, nil
 		}
 		return true, recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 	}
@@ -501,14 +497,10 @@ func (m *Manager) transitionToPhase(logger logr.Logger, cluster *openbaov1alpha1
 	// Reset job failure count on phase transition
 	cluster.Status.BlueGreen.JobFailureCount = 0
 	cluster.Status.BlueGreen.LastJobFailure = ""
-	if previousPhase != phase {
-		logging.LogAuditEvent(logger, logging.EventBlueGreenPhaseTransition, map[string]string{
-			"cluster_namespace": cluster.Namespace,
-			"cluster_name":      cluster.Name,
-			"phase_from":        string(previousPhase),
-			"phase_to":          string(phase),
-		})
-	}
+	opslifecycle.LogPhaseTransition(logger, logging.EventBlueGreenPhaseTransition, string(previousPhase), string(phase), map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+	})
 }
 
 // executeStateMachine runs the blue/green upgrade state machine.
