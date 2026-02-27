@@ -107,12 +107,18 @@ Artifacts are written to `dist/architecture/`:
 - `internal-dependency-edges.tsv`
 - `internal-dependency-graph.dot`
 - `internal-dependency-graph.mmd`
+- `adapter-boundary-audit.md`
 
 The command is report-only and does not fail on policy findings.
 
 Intentional policy exceptions are tracked in:
 
 - `hack/architecture/dependency-policy-exceptions.tsv`
+
+The adapter boundary audit classifies runtime adapter-to-adapter edges as:
+
+- `exception`: edge is explicitly tracked in `hack/architecture/dependency-policy-exceptions.tsv`.
+- `untracked`: edge is not tracked and should be reviewed before merge.
 
 To track trends locally across refactors, save a baseline snapshot and compare against it:
 

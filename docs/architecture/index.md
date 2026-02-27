@@ -86,7 +86,24 @@ graph TD
     class STS,Svc,ObjStore,Pods,PVC write;
 ```
 
-### 1.3 Component Interaction
+### 1.3 Code Package Model
+
+The runtime code is organized into layered packages to keep controller plumbing, orchestration, and adapters separated.
+
+| Layer | Purpose | Package examples |
+| :--- | :--- | :--- |
+| `L0` | API types | `api/v1alpha1` |
+| `L1` | Entrypoints | `cmd/controller`, `cmd/provisioner`, helper binaries |
+| `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore` |
+| `L3` | App orchestration | `internal/app/openbaocluster`, `internal/app/openbaorestore`, `internal/app/provisioner` |
+| `L4` | Services/managers | `internal/backup`, `internal/restore`, `internal/upgrade`, `internal/infra`, `internal/certs`, `internal/init` |
+| `L5` | Ports/contracts | `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/initmanager` |
+| `L6` | Adapters/integrations | `internal/storage`, `internal/openbao`, `internal/kube`, `internal/security`, `internal/raft` |
+| `L7` | Cross-cutting utilities | `internal/errors`, `internal/logging`, `internal/reconcile`, `internal/observability`, `internal/predicates` |
+
+Dependency intent is top-down across layers: higher layers depend on lower layers through narrow contracts, and adapters do not import controller packages.
+
+### 1.4 Component Interaction
 
 ```mermaid
 sequenceDiagram
@@ -112,7 +129,7 @@ sequenceDiagram
     end
 ```
 
-### 1.4 Assumptions
+### 1.5 Assumptions
 
 !!! note "Core Assumptions"
     - **Storage**: Default StorageClass available.
