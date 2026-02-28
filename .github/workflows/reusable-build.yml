@@ -28,12 +28,16 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   build:
     name: Build ${{ matrix.image }}
     runs-on: &runner ubuntu-24.04 
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -71,9 +75,13 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+        with:
+          image: tonistiigi/binfmt:qemu-v10.2.1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        with:
+          version: v0.31.1
 
       - name: Build and push
         id: build
@@ -94,10 +102,20 @@ jobs:
         run: |
           echo "${{ matrix.output_key }}_digest=${{ steps.build.outputs.digest }}" >> "${GITHUB_OUTPUT}"
 
+      - name: Attest build provenance (GitHub)
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
   collect-digests:
     name: Collect Image Digests
     runs-on: *runner
     needs: [build]
+    permissions:
+      contents: read
+      packages: read
     outputs:
       manager_digest: ${{ steps.collect.outputs.manager_digest }}
       config_init_digest: ${{ steps.collect.outputs.config_init_digest }}
@@ -113,6 +131,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        with:
+          version: v0.31.1
 
       - name: Collect digests from registry
         id: collect

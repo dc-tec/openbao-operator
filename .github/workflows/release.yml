@@ -7,10 +7,7 @@ on:
       - "[0-9]*.[0-9]*.[0-9]*-*"
 
 permissions:
-  contents: write
-  packages: write
-  id-token: write
-  attestations: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -20,6 +17,8 @@ jobs:
   prepare:
     name: Prepare
     runs-on: &runner ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.vars.outputs.version }}
       chart_version: ${{ steps.vars.outputs.chart_version }}
@@ -94,6 +93,11 @@ jobs:
   build:
     name: Build Images
     needs: prepare
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/reusable-build.yml
     with:
       build_tag: ${{ needs.prepare.outputs.build_tag }}
@@ -104,6 +108,8 @@ jobs:
     name: Security Gate (vulncheck)
     runs-on: *runner
     needs: prepare
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -133,6 +139,9 @@ jobs:
     name: Security Gate (Trivy image ${{ matrix.image_name }})
     runs-on: *runner
     needs: [prepare, build]
+    permissions:
+      contents: read
+      packages: read
     strategy:
       fail-fast: false
       matrix:
@@ -166,6 +175,9 @@ jobs:
     name: E2E Gate (kind ${{ matrix.k8s }})
     runs-on: *runner
     needs: [prepare, build]
+    permissions:
+      contents: read
+      packages: read
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -255,6 +267,8 @@ jobs:
     name: Performance Gate (kind v1.34.3)
     runs-on: *runner
     needs: prepare
+    permissions:
+      contents: read
     timeout-minutes: 180
     steps:
       - name: Checkout
@@ -289,10 +303,43 @@ jobs:
           PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml
         run: make verify-perf
 
+  verify-provenance:
+    name: Verify Image Provenance
+    runs-on: *runner
+    needs: [prepare, build]
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+      MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
+      CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
+      CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
+      BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
+      BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
+      UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
+      UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - name: Verify image attestations
+        run: bash hack/ci/verify-image-attestations.sh
+
   promote:
     name: Promote + Publish Release
     runs-on: *runner
-    needs: [prepare, build, security-govulncheck, security-images, e2e, perf-gate]
+    needs: [prepare, build, security-govulncheck, security-images, e2e, perf-gate, verify-provenance]
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -309,6 +356,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        with:
+          version: v0.31.1
 
       - name: Promote tags (no rebuild)
         env:
@@ -351,36 +400,10 @@ jobs:
           cosign sign --yes --new-bundle-format=true "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           cosign sign --yes --new-bundle-format=true "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
-      - name: Attest build provenance (GitHub) - manager
-        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
-        with:
-          subject-name: ${{ needs.prepare.outputs.manager_image }}
-          subject-digest: ${{ needs.build.outputs.manager_digest }}
-          push-to-registry: true
-
-      - name: Attest build provenance (GitHub) - config-init
-        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
-        with:
-          subject-name: ${{ needs.prepare.outputs.config_init_image }}
-          subject-digest: ${{ needs.build.outputs.config_init_digest }}
-          push-to-registry: true
-
-      - name: Attest build provenance (GitHub) - backup executor
-        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
-        with:
-          subject-name: ${{ needs.prepare.outputs.backup_executor_image }}
-          subject-digest: ${{ needs.build.outputs.backup_executor_digest }}
-          push-to-registry: true
-
-      - name: Attest build provenance (GitHub) - upgrade executor
-        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
-        with:
-          subject-name: ${{ needs.prepare.outputs.upgrade_executor_image }}
-          subject-digest: ${{ needs.build.outputs.upgrade_executor_digest }}
-          push-to-registry: true
-
       - name: Setup Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.1.1
 
       - name: Set Artifact Hub prerelease annotation
         env:
@@ -527,31 +550,49 @@ jobs:
           check-latest: true
           cache: true
 
-      - name: Sign Helm chart by digest (OCI)
-        env:
-          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
-          OWNER: ${{ github.repository_owner }}
+      - name: Install crane
         run: |
           set -euo pipefail
           go install github.com/google/go-containerregistry/cmd/crane@v0.20.7
-          chart_ref="ghcr.io/${OWNER}/charts/openbao-operator:${CHART_VERSION}"
-          chart_digest="$(crane digest "${chart_ref}")"
-          cosign sign --yes --new-bundle-format=true "ghcr.io/${OWNER}/charts/openbao-operator@${chart_digest}"
 
-      - name: Verify Helm chart signature (bundle format)
+      - name: Resolve Helm chart digest (OCI)
+        id: chart-digest
         env:
           CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
           OWNER: ${{ github.repository_owner }}
-          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           chart_ref="ghcr.io/${OWNER}/charts/openbao-operator:${CHART_VERSION}"
           chart_digest="$(crane digest "${chart_ref}")"
+          echo "chart_digest=${chart_digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Sign Helm chart by digest (OCI)
+        env:
+          OWNER: ${{ github.repository_owner }}
+          CHART_DIGEST: ${{ steps.chart-digest.outputs.chart_digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes --new-bundle-format=true "ghcr.io/${OWNER}/charts/openbao-operator@${CHART_DIGEST}"
+
+      - name: Attest Helm chart provenance (GitHub)
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/charts/openbao-operator
+          subject-digest: ${{ steps.chart-digest.outputs.chart_digest }}
+          push-to-registry: true
+
+      - name: Verify Helm chart signature (bundle format)
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+          CHART_DIGEST: ${{ steps.chart-digest.outputs.chart_digest }}
+        run: |
+          set -euo pipefail
           cosign verify \
             --new-bundle-format=true \
-            --certificate-identity "https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${CHART_VERSION}" \
+            --certificate-identity "https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${{ needs.prepare.outputs.version }}" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            "ghcr.io/${OWNER}/charts/openbao-operator@${chart_digest}" >/dev/null
+            "ghcr.io/${OWNER}/charts/openbao-operator@${CHART_DIGEST}" >/dev/null
 
       - name: Generate digest-pinned installer manifest
         env:
@@ -618,6 +659,11 @@ jobs:
           set -euo pipefail
           sha256sum dist/install.yaml dist/crds.yaml dist/sbom-*.spdx.json > dist/checksums.txt
 
+      - name: Attest release checksums provenance (GitHub)
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: dist/checksums.txt
+
       - name: Sign release checksums (keyless, bundle format)
         run: |
           set -euo pipefail
@@ -638,6 +684,31 @@ jobs:
             --certificate-identity "https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${{ needs.prepare.outputs.version }}" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             dist/checksums.txt >/dev/null
+
+      - name: Verify chart + release-asset attestations
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+          CHART_DIGEST: ${{ steps.chart-digest.outputs.chart_digest }}
+        run: bash hack/ci/verify-release-artifact-attestations.sh
+
+      - name: Generate provenance index
+        env:
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
+          CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
+          CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
+          CHART_DIGEST: ${{ steps.chart-digest.outputs.chart_digest }}
+        run: bash hack/ci/generate-provenance-index.sh
 
       - name: Publish GitHub Release
         env:
@@ -668,6 +739,7 @@ jobs:
             dist/sbom-openbao-init.spdx.json
             dist/sbom-openbao-backup.spdx.json
             dist/sbom-openbao-upgrade.spdx.json
+            dist/provenance-index.json
           )
 
           declare -A existing_asset_sizes=()
