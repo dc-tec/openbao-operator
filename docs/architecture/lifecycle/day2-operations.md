@@ -104,3 +104,10 @@ For manual recovery:
 2. Reconcilers short-circuit and stop mutating resources, allowing manual actions (e.g., manual restore from snapshot).
 3. If an upgrade was in progress, it is paused but state is preserved in `status.upgrade`.
 4. After maintenance, user sets `spec.paused=false` to resume normal reconciliation (including any paused upgrade).
+
+## Official OpenBao Documentation
+
+- [Upgrade Guide](https://openbao.org/docs/upgrading/)
+- [Operator Step-Down Command](https://openbao.org/docs/commands/operator/step-down/)
+- [Operator Raft Command](https://openbao.org/docs/commands/operator/raft/)
+- [Recovery Mode Concepts](https://openbao.org/docs/concepts/recovery-mode/)

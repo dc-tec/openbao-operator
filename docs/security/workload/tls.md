@@ -95,3 +95,8 @@ sequenceDiagram
 
 - [:material-docker: Pod Security](workload-security.md)
 - [:material-signature: Supply Chain](supply-chain.md)
+
+## Official OpenBao Documentation
+
+- [TCP Listener Configuration](https://openbao.org/docs/configuration/listener/tcp/)
+- [ACME TLS Listener RFC](https://openbao.org/docs/rfcs/acme-tls-listeners/)

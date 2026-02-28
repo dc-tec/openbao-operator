@@ -130,3 +130,13 @@ spec:
   workloadHardening:
     appArmorEnabled: true
 ```
+
+## Official OpenBao Documentation
+
+- [Seal Configuration Overview](https://openbao.org/docs/configuration/seal/)
+- [Static Seal Configuration](https://openbao.org/docs/configuration/seal/static/)
+- [AWS KMS Seal Configuration](https://openbao.org/docs/configuration/seal/awskms/)
+- [GCP KMS Seal Configuration](https://openbao.org/docs/configuration/seal/gcpckms/)
+- [Azure Key Vault Seal Configuration](https://openbao.org/docs/configuration/seal/azurekeyvault/)
+- [Transit Seal Configuration](https://openbao.org/docs/configuration/seal/transit/)
+- [Self-Initialization](https://openbao.org/docs/configuration/self-init/)

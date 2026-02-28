@@ -58,3 +58,6 @@ sequenceDiagram
     Op->>K: Update OpenBaoCluster.status.backup (last backup, failures)
     Op->>Storage: Apply retention policies (via backup manager, if configured)
 ```
+
+## Official OpenBao Documentation
+- - [OpenBao Backups](https://openbao.org/docs/concepts/storage/#backups)

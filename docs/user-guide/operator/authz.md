@@ -140,3 +140,9 @@ graph LR
     class SA_Op,SA_Backup read;
     class Role_Op,Role_Backup,Pol_Op,Pol_Backup write;
 ```
+
+## Official OpenBao Documentation
+
+- [Policy Concepts](https://openbao.org/docs/concepts/policies/)
+- [Policy Command Reference](https://openbao.org/docs/commands/policy/)
+- [Token Concepts](https://openbao.org/docs/concepts/tokens/)

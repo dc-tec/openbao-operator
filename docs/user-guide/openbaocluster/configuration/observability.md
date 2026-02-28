@@ -510,3 +510,9 @@ This exposes OpenBao metrics at `/v1/sys/metrics` on the OpenBao pods.
 !!! note "Separate Scrape Config"
     OpenBao server metrics require a separate scrape configuration targeting
     the OpenBao pods directly, not the OpenBao Operator.
+
+## Official OpenBao Documentation
+
+- [Telemetry Configuration](https://openbao.org/docs/configuration/telemetry/)
+- [Telemetry Metrics Reference](https://openbao.org/docs/internals/telemetry/metrics/)
+- [Audit Device Configuration](https://openbao.org/docs/configuration/audit/)

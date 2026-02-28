@@ -172,3 +172,9 @@ kubectl -n security get openbaocluster prod-cluster -o jsonpath='{.status.breakG
 ```
 
 See [Break Glass / Safe Mode](safe-mode.md) for details.
+
+## Official OpenBao Documentation
+
+- [Operator Raft Command](https://openbao.org/docs/commands/operator/raft/)
+- [Raft Autopilot Concepts](https://openbao.org/docs/concepts/integrated-storage/autopilot/)
+- [Recovery Mode Concepts](https://openbao.org/docs/concepts/recovery-mode/)

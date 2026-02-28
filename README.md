@@ -168,6 +168,11 @@ We welcome contributions! Please see the [Contributing Guide](https://dc-tec.git
 - Running tests (`make test-ci`).
 - Our AI-Assisted Contribution Policy.
 
+## Official OpenBao Documentation
+
+- [OpenBao Documentation](https://openbao.org/docs/)
+- [OpenBao Upgrade Guide](https://openbao.org/docs/upgrading/)
+
 ## License
 
 Apache-2.0. See `LICENSE`.

@@ -220,3 +220,11 @@ For a complete list of `spec.configuration` fields, run:
 ```bash
 kubectl explain openbaocluster.spec.configuration
 ```
+
+## Official OpenBao Documentation
+
+- [Server Configuration Overview](https://openbao.org/docs/configuration/)
+- [TCP Listener Configuration](https://openbao.org/docs/configuration/listener/tcp/)
+- [Raft Storage Configuration](https://openbao.org/docs/configuration/storage/raft/)
+- [Telemetry Configuration](https://openbao.org/docs/configuration/telemetry/)
+- [Audit Device Configuration](https://openbao.org/docs/configuration/audit/)

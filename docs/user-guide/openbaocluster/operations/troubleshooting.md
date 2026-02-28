@@ -66,3 +66,9 @@ spec:
   workloadHardening:
     appArmorEnabled: false
 ```
+
+## Official OpenBao Documentation
+
+- [TCP Listener Configuration](https://openbao.org/docs/configuration/listener/tcp/)
+- [ACME TLS Listener RFC](https://openbao.org/docs/rfcs/acme-tls-listeners/)
+- [Operator Raft Command](https://openbao.org/docs/commands/operator/raft/)

@@ -203,3 +203,10 @@ Check the status field to confirm self-initialization succeeded.
 kubectl get openbaocluster <name> -o jsonpath='{.status.selfInitialized}'
 # Output: true
 ```
+
+## Official OpenBao Documentation
+
+- [Self-Initialization](https://openbao.org/docs/configuration/self-init/)
+- [JWT/OIDC Auth Method](https://openbao.org/docs/auth/jwt/)
+- [Kubernetes Auth Method](https://openbao.org/docs/auth/kubernetes/)
+- [Token Concepts](https://openbao.org/docs/concepts/tokens/)

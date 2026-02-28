@@ -184,3 +184,10 @@ Track upgrade status directly on the CR:
     ```sh
     kubectl get openbaocluster my-cluster -o jsonpath='{.status.blueGreen.phase}{"\n"}{.status.blueGreen.jobFailureCount}{"\n"}{.status.blueGreen.lastJobFailure}{"\n"}'
     ```
+
+## Official OpenBao Documentation
+
+- [Upgrade Guide](https://openbao.org/docs/upgrading/)
+- [HA Upgrade Guidance](https://openbao.org/docs/upgrading/ha-upgrade/)
+- [Operator Step-Down Command](https://openbao.org/docs/commands/operator/step-down/)
+- [Operator Raft Command](https://openbao.org/docs/commands/operator/raft/)

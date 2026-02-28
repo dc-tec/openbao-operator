@@ -124,3 +124,9 @@ kubectl -n security get openbaocluster prod-cluster
 ```
 
 If the cluster unsealed successfully but assumes a **Standby** role (no active leader), check the [No Leader](no-leader.md) guide.
+
+## Official OpenBao Documentation
+
+- [Seal Configuration Overview](https://openbao.org/docs/configuration/seal/)
+- [Static Seal Configuration](https://openbao.org/docs/configuration/seal/static/)
+- [Operator Unseal Command](https://openbao.org/docs/commands/operator/unseal/)

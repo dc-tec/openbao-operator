@@ -141,3 +141,7 @@ For planned maintenance, consider:
    ```sh
    kubectl exec -it <pod-name> -- bao operator raft list-peers
    ```
+
+## Official OpenBao Documentation
+
+- [Raft Integrated Storage](https://openbao.org/docs/internals/integrated-storage)

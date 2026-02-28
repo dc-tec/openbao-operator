@@ -313,3 +313,8 @@ spec:
 ```
 
 1. Bypasses the safety lock. Events will appear as Warnings.
+
+## Official OpenBao Documentation
+
+- [Operator Raft Command](https://openbao.org/docs/commands/operator/raft/)
+- [Operator Unseal Command](https://openbao.org/docs/commands/operator/unseal/)

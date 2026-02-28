@@ -92,3 +92,9 @@ bao write auth/jwt-operator/role/openbao-operator \
     token_policies="openbao-operator" \
     token_ttl="1h"
 ```
+
+## Official OpenBao Documentation
+
+- [JWT/OIDC Auth Method](https://openbao.org/docs/auth/jwt/)
+- [Kubernetes Auth Method](https://openbao.org/docs/auth/kubernetes/)
+- [Token Concepts](https://openbao.org/docs/concepts/tokens/)

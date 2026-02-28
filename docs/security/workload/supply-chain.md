@@ -211,3 +211,8 @@ The operator project publishes release artifacts with a "build once, promote by 
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       checksums.txt
     ```
+
+## Official OpenBao Documentation
+
+- [OpenBao Release Policy](https://openbao.org/docs/policies/release/)
+- [OpenBao CVE Policy](https://openbao.org/docs/policies/cve/)

@@ -368,3 +368,9 @@ kubectl get openbaocluster my-cluster -o jsonpath='{.status.backup}'
 ```sh
 kubectl create job --from=cronjob/my-cluster-backup manual-backup-1
 ```
+
+## Official OpenBao Documentation
+
+- [OpenBao Backups](https://openbao.org/docs/concepts/storage/#backups)
+- [Operator Raft Command](https://openbao.org/docs/commands/operator/raft/)
+- [JWT/OIDC Auth Method](https://openbao.org/docs/auth/jwt/)

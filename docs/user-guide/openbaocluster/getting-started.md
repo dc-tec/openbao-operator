@@ -145,3 +145,7 @@ Look for:
 - [External Access](configuration/external-access.md) — Expose your cluster
 - [Security Profiles](configuration/security-profiles.md) — Understand profile differences
 - [Backups](operations/backups.md) — Configure disaster recovery
+
+## Official OpenBao Documentation
+
+- [OpenBao Self-Initialization](https://openbao.org/docs/configuration/self-init/)

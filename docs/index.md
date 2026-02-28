@@ -102,3 +102,8 @@ Connect with other users and contributors:
 ## Reference
 
 - [**Compatibility Matrix**](reference/compatibility.md) — Supported Kubernetes and OpenBao versions.
+
+## Official OpenBao Documentation
+
+- [OpenBao Documentation](https://openbao.org/docs/)
+- [OpenBao Upgrade Guide](https://openbao.org/docs/upgrading/)
