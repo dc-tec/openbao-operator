@@ -6,6 +6,8 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
+        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+      
       
       
         <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/contributing/docs-style-guide/">
@@ -59,6 +61,36 @@
 
     
     
+  
+  
+  
+  
+  
+  
+    
+  
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Documentation Style Guide">
+  
+    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/contributing/docs-style-guide/">
+  
+    <meta property="og:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Documentation Style Guide">
+  
+    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  
+    <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  
+
   </head>
   
   
@@ -3741,6 +3773,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../sdlc/" class="md-nav__link">
         
   
@@ -3867,6 +3927,17 @@
     <span class="md-ellipsis">
       
         2.2 Content Tabs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-page-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Page Metadata
       
     </span>
   </a>
@@ -4165,6 +4236,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#23-page-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Page Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4348,6 +4430,19 @@
 </div>
 </div>
 </div>
+<h3 id="23-page-metadata">2.3 Page Metadata<a class="headerlink" href="#23-page-metadata" title="Permanent link">&para;</a></h3>
+<p>Landing pages (especially <code>index.md</code> files) should include concise front matter descriptions for search snippets and link previews.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nn">---</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">One sentence summary of the page intent (roughly 120-160 chars).</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># optional social_image: assets/custom-card.png</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nn">---</span>
+</span></code></pre></div>
+<p>Guidance:</p>
+<ul>
+<li>Keep descriptions concrete and keyword-relevant.</li>
+<li>Do not duplicate the same text across multiple section indexes.</li>
+<li>Use <code>social_image</code> only when a page needs a non-default preview image.</li>
+</ul>
 <h2 id="3-advanced-components">3. Advanced Components<a class="headerlink" href="#3-advanced-components" title="Permanent link">&para;</a></h2>
 <h3 id="31-admonitions">3.1 Admonitions<a class="headerlink" href="#31-admonitions" title="Permanent link">&para;</a></h3>
 <p>Use the correct type for the severity of the message.</p>
@@ -4387,10 +4482,10 @@
 </table>
 <h3 id="32-annotations">3.2 Annotations<a class="headerlink" href="#32-annotations" title="Permanent link">&para;</a></h3>
 <p>Add callouts to code blocks to explain specific lines.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-secret</span><span class="w"> </span><span class="c1"># (1)!</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-secret</span><span class="w"> </span><span class="c1"># (1)!</span>
 </span></code></pre></div>
 <ol>
 <li>This name must match the <code>OpenBaoCluster</code> reference.</li>
@@ -4467,8 +4562,8 @@
 <li><strong>Operations:</strong> How to use/monitor.</li>
 </ol>
 <h2 id="6-previewing-docs">6. Previewing Docs<a class="headerlink" href="#6-previewing-docs" title="Permanent link">&para;</a></h2>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>docs-serve<span class="w"> </span><span class="c1"># http://localhost:8000</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>make<span class="w"> </span>docs-build<span class="w"> </span><span class="c1"># ./site/</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>docs-serve<span class="w"> </span><span class="c1"># http://localhost:8000</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>make<span class="w"> </span>docs-build<span class="w"> </span><span class="c1"># ./site/</span>
 </span></code></pre></div>
 
 

@@ -6,6 +6,8 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
+        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+      
       
       
         <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/backups/">
@@ -59,6 +61,36 @@
 
     
     
+  
+  
+  
+  
+  
+  
+    
+  
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Backups">
+  
+    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/backups/">
+  
+    <meta property="og:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Backups">
+  
+    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  
+    <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  
+
   </head>
   
   
@@ -1483,6 +1515,17 @@
     <span class="md-ellipsis">
       
         Operations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#official-openbao-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Official OpenBao Documentation
       
     </span>
   </a>
@@ -3893,6 +3936,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../../contributing/distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../../contributing/sdlc/" class="md-nav__link">
         
   
@@ -4163,6 +4234,17 @@
     <span class="md-ellipsis">
       
         Operations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#official-openbao-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Official OpenBao Documentation
       
     </span>
   </a>
@@ -4590,6 +4672,12 @@ Retention cleanup runs after successful backups and applies to all supported pro
 <p><strong>Trigger Manual Backup:</strong></p>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>job<span class="w"> </span>--from<span class="o">=</span>cronjob/my-cluster-backup<span class="w"> </span>manual-backup-1
 </span></code></pre></div>
+<h2 id="official-openbao-documentation">Official OpenBao Documentation<a class="headerlink" href="#official-openbao-documentation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://openbao.org/docs/concepts/storage/#backups">OpenBao Backups</a></li>
+<li><a href="https://openbao.org/docs/commands/operator/raft/">Operator Raft Command</a></li>
+<li><a href="https://openbao.org/docs/auth/jwt/">JWT/OIDC Auth Method</a></li>
+</ul>
 
 
 

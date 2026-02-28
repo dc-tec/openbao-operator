@@ -6,6 +6,8 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
+        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+      
       
       
         <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/security/multi-tenancy/tenant-isolation/">
@@ -59,6 +61,36 @@
 
     
     
+  
+  
+  
+  
+  
+  
+    
+  
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Tenant Isolation">
+  
+    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/security/multi-tenancy/tenant-isolation/">
+  
+    <meta property="og:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Tenant Isolation">
+  
+    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  
+    <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  
+
   </head>
   
   
@@ -3832,6 +3864,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../contributing/distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../contributing/sdlc/" class="md-nav__link">
         
   
@@ -4155,7 +4215,7 @@
 <li><strong>Reconcile:</strong> The Controller now has permission to manage resources in that namespace.</li>
 </ol>
 <h2 id="security-guarantees">Security Guarantees<a class="headerlink" href="#security-guarantees" title="Permanent link">&para;</a></h2>
-<p>The architecture provides the following immutable security properties:</p>
+<p>With admission policies enabled (default), the architecture provides the following security properties:</p>
 <table>
 <thead>
 <tr>
@@ -4182,6 +4242,11 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition warning">
+<p class="admonition-title">Unsafe Mode Caveat</p>
+<p>If admission policies are intentionally disabled (unsafe mode), defense-in-depth guardrails are reduced.
+Keep admission enforcement enabled in multi-tenant production deployments.</p>
+</div>
 <h2 id="threat-mitigation-checklist">Threat Mitigation Checklist<a class="headerlink" href="#threat-mitigation-checklist" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

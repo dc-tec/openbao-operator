@@ -6,6 +6,8 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
+        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+      
       
       
         <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/self-init/">
@@ -59,6 +61,36 @@
 
     
     
+  
+  
+  
+  
+  
+  
+    
+  
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Self-Initialization">
+  
+    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/self-init/">
+  
+    <meta property="og:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Self-Initialization">
+  
+    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  
+    <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  
+
   </head>
   
   
@@ -1139,6 +1171,17 @@
     <span class="md-ellipsis">
       
         Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#official-openbao-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Official OpenBao Documentation
       
     </span>
   </a>
@@ -3860,6 +3903,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../../contributing/distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../../contributing/sdlc/" class="md-nav__link">
         
   
@@ -4097,6 +4168,17 @@
     <span class="md-ellipsis">
       
         Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#official-openbao-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Official OpenBao Documentation
       
     </span>
   </a>
@@ -4353,6 +4435,13 @@ Set the same value in any manually managed roles and pass the env var to the ope
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.selfInitialized}&#39;</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Output: true</span>
 </span></code></pre></div>
+<h2 id="official-openbao-documentation">Official OpenBao Documentation<a class="headerlink" href="#official-openbao-documentation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://openbao.org/docs/configuration/self-init/">Self-Initialization</a></li>
+<li><a href="https://openbao.org/docs/auth/jwt/">JWT/OIDC Auth Method</a></li>
+<li><a href="https://openbao.org/docs/auth/kubernetes/">Kubernetes Auth Method</a></li>
+<li><a href="https://openbao.org/docs/concepts/tokens/">Token Concepts</a></li>
+</ul>
 
 
 

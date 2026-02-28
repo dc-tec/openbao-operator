@@ -6,6 +6,8 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
+        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+      
       
       
         <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/security/workload/workload-security/">
@@ -59,6 +61,36 @@
 
     
     
+  
+  
+  
+  
+  
+  
+    
+  
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Pod Security">
+  
+    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/security/workload/workload-security/">
+  
+    <meta property="og:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Pod Security">
+  
+    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  
+    <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  
+
   </head>
   
   
@@ -3843,6 +3875,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../contributing/distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../contributing/sdlc/" class="md-nav__link">
         
   
@@ -4107,8 +4167,8 @@
 <tbody>
 <tr>
 <td style="text-align: left;"><strong>Run As User/Group</strong></td>
-<td style="text-align: left;"><code>1000</code></td>
-<td style="text-align: left;">Ensures non-root execution.</td>
+<td style="text-align: left;">Default <code>100:1000</code> (Kubernetes mode)</td>
+<td style="text-align: left;">Ensures non-root execution with a stable UID/GID baseline.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Read-Only Root FS</strong></td>
@@ -4181,8 +4241,13 @@
 <p>An init container (<code>bao-config-init</code>) is used to render the OpenBao configuration (<code>config.hcl</code>) at runtime.</p>
 <ul>
 <li><strong>Purpose:</strong> Injects dynamic environment variables (Pod IP, Hostname) into the config template securely.</li>
-<li><strong>Security:</strong> Runs with the <em>exact same</em> non-root restrictions (<code>1000:1000</code>) as the main container and does not receive the Kubernetes API token mount.</li>
+<li><strong>Security:</strong> Runs under the Pod-level non-root security context (including capability drop, read-only root filesystem, and <code>runAsNonRoot=true</code>) and does not receive the Kubernetes API token mount.</li>
 </ul>
+<div class="admonition note">
+<p class="admonition-title">Platform and Override Behavior</p>
+<p>On OpenShift, UID/GID values are typically assigned by SCC instead of being pinned.
+<code>spec.securityContext</code> can also override default IDs on standard Kubernetes clusters.</p>
+</div>
 <h2 id="pod-security-standards-pss">Pod Security Standards (PSS)<a class="headerlink" href="#pod-security-standards-pss" title="Permanent link">&para;</a></h2>
 <p>The Provisioner automatically applies PSS labels to any Tenant namespace it creates:</p>
 <table>

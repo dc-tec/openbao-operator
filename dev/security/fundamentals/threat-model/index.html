@@ -6,6 +6,8 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
+        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+      
       
       
         <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/security/fundamentals/threat-model/">
@@ -59,6 +61,36 @@
 
     
     
+  
+  
+  
+  
+  
+  
+    
+  
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Threat Model">
+  
+    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/security/fundamentals/threat-model/">
+  
+    <meta property="og:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Threat Model">
+  
+    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+  
+  
+    <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
+  
+
+  
+
   </head>
   
   
@@ -3832,6 +3864,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../contributing/distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../contributing/sdlc/" class="md-nav__link">
         
   
@@ -4093,7 +4153,7 @@
 
     Op -- Reconciles --&gt; Bao
     Op -- Minimal Access --&gt; K8sAPI
-    Op -.-&gt;|Blind Write| Secret
+    Op -.-&gt;|Scoped Access| Secret
     Bao -- Streams Snapshots --&gt; S3
 
     linkStyle 0 stroke:#22c55e,stroke-width:2px;
@@ -4164,12 +4224,13 @@
 <p><strong>Threat:</strong> A rogue pod attempts to join the Raft cluster.</p>
 <div class="admonition success">
 <p class="admonition-title">Mitigation: mTLS</p>
-<p>Only pods with a valid certificate signed by the Operator CA (mounted via Secret) can join the mesh.</p>
+<p>Pods join using mTLS and certificate validation against the configured trust source.
+In <code>OperatorManaged</code> mode this trust source is the operator-managed CA, while <code>External</code> and <code>ACME</code> use their configured PKI flow.</p>
 </div>
 <p><strong>Threat:</strong> An attacker spoofs external endpoints.</p>
 <div class="admonition success">
 <p class="admonition-title">Mitigation: Network Policy</p>
-<p>Default-deny ingress policies enforce cluster isolation. TLS required for all external traffic.</p>
+<p>Default-deny ingress policies enforce cluster isolation. For production, run with TLS enabled and a trusted certificate mode (<code>OperatorManaged</code>, <code>External</code>, or <code>ACME</code>).</p>
 </div>
 </details>
 <details class="warning">
@@ -4190,7 +4251,7 @@
 <p><strong>Threat:</strong> Lack of audit trail for critical actions (step-down, backup).</p>
 <div class="admonition success">
 <p class="admonition-title">Mitigation: Structured Auditing</p>
-<p>The Operator emits structured JSON logs with <code>audit=true</code> for all control plane actions.</p>
+<p>The Operator emits structured JSON logs with <code>audit=true</code> for high-value control-plane operations (startup gating, upgrades, backups, restore, and lock transitions).</p>
 </div>
 </details>
 <details class="failure">
@@ -4216,7 +4277,7 @@
 <p class="admonition-title">Mitigation: Least Privilege</p>
 <ul>
 <li><strong>Non-Root:</strong> Operator runs as non-root.</li>
-<li><strong>Blind Writes:</strong> Operator can create Secrets but cannot list/read them back.</li>
+<li><strong>Scoped Secret Access:</strong> Operator cannot enumerate Secrets (<code>list</code>/<code>watch</code>); read/write access is constrained to allowlisted Secret names.</li>
 <li><strong>Split RBAC:</strong> Separated ServiceAccounts for Provisioning vs. Management.</li>
 </ul>
 </div>
