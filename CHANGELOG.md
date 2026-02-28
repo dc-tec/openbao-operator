@@ -4,6 +4,13 @@ Release notes are generated and maintained via **release-please** based on **Con
 
 ## Unreleased
 
+## [0.1.0-rc.3](https://github.com/dc-tec/openbao-operator/compare/0.1.0-rc.2...0.1.0-rc.3) (2026-02-28)
+
+
+### Miscellaneous Chores
+
+* **release:** set release target to 0.1.0-rc.3 ([#176](https://github.com/dc-tec/openbao-operator/issues/176)) ([af6043e](https://github.com/dc-tec/openbao-operator/commit/af6043ee5c02d6440b9de9401ce8bb9c332831ba))
+
 ## [0.1.0-rc.2](https://github.com/dc-tec/openbao-operator/compare/0.1.0-rc.1...0.1.0-rc.2) (2026-02-27)
 
 
