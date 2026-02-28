@@ -366,6 +366,55 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
 
+      - name: Set Artifact Hub prerelease annotation
+        env:
+          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
+        run: |
+          set -euo pipefail
+          if [[ "${CHART_VERSION}" == *-* ]]; then
+            PRE="true"
+          else
+            PRE="false"
+          fi
+
+          if ! grep -Eq '^[[:space:]]*artifacthub\.io/prerelease:' charts/openbao-operator/Chart.yaml; then
+            echo "artifacthub.io/prerelease annotation not found in Chart.yaml" >&2
+            exit 1
+          fi
+
+          sed -E -i.bak \
+            's|^([[:space:]]*artifacthub\.io/prerelease:[[:space:]]*).*$|\1"'"${PRE}"'"|' \
+            charts/openbao-operator/Chart.yaml
+          rm -f charts/openbao-operator/Chart.yaml.bak
+
+          grep -n 'artifacthub.io/prerelease:' charts/openbao-operator/Chart.yaml
+
+      - name: Verify Artifact Hub prerelease annotation
+        env:
+          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
+        run: |
+          set -euo pipefail
+          if [[ "${CHART_VERSION}" == *-* ]]; then
+            expected="true"
+          else
+            expected="false"
+          fi
+
+          actual="$(sed -nE 's/^[[:space:]]*artifacthub\.io\/prerelease:[[:space:]]*"(true|false)"[[:space:]]*$/\1/p' charts/openbao-operator/Chart.yaml | head -n1)"
+          if [[ -z "${actual}" ]]; then
+            echo "Could not parse artifacthub.io/prerelease from Chart.yaml" >&2
+            exit 1
+          fi
+          if [[ "${actual}" != "${expected}" ]]; then
+            echo "artifacthub.io/prerelease mismatch: expected=${expected} actual=${actual}" >&2
+            exit 1
+          fi
+
+      - name: Lint Helm chart (release)
+        run: |
+          set -euo pipefail
+          helm lint charts/openbao-operator
+
       - name: Package and push Helm chart (OCI)
         env:
           CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
