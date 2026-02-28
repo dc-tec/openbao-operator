@@ -54,6 +54,23 @@ Use tabs to group alternative configurations (e.g., Helm vs YAML) or operating m
     kind: Pod
     ```
 
+### 2.3 Page Metadata
+
+Landing pages (especially `index.md` files) should include concise front matter descriptions for search snippets and link previews.
+
+```yaml
+---
+description: One sentence summary of the page intent (roughly 120-160 chars).
+# optional social_image: assets/custom-card.png
+---
+```
+
+Guidance:
+
+- Keep descriptions concrete and keyword-relevant.
+- Do not duplicate the same text across multiple section indexes.
+- Use `social_image` only when a page needs a non-default preview image.
+
 ## 3. Advanced Components
 
 ### 3.1 Admonitions

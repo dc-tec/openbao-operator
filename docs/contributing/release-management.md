@@ -208,7 +208,25 @@ For Release Managers.
 ### Post-Release
 
 - [ ] **Verify**: Check that the GitHub Release exists and assets are valid.
+- [ ] **Artifact Hub**: Confirm chart package metadata is visible and install instructions resolve.
+- [ ] **Artifact Hub Metadata (OCI)**: If `artifacthub-repo.yml` changed, push updated metadata artifact (`:artifacthub.io` tag) to GHCR.
+- [ ] **Backlink Pack**: Publish and record:
+  - GitHub release notes URL
+  - Artifact Hub package URL
+  - OpenBao docs/community URL
+  - GitHub Discussions announcement URL
 - [ ] **Announce**: Post in relevant community channels.
+
+### Artifact Hub Metadata Sync (OCI)
+
+For OCI Helm repositories, `artifacthub-repo.yml` is not served over HTTP. Push it as an OCI artifact to the same chart repository path:
+
+```bash
+oras push \
+  ghcr.io/dc-tec/charts/openbao-operator:artifacthub.io \
+  --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
+  artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
+```
 
 ## 5. Verifying Artifacts
 
