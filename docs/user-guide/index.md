@@ -1,3 +1,7 @@
+---
+description: User guide for OpenBao Operator covering installation, tenant onboarding, OpenBao cluster operations, upgrades, backups, and restore workflows.
+---
+
 # OpenBao Operator – User Guide
 
 This guide covers everything you need to know to successfully operate OpenBao on Kubernetes, from installation to Day 2 operations.

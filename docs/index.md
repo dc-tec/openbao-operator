@@ -1,6 +1,10 @@
+---
+description: OpenBao Operator is a Kubernetes operator for secure OpenBao lifecycle management, including installs, upgrades, backup and restore, and multi-tenant operations.
+---
+
 # OpenBao Operator
 
-Welcome to the documentation for the OpenBao Operator, a Kubernetes native operator for managing [OpenBao](https://openbao.org) clusters.
+OpenBao Operator is a Kubernetes operator for [OpenBao](https://openbao.org), focused on secure lifecycle management: install, upgrades, backup/restore, and multi-tenant operations.
 
 !!! warning "Experimental Status"
     This operator is currently in an **experimental phase** and is actively seeking feedback. It is **not** recommended for production environments at this time.
@@ -85,8 +89,21 @@ Connect with other users and contributors:
 
     [:material-arrow-right: Go to Repository](https://github.com/dc-tec/openbao-operator)
 
+- :material-package-variant-closed: **Artifact Hub**
+
+    ---
+
+    Discover the Helm OCI package page and installation metadata.
+
+    [:material-arrow-right: Search Package](https://artifacthub.io/packages/search?repo=openbao-operator)
+
 </div>
 
 ## Reference
 
 - [**Compatibility Matrix**](reference/compatibility.md) — Supported Kubernetes and OpenBao versions.
+
+## Official OpenBao Documentation
+
+- [OpenBao Documentation](https://openbao.org/docs/)
+- [OpenBao Upgrade Guide](https://openbao.org/docs/upgrading/)

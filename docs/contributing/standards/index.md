@@ -1,3 +1,7 @@
+---
+description: Coding standards for OpenBao Operator covering Go style, error handling, Kubernetes patterns, security practices, and project conventions.
+---
+
 # Coding Standards
 
 These coding standards ensure consistency and quality across the OpenBao Operator codebase. All contributors—human or AI-assisted—must follow these guidelines.

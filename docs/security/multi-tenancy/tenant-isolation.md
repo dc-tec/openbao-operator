@@ -91,7 +91,7 @@ flowchart TD
 
 ## Security Guarantees
 
-The architecture provides the following immutable security properties:
+With admission policies enabled (default), the architecture provides the following security properties:
 
 | Property | Description |
 | :--- | :--- |
@@ -99,6 +99,10 @@ The architecture provides the following immutable security properties:
 | **No Cross-Talk** | Namespace A's RoleBinding does not grant access to Namespace B. |
 | **Privilege Separation** | The component that *grants* access (Provisioner) cannot *use* access. The component that *uses* access (Controller) cannot *grant* access. |
 | **Namespace Hardening** | The Provisioner automatically labels tenant namespaces with `pod-security: restricted`, preventing insecure workloads. |
+
+!!! warning "Unsafe Mode Caveat"
+    If admission policies are intentionally disabled (unsafe mode), defense-in-depth guardrails are reduced.
+    Keep admission enforcement enabled in multi-tenant production deployments.
 
 ## Threat Mitigation Checklist
 

@@ -9,7 +9,7 @@ The `StatefulSet` creates pods with a hardened security context compliant with t
 
 | Setting | Value | Purpose |
 | :--- | :--- | :--- |
-| **Run As User/Group** | `1000` | Ensures non-root execution. |
+| **Run As User/Group** | Default `100:1000` (Kubernetes mode) | Ensures non-root execution with a stable UID/GID baseline. |
 | **Read-Only Root FS** | `true` | Prevents filesystem tampering and immutable infrastructure violations. |
 | **Capabilities** | `ALL` dropped | Minimizes privilege escalation risks. |
 | **Seccomp Profile** | `RuntimeDefault` | Restricts available syscalls to the kernel. |
@@ -47,7 +47,11 @@ The Operator minimizes the attack surface of the Kubernetes JWT token:
 An init container (`bao-config-init`) is used to render the OpenBao configuration (`config.hcl`) at runtime.
 
 - **Purpose:** Injects dynamic environment variables (Pod IP, Hostname) into the config template securely.
-- **Security:** Runs with the *exact same* non-root restrictions (`1000:1000`) as the main container and does not receive the Kubernetes API token mount.
+- **Security:** Runs under the Pod-level non-root security context (including capability drop, read-only root filesystem, and `runAsNonRoot=true`) and does not receive the Kubernetes API token mount.
+
+!!! note "Platform and Override Behavior"
+    On OpenShift, UID/GID values are typically assigned by SCC instead of being pinned.
+    `spec.securityContext` can also override default IDs on standard Kubernetes clusters.
 
 ## Pod Security Standards (PSS)
 

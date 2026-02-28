@@ -8,6 +8,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.25.5-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/Docs-Live-green)](https://dc-tec.github.io/openbao-operator/)
+[![Artifact Hub](https://img.shields.io/badge/Artifact_Hub-Helm_OCI-417598?logo=artifacthub&logoColor=white)](https://artifacthub.io/packages/search?repo=openbao-operator)
 
 [Quick Start](#quick-start) • [Installation](#installation) • [Compatibility](#compatibility) • [Documentation](#documentation) • [Contributing](#contributing)
 
@@ -18,7 +19,7 @@
 
 ---
 
-The OpenBao Operator manages the lifecycle of [OpenBao](https://openbao.org) clusters on Kubernetes using a **Supervisor Pattern**. It handles the orchestration complexity—PKI, backups, upgrades, and secure multi-tenancy—so you can focus on consuming secrets.
+OpenBao Operator is a Kubernetes operator for [OpenBao](https://openbao.org) that automates lifecycle management: provisioning, TLS, backups/restores, upgrades, and multi-tenancy controls.
 
 ## Documentation
 
@@ -131,6 +132,9 @@ helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-oper
   --namespace openbao-operator-system
 ```
 
+Find the chart in Artifact Hub (indexing may lag shortly after releases):
+[Artifact Hub search: openbao-operator](https://artifacthub.io/packages/search?repo=openbao-operator)
+
 ### Option 2: Plain YAML
 
 Apply the latest release manifest directly.
@@ -163,6 +167,11 @@ We welcome contributions! Please see the [Contributing Guide](https://dc-tec.git
 - Setting up your development environment.
 - Running tests (`make test-ci`).
 - Our AI-Assisted Contribution Policy.
+
+## Official OpenBao Documentation
+
+- [OpenBao Documentation](https://openbao.org/docs/)
+- [OpenBao Upgrade Guide](https://openbao.org/docs/upgrading/)
 
 ## License
 

@@ -111,3 +111,8 @@ spec:
   rootCAsSecrets:
     - my-cluster-tls-ca
 ```
+
+## Official OpenBao Documentation
+
+- [TCP Listener Configuration](https://openbao.org/docs/configuration/listener/tcp/)
+- [ACME TLS Listener Configuration](https://openbao.org/docs/configuration/listener/tcp/#acme-parameters)

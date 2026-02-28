@@ -1,7 +1,8 @@
 # TLS & Identity
 
 !!! abstract "Encryption in Transit"
-    The Operator ensures that all internal and external communication is encrypted via TLS. It supports three distinct modes of operation to fit different security architectures: **Operator Managed**, **External**, and **ACME**.
+    When `spec.tls.enabled=true`, the Operator configures TLS for internal and external communication using one of three modes: **Operator Managed**, **External**, or **ACME**.
+    In production, keep TLS enabled and use a trusted certificate source.
 
 ## Certificate Rotation Flow
 
@@ -94,3 +95,8 @@ sequenceDiagram
 
 - [:material-docker: Pod Security](workload-security.md)
 - [:material-signature: Supply Chain](supply-chain.md)
+
+## Official OpenBao Documentation
+
+- [TCP Listener Configuration](https://openbao.org/docs/configuration/listener/tcp/)
+- [ACME TLS Listener RFC](https://openbao.org/docs/rfcs/acme-tls-listeners/)

@@ -1,3 +1,7 @@
+---
+description: Technical architecture of OpenBao Operator, including controller design, package layering, reconciliation flow, and API model.
+---
+
 # Architecture: OpenBao Supervisor Operator
 
 This document provides a comprehensive overview of the OpenBao Operator's architecture.

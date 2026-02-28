@@ -46,6 +46,15 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
     2. Run multiple replicas for high availability.
     3. Adjust resource limits based on cluster size.
 
+    ### Artifact Hub
+
+    Discover package metadata and install snippets on Artifact Hub:
+
+    - [Search `openbao-operator` package](https://artifacthub.io/packages/search?repo=openbao-operator)
+
+    !!! note
+        Artifact Hub indexing can lag shortly after a release is published.
+
     ### Full Values Reference
 
     | Parameter | Description | Default |

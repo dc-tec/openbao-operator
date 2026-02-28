@@ -1,3 +1,7 @@
+---
+description: Workload security guidance for OpenBao Operator covering pod security defaults, TLS protections, and software supply chain verification.
+---
+
 # Workload Security
 
 !!! abstract "Runtime Protection"

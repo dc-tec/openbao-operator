@@ -104,3 +104,8 @@ Day 1 involves the instantiation and initialization of the OpenBao cluster itsel
         Op->>K: Scale StatefulSet to spec.replicas
         Bao-->>Op: Pods auto-unseal and join Raft
     ```
+
+## Official OpenBao Documentation
+
+- [OpenBao Self-Initialization](https://openbao.org/docs/configuration/self-init/)
+- [OpenBao Service Registration](https://openbao.org/docs/configuration/service-registration/)

@@ -95,3 +95,10 @@ sequenceDiagram
 - [:material-location-exit: External Access](../../user-guide/openbaocluster/configuration/external-access.md)
 - [:material-server-security: Security Profiles](profiles.md)
 - [:material-archive: Backups Integration](../../user-guide/openbaocluster/operations/backups.md)
+
+## Official OpenBao Documentation
+
+- [Seal Configuration Overview](https://openbao.org/docs/configuration/seal/)
+- [Static Seal Configuration](https://openbao.org/docs/configuration/seal/static/)
+- [Self-Initialization](https://openbao.org/docs/configuration/self-init/)
+- [JWT/OIDC Auth Method](https://openbao.org/docs/auth/jwt/)
