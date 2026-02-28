@@ -55,6 +55,7 @@ The lifecycle maps directly to our documentation and toolchain.
 
       - :material-shield-check: [Security Practices](standards/security-practices.md)
       - :material-test-tube: [CI Pipeline](ci.md)
+      - :material-file-certificate: [Supply Chain Security](supply-chain-security.md)
       - :material-list-status: [Threat Model](../security/fundamentals/threat-model.md)
 
 - :material-rocket-launch: **Release & Deploy**
@@ -89,5 +90,5 @@ Security is not a separate phase; it is injected into every step of the process.
 | **Deps** | `dependabot` | Automated dependency updates |
 | **Verify** | `govulncheck` | Known vulnerability scanning |
 | **Build** | `trivy` | Container filesystem scanning |
-| **Release** | `cosign` | Keyless signing of images and charts |
-| **Publish** | `gh attestation` | Build provenance trails |
+| **Release** | `cosign` | Keyless signing of images, chart, and release checksum subject |
+| **Publish** | `gh attestation` | Enforced provenance verification gates before release publication |

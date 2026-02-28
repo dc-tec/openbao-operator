@@ -85,6 +85,13 @@ Follow this checklist to ensure your Pull Request is ready for review:
 
     [:material-arrow-right: Release Process](release-management.md)
 
+- **Supply Chain Security**
+
+    ---
+    Policy, verification requirements, and release signoff evidence for SLSA-oriented hardening.
+
+    [:material-arrow-right: Supply Chain Security](supply-chain-security.md)
+
 - **Distribution**
 
     ---

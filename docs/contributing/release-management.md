@@ -190,6 +190,7 @@ The stable/prerelease release produces the following artifacts:
     - `sbom-openbao-init.spdx.json`
     - `sbom-openbao-backup.spdx.json`
     - `sbom-openbao-upgrade.spdx.json`
+    - `provenance-index.json` (image/chart/checksum provenance map)
 
 === "Container images"
 
@@ -217,6 +218,8 @@ For Release Managers.
 ### Post-Release
 
 - [ ] **Verify**: Check that the GitHub Release exists and assets are valid.
+- [ ] **Provenance Evidence**: Record successful image/chart/`checksums.txt` attestation verification outputs.
+- [ ] **Ruleset Evidence**: Record exported ruleset JSON for default-branch + tag protections.
 - [ ] **Artifact Hub**: Confirm chart package metadata is visible and install instructions resolve.
 - [ ] **Artifact Hub Metadata (OCI)**: If `artifacthub-repo.yml` changed, push updated metadata artifact (`:artifacthub.io` tag) to GHCR.
 - [ ] **Backlink Pack**: Publish and record:
@@ -239,50 +242,89 @@ oras push \
 
 ## 5. Verifying Artifacts
 
-All artifacts are signed using Sigstore (Keyless).
+Stable/prerelease releases enforce provenance before publish. Verification must include image, chart, and release-checksum subjects.
 
 === ":material-check-decagram: Verify Image Signature"
-    Using `cosign` to verify the image was built by our release workflow.
+    Verify image signature on a digest-pinned reference:
 
     ```sh
+    IMAGE="ghcr.io/dc-tec/openbao-operator@sha256:<digest>"
     cosign verify \
       --new-bundle-format=true \
-      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      ghcr.io/dc-tec/openbao-operator:0.1.0
+      "${IMAGE}"
     ```
 
-=== ":material-file-certificate: Verify Attestation"
-    Using GitHub CLI to verify build provenance.
+=== ":material-file-certificate: Verify Image Attestation"
+    Verify image provenance attestation with strict identity constraints:
 
     ```sh
+    IMAGE="ghcr.io/dc-tec/openbao-operator@sha256:<digest>"
     gh attestation verify \
-      oci://ghcr.io/dc-tec/openbao-operator:0.1.0 \
-      --owner dc-tec
+      "oci://${IMAGE}" \
+      --repo dc-tec/openbao-operator \
+      --signer-workflow dc-tec/openbao-operator/.github/workflows/reusable-build.yml \
+      --source-ref refs/tags/0.1.0 \
+      --cert-oidc-issuer https://token.actions.githubusercontent.com \
+      --deny-self-hosted-runners
     ```
 
-=== ":material-chart-bubble: Verify Helm Chart"
-    Verify the OCI Helm Chart signature by digest.
+=== ":material-chart-bubble: Verify Helm Chart Signature + Attestation"
+    Verify both chart signature and provenance attestation:
 
     ```sh
-    # Resolve the chart digest (example uses crane)
-    crane digest ghcr.io/dc-tec/charts/openbao-operator:0.1.0
+    CHART="ghcr.io/dc-tec/charts/openbao-operator@sha256:<digest>"
 
     cosign verify \
       --new-bundle-format=true \
-      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      ghcr.io/dc-tec/charts/openbao-operator@sha256:...
+      "${CHART}"
+
+    gh attestation verify \
+      "oci://${CHART}" \
+      --repo dc-tec/openbao-operator \
+      --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
+      --source-ref refs/tags/0.1.0 \
+      --cert-oidc-issuer https://token.actions.githubusercontent.com \
+      --deny-self-hosted-runners
     ```
 
-=== ":material-file-lock: Verify Release Checksums"
-    Verify `checksums.txt` using the Sigstore bundle uploaded to the GitHub Release.
+=== ":material-file-lock: Verify Release Checksums Signature + Attestation"
+    Verify `checksums.txt` with both Sigstore bundle and GitHub attestation:
 
     ```sh
+    # Download checksums artifacts for the release into the current directory first.
     cosign verify-blob \
       --new-bundle-format=true \
-      --bundle dist/checksums.txt.bundle \
-      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --bundle checksums.txt.bundle \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      dist/checksums.txt
+      checksums.txt
+
+    gh attestation verify \
+      checksums.txt \
+      --repo dc-tec/openbao-operator \
+      --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
+      --source-ref refs/tags/0.1.0 \
+      --cert-oidc-issuer https://token.actions.githubusercontent.com \
+      --deny-self-hosted-runners
     ```
+
+=== ":material-format-list-bulleted: Verify Provenance Index"
+    Inspect release metadata and subjects:
+
+    ```sh
+    jq '.release, .identity_constraints, .images, .chart, .release_artifacts.checksums_txt' provenance-index.json
+    ```
+
+## 6. Troubleshooting
+
+| Failure | Cause | Action |
+| :--- | :--- | :--- |
+| `gh attestation verify` 404 | Propagation delay | Retry after short delay; release pipeline already retries before failing. |
+| Attestation signer mismatch | Wrong workflow identity | Use exact `--signer-workflow` value for subject type (images: `reusable-build.yml`; chart/checksums: `release.yml`). |
+| Source ref mismatch | Wrong release ref | Verify against exact `refs/tags/<version>`. |
+| `cosign verify` identity mismatch | Wrong certificate identity | Use full identity including workflow path and tag ref. |
+| `checksums.txt` verify failure | File/bundle mismatch or mutation | Re-download both files from the same release or regenerate and re-attest in a new release. |
