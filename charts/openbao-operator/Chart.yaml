@@ -20,3 +20,23 @@ maintainers:
   - name: dc-tec
     url: https://github.com/dc-tec
 kubeVersion: '>=1.33.0-0'
+annotations:
+  artifacthub.io/category: security
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/operator: "true"
+  artifacthub.io/operatorCapabilities: "Full Lifecycle"
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/maintainers: |
+    - name: dc-tec
+      email: roel@decort.tech
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://dc-tec.github.io/openbao-operator/latest/
+    - name: Source
+      url: https://github.com/dc-tec/openbao-operator
+    - name: Issues
+      url: https://github.com/dc-tec/openbao-operator/issues
+    - name: Discussions
+      url: https://github.com/dc-tec/openbao-operator/discussions
+    - name: OpenBao Docs
+      url: https://openbao.org/docs/

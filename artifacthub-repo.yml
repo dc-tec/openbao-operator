@@ -1,0 +1,11 @@
+# Artifact Hub repository metadata for the OCI chart repository:
+# oci://ghcr.io/dc-tec/charts/openbao-operator
+repositoryID: "d57830b0-ddf7-4dcc-8b50-70f2612dad78"
+owners:
+  - name: dc-tec
+    email: roel@decort.tech
+
+# Optional: ignore specific package versions if needed.
+# ignore:
+#   - name: openbao-operator
+#     version: "0.1.0-.*"
