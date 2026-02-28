@@ -1,3 +1,7 @@
+---
+description: Lifecycle overview for OpenBao Operator from Day 0 provisioning through Day 1 creation, Day 2 operations, and disaster recovery flows.
+---
+
 # Lifecycle Management Overview
 
 The OpenBao Operator manages the full lifecycle of OpenBao clusters, from initial provisioning (Day 0) to complex upgrades (Day 2) and disaster recovery (Day N).

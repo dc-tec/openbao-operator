@@ -1,3 +1,7 @@
+---
+description: Contributing guide for OpenBao Operator with setup steps, coding standards, testing requirements, and release/distribution workflows.
+---
+
 # Contributing to OpenBao Operator
 
 Welcome! We are glad you want to contribute to the OpenBao Operator. Whether you're fixing a bug, adding a feature, or improving documentation, this guide will help you get started.
@@ -80,6 +84,13 @@ Follow this checklist to ensure your Pull Request is ready for review:
     How we version and release the operator.
 
     [:material-arrow-right: Release Process](release-management.md)
+
+- **Distribution**
+
+    ---
+    Artifact Hub-first discoverability and deferred OperatorHub publication plan.
+
+    [:material-arrow-right: Distribution Guide](distribution.md)
 
 - **SDLC Overview**
 

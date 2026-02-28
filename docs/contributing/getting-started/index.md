@@ -1,3 +1,7 @@
+---
+description: Getting started guide for contributors to OpenBao Operator, including prerequisites, local environment setup, and first development workflow.
+---
+
 # Getting Started with Contributing
 
 Welcome! We are excited that you are interested in contributing to the OpenBao Operator. This section will guide you through setting up your environment and making your first contribution.

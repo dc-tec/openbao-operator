@@ -1,3 +1,7 @@
+---
+description: Infrastructure security controls in OpenBao Operator, including RBAC architecture, validating admission policies, and network security boundaries.
+---
+
 # Infrastructure Security
 
 !!! abstract "Platform Controls"

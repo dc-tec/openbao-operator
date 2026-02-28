@@ -1,3 +1,7 @@
+---
+description: Security overview for OpenBao Operator covering zero-trust model, RBAC boundaries, admission policy guardrails, workload hardening, and tenant isolation.
+---
+
 # Security: OpenBao Operator
 
 This section provides a comprehensive security overview for the OpenBao Operator, covering the security model, RBAC architecture, and threat analysis.
@@ -18,7 +22,7 @@ The Operator enforces a "Secure by Default" posture:
 
 ### Tenancy Security Models
 
-- **Multi-Tenant (Zero Trust):** The Controller is untrusted. It cannot read Secrets and must request permissions via the Provisioner. This creates a hard security boundary between tenants.
+- **Multi-Tenant (Zero Trust):** The Controller is treated as untrusted across namespaces. It cannot enumerate Secrets and only gets name-scoped Secret access via Provisioner-managed RBAC. With admission policies enabled, this creates a strong boundary between tenants.
 - **Single-Tenant (Direct Admin):** The Controller is fully trusted within its namespace. It has `ClusterRole` permissions bound to that specific namespace, simplifying operations but removing the Zero Trust isolation.
 
 ## Security Topics

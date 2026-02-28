@@ -1,3 +1,7 @@
+---
+description: Multi-tenancy security model for OpenBao Operator, describing tenant isolation, namespace boundaries, and least-privilege access control.
+---
+
 # Multi-Tenancy Security
 
 !!! abstract "Shared Platform, Isolated Tenants"

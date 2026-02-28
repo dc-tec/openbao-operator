@@ -1,3 +1,7 @@
+---
+description: Core security fundamentals for OpenBao Operator including threat model, security profiles, and secrets management practices.
+---
+
 # Security Fundamentals
 
 !!! abstract "Core Concepts"
