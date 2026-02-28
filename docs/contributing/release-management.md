@@ -66,6 +66,15 @@ We use **release-please** as the source of truth for:
 
 `release-please` is responsible for *versioning and release notes*. The `Release` workflow is responsible for *building, gating, and publishing artifacts*.
 
+!!! note "Chart version validation contract"
+    The `Release` workflow validates that the git tag (`X.Y.Z` or prerelease tag) matches both `charts/openbao-operator/Chart.yaml` fields:
+
+    - `version`
+    - `appVersion`
+
+    If either value differs from the tag, the release fails fast in `prepare`.
+    The workflow does **not** override chart version fields at package time; Helm packaging uses the committed `Chart.yaml` values.
+
 Our pipeline ensures that the artifacts we test in E2E are the *exact* same bits that are published (bit-for-bit identical).
 
 ```mermaid
