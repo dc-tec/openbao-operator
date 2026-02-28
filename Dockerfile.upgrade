@@ -7,7 +7,7 @@
 # Example build (from repo root):
 #   docker build -f Dockerfile.upgrade -t openbao-upgrade:dev .
 
-FROM --platform=$BUILDPLATFORM golang:1.25.7 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25.7@sha256:931c889bca758a82fcbfcb1b6ed6ca1de30783e9e52e6093ad50060735cb99be AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -21,7 +21,7 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o bao-upgrade-executor ./cmd/bao-upgrade
 
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot@sha256:f512d819b8f109f2375e8b51d8cfd8aafe81034bc3e319740128b7d7f70d5036
 
 USER 1000:1000
 WORKDIR /
