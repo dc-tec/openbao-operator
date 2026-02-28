@@ -1,0 +1,28 @@
+:root {
+    /* OpenBao Brand Colors */
+    --md-primary-fg-color: #336d5c;
+    /* Primary */
+    --md-primary-fg-color--light: #79c0ab;
+    /* Shadow Green */
+    --md-primary-fg-color--dark: #091a28;
+    /* Border (Darker shade) */
+
+    --md-accent-fg-color: #fdd0a4;
+    /* Bao #2 (Peach/Orange) - good contrast */
+    /* --md-accent-fg-color:      #87d6be; Secondary Green - alternative */
+
+    /* Customize Admonition Colors if needed */
+}
+
+/* Light mode overrides */
+[data-md-color-scheme="default"] {
+    --md-primary-fg-color: #336d5c;
+    --md-primary-fg-color--light: #79c0ab;
+    --md-primary-fg-color--dark: #091a28;
+}
+
+/* Dark mode overrides - maybe adjust for readability? */
+[data-md-color-scheme="slate"] {
+    /* Keep primary usually, or go darker/lighter */
+    --md-primary-fg-color: #336d5c;
+}
