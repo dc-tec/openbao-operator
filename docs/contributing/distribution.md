@@ -30,6 +30,10 @@ When adding the repository in Artifact Hub:
 - `artifacthub.io/operator`
 - `artifacthub.io/operatorCapabilities`
 - `artifacthub.io/prerelease` (set to `"true"` for prereleases)
+- `artifacthub.io/containsSecurityUpdates` (set to `"true"` when applicable for a release)
+- `artifacthub.io/images` (explicit image list for reliable Artifact Hub security scanning)
+- `artifacthub.io/crds` (operator CRD cards in Artifact Hub)
+- `artifacthub.io/crdsExamples` (example CR manifests per CRD)
 - `artifacthub.io/maintainers`
 - `artifacthub.io/links`
 

@@ -26,6 +26,67 @@ annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: "Full Lifecycle"
   artifacthub.io/prerelease: "true"
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/images: |
+    - name: openbao-operator
+      image: ghcr.io/dc-tec/openbao-operator:0.1.0-rc.2
+    - name: openbao-init
+      image: ghcr.io/dc-tec/openbao-init:0.1.0-rc.2
+    - name: openbao-backup
+      image: ghcr.io/dc-tec/openbao-backup:0.1.0-rc.2
+    - name: openbao-upgrade
+      image: ghcr.io/dc-tec/openbao-upgrade:0.1.0-rc.2
+  artifacthub.io/crds: |
+    - kind: OpenBaoCluster
+      version: v1alpha1
+      name: openbaoclusters.openbao.org
+      displayName: OpenBaoCluster
+      description: Manages OpenBao cluster lifecycle, configuration, upgrades, and backups.
+    - kind: OpenBaoTenant
+      version: v1alpha1
+      name: openbaotenants.openbao.org
+      displayName: OpenBaoTenant
+      description: Declares tenant onboarding and target namespace provisioning.
+    - kind: OpenBaoRestore
+      version: v1alpha1
+      name: openbaorestores.openbao.org
+      displayName: OpenBaoRestore
+      description: Requests restore operations from snapshot backups.
+  artifacthub.io/crdsExamples: |
+    - apiVersion: openbao.org/v1alpha1
+      kind: OpenBaoCluster
+      metadata:
+        name: openbaocluster-sample
+      spec:
+        version: "2.4.4"
+        replicas: 3
+        profile: Development
+        tls:
+          enabled: true
+          rotationPeriod: "720h"
+        storage:
+          size: "10Gi"
+    - apiVersion: openbao.org/v1alpha1
+      kind: OpenBaoTenant
+      metadata:
+        name: openbaocluster-full-tenant
+        namespace: openbao-operator-system
+      spec:
+        targetNamespace: openbaocluster-full
+    - apiVersion: openbao.org/v1alpha1
+      kind: OpenBaoRestore
+      metadata:
+        name: openbaorestore-sample
+      spec:
+        cluster: openbaocluster-sample
+        source:
+          target:
+            endpoint: https://s3.amazonaws.com
+            bucket: openbao-backups
+            region: us-east-1
+            credentialsSecretRef:
+              name: s3-credentials
+          key: clusters/openbaocluster-sample/2025-01-01-120000.snap
   artifacthub.io/maintainers: |
     - name: dc-tec
       email: roel@decort.tech

@@ -5,7 +5,9 @@ owners:
   - name: dc-tec
     email: roel@decort.tech
 
-# Optional: ignore specific package versions if needed.
-# ignore:
-#   - name: openbao-operator
-#     version: "0.1.0-.*"
+# Ignore pre-release tags used for release pipeline testing.
+ignore:
+  - name: openbao-operator
+    version: "0.1.0-rc.1"
+  - name: openbao-operator
+    version: "0.1.0-rc.2"
