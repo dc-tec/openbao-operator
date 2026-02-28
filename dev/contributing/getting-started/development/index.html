@@ -4257,13 +4257,19 @@
 <li><code>internal-dependency-edges.tsv</code></li>
 <li><code>internal-dependency-graph.dot</code></li>
 <li><code>internal-dependency-graph.mmd</code></li>
+<li><code>adapter-boundary-audit.md</code></li>
 </ul>
 <p>The command is report-only and does not fail on policy findings.</p>
 <p>Intentional policy exceptions are tracked in:</p>
 <ul>
 <li><code>hack/architecture/dependency-policy-exceptions.tsv</code></li>
 </ul>
-<p>To track trends locally across refactors, save a baseline snapshot and compare against it:</p>
+<p>The adapter boundary audit classifies runtime adapter-to-adapter edges as:</p>
+<ul>
+<li><code>exception</code>: edge is explicitly tracked in <code>hack/architecture/dependency-policy-exceptions.tsv</code>.</li>
+<li><code>untracked</code>: edge is not tracked and should be reviewed before merge.
+To track trends locally across refactors, save a baseline snapshot and compare against it:</li>
+</ul>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>report-internal-deps-snapshot
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>make<span class="w"> </span>report-internal-deps
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>make<span class="w"> </span>report-internal-deps-diff
