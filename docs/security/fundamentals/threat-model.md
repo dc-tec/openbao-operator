@@ -27,7 +27,7 @@ graph TD
 
     Op -- Reconciles --> Bao
     Op -- Minimal Access --> K8sAPI
-    Op -.->|Blind Write| Secret
+    Op -.->|Scoped Access| Secret
     Bao -- Streams Snapshots --> S3
     
     linkStyle 0 stroke:#22c55e,stroke-width:2px;
@@ -62,12 +62,13 @@ graph TD
     **Threat:** A rogue pod attempts to join the Raft cluster.
 
     !!! success "Mitigation: mTLS"
-        Only pods with a valid certificate signed by the Operator CA (mounted via Secret) can join the mesh.
+        Pods join using mTLS and certificate validation against the configured trust source.
+        In `OperatorManaged` mode this trust source is the operator-managed CA, while `External` and `ACME` use their configured PKI flow.
 
     **Threat:** An attacker spoofs external endpoints.
     
     !!! success "Mitigation: Network Policy"
-        Default-deny ingress policies enforce cluster isolation. TLS required for all external traffic.
+        Default-deny ingress policies enforce cluster isolation. For production, run with TLS enabled and a trusted certificate mode (`OperatorManaged`, `External`, or `ACME`).
 
 ??? warning "Tampering (Data Integrity)"
     **Threat:** User manually edits the StatefulSet (e.g., changes image).
@@ -84,7 +85,7 @@ graph TD
     **Threat:** Lack of audit trail for critical actions (step-down, backup).
 
     !!! success "Mitigation: Structured Auditing"
-        The Operator emits structured JSON logs with `audit=true` for all control plane actions.
+        The Operator emits structured JSON logs with `audit=true` for high-value control-plane operations (startup gating, upgrades, backups, restore, and lock transitions).
 
 ??? failure "Information Disclosure (Privacy)"
     **Threat:** TLS keys or tokens exposed in logs.
@@ -103,7 +104,7 @@ graph TD
 
     !!! success "Mitigation: Least Privilege"
         - **Non-Root:** Operator runs as non-root.
-        - **Blind Writes:** Operator can create Secrets but cannot list/read them back.
+        - **Scoped Secret Access:** Operator cannot enumerate Secrets (`list`/`watch`); read/write access is constrained to allowlisted Secret names.
         - **Split RBAC:** Separated ServiceAccounts for Provisioning vs. Management.
 
 ## 4. Secrets Management
