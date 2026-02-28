@@ -1,9 +1,19 @@
-# Release management
+# Release/versioning metadata
 /CHANGELOG.md @dc-tec
 /.release-please-manifest.json @dc-tec
 /release-please-config.json @dc-tec
-/charts/openbao-operator/Chart.yaml @dc-tec
-/.github/workflows/release-please.yml @dc-tec
-/.github/workflows/release.yml @dc-tec
-/.github/workflows/release-pr-gate.yml @dc-tec
+
+# CI/CD and release controls
+/.github/workflows/** @dc-tec
+/Makefile @dc-tec
+
+# Build inputs
+/Dockerfile* @dc-tec
+/hack/ci/Dockerfile.fast.* @dc-tec
+/charts/** @dc-tec
+
+# Release + supply-chain/security documentation
 /docs/contributing/release-management.md @dc-tec
+/docs/contributing/sdlc.md @dc-tec
+/docs/contributing/supply-chain-security.md @dc-tec
+/docs/security/workload/supply-chain.md @dc-tec
