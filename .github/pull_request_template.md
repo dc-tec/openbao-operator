@@ -25,6 +25,8 @@
 - [ ] I have added tests that prove my fix is effective or that my feature works.
 - [ ] New and existing unit tests pass locally with `make test`.
 - [ ] Any dependent changes have been merged and published in downstream modules.
+- [ ] For structural/boundary changes (if applicable), I included a dependency report delta and boundary-risk notes.
+- [ ] For structural/boundary changes (if applicable), I updated or confirmed policy exceptions.
 
 ## Verification Process
 

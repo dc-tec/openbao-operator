@@ -7,24 +7,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/robfig/cron/v3"
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	"github.com/dc-tec/openbao-operator/internal/kube"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/opslifecycle"
@@ -202,88 +195,6 @@ func validateBackupEgressConfiguration(cluster *openbaov1alpha1.OpenBaoCluster) 
 	)
 }
 
-// handleManualTrigger checks for and handles manual backup trigger annotation.
-// Returns (manualTrigger, scheduledTime, error).
-func (m *Manager) handleManualTrigger(
-	ctx context.Context,
-	logger logr.Logger,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-	now time.Time,
-) (bool, time.Time, error) {
-	triggerAnnotation := constants.AnnotationTriggerBackup
-	val, ok := cluster.Annotations[triggerAnnotation]
-	if !ok || val == "" {
-		return false, time.Time{}, nil
-	}
-
-	logger.Info("Manual backup trigger detected", "annotation", val)
-	logging.LogAuditEvent(logger, logging.EventBackupManualTriggerDetected, map[string]string{
-		"cluster_namespace": cluster.Namespace,
-		"cluster_name":      cluster.Name,
-		"trigger":           "manual_annotation",
-	})
-
-	// Check if there's already a backup job in progress
-	hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
-	if err != nil {
-		return false, time.Time{}, fmt.Errorf("failed to check for active backup job: %w", err)
-	}
-	if hasActiveJob {
-		logger.Info("Manual backup triggered but job already in progress, skipping duplicate")
-		logging.LogAuditEvent(logger, logging.EventBackupManualTriggerSkipped, map[string]string{
-			"cluster_namespace": cluster.Namespace,
-			"cluster_name":      cluster.Name,
-			"reason":            "active_job_in_progress",
-		})
-		m.clearTriggerAnnotation(ctx, logger, cluster, triggerAnnotation)
-		return false, time.Time{}, nil
-	}
-
-	return true, now, nil
-}
-
-// clearTriggerAnnotation removes the manual trigger annotation from the cluster.
-func (m *Manager) clearTriggerAnnotation(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, annotation string) {
-	// We use MergeFrom for annotation deletion to avoid claiming ownership of all annotations
-	original := cluster.DeepCopy()
-	if cluster.Annotations == nil {
-		cluster.Annotations = make(map[string]string)
-	}
-	delete(cluster.Annotations, annotation)
-	if err := m.client.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
-		logger.Error(err, "Failed to clear manual backup trigger annotation")
-	} else {
-		logger.Info("Cleared manual backup trigger annotation")
-	}
-}
-
-// patchStatusSSA updates the backup status using Server-Side Apply.
-func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	applyCluster := &openbaov1alpha1.OpenBaoCluster{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: openbaov1alpha1.GroupVersion.String(),
-			Kind:       "OpenBaoCluster",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
-		},
-		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			Backup: cluster.Status.Backup,
-		},
-	}
-
-	applyConfig, err := kube.ToApplyConfiguration(applyCluster, m.client)
-	if err != nil {
-		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
-	}
-
-	return m.client.Status().Apply(ctx, applyConfig,
-		client.FieldOwner("openbao-adminops-controller"),
-		client.ForceOwnership,
-	)
-}
-
 // checkBackupDue determines if a backup should be executed now.
 // Returns (shouldReturn, result, error) where shouldReturn indicates early return.
 //
@@ -454,168 +365,12 @@ func (m *Manager) executeAndProcessBackup(
 	return recon.Result{RequeueAfter: time.Until(nextScheduled)}, nil
 }
 
-func (m *Manager) recordBackupAttempt(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, now time.Time, scheduledTime time.Time, nextScheduled time.Time) error {
-	if cluster.Status.Backup == nil {
-		cluster.Status.Backup = &openbaov1alpha1.BackupStatus{}
-	}
-
-	nowMeta := metav1.NewTime(now)
-	cluster.Status.Backup.LastAttemptTime = &nowMeta
-
-	scheduledMeta := metav1.NewTime(scheduledTime)
-	cluster.Status.Backup.LastAttemptScheduledTime = &scheduledMeta
-
-	nextScheduledMeta := metav1.NewTime(nextScheduled)
-	cluster.Status.Backup.NextScheduledBackup = &nextScheduledMeta
-
-	return m.patchStatusSSA(ctx, cluster)
-}
-
 // BackupResult contains the result of a successful backup.
 type BackupResult struct {
 	// Key is the object storage key where the backup was stored.
 	Key string
 	// Size is the size of the backup in bytes.
 	Size int64
-}
-
-func (m *Manager) hasInProgressRestore(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	restoreList := &openbaov1alpha1.OpenBaoRestoreList{}
-	if err := m.client.List(ctx, restoreList, client.InNamespace(cluster.Namespace)); err != nil {
-		// In some zero-trust deployments, the OpenBaoCluster controller may not have permissions
-		// to list restore resources. Fallback to "no restore detected" in that case.
-		if apierrors.IsForbidden(err) {
-			logger.V(1).Info("Insufficient permissions to list OpenBaoRestore resources; cannot detect restore-in-progress", "error", err.Error())
-			return false, nil
-		}
-		return false, fmt.Errorf("failed to list OpenBaoRestore resources: %w", err)
-	}
-
-	for i := range restoreList.Items {
-		restore := &restoreList.Items[i]
-		if restore.DeletionTimestamp != nil {
-			continue
-		}
-		if restore.Spec.Cluster != cluster.Name {
-			continue
-		}
-		if restore.Status.Phase == openbaov1alpha1.RestorePhaseCompleted ||
-			restore.Status.Phase == openbaov1alpha1.RestorePhaseFailed {
-			continue
-		}
-		return true, nil
-	}
-
-	return false, nil
-}
-
-// checkPreconditions verifies that backup can proceed.
-func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	// Check cluster is initialized
-	if !cluster.Status.Initialized {
-		return fmt.Errorf("cluster is not initialized")
-	}
-
-	// Check cluster phase - don't backup during initialization
-	if cluster.Status.Phase == openbaov1alpha1.ClusterPhaseInitializing {
-		return fmt.Errorf("cluster is initializing")
-	}
-
-	// Check if an upgrade is about to start or in progress
-	// This prevents regular backups from starting when an upgrade is detected or in progress
-	// We use the same logic as the upgrade manager to detect pending upgrades
-	// This catches upgrades before Status.Upgrade is set and before pre-upgrade jobs are visible
-	if cluster.Status.Initialized {
-		// Only check for pending upgrades if cluster is initialized
-		// (upgrade manager also skips if not initialized)
-		if cluster.Status.CurrentVersion != "" {
-			// CurrentVersion is set - check if it differs from spec
-			if cluster.Spec.Version != cluster.Status.CurrentVersion {
-				// Upgrade is about to start - check if pre-upgrade snapshot is enabled
-				if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.PreUpgradeSnapshot {
-					// Pre-upgrade snapshot is enabled - skip regular backups
-					// The upgrade manager will handle the pre-upgrade backup
-					return fmt.Errorf("upgrade pending with pre-upgrade snapshot enabled")
-				}
-				// Upgrade is about to start but no pre-upgrade snapshot - still skip regular backups
-				return fmt.Errorf("upgrade pending")
-			}
-		}
-		// If CurrentVersion is empty but cluster is initialized, this is the first reconcile after init
-		// The upgrade manager will set CurrentVersion, so no upgrade is pending yet
-	}
-
-	// Check if upgrade is in progress - skip scheduled backups during upgrades
-	// Exception: Pre-upgrade backups are triggered by the upgrade manager, not here
-	if cluster.Status.Upgrade != nil {
-		return fmt.Errorf("upgrade in progress")
-	}
-
-	// Check if a pre-upgrade backup job exists or is in progress
-	// This is a fallback check in case the version check above didn't catch it
-	// (e.g., if Status.CurrentVersion is empty or there's a timing issue)
-	hasPreUpgradeJob, err := m.hasPreUpgradeBackupJob(ctx, cluster)
-	if err != nil {
-		return fmt.Errorf("failed to check for pre-upgrade backup job: %w", err)
-	}
-	if hasPreUpgradeJob {
-		return fmt.Errorf("pre-upgrade backup in progress")
-	}
-
-	// Check if another backup is in progress
-	hasBackupJob, err := m.hasActiveBackupJob(ctx, cluster)
-	if err != nil {
-		return fmt.Errorf("failed to check for active backup job: %w", err)
-	}
-	if hasBackupJob {
-		return fmt.Errorf("backup already in progress")
-	}
-
-	// Check we have a token for backup.
-	// All clusters (both standard and self-init) must use either JWT Auth
-	// or a backup token Secret. Root tokens are not used for security reasons.
-	backupCfg := cluster.Spec.Backup
-	if backupCfg == nil {
-		return ErrNoBackupToken
-	}
-
-	// Check if JWT Auth is configured (preferred method)
-	// If jwtAuthRole is empty, check if OIDC is enabled (operator will auto-create the backup role)
-	hasJWTAuth := strings.TrimSpace(backupCfg.JWTAuthRole) != ""
-	if !hasJWTAuth && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		// Operator will auto-create the backup role with name constants.RoleNameBackup
-		hasJWTAuth = true
-	}
-
-	// Check if static token is configured (fallback method)
-	hasTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""
-
-	// At least one authentication method must be configured
-	if !hasJWTAuth && !hasTokenSecret {
-		return ErrNoBackupToken
-	}
-
-	// If using token secret, verify it exists
-	// SECURITY: Always use cluster.Namespace for secret lookups.
-	// Do NOT trust user-provided Namespace in SecretRef to prevent Confused Deputy attacks.
-	if hasTokenSecret {
-		secretNamespace := cluster.Namespace
-
-		secretName := types.NamespacedName{
-			Namespace: secretNamespace,
-			Name:      backupCfg.TokenSecretRef.Name,
-		}
-
-		secret := &corev1.Secret{}
-		if err := m.client.Get(ctx, secretName, secret); err != nil {
-			if apierrors.IsNotFound(err) {
-				return fmt.Errorf("backup token Secret %s/%s not found: %w", secretNamespace, backupCfg.TokenSecretRef.Name, ErrNoBackupToken)
-			}
-			return fmt.Errorf("failed to get backup token Secret %s/%s: %w", secretNamespace, backupCfg.TokenSecretRef.Name, err)
-		}
-	}
-
-	return nil
 }
 
 // applyRetention applies the retention policy after a successful backup.
@@ -681,151 +436,6 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 	}
 
 	return nil
-}
-
-// ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs using Server-Side Apply.
-// This ServiceAccount is used for JWT Auth authentication to OpenBao.
-// ensureBackupServiceAccount creates or updates the ServiceAccount for backup Jobs using Server-Side Apply.
-// This ServiceAccount is used for JWT Auth authentication to OpenBao.
-func (m *Manager) ensureBackupServiceAccount(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	return EnsureBackupServiceAccount(ctx, m.client, m.scheme, cluster)
-}
-
-// ensureBackupRBAC creates a Role and RoleBinding that grants the backup service account
-// permission to list pods in its namespace. This is required for finding the active OpenBao pod.
-func (m *Manager) ensureBackupRBAC(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	return EnsureBackupRBAC(ctx, m.client, m.scheme, cluster)
-}
-
-// backupLabels returns the labels for backup resources
-func backupLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
-	return map[string]string{
-		constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-		constants.LabelAppInstance:      cluster.Name,
-		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: ComponentBackup,
-	}
-}
-
-// backupServiceAccountName returns the name for the backup ServiceAccount.
-func backupServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixBackupServiceAccount
-}
-
-// hasPreUpgradeBackupJob checks if there's a pre-upgrade backup job running or pending for this cluster.
-// This is used to prevent regular scheduled backups from starting when an upgrade is initiating.
-func (m *Manager) hasPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	jobList := &batchv1.JobList{}
-	labelSelector := labels.SelectorFromSet(map[string]string{
-		constants.LabelAppInstance:       cluster.Name,
-		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster:    cluster.Name,
-		constants.LabelOpenBaoComponent:  ComponentBackup,
-		constants.LabelOpenBaoBackupType: "pre-upgrade",
-	})
-
-	if err := m.client.List(ctx, jobList,
-		client.InNamespace(cluster.Namespace),
-		client.MatchingLabelsSelector{Selector: labelSelector},
-	); err != nil {
-		return false, fmt.Errorf("failed to list pre-upgrade backup jobs: %w", err)
-	}
-
-	// Check if there's a running or pending job (not yet succeeded or failed)
-	for i := range jobList.Items {
-		job := &jobList.Items[i]
-		// If job hasn't succeeded or failed, it's still running or pending
-		if !kube.JobSucceeded(job) && !kube.JobFailed(job) {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-// checkForCompletedJobs checks for any completed backup jobs and processes them.
-// Returns (statusUpdated, error) where statusUpdated indicates if any job was processed and status was updated.
-// This is used to ensure completed jobs are processed even when backup is not due yet.
-// Only the most recent completed job is processed to avoid incrementing ConsecutiveFailures multiple times
-// when there are several old failed jobs.
-func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	jobList := &batchv1.JobList{}
-	labelSelector := labels.SelectorFromSet(map[string]string{
-		constants.LabelAppInstance:      cluster.Name,
-		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: ComponentBackup,
-	})
-
-	if err := m.client.List(ctx, jobList,
-		client.InNamespace(cluster.Namespace),
-		client.MatchingLabelsSelector{Selector: labelSelector},
-	); err != nil {
-		return false, fmt.Errorf("failed to list backup jobs: %w", err)
-	}
-
-	// Find the most recent completed job (by creation timestamp).
-	// We only process the most recent one to avoid processing stale failures repeatedly.
-	var mostRecentCompleted *batchv1.Job
-	for i := range jobList.Items {
-		job := &jobList.Items[i]
-		if !kube.JobSucceeded(job) && !kube.JobFailed(job) {
-			continue // Skip jobs that are still running
-		}
-		if mostRecentCompleted == nil || job.CreationTimestamp.After(mostRecentCompleted.CreationTimestamp.Time) {
-			mostRecentCompleted = job
-		}
-	}
-
-	if mostRecentCompleted == nil {
-		return false, nil // No completed jobs to process
-	}
-
-	logger.Info("Processing completed backup job", "job", mostRecentCompleted.Name,
-		"succeeded", mostRecentCompleted.Status.Succeeded, "failed", mostRecentCompleted.Status.Failed)
-
-	statusUpdated, err := m.processBackupJobResult(ctx, logger, cluster, mostRecentCompleted.Name)
-	if err != nil {
-		return false, err
-	}
-	if statusUpdated {
-		logger.Info("Completed backup job processed, status updated", "job", mostRecentCompleted.Name)
-	} else {
-		logger.V(1).Info("Completed backup job already processed", "job", mostRecentCompleted.Name)
-	}
-
-	return statusUpdated, nil
-}
-
-// hasActiveBackupJob checks if there's any backup job (scheduled or manual) running or pending for this cluster.
-// This is used to prevent duplicate jobs from being created when manual triggers are processed multiple times.
-func (m *Manager) hasActiveBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	jobList := &batchv1.JobList{}
-	labelSelector := labels.SelectorFromSet(map[string]string{
-		constants.LabelAppInstance:      cluster.Name,
-		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: ComponentBackup,
-	})
-
-	if err := m.client.List(ctx, jobList,
-		client.InNamespace(cluster.Namespace),
-		client.MatchingLabelsSelector{Selector: labelSelector},
-	); err != nil {
-		return false, fmt.Errorf("failed to list backup jobs: %w", err)
-	}
-
-	// Check if there's a running or pending job (not yet succeeded or failed)
-	for i := range jobList.Items {
-		job := &jobList.Items[i]
-		// If job hasn't succeeded or failed, it's still running or pending
-		if !kube.JobSucceeded(job) && !kube.JobFailed(job) {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 // countingReader wraps an io.Reader to count bytes read.

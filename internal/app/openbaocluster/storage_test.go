@@ -16,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
@@ -42,7 +41,7 @@ func TestStorageReconciler_ExpandsPVCs(t *testing.T) {
 			Name:      "data-test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelOpenBaoCluster: "test",
+				storageLabelOpenBaoCluster: "test",
 			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -55,10 +54,10 @@ func TestStorageReconciler_ExpandsPVCs(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
-	r := &storageReconciler{
-		client:   c,
-		recorder: events.NewFakeRecorder(10),
-	}
+	r := NewStorageReconciler(
+		StorageDependencies{Client: c, Recorder: events.NewFakeRecorder(10)},
+		StorageReasonPolicy{},
+	)
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.NoError(t, err)
@@ -90,7 +89,7 @@ func TestStorageReconciler_RejectsShrink(t *testing.T) {
 			Name:      "data-test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelOpenBaoCluster: "test",
+				storageLabelOpenBaoCluster: "test",
 			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -103,14 +102,14 @@ func TestStorageReconciler_RejectsShrink(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
-	r := &storageReconciler{
-		client:   c,
-		recorder: events.NewFakeRecorder(10),
-	}
+	r := NewStorageReconciler(
+		StorageDependencies{Client: c, Recorder: events.NewFakeRecorder(10)},
+		StorageReasonPolicy{},
+	)
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), ReasonStorageShrinkNotSupported)
+	require.Contains(t, err.Error(), defaultReasonStorageShrinkNotSupported)
 }
 
 func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
@@ -133,7 +132,7 @@ func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 			Name:      "data-test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelOpenBaoCluster: "test",
+				storageLabelOpenBaoCluster: "test",
 			},
 		},
 		Status: corev1.PersistentVolumeClaimStatus{
@@ -157,16 +156,19 @@ func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, pvc, pod).Build()
 
-	r := &storageResizeRestartReconciler{
-		client:    c,
-		apiReader: c,
-		recorder:  events.NewFakeRecorder(10),
-		clientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (openbao.ClusterActions, error) {
-			return &openbao.MockClusterActions{
-				IsLeaderFunc: func(ctx context.Context) (bool, error) { return false, nil },
-			}, nil
+	r := NewStorageResizeRestartReconciler(
+		StorageResizeRestartDependencies{
+			Client:    c,
+			APIReader: c,
+			Recorder:  events.NewFakeRecorder(10),
+			ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (openbao.ClusterActions, error) {
+				return &openbao.MockClusterActions{
+					IsLeaderFunc: func(ctx context.Context) (bool, error) { return false, nil },
+				}, nil
+			},
 		},
-	}
+		StorageReasonPolicy{},
+	)
 
 	res, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.NoError(t, err)
@@ -198,7 +200,7 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 			Name:      "data-test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelOpenBaoCluster: "test",
+				storageLabelOpenBaoCluster: "test",
 			},
 		},
 		Status: corev1.PersistentVolumeClaimStatus{
@@ -226,20 +228,23 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, pvc, pod).Build()
 
 	stepDownCalled := 0
-	r := &storageResizeRestartReconciler{
-		client:    c,
-		apiReader: c,
-		recorder:  events.NewFakeRecorder(10),
-		clientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (openbao.ClusterActions, error) {
-			return &openbao.MockClusterActions{
-				IsLeaderFunc: func(ctx context.Context) (bool, error) { return true, nil },
-				StepDownLeaderFunc: func(ctx context.Context) error {
-					stepDownCalled++
-					return nil
-				},
-			}, nil
+	r := NewStorageResizeRestartReconciler(
+		StorageResizeRestartDependencies{
+			Client:    c,
+			APIReader: c,
+			Recorder:  events.NewFakeRecorder(10),
+			ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (openbao.ClusterActions, error) {
+				return &openbao.MockClusterActions{
+					IsLeaderFunc: func(ctx context.Context) (bool, error) { return true, nil },
+					StepDownLeaderFunc: func(ctx context.Context) error {
+						stepDownCalled++
+						return nil
+					},
+				}, nil
+			},
 		},
-	}
+		StorageReasonPolicy{},
+	)
 
 	res, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.NoError(t, err)
@@ -267,7 +272,7 @@ func TestStorageResizeRestartReconciler_RequiresMaintenance(t *testing.T) {
 			Name:      "data-test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelOpenBaoCluster: "test",
+				storageLabelOpenBaoCluster: "test",
 			},
 		},
 		Status: corev1.PersistentVolumeClaimStatus{
@@ -279,13 +284,12 @@ func TestStorageResizeRestartReconciler_RequiresMaintenance(t *testing.T) {
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, pvc).Build()
 
-	r := &storageResizeRestartReconciler{
-		client:    c,
-		apiReader: c,
-		recorder:  events.NewFakeRecorder(10),
-	}
+	r := NewStorageResizeRestartReconciler(
+		StorageResizeRestartDependencies{Client: c, APIReader: c, Recorder: events.NewFakeRecorder(10)},
+		StorageReasonPolicy{},
+	)
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), ReasonStorageRestartRequired)
+	require.Contains(t, err.Error(), defaultReasonStorageRestartRequired)
 }

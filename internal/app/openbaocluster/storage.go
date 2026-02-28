@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -15,29 +16,113 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
+const (
+	defaultReasonStorageInvalidSize             = "StorageInvalidSize"
+	defaultReasonStorageShrinkNotSupported      = "StorageShrinkNotSupported"
+	defaultReasonStorageResizeNotSupported      = "StorageResizeNotSupported"
+	defaultReasonStorageClassChangeNotSupported = "StorageClassChangeNotSupported"
+	defaultReasonStorageRestartRequired         = "StorageRestartRequired"
+
+	storageLabelOpenBaoCluster  = "openbao.org/cluster"
+	storageLabelOpenBaoRevision = "openbao.org/revision"
+	storageVolumeDataPrefix     = "data-"
+	storageRequeueShort         = 5 * time.Second
+)
+
+// StorageReasonPolicy configures storage-related error reason values.
+type StorageReasonPolicy struct {
+	InvalidSize             string
+	ShrinkNotSupported      string
+	ResizeNotSupported      string
+	StorageClassChangeError string
+	RestartRequired         string
+}
+
+func (p StorageReasonPolicy) invalidSizeReason() string {
+	if strings.TrimSpace(p.InvalidSize) != "" {
+		return p.InvalidSize
+	}
+	return defaultReasonStorageInvalidSize
+}
+
+func (p StorageReasonPolicy) shrinkNotSupportedReason() string {
+	if strings.TrimSpace(p.ShrinkNotSupported) != "" {
+		return p.ShrinkNotSupported
+	}
+	return defaultReasonStorageShrinkNotSupported
+}
+
+func (p StorageReasonPolicy) resizeNotSupportedReason() string {
+	if strings.TrimSpace(p.ResizeNotSupported) != "" {
+		return p.ResizeNotSupported
+	}
+	return defaultReasonStorageResizeNotSupported
+}
+
+func (p StorageReasonPolicy) storageClassChangeReason() string {
+	if strings.TrimSpace(p.StorageClassChangeError) != "" {
+		return p.StorageClassChangeError
+	}
+	return defaultReasonStorageClassChangeNotSupported
+}
+
+func (p StorageReasonPolicy) restartRequiredReason() string {
+	if strings.TrimSpace(p.RestartRequired) != "" {
+		return p.RestartRequired
+	}
+	return defaultReasonStorageRestartRequired
+}
+
+// StorageDependencies provides external dependencies for storage reconciliation.
+type StorageDependencies struct {
+	Client   client.Client
+	Recorder events.EventRecorder
+}
+
 type storageReconciler struct {
-	client   client.Client
-	recorder events.EventRecorder
+	deps    StorageDependencies
+	reasons StorageReasonPolicy
+}
+
+// NewStorageReconciler creates a SubReconciler that handles PVC storage expansion workflows.
+func NewStorageReconciler(deps StorageDependencies, reasons StorageReasonPolicy) SubReconciler {
+	return &storageReconciler{
+		deps:    deps,
+		reasons: reasons,
+	}
 }
 
 func (r *storageReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	return ReconcileStorage(ctx, logger, cluster, r.deps, r.reasons)
+}
+
+// ReconcileStorage validates and applies supported PVC storage expansion changes.
+func ReconcileStorage(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	deps StorageDependencies,
+	reasons StorageReasonPolicy,
+) (recon.Result, error) {
 	if cluster == nil {
 		return recon.Result{}, nil
 	}
+	if deps.Client == nil {
+		return recon.Result{}, fmt.Errorf("storage client is required")
+	}
 
-	desiredQty, desiredStorageClassName, err := desiredStorageSpec(cluster)
+	desiredQty, desiredStorageClassName, err := desiredStorageSpec(cluster, reasons)
 	if err != nil {
 		return recon.Result{}, err
 	}
 
-	pvcs, err := r.listClusterPVCs(ctx, cluster)
+	pvcs, err := listClusterPVCs(ctx, deps.Client, cluster)
 	if err != nil {
 		return recon.Result{}, err
 	}
@@ -45,11 +130,11 @@ func (r *storageReconciler) Reconcile(ctx context.Context, logger logr.Logger, c
 		return recon.Result{}, nil
 	}
 
-	if err := validateStorageChangeAllowed(desiredQty, desiredStorageClassName, pvcs); err != nil {
+	if err := validateStorageChangeAllowed(desiredQty, desiredStorageClassName, pvcs, reasons); err != nil {
 		return recon.Result{}, err
 	}
 
-	patched, err := r.expandPVCs(ctx, cluster, logger, desiredQty, pvcs)
+	patched, err := expandPVCs(ctx, deps.Client, deps.Recorder, cluster, logger, desiredQty, pvcs, reasons)
 	if err != nil {
 		return recon.Result{}, err
 	}
@@ -60,11 +145,11 @@ func (r *storageReconciler) Reconcile(ctx context.Context, logger logr.Logger, c
 	return recon.Result{}, nil
 }
 
-func desiredStorageSpec(cluster *openbaov1alpha1.OpenBaoCluster) (resource.Quantity, string, error) {
+func desiredStorageSpec(cluster *openbaov1alpha1.OpenBaoCluster, reasons StorageReasonPolicy) (resource.Quantity, string, error) {
 	desiredQty, err := resource.ParseQuantity(cluster.Spec.Storage.Size)
 	if err != nil {
 		return resource.Quantity{}, "", operatorerrors.WithReason(
-			ReasonStorageInvalidSize,
+			reasons.invalidSizeReason(),
 			operatorerrors.WrapPermanentConfig(fmt.Errorf("invalid spec.storage.size %q: %w", cluster.Spec.Storage.Size, err)),
 		)
 	}
@@ -77,11 +162,11 @@ func desiredStorageSpec(cluster *openbaov1alpha1.OpenBaoCluster) (resource.Quant
 	return desiredQty, desiredStorageClassName, nil
 }
 
-func (r *storageReconciler) listClusterPVCs(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) ([]corev1.PersistentVolumeClaim, error) {
+func listClusterPVCs(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster) ([]corev1.PersistentVolumeClaim, error) {
 	var pvcList corev1.PersistentVolumeClaimList
-	if err := r.client.List(ctx, &pvcList,
+	if err := c.List(ctx, &pvcList,
 		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(map[string]string{constants.LabelOpenBaoCluster: cluster.Name}),
+		client.MatchingLabels(map[string]string{storageLabelOpenBaoCluster: cluster.Name}),
 	); err != nil {
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
 			return nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
@@ -92,13 +177,13 @@ func (r *storageReconciler) listClusterPVCs(ctx context.Context, cluster *openba
 	return pvcList.Items, nil
 }
 
-func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageClassName string, pvcs []corev1.PersistentVolumeClaim) error {
+func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageClassName string, pvcs []corev1.PersistentVolumeClaim, reasons StorageReasonPolicy) error {
 	for i := range pvcs {
 		pvc := &pvcs[i]
 
 		if desiredStorageClassName != "" && pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != desiredStorageClassName {
 			return operatorerrors.WithReason(
-				ReasonStorageClassChangeNotSupported,
+				reasons.storageClassChangeReason(),
 				operatorerrors.WrapPermanentConfig(fmt.Errorf(
 					"spec.storage.storageClassName cannot be changed for an existing cluster (PVC %s has %q, desired %q)",
 					pvc.Name, *pvc.Spec.StorageClassName, desiredStorageClassName,
@@ -112,7 +197,7 @@ func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageCl
 		}
 		if desiredQty.Cmp(curr) < 0 {
 			return operatorerrors.WithReason(
-				ReasonStorageShrinkNotSupported,
+				reasons.shrinkNotSupportedReason(),
 				operatorerrors.WrapPermanentConfig(fmt.Errorf(
 					"spec.storage.size cannot be decreased (requested %s but PVC %s already requests %s); revert the change",
 					desiredQty.String(), pvc.Name, curr.String(),
@@ -124,7 +209,16 @@ func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageCl
 	return nil
 }
 
-func (r *storageReconciler) expandPVCs(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, logger logr.Logger, desiredQty resource.Quantity, pvcs []corev1.PersistentVolumeClaim) (int, error) {
+func expandPVCs(
+	ctx context.Context,
+	c client.Client,
+	recorder events.EventRecorder,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	logger logr.Logger,
+	desiredQty resource.Quantity,
+	pvcs []corev1.PersistentVolumeClaim,
+	reasons StorageReasonPolicy,
+) (int, error) {
 	patched := 0
 	for i := range pvcs {
 		pvc := &pvcs[i]
@@ -144,7 +238,7 @@ func (r *storageReconciler) expandPVCs(ctx context.Context, cluster *openbaov1al
 		}
 		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = desiredQty
 
-		if err := r.client.Patch(ctx, pvc, client.MergeFrom(orig)); err != nil {
+		if err := c.Patch(ctx, pvc, client.MergeFrom(orig)); err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
 			}
@@ -153,7 +247,7 @@ func (r *storageReconciler) expandPVCs(ctx context.Context, cluster *openbaov1al
 			}
 			if apierrors.IsInvalid(err) || apierrors.IsForbidden(err) {
 				return patched, operatorerrors.WithReason(
-					ReasonStorageResizeNotSupported,
+					reasons.resizeNotSupportedReason(),
 					operatorerrors.WrapPermanentConfig(fmt.Errorf("PVC %s cannot be expanded to %s: %w", pvc.Name, desiredQty.String(), err)),
 				)
 			}
@@ -161,34 +255,67 @@ func (r *storageReconciler) expandPVCs(ctx context.Context, cluster *openbaov1al
 		}
 
 		patched++
-		if r.recorder != nil {
-			r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResize", "PVCResize", "Resizing PVC %s from %s to %s", pvc.Name, currentQty.String(), desiredQty.String())
+		if recorder != nil {
+			recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResize", "PVCResize", "Resizing PVC %s from %s to %s", pvc.Name, currentQty.String(), desiredQty.String())
 		}
 	}
 
 	return patched, nil
 }
 
-type podClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (openbao.ClusterActions, error)
+// PodClientFactory constructs pod-targeted OpenBao API clients.
+type PodClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (openbao.ClusterActions, error)
+
+// StorageResizeRestartDependencies provides dependencies for filesystem resize restarts.
+type StorageResizeRestartDependencies struct {
+	Client            client.Client
+	APIReader         client.Reader
+	Recorder          events.EventRecorder
+	SmartClientConfig openbao.ClientConfig
+	ClientForPodFunc  PodClientFactory
+}
 
 type storageResizeRestartReconciler struct {
-	client            client.Client
-	apiReader         client.Reader
-	recorder          events.EventRecorder
-	smartClientConfig openbao.ClientConfig
-	clientForPodFunc  podClientFactory
+	deps    StorageResizeRestartDependencies
+	reasons StorageReasonPolicy
+}
+
+// NewStorageResizeRestartReconciler creates a SubReconciler that handles filesystem resize restarts.
+func NewStorageResizeRestartReconciler(deps StorageResizeRestartDependencies, reasons StorageReasonPolicy) SubReconciler {
+	return &storageResizeRestartReconciler{
+		deps:    deps,
+		reasons: reasons,
+	}
 }
 
 func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	return ReconcileStorageResizeRestart(ctx, logger, cluster, r.deps, r.reasons)
+}
+
+// ReconcileStorageResizeRestart performs controlled pod restarts when PVC filesystem expansion is pending.
+func ReconcileStorageResizeRestart(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	deps StorageResizeRestartDependencies,
+	reasons StorageReasonPolicy,
+) (recon.Result, error) {
 	if cluster == nil || !cluster.Status.Initialized {
 		return recon.Result{}, nil
 	}
+	if deps.Client == nil {
+		return recon.Result{}, fmt.Errorf("storage restart client is required")
+	}
 
-	// List PVCs once to avoid redundant API calls.
+	apiReader := deps.APIReader
+	if apiReader == nil {
+		apiReader = deps.Client
+	}
+
 	var pvcList corev1.PersistentVolumeClaimList
-	if err := r.apiReader.List(ctx, &pvcList,
+	if err := apiReader.List(ctx, &pvcList,
 		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(map[string]string{constants.LabelOpenBaoCluster: cluster.Name}),
+		client.MatchingLabels(map[string]string{storageLabelOpenBaoCluster: cluster.Name}),
 	); err != nil {
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
 			return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
@@ -199,7 +326,7 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 	if cluster.Spec.Maintenance == nil || !cluster.Spec.Maintenance.Enabled {
 		if anyPVCFileSystemResizePending(pvcList.Items) {
 			return recon.Result{}, operatorerrors.WithReason(
-				ReasonStorageRestartRequired,
+				reasons.restartRequiredReason(),
 				operatorerrors.WrapPermanentPrerequisitesMissing(fmt.Errorf(
 					"PVC filesystem resize is pending and requires a pod restart; enable spec.maintenance.enabled=true to allow the operator to perform controlled restarts, or restart the pods manually",
 				)),
@@ -208,13 +335,12 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 		return recon.Result{}, nil
 	}
 
-	// Avoid disruptive restarts while upgrades are in progress.
 	if cluster.Status.Phase == openbaov1alpha1.ClusterPhaseUpgrading ||
 		(cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.Phase != "" && cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle) {
-		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+		return recon.Result{RequeueAfter: storageRequeueShort}, nil
 	}
 
-	targetPod, err := r.nextPodNeedingFSResizeRestart(ctx, cluster, pvcList.Items)
+	targetPod, err := nextPodNeedingFSResizeRestart(ctx, deps.Client, cluster, pvcList.Items)
 	if err != nil {
 		return recon.Result{}, err
 	}
@@ -223,13 +349,11 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 	}
 
 	if !isPodReady(targetPod) {
-		// Don't chain restarts while the cluster is still converging.
-		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+		return recon.Result{RequeueAfter: storageRequeueShort}, nil
 	}
 
-	actions, err := r.clientForPod(cluster, targetPod.Name)
+	actions, err := clientForPod(cluster, targetPod.Name, deps.SmartClientConfig, deps.ClientForPodFunc)
 	if err != nil {
-		// If we can't talk to the pod, deleting it might be disruptive. Retry instead.
 		return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client for pod %s: %w", targetPod.Name, err))
 	}
 
@@ -239,34 +363,32 @@ func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger l
 	}
 
 	if isLeader {
-		// Single-replica clusters have no peer to transfer leadership to; stepping down will fail.
-		// In maintenance mode, accept a brief restart to complete the filesystem resize.
 		if cluster.Spec.Replicas > 1 {
 			logger.Info("Pod requires filesystem resize restart but is leader; stepping down first", "pod", targetPod.Name)
 			if err := actions.StepDownLeader(ctx); err != nil {
 				return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to step down leader %s before restart: %w", targetPod.Name, err))
 			}
-			if r.recorder != nil {
-				r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "PVCResizeLeaderStepDown", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
+			if deps.Recorder != nil {
+				deps.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "PVCResizeLeaderStepDown", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
 			}
-			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+			return recon.Result{RequeueAfter: storageRequeueShort}, nil
 		}
 		logger.Info("Pod requires filesystem resize restart and is leader in a single-replica cluster; restarting without step-down", "pod", targetPod.Name)
 	}
 
 	logger.Info("Restarting pod to complete filesystem resize", "pod", targetPod.Name)
-	if err := r.client.Delete(ctx, targetPod); err != nil && !apierrors.IsNotFound(err) {
+	if err := deps.Client.Delete(ctx, targetPod); err != nil && !apierrors.IsNotFound(err) {
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
 			return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to delete pod %s/%s for filesystem resize restart: %w", targetPod.Namespace, targetPod.Name, err))
 		}
 		return recon.Result{}, fmt.Errorf("failed to delete pod %s/%s for filesystem resize restart: %w", targetPod.Namespace, targetPod.Name, err)
 	}
 
-	if r.recorder != nil {
-		r.recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizePodRestart", "PVCResizePodRestart", "Restarted pod %s to complete filesystem resize", targetPod.Name)
+	if deps.Recorder != nil {
+		deps.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizePodRestart", "PVCResizePodRestart", "Restarted pod %s to complete filesystem resize", targetPod.Name)
 	}
 
-	return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+	return recon.Result{RequeueAfter: storageRequeueShort}, nil
 }
 
 func anyPVCFileSystemResizePending(pvcs []corev1.PersistentVolumeClaim) bool {
@@ -278,7 +400,12 @@ func anyPVCFileSystemResizePending(pvcs []corev1.PersistentVolumeClaim) bool {
 	return false
 }
 
-func (r *storageResizeRestartReconciler) nextPodNeedingFSResizeRestart(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, pvcs []corev1.PersistentVolumeClaim) (*corev1.Pod, error) {
+func nextPodNeedingFSResizeRestart(
+	ctx context.Context,
+	c client.Client,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	pvcs []corev1.PersistentVolumeClaim,
+) (*corev1.Pod, error) {
 	candidatePodNames := make([]string, 0, 1)
 	for i := range pvcs {
 		pvc := &pvcs[i]
@@ -296,7 +423,6 @@ func (r *storageResizeRestartReconciler) nextPodNeedingFSResizeRestart(ctx conte
 		return nil, nil
 	}
 
-	// Ensure we only restart pods belonging to the active revision when Blue/Green is enabled.
 	var wantRev string
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		wantRev = inframanager.BlueGreenActiveRevision(cluster)
@@ -334,7 +460,7 @@ func (r *storageResizeRestartReconciler) nextPodNeedingFSResizeRestart(ctx conte
 	var leaderCandidate *corev1.Pod
 	for _, candidatePodName := range candidates {
 		pod := &corev1.Pod{}
-		if err := r.client.Get(ctx, client.ObjectKey{Namespace: cluster.Namespace, Name: candidatePodName}, pod); err != nil {
+		if err := c.Get(ctx, client.ObjectKey{Namespace: cluster.Namespace, Name: candidatePodName}, pod); err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
 			}
@@ -345,7 +471,7 @@ func (r *storageResizeRestartReconciler) nextPodNeedingFSResizeRestart(ctx conte
 		}
 
 		if wantRev != "" {
-			if gotRev := strings.TrimSpace(pod.Labels[constants.LabelOpenBaoRevision]); gotRev != wantRev {
+			if gotRev := strings.TrimSpace(pod.Labels[storageLabelOpenBaoRevision]); gotRev != wantRev {
 				continue
 			}
 		}
@@ -362,16 +488,21 @@ func (r *storageResizeRestartReconciler) nextPodNeedingFSResizeRestart(ctx conte
 	return leaderCandidate, nil
 }
 
-func (r *storageResizeRestartReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (openbao.ClusterActions, error) {
-	if r.clientForPodFunc != nil {
-		return r.clientForPodFunc(cluster, podName)
+func clientForPod(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	podName string,
+	smartClientConfig openbao.ClientConfig,
+	factory PodClientFactory,
+) (openbao.ClusterActions, error) {
+	if factory != nil {
+		return factory(cluster, podName)
 	}
 
 	headlessServiceName := cluster.Name
 	podDNS := fmt.Sprintf("%s.%s.%s.svc:8200", podName, headlessServiceName, cluster.Namespace)
 	baseURL := "https://" + podDNS
 
-	cfg := r.smartClientConfig
+	cfg := smartClientConfig
 	cfg.BaseURL = baseURL
 
 	return openbao.NewClient(cfg)
@@ -391,11 +522,10 @@ func pvcHasFileSystemResizePending(pvc *corev1.PersistentVolumeClaim) bool {
 }
 
 func podNameForDataPVC(pvcName string) (string, bool) {
-	prefix := constants.VolumeData + "-"
-	if !strings.HasPrefix(pvcName, prefix) {
+	if !strings.HasPrefix(pvcName, storageVolumeDataPrefix) {
 		return "", false
 	}
-	return strings.TrimPrefix(pvcName, prefix), true
+	return strings.TrimPrefix(pvcName, storageVolumeDataPrefix), true
 }
 
 func podOrdinal(podName string) (int, bool) {
@@ -419,13 +549,10 @@ func isPodReady(pod *corev1.Pod) bool {
 	if pod == nil {
 		return false
 	}
-	if !pod.DeletionTimestamp.IsZero() {
-		return false
-	}
 	for i := range pod.Status.Conditions {
-		cond := pod.Status.Conditions[i]
-		if cond.Type == corev1.PodReady {
-			return cond.Status == corev1.ConditionTrue
+		c := pod.Status.Conditions[i]
+		if c.Type == corev1.PodReady {
+			return c.Status == corev1.ConditionTrue
 		}
 	}
 	return false

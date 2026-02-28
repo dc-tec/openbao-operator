@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -18,35 +19,123 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/admission"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
-// infraReconciler wraps InfraManager to implement the controller's sub-reconciler contract.
-// It handles image verification and injects the verified digest into InfraManager.
+const (
+	defaultImageVerificationFailurePolicyBlock = "Block"
+
+	defaultReasonGatewayAPIMissing                   = "GatewayAPIMissing"
+	defaultReasonPrerequisitesMissing                = "PrerequisitesMissing"
+	defaultReasonACMEDomainNotResolvable             = "ACMEDomainNotResolvable"
+	defaultReasonACMEGatewayNotConfiguredPassthrough = "ACMEGatewayNotConfiguredForPassthrough"
+	defaultReasonImageVerificationFailed             = "ImageVerificationFailed"
+	defaultReasonInitImageVerificationFailed         = "InitContainerImageVerificationFailed"
+
+	infraOpenBaoImageRepoEnv  = "RELATED_IMAGE_OPENBAO"
+	infraDefaultOpenBaoImage  = "openbao/openbao"
+	infraOpenBaoRevisionLabel = "openbao.org/revision"
+
+	infraImageVerificationTimeout = 5 * time.Second
+	infraRequeueShort             = 5 * time.Second
+)
+
+// OIDCConfig contains discovered issuer and key material for JWT bootstrap.
+type OIDCConfig struct {
+	IssuerURL string
+	JWKSKeys  []string
+}
+
+// InfraReasonPolicy configures infra-related error reason values.
+type InfraReasonPolicy struct {
+	GatewayAPIMissing                   string
+	PrerequisitesMissing                string
+	ACMEDomainNotResolvable             string
+	ACMEGatewayNotConfiguredPassthrough string
+	ImageVerificationFailed             string
+	InitContainerImageVerification      string
+}
+
+func (p InfraReasonPolicy) gatewayAPIMissingReason() string {
+	if strings.TrimSpace(p.GatewayAPIMissing) != "" {
+		return p.GatewayAPIMissing
+	}
+	return defaultReasonGatewayAPIMissing
+}
+
+func (p InfraReasonPolicy) prerequisitesMissingReason() string {
+	if strings.TrimSpace(p.PrerequisitesMissing) != "" {
+		return p.PrerequisitesMissing
+	}
+	return defaultReasonPrerequisitesMissing
+}
+
+func (p InfraReasonPolicy) acmeDomainNotResolvableReason() string {
+	if strings.TrimSpace(p.ACMEDomainNotResolvable) != "" {
+		return p.ACMEDomainNotResolvable
+	}
+	return defaultReasonACMEDomainNotResolvable
+}
+
+func (p InfraReasonPolicy) acmeGatewayNotConfiguredReason() string {
+	if strings.TrimSpace(p.ACMEGatewayNotConfiguredPassthrough) != "" {
+		return p.ACMEGatewayNotConfiguredPassthrough
+	}
+	return defaultReasonACMEGatewayNotConfiguredPassthrough
+}
+
+func (p InfraReasonPolicy) imageVerificationFailedReason() string {
+	if strings.TrimSpace(p.ImageVerificationFailed) != "" {
+		return p.ImageVerificationFailed
+	}
+	return defaultReasonImageVerificationFailed
+}
+
+func (p InfraReasonPolicy) initContainerImageVerificationReason() string {
+	if strings.TrimSpace(p.InitContainerImageVerification) != "" {
+		return p.InitContainerImageVerification
+	}
+	return defaultReasonInitImageVerificationFailed
+}
+
+type verifyImageFunc func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
+type verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, verifier imageverify.Verifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
+type podClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (openbao.ClusterActions, error)
+type discoverOIDCConfigFunc func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error)
+
+// InfraDependencies provides external dependencies for infrastructure reconciliation.
+type InfraDependencies struct {
+	Client                client.Client
+	APIReader             client.Reader
+	Scheme                *runtime.Scheme
+	RestConfig            *rest.Config
+	OperatorNamespace     string
+	OIDCIssuer            string
+	OIDCJWTKeys           []string
+	OperatorImageVerifier imageverify.Verifier
+	VerifyImageFunc       verifyImageFunc
+	VerifyOperatorImage   verifyOperatorImageFunc
+	Recorder              events.EventRecorder
+	Platform              string
+	SmartClientConfig     openbao.ClientConfig
+	ClientForPodFunc      podClientFactory
+	DiscoverOIDCConfig    discoverOIDCConfigFunc
+}
+
 type infraReconciler struct {
-	client                  client.Client
-	apiReader               client.Reader
-	scheme                  *runtime.Scheme
-	restConfig              *rest.Config
-	operatorNamespace       string
-	oidcIssuer              string
-	oidcJWTKeys             []string
-	operatorImageVerifier   imageverify.Verifier
-	verifyImageFunc         func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
-	verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, verifier imageverify.Verifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
-	recorder                events.EventRecorder
-	admissionStatus         *admission.Status
-	platform                string
-	smartClientConfig       openbao.ClientConfig
-	clientForPodFunc        func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (*openbao.Client, error)
-	discoverOIDCConfigFunc  func(ctx context.Context, cfg *rest.Config) (*appopenbaocluster.OIDCConfig, error)
+	deps    InfraDependencies
+	reasons InfraReasonPolicy
+}
+
+// NewInfraReconciler creates a SubReconciler that handles infrastructure orchestration.
+func NewInfraReconciler(deps InfraDependencies, reasons InfraReasonPolicy) SubReconciler {
+	return &infraReconciler{deps: deps, reasons: reasons}
 }
 
 func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
@@ -56,12 +145,20 @@ func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 		cluster.Spec.SelfInit.OIDC.Enabled
 }
 
+func oidcDiscoveryStatusCode(err error) (int, bool) {
+	var statusErr *auth.HTTPStatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.StatusCode, true
+	}
+	return 0, false
+}
+
 func oidcDiscoveryError(err error) error {
 	if err == nil {
 		return nil
 	}
 
-	if statusCode, ok := appopenbaocluster.OIDCDiscoveryStatusCode(err); ok {
+	if statusCode, ok := oidcDiscoveryStatusCode(err); ok {
 		switch statusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
 			return operatorerrors.WrapPermanentConfig(fmt.Errorf(
@@ -87,27 +184,38 @@ func oidcDiscoveryError(err error) error {
 	return operatorerrors.WrapTransientKubernetesAPI(operatorerrors.WrapTransientConnection(err))
 }
 
+func defaultDiscoverOIDCConfig(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
+	discovered, err := auth.DiscoverConfig(ctx, cfg, "")
+	if err != nil {
+		return nil, err
+	}
+	if discovered == nil {
+		return nil, nil
+	}
+	return &OIDCConfig{IssuerURL: discovered.IssuerURL, JWKSKeys: discovered.JWKSKeys}, nil
+}
+
 func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, []string, error) {
-	effectiveIssuer := r.oidcIssuer
-	effectiveKeys := r.oidcJWTKeys
+	effectiveIssuer := r.deps.OIDCIssuer
+	effectiveKeys := r.deps.OIDCJWTKeys
 
 	if !shouldBootstrapJWTAuth(cluster) || (strings.TrimSpace(effectiveIssuer) != "" && len(effectiveKeys) > 0) {
 		return effectiveIssuer, effectiveKeys, nil
 	}
 
-	if r.restConfig == nil {
+	if r.deps.RestConfig == nil {
 		return "", nil, operatorerrors.WrapPermanentConfig(fmt.Errorf("OIDC discovery required but controller rest.Config is not available"))
 	}
 
-	discover := r.discoverOIDCConfigFunc
+	discover := r.deps.DiscoverOIDCConfig
 	if discover == nil {
-		discover = appopenbaocluster.DiscoverOIDCConfig
+		discover = defaultDiscoverOIDCConfig
 	}
 
 	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	discovered, err := discover(discoveryCtx, r.restConfig)
+	discovered, err := discover(discoveryCtx, r.deps.RestConfig)
 	if err != nil {
 		return "", nil, oidcDiscoveryError(err)
 	}
@@ -123,24 +231,23 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	if cluster.Spec.ImageVerification == nil {
-		return constants.ImageVerificationFailurePolicyBlock
+		return defaultImageVerificationFailurePolicyBlock
 	}
 	failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
 	if failurePolicy == "" {
-		return constants.ImageVerificationFailurePolicyBlock
+		return defaultImageVerificationFailurePolicyBlock
 	}
 	return failurePolicy
 }
 
 func operatorImageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	// Use OperatorImageVerification only - no fallback
 	config := cluster.Spec.OperatorImageVerification
 	if config == nil {
-		return constants.ImageVerificationFailurePolicyBlock
+		return defaultImageVerificationFailurePolicyBlock
 	}
 	failurePolicy := config.FailurePolicy
 	if failurePolicy == "" {
-		return constants.ImageVerificationFailurePolicyBlock
+		return defaultImageVerificationFailurePolicyBlock
 	}
 	return failurePolicy
 }
@@ -173,7 +280,7 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 		return "", fmt.Errorf("verify function is required")
 	}
 
-	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+	verifyCtx, cancel := context.WithTimeout(ctx, infraImageVerificationTimeout)
 	defer cancel()
 
 	digest, err := verify(verifyCtx)
@@ -182,39 +289,38 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 		return digest, nil
 	}
 
-	if opts.failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+	if opts.failurePolicy == defaultImageVerificationFailurePolicyBlock {
 		return "", operatorerrors.WithReason(opts.failureReason, fmt.Errorf("%s (policy=Block): %w", opts.failureMessagePrefix, err))
 	}
 
 	logger.Error(err, opts.failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
-	if opts.emitEventOnWarn && r.recorder != nil {
-		r.recorder.Eventf(cluster, nil, corev1.EventTypeWarning, opts.failureReason, opts.failureReason, "%s but proceeding due to Warn policy: %v", opts.failureMessagePrefix, err)
+	if opts.emitEventOnWarn && r.deps.Recorder != nil {
+		r.deps.Recorder.Eventf(cluster, nil, corev1.EventTypeWarning, opts.failureReason, opts.failureReason, "%s but proceeding due to Warn policy: %v", opts.failureMessagePrefix, err)
 	}
 	return "", nil
 }
 
 func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	opts := imageVerificationOptions{
-		enabled:              appopenbaocluster.IsMainImageVerificationEnabled(cluster),
+		enabled:              security.IsMainImageVerificationEnabled(cluster),
 		imageRef:             imageRef,
 		failurePolicy:        imageVerificationFailurePolicy(cluster),
-		failureReason:        constants.ReasonImageVerificationFailed,
+		failureReason:        r.reasons.imageVerificationFailedReason(),
 		failureMessagePrefix: "Image verification failed",
 		successMessage:       "Image verified successfully, using digest",
 		emitEventOnWarn:      true,
 	}
 
 	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
-		if r.verifyImageFunc == nil {
+		if r.deps.VerifyImageFunc == nil {
 			return "", fmt.Errorf("verifyImageFunc is required")
 		}
-		return r.verifyImageFunc(ctx, logger, cluster, imageRef)
+		return r.deps.VerifyImageFunc(ctx, logger, cluster, imageRef)
 	})
 }
 
 func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
-	// Use OperatorImageVerification only - no fallback to ImageVerification
-	if !appopenbaocluster.IsOperatorImageVerificationEnabled(cluster) {
+	if !security.IsOperatorImageVerificationEnabled(cluster) {
 		return "", nil
 	}
 
@@ -228,13 +334,13 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 		emitEventOnWarn:      true,
 	}
 
-	verifyFunc := r.verifyOperatorImageFunc
+	verifyFunc := r.deps.VerifyOperatorImage
 	if verifyFunc == nil {
-		verifyFunc = appopenbaocluster.VerifyOperatorImageForCluster
+		verifyFunc = security.VerifyOperatorImageForCluster
 	}
 
 	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
-		return verifyFunc(ctx, logger, r.operatorImageVerifier, cluster, strings.TrimSpace(imageRef))
+		return verifyFunc(ctx, logger, r.deps.OperatorImageVerifier, cluster, strings.TrimSpace(imageRef))
 	})
 }
 
@@ -248,11 +354,10 @@ func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, lo
 		return "", nil
 	}
 
-	return r.verifyOperatorImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Init container image verification failed")
+	return r.verifyOperatorImageDigest(ctx, logger, cluster, initImage, r.reasons.initContainerImageVerificationReason(), "Init container image verification failed")
 }
 
 // computeStatefulSetSpec computes the StatefulSetSpec from the cluster and verified image digests.
-// This method encapsulates all upgrade strategy knowledge, removing it from the infrastructure layer.
 func (r *infraReconciler) computeStatefulSetSpec(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
@@ -267,7 +372,6 @@ func (r *infraReconciler) computeStatefulSetSpec(
 		SkipReconciliation: false,
 	}
 
-	// Determine revision and skip logic based on update strategy
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		spec.Revision = inframanager.BlueGreenStableRevision(cluster)
 		if cluster.Status.BlueGreen != nil &&
@@ -280,43 +384,40 @@ func (r *infraReconciler) computeStatefulSetSpec(
 			return spec
 		}
 	} else {
-		// For RollingUpdate or default, use empty revision (cluster name)
 		spec.Revision = ""
 	}
 
-	// Compute StatefulSet name from cluster name and revision
 	if spec.Revision == "" {
 		spec.Name = cluster.Name
 	} else {
 		spec.Name = fmt.Sprintf("%s-%s", cluster.Name, spec.Revision)
 	}
 
-	// ConfigHash will be computed in the infra manager from the rendered config
-	// We leave it empty here and it will be set during reconciliation
-
 	return spec
 }
 
+func defaultOpenBaoImage(specVersion string) string {
+	repo := os.Getenv(infraOpenBaoImageRepoEnv)
+	if repo == "" {
+		repo = infraDefaultOpenBaoImage
+	}
+	return fmt.Sprintf("%s:%s", repo, strings.TrimSpace(specVersion))
+}
+
 // resolveTargetMainImage determines the image reference to use for infrastructure reconciliation.
-// For BlueGreen upgrades, this is the currently-active ("Blue") image, not necessarily spec.image
-// (which may already be set to the target upgrade image).
-//
-// Note: The workload controller does not own BlueGreen status, so any mutation of
-// cluster.Status.BlueGreen here is in-memory only, to avoid accidental upgrades of the active
-// cluster during upgrade start/restarts/cache staleness.
 func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) string {
 	targetImage := strings.TrimSpace(cluster.Spec.Image)
 	if targetImage == "" {
-		targetImage = constants.GetOpenBaoImage(cluster.Spec.Version)
+		targetImage = defaultOpenBaoImage(cluster.Spec.Version)
 	}
 
 	if cluster.Spec.Upgrade == nil || cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen {
 		return targetImage
 	}
 
-	podReader := client.Reader(r.client)
-	if r.apiReader != nil {
-		podReader = r.apiReader
+	podReader := client.Reader(r.deps.Client)
+	if r.deps.APIReader != nil {
+		podReader = r.deps.APIReader
 	}
 
 	inframanager.EnsureBlueGreenStatus(ctx, logger, podReader, cluster)
@@ -328,7 +429,6 @@ func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger log
 }
 
 // Reconcile implements the controller's sub-reconciler contract for infrastructure reconciliation.
-// TODO: split this function into smaller functions
 // nolint:gocyclo
 func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	logger.Info("Reconciling infrastructure for OpenBaoCluster")
@@ -339,9 +439,6 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	if err != nil {
 		return recon.Result{}, err
 	}
-	// The infra layer expects a non-empty image reference; when verification is disabled (or on Warn),
-	// keep using the selected tag/ref to avoid falling back to cluster.Spec.Image (which may already be
-	// the target upgrade image during BlueGreen).
 	if strings.TrimSpace(verifiedImageDigest) == "" {
 		verifiedImageDigest = targetImage
 	}
@@ -354,21 +451,13 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		verifiedInitContainerDigest = strings.TrimSpace(cluster.Spec.InitContainer.Image)
 	}
 
-	// Compute StatefulSetSpec with all upgrade strategy knowledge
 	spec := r.computeStatefulSetSpec(logger, cluster, verifiedImageDigest, verifiedInitContainerDigest)
 
-	// SCALING SAFETY: Check for scale down operations and ensure leader step-down
-	// This must happen BEFORE passing the spec to the manager, as the manager updates the StatefulSet.
 	currentSTS := &appsv1.StatefulSet{}
-	currentSTSName := spec.Name
-
-	// We use r.client (cached) to fetch the StatefulSet.
-	// If it doesn't exist, we can't be scaling down, so we proceed.
-	if err := r.client.Get(ctx, client.ObjectKey{Name: currentSTSName, Namespace: cluster.Namespace}, currentSTS); err == nil {
+	if err := r.deps.Client.Get(ctx, client.ObjectKey{Name: spec.Name, Namespace: cluster.Namespace}, currentSTS); err == nil {
 		if err := r.handleScaleDownSafety(ctx, cluster, spec.Replicas, currentSTS); err != nil {
 			logger.Info("Scale down safety check blocked reconciliation", "reason", err.Error())
-			// Return RequeueShort to check again soon (e.g. for leader step-down to complete)
-			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+			return recon.Result{RequeueAfter: infraRequeueShort}, nil
 		}
 	}
 
@@ -377,22 +466,22 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		return recon.Result{}, err
 	}
 
-	manager := inframanager.NewManager(r.client, r.scheme, r.operatorNamespace, effectiveIssuer, effectiveKeys, r.platform)
-	if r.apiReader != nil {
-		manager = inframanager.NewManagerWithReader(r.client, r.apiReader, r.scheme, r.operatorNamespace, effectiveIssuer, effectiveKeys, r.platform)
+	manager := inframanager.NewManager(r.deps.Client, r.deps.Scheme, r.deps.OperatorNamespace, effectiveIssuer, effectiveKeys, r.deps.Platform)
+	if r.deps.APIReader != nil {
+		manager = inframanager.NewManagerWithReader(r.deps.Client, r.deps.APIReader, r.deps.Scheme, r.deps.OperatorNamespace, effectiveIssuer, effectiveKeys, r.deps.Platform)
 	}
 	if err := manager.Reconcile(ctx, logger, cluster, spec); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
-			return recon.Result{}, operatorerrors.WithReason(ReasonGatewayAPIMissing, err)
+			return recon.Result{}, operatorerrors.WithReason(r.reasons.gatewayAPIMissingReason(), err)
 		}
 		if errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing) {
-			return recon.Result{}, operatorerrors.WithReason(ReasonPrerequisitesMissing, err)
+			return recon.Result{}, operatorerrors.WithReason(r.reasons.prerequisitesMissingReason(), err)
 		}
 		if errors.Is(err, inframanager.ErrACMEDomainNotResolvable) {
-			return recon.Result{}, operatorerrors.WithReason(ReasonACMEDomainNotResolvable, err)
+			return recon.Result{}, operatorerrors.WithReason(r.reasons.acmeDomainNotResolvableReason(), err)
 		}
 		if errors.Is(err, inframanager.ErrACMEGatewayNotConfiguredForPassthrough) {
-			return recon.Result{}, operatorerrors.WithReason(ReasonACMEGatewayNotConfiguredForPassthrough, err)
+			return recon.Result{}, operatorerrors.WithReason(r.reasons.acmeGatewayNotConfiguredReason(), err)
 		}
 		return recon.Result{}, err
 	}
@@ -401,58 +490,37 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 }
 
 func (r *infraReconciler) handleScaleDownSafety(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, desiredReplicas int32, currentSTS *appsv1.StatefulSet) error {
-	// 1. Check if we are scaling down
 	if currentSTS.Spec.Replicas == nil {
 		return nil
 	}
 	currentReplicas := *currentSTS.Spec.Replicas
-
 	if desiredReplicas >= currentReplicas {
-		return nil // Not scaling down, nothing to do
+		return nil
 	}
 
-	// 2. Identify the victim pod (highest ordinal)
-	// Example: Current=3, Desired=2. Victim is pod-2.
 	victimOrdinal := currentReplicas - 1
-	// Determine POD name based on STS name logic
-	// If it's a blue/green revision, the pod name includes the revision hash
 	victimPodName := fmt.Sprintf("%s-%d", currentSTS.Name, victimOrdinal)
 
 	logger := log.FromContext(ctx).WithValues("victim", victimPodName, "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
 	logger.Info("Detected scale down operation; checking victim leadership")
 
-	// 3. Create a client specifically for the victim pod
 	victimClient, err := r.clientForPod(cluster, victimPodName)
 	if err != nil {
-		// If we can't create a client (e.g. config error), we probably can't talk to it.
-		// Log error and proceed? Or block?
-		// "Safe" is to block, but if we can't create a client, we might be stuck.
-		// However, failing here is usually a code/config issue.
 		logger.Error(err, "Failed to create client for victim pod; assuming safe to remove")
 		return nil
 	}
 
-	// 4. Check Leadership
 	isLeader, err := victimClient.IsLeader(ctx)
 	if err != nil {
 		logger.Error(err, "Failed to check leadership of victim pod; assuming safe to remove (pod might be down)")
-		// If we can't talk to the pod, it's likely not the leader (or won't be for long).
-		// Safe to proceed to let K8s terminate it.
 		return nil
 	}
 
-	// 5. If it IS the leader, Step Down
 	if isLeader {
 		logger.Info("Victim pod is the Active Leader. Attempting graceful step-down.")
-
-		// Call sys/step-down
 		if err := victimClient.StepDownLeader(ctx); err != nil {
 			return fmt.Errorf("failed to step down leader %s: %w", victimPodName, err)
 		}
-
-		// 6. Block Reconciliation
-		// We return an error to stop the InfraManager from updating the StatefulSet immediately.
-		// We want to wait for the next reconcile loop where the pod is hopefully a follower.
 		return fmt.Errorf("waiting for leader step-down on %s to complete", victimPodName)
 	}
 
@@ -460,23 +528,17 @@ func (r *infraReconciler) handleScaleDownSafety(ctx context.Context, cluster *op
 	return nil
 }
 
-func (r *infraReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (*openbao.Client, error) {
-	if r.clientForPodFunc != nil {
-		return r.clientForPodFunc(cluster, podName)
+func (r *infraReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (openbao.ClusterActions, error) {
+	if r.deps.ClientForPodFunc != nil {
+		return r.deps.ClientForPodFunc(cluster, podName)
 	}
 
-	// Construct the Pod DNS name
-	// Format: <pod-name>.<service-name>.<namespace>.svc
-	// Use the headless service name
-	headlessServiceName := cluster.Name // Default headless service name matches cluster name
-
-	// Address: https://<pod-name>.<cluster-name>.<namespace>.svc:8200
+	headlessServiceName := cluster.Name
 	podDNS := fmt.Sprintf("%s.%s.%s.svc:8200", podName, headlessServiceName, cluster.Namespace)
 	baseURL := "https://" + podDNS
 
-	// Clone the smart client config defaults
-	config := r.smartClientConfig
-	config.BaseURL = baseURL
+	cfg := r.deps.SmartClientConfig
+	cfg.BaseURL = baseURL
 
-	return openbao.NewClient(config)
+	return openbao.NewClient(cfg)
 }
