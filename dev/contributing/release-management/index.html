@@ -4389,6 +4389,16 @@ GitHub often excludes self-approvals from required reviews. Prefer a bot account
 </div>
 <h2 id="1-stableprerelease-release-flow">1. Stable/Prerelease Release Flow<a class="headerlink" href="#1-stableprerelease-release-flow" title="Permanent link">&para;</a></h2>
 <p><code>release-please</code> is responsible for <em>versioning and release notes</em>. The <code>Release</code> workflow is responsible for <em>building, gating, and publishing artifacts</em>.</p>
+<div class="admonition note">
+<p class="admonition-title">Chart version validation contract</p>
+<p>The <code>Release</code> workflow validates that the git tag (<code>X.Y.Z</code> or prerelease tag) matches both <code>charts/openbao-operator/Chart.yaml</code> fields:</p>
+<ul>
+<li><code>version</code></li>
+<li><code>appVersion</code></li>
+</ul>
+<p>If either value differs from the tag, the release fails fast in <code>prepare</code>.
+The workflow does <strong>not</strong> override chart version fields at package time; Helm packaging uses the committed <code>Chart.yaml</code> values.</p>
+</div>
 <p>Our pipeline ensures that the artifacts we test in E2E are the <em>exact</em> same bits that are published (bit-for-bit identical).</p>
 <pre class="mermaid"><code>graph TD
     RP[Merge release-please PR] --&gt; GitTag[Git tag: X.Y.Z]
