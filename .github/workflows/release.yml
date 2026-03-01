@@ -18,7 +18,9 @@ jobs:
     name: Prepare
     runs-on: &runner ubuntu-24.04
     permissions:
-      contents: read
+      # Needed to read draft release metadata via `gh release view`.
+      # `contents: read` cannot see draft releases and causes false 404 failures.
+      contents: write
     outputs:
       version: ${{ steps.vars.outputs.version }}
       chart_version: ${{ steps.vars.outputs.chart_version }}
