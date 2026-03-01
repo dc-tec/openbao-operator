@@ -118,8 +118,18 @@ func parseArgs() (args, error) {
 	// release mode
 	flag.StringVar(&cfg.chartDigest, "chart-digest", "", "chart digest (release mode)")
 	flag.StringVar(&cfg.releaseSourceRef, "release-source-ref", "", "release source ref (release mode)")
-	flag.StringVar(&cfg.claim, "claim", "Targets SLSA Build L3 controls with additional L4-like hardening.", "claim text (release mode)")
-	flag.StringVar(&cfg.reusableBuildSignerWorkflow, "reusable-build-signer-workflow", "", "image attestation signer workflow")
+	flag.StringVar(
+		&cfg.claim,
+		"claim",
+		"Targets SLSA Build L3 controls with additional L4-like hardening.",
+		"claim text (release mode)",
+	)
+	flag.StringVar(
+		&cfg.reusableBuildSignerWorkflow,
+		"reusable-build-signer-workflow",
+		"",
+		"image attestation signer workflow",
+	)
 	flag.StringVar(&cfg.releaseSignerWorkflow, "release-signer-workflow", "", "release attestation signer workflow")
 	flag.StringVar(&cfg.checksumsPath, "checksums-path", "dist/checksums.txt", "checksums path")
 	flag.StringVar(&cfg.checksumsBundlePath, "checksums-bundle-path", "dist/checksums.txt.bundle", "checksums bundle path")
@@ -133,8 +143,18 @@ func parseArgs() (args, error) {
 	flag.StringVar(&cfg.runID, "run-id", "", "workflow run id (channel mode)")
 	flag.StringVar(&cfg.runAttempt, "run-attempt", "", "workflow run attempt (channel mode)")
 	flag.StringVar(&cfg.sourceRef, "source-ref", "refs/heads/main", "source ref (channel mode)")
-	flag.StringVar(&cfg.attestationSignerWorkflow, "attestation-signer-workflow", "", "image attestation signer workflow (channel mode)")
-	flag.StringVar(&cfg.checksumsSignerWorkflow, "checksums-signer-workflow", "", "checksums signer workflow (channel mode)")
+	flag.StringVar(
+		&cfg.attestationSignerWorkflow,
+		"attestation-signer-workflow",
+		"",
+		"image attestation signer workflow (channel mode)",
+	)
+	flag.StringVar(
+		&cfg.checksumsSignerWorkflow,
+		"checksums-signer-workflow",
+		"",
+		"checksums signer workflow (channel mode)",
+	)
 
 	flag.Parse()
 
@@ -276,7 +296,7 @@ func buildReleaseIndex(cfg args) (map[string]any, error) {
 			"digest":             cfg.chartDigest,
 			"oci_subject":        fmt.Sprintf("ghcr.io/%s/charts/openbao-operator@%s", cfg.owner, cfg.chartDigest),
 			"attestation_api":    apiAttestationURI(cfg.repo, cfg.chartDigest),
-			"signature_identity": fmt.Sprintf("https://github.com/%s/.github/workflows/release.yml@refs/tags/%s", cfg.repo, cfg.version),
+			"signature_identity": releaseWorkflowIdentity(cfg.repo, cfg.version),
 		},
 		"release_artifacts": map[string]any{
 			"checksums_txt": map[string]any{
@@ -362,7 +382,7 @@ func buildChannelIndex(cfg args) (map[string]any, error) {
 func buildReleaseImages(cfg args) []map[string]any {
 	entries := imageBaseEntries(cfg)
 	for _, image := range entries {
-		image["signing_identity"] = fmt.Sprintf("https://github.com/%s/.github/workflows/release.yml@refs/tags/%s", cfg.repo, cfg.version)
+		image["signing_identity"] = releaseWorkflowIdentity(cfg.repo, cfg.version)
 		image["attestation_signer_workflow"] = cfg.reusableBuildSignerWorkflow
 	}
 	return entries
@@ -425,7 +445,6 @@ func parseChecksumsFile(path string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -436,10 +455,22 @@ func parseChecksumsFile(path string) (map[string]string, error) {
 		out[fields[1]] = fields[0]
 	}
 	if err := scanner.Err(); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	if err := file.Close(); err != nil {
 		return nil, err
 	}
 
 	return out, nil
+}
+
+func releaseWorkflowIdentity(repo, version string) string {
+	return fmt.Sprintf(
+		"https://github.com/%s/.github/workflows/release.yml@refs/tags/%s",
+		repo,
+		version,
+	)
 }
 
 func maybeSHA256WithPrefix(path string) (any, error) {
