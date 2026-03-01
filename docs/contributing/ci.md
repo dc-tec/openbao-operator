@@ -1,184 +1,219 @@
+---
+description: CI pipeline overview, local command parity, E2E routing, and release/build hardening channel flow.
+---
+
 # Continuous Integration
 
-We use GitHub Actions for all CI checks. The pipeline is designed to be deterministic and reproducible locally.
+We use GitHub Actions for pull request validation, `main` branch validation, and release/build hardening channels.
 
-## 1. CI Pipeline
+!!! note
+    CI and release workflows enforce vendored Go dependencies. After changing dependencies, run `make verify-vendor`.
 
-The pipeline runs on every PR and `main` push.
+## 1. Pipeline Overview
+
+### 1.1 Pull Request and `main` CI
+
+The `CI` workflow runs on every pull request update and every push to `main`.
 
 ```mermaid
 graph TD
-    PR([PR Created]) --> Static
-    PR --> Build
-    PR --> Unit
+    A[Pull request] --> B[Detect Changes]
+    C[Push to main] --> B
 
-    subgraph Static [Static Analysis]
-        Lint[Lint & Tidy]
-        Gen[Verify Generated]
-        Helm[Verify Helm]
-        Sec[Security Scan]
-    end
+    B --> D[Core quality gates]
+    D --> D1[Lint format tidy vendor]
+    D --> D2[Generated docs helm]
+    D --> D3[Security compatibility]
+    D --> D4[Unit and integration tests]
 
-    subgraph Build [Build Artifacts]
-        Docs[Build Docs]
-        Chart[Lint Chart]
-    end
+    B --> E[E2E routing]
+    E --> E1[Targeted shards]
+    E --> E2[Full suite with ci full e2e label]
+    B --> E3[Helm E2E smoke on chart changes]
 
-    subgraph Unit [Verification]
-        Sanity[Unit Tests]
-        Compat[OpenBao Compat]
-    end
+    D --> F[CI result]
+    E1 --> F
+    E2 --> F
+    E3 --> F
 
-    Static --> E2E{E2E Tests}
-    Build --> E2E
-    Unit --> E2E
-
-    E2E --> Smoke["Smoke Tests"]
-    E2E --> Full["Full Matrix (Nightly)"]
-
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    
-    class PR process;
-    class Static,Build,Unit,E2E process;
-    class Lint,Gen,Helm,Sec,Docs,Chart,Sanity,Compat,Smoke,Full read;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
+
+    class A,C git;
+    class B,D,E,F process;
+    class D1,D2,D4,E1,E2,E3 read;
+    class D3 security;
 ```
 
-## 2. CI vs Local Commands ("The Rosetta Stone")
+### 1.2 Publish and Release Hardening
 
-Run these locally to debug CI failures.
+Edge, nightly, and tagged releases use strict hardening gates before publish.
 
-| CI Job | Local Command | Description |
+```mermaid
+graph TD
+    M[CI success on main] --> PE[Publish Edge]
+    N[Nightly schedule] --> NW[Nightly workflow]
+    NW --> PN[Publish Nightly]
+    T[Semver tag push] --> R[Release workflow]
+
+    PE --> H[Reusable channel hardening]
+    PN --> H
+
+    H --> H1[Provenance gate]
+    H --> H2[Byte reproducibility gate]
+    H1 --> HP[Promote by digest and publish pages]
+    H2 --> HP
+
+    R --> RB[Build and independent rebuild]
+    RB --> RG1[Provenance gate]
+    RB --> RG2[Byte reproducibility gate]
+    RG1 --> RP[Publish release artifacts]
+    RG2 --> RP
+
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
+
+    class M,N,T git;
+    class PE,NW,PN,R,H,RB,HP,RP process;
+    class H1,H2,RG1,RG2 security;
+```
+
+## 2. CI vs Local Commands
+
+Run these commands locally to reproduce CI behavior.
+
+### 2.1 Core PR-equivalent checks
+
+```sh
+make lint-config lint
+make verify-fmt
+make verify-tidy
+make verify-vendor
+make verify-generated
+make verify-helm
+make test-ci
+make verify-openbao-config-compat
+make docs-build
+```
+
+### 2.2 Job-to-command mapping
+
+| CI Job | Local Command | Notes |
 | :--- | :--- | :--- |
-| **Lint Check** | `make lint` | Runs `golangci-lint` |
-| **Formatting** | `make verify-fmt` | Checks `gofmt` compliance |
-| **Dependencies** | `make verify-tidy` | Ensures `go.mod` is clean |
-| **Generators** | `make verify-generated` | Checks for drift in CRDs/RBAC |
-| **Helm Sync** | `make verify-helm` | Checks drift in `charts/` (including values/schema validation) |
-| **Unit Tests** | `make test-ci` | Runs unit + integration tests |
-| **Compatibility** | `make verify-openbao-config-compat` | Checks HCL against upstream OpenBao |
-| **Architecture Report (local)** | `make report-internal-deps` | Generates internal package dependency report and graphs (report-only warnings) |
+| `Lint` | `make lint-config lint` | Linter config + lint run |
+| `Verify Formatting` | `make verify-fmt` | Checks `gofmt` compliance |
+| `Verify go.mod/go.sum` | `make verify-tidy` | Ensures module files are clean |
+| `Verify vendor/` | `make verify-vendor` | Fails on stale vendored dependencies |
+| `Verify Generated Artifacts` | `make verify-generated` | Checks generated files drift |
+| `Helm Chart` | `make verify-helm && make helm-test` | Includes Helm sync, lint, template, and OpenShift rendering checks |
+| `Security (vulncheck + Trivy FS)` | `make vulncheck` and `make security-scan IMG=ghcr.io/dc-tec/openbao-operator:edge` | Trivy scan checks filesystem and the provided image |
+| `Unit Tests` + `Envtest Integration` | `make test-ci` | Runs unit + integration test stack |
+| `OpenBao Config Compatibility` | `make verify-openbao-config-compat` | Validates generated HCL fixtures against upstream parser |
+| `Docs Build` | `make docs-build` | Strict MkDocs build |
 
-## 2.1 Pull Request Standards Gates
+!!! tip
+    You can run `make ci-core` as a broad local gate, but set `IMG` first so the image scan stage is meaningful.
 
-We enforce PR metadata and commit standards in CI (`.github/workflows/pr-standards.yml`):
+## 3. Pull Request Standards Gates
 
-- PR title must follow Conventional Commits.
-- PR description must include required sections from `.github/pull_request_template.md`.
-- Commit-subject checks are informational only (not enforced).
+The `PR Standards` workflow (`.github/workflows/pr-standards.yml`) enforces:
 
-Because this repository uses squash merge, the PR title gate is the effective release-facing commit message gate for `main`.
+- PR title follows Conventional Commits.
+- PR description includes required template sections.
+- Commit-subject checks are informational only.
 
-## 3. End-to-End Testing
+Because this repository uses squash merge, the PR title is the release-facing commit message gate for `main`.
 
-We use [Kind](https://kind.sigs.k8s.io/) for E2E tests.
+## 4. End-to-End Testing
 
-CI optimization model:
+We run E2E tests on Kind and route scope based on changed files and labels.
 
-- Build once, reuse many: CI builds fast E2E images once per workflow and reuses pinned digest refs across shards.
-- Trusted PR requirement: the optimized E2E lane runs for same-repository PRs and branch pushes (it pushes temporary images to GHCR).
-- Hybrid routing:
-  - Path-driven by default (`changes` job decides whether E2E is needed, and whether backup/upgrade/hardened lanes are relevant).
-  - PR labels can expand scope:
-    - `backup` includes backup/restore slow lane.
-    - `upgrades` includes upgrade/chaos slow lane.
-    - `ci:full-e2e` forces the full suite (except OpenShift lane).
-- Hardened PR lane focuses on hardened/GitOps coverage (ACME-focused checks are left to main/nightly/release).
+- Default routing runs targeted shards.
+- Label `ci:full-e2e` enables broader suite coverage.
+- Labels `backup` and `upgrades` expand slow-lane coverage.
+- Hardened signed lane runs for relevant security/controller change scope.
+- Prebuilt E2E images are reused across shards for speed.
 
-### Prerequisites
+!!! warning
+    The optimized E2E lane pushes temporary images to GHCR, so it runs only for branch pushes and same-repository pull requests.
 
-- [x] Docker running
-- [x] `kubectl` installed
-- [x] 4 CPU / 8GB RAM recommended
+### 4.1 Local E2E commands
 
-### Running Tests
-
-=== ":material-rocket-launch: Smoke Test (Fast)"
-    Runs a subset of critical tests. Best for quick feedback.
+=== ":material-rocket-launch: Smoke"
 
     ```sh
     make test-e2e-ci \
       KIND_NODE_IMAGE=kindest/node:v1.34.3 \
-      E2E_LABEL_FILTER=smoke \
+      E2E_LABEL_FILTER='!slow && !nightly && !openshift && !pentest' \
       E2E_PARALLEL_NODES=1
     ```
 
-=== ":material-flask: Full Suite (Thorough)"
-    Runs the entire test matrix (Upgrade, Backup, Restore, etc).
+=== ":material-flask: Full"
 
     ```sh
     make test-e2e-ci KIND_NODE_IMAGE=kindest/node:v1.34.3
     ```
 
-=== ":material-bug: Debug Mode"
-    Keeps the cluster alive after failure for inspection.
+=== ":material-hammer-wrench: Helm Smoke"
+
+    ```sh
+    make helm-e2e-smoke
+    ```
+
+=== ":material-bug: Debug"
 
     ```sh
     make test-e2e-ci E2E_SKIP_CLEANUP=true
     ```
 
-## 4. Security Checks
-
-We run vulnerability scanning on every PR.
+## 5. Security Checks
 
 === "Govulncheck"
-    Detects known vulnerabilities in Go dependencies.
 
     ```sh
-    go install golang.org/x/vuln/cmd/govulncheck@latest
-    govulncheck -test ./...
+    make vulncheck
     ```
 
 === "Trivy"
-    Scans the operator image for OS vulnerabilities.
 
     ```sh
-    make security-scan IMG=ghcr.io/dc-tec/openbao-operator:latest
+    make security-scan IMG=ghcr.io/dc-tec/openbao-operator:edge
     ```
 
-    !!! note "Expected RBAC findings (skipped in Trivy FS)"
-        Trivy's Kubernetes misconfiguration rules flag several **intentionally privileged** RBAC manifests/templates
-        (e.g. tenant template roles, single-tenant mode, and provisioner cleanup permissions).
-        We skip these specific files in CI and in `make security-scan` using Trivy's `--skip-files` flags.
+    !!! note "Expected RBAC findings"
+        Trivy's Kubernetes misconfiguration rules flag several intentionally privileged RBAC manifests and templates.
 
-        If you modify RBAC under `config/rbac/`, `dist/install.yaml`, or the chart RBAC templates, and Trivy starts failing,
-        update the skip list in:
+        CI and local security scans skip specific files in:
 
-        - `.github/workflows/ci.yml` (Trivy FS step)
-        - `.github/workflows/nightly.yml` (Trivy FS step)
+        - `.github/workflows/ci.yml`
+        - `.github/workflows/nightly.yml`
         - `Makefile` (`security-scan` target)
 
-## 5. Documentation Build
-
-Docs are built with MkDocs and Material.
+## 6. Documentation Build
 
 ```sh
-# Local preview
 make docs-serve
-
-# Build distribution (checks internal links)
 make docs-build
 ```
 
-!!! tip "Preview Deployment"
-    CI currently validates docs with `make docs-build` but does not publish a per-PR preview URL.
-    Use `make docs-serve` locally for interactive preview.
+## 7. Performance Workflows
 
-## 6. Performance Baseline Capture (GitHub Runners)
-
-Use the dedicated workflow to capture baseline evidence on the same runner class used by CI.
+### 7.1 Baseline Capture
 
 1. Open **Actions** -> **Performance Baseline Capture**.
-2. Run the workflow on `main` (or the target release branch) with default inputs unless you intentionally want a different run count/timeout.
-3. Download the uploaded artifact containing:
-   - `hack/perf/baseline/kind-v1.34.3-baseline.json`
-   - `hack/perf/thresholds/kind-v1.34.3.yaml`
-4. Commit those files in a normal PR and use release/weekly perf workflows to validate thresholds (`verify-perf`).
+2. Run on `main` (or the release branch you are validating).
+3. Download the artifact containing baseline JSON and thresholds YAML.
+4. Commit updated baseline files in a normal PR.
 
-## 7. Weekly Performance Regression Gate
+### 7.2 Weekly Regression Gate
 
-The `Performance Regression Weekly` workflow runs full `make verify-perf` weekly and can also be run manually.
+The `Performance Regression Weekly` workflow runs `make verify-perf` weekly and can also be triggered manually.
 
-- Scheduled failures automatically open (or update) an issue titled `Weekly performance regression detected`.
-- Release workflow still enforces full `verify-perf` as a hard gate.
+- Scheduled failures open or update the `Weekly performance regression detected` issue.
+- Release workflow enforces full `verify-perf` as a blocking gate.
