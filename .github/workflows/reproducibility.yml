@@ -298,13 +298,32 @@ jobs:
           registry-username: ${{ github.actor }}
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Normalize SBOM JSON (deterministic)
+        env:
+          SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
+        run: |
+          set -euo pipefail
+          bash hack/ci/normalize-spdx-json.sh \
+            dist/release/sbom-openbao-operator.spdx.json \
+            dist/release/sbom-openbao-init.spdx.json \
+            dist/release/sbom-openbao-backup.spdx.json \
+            dist/release/sbom-openbao-upgrade.spdx.json \
+            dist/rebuild/sbom-openbao-operator.spdx.json \
+            dist/rebuild/sbom-openbao-init.spdx.json \
+            dist/rebuild/sbom-openbao-backup.spdx.json \
+            dist/rebuild/sbom-openbao-upgrade.spdx.json
+
       - name: Generate deterministic checksums
         run: |
           set -euo pipefail
-          mapfile -t release_sboms < <(find dist/release -maxdepth 1 -type f -name 'sbom-*.spdx.json' | LC_ALL=C sort)
-          mapfile -t rebuild_sboms < <(find dist/rebuild -maxdepth 1 -type f -name 'sbom-*.spdx.json' | LC_ALL=C sort)
-          sha256sum dist/release/install.yaml dist/release/crds.yaml "${release_sboms[@]}" > dist/release/checksums.txt
-          sha256sum dist/rebuild/install.yaml dist/rebuild/crds.yaml "${rebuild_sboms[@]}" > dist/rebuild/checksums.txt
+          for dir in dist/release dist/rebuild; do
+            (
+              cd "${dir}"
+              mapfile -t sboms < <(find . -maxdepth 1 -type f -name 'sbom-*.spdx.json' -print | LC_ALL=C sort)
+              mapfile -t sbom_names < <(printf '%s\n' "${sboms[@]}" | sed 's#^\./##')
+              sha256sum install.yaml crds.yaml "${sbom_names[@]}" > checksums.txt
+            )
+          done
 
       - name: Compare reproducibility (report-only)
         env:
