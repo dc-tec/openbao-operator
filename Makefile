@@ -810,6 +810,7 @@ security-scan: ## Run Trivy security scans (filesystem and container image)
 			--skip-files config/rbac/single_tenant_clusterrole.yaml \
 			--skip-files dist/install.yaml \
 			--skip-dirs test/manifests \
+			--skip-dirs vendor \
 			.
 	trivy image \
 		--severity HIGH,CRITICAL \
