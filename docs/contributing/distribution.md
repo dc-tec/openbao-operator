@@ -1,5 +1,5 @@
 ---
-description: Distribution strategy for OpenBao Operator: Artifact Hub now (Helm OCI), OLM/OperatorHub later after maturity gates.
+description: Distribution strategy for OpenBao Operator.
 ---
 
 # Distribution
