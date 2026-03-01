@@ -1,6 +1,6 @@
 # Release Management
 
-We follow a strict "Build Once, Promote Everywhere" philosophy. Releases are automated, signed, and provenanced.
+We follow a strict "Build Once, Promote Everywhere" philosophy. Releases are automated, signed, and include verifiable provenance.
 
 !!! note "Version format"
     Git tags and Helm chart versions use SemVer **without** a leading `v` (for example: `0.1.0`, `0.2.0-rc.1`).
