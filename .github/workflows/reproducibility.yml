@@ -4,10 +4,11 @@ on:
   push:
     tags:
       - "[0-9]*.[0-9]*.[0-9]*"
+      - "[0-9]*.[0-9]*.[0-9]*-*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Stable release tag to rebuild and compare (e.g. 0.2.0)"
+        description: "SemVer release/prerelease tag to rebuild and compare (e.g. 0.2.0, 0.2.0-rc.1)"
         required: false
         type: string
 
@@ -27,12 +28,19 @@ jobs:
     outputs:
       tag: ${{ steps.vars.outputs.tag }}
       ref: ${{ steps.vars.outputs.ref }}
+      chart_version: ${{ steps.vars.outputs.chart_version }}
       build_tag: ${{ steps.vars.outputs.build_tag }}
+      source_date_epoch: ${{ steps.vars.outputs.source_date_epoch }}
       manager_image: ${{ steps.vars.outputs.manager_image }}
       config_init_image: ${{ steps.vars.outputs.config_init_image }}
       backup_executor_image: ${{ steps.vars.outputs.backup_executor_image }}
       upgrade_executor_image: ${{ steps.vars.outputs.upgrade_executor_image }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
       - name: Compute reproducibility variables
         id: vars
         run: |
@@ -41,15 +49,27 @@ jobs:
           if [[ -z "${tag}" ]]; then
             tag="${GITHUB_REF_NAME}"
           fi
-          if ! [[ "${tag}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Stable semver tag required (X.Y.Z). Got: ${tag}" >&2
+          if ! [[ "${tag}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
+            echo "SemVer tag required (X.Y.Z or X.Y.Z-rc.N). Got: ${tag}" >&2
             exit 1
           fi
 
+          git checkout "refs/tags/${tag}" --detach
+
+          chart_file="charts/openbao-operator/Chart.yaml"
+          chart_version="$(sed -nE 's/^version:[[:space:]]*"?([^"#[:space:]]+)"?[[:space:]]*(#.*)?$/\1/p' "${chart_file}" | head -n1)"
+          if [[ -z "${chart_version}" ]]; then
+            echo "failed to parse chart version from ${chart_file}" >&2
+            exit 1
+          fi
+
+          source_date_epoch="$(git show -s --format=%ct HEAD)"
           owner="${GITHUB_REPOSITORY_OWNER}"
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "ref=refs/tags/${tag}" >> "${GITHUB_OUTPUT}"
+          echo "chart_version=${chart_version}" >> "${GITHUB_OUTPUT}"
           echo "build_tag=repro-${tag}-${GITHUB_RUN_ID}" >> "${GITHUB_OUTPUT}"
+          echo "source_date_epoch=${source_date_epoch}" >> "${GITHUB_OUTPUT}"
           echo "manager_image=ghcr.io/${owner}/openbao-operator" >> "${GITHUB_OUTPUT}"
           echo "config_init_image=ghcr.io/${owner}/openbao-init" >> "${GITHUB_OUTPUT}"
           echo "backup_executor_image=ghcr.io/${owner}/openbao-backup" >> "${GITHUB_OUTPUT}"
@@ -67,16 +87,42 @@ jobs:
     with:
       build_tag: ${{ needs.prepare.outputs.build_tag }}
       ref: ${{ needs.prepare.outputs.ref }}
+      source_date_epoch: ${{ needs.prepare.outputs.source_date_epoch }}
     secrets: inherit
 
   compare:
-    name: Compare Release vs Rebuild Digests (report-only)
+    name: Compare Release vs Rebuild Artifacts (report-only)
     runs-on: *runner
     needs: [prepare, rebuild]
     permissions:
       contents: read
       packages: read
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: bin/
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.1.1
+
       - name: Login to GHCR (read)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
@@ -89,40 +135,194 @@ jobs:
         with:
           version: v0.31.1
 
-      - name: Compare digests
+      - name: Resolve release digests
+        id: release-digests
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
           MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          MANAGER_REBUILD_DIGEST: ${{ needs.rebuild.outputs.manager_digest }}
           CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
-          CONFIG_INIT_REBUILD_DIGEST: ${{ needs.rebuild.outputs.config_init_digest }}
           BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
-          BACKUP_EXECUTOR_REBUILD_DIGEST: ${{ needs.rebuild.outputs.backup_executor_digest }}
           UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
-          UPGRADE_EXECUTOR_REBUILD_DIGEST: ${{ needs.rebuild.outputs.upgrade_executor_digest }}
         run: |
           set -euo pipefail
-
           release_digest() {
             docker buildx imagetools inspect "$1" --format '{{json .Manifest.Digest}}' | tr -d '"'
           }
+          echo "manager=$(release_digest "${MANAGER_IMAGE}:${TAG}")" >> "${GITHUB_OUTPUT}"
+          echo "config_init=$(release_digest "${CONFIG_INIT_IMAGE}:${TAG}")" >> "${GITHUB_OUTPUT}"
+          echo "backup_executor=$(release_digest "${BACKUP_EXECUTOR_IMAGE}:${TAG}")" >> "${GITHUB_OUTPUT}"
+          echo "upgrade_executor=$(release_digest "${UPGRADE_EXECUTOR_IMAGE}:${TAG}")" >> "${GITHUB_OUTPUT}"
 
-          release_manager="$(release_digest "${MANAGER_IMAGE}:${TAG}")"
-          release_config_init="$(release_digest "${CONFIG_INIT_IMAGE}:${TAG}")"
-          release_backup_executor="$(release_digest "${BACKUP_EXECUTOR_IMAGE}:${TAG}")"
-          release_upgrade_executor="$(release_digest "${UPGRADE_EXECUTOR_IMAGE}:${TAG}")"
+      - name: Prepare output directories
+        run: |
+          set -euo pipefail
+          mkdir -p dist/release dist/rebuild
 
-          cat <<'EOF' >> "${GITHUB_STEP_SUMMARY}"
-          ## Reproducibility Report (Report-Only)
-          EOF
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "Tag: \`${TAG}\`" >> "${GITHUB_STEP_SUMMARY}"
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Image | Release digest | Rebuild digest | Match |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| :--- | :--- | :--- | :---: |" >> "${GITHUB_STEP_SUMMARY}"
+      - name: Generate release manifests
+        env:
+          GOFLAGS: -mod=vendor
+          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+          MANAGER_DIGEST: ${{ steps.release-digests.outputs.manager }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${TAG}"
+          cp dist/install.yaml dist/release/install.yaml
+          make build-crds
+          cp dist/crds.yaml dist/release/crds.yaml
 
+      - name: Generate rebuild manifests
+        env:
+          GOFLAGS: -mod=vendor
+          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+          MANAGER_DIGEST: ${{ needs.rebuild.outputs.manager_digest }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${TAG}"
+          cp dist/install.yaml dist/rebuild/install.yaml
+          make build-crds
+          cp dist/crds.yaml dist/rebuild/crds.yaml
+
+      - name: Package Helm chart (release)
+        env:
+          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
+          OWNER: ${{ github.repository_owner }}
+          SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
+        run: |
+          set -euo pipefail
+          work_dir="$(mktemp -d)"
+          cp -a charts/openbao-operator "${work_dir}/openbao-operator"
+          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash hack/ci/prepare-release-chart.sh
+          find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
+          helm package "${work_dir}/openbao-operator" -d dist/release
+
+      - name: Package Helm chart (rebuild)
+        env:
+          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
+          OWNER: ${{ github.repository_owner }}
+          SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
+        run: |
+          set -euo pipefail
+          work_dir="$(mktemp -d)"
+          cp -a charts/openbao-operator "${work_dir}/openbao-operator"
+          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash hack/ci/prepare-release-chart.sh
+          find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
+          helm package "${work_dir}/openbao-operator" -d dist/rebuild
+
+      - name: Generate SBOM (release) - manager
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        with:
+          image: ${{ needs.prepare.outputs.manager_image }}@${{ steps.release-digests.outputs.manager }}
+          format: spdx-json
+          output-file: dist/release/sbom-openbao-operator.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOM (release) - config-init
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        with:
+          image: ${{ needs.prepare.outputs.config_init_image }}@${{ steps.release-digests.outputs.config_init }}
+          format: spdx-json
+          output-file: dist/release/sbom-openbao-init.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOM (release) - backup
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        with:
+          image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ steps.release-digests.outputs.backup_executor }}
+          format: spdx-json
+          output-file: dist/release/sbom-openbao-backup.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOM (release) - upgrade
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        with:
+          image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ steps.release-digests.outputs.upgrade_executor }}
+          format: spdx-json
+          output-file: dist/release/sbom-openbao-upgrade.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOM (rebuild) - manager
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        with:
+          image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
+          format: spdx-json
+          output-file: dist/rebuild/sbom-openbao-operator.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOM (rebuild) - config-init
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        with:
+          image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.rebuild.outputs.config_init_digest }}
+          format: spdx-json
+          output-file: dist/rebuild/sbom-openbao-init.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOM (rebuild) - backup
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        with:
+          image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.rebuild.outputs.backup_executor_digest }}
+          format: spdx-json
+          output-file: dist/rebuild/sbom-openbao-backup.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOM (rebuild) - upgrade
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        with:
+          image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.rebuild.outputs.upgrade_executor_digest }}
+          format: spdx-json
+          output-file: dist/rebuild/sbom-openbao-upgrade.spdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate deterministic checksums
+        run: |
+          set -euo pipefail
+          mapfile -t release_sboms < <(find dist/release -maxdepth 1 -type f -name 'sbom-*.spdx.json' | LC_ALL=C sort)
+          mapfile -t rebuild_sboms < <(find dist/rebuild -maxdepth 1 -type f -name 'sbom-*.spdx.json' | LC_ALL=C sort)
+          sha256sum dist/release/install.yaml dist/release/crds.yaml "${release_sboms[@]}" > dist/release/checksums.txt
+          sha256sum dist/rebuild/install.yaml dist/rebuild/crds.yaml "${rebuild_sboms[@]}" > dist/rebuild/checksums.txt
+
+      - name: Compare reproducibility (report-only)
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
+          RELEASE_MANAGER_DIGEST: ${{ steps.release-digests.outputs.manager }}
+          REBUILD_MANAGER_DIGEST: ${{ needs.rebuild.outputs.manager_digest }}
+          RELEASE_CONFIG_INIT_DIGEST: ${{ steps.release-digests.outputs.config_init }}
+          REBUILD_CONFIG_INIT_DIGEST: ${{ needs.rebuild.outputs.config_init_digest }}
+          RELEASE_BACKUP_DIGEST: ${{ steps.release-digests.outputs.backup_executor }}
+          REBUILD_BACKUP_DIGEST: ${{ needs.rebuild.outputs.backup_executor_digest }}
+          RELEASE_UPGRADE_DIGEST: ${{ steps.release-digests.outputs.upgrade_executor }}
+          REBUILD_UPGRADE_DIGEST: ${{ needs.rebuild.outputs.upgrade_executor_digest }}
+        run: |
+          set -euo pipefail
           status=0
-          compare_one() {
+
+          compare_digest() {
             local name="$1"
             local release="$2"
             local rebuild="$3"
@@ -135,14 +335,60 @@ jobs:
             echo "| ${name} | \`${release}\` | \`${rebuild}\` | ${mark} |" >> "${GITHUB_STEP_SUMMARY}"
           }
 
-          compare_one "openbao-operator" "${release_manager}" "${MANAGER_REBUILD_DIGEST}"
-          compare_one "openbao-init" "${release_config_init}" "${CONFIG_INIT_REBUILD_DIGEST}"
-          compare_one "openbao-backup" "${release_backup_executor}" "${BACKUP_EXECUTOR_REBUILD_DIGEST}"
-          compare_one "openbao-upgrade" "${release_upgrade_executor}" "${UPGRADE_EXECUTOR_REBUILD_DIGEST}"
+          compare_file() {
+            local rel="$1"
+            local release_path="dist/release/${rel}"
+            local rebuild_path="dist/rebuild/${rel}"
+            local mark="✅"
+            if [[ ! -f "${release_path}" || ! -f "${rebuild_path}" ]]; then
+              mark="❌"
+              status=1
+              echo "::warning::Missing reproducibility file: ${rel}"
+              echo "| ${rel} | missing | missing | ${mark} |" >> "${GITHUB_STEP_SUMMARY}"
+              return
+            fi
+            local release_sha rebuild_sha
+            release_sha="$(sha256sum "${release_path}" | awk '{print $1}')"
+            rebuild_sha="$(sha256sum "${rebuild_path}" | awk '{print $1}')"
+            if [[ "${release_sha}" != "${rebuild_sha}" ]]; then
+              mark="❌"
+              status=1
+              echo "::warning::Byte mismatch for ${rel}: release=${release_sha} rebuild=${rebuild_sha}"
+            fi
+            echo "| ${rel} | \`${release_sha}\` | \`${rebuild_sha}\` | ${mark} |" >> "${GITHUB_STEP_SUMMARY}"
+          }
+
+          cat <<'EOF' >> "${GITHUB_STEP_SUMMARY}"
+          ## Reproducibility Report (Report-Only)
+          EOF
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Tag: \`${TAG}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "### Image Digests" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Image | Release digest | Rebuild digest | Match |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| :--- | :--- | :--- | :---: |" >> "${GITHUB_STEP_SUMMARY}"
+          compare_digest "openbao-operator" "${RELEASE_MANAGER_DIGEST}" "${REBUILD_MANAGER_DIGEST}"
+          compare_digest "openbao-init" "${RELEASE_CONFIG_INIT_DIGEST}" "${REBUILD_CONFIG_INIT_DIGEST}"
+          compare_digest "openbao-backup" "${RELEASE_BACKUP_DIGEST}" "${REBUILD_BACKUP_DIGEST}"
+          compare_digest "openbao-upgrade" "${RELEASE_UPGRADE_DIGEST}" "${REBUILD_UPGRADE_DIGEST}"
+
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "### Artifact Bytes" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Artifact | Release sha256 | Rebuild sha256 | Match |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| :--- | :--- | :--- | :---: |" >> "${GITHUB_STEP_SUMMARY}"
+
+          compare_file "install.yaml"
+          compare_file "crds.yaml"
+          compare_file "checksums.txt"
+          compare_file "openbao-operator-${CHART_VERSION}.tgz"
+          compare_file "sbom-openbao-operator.spdx.json"
+          compare_file "sbom-openbao-init.spdx.json"
+          compare_file "sbom-openbao-backup.spdx.json"
+          compare_file "sbom-openbao-upgrade.spdx.json"
 
           echo "" >> "${GITHUB_STEP_SUMMARY}"
           if (( status == 0 )); then
-            echo "Result: reproducible for all image digests." >> "${GITHUB_STEP_SUMMARY}"
+            echo "Result: reproducible across image digests and byte-level artifacts." >> "${GITHUB_STEP_SUMMARY}"
           else
-            echo "Result: digest mismatch detected. This workflow is report-only and does not fail the pipeline." >> "${GITHUB_STEP_SUMMARY}"
+            echo "Result: mismatches detected. This workflow is report-only and does not fail the pipeline." >> "${GITHUB_STEP_SUMMARY}"
           fi

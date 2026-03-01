@@ -5,7 +5,6 @@ set -euo pipefail
 : "${REPO:?REPO is required (owner/repo)}"
 : "${VERSION:?VERSION is required}"
 : "${OWNER:?OWNER is required}"
-: "${CHART_DIGEST:?CHART_DIGEST is required}"
 
 CHECKSUMS_PATH="${CHECKSUMS_PATH:-dist/checksums.txt}"
 SIGNER_WORKFLOW="${SIGNER_WORKFLOW:-${REPO}/.github/workflows/release.yml}"
@@ -13,10 +12,19 @@ SOURCE_REF="${SOURCE_REF:-refs/tags/${VERSION}}"
 CERT_OIDC_ISSUER="${CERT_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-10}"
 RETRY_SECONDS="${RETRY_SECONDS:-6}"
+VERIFY_CHART="${VERIFY_CHART:-auto}"
 
 if [[ ! -f "${CHECKSUMS_PATH}" ]]; then
   echo "checksums file not found: ${CHECKSUMS_PATH}" >&2
   exit 1
+fi
+
+if [[ "${VERIFY_CHART}" == "auto" ]]; then
+  if [[ -n "${CHART_DIGEST:-}" ]]; then
+    VERIFY_CHART="true"
+  else
+    VERIFY_CHART="false"
+  fi
 fi
 
 verify_oci_subject() {
@@ -67,5 +75,8 @@ verify_file_subject() {
   done
 }
 
-verify_oci_subject "ghcr.io/${OWNER}/charts/openbao-operator@${CHART_DIGEST}"
+if [[ "${VERIFY_CHART}" == "true" ]]; then
+  : "${CHART_DIGEST:?CHART_DIGEST is required when VERIFY_CHART=true}"
+  verify_oci_subject "ghcr.io/${OWNER}/charts/openbao-operator@${CHART_DIGEST}"
+fi
 verify_file_subject "${CHECKSUMS_PATH}"

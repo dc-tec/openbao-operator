@@ -37,7 +37,7 @@ jobs:
 
       - name: Run vulncheck
         env:
-          GOFLAGS: -mod=readonly
+          GOFLAGS: -mod=vendor
         run: make vulncheck
 
       - name: Run Trivy filesystem scan
@@ -75,6 +75,8 @@ jobs:
         run: bash hack/ci/openbao-config-compat.sh 2.4.4 2.5.0
 
       - name: Report operator-vs-upstream config schema drift (informational)
+        env:
+          GOFLAGS: -mod=vendor
         run: go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.5.0
 
   build-artifacts:
@@ -93,7 +95,7 @@ jobs:
 
       - name: Build Linux Binaries
         env:
-          GOFLAGS: -mod=readonly
+          GOFLAGS: -mod=vendor
         run: make build-linux
 
       - name: Upload Binaries
@@ -270,7 +272,7 @@ jobs:
 
       - name: Run full E2E
         env:
-          GOFLAGS: -mod=readonly
+          GOFLAGS: -mod=vendor
           OPENBAO_REQUEUE_STANDARD: 10s
           KIND_CLUSTER: kind
           E2E_PARALLEL_NODES: "1"
@@ -323,7 +325,7 @@ jobs:
 
       - name: Verify Helm chart synced inputs
         env:
-          GOFLAGS: -mod=readonly
+          GOFLAGS: -mod=vendor
         run: make verify-helm
 
       - name: Setup Helm

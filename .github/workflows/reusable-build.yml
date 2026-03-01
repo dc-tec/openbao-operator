@@ -12,6 +12,11 @@ on:
         required: false
         default: ${{ github.ref }}
         type: string
+      source_date_epoch:
+        description: "Unix timestamp used for deterministic build metadata"
+        required: false
+        default: ""
+        type: string
     outputs:
       manager_digest:
         description: "Digest of the manager image"
@@ -89,6 +94,8 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          build-args: |
+            SOURCE_DATE_EPOCH=${{ inputs.source_date_epoch }}
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
