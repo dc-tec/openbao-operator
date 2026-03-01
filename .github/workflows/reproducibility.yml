@@ -3,7 +3,6 @@ name: Reproducibility Report
 on:
   workflow_run:
     workflows: ["Release"]
-    branches: [main]
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -27,8 +26,7 @@ jobs:
       ${{
         github.event_name != 'workflow_run' ||
         (github.event.workflow_run.conclusion == 'success' &&
-         github.event.workflow_run.event == 'push' &&
-         startsWith(github.event.workflow_run.head_branch, '0.'))
+         github.event.workflow_run.event == 'push')
       }}
     permissions:
       contents: read
