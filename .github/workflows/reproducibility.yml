@@ -1,10 +1,10 @@
 name: Reproducibility Report
 
 on:
-  push:
-    tags:
-      - "[0-9]*.[0-9]*.[0-9]*"
-      - "[0-9]*.[0-9]*.[0-9]*-*"
+  workflow_run:
+    workflows: ["Release"]
+    branches: [main]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -16,13 +16,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: reproducibility-${{ github.ref_name || github.event.inputs.tag || github.run_id }}
+  group: reproducibility-${{ github.event.workflow_run.head_branch || github.event.inputs.tag || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   prepare:
     name: Prepare Inputs
     runs-on: &runner ubuntu-24.04
+    if: >-
+      ${{
+        github.event_name != 'workflow_run' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push' &&
+         startsWith(github.event.workflow_run.head_branch, '0.'))
+      }}
     permissions:
       contents: read
     outputs:
@@ -39,16 +46,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Compute reproducibility variables
         id: vars
         run: |
           set -euo pipefail
-          tag="${{ github.event.inputs.tag }}"
-          if [[ -z "${tag}" ]]; then
-            tag="${GITHUB_REF_NAME}"
+          tag=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ github.event.inputs.tag }}"
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            tag="${{ github.event.workflow_run.head_branch }}"
           fi
+
           if ! [[ "${tag}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
             echo "SemVer tag required (X.Y.Z or X.Y.Z-rc.N). Got: ${tag}" >&2
             exit 1
