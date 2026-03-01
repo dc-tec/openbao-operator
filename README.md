@@ -1,11 +1,12 @@
 <div align="center">
 
-# OpenBao Operator
+<img src="docs/assets/repo_logo.png" alt="OpenBao Operator" width="520" />
+
 
 **Enterprise-grade management for OpenBao on Kubernetes.**
 
 [![CI](https://github.com/dc-tec/openbao-operator/actions/workflows/ci.yml/badge.svg)](https://github.com/dc-tec/openbao-operator/actions/workflows/ci.yml)
-[![Go Version](https://img.shields.io/badge/Go-1.25.5-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/dc-tec/openbao-operator?filename=go.mod&label=Go&logo=go&logoColor=white)](https://github.com/dc-tec/openbao-operator/blob/main/go.mod)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/Docs-Live-green)](https://dc-tec.github.io/openbao-operator/)
 [![Artifact Hub](https://img.shields.io/badge/Artifact_Hub-Helm_OCI-417598?logo=artifacthub&logoColor=white)](https://artifacthub.io/packages/search?repo=openbao-operator)
