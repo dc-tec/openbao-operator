@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Supply-chain policy for release governance, provenance verification, and signoff evidence for OpenBao Operator stable/prerelease releases.">
+        <meta name="description" content="Current supply-chain security controls for OpenBao Operator, including governance, provenance, reproducibility, and release evidence requirements.">
       
       
       
@@ -73,7 +73,7 @@
   <meta property="og:type" content="website">
   <meta property="og:title" content="Supply Chain Security">
   
-    <meta property="og:description" content="Supply-chain policy for release governance, provenance verification, and signoff evidence for OpenBao Operator stable/prerelease releases.">
+    <meta property="og:description" content="Current supply-chain security controls for OpenBao Operator, including governance, provenance, reproducibility, and release evidence requirements.">
   
   <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/contributing/supply-chain-security/">
   
@@ -83,7 +83,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Supply Chain Security">
   
-    <meta name="twitter:description" content="Supply-chain policy for release governance, provenance verification, and signoff evidence for OpenBao Operator stable/prerelease releases.">
+    <meta name="twitter:description" content="Current supply-chain security controls for OpenBao Operator, including governance, provenance, reproducibility, and release evidence requirements.">
   
   
     <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
@@ -3833,10 +3833,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-compliance-language" class="md-nav__link">
+  <a href="#1-current-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Compliance Language
+        1. Current Model
       
     </span>
   </a>
@@ -3844,10 +3844,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-scope-wave-1" class="md-nav__link">
+  <a href="#2-channel-coverage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Scope (Wave 1)
+        2. Channel Coverage
       
     </span>
   </a>
@@ -3855,10 +3855,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-governance-controls" class="md-nav__link">
+  <a href="#3-implementation-map" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Governance Controls
+        3. Implementation Map
       
     </span>
   </a>
@@ -3866,10 +3866,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-buildrelease-integrity-policy" class="md-nav__link">
+  <a href="#4-governance-controls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Build/Release Integrity Policy
+        4. Governance Controls
       
     </span>
   </a>
@@ -3877,10 +3877,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-verification-policy" class="md-nav__link">
+  <a href="#5-build-and-dependency-controls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Verification Policy
+        5. Build and Dependency Controls
       
     </span>
   </a>
@@ -3888,10 +3888,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-release-signoff-evidence" class="md-nav__link">
+  <a href="#6-provenance-signing-and-attestation-controls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Release Signoff Evidence
+        6. Provenance, Signing, and Attestation Controls
       
     </span>
   </a>
@@ -3899,10 +3899,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-troubleshooting-matrix" class="md-nav__link">
+  <a href="#7-reproducibility-controls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Troubleshooting Matrix
+        7. Reproducibility Controls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-release-evidence-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Release Evidence Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-troubleshooting-quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Troubleshooting Quick Reference
       
     </span>
   </a>
@@ -4125,10 +4147,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-compliance-language" class="md-nav__link">
+  <a href="#1-current-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Compliance Language
+        1. Current Model
       
     </span>
   </a>
@@ -4136,10 +4158,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-scope-wave-1" class="md-nav__link">
+  <a href="#2-channel-coverage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Scope (Wave 1)
+        2. Channel Coverage
       
     </span>
   </a>
@@ -4147,10 +4169,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-governance-controls" class="md-nav__link">
+  <a href="#3-implementation-map" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Governance Controls
+        3. Implementation Map
       
     </span>
   </a>
@@ -4158,10 +4180,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-buildrelease-integrity-policy" class="md-nav__link">
+  <a href="#4-governance-controls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Build/Release Integrity Policy
+        4. Governance Controls
       
     </span>
   </a>
@@ -4169,10 +4191,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-verification-policy" class="md-nav__link">
+  <a href="#5-build-and-dependency-controls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Verification Policy
+        5. Build and Dependency Controls
       
     </span>
   </a>
@@ -4180,10 +4202,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-release-signoff-evidence" class="md-nav__link">
+  <a href="#6-provenance-signing-and-attestation-controls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Release Signoff Evidence
+        6. Provenance, Signing, and Attestation Controls
       
     </span>
   </a>
@@ -4191,10 +4213,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-troubleshooting-matrix" class="md-nav__link">
+  <a href="#7-reproducibility-controls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Troubleshooting Matrix
+        7. Reproducibility Controls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-release-evidence-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Release Evidence Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-troubleshooting-quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Troubleshooting Quick Reference
       
     </span>
   </a>
@@ -4222,114 +4266,181 @@
 
 
 <h1 id="supply-chain-security">Supply Chain Security<a class="headerlink" href="#supply-chain-security" title="Permanent link">&para;</a></h1>
+<p>This page describes the current supply-chain security posture of OpenBao Operator and how controls are implemented in CI and release workflows.</p>
 <div class="admonition note">
-<p class="admonition-title">Policy intent</p>
-<p>Use this page as the source of truth for release supply-chain requirements and evidence.</p>
+<p class="admonition-title">How to use this page</p>
+<p>Use this document as the implementation reference for maintainers.
+For exact verification commands and release execution steps, use <a href="../release-management/">Release Management</a>.</p>
 </div>
-<h2 id="1-compliance-language">1. Compliance Language<a class="headerlink" href="#1-compliance-language" title="Permanent link">&para;</a></h2>
-<div class="admonition success">
-<p class="admonition-title">Approved claim language</p>
-<p>Use the following statements in release signoff and public documentation:</p>
+<h2 id="1-current-model">1. Current Model<a class="headerlink" href="#1-current-model" title="Permanent link">&para;</a></h2>
+<p>OpenBao Operator uses a hardened "build once, verify, then promote" model:</p>
 <ol>
-<li>OpenBao Operator release pipeline targets SLSA Build L3 controls for stable/prerelease releases.</li>
-<li>OpenBao Operator implements additional L4-like hardening controls where feasible.</li>
-<li>This is not a formal SLSA Build L4 conformance claim.</li>
+<li>Build immutable artifacts from a pinned workflow/toolchain.</li>
+<li>Verify provenance and reproducibility before publish.</li>
+<li>Sign and attest published subjects.</li>
+<li>Publish machine-readable verification metadata.</li>
 </ol>
-</div>
-<div class="admonition warning">
-<p class="admonition-title">Formal Build L4 claim</p>
-<p>Do not claim formal SLSA Build L4 conformance for this repository.</p>
-</div>
-<h2 id="2-scope-wave-1">2. Scope (Wave 1)<a class="headerlink" href="#2-scope-wave-1" title="Permanent link">&para;</a></h2>
-<div class="admonition note">
-<p class="admonition-title">Wave 1 boundary</p>
-<p>Formal scope is stable/prerelease releases only through <code>.github/workflows/release.yml</code>.</p>
-</div>
+<pre class="mermaid"><code>graph TD
+    A[Commit or tag] --&gt; B[Build immutable artifacts]
+    B --&gt; C[Verify provenance]
+    B --&gt; D[Verify reproducibility]
+    C --&gt; E[Promote by digest]
+    D --&gt; E
+    E --&gt; F[Sign and attest publish subjects]
+    F --&gt; G[Publish manifests and release assets]
+
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+
+    class A,B,E,G process;
+    class C,D,F security;</code></pre>
+<h2 id="2-channel-coverage">2. Channel Coverage<a class="headerlink" href="#2-channel-coverage" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Channel</th>
+<th style="text-align: left;">Workflow Path</th>
+<th style="text-align: center;">Blocking Provenance Gate</th>
+<th style="text-align: center;">Blocking Byte-Repro Gate</th>
+<th style="text-align: left;">Published Output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">CI (PR/main)</td>
+<td style="text-align: left;"><code>.github/workflows/ci.yml</code></td>
+<td style="text-align: center;">No</td>
+<td style="text-align: center;">No</td>
+<td style="text-align: left;">Validation only</td>
+</tr>
+<tr>
+<td style="text-align: left;">Edge</td>
+<td style="text-align: left;"><code>.github/workflows/publish-edge.yml</code> + <code>reusable-channel-hardening.yml</code></td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: left;">GitHub Pages edge manifests + checksums + provenance index</td>
+</tr>
+<tr>
+<td style="text-align: left;">Nightly</td>
+<td style="text-align: left;"><code>.github/workflows/publish-nightly.yml</code> + <code>reusable-channel-hardening.yml</code></td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: left;">GitHub Pages nightly manifests + checksums + provenance index</td>
+</tr>
+<tr>
+<td style="text-align: left;">Stable/prerelease</td>
+<td style="text-align: left;"><code>.github/workflows/release.yml</code></td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: left;">GitHub Release assets + OCI images/chart + provenance index</td>
+</tr>
+</tbody>
+</table>
 <div class="admonition tip">
-<p class="admonition-title">Channel hardening parity</p>
-<p>Edge and nightly channels run the same strict build/provenance/byte-repro gates through <code>.github/workflows/reusable-channel-hardening.yml</code>.
-They are enforced release/build hardening controls, but are not part of the formal stable/prerelease claim boundary.</p>
+<p class="admonition-title">Shared hardening component</p>
+<p>Edge and nightly use the same reusable hardening workflow as the strict pre-publish gate implementation.</p>
 </div>
-<p>Artifacts in scope:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Images</label><label for="__tabbed_1_2">Helm chart</label><label for="__tabbed_1_3">Release files</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<ul>
-<li><code>ghcr.io/&lt;owner&gt;/openbao-operator</code></li>
-<li><code>ghcr.io/&lt;owner&gt;/openbao-init</code></li>
-<li><code>ghcr.io/&lt;owner&gt;/openbao-backup</code></li>
-<li><code>ghcr.io/&lt;owner&gt;/openbao-upgrade</code></li>
-</ul>
-</div>
-<div class="tabbed-block">
-<ul>
-<li><code>ghcr.io/&lt;owner&gt;/charts/openbao-operator</code></li>
-</ul>
-</div>
-<div class="tabbed-block">
-<ul>
-<li><code>dist/install.yaml</code></li>
-<li><code>dist/crds.yaml</code></li>
-<li><code>dist/checksums.txt</code></li>
-<li><code>dist/checksums.txt.bundle</code></li>
-<li><code>dist/sbom-*.spdx.json</code></li>
-<li><code>dist/provenance-index.json</code></li>
-</ul>
-</div>
-</div>
-</div>
-<h2 id="3-governance-controls">3. Governance Controls<a class="headerlink" href="#3-governance-controls" title="Permanent link">&para;</a></h2>
+<h2 id="3-implementation-map">3. Implementation Map<a class="headerlink" href="#3-implementation-map" title="Permanent link">&para;</a></h2>
+<p>The controls on this page are implemented by these workflows and scripts:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Control</th>
+<th style="text-align: left;">Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Build and attest images</td>
+<td style="text-align: left;"><code>.github/workflows/reusable-build.yml</code> + <code>actions/attest-build-provenance</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Channel hardening gates (edge/nightly)</td>
+<td style="text-align: left;"><code>.github/workflows/reusable-channel-hardening.yml</code> + <code>hack/ci/verify-image-attestations.sh</code> + <code>hack/ci/verify-byte-reproducibility.sh</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Release hardening gates (stable/prerelease)</td>
+<td style="text-align: left;"><code>.github/workflows/release.yml</code> + <code>hack/ci/verify-image-attestations.sh</code> + <code>hack/ci/verify-byte-reproducibility.sh</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Chart/checksum attestation verification</td>
+<td style="text-align: left;"><code>hack/ci/verify-release-artifact-attestations.sh</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Provenance metadata index generation</td>
+<td style="text-align: left;"><code>hack/ci/generate-provenance-index.sh</code> + <code>hack/ci/generate-channel-provenance-index.sh</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">SBOM deterministic normalization</td>
+<td style="text-align: left;"><code>hack/ci/normalize-spdx-json.sh</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="4-governance-controls">4. Governance Controls<a class="headerlink" href="#4-governance-controls" title="Permanent link">&para;</a></h2>
+<p>Current governance controls:</p>
+<ol>
+<li>Protected default branch and protected release tag patterns.</li>
+<li>CODEOWNERS coverage for release-critical paths (workflows, Dockerfiles, chart, security/release docs).</li>
+<li>PR-based change flow with required checks.</li>
+<li>GitHub Actions pinned by SHA.</li>
+</ol>
 <div class="admonition warning">
 <p class="admonition-title">Single-maintainer constraint</p>
-<p>Operating mode currently uses one maintainer. Keep approvals at <code>0</code> for now, but continue enforcing PR-based changes and required checks.</p>
+<p>Approval count remains <code>0</code> due to current single-maintainer operating mode. Human two-person controls are not currently enforced.</p>
 </div>
-<p>Required repository controls:</p>
+<h2 id="5-build-and-dependency-controls">5. Build and Dependency Controls<a class="headerlink" href="#5-build-and-dependency-controls" title="Permanent link">&para;</a></h2>
+<p>Deterministic and least-drift controls in use:</p>
 <ol>
-<li>Protect <code>main</code> with default branch ruleset and required checks for release confidence.</li>
-<li>Protect semver release tags (<code>[0-9]*.[0-9]*.[0-9]*</code> and prerelease variants) against deletion/retarget.</li>
-<li>Enforce CODEOWNERS coverage for workflows, Dockerfiles, chart, and release/security docs.</li>
-<li>Keep direct pushes blocked through ruleset policy on protected refs.</li>
-<li>Keep GitHub Actions pinned by SHA; move to explicit allowlist as follow-up hardening.</li>
+<li>Go build/test paths in CI, edge/nightly hardening, and release use vendored dependency mode (<code>-mod=vendor</code>) where applicable.</li>
+<li>Build metadata normalization via <code>SOURCE_DATE_EPOCH</code> from commit time.</li>
+<li>Docker base images pinned by digest.</li>
+<li>Critical build tool versions pinned (Buildx, QEMU, Helm, Cosign).</li>
+<li>Release and channel promotion uses digest references, not rebuild-on-promote.</li>
 </ol>
-<h2 id="4-buildrelease-integrity-policy">4. Build/Release Integrity Policy<a class="headerlink" href="#4-buildrelease-integrity-policy" title="Permanent link">&para;</a></h2>
-<p>Mandatory controls:</p>
+<h2 id="6-provenance-signing-and-attestation-controls">6. Provenance, Signing, and Attestation Controls<a class="headerlink" href="#6-provenance-signing-and-attestation-controls" title="Permanent link">&para;</a></h2>
+<p>Current enforced controls:</p>
 <ol>
-<li>Build once, promote by digest: tags/channels are promoted from pre-built digests only.</li>
-<li>Use reusable build workflow as provenance authority for image attestations.</li>
-<li>Require blocking provenance and byte-level reproducibility gates before publish/promote.</li>
-<li>Enforce vendored Go dependency resolution (<code>-mod=vendor</code>) for CI/release build and test paths.</li>
-<li>Require chart digest and <code>checksums.txt</code> GitHub attestations with in-pipeline verification.</li>
-<li>Publish <code>provenance-index.json</code> as machine-readable verification metadata for release/edge/nightly channels.</li>
-<li>Pin base images and critical toolchain versions to reduce drift.</li>
-<li>Collect reproducibility diagnostics with <code>.github/workflows/reproducibility.yml</code> (report-only for stable/prerelease tags).</li>
+<li>Image build provenance attestations are emitted by reusable build workflow.</li>
+<li>Image provenance is verified with strict identity constraints before publish.</li>
+<li>Published images are keylessly signed.</li>
+<li>Release/chart/checksum subjects are signed and/or attested before publish completion.</li>
+<li>Published metadata includes <code>provenance-index.json</code> for verifiable linkage.</li>
 </ol>
-<h2 id="5-verification-policy">5. Verification Policy<a class="headerlink" href="#5-verification-policy" title="Permanent link">&para;</a></h2>
-<p>Verify all release artifact classes before install/use:</p>
+<p>Verification reference commands:</p>
+<ul>
+<li><a href="../release-management/#5-verifying-artifacts">Release artifact verification commands</a></li>
+</ul>
+<h2 id="7-reproducibility-controls">7. Reproducibility Controls<a class="headerlink" href="#7-reproducibility-controls" title="Permanent link">&para;</a></h2>
+<p>Blocking reproducibility checks validate that independent rebuild output matches expected bytes before publish.</p>
+<p>Checked subjects include:</p>
 <ol>
-<li>Image signatures and image build attestations.</li>
-<li>Chart signature and chart attestation.</li>
-<li><code>checksums.txt</code> signature and attestation.</li>
-</ol>
-<div class="admonition tip">
-<p class="admonition-title">Verification commands</p>
-<p>Use the exact command set from <a href="../release-management/#5-verifying-artifacts">Release Management</a>.</p>
-</div>
-<h2 id="6-release-signoff-evidence">6. Release Signoff Evidence<a class="headerlink" href="#6-release-signoff-evidence" title="Permanent link">&para;</a></h2>
-<p>Capture the following for every stable/prerelease release:</p>
-<ol>
-<li><code>Release</code> workflow run URL and run ID.</li>
-<li>Successful <code>verify-provenance</code> gate evidence.</li>
-<li><code>gh attestation verify</code> outputs for one image, chart digest, and <code>checksums.txt</code>.</li>
-<li>GitHub Release asset list including <code>provenance-index.json</code>.</li>
-<li>Ruleset export evidence for default-branch and tag rulesets.</li>
+<li>Image digests (primary vs independent rebuild).</li>
+<li>Rendered manifests (<code>install.yaml</code>, <code>crds.yaml</code>).</li>
+<li>Helm chart package bytes.</li>
+<li>Checksums file bytes.</li>
+<li>SBOM bytes after deterministic SPDX normalization.</li>
 </ol>
 <div class="admonition note">
-<p class="admonition-title">Ruleset export commands</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/dc-tec/openbao-operator/rulesets<span class="w"> </span>&gt;<span class="w"> </span>rulesets.json
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/dc-tec/openbao-operator/rulesets/&lt;RULESET_ID&gt;<span class="w"> </span>&gt;<span class="w"> </span>ruleset-&lt;RULESET_ID&gt;.json
-</span></code></pre></div>
+<p class="admonition-title">SBOM normalization</p>
+<p>Raw SPDX output is not byte-stable by default due runtime metadata fields.
+The workflow normalizes SPDX JSON before comparison to keep strict gates deterministic.</p>
 </div>
-<h2 id="7-troubleshooting-matrix">7. Troubleshooting Matrix<a class="headerlink" href="#7-troubleshooting-matrix" title="Permanent link">&para;</a></h2>
+<p>Diagnostic workflow:</p>
+<ul>
+<li><code>.github/workflows/reproducibility.yml</code> (report-focused parity checks)</li>
+</ul>
+<h2 id="8-release-evidence-requirements">8. Release Evidence Requirements<a class="headerlink" href="#8-release-evidence-requirements" title="Permanent link">&para;</a></h2>
+<p>For each stable/prerelease release, collect and retain:</p>
+<ol>
+<li>Workflow run URL and run ID.</li>
+<li>Successful provenance/reproducibility gate evidence.</li>
+<li>Verification outputs for image/chart/checksum subjects.</li>
+<li>Asset listing that includes <code>provenance-index.json</code>.</li>
+<li>Ruleset export evidence for branch/tag protections.</li>
+</ol>
+<h2 id="9-troubleshooting-quick-reference">9. Troubleshooting Quick Reference<a class="headerlink" href="#9-troubleshooting-quick-reference" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -4341,33 +4452,28 @@ They are enforced release/build hardening controls, but are not part of the form
 <tbody>
 <tr>
 <td style="text-align: left;"><code>gh attestation verify</code> returns 404</td>
-<td style="text-align: left;">Attestation not yet indexed</td>
-<td style="text-align: left;">Retry with bounded backoff (workflow already does this).</td>
+<td style="text-align: left;">Attestation index delay</td>
+<td style="text-align: left;">Retry with bounded backoff.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>signer workflow mismatch</code></td>
-<td style="text-align: left;">Wrong <code>--signer-workflow</code> identity</td>
-<td style="text-align: left;">Use exact workflow path expected by policy (<code>reusable-build.yml</code> for images, <code>release.yml</code> for chart/checksums).</td>
+<td style="text-align: left;">Signer workflow mismatch</td>
+<td style="text-align: left;">Wrong workflow identity constraint</td>
+<td style="text-align: left;">Verify with the expected workflow path for that subject.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>source ref mismatch</code></td>
-<td style="text-align: left;">Attestation built from different ref</td>
-<td style="text-align: left;">Verify with exact <code>refs/tags/&lt;version&gt;</code> source ref.</td>
+<td style="text-align: left;">Source-ref mismatch</td>
+<td style="text-align: left;">Verification uses wrong ref</td>
+<td style="text-align: left;">Verify against the exact source ref used by workflow.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>self-hosted runner denied</code></td>
-<td style="text-align: left;">Build ran on non-GitHub-hosted runner</td>
-<td style="text-align: left;">Re-run release on GitHub-hosted runner pool only.</td>
+<td style="text-align: left;">Byte reproducibility failure</td>
+<td style="text-align: left;">Nondeterministic artifact input/output</td>
+<td style="text-align: left;">Inspect gate logs, normalize/canonicalize deterministic fields, and rerun.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>checksums.txt attestation verify failed</code></td>
-<td style="text-align: left;">File changed after attestation</td>
-<td style="text-align: left;">Regenerate checksums, re-attest, and ensure no post-attestation mutation.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>cosign verify-blob</code> fails</td>
-<td style="text-align: left;">Wrong bundle or identity constraint</td>
-<td style="text-align: left;">Download matching <code>checksums.txt</code> and bundle from same release; verify against <code>release.yml@refs/tags/&lt;version&gt;</code>.</td>
+<td style="text-align: left;"><code>checksums.txt</code> verify fails</td>
+<td style="text-align: left;">File changed after signing/attestation</td>
+<td style="text-align: left;">Regenerate checksums and re-run sign/attestation flow.</td>
 </tr>
 </tbody>
 </table>
