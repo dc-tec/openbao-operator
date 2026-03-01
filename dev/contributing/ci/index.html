@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+        <meta name="description" content="CI pipeline overview, local command parity, E2E routing, and release/build hardening channel flow.">
       
       
       
@@ -73,7 +73,7 @@
   <meta property="og:type" content="website">
   <meta property="og:title" content="CI/CD">
   
-    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+    <meta property="og:description" content="CI pipeline overview, local command parity, E2E routing, and release/build hardening channel flow.">
   
   <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/contributing/ci/">
   
@@ -83,7 +83,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="CI/CD">
   
-    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+    <meta name="twitter:description" content="CI pipeline overview, local command parity, E2E routing, and release/build hardening channel flow.">
   
   
     <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
@@ -3777,55 +3777,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-ci-pipeline" class="md-nav__link">
+  <a href="#1-pipeline-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. CI Pipeline
+        1. Pipeline Overview
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-ci-vs-local-commands-the-rosetta-stone" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. CI vs Local Commands ("The Rosetta Stone")
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#21-pull-request-standards-gates" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 Pull Request Standards Gates
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-end-to-end-testing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. End-to-End Testing
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="3. End-to-End Testing">
+    <nav class="md-nav" aria-label="1. Pipeline Overview">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#11-pull-request-and-main-ci" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        1.1 Pull Request and main CI
       
     </span>
   </a>
@@ -3833,10 +3800,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#running-tests" class="md-nav__link">
+  <a href="#12-publish-and-release-hardening" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Running Tests
+        1.2 Publish and Release Hardening
       
     </span>
   </a>
@@ -3849,10 +3816,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-security-checks" class="md-nav__link">
+  <a href="#2-ci-vs-local-commands" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Security Checks
+        2. CI vs Local Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. CI vs Local Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-core-pr-equivalent-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Core PR-equivalent checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-job-to-command-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Job-to-command mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-pull-request-standards-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Pull Request Standards Gates
       
     </span>
   </a>
@@ -3860,10 +3866,38 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-documentation-build" class="md-nav__link">
+  <a href="#4-end-to-end-testing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Documentation Build
+        4. End-to-End Testing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. End-to-End Testing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-local-e2e-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Local E2E commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-security-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Security Checks
       
     </span>
   </a>
@@ -3871,10 +3905,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-performance-baseline-capture-github-runners" class="md-nav__link">
+  <a href="#6-documentation-build" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Performance Baseline Capture (GitHub Runners)
+        6. Documentation Build
       
     </span>
   </a>
@@ -3882,13 +3916,41 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-weekly-performance-regression-gate" class="md-nav__link">
+  <a href="#7-performance-workflows" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Weekly Performance Regression Gate
+        7. Performance Workflows
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="7. Performance Workflows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-baseline-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Baseline Capture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-weekly-regression-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 Weekly Regression Gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4164,55 +4226,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-ci-pipeline" class="md-nav__link">
+  <a href="#1-pipeline-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. CI Pipeline
+        1. Pipeline Overview
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-ci-vs-local-commands-the-rosetta-stone" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. CI vs Local Commands ("The Rosetta Stone")
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#21-pull-request-standards-gates" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 Pull Request Standards Gates
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-end-to-end-testing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. End-to-End Testing
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="3. End-to-End Testing">
+    <nav class="md-nav" aria-label="1. Pipeline Overview">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#11-pull-request-and-main-ci" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        1.1 Pull Request and main CI
       
     </span>
   </a>
@@ -4220,10 +4249,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#running-tests" class="md-nav__link">
+  <a href="#12-publish-and-release-hardening" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Running Tests
+        1.2 Publish and Release Hardening
       
     </span>
   </a>
@@ -4236,10 +4265,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-security-checks" class="md-nav__link">
+  <a href="#2-ci-vs-local-commands" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Security Checks
+        2. CI vs Local Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. CI vs Local Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-core-pr-equivalent-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Core PR-equivalent checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-job-to-command-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Job-to-command mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-pull-request-standards-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Pull Request Standards Gates
       
     </span>
   </a>
@@ -4247,10 +4315,38 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-documentation-build" class="md-nav__link">
+  <a href="#4-end-to-end-testing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Documentation Build
+        4. End-to-End Testing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. End-to-End Testing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-local-e2e-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Local E2E commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-security-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Security Checks
       
     </span>
   </a>
@@ -4258,10 +4354,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-performance-baseline-capture-github-runners" class="md-nav__link">
+  <a href="#6-documentation-build" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Performance Baseline Capture (GitHub Runners)
+        6. Documentation Build
       
     </span>
   </a>
@@ -4269,13 +4365,41 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-weekly-performance-regression-gate" class="md-nav__link">
+  <a href="#7-performance-workflows" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Weekly Performance Regression Gate
+        7. Performance Workflows
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="7. Performance Workflows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-baseline-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Baseline Capture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-weekly-regression-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 Weekly Regression Gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4300,209 +4424,239 @@
 
 
 <h1 id="continuous-integration">Continuous Integration<a class="headerlink" href="#continuous-integration" title="Permanent link">&para;</a></h1>
-<p>We use GitHub Actions for all CI checks. The pipeline is designed to be deterministic and reproducible locally.</p>
-<h2 id="1-ci-pipeline">1. CI Pipeline<a class="headerlink" href="#1-ci-pipeline" title="Permanent link">&para;</a></h2>
-<p>The pipeline runs on every PR and <code>main</code> push.</p>
+<p>We use GitHub Actions for pull request validation, <code>main</code> branch validation, and release/build hardening channels.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>CI and release workflows enforce vendored Go dependencies. After changing dependencies, run <code>make verify-vendor</code>.</p>
+</div>
+<h2 id="1-pipeline-overview">1. Pipeline Overview<a class="headerlink" href="#1-pipeline-overview" title="Permanent link">&para;</a></h2>
+<h3 id="11-pull-request-and-main-ci">1.1 Pull Request and <code>main</code> CI<a class="headerlink" href="#11-pull-request-and-main-ci" title="Permanent link">&para;</a></h3>
+<p>The <code>CI</code> workflow runs on every pull request update and every push to <code>main</code>.</p>
 <pre class="mermaid"><code>graph TD
-    PR([PR Created]) --&gt; Static
-    PR --&gt; Build
-    PR --&gt; Unit
+    A[Pull request] --&gt; B[Detect Changes]
+    C[Push to main] --&gt; B
 
-    subgraph Static [Static Analysis]
-        Lint[Lint &amp; Tidy]
-        Gen[Verify Generated]
-        Helm[Verify Helm]
-        Sec[Security Scan]
-    end
+    B --&gt; D[Core quality gates]
+    D --&gt; D1[Lint format tidy vendor]
+    D --&gt; D2[Generated docs helm]
+    D --&gt; D3[Security compatibility]
+    D --&gt; D4[Unit and integration tests]
 
-    subgraph Build [Build Artifacts]
-        Docs[Build Docs]
-        Chart[Lint Chart]
-    end
+    B --&gt; E[E2E routing]
+    E --&gt; E1[Targeted shards]
+    E --&gt; E2[Full suite with ci full e2e label]
+    B --&gt; E3[Helm E2E smoke on chart changes]
 
-    subgraph Unit [Verification]
-        Sanity[Unit Tests]
-        Compat[OpenBao Compat]
-    end
+    D --&gt; F[CI result]
+    E1 --&gt; F
+    E2 --&gt; F
+    E3 --&gt; F
 
-    Static --&gt; E2E{E2E Tests}
-    Build --&gt; E2E
-    Unit --&gt; E2E
-
-    E2E --&gt; Smoke["Smoke Tests"]
-    E2E --&gt; Full["Full Matrix (Nightly)"]
-
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
 
-    class PR process;
-    class Static,Build,Unit,E2E process;
-    class Lint,Gen,Helm,Sec,Docs,Chart,Sanity,Compat,Smoke,Full read;</code></pre>
-<h2 id="2-ci-vs-local-commands-the-rosetta-stone">2. CI vs Local Commands ("The Rosetta Stone")<a class="headerlink" href="#2-ci-vs-local-commands-the-rosetta-stone" title="Permanent link">&para;</a></h2>
-<p>Run these locally to debug CI failures.</p>
+    class A,C git;
+    class B,D,E,F process;
+    class D1,D2,D4,E1,E2,E3 read;
+    class D3 security;</code></pre>
+<h3 id="12-publish-and-release-hardening">1.2 Publish and Release Hardening<a class="headerlink" href="#12-publish-and-release-hardening" title="Permanent link">&para;</a></h3>
+<p>Edge, nightly, and tagged releases use strict hardening gates before publish.</p>
+<pre class="mermaid"><code>graph TD
+    M[CI success on main] --&gt; PE[Publish Edge]
+    N[Nightly schedule] --&gt; NW[Nightly workflow]
+    NW --&gt; PN[Publish Nightly]
+    T[Semver tag push] --&gt; R[Release workflow]
+
+    PE --&gt; H[Reusable channel hardening]
+    PN --&gt; H
+
+    H --&gt; H1[Provenance gate]
+    H --&gt; H2[Byte reproducibility gate]
+    H1 --&gt; HP[Promote by digest and publish pages]
+    H2 --&gt; HP
+
+    R --&gt; RB[Build and independent rebuild]
+    RB --&gt; RG1[Provenance gate]
+    RB --&gt; RG2[Byte reproducibility gate]
+    RG1 --&gt; RP[Publish release artifacts]
+    RG2 --&gt; RP
+
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
+
+    class M,N,T git;
+    class PE,NW,PN,R,H,RB,HP,RP process;
+    class H1,H2,RG1,RG2 security;</code></pre>
+<h2 id="2-ci-vs-local-commands">2. CI vs Local Commands<a class="headerlink" href="#2-ci-vs-local-commands" title="Permanent link">&para;</a></h2>
+<p>Run these commands locally to reproduce CI behavior.</p>
+<h3 id="21-core-pr-equivalent-checks">2.1 Core PR-equivalent checks<a class="headerlink" href="#21-core-pr-equivalent-checks" title="Permanent link">&para;</a></h3>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>lint-config<span class="w"> </span>lint
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>verify-fmt
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>make<span class="w"> </span>verify-tidy
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>make<span class="w"> </span>verify-vendor
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>make<span class="w"> </span>verify-generated
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>make<span class="w"> </span>verify-helm
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>make<span class="w"> </span>test-ci
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>make<span class="w"> </span>verify-openbao-config-compat
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>make<span class="w"> </span>docs-build
+</span></code></pre></div>
+<h3 id="22-job-to-command-mapping">2.2 Job-to-command mapping<a class="headerlink" href="#22-job-to-command-mapping" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
 <th style="text-align: left;">CI Job</th>
 <th style="text-align: left;">Local Command</th>
-<th style="text-align: left;">Description</th>
+<th style="text-align: left;">Notes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>Lint Check</strong></td>
-<td style="text-align: left;"><code>make lint</code></td>
-<td style="text-align: left;">Runs <code>golangci-lint</code></td>
+<td style="text-align: left;"><code>Lint</code></td>
+<td style="text-align: left;"><code>make lint-config lint</code></td>
+<td style="text-align: left;">Linter config + lint run</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Formatting</strong></td>
+<td style="text-align: left;"><code>Verify Formatting</code></td>
 <td style="text-align: left;"><code>make verify-fmt</code></td>
 <td style="text-align: left;">Checks <code>gofmt</code> compliance</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Dependencies</strong></td>
+<td style="text-align: left;"><code>Verify go.mod/go.sum</code></td>
 <td style="text-align: left;"><code>make verify-tidy</code></td>
-<td style="text-align: left;">Ensures <code>go.mod</code> is clean</td>
+<td style="text-align: left;">Ensures module files are clean</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Generators</strong></td>
+<td style="text-align: left;"><code>Verify vendor/</code></td>
+<td style="text-align: left;"><code>make verify-vendor</code></td>
+<td style="text-align: left;">Fails on stale vendored dependencies</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Verify Generated Artifacts</code></td>
 <td style="text-align: left;"><code>make verify-generated</code></td>
-<td style="text-align: left;">Checks for drift in CRDs/RBAC</td>
+<td style="text-align: left;">Checks generated files drift</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Helm Sync</strong></td>
-<td style="text-align: left;"><code>make verify-helm</code></td>
-<td style="text-align: left;">Checks drift in <code>charts/</code> (including values/schema validation)</td>
+<td style="text-align: left;"><code>Helm Chart</code></td>
+<td style="text-align: left;"><code>make verify-helm &amp;&amp; make helm-test</code></td>
+<td style="text-align: left;">Includes Helm sync, lint, template, and OpenShift rendering checks</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Unit Tests</strong></td>
+<td style="text-align: left;"><code>Security (vulncheck + Trivy FS)</code></td>
+<td style="text-align: left;"><code>make vulncheck</code> and <code>make security-scan IMG=ghcr.io/dc-tec/openbao-operator:edge</code></td>
+<td style="text-align: left;">Trivy scan checks filesystem and the provided image</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Unit Tests</code> + <code>Envtest Integration</code></td>
 <td style="text-align: left;"><code>make test-ci</code></td>
-<td style="text-align: left;">Runs unit + integration tests</td>
+<td style="text-align: left;">Runs unit + integration test stack</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Compatibility</strong></td>
+<td style="text-align: left;"><code>OpenBao Config Compatibility</code></td>
 <td style="text-align: left;"><code>make verify-openbao-config-compat</code></td>
-<td style="text-align: left;">Checks HCL against upstream OpenBao</td>
+<td style="text-align: left;">Validates generated HCL fixtures against upstream parser</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Architecture Report (local)</strong></td>
-<td style="text-align: left;"><code>make report-internal-deps</code></td>
-<td style="text-align: left;">Generates internal package dependency report and graphs (report-only warnings)</td>
+<td style="text-align: left;"><code>Docs Build</code></td>
+<td style="text-align: left;"><code>make docs-build</code></td>
+<td style="text-align: left;">Strict MkDocs build</td>
 </tr>
 </tbody>
 </table>
-<h2 id="21-pull-request-standards-gates">2.1 Pull Request Standards Gates<a class="headerlink" href="#21-pull-request-standards-gates" title="Permanent link">&para;</a></h2>
-<p>We enforce PR metadata and commit standards in CI (<code>.github/workflows/pr-standards.yml</code>):</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>You can run <code>make ci-core</code> as a broad local gate, but set <code>IMG</code> first so the image scan stage is meaningful.</p>
+</div>
+<h2 id="3-pull-request-standards-gates">3. Pull Request Standards Gates<a class="headerlink" href="#3-pull-request-standards-gates" title="Permanent link">&para;</a></h2>
+<p>The <code>PR Standards</code> workflow (<code>.github/workflows/pr-standards.yml</code>) enforces:</p>
 <ul>
-<li>PR title must follow Conventional Commits.</li>
-<li>PR description must include required sections from <code>.github/pull_request_template.md</code>.</li>
-<li>Commit-subject checks are informational only (not enforced).</li>
+<li>PR title follows Conventional Commits.</li>
+<li>PR description includes required template sections.</li>
+<li>Commit-subject checks are informational only.</li>
 </ul>
-<p>Because this repository uses squash merge, the PR title gate is the effective release-facing commit message gate for <code>main</code>.</p>
-<h2 id="3-end-to-end-testing">3. End-to-End Testing<a class="headerlink" href="#3-end-to-end-testing" title="Permanent link">&para;</a></h2>
-<p>We use <a href="https://kind.sigs.k8s.io/">Kind</a> for E2E tests.</p>
-<p>CI optimization model:</p>
+<p>Because this repository uses squash merge, the PR title is the release-facing commit message gate for <code>main</code>.</p>
+<h2 id="4-end-to-end-testing">4. End-to-End Testing<a class="headerlink" href="#4-end-to-end-testing" title="Permanent link">&para;</a></h2>
+<p>We run E2E tests on Kind and route scope based on changed files and labels.</p>
 <ul>
-<li>Build once, reuse many: CI builds fast E2E images once per workflow and reuses pinned digest refs across shards.</li>
-<li>Trusted PR requirement: the optimized E2E lane runs for same-repository PRs and branch pushes (it pushes temporary images to GHCR).</li>
-<li>Hybrid routing:</li>
-<li>Path-driven by default (<code>changes</code> job decides whether E2E is needed, and whether backup/upgrade/hardened lanes are relevant).</li>
-<li>PR labels can expand scope:<ul>
-<li><code>backup</code> includes backup/restore slow lane.</li>
-<li><code>upgrades</code> includes upgrade/chaos slow lane.</li>
-<li><code>ci:full-e2e</code> forces the full suite (except OpenShift lane).</li>
+<li>Default routing runs targeted shards.</li>
+<li>Label <code>ci:full-e2e</code> enables broader suite coverage.</li>
+<li>Labels <code>backup</code> and <code>upgrades</code> expand slow-lane coverage.</li>
+<li>Hardened signed lane runs for relevant security/controller change scope.</li>
+<li>Prebuilt E2E images are reused across shards for speed.</li>
 </ul>
-</li>
-<li>Hardened PR lane focuses on hardened/GitOps coverage (ACME-focused checks are left to main/nightly/release).</li>
-</ul>
-<h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
-<ul class="task-list">
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Docker running</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <code>kubectl</code> installed</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> 4 CPU / 8GB RAM recommended</li>
-</ul>
-<h3 id="running-tests">Running Tests<a class="headerlink" href="#running-tests" title="Permanent link">&para;</a></h3>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m13.13 22.19-1.63-3.83c1.57-.58 3.04-1.36 4.4-2.27zM5.64 12.5l-3.83-1.63 6.1-2.77C7 9.46 6.22 10.93 5.64 12.5M21.61 2.39S16.66.269 11 5.93c-2.19 2.19-3.5 4.6-4.35 6.71-.28.75-.09 1.57.46 2.13l2.13 2.12c.55.56 1.37.74 2.12.46A19.1 19.1 0 0 0 18.07 13c5.66-5.66 3.54-10.61 3.54-10.61m-7.07 7.07c-.78-.78-.78-2.05 0-2.83s2.05-.78 2.83 0c.77.78.78 2.05 0 2.83s-2.05.78-2.83 0m-5.66 7.07-1.41-1.41zM6.24 22l3.64-3.64c-.34-.09-.67-.24-.97-.45L4.83 22zM2 22h1.41l4.77-4.76-1.42-1.41L2 20.59zm0-2.83 4.09-4.08c-.21-.3-.36-.62-.45-.97L2 17.76z"/></svg></span> Smoke Test (Fast)</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 22a3 3 0 0 1-3-3c0-.6.18-1.16.5-1.63L9 7.81V6a1 1 0 0 1-1-1V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1v1.81l5.5 9.56c.32.47.5 1.03.5 1.63a3 3 0 0 1-3 3zm-1-3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1c0-.21-.07-.41-.18-.57l-2.29-3.96L14 17l-5.07-5.07-3.75 6.5c-.11.16-.18.36-.18.57m8-9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1"/></svg></span> Full Suite (Thorough)</label><label for="__tabbed_1_3"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 12h-4v-2h4m0 6h-4v-2h4m6-6h-2.81a6 6 0 0 0-1.82-1.96L17 4.41 15.59 3l-2.17 2.17a6 6 0 0 0-2.83 0L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20z"/></svg></span> Debug Mode</label></div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>The optimized E2E lane pushes temporary images to GHCR, so it runs only for branch pushes and same-repository pull requests.</p>
+</div>
+<h3 id="41-local-e2e-commands">4.1 Local E2E commands<a class="headerlink" href="#41-local-e2e-commands" title="Permanent link">&para;</a></h3>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m13.13 22.19-1.63-3.83c1.57-.58 3.04-1.36 4.4-2.27zM5.64 12.5l-3.83-1.63 6.1-2.77C7 9.46 6.22 10.93 5.64 12.5M21.61 2.39S16.66.269 11 5.93c-2.19 2.19-3.5 4.6-4.35 6.71-.28.75-.09 1.57.46 2.13l2.13 2.12c.55.56 1.37.74 2.12.46A19.1 19.1 0 0 0 18.07 13c5.66-5.66 3.54-10.61 3.54-10.61m-7.07 7.07c-.78-.78-.78-2.05 0-2.83s2.05-.78 2.83 0c.77.78.78 2.05 0 2.83s-2.05.78-2.83 0m-5.66 7.07-1.41-1.41zM6.24 22l3.64-3.64c-.34-.09-.67-.24-.97-.45L4.83 22zM2 22h1.41l4.77-4.76-1.42-1.41L2 20.59zm0-2.83 4.09-4.08c-.21-.3-.36-.62-.45-.97L2 17.76z"/></svg></span> Smoke</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 22a3 3 0 0 1-3-3c0-.6.18-1.16.5-1.63L9 7.81V6a1 1 0 0 1-1-1V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1v1.81l5.5 9.56c.32.47.5 1.03.5 1.63a3 3 0 0 1-3 3zm-1-3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1c0-.21-.07-.41-.18-.57l-2.29-3.96L14 17l-5.07-5.07-3.75 6.5c-.11.16-.18.36-.18.57m8-9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1"/></svg></span> Full</label><label for="__tabbed_1_3"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m13.78 15.3 6 6 2.11-2.16-6-6zm3.72-5.2c-.39 0-.81-.05-1.14-.19L4.97 21.25l-2.11-2.11 7.41-7.4L8.5 9.96l-.72.7-1.45-1.41v2.86l-.7.7-3.52-3.56.7-.7h2.81l-1.4-1.41 3.56-3.56a2.976 2.976 0 0 1 4.22 0L9.89 5.74l1.41 1.4-.71.71 1.79 1.78 1.82-1.88c-.14-.33-.2-.75-.2-1.12a3.49 3.49 0 0 1 3.5-3.52c.59 0 1.11.14 1.58.42L16.41 6.2l1.5 1.5 2.67-2.67c.28.47.42.97.42 1.6 0 1.92-1.55 3.47-3.5 3.47"/></svg></span> Helm Smoke</label><label for="__tabbed_1_4"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 12h-4v-2h4m0 6h-4v-2h4m6-6h-2.81a6 6 0 0 0-1.82-1.96L17 4.41 15.59 3l-2.17 2.17a6 6 0 0 0-2.83 0L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20z"/></svg></span> Debug</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>Runs a subset of critical tests. Best for quick feedback.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>test-e2e-ci<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nv">KIND_NODE_IMAGE</span><span class="o">=</span>kindest/node:v1.34.3<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span>smoke<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nv">E2E_PARALLEL_NODES</span><span class="o">=</span><span class="m">1</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>test-e2e-ci<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nv">KIND_NODE_IMAGE</span><span class="o">=</span>kindest/node:v1.34.3<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;!slow &amp;&amp; !nightly &amp;&amp; !openshift &amp;&amp; !pentest&#39;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nv">E2E_PARALLEL_NODES</span><span class="o">=</span><span class="m">1</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>Runs the entire test matrix (Upgrade, Backup, Restore, etc).</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>test-e2e-ci<span class="w"> </span><span class="nv">KIND_NODE_IMAGE</span><span class="o">=</span>kindest/node:v1.34.3
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>test-e2e-ci<span class="w"> </span><span class="nv">KIND_NODE_IMAGE</span><span class="o">=</span>kindest/node:v1.34.3
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>Keeps the cluster alive after failure for inspection.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>test-e2e-ci<span class="w"> </span><span class="nv">E2E_SKIP_CLEANUP</span><span class="o">=</span><span class="nb">true</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>helm-e2e-smoke
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>test-e2e-ci<span class="w"> </span><span class="nv">E2E_SKIP_CLEANUP</span><span class="o">=</span><span class="nb">true</span>
 </span></code></pre></div>
 </div>
 </div>
 </div>
-<h2 id="4-security-checks">4. Security Checks<a class="headerlink" href="#4-security-checks" title="Permanent link">&para;</a></h2>
-<p>We run vulnerability scanning on every PR.</p>
+<h2 id="5-security-checks">5. Security Checks<a class="headerlink" href="#5-security-checks" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Govulncheck</label><label for="__tabbed_2_2">Trivy</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>Detects known vulnerabilities in Go dependencies.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>go<span class="w"> </span>install<span class="w"> </span>golang.org/x/vuln/cmd/govulncheck@latest
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>govulncheck<span class="w"> </span>-test<span class="w"> </span>./...
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>vulncheck
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>Scans the operator image for OS vulnerabilities.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>security-scan<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/dc-tec/openbao-operator:latest
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>security-scan<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/dc-tec/openbao-operator:edge
 </span></code></pre></div>
 <div class="admonition note">
-<p class="admonition-title">Expected RBAC findings (skipped in Trivy FS)</p>
-<p>Trivy's Kubernetes misconfiguration rules flag several <strong>intentionally privileged</strong> RBAC manifests/templates
-(e.g. tenant template roles, single-tenant mode, and provisioner cleanup permissions).
-We skip these specific files in CI and in <code>make security-scan</code> using Trivy's <code>--skip-files</code> flags.</p>
-<p>If you modify RBAC under <code>config/rbac/</code>, <code>dist/install.yaml</code>, or the chart RBAC templates, and Trivy starts failing,
-update the skip list in:</p>
+<p class="admonition-title">Expected RBAC findings</p>
+<p>Trivy's Kubernetes misconfiguration rules flag several intentionally privileged RBAC manifests and templates.</p>
+<p>CI and local security scans skip specific files in:</p>
 <ul>
-<li><code>.github/workflows/ci.yml</code> (Trivy FS step)</li>
-<li><code>.github/workflows/nightly.yml</code> (Trivy FS step)</li>
+<li><code>.github/workflows/ci.yml</code></li>
+<li><code>.github/workflows/nightly.yml</code></li>
 <li><code>Makefile</code> (<code>security-scan</code> target)</li>
 </ul>
 </div>
 </div>
 </div>
 </div>
-<h2 id="5-documentation-build">5. Documentation Build<a class="headerlink" href="#5-documentation-build" title="Permanent link">&para;</a></h2>
-<p>Docs are built with MkDocs and Material.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Local preview</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>make<span class="w"> </span>docs-serve
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Build distribution (checks internal links)</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>make<span class="w"> </span>docs-build
+<h2 id="6-documentation-build">6. Documentation Build<a class="headerlink" href="#6-documentation-build" title="Permanent link">&para;</a></h2>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>docs-serve
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>make<span class="w"> </span>docs-build
 </span></code></pre></div>
-<div class="admonition tip">
-<p class="admonition-title">Preview Deployment</p>
-<p>CI currently validates docs with <code>make docs-build</code> but does not publish a per-PR preview URL.
-Use <code>make docs-serve</code> locally for interactive preview.</p>
-</div>
-<h2 id="6-performance-baseline-capture-github-runners">6. Performance Baseline Capture (GitHub Runners)<a class="headerlink" href="#6-performance-baseline-capture-github-runners" title="Permanent link">&para;</a></h2>
-<p>Use the dedicated workflow to capture baseline evidence on the same runner class used by CI.</p>
+<h2 id="7-performance-workflows">7. Performance Workflows<a class="headerlink" href="#7-performance-workflows" title="Permanent link">&para;</a></h2>
+<h3 id="71-baseline-capture">7.1 Baseline Capture<a class="headerlink" href="#71-baseline-capture" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Open <strong>Actions</strong> -&gt; <strong>Performance Baseline Capture</strong>.</li>
-<li>Run the workflow on <code>main</code> (or the target release branch) with default inputs unless you intentionally want a different run count/timeout.</li>
-<li>Download the uploaded artifact containing:</li>
-<li><code>hack/perf/baseline/kind-v1.34.3-baseline.json</code></li>
-<li><code>hack/perf/thresholds/kind-v1.34.3.yaml</code></li>
-<li>Commit those files in a normal PR and use release/weekly perf workflows to validate thresholds (<code>verify-perf</code>).</li>
+<li>Run on <code>main</code> (or the release branch you are validating).</li>
+<li>Download the artifact containing baseline JSON and thresholds YAML.</li>
+<li>Commit updated baseline files in a normal PR.</li>
 </ol>
-<h2 id="7-weekly-performance-regression-gate">7. Weekly Performance Regression Gate<a class="headerlink" href="#7-weekly-performance-regression-gate" title="Permanent link">&para;</a></h2>
-<p>The <code>Performance Regression Weekly</code> workflow runs full <code>make verify-perf</code> weekly and can also be run manually.</p>
+<h3 id="72-weekly-regression-gate">7.2 Weekly Regression Gate<a class="headerlink" href="#72-weekly-regression-gate" title="Permanent link">&para;</a></h3>
+<p>The <code>Performance Regression Weekly</code> workflow runs <code>make verify-perf</code> weekly and can also be triggered manually.</p>
 <ul>
-<li>Scheduled failures automatically open (or update) an issue titled <code>Weekly performance regression detected</code>.</li>
-<li>Release workflow still enforces full <code>verify-perf</code> as a hard gate.</li>
+<li>Scheduled failures open or update the <code>Weekly performance regression detected</code> issue.</li>
+<li>Release workflow enforces full <code>verify-perf</code> as a blocking gate.</li>
 </ul>
 
 
@@ -4510,6 +4664,9 @@ Use <code>make docs-serve</code> locally for interactive preview.</p>
 
 
 
+
+  
+  
 
 
 
