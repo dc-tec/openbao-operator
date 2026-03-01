@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+        <meta name="description" content="Distribution strategy for OpenBao Operator.">
       
       
       
@@ -73,7 +73,7 @@
   <meta property="og:type" content="website">
   <meta property="og:title" content="Distribution">
   
-    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+    <meta property="og:description" content="Distribution strategy for OpenBao Operator.">
   
   <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/contributing/distribution/">
   
@@ -83,7 +83,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Distribution">
   
-    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+    <meta name="twitter:description" content="Distribution strategy for OpenBao Operator.">
   
   
     <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
@@ -110,7 +110,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#description-distribution-strategy-for-openbao-operator-artifact-hub-now-helm-oci-olmoperatorhub-later-after-maturity-gates" class="md-skip">
+        <a href="#distribution" class="md-skip">
           Skip to content
         </a>
       
@@ -3807,6 +3807,8 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
+        
+      
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
@@ -3849,6 +3851,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -3857,29 +3861,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#description-distribution-strategy-for-openbao-operator-artifact-hub-now-helm-oci-olmoperatorhub-later-after-maturity-gates" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        description: Distribution strategy for OpenBao Operator: Artifact Hub now (Helm OCI), OLM/OperatorHub later after maturity gates.
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#distribution" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Distribution
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Distribution">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
   <a href="#current-strategy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3889,8 +3870,8 @@
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
+      
+        <li class="md-nav__item">
   <a href="#artifact-hub-helm-oci" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3950,8 +3931,8 @@
     </nav>
   
 </li>
-        
-          <li class="md-nav__item">
+      
+        <li class="md-nav__item">
   <a href="#references" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3959,11 +3940,6 @@
       
     </span>
   </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -4145,6 +4121,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -4153,29 +4131,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#description-distribution-strategy-for-openbao-operator-artifact-hub-now-helm-oci-olmoperatorhub-later-after-maturity-gates" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        description: Distribution strategy for OpenBao Operator: Artifact Hub now (Helm OCI), OLM/OperatorHub later after maturity gates.
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#distribution" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Distribution
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Distribution">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
   <a href="#current-strategy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4185,8 +4140,8 @@
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
+      
+        <li class="md-nav__item">
   <a href="#artifact-hub-helm-oci" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4246,8 +4201,8 @@
     </nav>
   
 </li>
-        
-          <li class="md-nav__item">
+      
+        <li class="md-nav__item">
   <a href="#references" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4255,11 +4210,6 @@
       
     </span>
   </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -4283,8 +4233,6 @@
   
 
 
-<hr />
-<h2 id="description-distribution-strategy-for-openbao-operator-artifact-hub-now-helm-oci-olmoperatorhub-later-after-maturity-gates">description: Distribution strategy for OpenBao Operator: Artifact Hub now (Helm OCI), OLM/OperatorHub later after maturity gates.<a class="headerlink" href="#description-distribution-strategy-for-openbao-operator-artifact-hub-now-helm-oci-olmoperatorhub-later-after-maturity-gates" title="Permanent link">&para;</a></h2>
 <h1 id="distribution">Distribution<a class="headerlink" href="#distribution" title="Permanent link">&para;</a></h1>
 <p>This project uses an Artifact Hub-first distribution strategy and defers public OperatorHub publication until post-<code>0.1.0</code> maturity gates are met.</p>
 <h2 id="current-strategy">Current Strategy<a class="headerlink" href="#current-strategy" title="Permanent link">&para;</a></h2>
@@ -4347,6 +4295,9 @@
 
 
 
+
+  
+  
 
 
 
