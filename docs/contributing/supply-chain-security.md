@@ -1,116 +1,140 @@
 ---
-description: Supply-chain policy for release governance, provenance verification, and signoff evidence for OpenBao Operator stable/prerelease releases.
+description: Current supply-chain security controls for OpenBao Operator, including governance, provenance, reproducibility, and release evidence requirements.
 ---
 
 # Supply Chain Security
 
-!!! note "Policy intent"
-    Use this page as the source of truth for release supply-chain requirements and evidence.
+This page describes the current supply-chain security posture of OpenBao Operator and how controls are implemented in CI and release workflows.
 
-## 1. Compliance Language
+!!! note "How to use this page"
+    Use this document as the implementation reference for maintainers.
+    For exact verification commands and release execution steps, use [Release Management](release-management.md).
 
-!!! success "Approved claim language"
-    Use the following statements in release signoff and public documentation:
+## 1. Current Model
 
-    1. OpenBao Operator release pipeline targets SLSA Build L3 controls for stable/prerelease releases.
-    2. OpenBao Operator implements additional L4-like hardening controls where feasible.
-    3. This is not a formal SLSA Build L4 conformance claim.
+OpenBao Operator uses a hardened "build once, verify, then promote" model:
 
-!!! warning "Formal Build L4 claim"
-    Do not claim formal SLSA Build L4 conformance for this repository.
+1. Build immutable artifacts from a pinned workflow/toolchain.
+2. Verify provenance and reproducibility before publish.
+3. Sign and attest published subjects.
+4. Publish machine-readable verification metadata.
 
-## 2. Scope (Wave 1)
+```mermaid
+graph TD
+    A[Commit or tag] --> B[Build immutable artifacts]
+    B --> C[Verify provenance]
+    B --> D[Verify reproducibility]
+    C --> E[Promote by digest]
+    D --> E
+    E --> F[Sign and attest publish subjects]
+    F --> G[Publish manifests and release assets]
 
-!!! note "Wave 1 boundary"
-    Formal scope is stable/prerelease releases only through `.github/workflows/release.yml`.
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
 
-!!! tip "Channel hardening parity"
-    Edge and nightly channels run the same strict build/provenance/byte-repro gates through `.github/workflows/reusable-channel-hardening.yml`.
-    They are enforced release/build hardening controls, but are not part of the formal stable/prerelease claim boundary.
+    class A,B,E,G process;
+    class C,D,F security;
+```
 
-Artifacts in scope:
+## 2. Channel Coverage
 
-=== "Images"
+| Channel | Workflow Path | Blocking Provenance Gate | Blocking Byte-Repro Gate | Published Output |
+| :--- | :--- | :---: | :---: | :--- |
+| CI (PR/main) | `.github/workflows/ci.yml` | No | No | Validation only |
+| Edge | `.github/workflows/publish-edge.yml` + `reusable-channel-hardening.yml` | Yes | Yes | GitHub Pages edge manifests + checksums + provenance index |
+| Nightly | `.github/workflows/publish-nightly.yml` + `reusable-channel-hardening.yml` | Yes | Yes | GitHub Pages nightly manifests + checksums + provenance index |
+| Stable/prerelease | `.github/workflows/release.yml` | Yes | Yes | GitHub Release assets + OCI images/chart + provenance index |
 
-    - `ghcr.io/<owner>/openbao-operator`
-    - `ghcr.io/<owner>/openbao-init`
-    - `ghcr.io/<owner>/openbao-backup`
-    - `ghcr.io/<owner>/openbao-upgrade`
+!!! tip "Shared hardening component"
+    Edge and nightly use the same reusable hardening workflow as the strict pre-publish gate implementation.
 
-=== "Helm chart"
+## 3. Implementation Map
 
-    - `ghcr.io/<owner>/charts/openbao-operator`
+The controls on this page are implemented by these workflows and scripts:
 
-=== "Release files"
+| Control | Implementation |
+| :--- | :--- |
+| Build and attest images | `.github/workflows/reusable-build.yml` + `actions/attest-build-provenance` |
+| Channel hardening gates (edge/nightly) | `.github/workflows/reusable-channel-hardening.yml` + `hack/ci/verify-image-attestations.sh` + `hack/ci/verify-byte-reproducibility.sh` |
+| Release hardening gates (stable/prerelease) | `.github/workflows/release.yml` + `hack/ci/verify-image-attestations.sh` + `hack/ci/verify-byte-reproducibility.sh` |
+| Chart/checksum attestation verification | `hack/ci/verify-release-artifact-attestations.sh` |
+| Provenance metadata index generation | `hack/ci/generate-provenance-index.sh` + `hack/ci/generate-channel-provenance-index.sh` |
+| SBOM deterministic normalization | `hack/ci/normalize-spdx-json.sh` |
 
-    - `dist/install.yaml`
-    - `dist/crds.yaml`
-    - `dist/checksums.txt`
-    - `dist/checksums.txt.bundle`
-    - `dist/sbom-*.spdx.json`
-    - `dist/provenance-index.json`
+## 4. Governance Controls
 
-## 3. Governance Controls
+Current governance controls:
+
+1. Protected default branch and protected release tag patterns.
+2. CODEOWNERS coverage for release-critical paths (workflows, Dockerfiles, chart, security/release docs).
+3. PR-based change flow with required checks.
+4. GitHub Actions pinned by SHA.
 
 !!! warning "Single-maintainer constraint"
-    Operating mode currently uses one maintainer. Keep approvals at `0` for now, but continue enforcing PR-based changes and required checks.
+    Approval count remains `0` due to current single-maintainer operating mode. Human two-person controls are not currently enforced.
 
-Required repository controls:
+## 5. Build and Dependency Controls
 
-1. Protect `main` with default branch ruleset and required checks for release confidence.
-2. Protect semver release tags (`[0-9]*.[0-9]*.[0-9]*` and prerelease variants) against deletion/retarget.
-3. Enforce CODEOWNERS coverage for workflows, Dockerfiles, chart, and release/security docs.
-4. Keep direct pushes blocked through ruleset policy on protected refs.
-5. Keep GitHub Actions pinned by SHA; move to explicit allowlist as follow-up hardening.
+Deterministic and least-drift controls in use:
 
-## 4. Build/Release Integrity Policy
+1. Go build/test paths in CI, edge/nightly hardening, and release use vendored dependency mode (`-mod=vendor`) where applicable.
+2. Build metadata normalization via `SOURCE_DATE_EPOCH` from commit time.
+3. Docker base images pinned by digest.
+4. Critical build tool versions pinned (Buildx, QEMU, Helm, Cosign).
+5. Release and channel promotion uses digest references, not rebuild-on-promote.
 
-Mandatory controls:
+## 6. Provenance, Signing, and Attestation Controls
 
-1. Build once, promote by digest: tags/channels are promoted from pre-built digests only.
-2. Use reusable build workflow as provenance authority for image attestations.
-3. Require blocking provenance and byte-level reproducibility gates before publish/promote.
-4. Enforce vendored Go dependency resolution (`-mod=vendor`) for CI/release build and test paths.
-5. Require chart digest and `checksums.txt` GitHub attestations with in-pipeline verification.
-6. Publish `provenance-index.json` as machine-readable verification metadata for release/edge/nightly channels.
-7. Pin base images and critical toolchain versions to reduce drift.
-8. Collect reproducibility diagnostics with `.github/workflows/reproducibility.yml` (report-only for stable/prerelease tags).
+Current enforced controls:
 
-## 5. Verification Policy
+1. Image build provenance attestations are emitted by reusable build workflow.
+2. Image provenance is verified with strict identity constraints before publish.
+3. Published images are keylessly signed.
+4. Release/chart/checksum subjects are signed and/or attested before publish completion.
+5. Published metadata includes `provenance-index.json` for verifiable linkage.
 
-Verify all release artifact classes before install/use:
+Verification reference commands:
 
-1. Image signatures and image build attestations.
-2. Chart signature and chart attestation.
-3. `checksums.txt` signature and attestation.
+- [Release artifact verification commands](release-management.md#5-verifying-artifacts)
 
-!!! tip "Verification commands"
-    Use the exact command set from [Release Management](release-management.md#5-verifying-artifacts).
+## 7. Reproducibility Controls
 
-## 6. Release Signoff Evidence
+Blocking reproducibility checks validate that independent rebuild output matches expected bytes before publish.
 
-Capture the following for every stable/prerelease release:
+Checked subjects include:
 
-1. `Release` workflow run URL and run ID.
-2. Successful `verify-provenance` gate evidence.
-3. `gh attestation verify` outputs for one image, chart digest, and `checksums.txt`.
-4. GitHub Release asset list including `provenance-index.json`.
-5. Ruleset export evidence for default-branch and tag rulesets.
+1. Image digests (primary vs independent rebuild).
+2. Rendered manifests (`install.yaml`, `crds.yaml`).
+3. Helm chart package bytes.
+4. Checksums file bytes.
+5. SBOM bytes after deterministic SPDX normalization.
 
-!!! note "Ruleset export commands"
+!!! note "SBOM normalization"
+    Raw SPDX output is not byte-stable by default due runtime metadata fields.
+    The workflow normalizes SPDX JSON before comparison to keep strict gates deterministic.
 
-    ```sh
-    gh api repos/dc-tec/openbao-operator/rulesets > rulesets.json
-    gh api repos/dc-tec/openbao-operator/rulesets/<RULESET_ID> > ruleset-<RULESET_ID>.json
-    ```
+Diagnostic workflow:
 
-## 7. Troubleshooting Matrix
+- `.github/workflows/reproducibility.yml` (report-focused parity checks)
+
+## 8. Release Evidence Requirements
+
+For each stable/prerelease release, collect and retain:
+
+1. Workflow run URL and run ID.
+2. Successful provenance/reproducibility gate evidence.
+3. Verification outputs for image/chart/checksum subjects.
+4. Asset listing that includes `provenance-index.json`.
+5. Ruleset export evidence for branch/tag protections.
+
+## 9. Troubleshooting Quick Reference
 
 | Failure | Likely Cause | Resolution |
 | :--- | :--- | :--- |
-| `gh attestation verify` returns 404 | Attestation not yet indexed | Retry with bounded backoff (workflow already does this). |
-| `signer workflow mismatch` | Wrong `--signer-workflow` identity | Use exact workflow path expected by policy (`reusable-build.yml` for images, `release.yml` for chart/checksums). |
-| `source ref mismatch` | Attestation built from different ref | Verify with exact `refs/tags/<version>` source ref. |
-| `self-hosted runner denied` | Build ran on non-GitHub-hosted runner | Re-run release on GitHub-hosted runner pool only. |
-| `checksums.txt attestation verify failed` | File changed after attestation | Regenerate checksums, re-attest, and ensure no post-attestation mutation. |
-| `cosign verify-blob` fails | Wrong bundle or identity constraint | Download matching `checksums.txt` and bundle from same release; verify against `release.yml@refs/tags/<version>`. |
+| `gh attestation verify` returns 404 | Attestation index delay | Retry with bounded backoff. |
+| Signer workflow mismatch | Wrong workflow identity constraint | Verify with the expected workflow path for that subject. |
+| Source-ref mismatch | Verification uses wrong ref | Verify against the exact source ref used by workflow. |
+| Byte reproducibility failure | Nondeterministic artifact input/output | Inspect gate logs, normalize/canonicalize deterministic fields, and rerun. |
+| `checksums.txt` verify fails | File changed after signing/attestation | Regenerate checksums and re-run sign/attestation flow. |
