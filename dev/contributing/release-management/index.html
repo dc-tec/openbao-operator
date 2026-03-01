@@ -16,7 +16,7 @@
         <link rel="prev" href="../ci/">
       
       
-        <link rel="next" href="../distribution/">
+        <link rel="next" href="../supply-chain-security/">
       
       
         
@@ -3942,10 +3942,49 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../supply-chain-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supply Chain Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -4295,6 +4334,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4321,12 +4371,16 @@
 <p class="admonition-title">Version format</p>
 <p>Git tags and Helm chart versions use SemVer <strong>without</strong> a leading <code>v</code> (for example: <code>0.1.0</code>, <code>0.2.0-rc.1</code>).</p>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Build invariants</p>
+<p>Release/build workflows enforce vendored dependency resolution for Go build/test paths (<code>-mod=vendor</code>) and block publish on provenance or byte-level reproducibility mismatches.</p>
+</div>
 <h2 id="0-channels">0. Channels<a class="headerlink" href="#0-channels" title="Permanent link">&para;</a></h2>
 <p>We publish multiple channels:</p>
 <ul>
 <li><strong>Stable / SemVer</strong>: <code>MAJOR.MINOR.PATCH</code> (and prereleases like <code>X.Y.Z-rc.1</code>, <code>X.Y.Z-beta.1</code>, <code>X.Y.Z-alpha.1</code>). This is the only channel that publishes OCI Helm charts and GitHub Release assets.</li>
-<li><strong>Edge</strong> (main): published automatically after CI passes on <code>main</code> (tags: <code>edge</code>, <code>edge-&lt;shortsha&gt;</code>), with signed manifests published to GitHub Pages under <code>/edge/&lt;shortsha&gt;/</code> and <code>/edge/latest/</code>. No OCI Helm chart publication. Edge is for pre-release validation and is not supported for production.</li>
-<li><strong>Nightly</strong>: published automatically after nightly E2E passes (tags: <code>nightly</code>, <code>nightly-YYYYMMDD</code>, <code>nightly-YYYYMMDD-&lt;shortsha&gt;</code>), and published as mutable manifests on GitHub Pages under <code>/nightly/</code>. No OCI Helm chart publication.</li>
+<li><strong>Edge</strong> (main): published automatically after CI passes on <code>main</code> (tags: <code>edge</code>, <code>edge-&lt;shortsha&gt;</code>), with signed manifests and <code>provenance-index.json</code> published to GitHub Pages under <code>/edge/&lt;shortsha&gt;/</code> and <code>/edge/latest/</code>. No OCI Helm chart publication. Edge is for pre-release validation and is not supported for production.</li>
+<li><strong>Nightly</strong>: published automatically after nightly E2E passes (tags: <code>nightly</code>, <code>nightly-YYYYMMDD</code>, <code>nightly-YYYYMMDD-&lt;shortsha&gt;</code>), and published as mutable manifests plus <code>provenance-index.json</code> on GitHub Pages under <code>/nightly/</code>. No OCI Helm chart publication.</li>
 </ul>
 <h2 id="01-release-please-versioning-release-prs">0.1 Release-Please (Versioning + Release PRs)<a class="headerlink" href="#01-release-please-versioning-release-prs" title="Permanent link">&para;</a></h2>
 <p>We use <strong>release-please</strong> as the source of truth for:</p>
@@ -4365,11 +4419,12 @@ GitHub often excludes self-approvals from required reviews. Prefer a bot account
 <div class="tabbed-block">
 <ul>
 <li>After CI success on <code>main</code>, <code>.github/workflows/publish-edge.yml</code> publishes:<ul>
+<li>Shared strict gate component: <code>.github/workflows/reusable-channel-hardening.yml</code></li>
 <li>Images: <code>:edge</code> and <code>:edge-&lt;shortsha&gt;</code></li>
 <li>Manifests to GitHub Pages:</li>
 <li>immutable per-commit: <code>/edge/&lt;shortsha&gt;/install.yaml</code> and <code>/edge/&lt;shortsha&gt;/crds.yaml</code></li>
 <li>moving pointer: <code>/edge/latest/install.yaml</code> and <code>/edge/latest/crds.yaml</code></li>
-<li>plus checksums, checksums bundle, and metadata in both paths</li>
+<li>plus checksums, checksums bundle, <code>provenance-index.json</code>, and metadata in both paths</li>
 <li>No Helm chart publication (release-only)</li>
 </ul>
 </li>
@@ -4378,8 +4433,9 @@ GitHub often excludes self-approvals from required reviews. Prefer a bot account
 <div class="tabbed-block">
 <ul>
 <li>After nightly E2E success, <code>.github/workflows/publish-nightly.yml</code> publishes:<ul>
+<li>Shared strict gate component: <code>.github/workflows/reusable-channel-hardening.yml</code></li>
 <li>Images: <code>:nightly</code>, <code>:nightly-YYYYMMDD</code>, <code>:nightly-YYYYMMDD-&lt;shortsha&gt;</code></li>
-<li>Manifests to GitHub Pages: <code>/nightly/install.yaml</code>, <code>/nightly/crds.yaml</code> (+ checksums, checksums bundle, metadata)</li>
+<li>Manifests to GitHub Pages: <code>/nightly/install.yaml</code>, <code>/nightly/crds.yaml</code> (+ checksums, checksums bundle, <code>provenance-index.json</code>, metadata)</li>
 <li>No Helm chart publication (release-only)</li>
 </ul>
 </li>
@@ -4399,7 +4455,7 @@ GitHub often excludes self-approvals from required reviews. Prefer a bot account
 <p>If either value differs from the tag, the release fails fast in <code>prepare</code>.
 The workflow does <strong>not</strong> override chart version fields at package time; Helm packaging uses the committed <code>Chart.yaml</code> values.</p>
 </div>
-<p>Our pipeline ensures that the artifacts we test in E2E are the <em>exact</em> same bits that are published (bit-for-bit identical).</p>
+<p>Our pipeline enforces both provenance and byte reproducibility before publish, and ensures that the artifacts we test in E2E are the <em>exact</em> same bits that are published.</p>
 <pre class="mermaid"><code>graph TD
     RP[Merge release-please PR] --&gt; GitTag[Git tag: X.Y.Z]
 
@@ -4516,6 +4572,7 @@ For out-of-band release, prefer cutting a dedicated PR on <code>main</code> and 
 <li><code>sbom-openbao-init.spdx.json</code></li>
 <li><code>sbom-openbao-backup.spdx.json</code></li>
 <li><code>sbom-openbao-upgrade.spdx.json</code></li>
+<li><code>provenance-index.json</code> (image/chart/checksum provenance map)</li>
 </ul>
 </div>
 <div class="tabbed-block">
@@ -4546,6 +4603,8 @@ For out-of-band release, prefer cutting a dedicated PR on <code>main</code> and 
 <h3 id="post-release">Post-Release<a class="headerlink" href="#post-release" title="Permanent link">&para;</a></h3>
 <ul class="task-list">
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Verify</strong>: Check that the GitHub Release exists and assets are valid.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Provenance Evidence</strong>: Record successful image/chart/<code>checksums.txt</code> attestation verification outputs.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Ruleset Evidence</strong>: Record exported ruleset JSON for default-branch + tag protections.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Artifact Hub</strong>: Confirm chart package metadata is visible and install instructions resolve.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Artifact Hub Metadata (OCI)</strong>: If <code>artifacthub-repo.yml</code> changed, push updated metadata artifact (<code>:artifacthub.io</code> tag) to GHCR.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Backlink Pack</strong>: Publish and record:</li>
@@ -4563,49 +4622,113 @@ For out-of-band release, prefer cutting a dedicated PR on <code>main</code> and 
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
 </span></code></pre></div>
 <h2 id="5-verifying-artifacts">5. Verifying Artifacts<a class="headerlink" href="#5-verifying-artifacts" title="Permanent link">&para;</a></h2>
-<p>All artifacts are signed using Sigstore (Keyless).</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="5:4"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><input id="__tabbed_5_3" name="__tabbed_5" type="radio" /><input id="__tabbed_5_4" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m23 12-2.44-2.78.34-3.68-3.61-.82-1.89-3.18L12 3 8.6 1.54 6.71 4.72l-3.61.81.34 3.68L1 12l2.44 2.78-.34 3.69 3.61.82 1.89 3.18L12 21l3.4 1.46 1.89-3.18 3.61-.82-.34-3.68zm-13 5-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9z"/></svg></span> Verify Image Signature</label><label for="__tabbed_5_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3v3l2-1 2 1v-3h3a2 2 0 0 0 2-2V7m-5 8v2l-2-1-2 1v-2l-2-1 2-1v-2l2 1 2-1v2l2 1m-3-6V3.5L17.5 8Z"/></svg></span> Verify Attestation</label><label for="__tabbed_5_3"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7.2 11.2c1.77 0 3.2 1.43 3.2 3.2s-1.43 3.2-3.2 3.2S4 16.17 4 14.4s1.43-3.2 3.2-3.2m7.6 4.8a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2m.4-12A4.8 4.8 0 0 1 20 8.8c0 2.65-2.15 4.8-4.8 4.8a4.8 4.8 0 0 1-4.8-4.8c0-2.65 2.15-4.8 4.8-4.8"/></svg></span> Verify Helm Chart</label><label for="__tabbed_5_4"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 13c-1.4 0-2.8 1.1-2.8 2.5V17c-.6 0-1.2.6-1.2 1.2v3.5c0 .7.6 1.3 1.2 1.3h5.5c.7 0 1.3-.6 1.3-1.2v-3.5c0-.7-.6-1.3-1.2-1.3v-1.5c0-1.4-1.4-2.5-2.8-2.5m0 1.2c.8 0 1.5.5 1.5 1.3V17h-3v-1.5c0-.8.7-1.3 1.5-1.3M6 2c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h6v-3.8c0-1 .4-1.7 1-2.2.1-.1.2-.1.2-.2v-.3c0-2.7 2.4-4.5 4.8-4.5.7 0 1.4.2 2 .4V8l-6-6zm7 1.5L18.5 9H13z"/></svg></span> Verify Release Checksums</label></div>
+<p>Stable/prerelease releases enforce provenance before publish. Verification must include image, chart, and release-checksum subjects.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:5"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><input id="__tabbed_5_3" name="__tabbed_5" type="radio" /><input id="__tabbed_5_4" name="__tabbed_5" type="radio" /><input id="__tabbed_5_5" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m23 12-2.44-2.78.34-3.68-3.61-.82-1.89-3.18L12 3 8.6 1.54 6.71 4.72l-3.61.81.34 3.68L1 12l2.44 2.78-.34 3.69 3.61.82 1.89 3.18L12 21l3.4 1.46 1.89-3.18 3.61-.82-.34-3.68zm-13 5-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9z"/></svg></span> Verify Image Signature</label><label for="__tabbed_5_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3v3l2-1 2 1v-3h3a2 2 0 0 0 2-2V7m-5 8v2l-2-1-2 1v-2l-2-1 2-1v-2l2 1 2-1v2l2 1m-3-6V3.5L17.5 8Z"/></svg></span> Verify Image Attestation</label><label for="__tabbed_5_3"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7.2 11.2c1.77 0 3.2 1.43 3.2 3.2s-1.43 3.2-3.2 3.2S4 16.17 4 14.4s1.43-3.2 3.2-3.2m7.6 4.8a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2m.4-12A4.8 4.8 0 0 1 20 8.8c0 2.65-2.15 4.8-4.8 4.8a4.8 4.8 0 0 1-4.8-4.8c0-2.65 2.15-4.8 4.8-4.8"/></svg></span> Verify Helm Chart Signature + Attestation</label><label for="__tabbed_5_4"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 13c-1.4 0-2.8 1.1-2.8 2.5V17c-.6 0-1.2.6-1.2 1.2v3.5c0 .7.6 1.3 1.2 1.3h5.5c.7 0 1.3-.6 1.3-1.2v-3.5c0-.7-.6-1.3-1.2-1.3v-1.5c0-1.4-1.4-2.5-2.8-2.5m0 1.2c.8 0 1.5.5 1.5 1.3V17h-3v-1.5c0-.8.7-1.3 1.5-1.3M6 2c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h6v-3.8c0-1 .4-1.7 1-2.2.1-.1.2-.1.2-.2v-.3c0-2.7 2.4-4.5 4.8-4.5.7 0 1.4.2 2 .4V8l-6-6zm7 1.5L18.5 9H13z"/></svg></span> Verify Release Checksums Signature + Attestation</label><label for="__tabbed_5_5"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 5h14v2H7zm0 8v-2h14v2zM4 4.5A1.5 1.5 0 0 1 5.5 6 1.5 1.5 0 0 1 4 7.5 1.5 1.5 0 0 1 2.5 6 1.5 1.5 0 0 1 4 4.5m0 6A1.5 1.5 0 0 1 5.5 12 1.5 1.5 0 0 1 4 13.5 1.5 1.5 0 0 1 2.5 12 1.5 1.5 0 0 1 4 10.5M7 19v-2h14v2zm-3-2.5A1.5 1.5 0 0 1 5.5 18 1.5 1.5 0 0 1 4 19.5 1.5 1.5 0 0 1 2.5 18 1.5 1.5 0 0 1 4 16.5"/></svg></span> Verify Provenance Index</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>Using <code>cosign</code> to verify the image was built by our release workflow.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>ghcr.io/dc-tec/openbao-operator:0.1.0
+<p>Verify image signature on a digest-pinned reference:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nv">IMAGE</span><span class="o">=</span><span class="s2">&quot;ghcr.io/dc-tec/openbao-operator@sha256:&lt;digest&gt;&quot;</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">IMAGE</span><span class="si">}</span><span class="s2">&quot;</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>Using GitHub CLI to verify build provenance.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>oci://ghcr.io/dc-tec/openbao-operator:0.1.0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--owner<span class="w"> </span>dc-tec
+<p>Verify image provenance attestation with strict identity constraints:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">IMAGE</span><span class="o">=</span><span class="s2">&quot;ghcr.io/dc-tec/openbao-operator@sha256:&lt;digest&gt;&quot;</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="s2">&quot;oci://</span><span class="si">${</span><span class="nv">IMAGE</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--repo<span class="w"> </span>dc-tec/openbao-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>dc-tec/openbao-operator/.github/workflows/reusable-build.yml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--source-ref<span class="w"> </span>refs/tags/0.1.0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--cert-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>--deny-self-hosted-runners
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>Verify the OCI Helm Chart signature by digest.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Resolve the chart digest (example uses crane)</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>crane<span class="w"> </span>digest<span class="w"> </span>ghcr.io/dc-tec/charts/openbao-operator:0.1.0
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span>ghcr.io/dc-tec/charts/openbao-operator@sha256:...
+<p>Verify both chart signature and provenance attestation:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">CHART</span><span class="o">=</span><span class="s2">&quot;ghcr.io/dc-tec/charts/openbao-operator@sha256:&lt;digest&gt;&quot;</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">CHART</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span><span class="s2">&quot;oci://</span><span class="si">${</span><span class="nv">CHART</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>--repo<span class="w"> </span>dc-tec/openbao-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>dc-tec/openbao-operator/.github/workflows/release.yml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span>--source-ref<span class="w"> </span>refs/tags/0.1.0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">  </span>--cert-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>--deny-self-hosted-runners
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>Verify <code>checksums.txt</code> using the Sigstore bundle uploaded to the GitHub Release.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--bundle<span class="w"> </span>dist/checksums.txt.bundle<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>dist/checksums.txt
+<p>Verify <code>checksums.txt</code> with both Sigstore bundle and GitHub attestation:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Download checksums artifacts for the release into the current directory first.</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--bundle<span class="w"> </span>checksums.txt.bundle<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>checksums.txt
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span>checksums.txt<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span>--repo<span class="w"> </span>dc-tec/openbao-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>dc-tec/openbao-operator/.github/workflows/release.yml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span>--source-ref<span class="w"> </span>refs/tags/0.1.0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span>--cert-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span>--deny-self-hosted-runners
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<p>Inspect release metadata and subjects:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>jq<span class="w"> </span><span class="s1">&#39;.release, .identity_constraints, .images, .chart, .release_artifacts.checksums_txt&#39;</span><span class="w"> </span>provenance-index.json
 </span></code></pre></div>
 </div>
 </div>
 </div>
+<h2 id="6-troubleshooting">6. Troubleshooting<a class="headerlink" href="#6-troubleshooting" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Failure</th>
+<th style="text-align: left;">Cause</th>
+<th style="text-align: left;">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>gh attestation verify</code> 404</td>
+<td style="text-align: left;">Propagation delay</td>
+<td style="text-align: left;">Retry after short delay; release pipeline already retries before failing.</td>
+</tr>
+<tr>
+<td style="text-align: left;">Attestation signer mismatch</td>
+<td style="text-align: left;">Wrong workflow identity</td>
+<td style="text-align: left;">Use exact <code>--signer-workflow</code> value for subject type (images: <code>reusable-build.yml</code>; chart/checksums: <code>release.yml</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;">Source ref mismatch</td>
+<td style="text-align: left;">Wrong release ref</td>
+<td style="text-align: left;">Verify against exact <code>refs/tags/&lt;version&gt;</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cosign verify</code> identity mismatch</td>
+<td style="text-align: left;">Wrong certificate identity</td>
+<td style="text-align: left;">Use full identity including workflow path and tag ref.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>checksums.txt</code> verify failure</td>
+<td style="text-align: left;">File/bundle mismatch or mutation</td>
+<td style="text-align: left;">Re-download both files from the same release or regenerate and re-attest in a new release.</td>
+</tr>
+</tbody>
+</table>
 
 
 
