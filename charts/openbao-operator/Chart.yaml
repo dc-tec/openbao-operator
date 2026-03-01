@@ -6,7 +6,7 @@ description: >-
 type: application
 version: 0.1.0-rc.3
 appVersion: 0.1.0-rc.3
-icon: https://openbao.org/img/logo.svg
+icon: https://raw.githubusercontent.com/dc-tec/openbao-operator/main/docs/assets/logo.svg
 home: https://github.com/dc-tec/openbao-operator
 sources:
   - https://github.com/dc-tec/openbao-operator
