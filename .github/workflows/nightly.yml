@@ -76,7 +76,7 @@ jobs:
 
       - name: Report operator-vs-upstream config schema drift (informational)
         env:
-          GOFLAGS: -mod=vendor
+          GOFLAGS: -mod=mod
         run: go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.5.0
 
   build-artifacts:
