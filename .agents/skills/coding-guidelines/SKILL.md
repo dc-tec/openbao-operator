@@ -42,6 +42,13 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
+## 3.1 Vendored Go Dependencies
+
+When editing Go dependencies:
+- Treat `vendor/` as a required generated artifact.
+- If `go.mod`/`go.sum` changes, run `make verify-vendor` and commit resulting `vendor/` updates.
+- Do not leave dependency-only changes without synchronized vendored content.
+
 ## 4. Goal-Driven Execution
 
 **Define success criteria. Loop until verified.**
