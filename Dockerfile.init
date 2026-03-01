@@ -15,15 +15,18 @@ COPY . .
 
 # Build the init config binary
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-  go build -a -mod=vendor -trimpath -buildvcs=false -ldflags="-buildid=" -o bao-init-config ./cmd/bao-config-init
+  go build -a -mod=vendor -trimpath -buildvcs=false -ldflags="-buildid=" -o bao-init-config ./cmd/bao-config-init && \
+  touch -h -d "@${SOURCE_DATE_EPOCH}" bao-init-config
 
 # Build the wrapper binary
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-  go build -a -mod=vendor -trimpath -buildvcs=false -ldflags="-buildid=" -o bao-wrapper ./cmd/bao-wrapper
+  go build -a -mod=vendor -trimpath -buildvcs=false -ldflags="-buildid=" -o bao-wrapper ./cmd/bao-wrapper && \
+  touch -h -d "@${SOURCE_DATE_EPOCH}" bao-wrapper
 
 # Build the probe binary
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-  go build -a -mod=vendor -trimpath -buildvcs=false -ldflags="-buildid=" -o bao-probe ./cmd/bao-probe
+  go build -a -mod=vendor -trimpath -buildvcs=false -ldflags="-buildid=" -o bao-probe ./cmd/bao-probe && \
+  touch -h -d "@${SOURCE_DATE_EPOCH}" bao-probe
 
 FROM gcr.io/distroless/static:nonroot@sha256:f512d819b8f109f2375e8b51d8cfd8aafe81034bc3e319740128b7d7f70d5036
 
