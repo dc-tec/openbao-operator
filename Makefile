@@ -107,7 +107,7 @@ fmt: ## Run go fmt against code.
 
 .PHONY: verify-fmt
 verify-fmt: ## Verify all Go code is gofmt'd (does not modify files).
-	@unformatted="$$(gofmt -l .)"; \
+	@unformatted="$$(find . -path ./vendor -prune -o -name '*.go' -print0 | xargs -0 gofmt -l)"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "The following files are not gofmt'd:"; \
 		echo "$$unformatted"; \
@@ -828,7 +828,7 @@ set -e; \
 package=$(2)@$(3) ;\
 echo "Downloading $${package}" ;\
 rm -f "$(1)" ;\
-GOBIN="$(LOCALBIN)" go install $${package} ;\
+GOFLAGS="-mod=mod" GOBIN="$(LOCALBIN)" go install $${package} ;\
 mv "$(LOCALBIN)/$$(basename "$(1)")" "$(1)-$(3)" ;\
 } ;\
 ln -sf "$$(realpath "$(1)-$(3)")" "$(1)"
