@@ -54,7 +54,7 @@ jobs:
 
       - name: Capture baseline and regenerate thresholds
         env:
-          GOFLAGS: -mod=readonly
+          GOFLAGS: -mod=vendor
           PERF_RUNS: ${{ inputs.runs }}
           PERF_NODE_IMAGE: ${{ inputs.node_image }}
           PERF_SCENARIO_TIMEOUT: ${{ inputs.scenario_timeout }}
@@ -64,7 +64,7 @@ jobs:
 
       - name: Verify captured thresholds
         env:
-          GOFLAGS: -mod=readonly
+          GOFLAGS: -mod=vendor
           PERF_NODE_IMAGE: ${{ inputs.node_image }}
           PERF_SCENARIO_TIMEOUT: ${{ inputs.scenario_timeout }}
           PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml

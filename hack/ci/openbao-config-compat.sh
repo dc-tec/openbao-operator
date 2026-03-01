@@ -25,6 +25,8 @@ if [ ${#FILES[@]} -eq 0 ]; then
 fi
 
 REPORT_SCHEMA_DRIFT="${REPORT_SCHEMA_DRIFT:-false}"
+TMPMODULE_GOFLAGS="${TMPMODULE_GOFLAGS:--mod=mod}"
+REPO_GOFLAGS="${REPO_GOFLAGS:--mod=vendor}"
 schema_tmp=""
 if [ "${REPORT_SCHEMA_DRIFT}" = "true" ]; then
   schema_tmp="$(mktemp -d)"
@@ -84,15 +86,15 @@ GO
   (
     cd "${tmpdir}"
     go mod init tmp.example/openbao-config-compat >/dev/null 2>&1
-    go get "github.com/openbao/openbao@${sha}" >/dev/null 2>&1
-    go mod tidy >/dev/null 2>&1
-    go run . "${FILES[@]}"
+    GOFLAGS="${TMPMODULE_GOFLAGS}" go get "github.com/openbao/openbao@${sha}" >/dev/null 2>&1
+    GOFLAGS="${TMPMODULE_GOFLAGS}" go mod tidy >/dev/null 2>&1
+    GOFLAGS="${TMPMODULE_GOFLAGS}" go run . "${FILES[@]}"
 
     if [ "${REPORT_SCHEMA_DRIFT}" = "true" ]; then
-      moddir="$(go list -m -f '{{.Dir}}' github.com/openbao/openbao)"
+      moddir="$(GOFLAGS="${TMPMODULE_GOFLAGS}" go list -m -f '{{.Dir}}' github.com/openbao/openbao)"
       (
         cd "${ROOT_DIR}"
-        go run ./hack/tools/openbao_config_schema -file "${moddir}/command/server/config.go"
+        GOFLAGS="${REPO_GOFLAGS}" go run ./hack/tools/openbao_config_schema -file "${moddir}/command/server/config.go"
       ) > "${schema_tmp}/keys-${version}.txt"
     fi
   )

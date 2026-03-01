@@ -7,9 +7,7 @@ on:
     types: [completed]
 
 permissions:
-  contents: write
-  packages: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: publish-edge-${{ github.event.workflow_run.head_branch }}
@@ -21,16 +19,21 @@ jobs:
     runs-on: &runner ubuntu-24.04
     if: >-
       ${{
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' &&
-        github.event.workflow_run.head_branch == 'main' &&
-        !github.event.workflow_run.repository.fork
-      }}
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          !github.event.workflow_run.repository.fork
+        }}
+    permissions:
+      contents: read
     outputs:
       sha: ${{ steps.vars.outputs.sha }}
       short_sha: ${{ steps.vars.outputs.short_sha }}
       version: ${{ steps.vars.outputs.version }}
+      chart_version: ${{ steps.vars.outputs.chart_version }}
       build_tag: ${{ steps.vars.outputs.build_tag }}
+      repro_build_tag: ${{ steps.vars.outputs.repro_build_tag }}
+      source_date_epoch: ${{ steps.vars.outputs.source_date_epoch }}
       manager_image: ${{ steps.vars.outputs.manager_image }}
       config_init_image: ${{ steps.vars.outputs.config_init_image }}
       backup_executor_image: ${{ steps.vars.outputs.backup_executor_image }}
@@ -49,42 +52,73 @@ jobs:
           sha="$(git rev-parse HEAD)"
           short_sha="$(git rev-parse --short=12 HEAD)"
           build_tag="edge-build-${sha}"
+          repro_build_tag="edge-repro-${sha}"
+          source_date_epoch="$(git show -s --format=%ct HEAD)"
           version="edge-${short_sha}"
+
+          chart_file="charts/openbao-operator/Chart.yaml"
+          chart_version="$(sed -nE 's/^version:[[:space:]]*"?([^"#[:space:]]+)"?[[:space:]]*(#.*)?$/\1/p' "${chart_file}" | head -n1)"
+          if [[ -z "${chart_version}" ]]; then
+            echo "failed to parse chart version from ${chart_file}" >&2
+            exit 1
+          fi
 
           owner="${GITHUB_REPOSITORY_OWNER}"
           echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
           echo "short_sha=${short_sha}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "chart_version=${chart_version}" >> "${GITHUB_OUTPUT}"
           echo "build_tag=${build_tag}" >> "${GITHUB_OUTPUT}"
+          echo "repro_build_tag=${repro_build_tag}" >> "${GITHUB_OUTPUT}"
+          echo "source_date_epoch=${source_date_epoch}" >> "${GITHUB_OUTPUT}"
           echo "manager_image=ghcr.io/${owner}/openbao-operator" >> "${GITHUB_OUTPUT}"
           echo "config_init_image=ghcr.io/${owner}/openbao-init" >> "${GITHUB_OUTPUT}"
           echo "backup_executor_image=ghcr.io/${owner}/openbao-backup" >> "${GITHUB_OUTPUT}"
           echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade" >> "${GITHUB_OUTPUT}"
 
-  build:
-    name: Build Images
+  hardening:
+    name: Build + Verify Channel Integrity
     needs: prepare
-    uses: ./.github/workflows/reusable-build.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/reusable-channel-hardening.yml
     with:
-      build_tag: ${{ needs.prepare.outputs.build_tag }}
       ref: ${{ github.event.workflow_run.head_sha }}
+      source_ref: refs/heads/main
+      version: ${{ needs.prepare.outputs.version }}
+      chart_version: ${{ needs.prepare.outputs.chart_version }}
+      build_tag: ${{ needs.prepare.outputs.build_tag }}
+      repro_build_tag: ${{ needs.prepare.outputs.repro_build_tag }}
+      source_date_epoch: ${{ needs.prepare.outputs.source_date_epoch }}
+      manager_image: ${{ needs.prepare.outputs.manager_image }}
+      config_init_image: ${{ needs.prepare.outputs.config_init_image }}
+      backup_executor_image: ${{ needs.prepare.outputs.backup_executor_image }}
+      upgrade_executor_image: ${{ needs.prepare.outputs.upgrade_executor_image }}
+      byte_artifact_name: edge-byte-verified-assets
     secrets: inherit
 
   promote:
     name: Promote Edge Tags
-    needs: [prepare, build]
     runs-on: *runner
+    needs: [prepare, hardening]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
-      BUILD_TAG: ${{ needs.prepare.outputs.build_tag }}
       MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
       CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
       BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
       UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
-      MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
-      CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
-      BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
-      UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
+      MANAGER_DIGEST: ${{ needs.hardening.outputs.manager_digest }}
+      CONFIG_INIT_DIGEST: ${{ needs.hardening.outputs.config_init_digest }}
+      BACKUP_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.backup_executor_digest }}
+      UPGRADE_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.upgrade_executor_digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -92,11 +126,11 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
-      - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+      - name: Download byte-verified edge assets
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          go-version-file: go.mod
-          check-latest: true
+          name: edge-byte-verified-assets
+          path: dist
 
       - name: Login to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
@@ -107,6 +141,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        with:
+          version: v0.31.1
 
       - name: Promote tags (no rebuild)
         run: |
@@ -164,33 +200,73 @@ jobs:
           verify_signed "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           verify_signed "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
-      - name: Generate digest-pinned installer manifest
-        env:
-          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          set -euo pipefail
-          make build-installer \
-            IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" \
-            OPERATOR_VERSION="${VERSION}"
+      - name: Attest edge checksums provenance (GitHub)
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: dist/checksums.txt
 
-      - name: Generate CRDs manifest
+      - name: Sign edge checksums (keyless, bundle format)
         run: |
           set -euo pipefail
-          make build-crds
-
-      - name: Generate and sign manifest checksums (bundle)
-        run: |
-          set -euo pipefail
-          sha256sum dist/install.yaml dist/crds.yaml > dist/checksums.txt
           cosign sign-blob \
             --yes \
             --new-bundle-format=true \
             --bundle dist/checksums.txt.bundle \
             dist/checksums.txt
 
-      - name: Upload manifests as artifacts
+      - name: Verify edge checksums signature (bundle format)
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cosign verify-blob \
+            --new-bundle-format=true \
+            --bundle dist/checksums.txt.bundle \
+            --certificate-identity "https://github.com/${REPO}/.github/workflows/publish-edge.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            dist/checksums.txt >/dev/null
+
+      - name: Verify edge checksums attestation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SOURCE_REF: refs/heads/main
+          OWNER: ${{ github.repository_owner }}
+          SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/publish-edge.yml
+          VERIFY_CHART: "false"
+        run: bash hack/ci/verify-release-artifact-attestations.sh
+
+      - name: Setup Go (for provenance tooling)
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Generate edge provenance index
+        env:
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          CHANNEL: edge
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          SOURCE_REF: refs/heads/main
+          SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
+          CHECKSUMS_SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/publish-edge.yml
+          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
+          MANAGER_DIGEST: ${{ needs.hardening.outputs.manager_digest }}
+          CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
+          CONFIG_INIT_DIGEST: ${{ needs.hardening.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.upgrade_executor_digest }}
+        run: bash hack/ci/generate-channel-provenance-index.sh
+
+      - name: Upload edge publish artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: manifests-edge
@@ -199,15 +275,18 @@ jobs:
             dist/crds.yaml
             dist/checksums.txt
             dist/checksums.txt.bundle
+            dist/provenance-index.json
           retention-days: 5
 
   publish-pages:
     name: Publish Edge Manifests (GitHub Pages)
     runs-on: *runner
-    needs: [prepare, build, promote]
+    needs: [prepare, hardening, promote]
     concurrency:
       group: gh-pages
       cancel-in-progress: false
+    permissions:
+      contents: write
     env:
       SHA: ${{ needs.prepare.outputs.sha }}
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
@@ -216,10 +295,10 @@ jobs:
       CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
       BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
       UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
-      MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
-      CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
-      BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
-      UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
+      MANAGER_DIGEST: ${{ needs.hardening.outputs.manager_digest }}
+      CONFIG_INIT_DIGEST: ${{ needs.hardening.outputs.config_init_digest }}
+      BACKUP_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.backup_executor_digest }}
+      UPGRADE_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.upgrade_executor_digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -264,6 +343,7 @@ jobs:
                   "crds_yaml": "crds.yaml",
                   "checksums_txt": "checksums.txt",
                   "checksums_bundle": "checksums.txt.bundle",
+                  "provenance_index": "provenance-index.json",
               },
               "images": {
                   "manager": {"ref": os.environ["MANAGER_IMAGE"], "digest": os.environ["MANAGER_DIGEST"]},
@@ -281,6 +361,7 @@ jobs:
             cp dist/crds.yaml "${dest}/crds.yaml"
             cp dist/checksums.txt "${dest}/checksums.txt"
             cp dist/checksums.txt.bundle "${dest}/checksums.txt.bundle"
+            cp dist/provenance-index.json "${dest}/provenance-index.json"
             cp dist/metadata.json "${dest}/metadata.json"
           done
 
@@ -305,6 +386,7 @@ jobs:
                 <li><a href="latest/crds.yaml">latest/crds.yaml</a></li>
                 <li><a href="latest/checksums.txt">latest/checksums.txt</a></li>
                 <li><a href="latest/checksums.txt.bundle">latest/checksums.txt.bundle</a></li>
+                <li><a href="latest/provenance-index.json">latest/provenance-index.json</a></li>
                 <li><a href="latest/metadata.json">latest/metadata.json</a></li>
               </ul>
               <p>To install: <code>kubectl apply -f latest/install.yaml</code></p>
@@ -318,11 +400,13 @@ jobs:
             "edge/${SHORT_SHA}/crds.yaml" \
             "edge/${SHORT_SHA}/checksums.txt" \
             "edge/${SHORT_SHA}/checksums.txt.bundle" \
+            "edge/${SHORT_SHA}/provenance-index.json" \
             "edge/${SHORT_SHA}/metadata.json" \
             "edge/latest/install.yaml" \
             "edge/latest/crds.yaml" \
             "edge/latest/checksums.txt" \
             "edge/latest/checksums.txt.bundle" \
+            "edge/latest/provenance-index.json" \
             "edge/latest/metadata.json" \
             "edge/index.html"
 

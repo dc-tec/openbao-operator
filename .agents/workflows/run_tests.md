@@ -16,6 +16,7 @@ make test
 Run the CI-style non-E2E test lane:
 
 ```bash
+make verify-vendor
 make test-ci
 ```
 

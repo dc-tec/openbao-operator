@@ -8,21 +8,25 @@
 # Example build (from repo root):
 #   docker build -f Dockerfile.backup -t openbao-backup:dev .
 
-FROM --platform=$BUILDPLATFORM golang:1.25.7 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25.7@sha256:931c889bca758a82fcbfcb1b6ed6ca1de30783e9e52e6093ad50060735cb99be AS builder
 ARG TARGETOS
 ARG TARGETARCH
+ARG SOURCE_DATE_EPOCH=0
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
 
 WORKDIR /workspace
 
 COPY go.mod go.mod
 COPY go.sum go.sum
-RUN go mod download
+COPY vendor/ vendor/
+RUN test -f vendor/modules.txt
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o bao-backup ./cmd/bao-backup
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+  go build -a -mod=vendor -trimpath -buildvcs=false -ldflags="-buildid=" -o bao-backup ./cmd/bao-backup
 
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot@sha256:f512d819b8f109f2375e8b51d8cfd8aafe81034bc3e319740128b7d7f70d5036
 
 # The backup executor binary is designed to run as a non-root user. We align the
 # container user and group IDs with the IDs used by the operator-managed

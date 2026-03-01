@@ -8,6 +8,7 @@ description: Generated artifacts workflows (CRDs/Helm/RBAC/golden files)
 
 This repo has multiple generated outputs that must stay in sync with their sources.
 See `docs/contributing/standards/generated-artifacts.md` for the canonical guide.
+This includes the committed Go `vendor/` tree.
 
 ## Rules of Thumb
 
@@ -19,6 +20,7 @@ See `docs/contributing/standards/generated-artifacts.md` for the canonical guide
 
 ```sh
 make verify-generated   # CI-equivalent check, no file modifications expected
+make verify-vendor      # vendor/ matches go.mod and go.sum
 make manifests generate # CRDs + deepcopy (controller-gen)
 make helm-sync          # charts/openbao-operator (CRDs + install.yaml.tpl)
 make test-update-golden # internal/config/testdata golden HCL
@@ -27,6 +29,7 @@ make test-update-golden # internal/config/testdata golden HCL
 ## Heuristics (When to Run What)
 
 - Touching `api/` or `config/crd/`: run `make manifests generate` (and usually `make helm-sync`).
+- Touching `go.mod` or `go.sum`: run `make verify-vendor` (or `go mod vendor`) and commit `vendor/` updates.
 - Touching `dist/install.yaml` or `charts/openbao-operator/`: run `make helm-sync`.
 - Touching `internal/provisioner/rbac.go` or `hack/gen-rbac/`: run `make rbac-sync`.
 - Touching `internal/config/*`: consider `make test-update-golden`.

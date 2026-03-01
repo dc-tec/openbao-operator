@@ -5,13 +5,16 @@ We follow a strict "Build Once, Promote Everywhere" philosophy. Releases are aut
 !!! note "Version format"
     Git tags and Helm chart versions use SemVer **without** a leading `v` (for example: `0.1.0`, `0.2.0-rc.1`).
 
+!!! note "Build invariants"
+    Release/build workflows enforce vendored dependency resolution for Go build/test paths (`-mod=vendor`) and block publish on provenance or byte-level reproducibility mismatches.
+
 ## 0. Channels
 
 We publish multiple channels:
 
 - **Stable / SemVer**: `MAJOR.MINOR.PATCH` (and prereleases like `X.Y.Z-rc.1`, `X.Y.Z-beta.1`, `X.Y.Z-alpha.1`). This is the only channel that publishes OCI Helm charts and GitHub Release assets.
-- **Edge** (main): published automatically after CI passes on `main` (tags: `edge`, `edge-<shortsha>`), with signed manifests published to GitHub Pages under `/edge/<shortsha>/` and `/edge/latest/`. No OCI Helm chart publication. Edge is for pre-release validation and is not supported for production.
-- **Nightly**: published automatically after nightly E2E passes (tags: `nightly`, `nightly-YYYYMMDD`, `nightly-YYYYMMDD-<shortsha>`), and published as mutable manifests on GitHub Pages under `/nightly/`. No OCI Helm chart publication.
+- **Edge** (main): published automatically after CI passes on `main` (tags: `edge`, `edge-<shortsha>`), with signed manifests and `provenance-index.json` published to GitHub Pages under `/edge/<shortsha>/` and `/edge/latest/`. No OCI Helm chart publication. Edge is for pre-release validation and is not supported for production.
+- **Nightly**: published automatically after nightly E2E passes (tags: `nightly`, `nightly-YYYYMMDD`, `nightly-YYYYMMDD-<shortsha>`), and published as mutable manifests plus `provenance-index.json` on GitHub Pages under `/nightly/`. No OCI Helm chart publication.
 
 ## 0.1 Release-Please (Versioning + Release PRs)
 
@@ -48,18 +51,20 @@ We use **release-please** as the source of truth for:
 === "Edge (main)"
 
     - After CI success on `main`, `.github/workflows/publish-edge.yml` publishes:
+        - Shared strict gate component: `.github/workflows/reusable-channel-hardening.yml`
         - Images: `:edge` and `:edge-<shortsha>`
         - Manifests to GitHub Pages:
           - immutable per-commit: `/edge/<shortsha>/install.yaml` and `/edge/<shortsha>/crds.yaml`
           - moving pointer: `/edge/latest/install.yaml` and `/edge/latest/crds.yaml`
-          - plus checksums, checksums bundle, and metadata in both paths
+          - plus checksums, checksums bundle, `provenance-index.json`, and metadata in both paths
         - No Helm chart publication (release-only)
 
 === "Nightly"
 
     - After nightly E2E success, `.github/workflows/publish-nightly.yml` publishes:
+        - Shared strict gate component: `.github/workflows/reusable-channel-hardening.yml`
         - Images: `:nightly`, `:nightly-YYYYMMDD`, `:nightly-YYYYMMDD-<shortsha>`
-        - Manifests to GitHub Pages: `/nightly/install.yaml`, `/nightly/crds.yaml` (+ checksums, checksums bundle, metadata)
+        - Manifests to GitHub Pages: `/nightly/install.yaml`, `/nightly/crds.yaml` (+ checksums, checksums bundle, `provenance-index.json`, metadata)
         - No Helm chart publication (release-only)
 
 ## 1. Stable/Prerelease Release Flow
@@ -75,7 +80,7 @@ We use **release-please** as the source of truth for:
     If either value differs from the tag, the release fails fast in `prepare`.
     The workflow does **not** override chart version fields at package time; Helm packaging uses the committed `Chart.yaml` values.
 
-Our pipeline ensures that the artifacts we test in E2E are the *exact* same bits that are published (bit-for-bit identical).
+Our pipeline enforces both provenance and byte reproducibility before publish, and ensures that the artifacts we test in E2E are the *exact* same bits that are published.
 
 ```mermaid
 graph TD
@@ -190,6 +195,7 @@ The stable/prerelease release produces the following artifacts:
     - `sbom-openbao-init.spdx.json`
     - `sbom-openbao-backup.spdx.json`
     - `sbom-openbao-upgrade.spdx.json`
+    - `provenance-index.json` (image/chart/checksum provenance map)
 
 === "Container images"
 
@@ -217,6 +223,8 @@ For Release Managers.
 ### Post-Release
 
 - [ ] **Verify**: Check that the GitHub Release exists and assets are valid.
+- [ ] **Provenance Evidence**: Record successful image/chart/`checksums.txt` attestation verification outputs.
+- [ ] **Ruleset Evidence**: Record exported ruleset JSON for default-branch + tag protections.
 - [ ] **Artifact Hub**: Confirm chart package metadata is visible and install instructions resolve.
 - [ ] **Artifact Hub Metadata (OCI)**: If `artifacthub-repo.yml` changed, push updated metadata artifact (`:artifacthub.io` tag) to GHCR.
 - [ ] **Backlink Pack**: Publish and record:
@@ -239,50 +247,89 @@ oras push \
 
 ## 5. Verifying Artifacts
 
-All artifacts are signed using Sigstore (Keyless).
+Stable/prerelease releases enforce provenance before publish. Verification must include image, chart, and release-checksum subjects.
 
 === ":material-check-decagram: Verify Image Signature"
-    Using `cosign` to verify the image was built by our release workflow.
+    Verify image signature on a digest-pinned reference:
 
     ```sh
+    IMAGE="ghcr.io/dc-tec/openbao-operator@sha256:<digest>"
     cosign verify \
       --new-bundle-format=true \
-      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      ghcr.io/dc-tec/openbao-operator:0.1.0
+      "${IMAGE}"
     ```
 
-=== ":material-file-certificate: Verify Attestation"
-    Using GitHub CLI to verify build provenance.
+=== ":material-file-certificate: Verify Image Attestation"
+    Verify image provenance attestation with strict identity constraints:
 
     ```sh
+    IMAGE="ghcr.io/dc-tec/openbao-operator@sha256:<digest>"
     gh attestation verify \
-      oci://ghcr.io/dc-tec/openbao-operator:0.1.0 \
-      --owner dc-tec
+      "oci://${IMAGE}" \
+      --repo dc-tec/openbao-operator \
+      --signer-workflow dc-tec/openbao-operator/.github/workflows/reusable-build.yml \
+      --source-ref refs/tags/0.1.0 \
+      --cert-oidc-issuer https://token.actions.githubusercontent.com \
+      --deny-self-hosted-runners
     ```
 
-=== ":material-chart-bubble: Verify Helm Chart"
-    Verify the OCI Helm Chart signature by digest.
+=== ":material-chart-bubble: Verify Helm Chart Signature + Attestation"
+    Verify both chart signature and provenance attestation:
 
     ```sh
-    # Resolve the chart digest (example uses crane)
-    crane digest ghcr.io/dc-tec/charts/openbao-operator:0.1.0
+    CHART="ghcr.io/dc-tec/charts/openbao-operator@sha256:<digest>"
 
     cosign verify \
       --new-bundle-format=true \
-      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      ghcr.io/dc-tec/charts/openbao-operator@sha256:...
+      "${CHART}"
+
+    gh attestation verify \
+      "oci://${CHART}" \
+      --repo dc-tec/openbao-operator \
+      --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
+      --source-ref refs/tags/0.1.0 \
+      --cert-oidc-issuer https://token.actions.githubusercontent.com \
+      --deny-self-hosted-runners
     ```
 
-=== ":material-file-lock: Verify Release Checksums"
-    Verify `checksums.txt` using the Sigstore bundle uploaded to the GitHub Release.
+=== ":material-file-lock: Verify Release Checksums Signature + Attestation"
+    Verify `checksums.txt` with both Sigstore bundle and GitHub attestation:
 
     ```sh
+    # Download checksums artifacts for the release into the current directory first.
     cosign verify-blob \
       --new-bundle-format=true \
-      --bundle dist/checksums.txt.bundle \
-      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --bundle checksums.txt.bundle \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      dist/checksums.txt
+      checksums.txt
+
+    gh attestation verify \
+      checksums.txt \
+      --repo dc-tec/openbao-operator \
+      --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
+      --source-ref refs/tags/0.1.0 \
+      --cert-oidc-issuer https://token.actions.githubusercontent.com \
+      --deny-self-hosted-runners
     ```
+
+=== ":material-format-list-bulleted: Verify Provenance Index"
+    Inspect release metadata and subjects:
+
+    ```sh
+    jq '.release, .identity_constraints, .images, .chart, .release_artifacts.checksums_txt' provenance-index.json
+    ```
+
+## 6. Troubleshooting
+
+| Failure | Cause | Action |
+| :--- | :--- | :--- |
+| `gh attestation verify` 404 | Propagation delay | Retry after short delay; release pipeline already retries before failing. |
+| Attestation signer mismatch | Wrong workflow identity | Use exact `--signer-workflow` value for subject type (images: `reusable-build.yml`; chart/checksums: `release.yml`). |
+| Source ref mismatch | Wrong release ref | Verify against exact `refs/tags/<version>`. |
+| `cosign verify` identity mismatch | Wrong certificate identity | Use full identity including workflow path and tag ref. |
+| `checksums.txt` verify failure | File/bundle mismatch or mutation | Re-download both files from the same release or regenerate and re-attest in a new release. |

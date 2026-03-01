@@ -1,4 +1,4 @@
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot@sha256:f512d819b8f109f2375e8b51d8cfd8aafe81034bc3e319740128b7d7f70d5036
 
 ARG BIN_DIR=bin/linux_amd64
 

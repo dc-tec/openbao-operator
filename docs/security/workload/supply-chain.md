@@ -176,41 +176,74 @@ The operator project publishes release artifacts with a "build once, promote by 
 
 - Images are built and tested under a `build-<sha>` tag.
 - Stable/prerelease tags (for example `0.1.0`, `0.2.0-rc.1`) are promoted **by digest** (no rebuild).
+- Image attestations are emitted by the reusable build workflow and verified before publish.
 - Images and charts are signed keylessly with Sigstore.
+- Chart digest and `checksums.txt` are attested and verified before GitHub Release publication.
 - SBOMs are generated and checksummed; the checksums file is signed as a blob.
+- `provenance-index.json` is published as a release asset for machine-readable verification metadata.
+- Edge/nightly channels apply the same blocking provenance + byte-repro hardening controls, and publish channel-level `provenance-index.json` files on GitHub Pages.
 
 === ":material-check-decagram: Verify Operator Images"
 
     ```sh
+    IMAGE="ghcr.io/dc-tec/openbao-operator@sha256:<digest>"
+
     cosign verify \
       --new-bundle-format=true \
-      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      ghcr.io/dc-tec/openbao-operator:0.1.0
+      "${IMAGE}"
+
+    gh attestation verify \
+      "oci://${IMAGE}" \
+      --repo dc-tec/openbao-operator \
+      --signer-workflow dc-tec/openbao-operator/.github/workflows/reusable-build.yml \
+      --source-ref refs/tags/0.1.0 \
+      --cert-oidc-issuer https://token.actions.githubusercontent.com \
+      --deny-self-hosted-runners
     ```
 
 === ":material-chart-bubble: Verify Helm Chart (OCI)"
 
     ```sh
-    crane digest ghcr.io/dc-tec/charts/openbao-operator:0.1.0
+    CHART="ghcr.io/dc-tec/charts/openbao-operator@sha256:<digest>"
 
     cosign verify \
       --new-bundle-format=true \
-      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      ghcr.io/dc-tec/charts/openbao-operator@sha256:...
+      "${CHART}"
+
+    gh attestation verify \
+      "oci://${CHART}" \
+      --repo dc-tec/openbao-operator \
+      --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
+      --source-ref refs/tags/0.1.0 \
+      --cert-oidc-issuer https://token.actions.githubusercontent.com \
+      --deny-self-hosted-runners
     ```
 
 === ":material-file-lock: Verify Release Checksums"
 
     ```sh
+    # Download checksums.txt and checksums.txt.bundle from the release first.
     cosign verify-blob \
       --new-bundle-format=true \
       --bundle checksums.txt.bundle \
-      --certificate-identity-regexp "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       checksums.txt
+
+    gh attestation verify \
+      checksums.txt \
+      --repo dc-tec/openbao-operator \
+      --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
+      --source-ref refs/tags/0.1.0 \
+      --cert-oidc-issuer https://token.actions.githubusercontent.com \
+      --deny-self-hosted-runners
     ```
+
+For contributor-facing policy and release evidence requirements, see [Supply Chain Security (Contributing)](../../contributing/supply-chain-security.md).
 
 ## Official OpenBao Documentation
 
