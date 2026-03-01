@@ -43,6 +43,9 @@ UPGRADE_IMG ?= $(REGISTRY)/openbao-upgrade:$(VERSION)
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+# Use vendored dependencies for deterministic/reproducible Go builds.
+GOFLAGS_VENDOR ?= -mod=vendor
+
 .PHONY: all
 all: build
 
@@ -80,7 +83,7 @@ endif
 	@echo "✅ All CI checks passed!"
 
 .PHONY: ci-core
-ci-core: security-scan lint-config lint verify-fmt verify-tidy verify-generated test-ci verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
+ci-core: security-scan lint-config lint verify-fmt verify-tidy verify-vendor verify-generated test-ci verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
 
 .PHONY: pentest-smoke
 pentest-smoke: ## Run "pentest" labeled e2e tests against an existing cluster (requires E2E_OPERATOR_IMAGE).
@@ -113,28 +116,39 @@ verify-fmt: ## Verify all Go code is gofmt'd (does not modify files).
 
 .PHONY: vet
 vet: ## Run go vet against code.
-	go vet ./...
+	GOFLAGS="$(GOFLAGS_VENDOR)" go vet ./...
 
 .PHONY: test
 test: manifests generate fmt vet ## Run unit tests (fast, no envtest).
-	go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+	GOFLAGS="$(GOFLAGS_VENDOR)" go test $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e) -coverprofile cover.out
 
 .PHONY: test-ci
 test-ci: manifests generate vet setup-envtest ## Run unit + integration tests in CI mode (does not modify tracked files).
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -tags=integration -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" GOFLAGS="$(GOFLAGS_VENDOR)" go test $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e) -tags=integration -coverprofile cover.out
 
 .PHONY: test-integration
 test-integration: manifests generate vet setup-envtest ## Run envtest-based integration tests (envtest; requires -tags=integration).
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -tags=integration -count=1 -v
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" GOFLAGS="$(GOFLAGS_VENDOR)" go test $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e) -tags=integration -count=1 -v
 
 .PHONY: verify-tidy
 verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
-	@go mod tidy
+	@GOFLAGS="-mod=mod" go mod tidy
 	@{ \
 		git diff --exit-code -- go.mod go.sum; \
 	} || { \
 		echo "go.mod/go.sum are not tidy. Run 'go mod tidy' and commit the result."; \
 		git --no-pager diff -- go.mod go.sum; \
+		exit 1; \
+	}
+
+.PHONY: verify-vendor
+verify-vendor: ## Verify vendor/ is synchronized with go.mod/go.sum.
+	@GOFLAGS="-mod=mod" go mod vendor
+	@{ \
+		git diff --exit-code -- vendor; \
+	} || { \
+		echo "vendor/ is out of date. Run 'go mod vendor' and commit the result."; \
+		git --no-pager diff -- vendor; \
 		exit 1; \
 	}
 
@@ -158,7 +172,7 @@ report-openbao-config-schema-drift: ## Report upstream OpenBao config schema dri
 
 .PHONY: report-openbao-operator-schema-drift
 report-openbao-operator-schema-drift: ## Report operator-vs-upstream OpenBao config schema drift (non-failing).
-	@go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
 
 .PHONY: report-internal-deps
 report-internal-deps: ## Generate internal runtime dependency graph/report locally (report-only; non-failing).
@@ -178,11 +192,11 @@ report-internal-deps-diff: ## Compare internal dependency report against local b
 
 .PHONY: helm-sync
 helm-sync: manifests ## Sync Helm chart from config/ (CRDs, admission policies).
-	@go run ./hack/helmchart
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/helmchart
 
 .PHONY: verify-helm-values
 verify-helm-values: ## Verify Helm values.yaml and values.schema.json stay in sync with templates.
-	@go run ./hack/helmvalues
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/helmvalues
 
 .PHONY: verify-helm
 verify-helm: helm-sync verify-helm-values ## Verify Helm chart is up-to-date (does not modify tracked files).
