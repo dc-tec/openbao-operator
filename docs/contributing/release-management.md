@@ -5,13 +5,16 @@ We follow a strict "Build Once, Promote Everywhere" philosophy. Releases are aut
 !!! note "Version format"
     Git tags and Helm chart versions use SemVer **without** a leading `v` (for example: `0.1.0`, `0.2.0-rc.1`).
 
+!!! note "Build invariants"
+    Release/build workflows enforce vendored dependency resolution for Go build/test paths (`-mod=vendor`) and block publish on provenance or byte-level reproducibility mismatches.
+
 ## 0. Channels
 
 We publish multiple channels:
 
 - **Stable / SemVer**: `MAJOR.MINOR.PATCH` (and prereleases like `X.Y.Z-rc.1`, `X.Y.Z-beta.1`, `X.Y.Z-alpha.1`). This is the only channel that publishes OCI Helm charts and GitHub Release assets.
-- **Edge** (main): published automatically after CI passes on `main` (tags: `edge`, `edge-<shortsha>`), with signed manifests published to GitHub Pages under `/edge/<shortsha>/` and `/edge/latest/`. No OCI Helm chart publication. Edge is for pre-release validation and is not supported for production.
-- **Nightly**: published automatically after nightly E2E passes (tags: `nightly`, `nightly-YYYYMMDD`, `nightly-YYYYMMDD-<shortsha>`), and published as mutable manifests on GitHub Pages under `/nightly/`. No OCI Helm chart publication.
+- **Edge** (main): published automatically after CI passes on `main` (tags: `edge`, `edge-<shortsha>`), with signed manifests and `provenance-index.json` published to GitHub Pages under `/edge/<shortsha>/` and `/edge/latest/`. No OCI Helm chart publication. Edge is for pre-release validation and is not supported for production.
+- **Nightly**: published automatically after nightly E2E passes (tags: `nightly`, `nightly-YYYYMMDD`, `nightly-YYYYMMDD-<shortsha>`), and published as mutable manifests plus `provenance-index.json` on GitHub Pages under `/nightly/`. No OCI Helm chart publication.
 
 ## 0.1 Release-Please (Versioning + Release PRs)
 
@@ -48,18 +51,20 @@ We use **release-please** as the source of truth for:
 === "Edge (main)"
 
     - After CI success on `main`, `.github/workflows/publish-edge.yml` publishes:
+        - Shared strict gate component: `.github/workflows/reusable-channel-hardening.yml`
         - Images: `:edge` and `:edge-<shortsha>`
         - Manifests to GitHub Pages:
           - immutable per-commit: `/edge/<shortsha>/install.yaml` and `/edge/<shortsha>/crds.yaml`
           - moving pointer: `/edge/latest/install.yaml` and `/edge/latest/crds.yaml`
-          - plus checksums, checksums bundle, and metadata in both paths
+          - plus checksums, checksums bundle, `provenance-index.json`, and metadata in both paths
         - No Helm chart publication (release-only)
 
 === "Nightly"
 
     - After nightly E2E success, `.github/workflows/publish-nightly.yml` publishes:
+        - Shared strict gate component: `.github/workflows/reusable-channel-hardening.yml`
         - Images: `:nightly`, `:nightly-YYYYMMDD`, `:nightly-YYYYMMDD-<shortsha>`
-        - Manifests to GitHub Pages: `/nightly/install.yaml`, `/nightly/crds.yaml` (+ checksums, checksums bundle, metadata)
+        - Manifests to GitHub Pages: `/nightly/install.yaml`, `/nightly/crds.yaml` (+ checksums, checksums bundle, `provenance-index.json`, metadata)
         - No Helm chart publication (release-only)
 
 ## 1. Stable/Prerelease Release Flow
@@ -75,7 +80,7 @@ We use **release-please** as the source of truth for:
     If either value differs from the tag, the release fails fast in `prepare`.
     The workflow does **not** override chart version fields at package time; Helm packaging uses the committed `Chart.yaml` values.
 
-Our pipeline ensures that the artifacts we test in E2E are the *exact* same bits that are published (bit-for-bit identical).
+Our pipeline enforces both provenance and byte reproducibility before publish, and ensures that the artifacts we test in E2E are the *exact* same bits that are published.
 
 ```mermaid
 graph TD

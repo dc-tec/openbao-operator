@@ -24,6 +24,10 @@ description: Supply-chain policy for release governance, provenance verification
 !!! note "Wave 1 boundary"
     Formal scope is stable/prerelease releases only through `.github/workflows/release.yml`.
 
+!!! tip "Channel hardening parity"
+    Edge and nightly channels run the same strict build/provenance/byte-repro gates through `.github/workflows/reusable-channel-hardening.yml`.
+    They are enforced release/build hardening controls, but are not part of the formal stable/prerelease claim boundary.
+
 Artifacts in scope:
 
 === "Images"
@@ -63,13 +67,14 @@ Required repository controls:
 
 Mandatory controls:
 
-1. Build once, promote by digest: release tags must be promoted from pre-built digests.
+1. Build once, promote by digest: tags/channels are promoted from pre-built digests only.
 2. Use reusable build workflow as provenance authority for image attestations.
-3. Block release publication unless provenance verification succeeds.
-4. Require chart digest and `checksums.txt` GitHub attestations with in-pipeline verification.
-5. Publish `provenance-index.json` as machine-readable verification metadata.
-6. Pin base images and critical toolchain versions to reduce drift.
-7. Collect reproducibility evidence with `.github/workflows/reproducibility.yml` in report-only mode for stable tags.
+3. Require blocking provenance and byte-level reproducibility gates before publish/promote.
+4. Enforce vendored Go dependency resolution (`-mod=vendor`) for CI/release build and test paths.
+5. Require chart digest and `checksums.txt` GitHub attestations with in-pipeline verification.
+6. Publish `provenance-index.json` as machine-readable verification metadata for release/edge/nightly channels.
+7. Pin base images and critical toolchain versions to reduce drift.
+8. Collect reproducibility diagnostics with `.github/workflows/reproducibility.yml` (report-only for stable/prerelease tags).
 
 ## 5. Verification Policy
 

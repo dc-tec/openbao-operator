@@ -88,7 +88,9 @@ Security is not a separate phase; it is injected into every step of the process.
 | :--- | :--- | :--- |
 | **Code** | `golangci-lint` | Static analysis for bugs and style |
 | **Deps** | `dependabot` | Automated dependency updates |
+| **Build Inputs** | Go vendoring (`-mod=vendor`) | Deterministic dependency resolution in CI/release paths |
 | **Verify** | `govulncheck` | Known vulnerability scanning |
 | **Build** | `trivy` | Container filesystem scanning |
 | **Release** | `cosign` | Keyless signing of images, chart, and release checksum subject |
 | **Publish** | `gh attestation` | Enforced provenance verification gates before release publication |
+| **Reproducibility** | `verify-byte-reproducibility` + report workflow | Byte-for-byte checks across images, chart, manifests, checksums, and SBOMs |

@@ -181,6 +181,7 @@ The operator project publishes release artifacts with a "build once, promote by 
 - Chart digest and `checksums.txt` are attested and verified before GitHub Release publication.
 - SBOMs are generated and checksummed; the checksums file is signed as a blob.
 - `provenance-index.json` is published as a release asset for machine-readable verification metadata.
+- Edge/nightly channels apply the same blocking provenance + byte-repro hardening controls, and publish channel-level `provenance-index.json` files on GitHub Pages.
 
 === ":material-check-decagram: Verify Operator Images"
 
