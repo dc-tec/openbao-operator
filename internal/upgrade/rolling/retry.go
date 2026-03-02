@@ -53,13 +53,52 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 		return false, err
 	}
 
-	clearUpgradeFailureForRetry(cluster)
-	if err := m.patchStatusSSA(ctx, cluster); err != nil {
-		return false, fmt.Errorf("failed to clear failed upgrade state for retry: %w", err)
+	// Re-read cluster after metadata patch to avoid stale-resource conflicts
+	// when persisting status updates in a concurrent reconcile environment.
+	latest := &openbaov1alpha1.OpenBaoCluster{}
+	if err := m.client.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, latest); err != nil {
+		return false, fmt.Errorf("failed to refresh cluster before retry status patch: %w", err)
 	}
+	if latest.Status.Upgrade == nil {
+		return false, nil
+	}
+
+	clearUpgradeFailureForRetry(latest)
+	if err := m.patchStatusSSA(ctx, latest); err != nil {
+		// Fall back to merge patch on conflict to tolerate fast-moving status updates.
+		if !apierrors.IsConflict(err) {
+			return false, fmt.Errorf("failed to clear failed upgrade state for retry: %w", err)
+		}
+		if mergeErr := m.patchRetryStatusMerge(ctx, latest); mergeErr != nil {
+			return false, fmt.Errorf("failed to clear failed upgrade state for retry: %w", mergeErr)
+		}
+	}
+	cluster.Status.Upgrade = latest.Status.Upgrade
+	cluster.Annotations = latest.Annotations
 
 	logger.Info("Cleared failed rolling upgrade state and resumed upgrade")
 	return true, nil
+}
+
+func (m *Manager) patchRetryStatusMerge(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	current := &openbaov1alpha1.OpenBaoCluster{}
+	key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
+	if err := m.client.Get(ctx, key, current); err != nil {
+		return fmt.Errorf("failed to refresh cluster for conflict retry: %w", err)
+	}
+	if current.Status.Upgrade == nil {
+		cluster.Status.Upgrade = nil
+		return nil
+	}
+
+	desired := current.DeepCopy()
+	clearUpgradeFailureForRetry(desired)
+	if err := m.client.Status().Patch(ctx, desired, client.MergeFrom(current)); err != nil {
+		return fmt.Errorf("failed to patch status after conflict retry: %w", err)
+	}
+
+	cluster.Status.Upgrade = desired.Status.Upgrade
+	return nil
 }
 
 func (m *Manager) clearRollingRetryAnnotation(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
