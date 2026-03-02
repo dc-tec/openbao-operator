@@ -297,8 +297,7 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 		if err := r.parent.updateStatusForProfileNotSet(ctx, logger, cluster); err != nil {
 			return ctrl.Result{}, err
 		}
-		jitterNanos := time.Now().UnixNano() % int64(constants.RequeueSafetyNetJitter)
-		requeueAfter := constants.RequeueSafetyNetBase + time.Duration(jitterNanos)
+		requeueAfter := safetyNetRequeueAfter(time.Now())
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
@@ -314,7 +313,11 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
-	jitterNanos := time.Now().UnixNano() % int64(constants.RequeueSafetyNetJitter)
-	requeueAfter := constants.RequeueSafetyNetBase + time.Duration(jitterNanos)
+	requeueAfter := safetyNetRequeueAfter(time.Now())
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
+}
+
+func safetyNetRequeueAfter(now time.Time) time.Duration {
+	jitterNanos := now.UnixNano() % int64(constants.RequeueSafetyNetJitter)
+	return constants.RequeueSafetyNetBase + time.Duration(jitterNanos)
 }

@@ -10,8 +10,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/restore"
 )
+
+type restoreReconciler interface {
+	Reconcile(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error)
+}
 
 // ReconcileOpenBaoRestore loads the restore resource and delegates lifecycle
 // orchestration to the restore manager.
@@ -20,7 +23,7 @@ func ReconcileOpenBaoRestore(
 	c client.Client,
 	req ctrl.Request,
 	logger logr.Logger,
-	restoreManager *restore.Manager,
+	restoreManager restoreReconciler,
 ) (ctrl.Result, error) {
 	if restoreManager == nil {
 		return ctrl.Result{}, fmt.Errorf("restore manager is required")

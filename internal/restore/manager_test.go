@@ -2,6 +2,7 @@ package restore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/security"
+	"github.com/dc-tec/openbao-operator/internal/testutil/robustness"
 )
 
 // testLogger returns a no-op logger for testing.
@@ -985,6 +987,48 @@ func TestEnsureFinalizer(t *testing.T) {
 	restore.Finalizers = updated.Finalizers
 	err = mgr.ensureFinalizer(context.Background(), restore)
 	require.NoError(t, err)
+}
+
+func TestEnsureFinalizer_TransientPatchFailureThenSuccess(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+	}
+
+	expected := errors.New("transient patch failure")
+	injector := robustness.NewInjector(map[robustness.Operation]robustness.Rule{
+		robustness.OpPatch: robustness.Once(expected),
+	})
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore).
+		WithInterceptorFuncs(injector.InterceptorFuncs()).
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	firstErr := mgr.ensureFinalizer(context.Background(), restore)
+	require.Error(t, firstErr)
+	assert.Contains(t, firstErr.Error(), "failed to add finalizer")
+	assert.Contains(t, firstErr.Error(), expected.Error())
+
+	freshRestore := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, freshRestore))
+	require.NotContains(t, freshRestore.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
+
+	require.NoError(t, mgr.ensureFinalizer(context.Background(), freshRestore))
+
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Contains(t, updated.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
+
+	require.NoError(t, mgr.ensureFinalizer(context.Background(), updated))
 }
 
 // TestHandleDeletion tests the deletion handling.

@@ -27,6 +27,14 @@ const (
 	exitVerificationError = 6
 )
 
+type restoreSettings struct {
+	key          string
+	bucket       string
+	endpoint     string
+	region       string
+	usePathStyle bool
+}
+
 // findLeader discovers the current Raft leader by querying health endpoints.
 // It retries with exponential backoff to handle cases where pods are still starting up
 // after scale-up operations.
@@ -254,29 +262,11 @@ func runRestore(ctx context.Context) error {
 	fmt.Printf("Configuration loaded - cluster=%s, namespace=%s, replicas=%d\n",
 		cfg.ClusterName, cfg.ClusterNamespace, cfg.ClusterReplicas)
 
-	// Get restore-specific configuration from environment
-	restoreKey := os.Getenv("RESTORE_KEY")
-	if restoreKey == "" {
-		return fmt.Errorf("RESTORE_KEY environment variable is required")
+	settings, err := resolveRestoreSettings(cfg)
+	if err != nil {
+		return err
 	}
-	fmt.Printf("Restore key: %s\n", restoreKey)
-
-	restoreBucket := os.Getenv("RESTORE_BUCKET")
-	if restoreBucket == "" {
-		restoreBucket = cfg.BackupBucket // Fall back to backup bucket if not specified
-	}
-
-	restoreEndpoint := os.Getenv("RESTORE_ENDPOINT")
-	if restoreEndpoint == "" {
-		restoreEndpoint = cfg.BackupEndpoint // Fall back to backup endpoint
-	}
-
-	restoreRegion := os.Getenv("RESTORE_REGION")
-	if restoreRegion == "" {
-		restoreRegion = cfg.BackupRegion
-	}
-
-	usePathStyle := os.Getenv("RESTORE_USE_PATH_STYLE") == "true"
+	fmt.Printf("Restore key: %s\n", settings.key)
 
 	// Find leader with timeout (60s to allow for retries in findLeader)
 	fmt.Println("Finding cluster leader...")
@@ -315,15 +305,15 @@ func runRestore(ctx context.Context) error {
 
 	// Create a modified config for restore with restore-specific values
 	restoreCfg := *cfg
-	restoreCfg.BackupBucket = restoreBucket
-	restoreCfg.BackupEndpoint = restoreEndpoint
-	restoreCfg.BackupRegion = restoreRegion
-	restoreCfg.BackupUsePathStyle = usePathStyle
+	restoreCfg.BackupBucket = settings.bucket
+	restoreCfg.BackupEndpoint = settings.endpoint
+	restoreCfg.BackupRegion = settings.region
+	restoreCfg.BackupUsePathStyle = settings.usePathStyle
 
 	// Re-check emulator mode for GCS after setting restore endpoint
 	// (emulator detection in LoadExecutorConfig only checks BACKUP_ENDPOINT)
 	if restoreCfg.BackupProvider == constants.StorageProviderGCS {
-		endpointLower := strings.ToLower(restoreEndpoint)
+		endpointLower := strings.ToLower(settings.endpoint)
 		if strings.Contains(endpointLower, "fake-gcs-server") || strings.HasPrefix(endpointLower, "http://") {
 			restoreCfg.GCSUseEmulator = true
 		}
@@ -332,10 +322,10 @@ func runRestore(ctx context.Context) error {
 	// Ensure region is set in credentials for S3
 	if restoreCfg.StorageCredentials == nil {
 		restoreCfg.StorageCredentials = &storage.Credentials{
-			Region: restoreRegion,
+			Region: settings.region,
 		}
 	} else if restoreCfg.StorageCredentials.Region == "" {
-		restoreCfg.StorageCredentials.Region = restoreRegion
+		restoreCfg.StorageCredentials.Region = settings.region
 	}
 
 	// Create storage client for downloading using cloud-agnostic API
@@ -350,20 +340,20 @@ func runRestore(ctx context.Context) error {
 	fmt.Println("Storage client created")
 
 	// Verify snapshot exists before downloading
-	fmt.Printf("Verifying snapshot exists: %s\n", restoreKey)
-	objInfo, err := storageClient.Head(ctx, restoreKey)
+	fmt.Printf("Verifying snapshot exists: %s\n", settings.key)
+	objInfo, err := storageClient.Head(ctx, settings.key)
 	if err != nil {
 		return fmt.Errorf("failed to verify snapshot exists: %w", err)
 	}
 	if objInfo == nil {
-		return fmt.Errorf("snapshot not found: %s", restoreKey)
+		return fmt.Errorf("snapshot not found: %s", settings.key)
 	}
 
-	_, _ = fmt.Fprintf(os.Stdout, "Found snapshot: %s (size: %d bytes)\n", restoreKey, objInfo.Size)
+	_, _ = fmt.Fprintf(os.Stdout, "Found snapshot: %s (size: %d bytes)\n", settings.key, objInfo.Size)
 
 	// Download snapshot from storage
 	fmt.Println("Downloading snapshot from storage...")
-	reader, err := storageClient.Download(ctx, restoreKey)
+	reader, err := storageClient.Download(ctx, settings.key)
 	if err != nil {
 		return fmt.Errorf("failed to download snapshot: %w", err)
 	}
@@ -379,7 +369,7 @@ func runRestore(ctx context.Context) error {
 	}
 
 	// Success
-	_, _ = fmt.Fprintf(os.Stdout, "Restore completed successfully from: %s\n", restoreKey)
+	_, _ = fmt.Fprintf(os.Stdout, "Restore completed successfully from: %s\n", settings.key)
 	return nil
 }
 
@@ -407,27 +397,7 @@ func main() {
 			prefix = "bao-restore"
 		}
 		_, _ = fmt.Fprintf(os.Stderr, "%s error: %v\n", prefix, err)
-		// Determine exit code based on error type
-		errStr := err.Error()
-		switch {
-		case strings.Contains(errStr, "failed to load configuration"):
-			os.Exit(exitConfigError)
-		case strings.Contains(errStr, "failed to authenticate"):
-			os.Exit(exitAuthError)
-		case strings.Contains(errStr, "failed to find leader"):
-			os.Exit(exitLeaderDiscovery)
-		case strings.Contains(errStr, "failed to get snapshot") ||
-			strings.Contains(errStr, "failed to restore snapshot"):
-			os.Exit(exitSnapshotError)
-		case strings.Contains(errStr, "failed to upload backup") ||
-			strings.Contains(errStr, "failed to download snapshot") ||
-			strings.Contains(errStr, "failed to create storage client"):
-			os.Exit(exitStorageError)
-		case strings.Contains(errStr, "failed to verify"):
-			os.Exit(exitVerificationError)
-		default:
-			os.Exit(exitConfigError)
-		}
+		os.Exit(exitCodeForError(err))
 	}
 	os.Exit(exitSuccess)
 }
@@ -445,16 +415,83 @@ func parseDuration(s string) time.Duration {
 	return d
 }
 
-// openStorageClient creates a storage client based on the configured provider.
-func openStorageClient(ctx context.Context, cfg *backupconfig.ExecutorConfig) (blobstore.BlobStore, error) {
+func resolveRestoreSettings(cfg *backupconfig.ExecutorConfig) (restoreSettings, error) {
+	if cfg == nil {
+		return restoreSettings{}, fmt.Errorf("restore configuration is required")
+	}
+
+	settings := restoreSettings{
+		key: strings.TrimSpace(os.Getenv("RESTORE_KEY")),
+	}
+	if settings.key == "" {
+		return restoreSettings{}, fmt.Errorf("RESTORE_KEY environment variable is required")
+	}
+
+	settings.bucket = strings.TrimSpace(os.Getenv("RESTORE_BUCKET"))
+	if settings.bucket == "" {
+		settings.bucket = cfg.BackupBucket
+	}
+
+	settings.endpoint = strings.TrimSpace(os.Getenv("RESTORE_ENDPOINT"))
+	if settings.endpoint == "" {
+		settings.endpoint = cfg.BackupEndpoint
+	}
+
+	settings.region = strings.TrimSpace(os.Getenv("RESTORE_REGION"))
+	if settings.region == "" {
+		settings.region = cfg.BackupRegion
+	}
+
+	settings.usePathStyle = strings.EqualFold(strings.TrimSpace(os.Getenv("RESTORE_USE_PATH_STYLE")), "true")
+
+	return settings, nil
+}
+
+func exitCodeForError(err error) int {
+	if err == nil {
+		return exitSuccess
+	}
+
+	errStr := err.Error()
+	switch {
+	case strings.Contains(errStr, "failed to load configuration"):
+		return exitConfigError
+	case strings.Contains(errStr, "failed to authenticate"):
+		return exitAuthError
+	case strings.Contains(errStr, "failed to find leader"):
+		return exitLeaderDiscovery
+	case strings.Contains(errStr, "failed to get snapshot") ||
+		strings.Contains(errStr, "failed to restore snapshot"):
+		return exitSnapshotError
+	case strings.Contains(errStr, "failed to upload backup") ||
+		strings.Contains(errStr, "failed to download snapshot") ||
+		strings.Contains(errStr, "failed to create storage client"):
+		return exitStorageError
+	case strings.Contains(errStr, "failed to verify"):
+		return exitVerificationError
+	default:
+		return exitConfigError
+	}
+}
+
+func buildStorageConfig(cfg *backupconfig.ExecutorConfig) (storage.Config, error) {
+	if cfg == nil {
+		return storage.Config{}, fmt.Errorf("storage configuration is required")
+	}
+
+	provider := cfg.BackupProvider
+	if provider == "" {
+		provider = constants.StorageProviderS3
+	}
+
 	storageConfig := storage.Config{
-		Provider: storage.ProviderType(cfg.BackupProvider),
+		Provider: storage.ProviderType(provider),
 		Bucket:   cfg.BackupBucket,
 		Endpoint: cfg.BackupEndpoint,
 	}
 
-	switch cfg.BackupProvider {
-	case constants.StorageProviderS3, "":
+	switch provider {
+	case constants.StorageProviderS3:
 		storageConfig.Region = cfg.BackupRegion
 		if cfg.StorageCredentials != nil {
 			storageConfig.Credentials = cfg.StorageCredentials
@@ -469,7 +506,7 @@ func openStorageClient(ctx context.Context, cfg *backupconfig.ExecutorConfig) (b
 			EnsureExists:       true, // Always try to ensure bucket exists for backups
 		}
 
-		// Fallback: Infer InsecureSkipVerify if using HTTP endpoint and not explicitly set
+		// Fallback: infer InsecureSkipVerify for HTTP endpoints when not explicitly set.
 		if !cfg.InsecureSkipVerify && strings.HasPrefix(strings.ToLower(cfg.BackupEndpoint), "http://") {
 			storageConfig.S3.InsecureSkipVerify = true
 		}
@@ -481,7 +518,6 @@ func openStorageClient(ctx context.Context, cfg *backupconfig.ExecutorConfig) (b
 			UseEmulator:        cfg.GCSUseEmulator,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 		}
-		// Set InsecureSkipVerify for emulator mode with HTTP endpoints if not already set
 		if !cfg.InsecureSkipVerify && cfg.GCSUseEmulator &&
 			strings.HasPrefix(strings.ToLower(cfg.BackupEndpoint), "http://") {
 			storageConfig.GCS.InsecureSkipVerify = true
@@ -494,13 +530,22 @@ func openStorageClient(ctx context.Context, cfg *backupconfig.ExecutorConfig) (b
 			ConnectionString:   cfg.AzureConnectionString,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 		}
-		// Use Azure container if specified, otherwise fall back to bucket
 		if cfg.AzureContainer != "" {
 			storageConfig.Bucket = cfg.AzureContainer
 		}
 
 	default:
-		return nil, fmt.Errorf("unknown storage provider: %q", cfg.BackupProvider)
+		return storage.Config{}, fmt.Errorf("unknown storage provider: %q", cfg.BackupProvider)
+	}
+
+	return storageConfig, nil
+}
+
+// openStorageClient creates a storage client based on the configured provider.
+func openStorageClient(ctx context.Context, cfg *backupconfig.ExecutorConfig) (blobstore.BlobStore, error) {
+	storageConfig, err := buildStorageConfig(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	return storage.OpenBlobStore(ctx, storageConfig)

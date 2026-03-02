@@ -400,6 +400,17 @@ PERF_BASELINE_OUT ?= hack/perf/baseline/kind-v1.34.3-baseline.json
 # PERF_THRESHOLDS_OUT is the thresholds YAML path used by verify-perf and CI gates.
 PERF_THRESHOLDS_OUT ?= hack/perf/thresholds/kind-v1.34.3.yaml
 
+# Mutation testing defaults (gomu, local workflow).
+# MUTATION_PATHS accepts a comma-separated list of target paths.
+MUTATION_TARGET_PATH ?= ./internal/operationlock
+MUTATION_PATHS ?= $(shell find ./internal -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort | paste -sd, -)
+MUTATION_WORKERS ?= 1
+MUTATION_TIMEOUT ?= 30
+MUTATION_INCREMENTAL ?= false
+MUTATION_TOP_SURVIVORS ?= 20
+MUTATION_GOFLAGS ?= -p=1
+MUTATION_GOMEMLIMIT ?= 8GiB
+
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 	@command -v $(KIND) >/dev/null 2>&1 || { \
@@ -519,6 +530,52 @@ verify-perf-smoke: ## Run a lightweight performance smoke gate (PR-focused).
 		--node-image="$(PERF_NODE_IMAGE)" \
 		--thresholds="$(PERF_THRESHOLDS_OUT)" \
 		--scenario-timeout="$(PERF_SMOKE_SCENARIO_TIMEOUT)"
+
+.PHONY: mutation-smoke
+mutation-smoke: gomu ## Run a fast mutation smoke check (operationlock package).
+	@out="dist/mutation/smoke-$$(date -u +%Y%m%dT%H%M%SZ)"; \
+	GOMU_BIN="$(GOMU)" bash hack/ci/run-gomu.sh \
+		--path "./internal/operationlock" \
+		--workers "1" \
+		--timeout "20" \
+		--incremental "false" \
+		--ci-mode "false" \
+		--fail-on-gate "false" \
+		--output-dir "$$out"; \
+	echo "Mutation smoke artifacts: $$out"
+
+.PHONY: mutation-target
+mutation-target: gomu ## Run mutation testing for one target path (set MUTATION_TARGET_PATH=./internal/<pkg>).
+	@out="dist/mutation/target-$$(date -u +%Y%m%dT%H%M%SZ)"; \
+	GOMU_BIN="$(GOMU)" bash hack/ci/run-gomu.sh \
+		--path "$(MUTATION_TARGET_PATH)" \
+		--workers "$(MUTATION_WORKERS)" \
+		--timeout "$(MUTATION_TIMEOUT)" \
+		--incremental "$(MUTATION_INCREMENTAL)" \
+		--go-flags "$(MUTATION_GOFLAGS)" \
+		--go-mem-limit "$(MUTATION_GOMEMLIMIT)" \
+		--ci-mode "false" \
+		--fail-on-gate "false" \
+		--top-survivors "$(MUTATION_TOP_SURVIVORS)" \
+		--output-dir "$$out"; \
+	echo "Mutation target artifacts: $$out"
+
+.PHONY: mutation-local
+mutation-local: gomu ## Run broad local mutation testing (report-only mode).
+	@out="dist/mutation/local-$$(date -u +%Y%m%dT%H%M%SZ)"; \
+	GOMU_BIN="$(GOMU)" bash hack/ci/run-gomu.sh \
+		--path "$(MUTATION_PATHS)" \
+		--workers "$(MUTATION_WORKERS)" \
+		--timeout "$(MUTATION_TIMEOUT)" \
+		--incremental "$(MUTATION_INCREMENTAL)" \
+		--go-flags "$(MUTATION_GOFLAGS)" \
+		--go-mem-limit "$(MUTATION_GOMEMLIMIT)" \
+		--ci-mode "false" \
+		--fail-on-gate "false" \
+		--top-survivors "$(MUTATION_TOP_SURVIVORS)" \
+		--output-dir "$$out"; \
+	echo "Mutation local artifacts: $$out"
+
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@command -v $(KIND) >/dev/null 2>&1 || { \
@@ -733,6 +790,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 GINKGO ?= $(LOCALBIN)/ginkgo
 GOVULNCHECK ?= $(LOCALBIN)/govulncheck
+GOMU ?= $(LOCALBIN)/gomu
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.7.1
@@ -753,6 +811,7 @@ ENVTEST_K8S_VERSION ?= $(shell v='$(call gomodver,k8s.io/api)'; \
 
 GOLANGCI_LINT_VERSION ?= v2.5.0
 GOVULNCHECK_VERSION ?= v1.1.4
+GOMU_VERSION ?= v0.1.0
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
@@ -790,6 +849,11 @@ $(GINKGO): $(LOCALBIN)
 govulncheck: $(GOVULNCHECK) ## Download govulncheck locally if necessary.
 $(GOVULNCHECK): $(LOCALBIN)
 	$(call go-install-tool,$(GOVULNCHECK),golang.org/x/vuln/cmd/govulncheck,$(GOVULNCHECK_VERSION))
+
+.PHONY: gomu
+gomu: $(GOMU) ## Download gomu locally if necessary.
+$(GOMU): $(LOCALBIN)
+	$(call go-install-tool,$(GOMU),github.com/sivchari/gomu/cmd/gomu,$(GOMU_VERSION))
 
 .PHONY: security-scan
 security-scan: ## Run Trivy security scans (filesystem and container image)

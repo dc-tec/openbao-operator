@@ -1,0 +1,22 @@
+# Non-operator source trees
+api/
+charts/
+cmd/
+config/
+docs/
+site/
+test/
+hack/
+dist/
+bin/
+vendor/
+.github/
+
+# Local/dev folders
+.venv/
+.venv-docs/
+
+# Generated artifacts
+zz_generated.*
+*.deepcopy.go
+*.pb.go

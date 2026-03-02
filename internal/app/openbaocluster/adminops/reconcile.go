@@ -57,6 +57,8 @@ type subReconciler interface {
 	Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error)
 }
 
+var adminOpsReconcilersBuilder = buildReconcilers
+
 // Reconcile executes admin-operations orchestration and status patching.
 func Reconcile(
 	ctx context.Context,
@@ -76,7 +78,7 @@ func Reconcile(
 		errorStatus = defaultErrorStatus
 	}
 
-	for _, rec := range buildReconcilers(deps) {
+	for _, rec := range adminOpsReconcilersBuilder(deps) {
 		result, err := rec.Reconcile(ctx, logger, cluster)
 		if err != nil {
 			if recordError != nil {
