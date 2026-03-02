@@ -109,7 +109,7 @@ func runBlueGreenJoinGreenNonVoters(ctx context.Context, logger logr.Logger, cfg
 	}
 	defer cleanup()
 
-	for i := int32(0); i < cfg.ClusterReplicas; i++ {
+	for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
 		greenPodURL := podURL(cfg, cfg.GreenRevision, i)
 		logger.V(1).Info("Joining Green pod as non-voter", "green_pod_url", greenPodURL)
 		client, err := factory.NewWithToken(greenPodURL, token)
@@ -198,8 +198,8 @@ func runBlueGreenWaitGreenSynced(ctx context.Context, logger logr.Logger, cfg *E
 		maxDelta := uint64(0)
 		missingGreen := 0
 		unhealthyGreen := 0
-		for i := int32(0); i < cfg.ClusterReplicas; i++ {
-			greenPodName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.GreenRevision, i)
+		for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
+			greenPodName := revisionPodName(cfg.ClusterName, cfg.GreenRevision, i)
 			found := false
 			for _, server := range state.Servers {
 				if raftAutopilotServerMatchesPod(server, greenPodName) {
@@ -323,8 +323,8 @@ func countMissingGreenServers(cfg *ExecutorConfig, config *openbao.RaftConfigura
 	}
 
 	missing := 0
-	for i := int32(0); i < cfg.ClusterReplicas; i++ {
-		greenPodName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.GreenRevision, i)
+	for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
+		greenPodName := revisionPodName(cfg.ClusterName, cfg.GreenRevision, i)
 		found := false
 		for _, server := range config.Config.Servers {
 			if server.NodeID == greenPodName || strings.Contains(server.Address, greenPodName) {
@@ -385,23 +385,11 @@ func runBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 
 	// Helper to classify a Raft server as Blue or Green based on pod naming.
 	isBlueServer := func(nodeID, address string) bool {
-		for i := int32(0); i < cfg.ClusterReplicas; i++ {
-			podName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.BlueRevision, i)
-			if nodeID == podName || strings.Contains(address, podName) {
-				return true
-			}
-		}
-		return false
+		return raftServerMatchesRevision(nodeID, address, cfg.ClusterName, cfg.BlueRevision, cfg.ClusterReplicas)
 	}
 
 	isGreenServer := func(nodeID, address string) bool {
-		for i := int32(0); i < cfg.ClusterReplicas; i++ {
-			podName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.GreenRevision, i)
-			if nodeID == podName || strings.Contains(address, podName) {
-				return true
-			}
-		}
-		return false
+		return raftServerMatchesRevision(nodeID, address, cfg.ClusterName, cfg.GreenRevision, cfg.ClusterReplicas)
 	}
 
 	// First pass: ensure all Blue servers are voters.
@@ -487,8 +475,8 @@ func runBlueGreenPromoteGreenVoters(ctx context.Context, logger logr.Logger, cfg
 	}
 
 	// Promote each Green pod from non-voter to voter individually
-	for i := int32(0); i < cfg.ClusterReplicas; i++ {
-		greenPodName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.GreenRevision, i)
+	for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
+		greenPodName := revisionPodName(cfg.ClusterName, cfg.GreenRevision, i)
 
 		// Check if already a voter (autopilot may have auto-promoted)
 		if isVoter, found := voterStatus[greenPodName]; found {
@@ -557,7 +545,7 @@ func ensureGreenLeaderBySteppingDownBlue(
 	bluePrefix := fmt.Sprintf("%s-%s-", cfg.ClusterName, cfg.BlueRevision)
 
 	var client *openbao.Client
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for _, attempt := range attemptOrdinals(maxRetries) {
 		var err error
 		client, err = clientForLeaderURL(ctx, cfg, factory, leaderURL)
 		if err != nil {
@@ -668,9 +656,20 @@ func stepDownLeader(ctx context.Context, logger logr.Logger, client *openbao.Cli
 }
 
 func waitForNewLeaderURL(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
+	return waitForNewLeaderURLWithFuncs(ctx, logger, cfg, previousLeaderURL, waitForLeaderElection, findLeaderWithFallback)
+}
+
+func waitForNewLeaderURLWithFuncs(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	previousLeaderURL string,
+	waitFn func(context.Context, *ExecutorConfig, string) (string, error),
+	fallbackFn func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error),
+) (string, error) {
 	logger.Info("Waiting for new leader election...")
 
-	newLeaderURL, err := waitForLeaderElection(ctx, cfg, previousLeaderURL)
+	newLeaderURL, err := waitFn(ctx, cfg, previousLeaderURL)
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 		return "", fmt.Errorf("failed while waiting for new leader election: %w", err)
 	}
@@ -681,7 +680,7 @@ func waitForNewLeaderURL(ctx context.Context, logger logr.Logger, cfg *ExecutorC
 		return newLeaderURL, nil
 	}
 
-	leaderURL, findErr := findLeaderWithFallback(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
+	leaderURL, findErr := fallbackFn(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
 	if findErr != nil {
 		return "", fmt.Errorf("failed to find new leader after step-down: %w", findErr)
 	}
@@ -715,7 +714,7 @@ func demoteAllBluePods(ctx context.Context, logger logr.Logger, cfg *ExecutorCon
 		return fmt.Errorf("client is required to demote Blue pods")
 	}
 
-	for i := int32(0); i < cfg.ClusterReplicas; i++ {
+	for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
 		bluePodName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.BlueRevision, i)
 		logger.V(1).Info("Demoting Blue pod to non-voter", "pod_name", bluePodName)
 		if err := client.DemoteRaftPeer(ctx, bluePodName); err != nil {
@@ -786,17 +785,16 @@ func runBlueGreenRemovePeers(
 	}
 
 	for _, server := range config.Config.Servers {
-		for i := int32(0); i < cfg.ClusterReplicas; i++ {
-			podName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, revisionToRemove, i)
-			if server.NodeID == podName || strings.Contains(server.Address, podName) {
-				logger.Info("Removing Raft peer",
-					"target", peerColor,
-					"node_id", server.NodeID,
-					"address", server.Address)
-				if err := client.RemoveRaftPeer(ctx, server.NodeID); err != nil {
-					return fmt.Errorf("failed to remove Raft peer %q: %w", server.NodeID, err)
-				}
-			}
+		if !raftServerMatchesRevision(server.NodeID, server.Address, cfg.ClusterName, revisionToRemove, cfg.ClusterReplicas) {
+			continue
+		}
+
+		logger.Info("Removing Raft peer",
+			"target", peerColor,
+			"node_id", server.NodeID,
+			"address", server.Address)
+		if err := client.RemoveRaftPeer(ctx, server.NodeID); err != nil {
+			return fmt.Errorf("failed to remove Raft peer %q: %w", server.NodeID, err)
 		}
 	}
 
@@ -821,8 +819,8 @@ func findLeader(ctx context.Context, cfg *ExecutorConfig, revision string) (stri
 	}
 	defer cleanup()
 
-	for attempt := 0; attempt < 10; attempt++ {
-		for i := int32(0); i < cfg.ClusterReplicas; i++ {
+	for range attemptOrdinals(10) {
+		for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
 			url := podURL(cfg, revision, i)
 			client, err := factory.New(url)
 			if err != nil {
@@ -858,7 +856,22 @@ func findLeaderWithFallback(
 	primaryLabel string,
 	fallbackLabel string,
 ) (string, error) {
-	leaderURL, err := findLeader(ctx, cfg, primaryRevision)
+	return findLeaderWithFallbackUsing(ctx, logger, cfg, primaryRevision, fallbackRevision, primaryLabel, fallbackLabel, findLeader)
+}
+
+type leaderFinder func(context.Context, *ExecutorConfig, string) (string, error)
+
+func findLeaderWithFallbackUsing(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	primaryRevision string,
+	fallbackRevision string,
+	primaryLabel string,
+	fallbackLabel string,
+	finder leaderFinder,
+) (string, error) {
+	leaderURL, err := finder(ctx, cfg, primaryRevision)
 	if err == nil {
 		return leaderURL, nil
 	}
@@ -872,7 +885,7 @@ func findLeaderWithFallback(
 		"error", err,
 	)
 
-	leaderURL, fallbackErr := findLeader(ctx, cfg, fallbackRevision)
+	leaderURL, fallbackErr := finder(ctx, cfg, fallbackRevision)
 	if fallbackErr != nil {
 		return "", fmt.Errorf("failed to find leader (checked %s and %s): %w", primaryLabel, fallbackLabel, fallbackErr)
 	}
@@ -886,7 +899,7 @@ func findLeaderOnce(ctx context.Context, cfg *ExecutorConfig, revision string) (
 	}
 	defer cleanup()
 
-	for i := int32(0); i < cfg.ClusterReplicas; i++ {
+	for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
 		url := podURL(cfg, revision, i)
 		client, err := factory.New(url)
 		if err != nil {
@@ -905,12 +918,48 @@ func findLeaderOnce(ctx context.Context, cfg *ExecutorConfig, revision string) (
 }
 
 func podURL(cfg *ExecutorConfig, revision string, ordinal int32) string {
-	podName := fmt.Sprintf("%s-%d", cfg.ClusterName, ordinal)
-	if revision != "" {
-		podName = fmt.Sprintf("%s-%s-%d", cfg.ClusterName, revision, ordinal)
-	}
+	podName := revisionPodName(cfg.ClusterName, revision, ordinal)
 	host := fmt.Sprintf("%s.%s.%s.svc", podName, cfg.ClusterName, cfg.ClusterNamespace)
 	return fmt.Sprintf("https://%s:%d", host, constants.PortAPI)
+}
+
+func revisionPodName(clusterName string, revision string, ordinal int32) string {
+	if revision == "" {
+		return fmt.Sprintf("%s-%d", clusterName, ordinal)
+	}
+	return fmt.Sprintf("%s-%s-%d", clusterName, revision, ordinal)
+}
+
+func raftServerMatchesRevision(nodeID string, address string, clusterName string, revision string, replicas int32) bool {
+	for _, i := range replicaOrdinals(replicas) {
+		podName := revisionPodName(clusterName, revision, i)
+		if nodeID == podName || strings.Contains(address, podName) {
+			return true
+		}
+	}
+	return false
+}
+
+func replicaOrdinals(replicas int32) []int32 {
+	if replicas <= 0 {
+		return nil
+	}
+	ordinals := make([]int32, 0, replicas)
+	for i := int32(0); i < replicas; i++ {
+		ordinals = append(ordinals, i)
+	}
+	return ordinals
+}
+
+func attemptOrdinals(maxAttempts int) []int {
+	if maxAttempts <= 0 {
+		return nil
+	}
+	ordinals := make([]int, 0, maxAttempts)
+	for i := 0; i < maxAttempts; i++ {
+		ordinals = append(ordinals, i)
+	}
+	return ordinals
 }
 
 func isBenignJoinError(err error) bool {
