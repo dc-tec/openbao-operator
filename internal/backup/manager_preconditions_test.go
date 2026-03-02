@@ -30,7 +30,7 @@ func basePreconditionsCluster() *openbaov1alpha1.OpenBaoCluster {
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version: "2.4.4",
 			Backup: &openbaov1alpha1.BackupSchedule{
-				JWTAuthRole: "backup-role",
+				JWTAuthRole: testBackupJWTAuthRole,
 				Target: openbaov1alpha1.BackupTarget{
 					Provider: "s3",
 					Bucket:   "bucket-a",
@@ -102,7 +102,7 @@ func TestCheckPreconditions(t *testing.T) {
 		{
 			name: "fails when upgrade is pending with pre-upgrade snapshot",
 			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) []client.Object {
-				cluster.Spec.Version = "2.5.0"
+				cluster.Spec.Version = testPendingUpgradeVersion
 				cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{PreUpgradeSnapshot: true}
 				return nil
 			},
@@ -111,7 +111,7 @@ func TestCheckPreconditions(t *testing.T) {
 		{
 			name: "fails when upgrade is pending",
 			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) []client.Object {
-				cluster.Spec.Version = "2.5.0"
+				cluster.Spec.Version = testPendingUpgradeVersion
 				cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{PreUpgradeSnapshot: false}
 				return nil
 			},
@@ -121,7 +121,7 @@ func TestCheckPreconditions(t *testing.T) {
 		{
 			name: "fails when upgrade is pending and upgrade config is nil",
 			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) []client.Object {
-				cluster.Spec.Version = "2.5.0"
+				cluster.Spec.Version = testPendingUpgradeVersion
 				cluster.Spec.Upgrade = nil
 				return nil
 			},
@@ -208,7 +208,7 @@ func TestCheckPreconditions(t *testing.T) {
 		{
 			name: "passes when jwt auth role is configured",
 			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) []client.Object {
-				cluster.Spec.Backup.JWTAuthRole = "backup-role"
+				cluster.Spec.Backup.JWTAuthRole = testBackupJWTAuthRole
 				cluster.Spec.Backup.TokenSecretRef = nil
 				return nil
 			},
@@ -232,7 +232,7 @@ func TestCheckPreconditions(t *testing.T) {
 			name: "passes when current version is empty and desired version differs",
 			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) []client.Object {
 				cluster.Status.CurrentVersion = ""
-				cluster.Spec.Version = "2.5.0"
+				cluster.Spec.Version = testPendingUpgradeVersion
 				return nil
 			},
 			expectNil: true,
@@ -458,7 +458,7 @@ func TestCheckPreconditions_Idempotent(t *testing.T) {
 		{
 			name: "pending upgrade stays stable across retries",
 			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) []client.Object {
-				cluster.Spec.Version = "2.5.0"
+				cluster.Spec.Version = testPendingUpgradeVersion
 				cluster.Spec.Upgrade = nil
 				return nil
 			},

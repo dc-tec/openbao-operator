@@ -98,7 +98,7 @@ func TestInjector_DisabledRuleDoesNotFail(t *testing.T) {
 func TestStaticClock(t *testing.T) {
 	t.Parallel()
 
-	start := metav1.Now().Time.UTC()
+	start := metav1.Now().UTC()
 	clock := NewStaticClock(start)
 	if got := clock.Now(); !got.Equal(start) {
 		t.Fatalf("Now()=%s, want %s", got, start)

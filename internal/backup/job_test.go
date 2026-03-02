@@ -34,7 +34,11 @@ var testScheme = func() *runtime.Scheme {
 	return scheme
 }()
 
-const testBackupJobName = "backup-test-cluster-20250101-120000"
+const (
+	testBackupJobName         = "backup-test-cluster-20250101-120000"
+	testBackupJWTAuthRole     = "backup-role"
+	testPendingUpgradeVersion = "2.5.0"
+)
 
 func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 	t.Helper()
@@ -378,7 +382,7 @@ func TestBuildBackupJob_WithCredentialsSecret(t *testing.T) {
 
 func TestBuildBackupJob_WithJWTAuth(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
-	cluster.Spec.Backup.JWTAuthRole = "backup-role"
+	cluster.Spec.Backup.JWTAuthRole = testBackupJWTAuthRole
 
 	jobName := testBackupJobName
 	job, err := BuildJob(cluster, JobOptions{
@@ -397,8 +401,12 @@ func TestBuildBackupJob_WithJWTAuth(t *testing.T) {
 		envMap[env.Name] = env.Value
 	}
 
-	if envMap[constants.EnvBackupJWTAuthRole] != "backup-role" {
-		t.Errorf("buildBackupJob() BACKUP_JWT_AUTH_ROLE = %v, want backup-role", envMap[constants.EnvBackupJWTAuthRole])
+	if envMap[constants.EnvBackupJWTAuthRole] != testBackupJWTAuthRole {
+		t.Errorf(
+			"buildBackupJob() BACKUP_JWT_AUTH_ROLE = %v, want %s",
+			envMap[constants.EnvBackupJWTAuthRole],
+			testBackupJWTAuthRole,
+		)
 	}
 
 	if envMap[constants.EnvBackupAuthMethod] != constants.BackupAuthMethodJWT {
