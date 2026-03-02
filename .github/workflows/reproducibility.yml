@@ -114,7 +114,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: go.mod
           check-latest: true
@@ -220,7 +220,7 @@ jobs:
           helm package "${work_dir}/openbao-operator" -d dist/rebuild
 
       - name: Generate SBOM (release) - manager
-        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
         with:
           image: ${{ needs.prepare.outputs.manager_image }}@${{ steps.release-digests.outputs.manager }}
           format: spdx-json
@@ -231,7 +231,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (release) - config-init
-        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
         with:
           image: ${{ needs.prepare.outputs.config_init_image }}@${{ steps.release-digests.outputs.config_init }}
           format: spdx-json
@@ -242,7 +242,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (release) - backup
-        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
         with:
           image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ steps.release-digests.outputs.backup_executor }}
           format: spdx-json
@@ -253,7 +253,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (release) - upgrade
-        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
         with:
           image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ steps.release-digests.outputs.upgrade_executor }}
           format: spdx-json
@@ -264,7 +264,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (rebuild) - manager
-        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
         with:
           image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
           format: spdx-json
@@ -275,7 +275,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (rebuild) - config-init
-        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
         with:
           image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.rebuild.outputs.config_init_digest }}
           format: spdx-json
@@ -286,7 +286,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (rebuild) - backup
-        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
         with:
           image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.rebuild.outputs.backup_executor_digest }}
           format: spdx-json
@@ -297,7 +297,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (rebuild) - upgrade
-        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
         with:
           image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.rebuild.outputs.upgrade_executor_digest }}
           format: spdx-json
