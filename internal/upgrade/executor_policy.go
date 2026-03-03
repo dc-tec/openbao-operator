@@ -13,6 +13,8 @@ const (
 	reasonPrimaryLeaderNotFound  = "reason_primary_leader_not_found"
 	reasonFallbackLeaderFound    = "reason_fallback_leader_found"
 	reasonFallbackLeaderNotFound = "reason_fallback_leader_not_found"
+	reasonElectionNewLeaderFound = "reason_election_new_leader_found"
+	reasonElectionSameLeaderSeen = "reason_election_same_leader_seen"
 	reasonContextCanceled        = "reason_context_canceled"
 	reasonDeadlineExceeded       = "reason_deadline_exceeded"
 	reasonElectionTimeout        = "reason_election_timeout"
@@ -26,6 +28,8 @@ const (
 	decisionPathContextCanceled              = "context_canceled"
 	decisionPathDeadlineExceeded             = "deadline_exceeded"
 	decisionPathElectionTimeout              = "election_timeout"
+	decisionPathElectionObservedNewLeader    = "election_observed_new_leader"
+	decisionPathElectionObservedSameLeader   = "election_observed_same_leader"
 )
 
 type leaderSearchPolicy struct {
@@ -57,6 +61,13 @@ type leaderSearchOutcome struct {
 	AttemptsUsed  int
 	PrimaryError  error
 	FallbackError error
+}
+
+type leaderElectionOutcome struct {
+	Value        string
+	DecisionPath string
+	ReasonCode   string
+	WaitError    error
 }
 
 type executorReasonedError struct {

@@ -659,30 +659,42 @@ func stepDownLeader(ctx context.Context, logger logr.Logger, client *openbao.Cli
 }
 
 func waitForNewLeaderURL(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
-	return waitForNewLeaderURLWithFuncs(ctx, logger, cfg, previousLeaderURL, waitForLeaderElection, findLeaderWithFallback)
+	return waitForNewLeaderURLWithFuncs(ctx, logger, cfg, previousLeaderURL, waitForLeaderElectionOutcome, findLeaderWithFallback)
 }
+
+type leaderElectionWaitFunc func(context.Context, *ExecutorConfig, string) leaderElectionOutcome
 
 func waitForNewLeaderURLWithFuncs(
 	ctx context.Context,
 	logger logr.Logger,
 	cfg *ExecutorConfig,
 	previousLeaderURL string,
-	waitFn func(context.Context, *ExecutorConfig, string) (string, error),
+	waitFn leaderElectionWaitFunc,
 	fallbackFn func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error),
 ) (string, error) {
 	logger.Info("Waiting for new leader election...")
 
-	newLeaderURL, err := waitFn(ctx, cfg, previousLeaderURL)
-	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
-		return "", newExecutorReasonedError(reasonElectionTimeout, "failed while waiting for new leader election", err)
+	waitOutcome := waitFn(ctx, cfg, previousLeaderURL)
+	if waitOutcome.WaitError != nil && !errors.Is(waitOutcome.WaitError, context.DeadlineExceeded) && !errors.Is(waitOutcome.WaitError, context.Canceled) {
+		reasonCode := reasonCodeFromError(waitOutcome.WaitError)
+		if reasonCode == "" {
+			reasonCode = reasonElectionTimeout
+		}
+		return "", newExecutorReasonedError(reasonCode, "failed while waiting for new leader election", waitOutcome.WaitError)
 	}
 
-	logger.Info("Finding new leader...")
-	if strings.TrimSpace(newLeaderURL) != "" {
-		logger.Info("New leader found", "leader_url", newLeaderURL)
-		return newLeaderURL, nil
+	logger.Info(
+		"Leader election wait completed",
+		"decision_path", waitOutcome.DecisionPath,
+		"reason_code", waitOutcome.ReasonCode,
+		"leader_url", waitOutcome.Value,
+	)
+	if waitOutcome.DecisionPath == decisionPathElectionObservedNewLeader && strings.TrimSpace(waitOutcome.Value) != "" {
+		logger.Info("New leader found", "leader_url", waitOutcome.Value)
+		return waitOutcome.Value, nil
 	}
 
+	logger.Info("Finding new leader via fallback search...")
 	leaderURL, findErr := fallbackFn(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
 	if findErr != nil {
 		reasonCode := reasonCodeFromError(findErr)
@@ -696,31 +708,95 @@ func waitForNewLeaderURLWithFuncs(
 }
 
 func waitForLeaderElection(ctx context.Context, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
-	var newLeaderURL string
-	err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, leaderElectionWaitDuration, true, func(ctx context.Context) (bool, error) {
-		if url, ok := findLeaderOnce(ctx, cfg, cfg.GreenRevision); ok {
-			newLeaderURL = url
+	outcome := waitForLeaderElectionOutcome(ctx, cfg, previousLeaderURL)
+	return outcome.Value, outcome.WaitError
+}
+
+type leaderOnceFinder func(context.Context, *ExecutorConfig, string) (string, bool)
+
+func waitForLeaderElectionOutcome(ctx context.Context, cfg *ExecutorConfig, previousLeaderURL string) leaderElectionOutcome {
+	return waitForLeaderElectionWithFinderAndPolicy(
+		ctx,
+		cfg,
+		previousLeaderURL,
+		retryPolicy{
+			AttemptInterval: 500 * time.Millisecond,
+			ElectionWait:    leaderElectionWaitDuration,
+		},
+		findLeaderOnce,
+	)
+}
+
+func waitForLeaderElectionWithFinderAndPolicy(
+	ctx context.Context,
+	cfg *ExecutorConfig,
+	previousLeaderURL string,
+	policy retryPolicy,
+	finder leaderOnceFinder,
+) leaderElectionOutcome {
+	policy = normalizeElectionRetryPolicy(policy)
+
+	outcome := leaderElectionOutcome{
+		DecisionPath: decisionPathElectionTimeout,
+		ReasonCode:   reasonElectionTimeout,
+	}
+	lastObservedLeaderURL := ""
+
+	err := wait.PollUntilContextTimeout(ctx, policy.AttemptInterval, policy.ElectionWait, true, func(ctx context.Context) (bool, error) {
+		if url, ok := finder(ctx, cfg, cfg.GreenRevision); ok {
+			outcome.Value = url
+			outcome.DecisionPath = decisionPathElectionObservedNewLeader
+			outcome.ReasonCode = reasonElectionNewLeaderFound
 			return true, nil
 		}
-		if url, ok := findLeaderOnce(ctx, cfg, cfg.BlueRevision); ok {
+
+		if url, ok := finder(ctx, cfg, cfg.BlueRevision); ok {
 			// Only consider it "new" if leadership moved away from the pre-stepdown leader.
 			if url != previousLeaderURL {
-				newLeaderURL = url
+				outcome.Value = url
+				outcome.DecisionPath = decisionPathElectionObservedNewLeader
+				outcome.ReasonCode = reasonElectionNewLeaderFound
 				return true, nil
 			}
-			// Keep the last observed leader as a fallback; the outer loop will step down again if needed.
-			newLeaderURL = url
+
+			// Keep the last observed leader as a fallback for the follow-up phase.
+			lastObservedLeaderURL = url
 		}
 		return false, nil
 	})
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.Canceled) {
-			err = newExecutorReasonedError(reasonElectionTimeout, "leader election did not converge within wait duration", err)
-		} else if reasonCode := reasonCodeFromContextError(err); reasonCode != "" {
-			err = newExecutorReasonedError(reasonCode, "leader election was interrupted", err)
-		}
+	if err == nil {
+		return outcome
 	}
-	return newLeaderURL, err
+
+	if errors.Is(err, context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.Canceled) {
+		if strings.TrimSpace(lastObservedLeaderURL) != "" {
+			outcome.Value = lastObservedLeaderURL
+			outcome.DecisionPath = decisionPathElectionObservedSameLeader
+			outcome.ReasonCode = reasonElectionSameLeaderSeen
+		}
+		outcome.WaitError = newExecutorReasonedError(reasonElectionTimeout, "leader election did not converge within wait duration", err)
+		return outcome
+	}
+
+	if reasonCode := reasonCodeFromContextError(err); reasonCode != "" {
+		outcome.DecisionPath = decisionPathFromReasonCode(reasonCode)
+		outcome.ReasonCode = reasonCode
+		outcome.WaitError = newExecutorReasonedError(reasonCode, "leader election was interrupted", err)
+		return outcome
+	}
+
+	outcome.WaitError = newExecutorReasonedError(reasonElectionTimeout, "leader election did not converge within wait duration", err)
+	return outcome
+}
+
+func normalizeElectionRetryPolicy(policy retryPolicy) retryPolicy {
+	if policy.AttemptInterval <= 0 {
+		policy.AttemptInterval = 500 * time.Millisecond
+	}
+	if policy.ElectionWait <= 0 {
+		policy.ElectionWait = leaderElectionWaitDuration
+	}
+	return policy
 }
 
 func demoteAllBluePods(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, client raftPeerDemoter) error {
