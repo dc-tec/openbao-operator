@@ -163,6 +163,13 @@ func newLeaderSearchPolicy(
 	}
 }
 
+func maxLeaderSearchAttempts(policy leaderSearchPolicy) int {
+	if policy.AllowFallback {
+		return 2
+	}
+	return 1
+}
+
 func resolveLeaderWithPolicyUsing(
 	ctx context.Context,
 	cfg *ExecutorConfig,

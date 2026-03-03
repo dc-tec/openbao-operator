@@ -201,6 +201,40 @@ func TestNormalizeRetryPolicy(t *testing.T) {
 	}
 }
 
+func TestMaxLeaderSearchAttempts(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		policy leaderSearchPolicy
+		want   int
+	}{
+		{
+			name: "fallback enabled",
+			policy: leaderSearchPolicy{
+				AllowFallback: true,
+			},
+			want: 2,
+		},
+		{
+			name: "fallback disabled",
+			policy: leaderSearchPolicy{
+				AllowFallback: false,
+			},
+			want: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := maxLeaderSearchAttempts(tt.policy); got != tt.want {
+				t.Fatalf("maxLeaderSearchAttempts()=%d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestReplicaOrdinals(t *testing.T) {
 	t.Parallel()
 

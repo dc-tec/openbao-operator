@@ -1181,6 +1181,15 @@ func findLeaderWithFallbackUsing(
 ) (string, error) {
 	policy := newLeaderSearchPolicy(primaryRevision, fallbackRevision, primaryLabel, fallbackLabel)
 	outcome := resolveLeaderWithPolicyUsing(ctx, cfg, policy, finder)
+	logger.Info(
+		"Leader search completed",
+		"decision_path", outcome.DecisionPath,
+		"reason_code", outcome.ReasonCode,
+		"attempt", outcome.AttemptsUsed,
+		"max_attempts", maxLeaderSearchAttempts(policy),
+		"primary_revision", policy.PrimaryRevision,
+		"fallback_revision", policy.FallbackRevision,
+	)
 	if outcome.Value != "" {
 		return outcome.Value, nil
 	}
