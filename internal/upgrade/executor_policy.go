@@ -9,15 +9,19 @@ import (
 )
 
 const (
-	reasonPrimaryLeaderFound     = "reason_primary_leader_found"
-	reasonPrimaryLeaderNotFound  = "reason_primary_leader_not_found"
-	reasonFallbackLeaderFound    = "reason_fallback_leader_found"
-	reasonFallbackLeaderNotFound = "reason_fallback_leader_not_found"
-	reasonElectionNewLeaderFound = "reason_election_new_leader_found"
-	reasonElectionSameLeaderSeen = "reason_election_same_leader_seen"
-	reasonContextCanceled        = "reason_context_canceled"
-	reasonDeadlineExceeded       = "reason_deadline_exceeded"
-	reasonElectionTimeout        = "reason_election_timeout"
+	reasonPrimaryLeaderFound             = "reason_primary_leader_found"
+	reasonPrimaryLeaderNotFound          = "reason_primary_leader_not_found"
+	reasonFallbackLeaderFound            = "reason_fallback_leader_found"
+	reasonFallbackLeaderNotFound         = "reason_fallback_leader_not_found"
+	reasonElectionNewLeaderFound         = "reason_election_new_leader_found"
+	reasonElectionSameLeaderSeen         = "reason_election_same_leader_seen"
+	reasonDemoteFatal                    = "reason_demote_fatal"
+	reasonStepDownFatal                  = "reason_stepdown_fatal"
+	reasonLeaderTransferStateFailed      = "reason_leader_transfer_state_failed"
+	reasonLeaderTransferRetriesExhausted = "reason_leader_transfer_retries_exhausted"
+	reasonContextCanceled                = "reason_context_canceled"
+	reasonDeadlineExceeded               = "reason_deadline_exceeded"
+	reasonElectionTimeout                = "reason_election_timeout"
 )
 
 const (

@@ -18,6 +18,7 @@ const (
 	leaderElectionWaitDuration      = 5 * time.Second
 	defaultLeaderSearchMaxAttempts  = 10
 	defaultLeaderSearchWaitInterval = 2 * time.Second
+	defaultLeaderTransferMaxRetries = 10
 	singleLeaderSearchAttempt       = 1
 )
 
@@ -537,47 +538,142 @@ func findInitialLeader(ctx context.Context, logger logr.Logger, cfg *ExecutorCon
 	return leaderURL, nil
 }
 
+type leaderTransferClient interface {
+	ReadRaftConfiguration(context.Context) (*openbao.RaftConfigurationResponse, error)
+	DemoteRaftPeer(context.Context, string) error
+	StepDown(context.Context) error
+}
+
+type leaderTransferClientResolver func(context.Context, string) (leaderTransferClient, error)
+
+type leaderTransferWaitFunc func(context.Context, logr.Logger, *ExecutorConfig, string) (string, error)
+
+const (
+	leaderTransferStateResolveCurrentLeader = "ResolveCurrentLeader"
+	leaderTransferStateInspectRaftConfig    = "InspectRaftConfig"
+	leaderTransferStateBiasElection         = "BiasElection"
+	leaderTransferStateStepDown             = "StepDown"
+	leaderTransferStateAwaitNewLeader       = "AwaitNewLeader"
+	leaderTransferStateValidateGreenLeader  = "ValidateGreenLeader"
+)
+
 func ensureGreenLeaderBySteppingDownBlue(
 	ctx context.Context,
 	logger logr.Logger,
 	cfg *ExecutorConfig,
 	factory *openbao.ClientFactory,
 	leaderURL string,
-) (*openbao.Client, error) {
-	const maxRetries = 10
+) (leaderTransferClient, error) {
+	resolver := func(ctx context.Context, leaderURL string) (leaderTransferClient, error) {
+		return clientForLeaderURL(ctx, cfg, factory, leaderURL)
+	}
+	return ensureGreenLeaderBySteppingDownBlueWithFuncs(
+		ctx,
+		logger,
+		cfg,
+		leaderURL,
+		retryPolicy{MaxAttempts: defaultLeaderTransferMaxRetries},
+		resolver,
+		waitForNewLeaderURL,
+	)
+}
+
+func ensureGreenLeaderBySteppingDownBlueWithFuncs(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	leaderURL string,
+	policy retryPolicy,
+	resolveClient leaderTransferClientResolver,
+	waitForLeader leaderTransferWaitFunc,
+) (leaderTransferClient, error) {
+	policy = normalizeLeaderTransferRetryPolicy(policy)
 	bluePrefix := fmt.Sprintf("%s-%s-", cfg.ClusterName, cfg.BlueRevision)
 
-	var client *openbao.Client
-	for _, attempt := range attemptOrdinals(maxRetries) {
-		var err error
-		client, err = clientForLeaderURL(ctx, cfg, factory, leaderURL)
-		if err != nil {
-			return nil, err
+	for _, attempt := range attemptOrdinals(policy.MaxAttempts) {
+		attemptNumber := attempt + 1
+		state := leaderTransferStateResolveCurrentLeader
+		var client leaderTransferClient
+		var config *openbao.RaftConfigurationResponse
+		var leaderID string
+		var leaderIsBlue bool
+
+		for {
+			switch state {
+			case leaderTransferStateResolveCurrentLeader:
+				resolvedClient, err := resolveClient(ctx, leaderURL)
+				if err != nil {
+					return nil, newExecutorReasonedError(reasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), err)
+				}
+				client = resolvedClient
+				state = leaderTransferStateInspectRaftConfig
+
+			case leaderTransferStateInspectRaftConfig:
+				currentConfig, err := client.ReadRaftConfiguration(ctx)
+				if err != nil {
+					return nil, newExecutorReasonedError(reasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), err)
+				}
+				config = currentConfig
+				leaderID, leaderIsBlue = raftLeaderInfo(config, bluePrefix)
+				if leaderID == "" {
+					return nil, newExecutorReasonedError(reasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), errors.New("raft leader not found in configuration"))
+				}
+				if !leaderIsBlue {
+					logger.Info("Leader is not Blue (assumed Green), proceeding to demotion", "state", leaderTransferStateValidateGreenLeader, "attempt", attemptNumber, "max_retries", policy.MaxAttempts)
+					return client, nil
+				}
+
+				logger.Info("Current leader is Blue", "leader_id", leaderID, "state", state, "attempt", attemptNumber, "max_retries", policy.MaxAttempts)
+				state = leaderTransferStateBiasElection
+
+			case leaderTransferStateBiasElection:
+				if err := demoteBlueVotersExceptLeader(ctx, logger, cfg, client, config, leaderID, bluePrefix); err != nil {
+					return nil, newExecutorReasonedError(reasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), err)
+				}
+				state = leaderTransferStateStepDown
+
+			case leaderTransferStateStepDown:
+				classification, err := stepDownLeader(ctx, logger, client)
+				if err != nil && classification == benignErrorClassificationFatal {
+					return nil, newExecutorReasonedError(reasonStepDownFatal, fmt.Sprintf("leader transfer state %s failed", state), err)
+				}
+				state = leaderTransferStateAwaitNewLeader
+
+			case leaderTransferStateAwaitNewLeader:
+				newLeaderURL, err := waitForLeader(ctx, logger, cfg, leaderURL)
+				if err != nil {
+					return nil, newExecutorReasonedError(reasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), err)
+				}
+				leaderURL = newLeaderURL
+				state = leaderTransferStateValidateGreenLeader
+
+			case leaderTransferStateValidateGreenLeader:
+				logger.V(1).Info(
+					"Leader transfer attempt completed; validating leader on next attempt",
+					"state", state,
+					"attempt", attemptNumber,
+					"max_retries", policy.MaxAttempts,
+					"next_leader_url", leaderURL,
+				)
+				goto nextAttempt
+			}
 		}
 
-		config, err := client.ReadRaftConfiguration(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read Raft configuration: %w", err)
-		}
-
-		leaderID, leaderIsBlue := raftLeaderInfo(config, bluePrefix)
-		if !leaderIsBlue {
-			logger.Info("Leader is not Blue (assumed Green), proceeding to demotion")
-			return client, nil
-		}
-
-		logger.Info("Current leader is Blue", "leader_id", leaderID, "attempt", attempt+1, "max_retries", maxRetries)
-		demoteBlueVotersExceptLeader(ctx, logger, cfg, client, config, leaderID, bluePrefix)
-		stepDownLeader(ctx, logger, client)
-
-		newLeaderURL, err := waitForNewLeaderURL(ctx, logger, cfg, leaderURL)
-		if err != nil {
-			return nil, err
-		}
-		leaderURL = newLeaderURL
+	nextAttempt:
 	}
 
-	return nil, fmt.Errorf("failed to transfer leadership to Green node after %d attempts", maxRetries)
+	return nil, newExecutorReasonedError(
+		reasonLeaderTransferRetriesExhausted,
+		fmt.Sprintf("failed to transfer leadership to Green node after %d attempts", policy.MaxAttempts),
+		nil,
+	)
+}
+
+func normalizeLeaderTransferRetryPolicy(policy retryPolicy) retryPolicy {
+	if policy.MaxAttempts <= 0 {
+		policy.MaxAttempts = defaultLeaderTransferMaxRetries
+	}
+	return policy
 }
 
 func clientForLeaderURL(ctx context.Context, cfg *ExecutorConfig, factory *openbao.ClientFactory, leaderURL string) (*openbao.Client, error) {
@@ -625,9 +721,9 @@ func demoteBlueVotersExceptLeader(
 	config *openbao.RaftConfigurationResponse,
 	leaderID string,
 	bluePrefix string,
-) {
+) error {
 	if client == nil || config == nil {
-		return
+		return nil
 	}
 
 	for _, server := range config.Config.Servers {
@@ -640,22 +736,36 @@ func demoteBlueVotersExceptLeader(
 
 		logger.Info("Demoting Blue peer before step-down to bias election", "node_id", server.NodeID)
 		if err := client.DemoteRaftPeer(ctx, server.NodeID); err != nil {
-			if isBenignDemoteError(err) {
+			classification := classifyDemoteError(err)
+			if classification == benignErrorClassificationBenign {
 				logger.V(1).Info("Blue peer already non-voter before step-down", "node_id", server.NodeID)
 				continue
 			}
-			// Log but continue - step-down is the main action.
-			logger.Error(err, "Failed to demote Blue peer before step-down", "node_id", server.NodeID, "cluster_replicas", cfg.ClusterReplicas)
+			if classification == benignErrorClassificationRetryable {
+				// Keep step-down as the primary action; retryable demote failures are surfaced in logs.
+				logger.Error(err, "Failed to demote Blue peer before step-down; continuing", "node_id", server.NodeID, "cluster_replicas", cfg.ClusterReplicas, "error_classification", classification)
+				continue
+			}
+
+			return newExecutorReasonedError(
+				reasonDemoteFatal,
+				fmt.Sprintf("failed to demote Blue peer %q before step-down", server.NodeID),
+				err,
+			)
 		}
 	}
+
+	return nil
 }
 
-func stepDownLeader(ctx context.Context, logger logr.Logger, client *openbao.Client) {
+func stepDownLeader(ctx context.Context, logger logr.Logger, client leaderTransferClient) (benignErrorClassification, error) {
 	logger.Info("Stepping down Blue leader to transfer leadership to Green")
 	if err := client.StepDown(ctx); err != nil {
-		// If step down fails, maybe we lost connection? Just log and retry loop.
-		logger.Error(err, "Failed to step down leader")
+		classification := classifyStepDownError(err)
+		logger.Error(err, "Failed to step down leader", "error_classification", classification)
+		return classification, err
 	}
+	return benignErrorClassificationBenign, nil
 }
 
 func waitForNewLeaderURL(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
@@ -1114,6 +1224,39 @@ func isBenignDemoteError(err error) bool {
 	return strings.Contains(message, "already a non-voter") ||
 		strings.Contains(message, "already non-voter") ||
 		strings.Contains(message, "already non voter")
+}
+
+func classifyDemoteError(err error) benignErrorClassification {
+	if err == nil {
+		return benignErrorClassificationBenign
+	}
+	if isBenignDemoteError(err) {
+		return benignErrorClassificationBenign
+	}
+
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "permission denied") ||
+		strings.Contains(message, "forbidden") ||
+		strings.Contains(message, "unauthorized") {
+		return benignErrorClassificationFatal
+	}
+
+	return benignErrorClassificationRetryable
+}
+
+func classifyStepDownError(err error) benignErrorClassification {
+	if err == nil {
+		return benignErrorClassificationBenign
+	}
+
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "permission denied") ||
+		strings.Contains(message, "forbidden") ||
+		strings.Contains(message, "unauthorized") {
+		return benignErrorClassificationFatal
+	}
+
+	return benignErrorClassificationRetryable
 }
 
 func newOpenBaoClientFactory(cfg *ExecutorConfig) (*openbao.ClientFactory, func(), error) {
