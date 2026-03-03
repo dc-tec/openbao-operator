@@ -9,8 +9,7 @@ on:
         type: string
       ref:
         description: "Git reference to checkout"
-        required: false
-        default: ${{ github.ref }}
+        required: true
         type: string
       source_date_epoch:
         description: "Unix timestamp used for deterministic build metadata"
@@ -65,6 +64,20 @@ jobs:
       backup_executor_digest: ${{ steps.set-output.outputs.backup_executor_digest }}
       upgrade_executor_digest: ${{ steps.set-output.outputs.upgrade_executor_digest }}
     steps:
+      - name: Validate checkout ref (immutable only)
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          if [[ "${REF}" =~ ^[0-9a-f]{40}$ ]]; then
+            exit 0
+          fi
+          if [[ "${REF}" =~ ^refs/tags/[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
+            exit 0
+          fi
+          echo "inputs.ref must be an immutable commit SHA or semver tag ref; got: ${REF}" >&2
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
