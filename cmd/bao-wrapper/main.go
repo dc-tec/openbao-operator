@@ -93,13 +93,24 @@ func applyUmaskFromEnv() {
 		return
 	}
 
-	mask, err := strconv.ParseUint(raw, 8, 32)
+	mask, err := parseUmask(raw)
 	if err != nil {
-		log.Printf("Invalid UMASK %q (expected octal), leaving default umask unchanged", raw)
+		log.Printf("Invalid UMASK %q (%v), leaving default umask unchanged", raw, err)
 		return
 	}
 
-	syscall.Umask(int(mask))
+	syscall.Umask(mask)
+}
+
+func parseUmask(raw string) (int, error) {
+	mask, err := strconv.ParseUint(raw, 8, 32)
+	if err != nil {
+		return 0, fmt.Errorf("expected octal value")
+	}
+	if mask > 0o777 {
+		return 0, fmt.Errorf("must be between 0000 and 0777")
+	}
+	return int(mask), nil
 }
 
 // watchFileForChanges watches a file for changes and calls onChange when a change is detected.
