@@ -418,8 +418,15 @@ func runBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 	// Prefer a Blue leader when repairing consensus, since Blue should remain
 	// the authoritative cluster after rollback. If that fails, fall back to any
 	// leader we can reach (including Green) to read the Raft configuration.
-	leaderPolicy := newLeaderSearchPolicy(cfg.BlueRevision, cfg.GreenRevision, "Blue", "Green")
-	leaderURL, err := findLeaderWithPolicy(ctx, logger, cfg, leaderPolicy)
+	leaderURL, err := findPreferredLeaderWithFallback(
+		ctx,
+		logger,
+		cfg,
+		cfg.BlueRevision,
+		cfg.GreenRevision,
+		"Blue",
+		"Green",
+	)
 	if err != nil {
 		return fmt.Errorf("failed to find leader for consensus repair: %w", err)
 	}
@@ -589,8 +596,15 @@ func runBlueGreenDemoteBlueNonVotersStepDown(ctx context.Context, logger logr.Lo
 }
 
 func findInitialLeader(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) (string, error) {
-	leaderPolicy := newLeaderSearchPolicy(cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
-	leaderURL, err := findLeaderWithPolicy(ctx, logger, cfg, leaderPolicy)
+	leaderURL, err := findPreferredLeaderWithFallback(
+		ctx,
+		logger,
+		cfg,
+		cfg.GreenRevision,
+		cfg.BlueRevision,
+		"Green",
+		"Blue",
+	)
 	if err != nil {
 		return "", fmt.Errorf("failed to find initial leader: %w", err)
 	}
@@ -829,11 +843,11 @@ func stepDownLeader(ctx context.Context, logger logr.Logger, client leaderTransf
 }
 
 func waitForNewLeaderURL(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
-	return waitForNewLeaderURLWithFuncs(ctx, logger, cfg, previousLeaderURL, waitForLeaderElectionOutcome, findLeaderWithPolicy)
+	return waitForNewLeaderURLWithFuncs(ctx, logger, cfg, previousLeaderURL, waitForLeaderElectionOutcome, findAnyLeader)
 }
 
 type leaderElectionWaitFunc func(context.Context, *ExecutorConfig, string) leaderElectionOutcome
-type leaderFallbackResolver func(context.Context, logr.Logger, *ExecutorConfig, leaderSearchPolicy) (string, error)
+type leaderFallbackResolver func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error)
 
 func waitForNewLeaderURLWithFuncs(
 	ctx context.Context,
@@ -846,6 +860,13 @@ func waitForNewLeaderURLWithFuncs(
 	logger.Info("Waiting for new leader election...")
 
 	waitOutcome := waitFn(ctx, cfg, previousLeaderURL)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		reasonCode := reasonCodeFromContextError(ctxErr)
+		if reasonCode == "" {
+			reasonCode = reasonContextCanceled
+		}
+		return "", newExecutorReasonedError(reasonCode, "failed while waiting for new leader election", ctxErr)
+	}
 	if waitOutcome.WaitError != nil && !errors.Is(waitOutcome.WaitError, context.DeadlineExceeded) && !errors.Is(waitOutcome.WaitError, context.Canceled) {
 		reasonCode := reasonCodeFromError(waitOutcome.WaitError)
 		if reasonCode == "" {
@@ -866,8 +887,7 @@ func waitForNewLeaderURLWithFuncs(
 	}
 
 	logger.Info("Finding new leader via fallback search...")
-	fallbackPolicy := newLeaderSearchPolicy(cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
-	leaderURL, findErr := fallbackFn(ctx, logger, cfg, fallbackPolicy)
+	leaderURL, findErr := fallbackFn(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision)
 	if findErr != nil {
 		reasonCode := reasonCodeFromError(findErr)
 		if reasonCode == "" {
@@ -1006,8 +1026,15 @@ func runBlueGreenRemovePeers(
 		return fmt.Errorf("revision to remove is required")
 	}
 
-	leaderPolicy := newLeaderSearchPolicy(preferredLeaderRevision, fallbackLeaderRevision, "preferred", "fallback")
-	leaderURL, err := findLeaderWithPolicy(ctx, logger, cfg, leaderPolicy)
+	leaderURL, err := findPreferredLeaderWithFallback(
+		ctx,
+		logger,
+		cfg,
+		preferredLeaderRevision,
+		fallbackLeaderRevision,
+		"preferred",
+		"fallback",
+	)
 	if err != nil {
 		return fmt.Errorf("failed to find leader: %w", err)
 	}
@@ -1148,6 +1175,29 @@ func normalizeRetryPolicy(policy retryPolicy) retryPolicy {
 }
 
 type leaderFinder func(context.Context, *ExecutorConfig, string) (string, error)
+
+func findPreferredLeaderWithFallback(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	preferredRevision string,
+	fallbackRevision string,
+	preferredLabel string,
+	fallbackLabel string,
+) (string, error) {
+	policy := newLeaderSearchPolicy(preferredRevision, fallbackRevision, preferredLabel, fallbackLabel)
+	return findLeaderWithPolicy(ctx, logger, cfg, policy)
+}
+
+func findAnyLeader(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	firstRevision string,
+	secondRevision string,
+) (string, error) {
+	return findPreferredLeaderWithFallback(ctx, logger, cfg, firstRevision, secondRevision, "first", "second")
+}
 
 func findLeaderWithPolicy(
 	ctx context.Context,
