@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,7 +16,11 @@ import (
 )
 
 const (
-	leaderElectionWaitDuration = 5 * time.Second
+	leaderElectionWaitDuration      = 5 * time.Second
+	defaultLeaderSearchMaxAttempts  = 10
+	defaultLeaderSearchWaitInterval = 2 * time.Second
+	defaultLeaderTransferMaxRetries = 10
+	singleLeaderSearchAttempt       = 1
 )
 
 // RunExecutor runs the upgrade executor action.
@@ -117,7 +122,7 @@ func runBlueGreenJoinGreenNonVoters(ctx context.Context, logger logr.Logger, cfg
 			return fmt.Errorf("failed to create client for Green pod %q: %w", greenPodURL, err)
 		}
 		if err := client.JoinRaftCluster(ctx, blueLeaderURL, true, true); err != nil {
-			if isBenignJoinError(err) {
+			if classifyJoinError(err) == benignErrorClassificationBenign {
 				logger.V(1).Info("Join reported benign error; continuing", "green_pod_url", greenPodURL, "error", err.Error())
 				continue
 			}
@@ -194,62 +199,35 @@ func runBlueGreenWaitGreenSynced(ctx context.Context, logger logr.Logger, cfg *E
 			)
 		}
 
-		allSynced := true
-		maxDelta := uint64(0)
-		missingGreen := 0
-		unhealthyGreen := 0
-		for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
-			greenPodName := revisionPodName(cfg.ClusterName, cfg.GreenRevision, i)
-			found := false
-			for _, server := range state.Servers {
-				if raftAutopilotServerMatchesPod(server, greenPodName) {
-					found = true
-
-					// Note: Non-voters may report as unhealthy during sync since they haven't
-					// fully replicated yet. We log this for visibility but only block on delta.
-					if !server.Healthy {
-						unhealthyGreen++
-						logger.V(1).Info("Green pod is not healthy in autopilot (expected for non-voters syncing)", "pod_name", greenPodName, "healthy", server.Healthy, "status", server.Status, "last_index", server.LastIndex)
-					}
-
-					var delta uint64
-					if targetIndex > server.LastIndex {
-						delta = targetIndex - server.LastIndex
-					}
-					if delta > maxDelta {
-						maxDelta = delta
-					}
-					if delta > cfg.SyncThreshold {
-						allSynced = false
-					}
-					break
-				}
-			}
-			if !found {
-				allSynced = false
-				missingGreen++
-				logger.V(1).Info("Green pod not found in autopilot state", "expected_pod_name", greenPodName)
-			}
+		evaluation := evaluateGreenSyncFromAutopilot(cfg, state, targetIndex)
+		for _, missingPodName := range evaluation.MissingPods {
+			logger.V(1).Info("Green pod not found in autopilot state", "expected_pod_name", missingPodName)
+		}
+		for _, unhealthyServer := range evaluation.UnhealthyServers {
+			// Note: Non-voters may report as unhealthy during sync since they haven't
+			// fully replicated yet. We log this for visibility but only block on delta.
+			logger.V(1).Info(
+				"Green pod is not healthy in autopilot (expected for non-voters syncing)",
+				"pod_name", unhealthyServer.PodName,
+				"healthy", unhealthyServer.Server.Healthy,
+				"status", unhealthyServer.Server.Status,
+				"last_index", unhealthyServer.Server.LastIndex,
+			)
 		}
 
-		if allSynced {
+		if evaluation.AllSynced {
 			logger.Info("Green pods are synced", "target_index", targetIndex, "sync_threshold", cfg.SyncThreshold)
 			return nil
 		}
 
 		if time.Now().After(nextProgressLog) {
-			// Log all servers in autopilot state for debugging
-			serverNames := make([]string, 0, len(state.Servers))
-			for key, server := range state.Servers {
-				serverNames = append(serverNames, fmt.Sprintf("%s(id=%s,name=%s,addr=%s)", key, server.ID, server.Name, server.Address))
-			}
 			logger.Info("Waiting for Green sync",
 				"target_index", targetIndex,
-				"max_delta", maxDelta,
+				"max_delta", evaluation.MaxDelta,
 				"sync_threshold", cfg.SyncThreshold,
-				"missing_green", missingGreen,
-				"unhealthy_green", unhealthyGreen,
-				"autopilot_servers", serverNames,
+				"missing_green", evaluation.MissingGreen,
+				"unhealthy_green", evaluation.UnhealthyGreen,
+				"autopilot_servers", autopilotServerDebugNames(state),
 			)
 			nextProgressLog = time.Now().Add(10 * time.Second)
 		}
@@ -262,6 +240,90 @@ func runBlueGreenWaitGreenSynced(ctx context.Context, logger logr.Logger, cfg *E
 		case <-timer.C:
 		}
 	}
+}
+
+type greenAutopilotServerObservation struct {
+	PodName string
+	Server  openbao.RaftAutopilotServerState
+}
+
+type greenSyncEvaluation struct {
+	AllSynced        bool
+	MaxDelta         uint64
+	MissingGreen     int
+	UnhealthyGreen   int
+	MissingPods      []string
+	UnhealthyServers []greenAutopilotServerObservation
+}
+
+func evaluateGreenSyncFromAutopilot(cfg *ExecutorConfig, state *openbao.RaftAutopilotStateResponse, targetIndex uint64) greenSyncEvaluation {
+	evaluation := greenSyncEvaluation{
+		AllSynced: true,
+	}
+
+	if cfg == nil || state == nil {
+		evaluation.AllSynced = false
+		return evaluation
+	}
+
+	for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
+		greenPodName := revisionPodName(cfg.ClusterName, cfg.GreenRevision, i)
+		server, found := findAutopilotServerForPod(state, greenPodName)
+		if !found {
+			evaluation.AllSynced = false
+			evaluation.MissingGreen++
+			evaluation.MissingPods = append(evaluation.MissingPods, greenPodName)
+			continue
+		}
+
+		if !server.Healthy {
+			evaluation.UnhealthyGreen++
+			evaluation.UnhealthyServers = append(evaluation.UnhealthyServers, greenAutopilotServerObservation{
+				PodName: greenPodName,
+				Server:  server,
+			})
+		}
+
+		var delta uint64
+		if targetIndex > server.LastIndex {
+			delta = targetIndex - server.LastIndex
+		}
+		if delta > evaluation.MaxDelta {
+			evaluation.MaxDelta = delta
+		}
+		if delta > cfg.SyncThreshold {
+			evaluation.AllSynced = false
+		}
+	}
+
+	return evaluation
+}
+
+func findAutopilotServerForPod(state *openbao.RaftAutopilotStateResponse, podName string) (openbao.RaftAutopilotServerState, bool) {
+	if state == nil {
+		return openbao.RaftAutopilotServerState{}, false
+	}
+
+	for _, server := range state.Servers {
+		if raftAutopilotServerMatchesPod(server, podName) {
+			return server, true
+		}
+	}
+
+	return openbao.RaftAutopilotServerState{}, false
+}
+
+func autopilotServerDebugNames(state *openbao.RaftAutopilotStateResponse) []string {
+	if state == nil {
+		return nil
+	}
+
+	serverNames := make([]string, 0, len(state.Servers))
+	for key, server := range state.Servers {
+		serverNames = append(serverNames, fmt.Sprintf("%s(id=%s,name=%s,addr=%s)", key, server.ID, server.Name, server.Address))
+	}
+	sort.Strings(serverNames)
+	return serverNames
 }
 
 func raftAutopilotLeaderLastIndex(state *openbao.RaftAutopilotStateResponse) (uint64, bool) {
@@ -356,7 +418,15 @@ func runBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 	// Prefer a Blue leader when repairing consensus, since Blue should remain
 	// the authoritative cluster after rollback. If that fails, fall back to any
 	// leader we can reach (including Green) to read the Raft configuration.
-	leaderURL, err := findLeaderWithFallback(ctx, logger, cfg, cfg.BlueRevision, cfg.GreenRevision, "Blue", "Green")
+	leaderURL, err := findPreferredLeaderWithFallback(
+		ctx,
+		logger,
+		cfg,
+		cfg.BlueRevision,
+		cfg.GreenRevision,
+		"Blue",
+		"Green",
+	)
 	if err != nil {
 		return fmt.Errorf("failed to find leader for consensus repair: %w", err)
 	}
@@ -526,7 +596,15 @@ func runBlueGreenDemoteBlueNonVotersStepDown(ctx context.Context, logger logr.Lo
 }
 
 func findInitialLeader(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) (string, error) {
-	leaderURL, err := findLeaderWithFallback(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
+	leaderURL, err := findPreferredLeaderWithFallback(
+		ctx,
+		logger,
+		cfg,
+		cfg.GreenRevision,
+		cfg.BlueRevision,
+		"Green",
+		"Blue",
+	)
 	if err != nil {
 		return "", fmt.Errorf("failed to find initial leader: %w", err)
 	}
@@ -534,47 +612,142 @@ func findInitialLeader(ctx context.Context, logger logr.Logger, cfg *ExecutorCon
 	return leaderURL, nil
 }
 
+type leaderTransferClient interface {
+	ReadRaftConfiguration(context.Context) (*openbao.RaftConfigurationResponse, error)
+	DemoteRaftPeer(context.Context, string) error
+	StepDown(context.Context) error
+}
+
+type leaderTransferClientResolver func(context.Context, string) (leaderTransferClient, error)
+
+type leaderTransferWaitFunc func(context.Context, logr.Logger, *ExecutorConfig, string) (string, error)
+
+const (
+	leaderTransferStateResolveCurrentLeader = "ResolveCurrentLeader"
+	leaderTransferStateInspectRaftConfig    = "InspectRaftConfig"
+	leaderTransferStateBiasElection         = "BiasElection"
+	leaderTransferStateStepDown             = "StepDown"
+	leaderTransferStateAwaitNewLeader       = "AwaitNewLeader"
+	leaderTransferStateValidateGreenLeader  = "ValidateGreenLeader"
+)
+
 func ensureGreenLeaderBySteppingDownBlue(
 	ctx context.Context,
 	logger logr.Logger,
 	cfg *ExecutorConfig,
 	factory *openbao.ClientFactory,
 	leaderURL string,
-) (*openbao.Client, error) {
-	const maxRetries = 10
+) (leaderTransferClient, error) {
+	resolver := func(ctx context.Context, leaderURL string) (leaderTransferClient, error) {
+		return clientForLeaderURL(ctx, cfg, factory, leaderURL)
+	}
+	return ensureGreenLeaderBySteppingDownBlueWithFuncs(
+		ctx,
+		logger,
+		cfg,
+		leaderURL,
+		retryPolicy{MaxAttempts: defaultLeaderTransferMaxRetries},
+		resolver,
+		waitForNewLeaderURL,
+	)
+}
+
+func ensureGreenLeaderBySteppingDownBlueWithFuncs(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	leaderURL string,
+	policy retryPolicy,
+	resolveClient leaderTransferClientResolver,
+	waitForLeader leaderTransferWaitFunc,
+) (leaderTransferClient, error) {
+	policy = normalizeLeaderTransferRetryPolicy(policy)
 	bluePrefix := fmt.Sprintf("%s-%s-", cfg.ClusterName, cfg.BlueRevision)
 
-	var client *openbao.Client
-	for _, attempt := range attemptOrdinals(maxRetries) {
-		var err error
-		client, err = clientForLeaderURL(ctx, cfg, factory, leaderURL)
-		if err != nil {
-			return nil, err
+	for _, attempt := range attemptOrdinals(policy.MaxAttempts) {
+		attemptNumber := attempt + 1
+		state := leaderTransferStateResolveCurrentLeader
+		var client leaderTransferClient
+		var config *openbao.RaftConfigurationResponse
+		var leaderID string
+		var leaderIsBlue bool
+
+		for {
+			switch state {
+			case leaderTransferStateResolveCurrentLeader:
+				resolvedClient, err := resolveClient(ctx, leaderURL)
+				if err != nil {
+					return nil, newExecutorReasonedError(reasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), err)
+				}
+				client = resolvedClient
+				state = leaderTransferStateInspectRaftConfig
+
+			case leaderTransferStateInspectRaftConfig:
+				currentConfig, err := client.ReadRaftConfiguration(ctx)
+				if err != nil {
+					return nil, newExecutorReasonedError(reasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), err)
+				}
+				config = currentConfig
+				leaderID, leaderIsBlue = raftLeaderInfo(config, bluePrefix)
+				if leaderID == "" {
+					return nil, newExecutorReasonedError(reasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), errors.New("raft leader not found in configuration"))
+				}
+				if !leaderIsBlue {
+					logger.Info("Leader is not Blue (assumed Green), proceeding to demotion", "state", leaderTransferStateValidateGreenLeader, "attempt", attemptNumber, "max_retries", policy.MaxAttempts)
+					return client, nil
+				}
+
+				logger.Info("Current leader is Blue", "leader_id", leaderID, "state", state, "attempt", attemptNumber, "max_retries", policy.MaxAttempts)
+				state = leaderTransferStateBiasElection
+
+			case leaderTransferStateBiasElection:
+				if err := demoteBlueVotersExceptLeader(ctx, logger, cfg, client, config, leaderID, bluePrefix); err != nil {
+					return nil, newExecutorReasonedError(reasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), err)
+				}
+				state = leaderTransferStateStepDown
+
+			case leaderTransferStateStepDown:
+				classification, err := stepDownLeader(ctx, logger, client)
+				if err != nil && classification == benignErrorClassificationFatal {
+					return nil, newExecutorReasonedError(reasonStepDownFatal, fmt.Sprintf("leader transfer state %s failed", state), err)
+				}
+				state = leaderTransferStateAwaitNewLeader
+
+			case leaderTransferStateAwaitNewLeader:
+				newLeaderURL, err := waitForLeader(ctx, logger, cfg, leaderURL)
+				if err != nil {
+					return nil, newExecutorReasonedError(reasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), err)
+				}
+				leaderURL = newLeaderURL
+				state = leaderTransferStateValidateGreenLeader
+
+			case leaderTransferStateValidateGreenLeader:
+				logger.V(1).Info(
+					"Leader transfer attempt completed; validating leader on next attempt",
+					"state", state,
+					"attempt", attemptNumber,
+					"max_retries", policy.MaxAttempts,
+					"next_leader_url", leaderURL,
+				)
+				goto nextAttempt
+			}
 		}
 
-		config, err := client.ReadRaftConfiguration(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read Raft configuration: %w", err)
-		}
-
-		leaderID, leaderIsBlue := raftLeaderInfo(config, bluePrefix)
-		if !leaderIsBlue {
-			logger.Info("Leader is not Blue (assumed Green), proceeding to demotion")
-			return client, nil
-		}
-
-		logger.Info("Current leader is Blue", "leader_id", leaderID, "attempt", attempt+1, "max_retries", maxRetries)
-		demoteBlueVotersExceptLeader(ctx, logger, cfg, client, config, leaderID, bluePrefix)
-		stepDownLeader(ctx, logger, client)
-
-		newLeaderURL, err := waitForNewLeaderURL(ctx, logger, cfg, leaderURL)
-		if err != nil {
-			return nil, err
-		}
-		leaderURL = newLeaderURL
+	nextAttempt:
 	}
 
-	return nil, fmt.Errorf("failed to transfer leadership to Green node after %d attempts", maxRetries)
+	return nil, newExecutorReasonedError(
+		reasonLeaderTransferRetriesExhausted,
+		fmt.Sprintf("failed to transfer leadership to Green node after %d attempts", policy.MaxAttempts),
+		nil,
+	)
+}
+
+func normalizeLeaderTransferRetryPolicy(policy retryPolicy) retryPolicy {
+	if policy.MaxAttempts <= 0 {
+		policy.MaxAttempts = defaultLeaderTransferMaxRetries
+	}
+	return policy
 }
 
 func clientForLeaderURL(ctx context.Context, cfg *ExecutorConfig, factory *openbao.ClientFactory, leaderURL string) (*openbao.Client, error) {
@@ -622,9 +795,9 @@ func demoteBlueVotersExceptLeader(
 	config *openbao.RaftConfigurationResponse,
 	leaderID string,
 	bluePrefix string,
-) {
+) error {
 	if client == nil || config == nil {
-		return
+		return nil
 	}
 
 	for _, server := range config.Config.Servers {
@@ -637,76 +810,184 @@ func demoteBlueVotersExceptLeader(
 
 		logger.Info("Demoting Blue peer before step-down to bias election", "node_id", server.NodeID)
 		if err := client.DemoteRaftPeer(ctx, server.NodeID); err != nil {
-			if isBenignDemoteError(err) {
+			classification := classifyDemoteError(err)
+			if classification == benignErrorClassificationBenign {
 				logger.V(1).Info("Blue peer already non-voter before step-down", "node_id", server.NodeID)
 				continue
 			}
-			// Log but continue - step-down is the main action.
-			logger.Error(err, "Failed to demote Blue peer before step-down", "node_id", server.NodeID, "cluster_replicas", cfg.ClusterReplicas)
+			if classification == benignErrorClassificationRetryable {
+				// Keep step-down as the primary action; retryable demote failures are surfaced in logs.
+				logger.Error(err, "Failed to demote Blue peer before step-down; continuing", "node_id", server.NodeID, "cluster_replicas", cfg.ClusterReplicas, "error_classification", classification)
+				continue
+			}
+
+			return newExecutorReasonedError(
+				reasonDemoteFatal,
+				fmt.Sprintf("failed to demote Blue peer %q before step-down", server.NodeID),
+				err,
+			)
 		}
 	}
+
+	return nil
 }
 
-func stepDownLeader(ctx context.Context, logger logr.Logger, client *openbao.Client) {
+func stepDownLeader(ctx context.Context, logger logr.Logger, client leaderTransferClient) (benignErrorClassification, error) {
 	logger.Info("Stepping down Blue leader to transfer leadership to Green")
 	if err := client.StepDown(ctx); err != nil {
-		// If step down fails, maybe we lost connection? Just log and retry loop.
-		logger.Error(err, "Failed to step down leader")
+		classification := classifyStepDownError(err)
+		logger.Error(err, "Failed to step down leader", "error_classification", classification)
+		return classification, err
 	}
+	return benignErrorClassificationBenign, nil
 }
 
 func waitForNewLeaderURL(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
-	return waitForNewLeaderURLWithFuncs(ctx, logger, cfg, previousLeaderURL, waitForLeaderElection, findLeaderWithFallback)
+	return waitForNewLeaderURLWithFuncs(ctx, logger, cfg, previousLeaderURL, waitForLeaderElectionOutcome, findAnyLeader)
 }
+
+type leaderElectionWaitFunc func(context.Context, *ExecutorConfig, string) leaderElectionOutcome
+type leaderFallbackResolver func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error)
 
 func waitForNewLeaderURLWithFuncs(
 	ctx context.Context,
 	logger logr.Logger,
 	cfg *ExecutorConfig,
 	previousLeaderURL string,
-	waitFn func(context.Context, *ExecutorConfig, string) (string, error),
-	fallbackFn func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error),
+	waitFn leaderElectionWaitFunc,
+	fallbackFn leaderFallbackResolver,
 ) (string, error) {
 	logger.Info("Waiting for new leader election...")
 
-	newLeaderURL, err := waitFn(ctx, cfg, previousLeaderURL)
-	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
-		return "", fmt.Errorf("failed while waiting for new leader election: %w", err)
+	waitOutcome := waitFn(ctx, cfg, previousLeaderURL)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		reasonCode := reasonCodeFromContextError(ctxErr)
+		if reasonCode == "" {
+			reasonCode = reasonContextCanceled
+		}
+		return "", newExecutorReasonedError(reasonCode, "failed while waiting for new leader election", ctxErr)
+	}
+	if waitOutcome.WaitError != nil && !errors.Is(waitOutcome.WaitError, context.DeadlineExceeded) && !errors.Is(waitOutcome.WaitError, context.Canceled) {
+		reasonCode := reasonCodeFromError(waitOutcome.WaitError)
+		if reasonCode == "" {
+			reasonCode = reasonElectionTimeout
+		}
+		return "", newExecutorReasonedError(reasonCode, "failed while waiting for new leader election", waitOutcome.WaitError)
 	}
 
-	logger.Info("Finding new leader...")
-	if strings.TrimSpace(newLeaderURL) != "" {
-		logger.Info("New leader found", "leader_url", newLeaderURL)
-		return newLeaderURL, nil
+	logger.Info(
+		"Leader election wait completed",
+		"decision_path", waitOutcome.DecisionPath,
+		"reason_code", waitOutcome.ReasonCode,
+		"leader_url", waitOutcome.Value,
+	)
+	if waitOutcome.DecisionPath == decisionPathElectionObservedNewLeader && strings.TrimSpace(waitOutcome.Value) != "" {
+		logger.Info("New leader found", "leader_url", waitOutcome.Value)
+		return waitOutcome.Value, nil
+	}
+	if waitOutcome.DecisionPath == decisionPathElectionObservedSameLeader && strings.TrimSpace(waitOutcome.Value) != "" {
+		logger.Info("Leader election retained previous leader; proceeding with observed leader", "leader_url", waitOutcome.Value)
+		return waitOutcome.Value, nil
 	}
 
-	leaderURL, findErr := fallbackFn(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
+	logger.Info("Finding new leader via fallback search...")
+	leaderURL, findErr := fallbackFn(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision)
 	if findErr != nil {
-		return "", fmt.Errorf("failed to find new leader after step-down: %w", findErr)
+		reasonCode := reasonCodeFromError(findErr)
+		if reasonCode == "" {
+			reasonCode = reasonFallbackLeaderNotFound
+		}
+		return "", newExecutorReasonedError(reasonCode, "failed to find new leader after step-down", findErr)
 	}
 	logger.Info("New leader found", "leader_url", leaderURL)
 	return leaderURL, nil
 }
 
-func waitForLeaderElection(ctx context.Context, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
-	var newLeaderURL string
-	err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, leaderElectionWaitDuration, true, func(ctx context.Context) (bool, error) {
-		if url, ok := findLeaderOnce(ctx, cfg, cfg.GreenRevision); ok {
-			newLeaderURL = url
+type leaderOnceFinder func(context.Context, *ExecutorConfig, string) (string, bool)
+
+func waitForLeaderElectionOutcome(ctx context.Context, cfg *ExecutorConfig, previousLeaderURL string) leaderElectionOutcome {
+	return waitForLeaderElectionWithFinderAndPolicy(
+		ctx,
+		cfg,
+		previousLeaderURL,
+		retryPolicy{
+			AttemptInterval: 500 * time.Millisecond,
+			ElectionWait:    leaderElectionWaitDuration,
+		},
+		findLeaderOnce,
+	)
+}
+
+func waitForLeaderElectionWithFinderAndPolicy(
+	ctx context.Context,
+	cfg *ExecutorConfig,
+	previousLeaderURL string,
+	policy retryPolicy,
+	finder leaderOnceFinder,
+) leaderElectionOutcome {
+	policy = normalizeElectionRetryPolicy(policy)
+
+	outcome := leaderElectionOutcome{
+		DecisionPath: decisionPathElectionTimeout,
+		ReasonCode:   reasonElectionTimeout,
+	}
+	lastObservedLeaderURL := ""
+
+	err := wait.PollUntilContextTimeout(ctx, policy.AttemptInterval, policy.ElectionWait, true, func(ctx context.Context) (bool, error) {
+		if url, ok := finder(ctx, cfg, cfg.GreenRevision); ok {
+			outcome.Value = url
+			outcome.DecisionPath = decisionPathElectionObservedNewLeader
+			outcome.ReasonCode = reasonElectionNewLeaderFound
 			return true, nil
 		}
-		if url, ok := findLeaderOnce(ctx, cfg, cfg.BlueRevision); ok {
+
+		if url, ok := finder(ctx, cfg, cfg.BlueRevision); ok {
 			// Only consider it "new" if leadership moved away from the pre-stepdown leader.
 			if url != previousLeaderURL {
-				newLeaderURL = url
+				outcome.Value = url
+				outcome.DecisionPath = decisionPathElectionObservedNewLeader
+				outcome.ReasonCode = reasonElectionNewLeaderFound
 				return true, nil
 			}
-			// Keep the last observed leader as a fallback; the outer loop will step down again if needed.
-			newLeaderURL = url
+
+			// Keep the last observed leader as a fallback for the follow-up phase.
+			lastObservedLeaderURL = url
 		}
 		return false, nil
 	})
-	return newLeaderURL, err
+	if err == nil {
+		return outcome
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.Canceled) {
+		if strings.TrimSpace(lastObservedLeaderURL) != "" {
+			outcome.Value = lastObservedLeaderURL
+			outcome.DecisionPath = decisionPathElectionObservedSameLeader
+			outcome.ReasonCode = reasonElectionSameLeaderSeen
+		}
+		outcome.WaitError = newExecutorReasonedError(reasonElectionTimeout, "leader election did not converge within wait duration", err)
+		return outcome
+	}
+
+	if reasonCode := reasonCodeFromContextError(err); reasonCode != "" {
+		outcome.DecisionPath = decisionPathFromReasonCode(reasonCode)
+		outcome.ReasonCode = reasonCode
+		outcome.WaitError = newExecutorReasonedError(reasonCode, "leader election was interrupted", err)
+		return outcome
+	}
+
+	outcome.WaitError = newExecutorReasonedError(reasonElectionTimeout, "leader election did not converge within wait duration", err)
+	return outcome
+}
+
+func normalizeElectionRetryPolicy(policy retryPolicy) retryPolicy {
+	if policy.AttemptInterval <= 0 {
+		policy.AttemptInterval = 500 * time.Millisecond
+	}
+	if policy.ElectionWait <= 0 {
+		policy.ElectionWait = leaderElectionWaitDuration
+	}
+	return policy
 }
 
 func demoteAllBluePods(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, client raftPeerDemoter) error {
@@ -749,7 +1030,7 @@ func runBlueGreenRemovePeers(
 		return fmt.Errorf("revision to remove is required")
 	}
 
-	leaderURL, err := findLeaderWithFallback(
+	leaderURL, err := findPreferredLeaderWithFallback(
 		ctx,
 		logger,
 		cfg,
@@ -813,92 +1094,62 @@ func loginJWT(ctx context.Context, cfg *ExecutorConfig, baseURL string) (string,
 }
 
 func findLeader(ctx context.Context, cfg *ExecutorConfig, revision string) (string, error) {
+	return resolveLeaderWithRetry(
+		ctx,
+		cfg,
+		revision,
+		retryPolicy{
+			MaxAttempts:     defaultLeaderSearchMaxAttempts,
+			AttemptInterval: defaultLeaderSearchWaitInterval,
+		},
+	)
+}
+
+func resolveLeaderWithRetry(
+	ctx context.Context,
+	cfg *ExecutorConfig,
+	revision string,
+	policy retryPolicy,
+) (string, error) {
+	policy = normalizeRetryPolicy(policy)
+
 	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return "", err
 	}
 	defer cleanup()
 
-	for range attemptOrdinals(10) {
-		for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
-			url := podURL(cfg, revision, i)
-			client, err := factory.New(url)
-			if err != nil {
-				continue
-			}
-			isLeader, err := client.IsLeader(ctx)
-			if err != nil {
-				continue
-			}
-			if isLeader {
-				return url, nil
-			}
+	for range attemptOrdinals(policy.MaxAttempts) {
+		if url, found := findLeaderInSingleScan(ctx, cfg, revision, factory); found {
+			return url, nil
 		}
 
-		timer := time.NewTimer(2 * time.Second)
+		if policy.AttemptInterval <= 0 {
+			continue
+		}
+
+		timer := time.NewTimer(policy.AttemptInterval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return "", fmt.Errorf("context cancelled while finding leader: %w", ctx.Err())
+			reasonCode := reasonCodeFromContextError(ctx.Err())
+			if reasonCode == "" {
+				reasonCode = reasonContextCanceled
+			}
+			return "", newExecutorReasonedError(reasonCode, "context cancelled while finding leader", ctx.Err())
 		case <-timer.C:
 		}
 	}
 
-	return "", fmt.Errorf("no leader found among %d pods", cfg.ClusterReplicas)
+	return "", newExecutorReasonedError(reasonPrimaryLeaderNotFound, fmt.Sprintf("no leader found among %d pods", cfg.ClusterReplicas), nil)
 }
 
-func findLeaderWithFallback(
+func findLeaderInSingleScan(
 	ctx context.Context,
-	logger logr.Logger,
 	cfg *ExecutorConfig,
-	primaryRevision string,
-	fallbackRevision string,
-	primaryLabel string,
-	fallbackLabel string,
-) (string, error) {
-	return findLeaderWithFallbackUsing(ctx, logger, cfg, primaryRevision, fallbackRevision, primaryLabel, fallbackLabel, findLeader)
-}
-
-type leaderFinder func(context.Context, *ExecutorConfig, string) (string, error)
-
-func findLeaderWithFallbackUsing(
-	ctx context.Context,
-	logger logr.Logger,
-	cfg *ExecutorConfig,
-	primaryRevision string,
-	fallbackRevision string,
-	primaryLabel string,
-	fallbackLabel string,
-	finder leaderFinder,
-) (string, error) {
-	leaderURL, err := finder(ctx, cfg, primaryRevision)
-	if err == nil {
-		return leaderURL, nil
-	}
-
-	if strings.TrimSpace(fallbackRevision) == "" || fallbackRevision == primaryRevision {
-		return "", fmt.Errorf("failed to find leader among %s pods: %w", primaryLabel, err)
-	}
-
-	logger.Info(
-		fmt.Sprintf("Failed to find leader among %s pods, checking %s pods", primaryLabel, fallbackLabel),
-		"error", err,
-	)
-
-	leaderURL, fallbackErr := finder(ctx, cfg, fallbackRevision)
-	if fallbackErr != nil {
-		return "", fmt.Errorf("failed to find leader (checked %s and %s): %w", primaryLabel, fallbackLabel, fallbackErr)
-	}
-	return leaderURL, nil
-}
-
-func findLeaderOnce(ctx context.Context, cfg *ExecutorConfig, revision string) (string, bool) {
-	factory, cleanup, err := newOpenBaoClientFactory(cfg)
-	if err != nil {
-		return "", false
-	}
-	defer cleanup()
-
+	revision string,
+	factory *openbao.ClientFactory,
+) (string, bool) {
 	for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
 		url := podURL(cfg, revision, i)
 		client, err := factory.New(url)
@@ -915,6 +1166,107 @@ func findLeaderOnce(ctx context.Context, cfg *ExecutorConfig, revision string) (
 	}
 
 	return "", false
+}
+
+func normalizeRetryPolicy(policy retryPolicy) retryPolicy {
+	if policy.MaxAttempts <= 0 {
+		policy.MaxAttempts = singleLeaderSearchAttempt
+	}
+	if policy.AttemptInterval < 0 {
+		policy.AttemptInterval = 0
+	}
+	return policy
+}
+
+type leaderFinder func(context.Context, *ExecutorConfig, string) (string, error)
+
+func findPreferredLeaderWithFallback(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	preferredRevision string,
+	fallbackRevision string,
+	preferredLabel string,
+	fallbackLabel string,
+) (string, error) {
+	policy := newLeaderSearchPolicy(preferredRevision, fallbackRevision, preferredLabel, fallbackLabel)
+	return findLeaderWithPolicy(ctx, logger, cfg, policy)
+}
+
+func findAnyLeader(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	firstRevision string,
+	secondRevision string,
+) (string, error) {
+	return findPreferredLeaderWithFallback(ctx, logger, cfg, firstRevision, secondRevision, "first", "second")
+}
+
+func findLeaderWithPolicy(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	policy leaderSearchPolicy,
+) (string, error) {
+	return findLeaderWithPolicyUsing(ctx, logger, cfg, policy, findLeader)
+}
+
+func findLeaderWithPolicyUsing(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	policy leaderSearchPolicy,
+	finder leaderFinder,
+) (string, error) {
+	outcome := resolveLeaderWithPolicyUsing(ctx, cfg, policy, finder)
+	logger.Info(
+		"Leader search completed",
+		"decision_path", outcome.DecisionPath,
+		"reason_code", outcome.ReasonCode,
+		"attempt", outcome.AttemptsUsed,
+		"max_attempts", maxLeaderSearchAttempts(policy),
+		"primary_revision", policy.PrimaryRevision,
+		"fallback_revision", policy.FallbackRevision,
+	)
+	if outcome.Value != "" {
+		return outcome.Value, nil
+	}
+
+	if policy.AllowFallback {
+		logger.Info(
+			fmt.Sprintf("Failed to find leader among %s pods, checking %s pods", policy.PrimaryLabel, policy.FallbackLabel),
+			"error", outcome.PrimaryError,
+			"decision_path", outcome.DecisionPath,
+			"reason_code", outcome.ReasonCode,
+		)
+		return "", newExecutorReasonedError(
+			outcome.ReasonCode,
+			fmt.Sprintf("failed to find leader (checked %s and %s)", policy.PrimaryLabel, policy.FallbackLabel),
+			outcome.FallbackError,
+		)
+	}
+
+	return "", newExecutorReasonedError(
+		outcome.ReasonCode,
+		fmt.Sprintf("failed to find leader among %s pods", policy.PrimaryLabel),
+		outcome.PrimaryError,
+	)
+}
+
+func findLeaderOnce(ctx context.Context, cfg *ExecutorConfig, revision string) (string, bool) {
+	leaderURL, err := resolveLeaderWithRetry(
+		ctx,
+		cfg,
+		revision,
+		retryPolicy{
+			MaxAttempts: singleLeaderSearchAttempt,
+		},
+	)
+	if err != nil {
+		return "", false
+	}
+	return leaderURL, true
 }
 
 func podURL(cfg *ExecutorConfig, revision string, ordinal int32) string {
@@ -969,6 +1321,24 @@ func isBenignJoinError(err error) bool {
 	return strings.Contains(err.Error(), "already joined")
 }
 
+func classifyJoinError(err error) benignErrorClassification {
+	if err == nil {
+		return benignErrorClassificationBenign
+	}
+	if isBenignJoinError(err) {
+		return benignErrorClassificationBenign
+	}
+
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "permission denied") ||
+		strings.Contains(message, "forbidden") ||
+		strings.Contains(message, "unauthorized") {
+		return benignErrorClassificationFatal
+	}
+
+	return benignErrorClassificationFatal
+}
+
 func isBenignDemoteError(err error) bool {
 	if err == nil {
 		return false
@@ -978,6 +1348,39 @@ func isBenignDemoteError(err error) bool {
 	return strings.Contains(message, "already a non-voter") ||
 		strings.Contains(message, "already non-voter") ||
 		strings.Contains(message, "already non voter")
+}
+
+func classifyDemoteError(err error) benignErrorClassification {
+	if err == nil {
+		return benignErrorClassificationBenign
+	}
+	if isBenignDemoteError(err) {
+		return benignErrorClassificationBenign
+	}
+
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "permission denied") ||
+		strings.Contains(message, "forbidden") ||
+		strings.Contains(message, "unauthorized") {
+		return benignErrorClassificationFatal
+	}
+
+	return benignErrorClassificationRetryable
+}
+
+func classifyStepDownError(err error) benignErrorClassification {
+	if err == nil {
+		return benignErrorClassificationBenign
+	}
+
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "permission denied") ||
+		strings.Contains(message, "forbidden") ||
+		strings.Contains(message, "unauthorized") {
+		return benignErrorClassificationFatal
+	}
+
+	return benignErrorClassificationRetryable
 }
 
 func newOpenBaoClientFactory(cfg *ExecutorConfig) (*openbao.ClientFactory, func(), error) {

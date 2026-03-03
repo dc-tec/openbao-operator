@@ -142,7 +142,7 @@ func TestRunExecutor(t *testing.T) {
 	}
 }
 
-func TestFindLeaderWithFallback(t *testing.T) {
+func TestFindLeaderWithPolicy(t *testing.T) {
 	t.Parallel()
 
 	ctx := canceledContext()
@@ -186,7 +186,7 @@ func TestFindLeaderWithFallback(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			leaderURL, err := findLeaderWithFallback(
+			leaderURL, err := findPreferredLeaderWithFallback(
 				ctx,
 				logr.Discard(),
 				cfg,
@@ -196,19 +196,19 @@ func TestFindLeaderWithFallback(t *testing.T) {
 				tt.fallbackLabel,
 			)
 			if err == nil {
-				t.Fatalf("findLeaderWithFallback() err=nil, want contains %q", tt.wantErr)
+				t.Fatalf("findPreferredLeaderWithFallback() err=nil, want contains %q", tt.wantErr)
 			}
 			if leaderURL != "" {
-				t.Fatalf("findLeaderWithFallback() leaderURL=%q, want empty", leaderURL)
+				t.Fatalf("findPreferredLeaderWithFallback() leaderURL=%q, want empty", leaderURL)
 			}
 			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("findLeaderWithFallback() error=%q, want contains %q", err.Error(), tt.wantErr)
+				t.Fatalf("findPreferredLeaderWithFallback() error=%q, want contains %q", err.Error(), tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestFindLeaderWithFallbackUsing(t *testing.T) {
+func TestFindLeaderWithPolicyUsingFallbackBehavior(t *testing.T) {
 	t.Parallel()
 
 	type findResult struct {
@@ -283,30 +283,29 @@ func TestFindLeaderWithFallbackUsing(t *testing.T) {
 				return "", errors.New("unexpected revision")
 			}
 
-			gotURL, err := findLeaderWithFallbackUsing(
+			policy := newLeaderSearchPolicy(tt.primaryRevision, tt.fallbackRevision, "Green", "Blue")
+
+			gotURL, err := findLeaderWithPolicyUsing(
 				context.Background(),
 				logr.Discard(),
 				cfg,
-				tt.primaryRevision,
-				tt.fallbackRevision,
-				"Green",
-				"Blue",
+				policy,
 				finder,
 			)
 
 			if tt.wantErr == "" {
 				if err != nil {
-					t.Fatalf("findLeaderWithFallbackUsing() unexpected error: %v", err)
+					t.Fatalf("findLeaderWithPolicyUsing() unexpected error: %v", err)
 				}
 				if gotURL != tt.wantURL {
-					t.Fatalf("findLeaderWithFallbackUsing() url=%q, want %q", gotURL, tt.wantURL)
+					t.Fatalf("findLeaderWithPolicyUsing() url=%q, want %q", gotURL, tt.wantURL)
 				}
 			} else {
 				if err == nil {
-					t.Fatalf("findLeaderWithFallbackUsing() error=nil, want contains %q", tt.wantErr)
+					t.Fatalf("findLeaderWithPolicyUsing() error=nil, want contains %q", tt.wantErr)
 				}
 				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("findLeaderWithFallbackUsing() error=%q, want contains %q", err.Error(), tt.wantErr)
+					t.Fatalf("findLeaderWithPolicyUsing() error=%q, want contains %q", err.Error(), tt.wantErr)
 				}
 			}
 
@@ -322,23 +321,202 @@ func TestFindLeaderWithFallbackUsing(t *testing.T) {
 	}
 }
 
-func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
+func TestFindLeaderWithPolicyUsing(t *testing.T) {
 	t.Parallel()
+
+	const (
+		greenRevision = "green"
+		blueRevision  = "blue"
+	)
+
+	policy := newLeaderSearchPolicy("green", "blue", "Green", "Blue")
+	calls := make([]string, 0, 2)
+	finder := func(_ context.Context, _ *ExecutorConfig, revision string) (string, error) {
+		calls = append(calls, revision)
+		if revision == greenRevision {
+			return "", errors.New("no leader in green")
+		}
+		if revision == blueRevision {
+			return "https://blue-leader", nil
+		}
+		return "", errors.New("unexpected revision")
+	}
+
+	gotURL, err := findLeaderWithPolicyUsing(
+		context.Background(),
+		logr.Discard(),
+		baseExecutorTestConfig(),
+		policy,
+		finder,
+	)
+	if err != nil {
+		t.Fatalf("findLeaderWithPolicyUsing() unexpected error: %v", err)
+	}
+	if gotURL != "https://blue-leader" {
+		t.Fatalf("findLeaderWithPolicyUsing() url=%q, want %q", gotURL, "https://blue-leader")
+	}
+	if len(calls) != 2 {
+		t.Fatalf("find calls=%v, want [green blue]", calls)
+	}
+	if calls[0] != greenRevision || calls[1] != blueRevision {
+		t.Fatalf("find calls=%v, want [green blue]", calls)
+	}
+}
+
+func TestResolveLeaderWithPolicyUsing(t *testing.T) {
+	t.Parallel()
+
+	type findResult struct {
+		url string
+		err error
+	}
 
 	tests := []struct {
 		name            string
-		waitFn          func(context.Context, *ExecutorConfig, string) (string, error)
-		fallbackFn      func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error)
+		policy          leaderSearchPolicy
+		resultsByRev    map[string]findResult
+		wantValue       string
+		wantDecision    string
+		wantReason      string
+		wantAttempts    int
+		wantPrimaryErr  bool
+		wantFallbackErr bool
+	}{
+		{
+			name:         "primary success",
+			policy:       newLeaderSearchPolicy("green", "blue", "Green", "Blue"),
+			resultsByRev: map[string]findResult{"green": {url: "https://green-leader"}},
+			wantValue:    "https://green-leader",
+			wantDecision: decisionPathPrimarySuccess,
+			wantReason:   reasonPrimaryLeaderFound,
+			wantAttempts: 1,
+		},
+		{
+			name:   "primary fail fallback success",
+			policy: newLeaderSearchPolicy("green", "blue", "Green", "Blue"),
+			resultsByRev: map[string]findResult{
+				"green": {err: errors.New("no green leader")},
+				"blue":  {url: "https://blue-leader"},
+			},
+			wantValue:      "https://blue-leader",
+			wantDecision:   decisionPathPrimaryFailedFallbackSuccess,
+			wantReason:     reasonFallbackLeaderFound,
+			wantAttempts:   2,
+			wantPrimaryErr: true,
+		},
+		{
+			name:   "both fail",
+			policy: newLeaderSearchPolicy("green", "blue", "Green", "Blue"),
+			resultsByRev: map[string]findResult{
+				"green": {err: errors.New("no green leader")},
+				"blue":  {err: errors.New("no blue leader")},
+			},
+			wantDecision:    decisionPathPrimaryFailedFallbackFailed,
+			wantReason:      reasonFallbackLeaderNotFound,
+			wantAttempts:    2,
+			wantPrimaryErr:  true,
+			wantFallbackErr: true,
+		},
+		{
+			name:   "fallback disabled",
+			policy: newLeaderSearchPolicy("green", "", "Green", "Blue"),
+			resultsByRev: map[string]findResult{
+				"green": {err: errors.New("no green leader")},
+			},
+			wantDecision:   decisionPathPrimaryFailedNoFallback,
+			wantReason:     reasonPrimaryLeaderNotFound,
+			wantAttempts:   1,
+			wantPrimaryErr: true,
+		},
+		{
+			name:   "context canceled classified deterministically",
+			policy: newLeaderSearchPolicy("green", "blue", "Green", "Blue"),
+			resultsByRev: map[string]findResult{
+				"green": {err: errors.New("no green leader")},
+				"blue":  {err: context.Canceled},
+			},
+			wantDecision:    decisionPathContextCanceled,
+			wantReason:      reasonContextCanceled,
+			wantAttempts:    2,
+			wantPrimaryErr:  true,
+			wantFallbackErr: true,
+		},
+		{
+			name:   "deadline exceeded classified deterministically",
+			policy: newLeaderSearchPolicy("green", "blue", "Green", "Blue"),
+			resultsByRev: map[string]findResult{
+				"green": {err: errors.New("no green leader")},
+				"blue":  {err: context.DeadlineExceeded},
+			},
+			wantDecision:    decisionPathDeadlineExceeded,
+			wantReason:      reasonDeadlineExceeded,
+			wantAttempts:    2,
+			wantPrimaryErr:  true,
+			wantFallbackErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			finder := func(_ context.Context, _ *ExecutorConfig, revision string) (string, error) {
+				if result, ok := tt.resultsByRev[revision]; ok {
+					return result.url, result.err
+				}
+				return "", errors.New("unexpected revision")
+			}
+
+			got := resolveLeaderWithPolicyUsing(context.Background(), baseExecutorTestConfig(), tt.policy, finder)
+
+			if got.Value != tt.wantValue {
+				t.Fatalf("value=%q, want %q", got.Value, tt.wantValue)
+			}
+			if got.DecisionPath != tt.wantDecision {
+				t.Fatalf("decision=%q, want %q", got.DecisionPath, tt.wantDecision)
+			}
+			if got.ReasonCode != tt.wantReason {
+				t.Fatalf("reason=%q, want %q", got.ReasonCode, tt.wantReason)
+			}
+			if got.AttemptsUsed != tt.wantAttempts {
+				t.Fatalf("attempts=%d, want %d", got.AttemptsUsed, tt.wantAttempts)
+			}
+			if (got.PrimaryError != nil) != tt.wantPrimaryErr {
+				t.Fatalf("primaryErr present=%v, want %v", got.PrimaryError != nil, tt.wantPrimaryErr)
+			}
+			if (got.FallbackError != nil) != tt.wantFallbackErr {
+				t.Fatalf("fallbackErr present=%v, want %v", got.FallbackError != nil, tt.wantFallbackErr)
+			}
+		})
+	}
+}
+
+func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
+	t.Parallel()
+
+	const fallbackLeaderURL = "https://fallback-leader"
+
+	tests := []struct {
+		name            string
+		ctx             context.Context
+		waitFn          func(context.Context, *ExecutorConfig, string) leaderElectionOutcome
+		fallbackFn      func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error)
 		wantURL         string
 		wantErr         string
+		wantReasonCode  string
 		wantFallbackRun bool
 	}{
 		{
 			name: "wait function returns new leader directly",
-			waitFn: func(context.Context, *ExecutorConfig, string) (string, error) {
-				return "https://green-leader", nil
+			ctx:  context.Background(),
+			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
+				return leaderElectionOutcome{
+					Value:        "https://green-leader",
+					DecisionPath: decisionPathElectionObservedNewLeader,
+					ReasonCode:   reasonElectionNewLeaderFound,
+				}
 			},
-			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error) {
+			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
 				return "", errors.New("fallback should not run")
 			},
 			wantURL:         "https://green-leader",
@@ -346,36 +524,86 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 		},
 		{
 			name: "deadline exceeded falls back to finder",
-			waitFn: func(context.Context, *ExecutorConfig, string) (string, error) {
-				return "", context.DeadlineExceeded
+			ctx:  context.Background(),
+			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
+				return leaderElectionOutcome{
+					DecisionPath: decisionPathDeadlineExceeded,
+					ReasonCode:   reasonDeadlineExceeded,
+					WaitError:    context.DeadlineExceeded,
+				}
 			},
-			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error) {
-				return "https://fallback-leader", nil
+			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
+				return fallbackLeaderURL, nil
 			},
-			wantURL:         "https://fallback-leader",
+			wantURL:         fallbackLeaderURL,
 			wantFallbackRun: true,
 		},
 		{
-			name: "unexpected wait error is returned",
-			waitFn: func(context.Context, *ExecutorConfig, string) (string, error) {
-				return "", errors.New("wait exploded")
+			name: "same leader observation returns observed leader without fallback",
+			ctx:  context.Background(),
+			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
+				return leaderElectionOutcome{
+					Value:        "https://previous-leader",
+					DecisionPath: decisionPathElectionObservedSameLeader,
+					ReasonCode:   reasonElectionSameLeaderSeen,
+				}
 			},
-			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error) {
-				return "https://fallback-leader", nil
+			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
+				return fallbackLeaderURL, nil
 			},
-			wantErr:         "failed while waiting for new leader election",
+			wantURL:         "https://previous-leader",
 			wantFallbackRun: false,
 		},
 		{
-			name: "fallback failure is wrapped",
-			waitFn: func(context.Context, *ExecutorConfig, string) (string, error) {
-				return "", context.Canceled
+			name: "unexpected wait error is returned",
+			ctx:  context.Background(),
+			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
+				return leaderElectionOutcome{
+					DecisionPath: decisionPathElectionTimeout,
+					ReasonCode:   reasonElectionTimeout,
+					WaitError:    errors.New("wait exploded"),
+				}
 			},
-			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error) {
+			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
+				return fallbackLeaderURL, nil
+			},
+			wantErr:         "failed while waiting for new leader election",
+			wantReasonCode:  reasonElectionTimeout,
+			wantFallbackRun: false,
+		},
+		{
+			name: "fallback failure is wrapped when context is active",
+			ctx:  context.Background(),
+			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
+				return leaderElectionOutcome{
+					DecisionPath: decisionPathContextCanceled,
+					ReasonCode:   reasonContextCanceled,
+					WaitError:    context.Canceled,
+				}
+			},
+			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
 				return "", errors.New("could not find fallback leader")
 			},
 			wantErr:         "failed to find new leader after step-down",
+			wantReasonCode:  reasonFallbackLeaderNotFound,
 			wantFallbackRun: true,
+		},
+		{
+			name: "parent context cancellation fails fast without fallback",
+			ctx:  canceledContext(),
+			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
+				return leaderElectionOutcome{
+					DecisionPath: decisionPathContextCanceled,
+					ReasonCode:   reasonContextCanceled,
+					WaitError:    context.Canceled,
+				}
+			},
+			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
+				return fallbackLeaderURL, nil
+			},
+			wantErr:         "failed while waiting for new leader election",
+			wantReasonCode:  reasonContextCanceled,
+			wantFallbackRun: false,
 		},
 	}
 
@@ -385,15 +613,19 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 
 			cfg := baseExecutorTestConfig()
 			fallbackCalls := 0
+			testCtx := tt.ctx
+			if testCtx == nil {
+				testCtx = context.Background()
+			}
 			gotURL, err := waitForNewLeaderURLWithFuncs(
-				context.Background(),
+				testCtx,
 				logr.Discard(),
 				cfg,
 				"https://previous-leader",
 				tt.waitFn,
-				func(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, primaryRevision, fallbackRevision, primaryLabel, fallbackLabel string) (string, error) {
+				func(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, firstRevision string, secondRevision string) (string, error) {
 					fallbackCalls++
-					return tt.fallbackFn(ctx, logger, cfg, primaryRevision, fallbackRevision, primaryLabel, fallbackLabel)
+					return tt.fallbackFn(ctx, logger, cfg, firstRevision, secondRevision)
 				},
 			)
 
@@ -411,6 +643,11 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("waitForNewLeaderURLWithFuncs() error=%q, want contains %q", err.Error(), tt.wantErr)
 				}
+				if tt.wantReasonCode != "" {
+					if gotReason := reasonCodeFromError(err); gotReason != tt.wantReasonCode {
+						t.Fatalf("waitForNewLeaderURLWithFuncs() reason=%q, want %q", gotReason, tt.wantReasonCode)
+					}
+				}
 			}
 
 			if tt.wantFallbackRun && fallbackCalls == 0 {
@@ -423,18 +660,154 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 	}
 }
 
-func TestWaitForLeaderElection(t *testing.T) {
+func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 	t.Parallel()
 
-	url, err := waitForLeaderElection(canceledContext(), baseExecutorTestConfig(), "previous-leader")
-	if err == nil {
-		t.Fatalf("waitForLeaderElection() error=nil, want context cancellation")
+	tests := []struct {
+		name             string
+		ctx              context.Context
+		previousLeader   string
+		policy           retryPolicy
+		finder           leaderOnceFinder
+		wantDecisionPath string
+		wantReasonCode   string
+		wantValue        string
+		wantWaitErr      bool
+		wantErrIs        error
+	}{
+		{
+			name:           "green leader observed",
+			ctx:            context.Background(),
+			previousLeader: "https://blue-0",
+			policy: retryPolicy{
+				AttemptInterval: time.Millisecond,
+				ElectionWait:    20 * time.Millisecond,
+			},
+			finder: func(_ context.Context, _ *ExecutorConfig, revision string) (string, bool) {
+				if revision == "green" {
+					return "https://green-0", true
+				}
+				return "", false
+			},
+			wantDecisionPath: decisionPathElectionObservedNewLeader,
+			wantReasonCode:   reasonElectionNewLeaderFound,
+			wantValue:        "https://green-0",
+		},
+		{
+			name:           "blue leader changed from previous",
+			ctx:            context.Background(),
+			previousLeader: "https://blue-0",
+			policy: retryPolicy{
+				AttemptInterval: time.Millisecond,
+				ElectionWait:    20 * time.Millisecond,
+			},
+			finder: func(_ context.Context, _ *ExecutorConfig, revision string) (string, bool) {
+				if revision == "blue" {
+					return "https://blue-1", true
+				}
+				return "", false
+			},
+			wantDecisionPath: decisionPathElectionObservedNewLeader,
+			wantReasonCode:   reasonElectionNewLeaderFound,
+			wantValue:        "https://blue-1",
+		},
+		{
+			name:           "same blue leader times out and is classified",
+			ctx:            context.Background(),
+			previousLeader: "https://blue-0",
+			policy: retryPolicy{
+				AttemptInterval: time.Millisecond,
+				ElectionWait:    5 * time.Millisecond,
+			},
+			finder: func(_ context.Context, _ *ExecutorConfig, revision string) (string, bool) {
+				if revision == "blue" {
+					return "https://blue-0", true
+				}
+				return "", false
+			},
+			wantDecisionPath: decisionPathElectionObservedSameLeader,
+			wantReasonCode:   reasonElectionSameLeaderSeen,
+			wantValue:        "https://blue-0",
+			wantWaitErr:      true,
+			wantErrIs:        context.DeadlineExceeded,
+		},
+		{
+			name:           "no leader observed and timed out",
+			ctx:            context.Background(),
+			previousLeader: "https://blue-0",
+			policy: retryPolicy{
+				AttemptInterval: time.Millisecond,
+				ElectionWait:    5 * time.Millisecond,
+			},
+			finder: func(_ context.Context, _ *ExecutorConfig, _ string) (string, bool) {
+				return "", false
+			},
+			wantDecisionPath: decisionPathElectionTimeout,
+			wantReasonCode:   reasonElectionTimeout,
+			wantWaitErr:      true,
+			wantErrIs:        context.DeadlineExceeded,
+		},
+		{
+			name:           "context canceled is propagated deterministically",
+			ctx:            canceledContext(),
+			previousLeader: "https://blue-0",
+			policy: retryPolicy{
+				AttemptInterval: time.Millisecond,
+				ElectionWait:    20 * time.Millisecond,
+			},
+			finder: func(_ context.Context, _ *ExecutorConfig, _ string) (string, bool) {
+				return "", false
+			},
+			wantDecisionPath: decisionPathContextCanceled,
+			wantReasonCode:   reasonContextCanceled,
+			wantWaitErr:      true,
+			wantErrIs:        context.Canceled,
+		},
 	}
-	if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("waitForLeaderElection() error=%v, want context canceled/deadline exceeded", err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			outcome := waitForLeaderElectionWithFinderAndPolicy(
+				tt.ctx,
+				baseExecutorTestConfig(),
+				tt.previousLeader,
+				tt.policy,
+				tt.finder,
+			)
+
+			if outcome.DecisionPath != tt.wantDecisionPath {
+				t.Fatalf("DecisionPath=%q, want %q", outcome.DecisionPath, tt.wantDecisionPath)
+			}
+			if outcome.ReasonCode != tt.wantReasonCode {
+				t.Fatalf("ReasonCode=%q, want %q", outcome.ReasonCode, tt.wantReasonCode)
+			}
+			if outcome.Value != tt.wantValue {
+				t.Fatalf("Value=%q, want %q", outcome.Value, tt.wantValue)
+			}
+			if (outcome.WaitError != nil) != tt.wantWaitErr {
+				t.Fatalf("WaitError present=%v, want %v", outcome.WaitError != nil, tt.wantWaitErr)
+			}
+			if tt.wantErrIs != nil && !errors.Is(outcome.WaitError, tt.wantErrIs) {
+				t.Fatalf("errors.Is(WaitError, %v)=false, want true (got: %v)", tt.wantErrIs, outcome.WaitError)
+			}
+		})
 	}
-	if url != "" {
-		t.Fatalf("waitForLeaderElection() url=%q, want empty", url)
+}
+
+func TestWaitForLeaderElectionOutcome(t *testing.T) {
+	t.Parallel()
+
+	outcome := waitForLeaderElectionOutcome(canceledContext(), baseExecutorTestConfig(), "previous-leader")
+	if outcome.WaitError == nil {
+		t.Fatalf("waitForLeaderElectionOutcome() WaitError=nil, want context cancellation")
+	}
+	if !errors.Is(outcome.WaitError, context.Canceled) && !errors.Is(outcome.WaitError, context.DeadlineExceeded) {
+		t.Fatalf("waitForLeaderElectionOutcome() error=%v, want context canceled/deadline exceeded", outcome.WaitError)
+	}
+	if outcome.Value != "" {
+		t.Fatalf("waitForLeaderElectionOutcome() value=%q, want empty", outcome.Value)
 	}
 }
 
@@ -449,8 +822,11 @@ func TestWaitForNewLeaderURL(t *testing.T) {
 	if newLeaderURL != "" {
 		t.Fatalf("waitForNewLeaderURL() newLeaderURL=%q, want empty", newLeaderURL)
 	}
-	if !strings.Contains(err.Error(), "failed to find new leader after step-down") {
-		t.Fatalf("waitForNewLeaderURL() error=%q, want wrapped leader-finding failure", err.Error())
+	if !strings.Contains(err.Error(), "failed while waiting for new leader election") {
+		t.Fatalf("waitForNewLeaderURL() error=%q, want wait interruption failure", err.Error())
+	}
+	if gotReason := reasonCodeFromError(err); gotReason != reasonContextCanceled {
+		t.Fatalf("waitForNewLeaderURL() reason=%q, want %q", gotReason, reasonContextCanceled)
 	}
 }
 

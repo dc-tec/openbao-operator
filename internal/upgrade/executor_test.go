@@ -24,6 +24,33 @@ func (f *fakeRaftPeerDemoter) DemoteRaftPeer(_ context.Context, serverID string)
 	return f.errByServerID[serverID]
 }
 
+type fakeLeaderTransferClient struct {
+	readConfigFn func(context.Context) (*openbao.RaftConfigurationResponse, error)
+	demoteFn     func(context.Context, string) error
+	stepDownFn   func(context.Context) error
+}
+
+func (f *fakeLeaderTransferClient) ReadRaftConfiguration(ctx context.Context) (*openbao.RaftConfigurationResponse, error) {
+	if f.readConfigFn != nil {
+		return f.readConfigFn(ctx)
+	}
+	return nil, nil
+}
+
+func (f *fakeLeaderTransferClient) DemoteRaftPeer(ctx context.Context, serverID string) error {
+	if f.demoteFn != nil {
+		return f.demoteFn(ctx, serverID)
+	}
+	return nil
+}
+
+func (f *fakeLeaderTransferClient) StepDown(ctx context.Context) error {
+	if f.stepDownFn != nil {
+		return f.stepDownFn(ctx)
+	}
+	return nil
+}
+
 func TestIsBenignDemoteError(t *testing.T) {
 	t.Parallel()
 
@@ -145,7 +172,10 @@ func TestDemoteBlueVotersExceptLeader(t *testing.T) {
 		},
 	}
 
-	demoteBlueVotersExceptLeader(context.Background(), logr.Discard(), cfg, demoter, config, leaderID, bluePrefix)
+	err := demoteBlueVotersExceptLeader(context.Background(), logr.Discard(), cfg, demoter, config, leaderID, bluePrefix)
+	if err != nil {
+		t.Fatalf("demoteBlueVotersExceptLeader() unexpected error: %v", err)
+	}
 
 	if len(demoter.calls) != 1 {
 		t.Fatalf("demoteBlueVotersExceptLeader() called DemoteRaftPeer %d times, want 1", len(demoter.calls))
@@ -153,4 +183,244 @@ func TestDemoteBlueVotersExceptLeader(t *testing.T) {
 	if demoter.calls[0] != "cluster-blue-1" {
 		t.Fatalf("demoteBlueVotersExceptLeader() called DemoteRaftPeer for %q, want %q", demoter.calls[0], "cluster-blue-1")
 	}
+}
+
+func TestDemoteBlueVotersExceptLeaderFatal(t *testing.T) {
+	t.Parallel()
+
+	cfg := &ExecutorConfig{
+		ClusterName:     "cluster",
+		ClusterReplicas: 3,
+	}
+	config := &openbao.RaftConfigurationResponse{
+		Config: openbao.RaftConfiguration{
+			Servers: []openbao.RaftServer{
+				{NodeID: "cluster-blue-0", Voter: true, Leader: true},
+				{NodeID: "cluster-blue-1", Voter: true},
+			},
+		},
+	}
+	demoter := &fakeRaftPeerDemoter{
+		errByServerID: map[string]error{
+			"cluster-blue-1": errors.New("permission denied"),
+		},
+	}
+
+	err := demoteBlueVotersExceptLeader(
+		context.Background(),
+		logr.Discard(),
+		cfg,
+		demoter,
+		config,
+		"cluster-blue-0",
+		"cluster-blue-",
+	)
+	if err == nil {
+		t.Fatalf("demoteBlueVotersExceptLeader() error=nil, want fatal demote error")
+	}
+	if gotReason := reasonCodeFromError(err); gotReason != reasonDemoteFatal {
+		t.Fatalf("demoteBlueVotersExceptLeader() reason=%q, want %q", gotReason, reasonDemoteFatal)
+	}
+}
+
+func TestClassifyDemoteError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want benignErrorClassification
+	}{
+		{
+			name: "benign already non-voter",
+			err:  errors.New("already non-voter"),
+			want: benignErrorClassificationBenign,
+		},
+		{
+			name: "fatal permission denied",
+			err:  errors.New("permission denied"),
+			want: benignErrorClassificationFatal,
+		},
+		{
+			name: "retryable transport failure",
+			err:  errors.New("connection reset by peer"),
+			want: benignErrorClassificationRetryable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := classifyDemoteError(tt.err); got != tt.want {
+				t.Fatalf("classifyDemoteError()=%q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClassifyStepDownError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want benignErrorClassification
+	}{
+		{
+			name: "fatal forbidden",
+			err:  errors.New("forbidden"),
+			want: benignErrorClassificationFatal,
+		},
+		{
+			name: "retryable io timeout",
+			err:  errors.New("i/o timeout"),
+			want: benignErrorClassificationRetryable,
+		},
+		{
+			name: "nil",
+			err:  nil,
+			want: benignErrorClassificationBenign,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := classifyStepDownError(tt.err); got != tt.want {
+				t.Fatalf("classifyStepDownError()=%q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEnsureGreenLeaderBySteppingDownBlueWithFuncs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("retries exhausted has deterministic reason", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &ExecutorConfig{
+			ClusterName:     "cluster",
+			BlueRevision:    "blue",
+			GreenRevision:   "green",
+			ClusterReplicas: 3,
+		}
+		blueLeaderConfig := &openbao.RaftConfigurationResponse{
+			Config: openbao.RaftConfiguration{
+				Servers: []openbao.RaftServer{
+					{NodeID: "cluster-blue-0", Leader: true, Voter: true},
+					{NodeID: "cluster-blue-1", Voter: true},
+				},
+			},
+		}
+
+		demoteCalls := 0
+		stepDownCalls := 0
+		waitCalls := 0
+		fakeClient := &fakeLeaderTransferClient{
+			readConfigFn: func(context.Context) (*openbao.RaftConfigurationResponse, error) {
+				return blueLeaderConfig, nil
+			},
+			demoteFn: func(context.Context, string) error {
+				demoteCalls++
+				return nil
+			},
+			stepDownFn: func(context.Context) error {
+				stepDownCalls++
+				return nil
+			},
+		}
+
+		resolveClient := func(context.Context, string) (leaderTransferClient, error) {
+			return fakeClient, nil
+		}
+		waitForLeader := func(context.Context, logr.Logger, *ExecutorConfig, string) (string, error) {
+			waitCalls++
+			return "https://cluster-blue-0", nil
+		}
+
+		_, err := ensureGreenLeaderBySteppingDownBlueWithFuncs(
+			context.Background(),
+			logr.Discard(),
+			cfg,
+			"https://cluster-blue-0",
+			retryPolicy{MaxAttempts: 2},
+			resolveClient,
+			waitForLeader,
+		)
+		if err == nil {
+			t.Fatalf("ensureGreenLeaderBySteppingDownBlueWithFuncs() error=nil, want retries exhausted")
+		}
+		if gotReason := reasonCodeFromError(err); gotReason != reasonLeaderTransferRetriesExhausted {
+			t.Fatalf("ensureGreenLeaderBySteppingDownBlueWithFuncs() reason=%q, want %q", gotReason, reasonLeaderTransferRetriesExhausted)
+		}
+		if demoteCalls != 2 {
+			t.Fatalf("demoteCalls=%d, want 2", demoteCalls)
+		}
+		if stepDownCalls != 2 {
+			t.Fatalf("stepDownCalls=%d, want 2", stepDownCalls)
+		}
+		if waitCalls != 2 {
+			t.Fatalf("waitCalls=%d, want 2", waitCalls)
+		}
+	})
+
+	t.Run("fatal stepdown fails fast", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &ExecutorConfig{
+			ClusterName:     "cluster",
+			BlueRevision:    "blue",
+			GreenRevision:   "green",
+			ClusterReplicas: 3,
+		}
+		blueLeaderConfig := &openbao.RaftConfigurationResponse{
+			Config: openbao.RaftConfiguration{
+				Servers: []openbao.RaftServer{
+					{NodeID: "cluster-blue-0", Leader: true, Voter: true},
+					{NodeID: "cluster-blue-1", Voter: true},
+				},
+			},
+		}
+
+		waitCalls := 0
+		fakeClient := &fakeLeaderTransferClient{
+			readConfigFn: func(context.Context) (*openbao.RaftConfigurationResponse, error) {
+				return blueLeaderConfig, nil
+			},
+			demoteFn: func(context.Context, string) error {
+				return nil
+			},
+			stepDownFn: func(context.Context) error {
+				return errors.New("permission denied")
+			},
+		}
+
+		resolveClient := func(context.Context, string) (leaderTransferClient, error) {
+			return fakeClient, nil
+		}
+		waitForLeader := func(context.Context, logr.Logger, *ExecutorConfig, string) (string, error) {
+			waitCalls++
+			return "", nil
+		}
+
+		_, err := ensureGreenLeaderBySteppingDownBlueWithFuncs(
+			context.Background(),
+			logr.Discard(),
+			cfg,
+			"https://cluster-blue-0",
+			retryPolicy{MaxAttempts: 3},
+			resolveClient,
+			waitForLeader,
+		)
+		if err == nil {
+			t.Fatalf("ensureGreenLeaderBySteppingDownBlueWithFuncs() error=nil, want stepdown fatal")
+		}
+		if gotReason := reasonCodeFromError(err); gotReason != reasonStepDownFatal {
+			t.Fatalf("ensureGreenLeaderBySteppingDownBlueWithFuncs() reason=%q, want %q", gotReason, reasonStepDownFatal)
+		}
+		if waitCalls != 0 {
+			t.Fatalf("waitCalls=%d, want 0", waitCalls)
+		}
+	})
 }
