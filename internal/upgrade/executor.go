@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -121,7 +122,7 @@ func runBlueGreenJoinGreenNonVoters(ctx context.Context, logger logr.Logger, cfg
 			return fmt.Errorf("failed to create client for Green pod %q: %w", greenPodURL, err)
 		}
 		if err := client.JoinRaftCluster(ctx, blueLeaderURL, true, true); err != nil {
-			if isBenignJoinError(err) {
+			if classifyJoinError(err) == benignErrorClassificationBenign {
 				logger.V(1).Info("Join reported benign error; continuing", "green_pod_url", greenPodURL, "error", err.Error())
 				continue
 			}
@@ -198,62 +199,35 @@ func runBlueGreenWaitGreenSynced(ctx context.Context, logger logr.Logger, cfg *E
 			)
 		}
 
-		allSynced := true
-		maxDelta := uint64(0)
-		missingGreen := 0
-		unhealthyGreen := 0
-		for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
-			greenPodName := revisionPodName(cfg.ClusterName, cfg.GreenRevision, i)
-			found := false
-			for _, server := range state.Servers {
-				if raftAutopilotServerMatchesPod(server, greenPodName) {
-					found = true
-
-					// Note: Non-voters may report as unhealthy during sync since they haven't
-					// fully replicated yet. We log this for visibility but only block on delta.
-					if !server.Healthy {
-						unhealthyGreen++
-						logger.V(1).Info("Green pod is not healthy in autopilot (expected for non-voters syncing)", "pod_name", greenPodName, "healthy", server.Healthy, "status", server.Status, "last_index", server.LastIndex)
-					}
-
-					var delta uint64
-					if targetIndex > server.LastIndex {
-						delta = targetIndex - server.LastIndex
-					}
-					if delta > maxDelta {
-						maxDelta = delta
-					}
-					if delta > cfg.SyncThreshold {
-						allSynced = false
-					}
-					break
-				}
-			}
-			if !found {
-				allSynced = false
-				missingGreen++
-				logger.V(1).Info("Green pod not found in autopilot state", "expected_pod_name", greenPodName)
-			}
+		evaluation := evaluateGreenSyncFromAutopilot(cfg, state, targetIndex)
+		for _, missingPodName := range evaluation.MissingPods {
+			logger.V(1).Info("Green pod not found in autopilot state", "expected_pod_name", missingPodName)
+		}
+		for _, unhealthyServer := range evaluation.UnhealthyServers {
+			// Note: Non-voters may report as unhealthy during sync since they haven't
+			// fully replicated yet. We log this for visibility but only block on delta.
+			logger.V(1).Info(
+				"Green pod is not healthy in autopilot (expected for non-voters syncing)",
+				"pod_name", unhealthyServer.PodName,
+				"healthy", unhealthyServer.Server.Healthy,
+				"status", unhealthyServer.Server.Status,
+				"last_index", unhealthyServer.Server.LastIndex,
+			)
 		}
 
-		if allSynced {
+		if evaluation.AllSynced {
 			logger.Info("Green pods are synced", "target_index", targetIndex, "sync_threshold", cfg.SyncThreshold)
 			return nil
 		}
 
 		if time.Now().After(nextProgressLog) {
-			// Log all servers in autopilot state for debugging
-			serverNames := make([]string, 0, len(state.Servers))
-			for key, server := range state.Servers {
-				serverNames = append(serverNames, fmt.Sprintf("%s(id=%s,name=%s,addr=%s)", key, server.ID, server.Name, server.Address))
-			}
 			logger.Info("Waiting for Green sync",
 				"target_index", targetIndex,
-				"max_delta", maxDelta,
+				"max_delta", evaluation.MaxDelta,
 				"sync_threshold", cfg.SyncThreshold,
-				"missing_green", missingGreen,
-				"unhealthy_green", unhealthyGreen,
-				"autopilot_servers", serverNames,
+				"missing_green", evaluation.MissingGreen,
+				"unhealthy_green", evaluation.UnhealthyGreen,
+				"autopilot_servers", autopilotServerDebugNames(state),
 			)
 			nextProgressLog = time.Now().Add(10 * time.Second)
 		}
@@ -266,6 +240,90 @@ func runBlueGreenWaitGreenSynced(ctx context.Context, logger logr.Logger, cfg *E
 		case <-timer.C:
 		}
 	}
+}
+
+type greenAutopilotServerObservation struct {
+	PodName string
+	Server  openbao.RaftAutopilotServerState
+}
+
+type greenSyncEvaluation struct {
+	AllSynced        bool
+	MaxDelta         uint64
+	MissingGreen     int
+	UnhealthyGreen   int
+	MissingPods      []string
+	UnhealthyServers []greenAutopilotServerObservation
+}
+
+func evaluateGreenSyncFromAutopilot(cfg *ExecutorConfig, state *openbao.RaftAutopilotStateResponse, targetIndex uint64) greenSyncEvaluation {
+	evaluation := greenSyncEvaluation{
+		AllSynced: true,
+	}
+
+	if cfg == nil || state == nil {
+		evaluation.AllSynced = false
+		return evaluation
+	}
+
+	for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
+		greenPodName := revisionPodName(cfg.ClusterName, cfg.GreenRevision, i)
+		server, found := findAutopilotServerForPod(state, greenPodName)
+		if !found {
+			evaluation.AllSynced = false
+			evaluation.MissingGreen++
+			evaluation.MissingPods = append(evaluation.MissingPods, greenPodName)
+			continue
+		}
+
+		if !server.Healthy {
+			evaluation.UnhealthyGreen++
+			evaluation.UnhealthyServers = append(evaluation.UnhealthyServers, greenAutopilotServerObservation{
+				PodName: greenPodName,
+				Server:  server,
+			})
+		}
+
+		var delta uint64
+		if targetIndex > server.LastIndex {
+			delta = targetIndex - server.LastIndex
+		}
+		if delta > evaluation.MaxDelta {
+			evaluation.MaxDelta = delta
+		}
+		if delta > cfg.SyncThreshold {
+			evaluation.AllSynced = false
+		}
+	}
+
+	return evaluation
+}
+
+func findAutopilotServerForPod(state *openbao.RaftAutopilotStateResponse, podName string) (openbao.RaftAutopilotServerState, bool) {
+	if state == nil {
+		return openbao.RaftAutopilotServerState{}, false
+	}
+
+	for _, server := range state.Servers {
+		if raftAutopilotServerMatchesPod(server, podName) {
+			return server, true
+		}
+	}
+
+	return openbao.RaftAutopilotServerState{}, false
+}
+
+func autopilotServerDebugNames(state *openbao.RaftAutopilotStateResponse) []string {
+	if state == nil {
+		return nil
+	}
+
+	serverNames := make([]string, 0, len(state.Servers))
+	for key, server := range state.Servers {
+		serverNames = append(serverNames, fmt.Sprintf("%s(id=%s,name=%s,addr=%s)", key, server.ID, server.Name, server.Address))
+	}
+	sort.Strings(serverNames)
+	return serverNames
 }
 
 func raftAutopilotLeaderLastIndex(state *openbao.RaftAutopilotStateResponse) (uint64, bool) {
@@ -1213,6 +1271,24 @@ func isBenignJoinError(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "already joined")
+}
+
+func classifyJoinError(err error) benignErrorClassification {
+	if err == nil {
+		return benignErrorClassificationBenign
+	}
+	if isBenignJoinError(err) {
+		return benignErrorClassificationBenign
+	}
+
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "permission denied") ||
+		strings.Contains(message, "forbidden") ||
+		strings.Contains(message, "unauthorized") {
+		return benignErrorClassificationFatal
+	}
+
+	return benignErrorClassificationFatal
 }
 
 func isBenignDemoteError(err error) bool {

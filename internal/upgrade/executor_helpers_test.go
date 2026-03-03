@@ -569,6 +569,170 @@ func TestRaftAutopilotServerMatchesPod(t *testing.T) {
 	}
 }
 
+func TestEvaluateGreenSyncFromAutopilot(t *testing.T) {
+	t.Parallel()
+
+	cfg := &ExecutorConfig{
+		ClusterName:     "openbao",
+		GreenRevision:   "green",
+		ClusterReplicas: 2,
+		SyncThreshold:   10,
+	}
+
+	tests := []struct {
+		name               string
+		state              *openbao.RaftAutopilotStateResponse
+		targetIndex        uint64
+		wantAllSynced      bool
+		wantMaxDelta       uint64
+		wantMissingGreen   int
+		wantUnhealthyGreen int
+		wantMissingPods    []string
+	}{
+		{
+			name: "all green pods synced",
+			state: &openbao.RaftAutopilotStateResponse{
+				Servers: map[string]openbao.RaftAutopilotServerState{
+					"a": {ID: "openbao-green-0", LastIndex: 100, Healthy: true},
+					"b": {ID: "openbao-green-1", LastIndex: 95, Healthy: true},
+				},
+			},
+			targetIndex:        100,
+			wantAllSynced:      true,
+			wantMaxDelta:       5,
+			wantMissingGreen:   0,
+			wantUnhealthyGreen: 0,
+		},
+		{
+			name: "missing green pod blocks sync",
+			state: &openbao.RaftAutopilotStateResponse{
+				Servers: map[string]openbao.RaftAutopilotServerState{
+					"a": {ID: "openbao-green-0", LastIndex: 100, Healthy: true},
+				},
+			},
+			targetIndex:        100,
+			wantAllSynced:      false,
+			wantMaxDelta:       0,
+			wantMissingGreen:   1,
+			wantUnhealthyGreen: 0,
+			wantMissingPods:    []string{"openbao-green-1"},
+		},
+		{
+			name: "delta above threshold blocks sync",
+			state: &openbao.RaftAutopilotStateResponse{
+				Servers: map[string]openbao.RaftAutopilotServerState{
+					"a": {ID: "openbao-green-0", LastIndex: 100, Healthy: true},
+					"b": {ID: "openbao-green-1", LastIndex: 80, Healthy: true},
+				},
+			},
+			targetIndex:        100,
+			wantAllSynced:      false,
+			wantMaxDelta:       20,
+			wantMissingGreen:   0,
+			wantUnhealthyGreen: 0,
+		},
+		{
+			name: "unhealthy green is tracked but not blocking by itself",
+			state: &openbao.RaftAutopilotStateResponse{
+				Servers: map[string]openbao.RaftAutopilotServerState{
+					"a": {ID: "openbao-green-0", LastIndex: 100, Healthy: false, Status: "follower"},
+					"b": {ID: "openbao-green-1", LastIndex: 100, Healthy: true},
+				},
+			},
+			targetIndex:        100,
+			wantAllSynced:      true,
+			wantMaxDelta:       0,
+			wantMissingGreen:   0,
+			wantUnhealthyGreen: 1,
+		},
+		{
+			name:               "nil state is unsynced",
+			state:              nil,
+			targetIndex:        100,
+			wantAllSynced:      false,
+			wantMaxDelta:       0,
+			wantMissingGreen:   0,
+			wantUnhealthyGreen: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := evaluateGreenSyncFromAutopilot(cfg, tt.state, tt.targetIndex)
+			if got.AllSynced != tt.wantAllSynced {
+				t.Fatalf("AllSynced=%v, want %v", got.AllSynced, tt.wantAllSynced)
+			}
+			if got.MaxDelta != tt.wantMaxDelta {
+				t.Fatalf("MaxDelta=%d, want %d", got.MaxDelta, tt.wantMaxDelta)
+			}
+			if got.MissingGreen != tt.wantMissingGreen {
+				t.Fatalf("MissingGreen=%d, want %d", got.MissingGreen, tt.wantMissingGreen)
+			}
+			if got.UnhealthyGreen != tt.wantUnhealthyGreen {
+				t.Fatalf("UnhealthyGreen=%d, want %d", got.UnhealthyGreen, tt.wantUnhealthyGreen)
+			}
+			if len(got.MissingPods) != len(tt.wantMissingPods) {
+				t.Fatalf("len(MissingPods)=%d, want %d", len(got.MissingPods), len(tt.wantMissingPods))
+			}
+			for i := range tt.wantMissingPods {
+				if got.MissingPods[i] != tt.wantMissingPods[i] {
+					t.Fatalf("MissingPods[%d]=%q, want %q", i, got.MissingPods[i], tt.wantMissingPods[i])
+				}
+			}
+		})
+	}
+}
+
+func TestFindAutopilotServerForPod(t *testing.T) {
+	t.Parallel()
+
+	state := &openbao.RaftAutopilotStateResponse{
+		Servers: map[string]openbao.RaftAutopilotServerState{
+			"a": {ID: "openbao-green-0", LastIndex: 10},
+		},
+	}
+
+	server, found := findAutopilotServerForPod(state, "openbao-green-0")
+	if !found {
+		t.Fatalf("findAutopilotServerForPod() found=false, want true")
+	}
+	if server.ID != "openbao-green-0" {
+		t.Fatalf("findAutopilotServerForPod() server.ID=%q, want %q", server.ID, "openbao-green-0")
+	}
+
+	_, found = findAutopilotServerForPod(state, "openbao-green-1")
+	if found {
+		t.Fatalf("findAutopilotServerForPod() found=true for missing pod, want false")
+	}
+}
+
+func TestAutopilotServerDebugNames(t *testing.T) {
+	t.Parallel()
+
+	state := &openbao.RaftAutopilotStateResponse{
+		Servers: map[string]openbao.RaftAutopilotServerState{
+			"z": {ID: "id-z", Name: "pod-z", Address: "https://pod-z"},
+			"a": {ID: "id-a", Name: "pod-a", Address: "https://pod-a"},
+		},
+	}
+
+	got := autopilotServerDebugNames(state)
+	want := []string{
+		"a(id=id-a,name=pod-a,addr=https://pod-a)",
+		"z(id=id-z,name=pod-z,addr=https://pod-z)",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("len(autopilotServerDebugNames)=%d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("autopilotServerDebugNames[%d]=%q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestCountMissingGreenServers(t *testing.T) {
 	t.Parallel()
 
@@ -700,6 +864,46 @@ func TestIsBenignJoinError(t *testing.T) {
 			t.Parallel()
 			if got := isBenignJoinError(tt.err); got != tt.want {
 				t.Fatalf("isBenignJoinError()=%v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClassifyJoinError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want benignErrorClassification
+	}{
+		{
+			name: "nil",
+			err:  nil,
+			want: benignErrorClassificationBenign,
+		},
+		{
+			name: "already joined is benign",
+			err:  errors.New("node already joined cluster"),
+			want: benignErrorClassificationBenign,
+		},
+		{
+			name: "permission denied is fatal",
+			err:  errors.New("permission denied"),
+			want: benignErrorClassificationFatal,
+		},
+		{
+			name: "unknown defaults to fatal",
+			err:  errors.New("some other join error"),
+			want: benignErrorClassificationFatal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := classifyJoinError(tt.err); got != tt.want {
+				t.Fatalf("classifyJoinError()=%q, want %q", got, tt.want)
 			}
 		})
 	}
