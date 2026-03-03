@@ -885,6 +885,10 @@ func waitForNewLeaderURLWithFuncs(
 		logger.Info("New leader found", "leader_url", waitOutcome.Value)
 		return waitOutcome.Value, nil
 	}
+	if waitOutcome.DecisionPath == decisionPathElectionObservedSameLeader && strings.TrimSpace(waitOutcome.Value) != "" {
+		logger.Info("Leader election retained previous leader; proceeding with observed leader", "leader_url", waitOutcome.Value)
+		return waitOutcome.Value, nil
+	}
 
 	logger.Info("Finding new leader via fallback search...")
 	leaderURL, findErr := fallbackFn(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision)

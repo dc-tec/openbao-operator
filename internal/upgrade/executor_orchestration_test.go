@@ -539,7 +539,7 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 			wantFallbackRun: true,
 		},
 		{
-			name: "same leader observation falls back to finder",
+			name: "same leader observation returns observed leader without fallback",
 			ctx:  context.Background(),
 			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
 				return leaderElectionOutcome{
@@ -551,8 +551,8 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
 				return fallbackLeaderURL, nil
 			},
-			wantURL:         fallbackLeaderURL,
-			wantFallbackRun: true,
+			wantURL:         "https://previous-leader",
+			wantFallbackRun: false,
 		},
 		{
 			name: "unexpected wait error is returned",
