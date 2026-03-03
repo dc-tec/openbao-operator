@@ -322,6 +322,48 @@ func TestFindLeaderWithFallbackUsing(t *testing.T) {
 	}
 }
 
+func TestFindLeaderWithPolicyUsing(t *testing.T) {
+	t.Parallel()
+
+	const (
+		greenRevision = "green"
+		blueRevision  = "blue"
+	)
+
+	policy := newLeaderSearchPolicy("green", "blue", "Green", "Blue")
+	calls := make([]string, 0, 2)
+	finder := func(_ context.Context, _ *ExecutorConfig, revision string) (string, error) {
+		calls = append(calls, revision)
+		if revision == greenRevision {
+			return "", errors.New("no leader in green")
+		}
+		if revision == blueRevision {
+			return "https://blue-leader", nil
+		}
+		return "", errors.New("unexpected revision")
+	}
+
+	gotURL, err := findLeaderWithPolicyUsing(
+		context.Background(),
+		logr.Discard(),
+		baseExecutorTestConfig(),
+		policy,
+		finder,
+	)
+	if err != nil {
+		t.Fatalf("findLeaderWithPolicyUsing() unexpected error: %v", err)
+	}
+	if gotURL != "https://blue-leader" {
+		t.Fatalf("findLeaderWithPolicyUsing() url=%q, want %q", gotURL, "https://blue-leader")
+	}
+	if len(calls) != 2 {
+		t.Fatalf("find calls=%v, want [green blue]", calls)
+	}
+	if calls[0] != greenRevision || calls[1] != blueRevision {
+		t.Fatalf("find calls=%v, want [green blue]", calls)
+	}
+}
+
 func TestResolveLeaderWithPolicyUsing(t *testing.T) {
 	t.Parallel()
 
@@ -453,6 +495,8 @@ func TestResolveLeaderWithPolicyUsing(t *testing.T) {
 func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 	t.Parallel()
 
+	const fallbackLeaderURL = "https://fallback-leader"
+
 	tests := []struct {
 		name            string
 		waitFn          func(context.Context, *ExecutorConfig, string) leaderElectionOutcome
@@ -487,9 +531,9 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 				}
 			},
 			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error) {
-				return "https://fallback-leader", nil
+				return fallbackLeaderURL, nil
 			},
-			wantURL:         "https://fallback-leader",
+			wantURL:         fallbackLeaderURL,
 			wantFallbackRun: true,
 		},
 		{
@@ -502,9 +546,9 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 				}
 			},
 			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error) {
-				return "https://fallback-leader", nil
+				return fallbackLeaderURL, nil
 			},
-			wantURL:         "https://fallback-leader",
+			wantURL:         fallbackLeaderURL,
 			wantFallbackRun: true,
 		},
 		{
@@ -517,7 +561,7 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 				}
 			},
 			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error) {
-				return "https://fallback-leader", nil
+				return fallbackLeaderURL, nil
 			},
 			wantErr:         "failed while waiting for new leader election",
 			wantReasonCode:  reasonElectionTimeout,
