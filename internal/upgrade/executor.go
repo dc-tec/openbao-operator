@@ -671,7 +671,7 @@ func waitForNewLeaderURLWithFuncs(
 
 	newLeaderURL, err := waitFn(ctx, cfg, previousLeaderURL)
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
-		return "", fmt.Errorf("failed while waiting for new leader election: %w", err)
+		return "", newExecutorReasonedError(reasonElectionTimeout, "failed while waiting for new leader election", err)
 	}
 
 	logger.Info("Finding new leader...")
@@ -682,7 +682,11 @@ func waitForNewLeaderURLWithFuncs(
 
 	leaderURL, findErr := fallbackFn(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
 	if findErr != nil {
-		return "", fmt.Errorf("failed to find new leader after step-down: %w", findErr)
+		reasonCode := reasonCodeFromError(findErr)
+		if reasonCode == "" {
+			reasonCode = reasonFallbackLeaderNotFound
+		}
+		return "", newExecutorReasonedError(reasonCode, "failed to find new leader after step-down", findErr)
 	}
 	logger.Info("New leader found", "leader_url", leaderURL)
 	return leaderURL, nil
@@ -706,6 +710,13 @@ func waitForLeaderElection(ctx context.Context, cfg *ExecutorConfig, previousLea
 		}
 		return false, nil
 	})
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.Canceled) {
+			err = newExecutorReasonedError(reasonElectionTimeout, "leader election did not converge within wait duration", err)
+		} else if reasonCode := reasonCodeFromContextError(err); reasonCode != "" {
+			err = newExecutorReasonedError(reasonCode, "leader election was interrupted", err)
+		}
+	}
 	return newLeaderURL, err
 }
 
@@ -839,12 +850,16 @@ func findLeader(ctx context.Context, cfg *ExecutorConfig, revision string) (stri
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return "", fmt.Errorf("context cancelled while finding leader: %w", ctx.Err())
+			reasonCode := reasonCodeFromContextError(ctx.Err())
+			if reasonCode == "" {
+				reasonCode = reasonContextCanceled
+			}
+			return "", newExecutorReasonedError(reasonCode, "context cancelled while finding leader", ctx.Err())
 		case <-timer.C:
 		}
 	}
 
-	return "", fmt.Errorf("no leader found among %d pods", cfg.ClusterReplicas)
+	return "", newExecutorReasonedError(reasonPrimaryLeaderNotFound, fmt.Sprintf("no leader found among %d pods", cfg.ClusterReplicas), nil)
 }
 
 func findLeaderWithFallback(
@@ -871,25 +886,31 @@ func findLeaderWithFallbackUsing(
 	fallbackLabel string,
 	finder leaderFinder,
 ) (string, error) {
-	leaderURL, err := finder(ctx, cfg, primaryRevision)
-	if err == nil {
-		return leaderURL, nil
+	policy := newLeaderSearchPolicy(primaryRevision, fallbackRevision, primaryLabel, fallbackLabel)
+	outcome := resolveLeaderWithPolicyUsing(ctx, cfg, policy, finder)
+	if outcome.Value != "" {
+		return outcome.Value, nil
 	}
 
-	if strings.TrimSpace(fallbackRevision) == "" || fallbackRevision == primaryRevision {
-		return "", fmt.Errorf("failed to find leader among %s pods: %w", primaryLabel, err)
+	if policy.AllowFallback {
+		logger.Info(
+			fmt.Sprintf("Failed to find leader among %s pods, checking %s pods", primaryLabel, fallbackLabel),
+			"error", outcome.PrimaryError,
+			"decision_path", outcome.DecisionPath,
+			"reason_code", outcome.ReasonCode,
+		)
+		return "", newExecutorReasonedError(
+			outcome.ReasonCode,
+			fmt.Sprintf("failed to find leader (checked %s and %s)", primaryLabel, fallbackLabel),
+			outcome.FallbackError,
+		)
 	}
 
-	logger.Info(
-		fmt.Sprintf("Failed to find leader among %s pods, checking %s pods", primaryLabel, fallbackLabel),
-		"error", err,
+	return "", newExecutorReasonedError(
+		outcome.ReasonCode,
+		fmt.Sprintf("failed to find leader among %s pods", primaryLabel),
+		outcome.PrimaryError,
 	)
-
-	leaderURL, fallbackErr := finder(ctx, cfg, fallbackRevision)
-	if fallbackErr != nil {
-		return "", fmt.Errorf("failed to find leader (checked %s and %s): %w", primaryLabel, fallbackLabel, fallbackErr)
-	}
-	return leaderURL, nil
 }
 
 func findLeaderOnce(ctx context.Context, cfg *ExecutorConfig, revision string) (string, bool) {

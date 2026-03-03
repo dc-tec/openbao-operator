@@ -1,12 +1,105 @@
 package upgrade
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
 
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 )
+
+func TestReasonCodeFromContextError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "context canceled",
+			err:  context.Canceled,
+			want: reasonContextCanceled,
+		},
+		{
+			name: "deadline exceeded",
+			err:  context.DeadlineExceeded,
+			want: reasonDeadlineExceeded,
+		},
+		{
+			name: "non-context error",
+			err:  errors.New("other"),
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := reasonCodeFromContextError(tt.err); got != tt.want {
+				t.Fatalf("reasonCodeFromContextError()=%q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExecutorReasonedError(t *testing.T) {
+	t.Parallel()
+
+	cause := context.DeadlineExceeded
+	err := newExecutorReasonedError(reasonDeadlineExceeded, "wrapped message", cause)
+
+	if got := reasonCodeFromError(err); got != reasonDeadlineExceeded {
+		t.Fatalf("reasonCodeFromError()=%q, want %q", got, reasonDeadlineExceeded)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("errors.Is(err, context.DeadlineExceeded)=false, want true")
+	}
+	if !strings.Contains(err.Error(), "wrapped message") {
+		t.Fatalf("error text=%q, want wrapped message", err.Error())
+	}
+}
+
+func TestDecisionPathFromReasonCode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		reason string
+		want   string
+	}{
+		{
+			name:   "context canceled",
+			reason: reasonContextCanceled,
+			want:   decisionPathContextCanceled,
+		},
+		{
+			name:   "deadline exceeded",
+			reason: reasonDeadlineExceeded,
+			want:   decisionPathDeadlineExceeded,
+		},
+		{
+			name:   "election timeout",
+			reason: reasonElectionTimeout,
+			want:   decisionPathElectionTimeout,
+		},
+		{
+			name:   "unknown reason",
+			reason: "reason_unknown",
+			want:   decisionPathPrimaryFailedFallbackFailed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := decisionPathFromReasonCode(tt.reason); got != tt.want {
+				t.Fatalf("decisionPathFromReasonCode()=%q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestReplicaOrdinals(t *testing.T) {
 	t.Parallel()
