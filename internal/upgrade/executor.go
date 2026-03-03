@@ -15,7 +15,10 @@ import (
 )
 
 const (
-	leaderElectionWaitDuration = 5 * time.Second
+	leaderElectionWaitDuration      = 5 * time.Second
+	defaultLeaderSearchMaxAttempts  = 10
+	defaultLeaderSearchWaitInterval = 2 * time.Second
+	singleLeaderSearchAttempt       = 1
 )
 
 // RunExecutor runs the upgrade executor action.
@@ -824,29 +827,41 @@ func loginJWT(ctx context.Context, cfg *ExecutorConfig, baseURL string) (string,
 }
 
 func findLeader(ctx context.Context, cfg *ExecutorConfig, revision string) (string, error) {
+	return resolveLeaderWithRetry(
+		ctx,
+		cfg,
+		revision,
+		retryPolicy{
+			MaxAttempts:     defaultLeaderSearchMaxAttempts,
+			AttemptInterval: defaultLeaderSearchWaitInterval,
+		},
+	)
+}
+
+func resolveLeaderWithRetry(
+	ctx context.Context,
+	cfg *ExecutorConfig,
+	revision string,
+	policy retryPolicy,
+) (string, error) {
+	policy = normalizeRetryPolicy(policy)
+
 	factory, cleanup, err := newOpenBaoClientFactory(cfg)
 	if err != nil {
 		return "", err
 	}
 	defer cleanup()
 
-	for range attemptOrdinals(10) {
-		for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
-			url := podURL(cfg, revision, i)
-			client, err := factory.New(url)
-			if err != nil {
-				continue
-			}
-			isLeader, err := client.IsLeader(ctx)
-			if err != nil {
-				continue
-			}
-			if isLeader {
-				return url, nil
-			}
+	for range attemptOrdinals(policy.MaxAttempts) {
+		if url, found := findLeaderInSingleScan(ctx, cfg, revision, factory); found {
+			return url, nil
 		}
 
-		timer := time.NewTimer(2 * time.Second)
+		if policy.AttemptInterval <= 0 {
+			continue
+		}
+
+		timer := time.NewTimer(policy.AttemptInterval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -860,6 +875,40 @@ func findLeader(ctx context.Context, cfg *ExecutorConfig, revision string) (stri
 	}
 
 	return "", newExecutorReasonedError(reasonPrimaryLeaderNotFound, fmt.Sprintf("no leader found among %d pods", cfg.ClusterReplicas), nil)
+}
+
+func findLeaderInSingleScan(
+	ctx context.Context,
+	cfg *ExecutorConfig,
+	revision string,
+	factory *openbao.ClientFactory,
+) (string, bool) {
+	for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
+		url := podURL(cfg, revision, i)
+		client, err := factory.New(url)
+		if err != nil {
+			continue
+		}
+		isLeader, err := client.IsLeader(ctx)
+		if err != nil {
+			continue
+		}
+		if isLeader {
+			return url, true
+		}
+	}
+
+	return "", false
+}
+
+func normalizeRetryPolicy(policy retryPolicy) retryPolicy {
+	if policy.MaxAttempts <= 0 {
+		policy.MaxAttempts = singleLeaderSearchAttempt
+	}
+	if policy.AttemptInterval < 0 {
+		policy.AttemptInterval = 0
+	}
+	return policy
 }
 
 func findLeaderWithFallback(
@@ -914,28 +963,18 @@ func findLeaderWithFallbackUsing(
 }
 
 func findLeaderOnce(ctx context.Context, cfg *ExecutorConfig, revision string) (string, bool) {
-	factory, cleanup, err := newOpenBaoClientFactory(cfg)
+	leaderURL, err := resolveLeaderWithRetry(
+		ctx,
+		cfg,
+		revision,
+		retryPolicy{
+			MaxAttempts: singleLeaderSearchAttempt,
+		},
+	)
 	if err != nil {
 		return "", false
 	}
-	defer cleanup()
-
-	for _, i := range replicaOrdinals(cfg.ClusterReplicas) {
-		url := podURL(cfg, revision, i)
-		client, err := factory.New(url)
-		if err != nil {
-			continue
-		}
-		isLeader, err := client.IsLeader(ctx)
-		if err != nil {
-			continue
-		}
-		if isLeader {
-			return url, true
-		}
-	}
-
-	return "", false
+	return leaderURL, true
 }
 
 func podURL(cfg *ExecutorConfig, revision string, ordinal int32) string {

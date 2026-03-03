@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 )
@@ -96,6 +97,105 @@ func TestDecisionPathFromReasonCode(t *testing.T) {
 			t.Parallel()
 			if got := decisionPathFromReasonCode(tt.reason); got != tt.want {
 				t.Fatalf("decisionPathFromReasonCode()=%q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNewLeaderSearchPolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		primaryRevision   string
+		fallbackRevision  string
+		wantAllowFallback bool
+	}{
+		{
+			name:              "fallback enabled",
+			primaryRevision:   "green",
+			fallbackRevision:  "blue",
+			wantAllowFallback: true,
+		},
+		{
+			name:              "fallback disabled for empty revision",
+			primaryRevision:   "green",
+			fallbackRevision:  "",
+			wantAllowFallback: false,
+		},
+		{
+			name:              "fallback disabled for same revision",
+			primaryRevision:   "green",
+			fallbackRevision:  "green",
+			wantAllowFallback: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := newLeaderSearchPolicy(tt.primaryRevision, tt.fallbackRevision, "primary", "fallback")
+			if got.AllowFallback != tt.wantAllowFallback {
+				t.Fatalf("newLeaderSearchPolicy() AllowFallback=%v, want %v", got.AllowFallback, tt.wantAllowFallback)
+			}
+		})
+	}
+}
+
+func TestNormalizeRetryPolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   retryPolicy
+		want retryPolicy
+	}{
+		{
+			name: "sets default attempts",
+			in: retryPolicy{
+				MaxAttempts:     0,
+				AttemptInterval: 2 * time.Second,
+			},
+			want: retryPolicy{
+				MaxAttempts:     singleLeaderSearchAttempt,
+				AttemptInterval: 2 * time.Second,
+			},
+		},
+		{
+			name: "normalizes negative interval",
+			in: retryPolicy{
+				MaxAttempts:     3,
+				AttemptInterval: -1 * time.Second,
+			},
+			want: retryPolicy{
+				MaxAttempts:     3,
+				AttemptInterval: 0,
+			},
+		},
+		{
+			name: "keeps valid values",
+			in: retryPolicy{
+				MaxAttempts:     4,
+				AttemptInterval: 500 * time.Millisecond,
+			},
+			want: retryPolicy{
+				MaxAttempts:     4,
+				AttemptInterval: 500 * time.Millisecond,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := normalizeRetryPolicy(tt.in)
+			if got.MaxAttempts != tt.want.MaxAttempts {
+				t.Fatalf("normalizeRetryPolicy() MaxAttempts=%d, want %d", got.MaxAttempts, tt.want.MaxAttempts)
+			}
+			if got.AttemptInterval != tt.want.AttemptInterval {
+				t.Fatalf("normalizeRetryPolicy() AttemptInterval=%v, want %v", got.AttemptInterval, tt.want.AttemptInterval)
 			}
 		})
 	}

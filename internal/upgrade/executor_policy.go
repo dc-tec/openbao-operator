@@ -50,11 +50,6 @@ const (
 	benignErrorClassificationFatal     benignErrorClassification = "fatal"
 )
 
-type benignErrorPolicy struct {
-	Operation string
-	Classify  func(error) benignErrorClassification
-}
-
 type leaderSearchOutcome struct {
 	Value         string
 	DecisionPath  string
