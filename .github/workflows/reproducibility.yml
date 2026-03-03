@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: reproducibility-${{ github.event.workflow_run.head_branch || github.event.inputs.tag || github.run_id }}
+  group: reproducibility-${{ github.event.workflow_run.head_sha || github.event.inputs.tag || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -26,7 +26,8 @@ jobs:
       ${{
         github.event_name != 'workflow_run' ||
         (github.event.workflow_run.conclusion == 'success' &&
-         github.event.workflow_run.event == 'push')
+         github.event.workflow_run.event == 'push' &&
+         !github.event.workflow_run.repository.fork)
       }}
     permissions:
       contents: read
@@ -55,7 +56,18 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             tag="${{ github.event.inputs.tag }}"
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            tag="${{ github.event.workflow_run.head_branch }}"
+            head_sha="${{ github.event.workflow_run.head_sha }}"
+            mapfile -t tags < <(git tag --points-at "${head_sha}" --sort=-v:refname)
+            for candidate in "${tags[@]}"; do
+              if [[ "${candidate}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
+                tag="${candidate}"
+                break
+              fi
+            done
+            if [[ -z "${tag}" ]]; then
+              echo "No SemVer tag found for workflow_run head sha ${head_sha}" >&2
+              exit 1
+            fi
           fi
 
           if ! [[ "${tag}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
@@ -64,6 +76,14 @@ jobs:
           fi
 
           git checkout "refs/tags/${tag}" --detach
+          resolved_sha="$(git rev-parse HEAD)"
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            expected_sha="${{ github.event.workflow_run.head_sha }}"
+            if [[ "${resolved_sha}" != "${expected_sha}" ]]; then
+              echo "Resolved tag ${tag} to ${resolved_sha}, expected ${expected_sha}" >&2
+              exit 1
+            fi
+          fi
 
           chart_file="charts/openbao-operator/Chart.yaml"
           chart_version="$(sed -nE 's/^version:[[:space:]]*"?([^"#[:space:]]+)"?[[:space:]]*(#.*)?$/\1/p' "${chart_file}" | head -n1)"
@@ -75,7 +95,7 @@ jobs:
           source_date_epoch="$(git show -s --format=%ct HEAD)"
           owner="${GITHUB_REPOSITORY_OWNER}"
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "ref=refs/tags/${tag}" >> "${GITHUB_OUTPUT}"
+          echo "ref=${resolved_sha}" >> "${GITHUB_OUTPUT}"
           echo "chart_version=${chart_version}" >> "${GITHUB_OUTPUT}"
           echo "build_tag=repro-${tag}-${GITHUB_RUN_ID}" >> "${GITHUB_OUTPUT}"
           echo "source_date_epoch=${source_date_epoch}" >> "${GITHUB_OUTPUT}"
@@ -118,14 +138,7 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
-
-      - name: Cache Tools
-        id: cache-tools
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+          cache: false
 
       - name: Setup Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
