@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -110,7 +109,7 @@ jobs:
         run: make vulncheck
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # 0.34.2
         with:
           scan-type: fs
           scan-ref: .
@@ -420,6 +419,9 @@ jobs:
     runs-on: *runner
     needs: [changes, build-artifacts]
     if: (needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e'))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+      packages: write
     outputs:
       manager_ref: ${{ steps.refs.outputs.manager_ref }}
       config_init_ref: ${{ steps.refs.outputs.config_init_ref }}
@@ -529,6 +531,9 @@ jobs:
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     name: E2E (${{ matrix.name }})
     runs-on: *runner
+    permissions:
+      contents: read
+      packages: read
     timeout-minutes: 45
     strategy:
       fail-fast: false

@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: nightly-${{ github.ref }}
@@ -41,7 +40,7 @@ jobs:
         run: make vulncheck
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # 0.34.2
         with:
           scan-type: fs
           scan-ref: .
@@ -109,6 +108,9 @@ jobs:
     name: Build E2E Images Once
     runs-on: *runner
     needs: build-artifacts
+    permissions:
+      contents: read
+      packages: write
     outputs:
       manager_ref: ${{ steps.refs.outputs.manager_ref }}
       config_init_ref: ${{ steps.refs.outputs.config_init_ref }}
@@ -217,6 +219,9 @@ jobs:
     name: E2E (kind ${{ matrix.k8s }})
     runs-on: *runner
     needs: [build-artifacts, build-e2e-images]
+    permissions:
+      contents: read
+      packages: read
     timeout-minutes: 90
     strategy:
       fail-fast: false
