@@ -829,10 +829,11 @@ func stepDownLeader(ctx context.Context, logger logr.Logger, client leaderTransf
 }
 
 func waitForNewLeaderURL(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
-	return waitForNewLeaderURLWithFuncs(ctx, logger, cfg, previousLeaderURL, waitForLeaderElectionOutcome, findLeaderWithFallback)
+	return waitForNewLeaderURLWithFuncs(ctx, logger, cfg, previousLeaderURL, waitForLeaderElectionOutcome, findLeaderWithPolicy)
 }
 
 type leaderElectionWaitFunc func(context.Context, *ExecutorConfig, string) leaderElectionOutcome
+type leaderFallbackResolver func(context.Context, logr.Logger, *ExecutorConfig, leaderSearchPolicy) (string, error)
 
 func waitForNewLeaderURLWithFuncs(
 	ctx context.Context,
@@ -840,7 +841,7 @@ func waitForNewLeaderURLWithFuncs(
 	cfg *ExecutorConfig,
 	previousLeaderURL string,
 	waitFn leaderElectionWaitFunc,
-	fallbackFn func(context.Context, logr.Logger, *ExecutorConfig, string, string, string, string) (string, error),
+	fallbackFn leaderFallbackResolver,
 ) (string, error) {
 	logger.Info("Waiting for new leader election...")
 
@@ -865,7 +866,8 @@ func waitForNewLeaderURLWithFuncs(
 	}
 
 	logger.Info("Finding new leader via fallback search...")
-	leaderURL, findErr := fallbackFn(ctx, logger, cfg, cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
+	fallbackPolicy := newLeaderSearchPolicy(cfg.GreenRevision, cfg.BlueRevision, "Green", "Blue")
+	leaderURL, findErr := fallbackFn(ctx, logger, cfg, fallbackPolicy)
 	if findErr != nil {
 		reasonCode := reasonCodeFromError(findErr)
 		if reasonCode == "" {
@@ -875,11 +877,6 @@ func waitForNewLeaderURLWithFuncs(
 	}
 	logger.Info("New leader found", "leader_url", leaderURL)
 	return leaderURL, nil
-}
-
-func waitForLeaderElection(ctx context.Context, cfg *ExecutorConfig, previousLeaderURL string) (string, error) {
-	outcome := waitForLeaderElectionOutcome(ctx, cfg, previousLeaderURL)
-	return outcome.Value, outcome.WaitError
 }
 
 type leaderOnceFinder func(context.Context, *ExecutorConfig, string) (string, bool)
@@ -1150,18 +1147,7 @@ func normalizeRetryPolicy(policy retryPolicy) retryPolicy {
 	return policy
 }
 
-func findLeaderWithFallback(
-	ctx context.Context,
-	logger logr.Logger,
-	cfg *ExecutorConfig,
-	primaryRevision string,
-	fallbackRevision string,
-	primaryLabel string,
-	fallbackLabel string,
-) (string, error) {
-	policy := newLeaderSearchPolicy(primaryRevision, fallbackRevision, primaryLabel, fallbackLabel)
-	return findLeaderWithPolicy(ctx, logger, cfg, policy)
-}
+type leaderFinder func(context.Context, *ExecutorConfig, string) (string, error)
 
 func findLeaderWithPolicy(
 	ctx context.Context,
@@ -1179,31 +1165,6 @@ func findLeaderWithPolicyUsing(
 	policy leaderSearchPolicy,
 	finder leaderFinder,
 ) (string, error) {
-	return findLeaderWithFallbackUsing(
-		ctx,
-		logger,
-		cfg,
-		policy.PrimaryRevision,
-		policy.FallbackRevision,
-		policy.PrimaryLabel,
-		policy.FallbackLabel,
-		finder,
-	)
-}
-
-type leaderFinder func(context.Context, *ExecutorConfig, string) (string, error)
-
-func findLeaderWithFallbackUsing(
-	ctx context.Context,
-	logger logr.Logger,
-	cfg *ExecutorConfig,
-	primaryRevision string,
-	fallbackRevision string,
-	primaryLabel string,
-	fallbackLabel string,
-	finder leaderFinder,
-) (string, error) {
-	policy := newLeaderSearchPolicy(primaryRevision, fallbackRevision, primaryLabel, fallbackLabel)
 	outcome := resolveLeaderWithPolicyUsing(ctx, cfg, policy, finder)
 	logger.Info(
 		"Leader search completed",
@@ -1220,21 +1181,21 @@ func findLeaderWithFallbackUsing(
 
 	if policy.AllowFallback {
 		logger.Info(
-			fmt.Sprintf("Failed to find leader among %s pods, checking %s pods", primaryLabel, fallbackLabel),
+			fmt.Sprintf("Failed to find leader among %s pods, checking %s pods", policy.PrimaryLabel, policy.FallbackLabel),
 			"error", outcome.PrimaryError,
 			"decision_path", outcome.DecisionPath,
 			"reason_code", outcome.ReasonCode,
 		)
 		return "", newExecutorReasonedError(
 			outcome.ReasonCode,
-			fmt.Sprintf("failed to find leader (checked %s and %s)", primaryLabel, fallbackLabel),
+			fmt.Sprintf("failed to find leader (checked %s and %s)", policy.PrimaryLabel, policy.FallbackLabel),
 			outcome.FallbackError,
 		)
 	}
 
 	return "", newExecutorReasonedError(
 		outcome.ReasonCode,
-		fmt.Sprintf("failed to find leader among %s pods", primaryLabel),
+		fmt.Sprintf("failed to find leader among %s pods", policy.PrimaryLabel),
 		outcome.PrimaryError,
 	)
 }
