@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
     
     
       
@@ -3954,6 +3954,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#8-ghcr-housekeeping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. GHCR Housekeeping
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4403,6 +4414,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#8-ghcr-housekeeping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. GHCR Housekeeping
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4657,6 +4679,43 @@
 <ul>
 <li>Scheduled failures open or update the <code>Weekly performance regression detected</code> issue.</li>
 <li>Release workflow enforces full <code>verify-perf</code> as a blocking gate.</li>
+</ul>
+<h2 id="8-ghcr-housekeeping">8. GHCR Housekeeping<a class="headerlink" href="#8-ghcr-housekeeping" title="Permanent link">&para;</a></h2>
+<p>Run <code>GHCR Housekeeping</code> (<code>.github/workflows/ghcr-housekeeping.yml</code>) to manage image package retention for:</p>
+<ul>
+<li><code>ghcr.io/dc-tec/openbao-operator</code></li>
+<li><code>ghcr.io/dc-tec/openbao-init</code></li>
+<li><code>ghcr.io/dc-tec/openbao-backup</code></li>
+<li><code>ghcr.io/dc-tec/openbao-upgrade</code></li>
+</ul>
+<p>Workflow behavior:</p>
+<ul>
+<li>Runs daily at <code>06:20 UTC</code>.</li>
+<li>Supports <code>workflow_dispatch</code> for manual dry runs or manual enforce runs.</li>
+<li>Uses alias-safe deletion by package version (digest), not by individual tag.</li>
+<li>Enforces a safety brake via <code>--max-delete-per-package</code> (default <code>100</code>).</li>
+<li>In <code>enforce</code> mode, the workflow performs a global preflight check and aborts all deletions if any package exceeds the safety brake.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Keep protected references indefinitely: SemVer tags, <code>edge</code>, <code>nightly</code>, <code>sha256-*</code>, and unknown/unmatched tags.</p>
+</div>
+<p>Set execution mode in this order:</p>
+<ol>
+<li>Manual <code>workflow_dispatch</code> input <code>mode</code> (if provided)</li>
+<li>Repository variable <code>GHCR_HOUSEKEEPING_MODE</code></li>
+<li>Default <code>dry-run</code></li>
+</ol>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Before enabling enforce mode, run dry-run mode for several days and review the generated report.</p>
+</div>
+<p>Each run uploads <code>dist/housekeeping-report.json</code> as an artifact and writes a markdown summary to the Actions job summary.</p>
+<p>The report and summary include unknown-version breakdown fields:</p>
+<ul>
+<li><code>kept_unknown_untagged</code></li>
+<li><code>kept_unknown_unmatched_tag</code></li>
+<li><code>kept_unknown_no_transient_match</code></li>
 </ul>
 
 

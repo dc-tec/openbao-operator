@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
     
     
       
@@ -3838,6 +3838,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#03-ghcr-housekeeping-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3 GHCR Housekeeping Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#1-stableprerelease-release-flow" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4230,6 +4241,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#03-ghcr-housekeeping-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3 GHCR Housekeeping Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#1-stableprerelease-release-flow" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4443,6 +4465,47 @@ GitHub often excludes self-approvals from required reviews. Prefer a bot account
 </div>
 </div>
 </div>
+<h2 id="03-ghcr-housekeeping-policy">0.3 GHCR Housekeeping Policy<a class="headerlink" href="#03-ghcr-housekeeping-policy" title="Permanent link">&para;</a></h2>
+<p>Run <code>.github/workflows/ghcr-housekeeping.yml</code> to keep GHCR history bounded while preserving release aliases and supply-chain evidence.</p>
+<ul>
+<li>Scope: image packages only (<code>openbao-operator</code>, <code>openbao-init</code>, <code>openbao-backup</code>, <code>openbao-upgrade</code>).</li>
+<li>Unit of deletion: package version (digest), not tag string.</li>
+<li>Alias safety: any version containing a protected tag is never deleted.</li>
+<li>Enforce safety: if any package exceeds <code>max-delete-per-package</code>, no package deletions are attempted in that run.</li>
+</ul>
+<p>Protected tags (kept indefinitely):</p>
+<ul>
+<li>SemVer release/prerelease tags</li>
+<li><code>edge</code> and <code>nightly</code> moving pointers</li>
+<li><code>sha256-*</code> signature/attestation tags</li>
+<li>Unknown/unmatched tags (fail-safe)</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Unknown or unmatched tags are protected by default. This fail-safe prevents accidental deletion when new tag formats appear.</p>
+</div>
+<p>Retention windows for transient tags:</p>
+<ul>
+<li>30 days: <code>edge-&lt;shortsha&gt;</code>, <code>nightly-YYYYMMDD</code>, <code>nightly-YYYYMMDD-&lt;shortsha&gt;</code>, legacy <code>dev*</code></li>
+<li>21 days: <code>edge-build-*</code>, <code>edge-repro-*</code>, <code>nightly-build-*</code>, <code>nightly-repro-*</code>, <code>build-*</code>, <code>repro-*</code></li>
+<li>7 days: <code>e2e-*</code>, <code>nightly-e2e-*</code></li>
+</ul>
+<p>Rollout/operation model:</p>
+<ol>
+<li>Default mode is <code>dry-run</code> (report only).</li>
+<li>Set repository variable <code>GHCR_HOUSEKEEPING_MODE=enforce</code> after dry-run validation window.</li>
+<li>If candidate count exceeds safety threshold, run fails and requires manual <code>workflow_dispatch</code> override for <code>max_delete_per_package</code>.</li>
+</ol>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Switch to enforce mode only after reviewing dry-run reports and confirming candidate behavior matches expectations.</p>
+</div>
+<p>Dry-run and enforce reports include unknown-version breakdown for auditability:</p>
+<ul>
+<li><code>kept_unknown_untagged</code></li>
+<li><code>kept_unknown_unmatched_tag</code></li>
+<li><code>kept_unknown_no_transient_match</code></li>
+</ul>
 <h2 id="1-stableprerelease-release-flow">1. Stable/Prerelease Release Flow<a class="headerlink" href="#1-stableprerelease-release-flow" title="Permanent link">&para;</a></h2>
 <p><code>release-please</code> is responsible for <em>versioning and release notes</em>. The <code>Release</code> workflow is responsible for <em>building, gating, and publishing artifacts</em>.</p>
 <div class="admonition note">
