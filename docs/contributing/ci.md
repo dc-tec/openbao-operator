@@ -217,3 +217,40 @@ The `Performance Regression Weekly` workflow runs `make verify-perf` weekly and 
 
 - Scheduled failures open or update the `Weekly performance regression detected` issue.
 - Release workflow enforces full `verify-perf` as a blocking gate.
+
+## 8. GHCR Housekeeping
+
+Run `GHCR Housekeeping` (`.github/workflows/ghcr-housekeeping.yml`) to manage image package retention for:
+
+- `ghcr.io/dc-tec/openbao-operator`
+- `ghcr.io/dc-tec/openbao-init`
+- `ghcr.io/dc-tec/openbao-backup`
+- `ghcr.io/dc-tec/openbao-upgrade`
+
+Workflow behavior:
+
+- Runs daily at `06:20 UTC`.
+- Supports `workflow_dispatch` for manual dry runs or manual enforce runs.
+- Uses alias-safe deletion by package version (digest), not by individual tag.
+- Enforces a safety brake via `--max-delete-per-package` (default `100`).
+- In `enforce` mode, the workflow performs a global preflight check and aborts all deletions if any package exceeds the safety brake.
+
+!!! note
+    Keep protected references indefinitely: SemVer tags, `edge`, `nightly`, `sha256-*`, and unknown/unmatched tags.
+
+Set execution mode in this order:
+
+1. Manual `workflow_dispatch` input `mode` (if provided)
+2. Repository variable `GHCR_HOUSEKEEPING_MODE`
+3. Default `dry-run`
+
+!!! warning
+    Before enabling enforce mode, run dry-run mode for several days and review the generated report.
+
+Each run uploads `dist/housekeeping-report.json` as an artifact and writes a markdown summary to the Actions job summary.
+
+The report and summary include unknown-version breakdown fields:
+
+- `kept_unknown_untagged`
+- `kept_unknown_unmatched_tag`
+- `kept_unknown_no_transient_match`

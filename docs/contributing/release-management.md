@@ -67,6 +67,46 @@ We use **release-please** as the source of truth for:
         - Manifests to GitHub Pages: `/nightly/install.yaml`, `/nightly/crds.yaml` (+ checksums, checksums bundle, `provenance-index.json`, metadata)
         - No Helm chart publication (release-only)
 
+## 0.3 GHCR Housekeeping Policy
+
+Run `.github/workflows/ghcr-housekeeping.yml` to keep GHCR history bounded while preserving release aliases and supply-chain evidence.
+
+- Scope: image packages only (`openbao-operator`, `openbao-init`, `openbao-backup`, `openbao-upgrade`).
+- Unit of deletion: package version (digest), not tag string.
+- Alias safety: any version containing a protected tag is never deleted.
+- Enforce safety: if any package exceeds `max-delete-per-package`, no package deletions are attempted in that run.
+
+Protected tags (kept indefinitely):
+
+- SemVer release/prerelease tags
+- `edge` and `nightly` moving pointers
+- `sha256-*` signature/attestation tags
+- Unknown/unmatched tags (fail-safe)
+
+!!! note
+    Unknown or unmatched tags are protected by default. This fail-safe prevents accidental deletion when new tag formats appear.
+
+Retention windows for transient tags:
+
+- 30 days: `edge-<shortsha>`, `nightly-YYYYMMDD`, `nightly-YYYYMMDD-<shortsha>`, legacy `dev*`
+- 21 days: `edge-build-*`, `edge-repro-*`, `nightly-build-*`, `nightly-repro-*`, `build-*`, `repro-*`
+- 7 days: `e2e-*`, `nightly-e2e-*`
+
+Rollout/operation model:
+
+1. Default mode is `dry-run` (report only).
+2. Set repository variable `GHCR_HOUSEKEEPING_MODE=enforce` after dry-run validation window.
+3. If candidate count exceeds safety threshold, run fails and requires manual `workflow_dispatch` override for `max_delete_per_package`.
+
+!!! warning
+    Switch to enforce mode only after reviewing dry-run reports and confirming candidate behavior matches expectations.
+
+Dry-run and enforce reports include unknown-version breakdown for auditability:
+
+- `kept_unknown_untagged`
+- `kept_unknown_unmatched_tag`
+- `kept_unknown_no_transient_match`
+
 ## 1. Stable/Prerelease Release Flow
 
 `release-please` is responsible for *versioning and release notes*. The `Release` workflow is responsible for *building, gating, and publishing artifacts*.
