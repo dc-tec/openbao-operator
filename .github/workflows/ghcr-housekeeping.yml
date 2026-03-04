@@ -1,0 +1,125 @@
+name: GHCR Housekeeping
+
+on:
+  schedule:
+    - cron: "20 6 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Optional mode override: dry-run or enforce"
+        required: false
+        type: string
+      max_delete_per_package:
+        description: "Optional safety brake override for this run (>0)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ghcr-housekeeping
+  cancel-in-progress: false
+
+jobs:
+  housekeeping:
+    name: Cleanup GHCR image package versions
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Resolve housekeeping configuration
+        id: cfg
+        env:
+          MODE_INPUT: ${{ github.event.inputs.mode }}
+          MODE_VAR: ${{ vars.GHCR_HOUSEKEEPING_MODE }}
+          MAX_INPUT: ${{ github.event.inputs.max_delete_per_package }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          normalize() {
+            local value="${1:-}"
+            value="$(echo "${value}" | tr '[:upper:]' '[:lower:]' | xargs)"
+            echo "${value}"
+          }
+
+          mode="$(normalize "${MODE_INPUT:-}")"
+          if [[ -z "${mode}" ]]; then
+            mode="$(normalize "${MODE_VAR:-}")"
+          fi
+          if [[ -z "${mode}" ]]; then
+            mode="dry-run"
+          fi
+          case "${mode}" in
+            dry-run|enforce) ;;
+            *)
+              echo "invalid mode '${mode}'. expected dry-run or enforce." >&2
+              exit 1
+              ;;
+          esac
+
+          max_delete="100"
+          if [[ -n "${MAX_INPUT:-}" ]]; then
+            if ! [[ "${MAX_INPUT}" =~ ^[0-9]+$ ]] || [[ "${MAX_INPUT}" -le 0 ]]; then
+              echo "max_delete_per_package must be a positive integer; got '${MAX_INPUT}'" >&2
+              exit 1
+            fi
+            max_delete="${MAX_INPUT}"
+          fi
+
+          echo "mode=${mode}" >> "${GITHUB_OUTPUT}"
+          echo "max_delete_per_package=${max_delete}" >> "${GITHUB_OUTPUT}"
+
+          owner="${GITHUB_REPOSITORY_OWNER}"
+          owner_kind="user"
+          if owner_type="$(curl -fsSL \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/users/${owner}" | jq -r '.type // empty')"; then
+            case "${owner_type}" in
+              Organization) owner_kind="org" ;;
+              User) owner_kind="user" ;;
+              *)
+                echo "::warning::Unable to classify owner type '${owner_type}', defaulting owner-kind=user"
+                ;;
+            esac
+          else
+            echo "::warning::Owner type lookup failed, defaulting owner-kind=user"
+          fi
+
+          echo "owner=${owner}" >> "${GITHUB_OUTPUT}"
+          echo "owner_kind=${owner_kind}" >> "${GITHUB_OUTPUT}"
+
+      - name: Run GHCR housekeeping tool
+        env:
+          GOFLAGS: -mod=vendor
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          go run ./hack/tools/ghcr_housekeeping \
+            --owner "${{ steps.cfg.outputs.owner }}" \
+            --owner-kind "${{ steps.cfg.outputs.owner_kind }}" \
+            --mode "${{ steps.cfg.outputs.mode }}" \
+            --policy-file hack/tools/ghcr_housekeeping/policy.json \
+            --max-delete-per-package "${{ steps.cfg.outputs.max_delete_per_package }}" \
+            --report-json dist/housekeeping-report.json
+
+      - name: Upload housekeeping report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ghcr-housekeeping-report
+          path: dist/housekeeping-report.json
+          if-no-files-found: warn
+          retention-days: 14
