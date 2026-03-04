@@ -91,8 +91,8 @@ Use `logr` with key-value pairs. Never use `fmt.Printf` or `log.Println`.
 === ":material-check: Good Pattern"
     ```go
     log.Info("Reconciling Cluster",
-        "namespace", req.Namespace,
-        "name", req.Name,
+        "cluster_namespace", req.Namespace,
+        "cluster_name", req.Name,
     )
     ```
 

@@ -52,7 +52,7 @@ When creating files, use the most restrictive permissions possible.
 
 ### Certificates
 
-Do not implement custom certificate logic. Use the `internal/pki` package, which defaults to safe algorithms (ECDSA P-256 or RSA 2048+).
+Do not implement custom certificate logic. Use the `internal/certs` package and shared certificate helpers.
 
 ## 3. No Shelling Out
 

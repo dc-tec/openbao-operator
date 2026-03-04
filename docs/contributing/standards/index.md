@@ -77,11 +77,13 @@ These coding standards ensure consistency and quality across the OpenBao Operato
 !!! success "Must Do"
     - [x] **Format Code:** Always run `gofmt` or `goimports`.
     - [x] **Linting:** Pass `golangci-lint` with the default configuration.
+    - [x] **Respect Architecture Boundaries:** Keep controller imports and package layering aligned with `.ast-grep/policy/architecture-boundaries.yml`.
+    - [x] **Keep ast-grep Rule Families Green:** Ensure `architecture-boundary`, `runtime-safety`, `reconcile-shape`, `status-ownership`, and `rbac-vap` checks pass.
     - [x] **Wrap Errors:** Use `fmt.Errorf("...: %w", err)` to preserve context.
     - [x] **Structured Logs:** Use `log.Info("msg", "key", "value")` instead of `Printf`.
     - [x] **Test Logic:** Write table-driven unit tests for all business logic.
     - [x] **Verify:** Run the full check suite:
-        `make lint verify-fmt verify-tidy verify-generated verify-helm test-ci`
+        `make lint-ci verify-arch-policy verify-fmt verify-tidy verify-generated verify-helm test-ci`
 
 !!! failure "Must NOT Do"
     - [ ] **No `interface{}`:** Avoid `any` types without rigorous justification.
