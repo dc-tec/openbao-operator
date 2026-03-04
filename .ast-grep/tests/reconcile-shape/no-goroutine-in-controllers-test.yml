@@ -1,0 +1,19 @@
+id: no-goroutine-in-controllers
+valid:
+  - |
+    package p
+    import "context"
+    func work(ctx context.Context) error { return nil }
+    func reconcile(ctx context.Context) error {
+      return work(ctx)
+    }
+invalid:
+  - |
+    package p
+    import "context"
+    func work(ctx context.Context) error { return nil }
+    func reconcile(ctx context.Context) {
+      go func() {
+        _ = work(ctx)
+      }()
+    }

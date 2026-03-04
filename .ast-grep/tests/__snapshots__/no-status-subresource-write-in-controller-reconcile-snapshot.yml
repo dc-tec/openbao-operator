@@ -1,0 +1,25 @@
+id: no-status-subresource-write-in-controller-reconcile
+snapshots:
+  ? |
+    package p
+    import "context"
+    type Reconciler struct{}
+    type Request struct{}
+    type Result struct{}
+    func (r *Reconciler) Reconcile(ctx context.Context, req Request) (result Result, err error) {
+      _ = r.Client.Status().Patch(ctx, obj, patch)
+      return Result{}, nil
+    }
+  : labels:
+    - source: r.Client.Status().Patch(ctx, obj, patch)
+      style: primary
+      start: 195
+      end: 235
+    - source: |-
+        func (r *Reconciler) Reconcile(ctx context.Context, req Request) (result Result, err error) {
+          _ = r.Client.Status().Patch(ctx, obj, patch)
+          return Result{}, nil
+        }
+      style: secondary
+      start: 95
+      end: 260

@@ -1,0 +1,28 @@
+id: no-rbac-cluster-admin-binding
+snapshots:
+  ? |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: bad
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: cluster-admin
+    subjects:
+      - kind: ServiceAccount
+        name: controller
+        namespace: system
+  : labels:
+    - source: 'name: cluster-admin'
+      style: primary
+      start: 157
+      end: 176
+    - source: |-
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: cluster-admin
+      style: secondary
+      start: 88
+      end: 176

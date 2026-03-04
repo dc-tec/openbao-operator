@@ -1,0 +1,17 @@
+id: no-legacy-request-log-keys-in-controller
+valid:
+  - |
+    package p
+    type Req struct { Namespace, Name string }
+    type Logger interface { Info(string, ...any) }
+    func f(log Logger, req Req) {
+      log.Info("Reconciling", "cluster_namespace", req.Namespace, "cluster_name", req.Name)
+    }
+invalid:
+  - |
+    package p
+    type Req struct { Namespace, Name string }
+    type Logger interface { Info(string, ...any) }
+    func f(log Logger, req Req) {
+      log.Info("Reconciling", "namespace", req.Namespace, "name", req.Name)
+    }

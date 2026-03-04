@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-vap-binding-validationactions-nondeny
+message: ValidatingAdmissionPolicyBinding validationActions must be Deny.
+severity: warning
+language: Yaml
+files:
+  - config/policy/*binding.yaml
+rule:
+  any:
+    - pattern: |
+        validationActions:
+          - $ACTION
+    - pattern: |
+        validationActions: [$ACTION]
+constraints:
+  ACTION:
+    not:
+      regex: '^Deny$'
+note: Binding actions other than Deny weaken policy enforcement.

@@ -1,0 +1,15 @@
+id: no-sleep-in-reconcile-path
+valid:
+  - |
+    package p
+    import "time"
+    func f() (any, error) {
+      return struct{ RequeueAfter time.Duration }{RequeueAfter: 5 * time.Second}, nil
+    }
+invalid:
+  - |
+    package p
+    import "time"
+    func f() {
+      time.Sleep(5 * time.Second)
+    }

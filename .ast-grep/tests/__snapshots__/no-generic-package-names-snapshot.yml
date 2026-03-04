@@ -1,0 +1,18 @@
+id: no-generic-package-names
+snapshots:
+  ? |
+    package helpers
+    func f() {}
+  : labels:
+    - source: package helpers
+      style: primary
+      start: 0
+      end: 15
+  ? |
+    package util
+    func f() {}
+  : labels:
+    - source: package util
+      style: primary
+      start: 0
+      end: 12

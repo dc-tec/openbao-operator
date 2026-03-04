@@ -1,0 +1,13 @@
+id: no-fmterrorf-single-err-without-wrap
+snapshots:
+  ? |
+    package p
+    import "fmt"
+    func f(err error) error {
+      return fmt.Errorf("failed: %v", err)
+    }
+  : labels:
+    - source: 'fmt.Errorf("failed: %v", err)'
+      style: primary
+      start: 58
+      end: 87

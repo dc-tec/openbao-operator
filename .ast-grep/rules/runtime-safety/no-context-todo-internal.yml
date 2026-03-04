@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-context-todo-internal
+message: Avoid context.TODO in internal runtime code; pass a concrete context.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  pattern: context.TODO()
+note: TODO contexts hide missing context propagation and weaken cancellation behavior.

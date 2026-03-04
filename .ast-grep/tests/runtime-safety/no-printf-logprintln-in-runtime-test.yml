@@ -1,0 +1,23 @@
+id: no-printf-logprintln-in-runtime
+valid:
+  - |
+    package p
+    type Logger interface {
+      Info(string, ...any)
+    }
+    func f(log Logger) {
+      log.Info("ok", "cluster_name", "demo")
+    }
+invalid:
+  - |
+    package p
+    import "fmt"
+    func f() {
+      fmt.Printf("debug: %s", "value")
+    }
+  - |
+    package p
+    import "log"
+    func f() {
+      log.Println("plain")
+    }

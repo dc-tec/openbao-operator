@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-kubebuilder-rbac-marker-openbaocluster-controller
+message: Do not add +kubebuilder:rbac markers in OpenBaoCluster controller packages.
+severity: warning
+language: Go
+files:
+  - internal/controller/openbaocluster/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - kind: comment
+    - regex: '\+kubebuilder:rbac'
+note: Runtime RBAC is defined centrally in config/rbac; avoid per-controller marker drift.

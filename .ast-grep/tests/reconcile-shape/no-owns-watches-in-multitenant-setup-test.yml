@@ -1,0 +1,17 @@
+id: no-owns-watches-in-multitenant-setup
+valid:
+  - |
+    package p
+    type Reconciler struct{}
+    func (r *Reconciler) setupSingleTenantMode(mgr any) error {
+      ctrl.NewControllerManagedBy(mgr).Owns(&corev1.Secret{})
+      return nil
+    }
+invalid:
+  - |
+    package p
+    type OpenBaoClusterReconciler struct{}
+    func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr any) error {
+      ctrl.NewControllerManagedBy(mgr).Owns(&corev1.Secret{})
+      return nil
+    }

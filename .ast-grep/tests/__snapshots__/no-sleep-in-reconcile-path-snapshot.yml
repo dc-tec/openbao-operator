@@ -1,0 +1,13 @@
+id: no-sleep-in-reconcile-path
+snapshots:
+  ? |
+    package p
+    import "time"
+    func f() {
+      time.Sleep(5 * time.Second)
+    }
+  : labels:
+    - source: time.Sleep(5 * time.Second)
+      style: primary
+      start: 37
+      end: 64

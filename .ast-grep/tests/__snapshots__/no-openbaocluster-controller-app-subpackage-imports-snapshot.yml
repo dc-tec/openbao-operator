@@ -1,0 +1,11 @@
+id: no-openbaocluster-controller-app-subpackage-imports
+snapshots:
+  ? |
+    package p
+    import statusops "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/statusops"
+    var _ = statusops.ObservedVersionFromPods
+  : labels:
+    - source: statusops "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/statusops"
+      style: primary
+      start: 17
+      end: 101

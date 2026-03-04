@@ -1,0 +1,23 @@
+id: no-new-manager-in-controller-reconcile
+valid:
+  - |
+    package p
+    import "context"
+    type Reconciler struct{}
+    type Request struct{}
+    type Result struct{}
+    func (r *Reconciler) Reconcile(ctx context.Context, req Request) (result Result, err error) {
+      return reconcileViaApp(ctx, req)
+    }
+invalid:
+  - |
+    package p
+    import "context"
+    type Reconciler struct{}
+    type Request struct{}
+    type Result struct{}
+    func (r *Reconciler) Reconcile(ctx context.Context, req Request) (result Result, err error) {
+      _ = restore.NewManager(nil, nil, nil, nil, "")
+      return Result{}, nil
+    }
+

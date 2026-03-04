@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-workload-lasterror-write-outside-workload-package
+message: status.workload.lastError is owned by workload reconciliation flow.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+ignores:
+  - '**/*_test.go'
+  - internal/app/openbaocluster/workload.go
+rule:
+  pattern: $CLUSTER.Status.Workload.LastError = $VALUE
+note: Keep ownership of workload error status localized to workload orchestration paths.
+

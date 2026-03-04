@@ -1,0 +1,11 @@
+id: no-openbaorestore-controller-unapproved-service-imports
+snapshots:
+  ? |
+    package p
+    import infra "github.com/dc-tec/openbao-operator/internal/infra"
+    var _ = infra.Manager
+  : labels:
+    - source: infra "github.com/dc-tec/openbao-operator/internal/infra"
+      style: primary
+      start: 17
+      end: 74

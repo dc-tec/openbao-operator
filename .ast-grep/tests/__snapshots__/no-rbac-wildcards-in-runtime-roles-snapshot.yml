@@ -1,0 +1,30 @@
+id: no-rbac-wildcards-in-runtime-roles
+snapshots:
+  ? |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: provisioner-role
+    rules:
+      - apiGroups: [""]
+        resources: ["namespaces"]
+        verbs: ["*"]
+  : labels:
+    - source: 'verbs: ["*"]'
+      style: primary
+      start: 155
+      end: 167
+  ? |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: provisioner-role
+    rules:
+      - apiGroups: ["*"]
+        resources: ["namespaces"]
+        verbs: ["get"]
+  : labels:
+    - source: 'apiGroups: ["*"]'
+      style: primary
+      start: 105
+      end: 121

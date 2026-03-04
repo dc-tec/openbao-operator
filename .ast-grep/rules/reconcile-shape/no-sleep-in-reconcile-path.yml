@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-sleep-in-reconcile-path
+message: Avoid time.Sleep in reconcile paths; return RequeueAfter instead.
+severity: warning
+language: Go
+files:
+  - internal/controller/**/*.go
+  - internal/app/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - pattern: $F($DURATION)
+constraints:
+  F:
+    regex: '^time\.Sleep$'
+note: Sleeping blocks workers and reduces controller throughput.

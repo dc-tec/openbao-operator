@@ -1,0 +1,11 @@
+id: no-openbaocluster-controller-unapproved-adapter-imports
+snapshots:
+  ? |
+    package p
+    import revision "github.com/dc-tec/openbao-operator/internal/revision"
+    var _ = revision.Reader
+  : labels:
+    - source: revision "github.com/dc-tec/openbao-operator/internal/revision"
+      style: primary
+      start: 17
+      end: 80

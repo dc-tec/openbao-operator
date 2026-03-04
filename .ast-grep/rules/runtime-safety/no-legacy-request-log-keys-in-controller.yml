@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-legacy-request-log-keys-in-controller
+message: Use cluster_namespace/cluster_name keys for request-scoped controller logs.
+severity: warning
+language: Go
+files:
+  - internal/controller/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  any:
+    - pattern: $F($MSG, "namespace", req.Namespace)
+    - pattern: $F($MSG, "namespace", req.Namespace, $$$REST)
+    - pattern: $F($MSG, "name", req.Name)
+    - pattern: $F($MSG, "name", req.Name, $$$REST)
+    - pattern: $F($ERR, $MSG, "namespace", req.Namespace)
+    - pattern: $F($ERR, $MSG, "namespace", req.Namespace, $$$REST)
+    - pattern: $F($ERR, $MSG, "name", req.Name)
+    - pattern: $F($ERR, $MSG, "name", req.Name, $$$REST)
+constraints:
+  F:
+    regex: '\.(Info|Error)$'
+note: Keep controller log keys stable for dashboards and cross-controller observability.

@@ -1,0 +1,15 @@
+id: no-fmterrorf-single-err-without-wrap
+valid:
+  - |
+    package p
+    import "fmt"
+    func f(err error) error {
+      return fmt.Errorf("failed: %w", err)
+    }
+invalid:
+  - |
+    package p
+    import "fmt"
+    func f(err error) error {
+      return fmt.Errorf("failed: %v", err)
+    }

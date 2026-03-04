@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-status-field-write-in-adapter-packages
+message: Adapter packages should not mutate CR status fields directly.
+severity: warning
+language: Go
+files:
+  - internal/auth/**/*.go
+  - internal/cluster/**/*.go
+  - internal/config/**/*.go
+  - internal/kube/**/*.go
+  - internal/openbao/**/*.go
+  - internal/operationlock/**/*.go
+  - internal/probe/**/*.go
+  - internal/raft/**/*.go
+  - internal/revision/**/*.go
+  - internal/security/**/*.go
+  - internal/storage/**/*.go
+  - internal/storageenv/**/*.go
+ignores:
+  - '**/*_test.go'
+  # Transitional ownership exception tracked separately.
+  - internal/operationlock/**/*.go
+rule:
+  any:
+    - pattern: $OBJ.Status = $VALUE
+    - pattern: $OBJ.Status.$FIELD = $VALUE
+note: Keep CR status mutation in app/controller-owned status flows; adapters should provide read/integration behavior.

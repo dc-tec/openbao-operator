@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-goroutine-in-controllers
+message: Do not spawn goroutines in reconcilers; rely on controller-runtime concurrency controls.
+severity: warning
+language: Go
+files:
+  - internal/controller/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  any:
+    - pattern: go $FUNC($$$ARGS)
+    - pattern: go func($$$PARAMS) { $$$BODY }($$$ARGS)
+note: Unmanaged goroutines can lose errors and create races in reconcile logic.

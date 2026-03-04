@@ -1,0 +1,11 @@
+id: no-provisioner-controller-unapproved-adapter-imports
+valid:
+  - |
+    package p
+    import app "github.com/dc-tec/openbao-operator/internal/app/provisioner"
+    var _ = app.ReconcileOpenBaoTenant
+invalid:
+  - |
+    package p
+    import openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+    var _ = openbao.Client

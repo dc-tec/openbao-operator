@@ -1,0 +1,15 @@
+id: no-context-background-internal
+valid:
+  - |
+    package p
+    import "context"
+    func f(ctx context.Context) {
+      _, _ = context.WithCancel(ctx)
+    }
+invalid:
+  - |
+    package p
+    import "context"
+    func f() {
+      _ = context.Background()
+    }

@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-adminops-lasterror-write-outside-adminops-package
+message: status.adminOps.lastError is owned by adminops reconciliation flow.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+ignores:
+  - '**/*_test.go'
+  - internal/app/openbaocluster/adminops/reconcile.go
+rule:
+  pattern: $CLUSTER.Status.AdminOps.LastError = $VALUE
+note: Keep ownership of adminops error status localized to adminops orchestration paths.
+

@@ -1,0 +1,24 @@
+id: no-printf-logprintln-in-runtime
+snapshots:
+  ? |
+    package p
+    import "fmt"
+    func f() {
+      fmt.Printf("debug: %s", "value")
+    }
+  : labels:
+    - source: 'fmt.Printf("debug: %s", "value")'
+      style: primary
+      start: 36
+      end: 68
+  ? |
+    package p
+    import "log"
+    func f() {
+      log.Println("plain")
+    }
+  : labels:
+    - source: log.Println("plain")
+      style: primary
+      start: 36
+      end: 56

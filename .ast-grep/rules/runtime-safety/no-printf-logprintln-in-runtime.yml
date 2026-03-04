@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-printf-logprintln-in-runtime
+message: Avoid fmt/log Printf/Println/Print in runtime operator paths; use structured logging.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/controller/**/*.go
+  - cmd/provisioner/**/*.go
+ignores:
+  - '**/*_test.go'
+  - internal/security/fetch_trusted_root.go
+rule:
+  all:
+    - kind: call_expression
+    - regex: '\b(fmt|log)\.Print(f|ln)?\('
+note: Runtime paths should emit key/value logs through logr helpers to preserve context.

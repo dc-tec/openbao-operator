@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-owns-watches-in-multitenant-setup
+message: setupMultiTenantMode must not add Owns/Watches child-resource watches.
+severity: warning
+language: Go
+files:
+  - internal/controller/openbaocluster/setup.go
+rule:
+  all:
+    - any:
+        - pattern: $F($A)
+        - pattern: $F($A, $B)
+        - pattern: $F($A, $B, $C)
+        - pattern: $F($A, $B, $C, $D)
+    - inside:
+        pattern: func (r *OpenBaoClusterReconciler) setupMultiTenantMode($MGR $TYPE) error { $$$BODY }
+        stopBy: end
+constraints:
+  F:
+    regex: '\.(Owns|Watches)$'
+note: Owns/Watches in multi-tenant mode imply broader list/watch RBAC that conflicts with the zero-trust tenancy model.

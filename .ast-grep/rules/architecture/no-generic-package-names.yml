@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-generic-package-names
+message: Avoid generic package names (util/common/shared/helper/helpers); use domain-focused names.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - kind: package_clause
+    - regex: '^package (util|common|shared|helper|helpers)$'
+note: Future-growth guardrail to keep package topology explicit as controllers and domains expand.

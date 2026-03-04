@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-any-interface-in-core-logic
+message: Avoid any/interface{} in controller and app core logic; prefer concrete types.
+severity: warning
+language: Go
+files:
+  - internal/controller/**/*.go
+  - internal/app/**/*.go
+ignores:
+  - '**/*_test.go'
+  # Allowed interop points for JSON merge/patch payload construction.
+  - internal/controller/openbaocluster/security_events.go
+  - internal/app/openbaocluster/deletionops/retention.go
+rule:
+  any:
+    - pattern: 'map[$K]any'
+    - pattern: 'map[$K]interface{}'
+    - pattern: '[]any'
+    - pattern: '[]interface{}'
+    - pattern: 'var $X any'
+    - pattern: 'var $X interface{}'
+    - pattern: 'func $F($P any) { $$$BODY }'
+    - pattern: 'func $F($P interface{}) { $$$BODY }'
+    - pattern: 'func $F($$$ARGS) any { $$$BODY }'
+    - pattern: 'func $F($$$ARGS) ($R any) { $$$BODY }'
+    - pattern: 'interface{}'
+note: Restrict broad dynamic typing in reconciliation/orchestration paths to preserve static safety.

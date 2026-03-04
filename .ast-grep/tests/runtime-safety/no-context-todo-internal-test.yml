@@ -1,0 +1,15 @@
+id: no-context-todo-internal
+valid:
+  - |
+    package p
+    import "context"
+    func f(ctx context.Context) {
+      _, _ = context.WithTimeout(ctx, 0)
+    }
+invalid:
+  - |
+    package p
+    import "context"
+    func f() {
+      _ = context.TODO()
+    }

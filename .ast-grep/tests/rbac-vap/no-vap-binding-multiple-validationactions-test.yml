@@ -1,0 +1,38 @@
+id: no-vap-binding-multiple-validationactions
+valid:
+  - |
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: b
+    spec:
+      policyName: p
+      validationActions:
+        - Deny
+  - |
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: b
+    spec:
+      policyName: p
+      validationActions: [Deny]
+invalid:
+  - |
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: b
+    spec:
+      policyName: p
+      validationActions:
+        - Deny
+        - Warn
+  - |
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: b
+    spec:
+      policyName: p
+      validationActions: [Deny, Warn]

@@ -1,0 +1,12 @@
+id: no-openbaocluster-controller-direct-domain-imports
+valid:
+  - |
+    package p
+    import app "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
+    var _ = app.GatherStatusState
+invalid:
+  - |
+    package p
+    import revision "github.com/dc-tec/openbao-operator/internal/revision"
+    var _ = revision.GetOpenBaoImageVersionFromLabel
+

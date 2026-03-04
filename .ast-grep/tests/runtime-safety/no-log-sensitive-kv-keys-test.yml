@@ -1,0 +1,15 @@
+id: no-log-sensitive-kv-keys
+valid:
+  - |
+    package p
+    type Logger interface { Info(string, ...any) }
+    func f(logger Logger, pod string) {
+      logger.Info("reconciling", "pod", pod)
+    }
+invalid:
+  - |
+    package p
+    type Logger interface { Info(string, ...any) }
+    func f(logger Logger, token string) {
+      logger.Info("auth", "token", token)
+    }

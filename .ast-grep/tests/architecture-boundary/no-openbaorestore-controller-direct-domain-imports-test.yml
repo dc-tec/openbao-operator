@@ -1,0 +1,11 @@
+id: no-openbaorestore-controller-direct-domain-imports
+valid:
+  - |
+    package p
+    import app "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
+    var _ = app.ReconcileOpenBaoRestore
+invalid:
+  - |
+    package p
+    import logging "github.com/dc-tec/openbao-operator/internal/logging"
+    var _ = logging.NewNopLogger

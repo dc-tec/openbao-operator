@@ -1,0 +1,15 @@
+id: no-any-interface-in-core-logic
+valid:
+  - |
+    package p
+    type Status struct {
+      Phase string
+    }
+    func reconcile(in Status) Status { return in }
+invalid:
+  - |
+    package p
+    type Payload map[string]any
+  - |
+    package p
+    var decoded interface{}

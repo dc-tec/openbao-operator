@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-rbac-wildcards-in-runtime-roles
+message: Runtime RBAC roles must not use wildcard permissions.
+severity: warning
+language: Yaml
+files:
+  - config/rbac/**/*.yaml
+ignores:
+  - config/rbac/openbaocluster_admin_role.yaml
+  - config/rbac/namespace_scoped_example.yaml
+rule:
+  any:
+    - pattern: |
+        verbs:
+          - $VALUE
+    - pattern: |
+        verbs: [$VALUE]
+    - pattern: |
+        resources:
+          - $VALUE
+    - pattern: |
+        resources: [$VALUE]
+    - pattern: |
+        apiGroups:
+          - $VALUE
+    - pattern: |
+        apiGroups: [$VALUE]
+    - pattern: |
+        nonResourceURLs:
+          - $VALUE
+    - pattern: |
+        nonResourceURLs: [$VALUE]
+constraints:
+  VALUE:
+    regex: '^"\*"$'
+note: Prefer explicit permissions to preserve least privilege for operator runtime identities.

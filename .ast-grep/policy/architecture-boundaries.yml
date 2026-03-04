@@ -1,0 +1,231 @@
+modulePath: github.com/dc-tec/openbao-operator
+
+layerCoverage:
+  root: internal
+  layers:
+    controller:
+      - controller
+    app:
+      - app
+    service:
+      - backup
+      - certs
+      - infra
+      - init
+      - opslifecycle
+      - provisioner
+      - restore
+      - upgrade
+    adapter:
+      - auth
+      - cluster
+      - config
+      - kube
+      - openbao
+      - operationlock
+      - probe
+      - raft
+      - revision
+      - security
+      - storage
+      - storageenv
+    port:
+      - port
+    utility:
+      - admission
+      - constants
+      - entrypoint
+      - errors
+      - logging
+      - observability
+      - predicates
+      - reconcile
+      - testutil
+
+controllerCoverage:
+  root: internal/controller
+
+serviceImportRoots:
+  - internal/backup
+  - internal/certs
+  - internal/infra
+  - internal/init
+  - internal/opslifecycle
+  - internal/provisioner
+  - internal/restore
+  - internal/upgrade
+
+adapterImportRoots:
+  - internal/auth
+  - internal/cluster
+  - internal/config
+  - internal/kube
+  - internal/openbao
+  - internal/operationlock
+  - internal/probe
+  - internal/raft
+  - internal/revision
+  - internal/security
+  - internal/storage
+  - internal/storageenv
+
+controllerBoundaries:
+  - name: openbaocluster
+    displayName: OpenBaoCluster
+    files:
+      - internal/controller/openbaocluster/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/infra
+      - internal/upgrade
+      - internal/revision
+      - internal/logging
+    appFacadeRoot: internal/app/openbaocluster
+    allowServiceImports:
+      - internal/certs
+    allowAdapterImports:
+      - internal/kube
+      - internal/openbao
+      - internal/security
+  - name: openbaorestore
+    displayName: OpenBaoRestore
+    files:
+      - internal/controller/openbaorestore/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/infra
+      - internal/upgrade
+      - internal/revision
+      - internal/logging
+    appFacadeRoot: internal/app/openbaorestore
+    allowServiceImports:
+      - internal/restore
+    allowAdapterImports:
+      - internal/security
+  - name: provisioner
+    displayName: Provisioner
+    files:
+      - internal/controller/provisioner/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/infra
+      - internal/upgrade
+      - internal/revision
+      - internal/logging
+    appFacadeRoot: internal/app/provisioner
+    allowServiceImports:
+      - internal/provisioner
+    allowAdapterImports: []
+
+globalImportBoundaries:
+  - id: no-adapter-import-controller-or-service
+    message: Adapter packages must not import controller or service-layer packages directly.
+    note: Keep adapter packages behind contracts and prevent upward-layer coupling.
+    files:
+      - internal/auth/**/*.go
+      - internal/cluster/**/*.go
+      - internal/config/**/*.go
+      - internal/kube/**/*.go
+      - internal/openbao/**/*.go
+      - internal/operationlock/**/*.go
+      - internal/probe/**/*.go
+      - internal/raft/**/*.go
+      - internal/revision/**/*.go
+      - internal/security/**/*.go
+      - internal/storage/**/*.go
+      - internal/storageenv/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/controller
+      - internal/backup
+      - internal/certs
+      - internal/infra
+      - internal/init
+      - internal/opslifecycle
+      - internal/provisioner
+      - internal/restore
+      - internal/upgrade
+  - id: no-adapter-imports-in-app-layer
+    message: App layer should not import adapter packages directly; depend on ports/contracts.
+    note: Keep app orchestration layer independent from concrete adapters.
+    files:
+      - internal/app/**/*.go
+    ignores:
+      - "**/*_test.go"
+      - internal/app/openbaocluster/**/*.go
+    disallowImports:
+      - internal/auth
+      - internal/cluster
+      - internal/config
+      - internal/kube
+      - internal/openbao
+      - internal/operationlock
+      - internal/probe
+      - internal/raft
+      - internal/revision
+      - internal/security
+      - internal/storage
+      - internal/storageenv
+  - id: no-adapter-to-adapter-imports
+    message: Adapter packages should not depend on other adapters; use ports/contracts.
+    note: Current exception internal/raft -> internal/openbao is tracked via dependency-policy-exceptions.tsv.
+    files:
+      - internal/auth/**/*.go
+      - internal/cluster/**/*.go
+      - internal/config/**/*.go
+      - internal/kube/**/*.go
+      - internal/openbao/**/*.go
+      - internal/operationlock/**/*.go
+      - internal/probe/**/*.go
+      - internal/raft/**/*.go
+      - internal/revision/**/*.go
+      - internal/security/**/*.go
+      - internal/storage/**/*.go
+      - internal/storageenv/**/*.go
+    ignores:
+      - "**/*_test.go"
+      - internal/raft/**/*.go
+    disallowImports:
+      - internal/auth
+      - internal/cluster
+      - internal/config
+      - internal/kube
+      - internal/openbao
+      - internal/operationlock
+      - internal/probe
+      - internal/raft
+      - internal/revision
+      - internal/security
+      - internal/storage
+      - internal/storageenv
+  - id: no-controller-runtime-reconcile-apis-in-app-layer
+    message: App layer should not depend on controller-runtime reconcile APIs directly.
+    note: Keep reconcile request/result ownership in controller layer and use app-domain return types/facades.
+    files:
+      - internal/app/**/*.go
+    ignores:
+      - "**/*_test.go"
+      # Transitional bridge points pending decomposition away from ctrl.Result/ctrl.Request.
+      - internal/app/openbaorestore/reconcile.go
+      - internal/app/provisioner/tenant_reconcile.go
+      - internal/app/openbaocluster/adminops.go
+      - internal/app/openbaocluster/adminops/reconcile.go
+      - internal/app/openbaocluster/workload.go
+    disallowExternalImports:
+      - sigs.k8s.io/controller-runtime/pkg/reconcile
+    disallowExternalExactImports:
+      - sigs.k8s.io/controller-runtime
+  - id: no-controller-imports-outside-entrypoints
+    message: Internal non-controller packages must not import controller packages directly.
+    note: Controller packages are entrypoint wiring concerns and should only be imported from cmd/*.
+    files:
+      - internal/**/*.go
+    ignores:
+      - "**/*_test.go"
+      - internal/controller/**/*.go
+    disallowImports:
+      - internal/controller

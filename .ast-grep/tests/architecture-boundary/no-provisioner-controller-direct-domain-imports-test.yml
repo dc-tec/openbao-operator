@@ -1,0 +1,11 @@
+id: no-provisioner-controller-direct-domain-imports
+valid:
+  - |
+    package p
+    import app "github.com/dc-tec/openbao-operator/internal/app/provisioner"
+    var _ = app.ReconcileOpenBaoTenant
+invalid:
+  - |
+    package p
+    import revision "github.com/dc-tec/openbao-operator/internal/revision"
+    var _ = revision.Reader

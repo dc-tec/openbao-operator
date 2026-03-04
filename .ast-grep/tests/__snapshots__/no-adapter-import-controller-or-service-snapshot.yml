@@ -1,0 +1,11 @@
+id: no-adapter-import-controller-or-service
+snapshots:
+  ? |
+    package p
+    import backup "github.com/dc-tec/openbao-operator/internal/backup"
+    var _ = backup.NewManager
+  : labels:
+    - source: backup "github.com/dc-tec/openbao-operator/internal/backup"
+      style: primary
+      start: 17
+      end: 76

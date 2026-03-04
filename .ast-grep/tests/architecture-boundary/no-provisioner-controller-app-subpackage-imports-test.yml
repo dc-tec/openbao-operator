@@ -1,0 +1,11 @@
+id: no-provisioner-controller-app-subpackage-imports
+valid:
+  - |
+    package p
+    import app "github.com/dc-tec/openbao-operator/internal/app/provisioner"
+    var _ = app.ReconcileOpenBaoTenant
+invalid:
+  - |
+    package p
+    import subpkg "github.com/dc-tec/openbao-operator/internal/app/provisioner/tenantops"
+    var _ = subpkg.Run

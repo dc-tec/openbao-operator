@@ -1,0 +1,18 @@
+id: no-status-subresource-write-in-service-adapter-packages
+valid:
+  - |
+    package p
+    type Client interface { Patch(any, any, ...any) error }
+    func persist(c Client, obj any) error {
+      return c.Patch(nil, obj)
+    }
+invalid:
+  - |
+    package p
+    type StatusWriter interface {
+      Status() StatusWriter
+      Patch(any, any, ...any) error
+    }
+    func persist(c StatusWriter, obj any) error {
+      return c.Status().Patch(nil, obj)
+    }

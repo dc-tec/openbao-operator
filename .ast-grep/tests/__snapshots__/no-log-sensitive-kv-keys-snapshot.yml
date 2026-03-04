@@ -1,0 +1,13 @@
+id: no-log-sensitive-kv-keys
+snapshots:
+  ? |
+    package p
+    type Logger interface { Info(string, ...any) }
+    func f(logger Logger, token string) {
+      logger.Info("auth", "token", token)
+    }
+  : labels:
+    - source: logger.Info("auth", "token", token)
+      style: primary
+      start: 97
+      end: 132

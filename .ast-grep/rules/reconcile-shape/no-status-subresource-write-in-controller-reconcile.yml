@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-status-subresource-write-in-controller-reconcile
+message: Avoid direct status subresource writes inside controller Reconcile; delegate to status patch helpers.
+severity: warning
+language: Go
+files:
+  - internal/controller/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - kind: call_expression
+    - regex: '\.Status\(\)\.(Apply|Patch|Update)\('
+    - inside:
+        all:
+          - kind: method_declaration
+          - regex: 'Reconcile\('
+        stopBy: end
+note: Keep Reconcile flow focused on delegation and let dedicated patch helpers own status persistence semantics.
+

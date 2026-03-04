@@ -1,0 +1,13 @@
+id: no-operationlock-status-write-outside-package
+snapshots:
+  ? |
+    package p
+    type Cluster struct { Status struct{ OperationLock any } }
+    func f(cluster *Cluster) {
+      cluster.Status.OperationLock = nil
+    }
+  : labels:
+    - source: cluster.Status.OperationLock = nil
+      style: primary
+      start: 98
+      end: 132

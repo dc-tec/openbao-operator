@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-rbac-cluster-admin-binding
+message: Runtime RBAC bindings must not reference cluster-admin.
+severity: warning
+language: Yaml
+files:
+  - config/rbac/**/*.yaml
+rule:
+  all:
+    - pattern: |
+        name: cluster-admin
+    - inside:
+        stopBy: end
+        pattern: |
+          roleRef:
+note: Binding operator identities to cluster-admin bypasses least-privilege controls.

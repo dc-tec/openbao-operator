@@ -1,0 +1,16 @@
+id: require-innamespace-on-runtime-client-list
+valid:
+  - |
+    package p
+    import "sigs.k8s.io/controller-runtime/pkg/client"
+    type Manager struct { client struct{ List func(any, any, ...any) error } }
+    func f(m *Manager, ctx any, podList any, ns string) error {
+      return m.client.List(ctx, podList, client.InNamespace(ns))
+    }
+invalid:
+  - |
+    package p
+    type Manager struct { client struct{ List func(any, any, ...any) error } }
+    func f(m *Manager, ctx any, podList any) error {
+      return m.client.List(ctx, podList)
+    }

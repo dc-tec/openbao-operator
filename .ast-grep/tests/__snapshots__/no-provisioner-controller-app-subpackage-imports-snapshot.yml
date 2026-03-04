@@ -1,0 +1,11 @@
+id: no-provisioner-controller-app-subpackage-imports
+snapshots:
+  ? |
+    package p
+    import subpkg "github.com/dc-tec/openbao-operator/internal/app/provisioner/tenantops"
+    var _ = subpkg.Run
+  : labels:
+    - source: subpkg "github.com/dc-tec/openbao-operator/internal/app/provisioner/tenantops"
+      style: primary
+      start: 17
+      end: 95

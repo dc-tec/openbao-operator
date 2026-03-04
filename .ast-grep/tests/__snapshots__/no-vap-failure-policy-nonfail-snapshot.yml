@@ -1,0 +1,14 @@
+id: no-vap-failure-policy-nonfail
+snapshots:
+  ? |
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicy
+    metadata:
+      name: p
+    spec:
+      failurePolicy: Ignore
+  : labels:
+    - source: 'failurePolicy: Ignore'
+      style: primary
+      start: 104
+      end: 125

@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-vap-binding-multiple-validationactions
+message: ValidatingAdmissionPolicyBinding must declare exactly one validation action.
+severity: warning
+language: Yaml
+files:
+  - config/policy/*binding.yaml
+rule:
+  any:
+    - pattern: |
+        validationActions:
+          - $A
+          - $B
+    - pattern: |
+        validationActions: [$A, $B]
+note: Use a single fail-closed action (Deny) for deterministic policy behavior.

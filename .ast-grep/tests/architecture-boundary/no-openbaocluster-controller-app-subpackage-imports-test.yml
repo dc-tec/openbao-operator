@@ -1,0 +1,12 @@
+id: no-openbaocluster-controller-app-subpackage-imports
+valid:
+  - |
+    package p
+    import app "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
+    var _ = app.ShouldWarnSelfInitDisabled
+invalid:
+  - |
+    package p
+    import statusops "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/statusops"
+    var _ = statusops.ObservedVersionFromPods
+

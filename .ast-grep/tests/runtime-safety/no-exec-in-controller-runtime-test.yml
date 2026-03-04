@@ -1,0 +1,15 @@
+id: no-exec-in-controller-runtime
+valid:
+  - |
+    package p
+    import "fmt"
+    func f() {
+      fmt.Println("ok")
+    }
+invalid:
+  - |
+    package p
+    import "os/exec"
+    func f() {
+      _ = exec.Command("kubectl", "get", "pods")
+    }
