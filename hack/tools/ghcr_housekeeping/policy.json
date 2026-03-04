@@ -1,0 +1,109 @@
+{
+  "protect_unknown": true,
+  "rules": [
+    {
+      "name": "semver",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([-.+].*)?$",
+      "action": "keep"
+    },
+    {
+      "name": "edge-pointer",
+      "pattern": "^edge$",
+      "action": "keep"
+    },
+    {
+      "name": "nightly-pointer",
+      "pattern": "^nightly$",
+      "action": "keep"
+    },
+    {
+      "name": "sha256-attestation",
+      "pattern": "^sha256-.*$",
+      "action": "keep"
+    },
+    {
+      "name": "edge-sha",
+      "pattern": "^edge-[0-9a-f]{12}$",
+      "action": "delete_after",
+      "ttl_days": 30
+    },
+    {
+      "name": "nightly-date",
+      "pattern": "^nightly-[0-9]{8}$",
+      "action": "delete_after",
+      "ttl_days": 30
+    },
+    {
+      "name": "nightly-date-sha",
+      "pattern": "^nightly-[0-9]{8}-[0-9a-f]{12}$",
+      "action": "delete_after",
+      "ttl_days": 30
+    },
+    {
+      "name": "dev",
+      "pattern": "^dev$",
+      "action": "delete_after",
+      "ttl_days": 30
+    },
+    {
+      "name": "dev-family",
+      "pattern": "^dev-.*$",
+      "action": "delete_after",
+      "ttl_days": 30
+    },
+    {
+      "name": "edge-build",
+      "pattern": "^edge-build-[0-9a-f]{40}$",
+      "action": "delete_after",
+      "ttl_days": 21
+    },
+    {
+      "name": "edge-repro",
+      "pattern": "^edge-repro-[0-9a-f]{40}$",
+      "action": "delete_after",
+      "ttl_days": 21
+    },
+    {
+      "name": "nightly-build",
+      "pattern": "^nightly-build-[0-9a-f]{40}$",
+      "action": "delete_after",
+      "ttl_days": 21
+    },
+    {
+      "name": "nightly-repro",
+      "pattern": "^nightly-repro-[0-9a-f]{40}$",
+      "action": "delete_after",
+      "ttl_days": 21
+    },
+    {
+      "name": "release-build",
+      "pattern": "^build-[0-9a-f]{40}$",
+      "action": "delete_after",
+      "ttl_days": 21
+    },
+    {
+      "name": "release-repro",
+      "pattern": "^repro-[0-9a-f]{40}$",
+      "action": "delete_after",
+      "ttl_days": 21
+    },
+    {
+      "name": "release-repro-legacy",
+      "pattern": "^repro-[0-9]+\\.[0-9]+\\.[0-9]+.*-[0-9]+$",
+      "action": "delete_after",
+      "ttl_days": 21
+    },
+    {
+      "name": "e2e",
+      "pattern": "^e2e-[0-9]+-[0-9]+$",
+      "action": "delete_after",
+      "ttl_days": 7
+    },
+    {
+      "name": "nightly-e2e",
+      "pattern": "^nightly-e2e-[0-9]+-[0-9]+$",
+      "action": "delete_after",
+      "ttl_days": 7
+    }
+  ]
+}
