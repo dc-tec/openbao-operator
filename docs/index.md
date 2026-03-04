@@ -101,7 +101,13 @@ Connect with other users and contributors:
 
 ## Reference
 
+- [**API Reference**](reference/api.md) — Generated CRD schema and field-level validation/default details.
 - [**Compatibility Matrix**](reference/compatibility.md) — Supported Kubernetes and OpenBao versions.
+- [**Deprecation Policy**](reference/deprecation-policy.md) — API lifecycle and breaking-change rules for `0.x`.
+- [**Support & Maintenance**](reference/support-policy.md) — Supported channels, release window, and support expectations.
+- [**Operator Upgrade Compatibility**](reference/operator-upgrade-compatibility.md) — Supported operator upgrade paths and CRD upgrade order.
+- [**Status Conditions & Events**](reference/status-and-events.md) — Condition types, reasons, and common events for operations.
+- [**Known Limitations**](reference/known-limitations.md) — Current non-goals and known constraints.
 
 ## Official OpenBao Documentation
 
