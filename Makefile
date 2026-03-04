@@ -153,14 +153,18 @@ verify-vendor: ## Verify vendor/ is synchronized with go.mod/go.sum.
 	}
 
 .PHONY: verify-generated
-verify-generated: manifests generate ## Verify generated artifacts are up-to-date (does not modify tracked files).
+verify-generated: manifests generate api-reference ## Verify generated artifacts are up-to-date (does not modify tracked files).
 	@{ \
-		git diff --exit-code -- api/v1alpha1 config/crd/bases; \
+		git diff --exit-code -- api/v1alpha1 config/crd/bases docs/reference/api.md; \
 	} || { \
-		echo "Generated artifacts are out of date. Run 'make manifests generate' and commit the result."; \
-		git --no-pager diff -- api/v1alpha1 config/crd/bases; \
+		echo "Generated artifacts are out of date. Run 'make manifests generate api-reference' and commit the result."; \
+		git --no-pager diff -- api/v1alpha1 config/crd/bases docs/reference/api.md; \
 		exit 1; \
 	}
+
+.PHONY: api-reference
+api-reference: crd-ref-docs ## Generate CRD API reference docs from api/v1alpha1.
+	@CRD_REF_DOCS_BIN="$(CRD_REF_DOCS)" bash hack/docs/generate-api-reference.sh
 
 .PHONY: verify-openbao-config-compat
 verify-openbao-config-compat: ## Validate generated HCL fixtures against upstream OpenBao config parser (semantic).
@@ -786,6 +790,7 @@ KUBECTL ?= kubectl
 KIND ?= kind
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
+CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 GINKGO ?= $(LOCALBIN)/ginkgo
@@ -795,6 +800,7 @@ GOMU ?= $(LOCALBIN)/gomu
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.7.1
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
+CRD_REF_DOCS_VERSION ?= v0.3.0
 GINKGO_VERSION ?= $(shell v='$(call gomodver,github.com/onsi/ginkgo/v2)'; \
   [ -n "$$v" ] || { echo "Set GINKGO_VERSION manually (ginkgo not in go.mod?)" >&2; exit 1; }; \
   printf '%s\n' "$$v")
@@ -821,6 +827,11 @@ $(KUSTOMIZE): $(LOCALBIN)
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
+
+.PHONY: crd-ref-docs
+crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
+$(CRD_REF_DOCS): $(LOCALBIN)
+	$(call go-install-tool,$(CRD_REF_DOCS),github.com/elastic/crd-ref-docs,$(CRD_REF_DOCS_VERSION))
 
 .PHONY: setup-envtest
 setup-envtest: envtest ## Download the binaries required for ENVTEST in the local bin directory.
