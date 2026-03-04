@@ -3576,10 +3576,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-helm-chart-sync" class="md-nav__link">
+  <a href="#2-api-reference-docs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Helm Chart Sync
+        2. API Reference Docs
       
     </span>
   </a>
@@ -3587,10 +3587,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-golden-test-files" class="md-nav__link">
+  <a href="#3-helm-chart-sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Golden Test Files
+        3. Helm Chart Sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-golden-test-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Golden Test Files
       
     </span>
   </a>
@@ -4082,6 +4093,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../reference/compatibility/" class="md-nav__link">
         
   
@@ -4090,6 +4129,146 @@
     
   
     Compatibility Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/deprecation-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/support-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Support & Maintenance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/operator-upgrade-compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator Upgrade Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/status-and-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status Conditions & Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/known-limitations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Limitations
   
 
     
@@ -4171,10 +4350,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-helm-chart-sync" class="md-nav__link">
+  <a href="#2-api-reference-docs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Helm Chart Sync
+        2. API Reference Docs
       
     </span>
   </a>
@@ -4182,10 +4361,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-golden-test-files" class="md-nav__link">
+  <a href="#3-helm-chart-sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Golden Test Files
+        3. Helm Chart Sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-golden-test-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Golden Test Files
       
     </span>
   </a>
@@ -4268,6 +4458,11 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <td style="text-align: left;"><code>verify-generated</code></td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>api/v1alpha1/*.go</code> (API reference docs)</td>
+<td style="text-align: left;"><code>make api-reference</code></td>
+<td style="text-align: left;"><code>verify-generated</code></td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>dist/install.yaml</code></td>
 <td style="text-align: left;"><code>make helm-sync</code></td>
 <td style="text-align: left;"><code>verify-helm</code></td>
@@ -4279,7 +4474,7 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 </tr>
 <tr>
 <td style="text-align: left;"><strong>I don't know</strong></td>
-<td style="text-align: left;"><code>make generate manifests helm-sync</code></td>
+<td style="text-align: left;"><code>make generate manifests api-reference helm-sync</code></td>
 <td style="text-align: left;"><code>verify-generated</code></td>
 </tr>
 </tbody>
@@ -4294,7 +4489,15 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <li><code>api/v1alpha1/zz_generated.deepcopy.go</code> (Go deepcopy methods)</li>
 <li><strong>Command:</strong> <code>make manifests generate</code></li>
 </ul>
-<h3 id="2-helm-chart-sync">2. Helm Chart Sync<a class="headerlink" href="#2-helm-chart-sync" title="Permanent link">&para;</a></h3>
+<h3 id="2-api-reference-docs">2. API Reference Docs<a class="headerlink" href="#2-api-reference-docs" title="Permanent link">&para;</a></h3>
+<p>CRD API reference docs are generated from Go API types and comments.</p>
+<ul>
+<li><strong>Source:</strong> <code>api/v1alpha1/*.go</code></li>
+<li><strong>Output:</strong></li>
+<li><code>docs/reference/api.md</code></li>
+<li><strong>Command:</strong> <code>make api-reference</code></li>
+</ul>
+<h3 id="3-helm-chart-sync">3. Helm Chart Sync<a class="headerlink" href="#3-helm-chart-sync" title="Permanent link">&para;</a></h3>
 <p>We maintain a standalone Helm chart that must stay in sync with our core manifests.</p>
 <ul>
 <li><strong>Source:</strong> <code>config/crd/bases/</code> + <code>config/policy/</code> + <code>config/rbac/</code></li>
@@ -4304,7 +4507,7 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <li><code>charts/openbao-operator/templates/rbac/</code> (Synced RBAC templates)</li>
 <li><strong>Command:</strong> <code>make helm-sync</code></li>
 </ul>
-<h3 id="3-golden-test-files">3. Golden Test Files<a class="headerlink" href="#3-golden-test-files" title="Permanent link">&para;</a></h3>
+<h3 id="4-golden-test-files">4. Golden Test Files<a class="headerlink" href="#4-golden-test-files" title="Permanent link">&para;</a></h3>
 <p>We use "Golden Files" to verify complex HCL configuration generation reliability.</p>
 <ul>
 <li><strong>Source:</strong> <code>internal/config/builder.go</code> logic changes</li>
@@ -4316,8 +4519,8 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <p>If the <code>verify-generated</code> or <code>verify-helm</code> job fails in CI, it means you forgot to check in the updated artifacts.</p>
 <p><strong>Fix:</strong></p>
 <ol>
-<li>Run the suggested command locally (e.g., <code>make manifests generate helm-sync</code>).</li>
-<li>Verify you see changes in <code>config/</code> or <code>charts/</code>.</li>
+<li>Run the suggested command locally (e.g., <code>make manifests generate api-reference helm-sync</code>).</li>
+<li>Verify you see changes in <code>config/</code>, <code>docs/reference/</code>, or <code>charts/</code>.</li>
 <li>Commit and push those changes.</li>
 </ol>
 
