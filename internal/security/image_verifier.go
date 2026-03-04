@@ -251,7 +251,7 @@ func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef stri
 	}
 
 	if err := v.verifyImageSignatureWithBundles(ctx, ref, digestRef, config, remoteOpts); err != nil {
-		return fmt.Errorf("image signature verification failed (legacy+bundle): legacy=%v; bundle=%v", legacyErr, err)
+		return fmt.Errorf("image signature verification failed (legacy+bundle): legacy=%v; bundle=%w", legacyErr, err)
 	}
 
 	return nil
