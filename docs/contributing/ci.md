@@ -110,7 +110,7 @@ make docs-build
 | `Verify Formatting` | `make verify-fmt` | Checks `gofmt` compliance |
 | `Verify go.mod/go.sum` | `make verify-tidy` | Ensures module files are clean |
 | `Verify vendor/` | `make verify-vendor` | Fails on stale vendored dependencies |
-| `Verify Generated Artifacts` | `make verify-generated` | Checks generated files drift |
+| `Verify Generated Artifacts` | `make verify-generated` | Checks generated files drift (`api/v1alpha1`, `config/crd/bases`, `docs/reference/api.md`) |
 | `Helm Chart` | `make verify-helm && make helm-test` | Includes Helm sync, lint, template, and OpenShift rendering checks |
 | `Security (vulncheck + Trivy FS)` | `make vulncheck` and `make security-scan IMG=ghcr.io/dc-tec/openbao-operator:edge` | Trivy scan checks filesystem and the provided image |
 | `Unit Tests` + `Envtest Integration` | `make test-ci` | Runs unit + integration test stack |
