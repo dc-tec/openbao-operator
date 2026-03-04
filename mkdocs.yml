@@ -196,4 +196,10 @@ nav:
               - SDLC: contributing/sdlc.md
               - Documentation Style Guide: contributing/docs-style-guide.md
       - Reference:
+              - API Reference: reference/api.md
               - Compatibility Matrix: reference/compatibility.md
+              - Deprecation Policy: reference/deprecation-policy.md
+              - Support & Maintenance: reference/support-policy.md
+              - Operator Upgrade Compatibility: reference/operator-upgrade-compatibility.md
+              - Status Conditions & Events: reference/status-and-events.md
+              - Known Limitations: reference/known-limitations.md
