@@ -18,7 +18,6 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
-	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
@@ -480,7 +479,7 @@ func nextPodNeedingFSResizeRestart(
 			}
 		}
 
-		active, present, _ := openbao.ParseBoolLabel(pod.Labels, openbao.LabelActive)
+		active, present, _ := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelActive)
 		if present && active {
 			leaderCandidate = pod
 			continue

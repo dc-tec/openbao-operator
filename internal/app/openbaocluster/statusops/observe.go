@@ -15,7 +15,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
-	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // LabelConfig supplies labels used during status observation.
@@ -203,20 +203,20 @@ func gatherPodState(
 		if pod.Name == pod0Name {
 			state.Pod0 = pod
 
-			initialized, present, err := openbao.ParseBoolLabel(pod.Labels, openbao.LabelInitialized)
+			initialized, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelInitialized)
 			if err == nil {
 				state.Initialized = initialized
 				state.InitializedKnown = present
 			}
 
-			sealed, present, err := openbao.ParseBoolLabel(pod.Labels, openbao.LabelSealed)
+			sealed, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelSealed)
 			if err == nil {
 				state.Sealed = sealed
 				state.SealedKnown = present
 			}
 		}
 
-		active, present, err := openbao.ParseBoolLabel(pod.Labels, openbao.LabelActive)
+		active, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
 		if err == nil && present && active {
 			state.LeaderCount++
 			if state.LeaderCount == 1 {
