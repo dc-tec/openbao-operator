@@ -47,14 +47,14 @@ type controllerBoundary struct {
 }
 
 type globalImportBoundary struct {
-	ID                            string   `yaml:"id"`
-	Message                       string   `yaml:"message"`
-	Note                          string   `yaml:"note"`
-	Files                         []string `yaml:"files"`
-	Ignores                       []string `yaml:"ignores"`
-	DisallowImports               []string `yaml:"disallowImports"`
-	DisallowExternalImports       []string `yaml:"disallowExternalImports"`
-	DisallowExternalExactImports  []string `yaml:"disallowExternalExactImports"`
+	ID                           string   `yaml:"id"`
+	Message                      string   `yaml:"message"`
+	Note                         string   `yaml:"note"`
+	Files                        []string `yaml:"files"`
+	Ignores                      []string `yaml:"ignores"`
+	DisallowImports              []string `yaml:"disallowImports"`
+	DisallowExternalImports      []string `yaml:"disallowExternalImports"`
+	DisallowExternalExactImports []string `yaml:"disallowExternalExactImports"`
 }
 
 type ruleSpec struct {
