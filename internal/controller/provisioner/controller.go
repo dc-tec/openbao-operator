@@ -34,6 +34,7 @@ import (
 	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	operatorpredicates "github.com/dc-tec/openbao-operator/internal/predicates"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
 // NamespaceProvisionerReconciler reconciles OpenBaoTenant objects to provision
@@ -86,7 +87,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		"tenant", req.NamespacedName,
 	)
 
-	result, err = appprovisioner.ReconcileOpenBaoTenant(ctx, req, logger, appprovisioner.TenantRuntime{
+	appResult, appErr := appprovisioner.ReconcileOpenBaoTenant(ctx, req.NamespacedName, logger, appprovisioner.TenantRuntime{
 		Client:                   r.Client,
 		APIReader:                r.APIReader,
 		Provisioner:              r.Provisioner,
@@ -95,11 +96,17 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		RequeueShort:             constants.RequeueShort,
 		RequeueStandard:          constants.RequeueStandard,
 	})
+	result = controllerResult(appResult)
+	err = appErr
 	if err != nil {
 		recordError(err)
 	}
 
 	return result, err
+}
+
+func controllerResult(result recon.Result) ctrl.Result {
+	return ctrl.Result{RequeueAfter: result.RequeueAfter}
 }
 
 // SetupWithManager sets up the controller with the Manager.
