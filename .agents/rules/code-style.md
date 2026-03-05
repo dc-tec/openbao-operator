@@ -20,14 +20,16 @@ description: Go coding standards for the OpenBao Operator
 ## Critical Rules
 
 1. Format with `gofmt`/`goimports`
-2. Pass `golangci-lint` with project config
-3. Wrap errors with context: `fmt.Errorf("context: %w", err)`
-4. Use structured logging with fields: `cluster_namespace`, `cluster_name`
-5. Keep functions small (lint enforces cyclomatic complexity)
-6. Keep Go lines under 120 chars when practical (lint enforces this in some dirs)
-7. Do NOT add `+kubebuilder:rbac` to OpenBaoCluster controller
-8. Do NOT shell out to kubectl, helm, or cloud CLIs
-9. Do NOT use `interface{}` or `any` without justification
-10. Do NOT log secrets, tokens, or keys
-11. Do NOT spawn goroutines in reconcilers
-12. Do NOT use `time.Sleep()` — use controller-runtime rate limiting
+2. Run `make lint-ci` for CI-equivalent linting (`golangci-lint` + ast-grep checks)
+3. Keep ast-grep rule families green: `architecture-boundary`, `runtime-safety`, `reconcile-shape`, `status-ownership`, `rbac-vap`
+4. Wrap errors with context: `fmt.Errorf("context: %w", err)`
+5. Use structured logging with fields: `cluster_namespace`, `cluster_name`
+6. In controllers, avoid legacy log keys (`namespace`, `name`) for request-scoped logs
+7. Keep functions small (lint enforces cyclomatic complexity)
+8. Keep Go lines under 120 chars when practical (lint enforces this in some dirs)
+9. Do NOT add `+kubebuilder:rbac` to OpenBaoCluster controller
+10. Do NOT shell out to kubectl, helm, or cloud CLIs
+11. Avoid `interface{}` / `any` in controller and app core logic; use explicit bridge points when interop requires dynamic types
+12. Do NOT log secrets, tokens, or keys
+13. Do NOT spawn goroutines in reconcilers
+14. Do NOT use `time.Sleep()` — use controller-runtime rate limiting

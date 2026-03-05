@@ -69,7 +69,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## 5. Architecture Boundaries First
 
-For runtime code changes, apply the layer model from `AGENT_REFACTOR_PLAN.md` section 6:
+For runtime code changes, apply the layer model in `.agents/rules/architecture.md` and the ast policy source of truth `.ast-grep/policy/architecture-boundaries.yml`:
 
 - `L2` controllers: `internal/controller/*`
 - `L3` app orchestration: `internal/app/*`
@@ -88,5 +88,9 @@ Guardrails:
 For structural changes, verify:
 
 ```sh
+make generate-ast-rules
+make verify-arch-policy
+make test-ast
+make lint-ast
 make report-internal-deps
 ```
