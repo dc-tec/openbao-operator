@@ -45,7 +45,7 @@ func (r *OpenBaoClusterReconciler) loggerFor(ctx context.Context, _ ctrl.Request
 
 func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterWorkload)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, controllerNameWorkload)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -61,7 +61,7 @@ func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}()
 
-	logger := r.parent.loggerFor(ctx, req, constants.ControllerNameOpenBaoClusterWorkload)
+	logger := r.parent.loggerFor(ctx, req, controllerNameWorkload)
 	logger.Info("Reconciling OpenBaoCluster workload")
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
@@ -209,7 +209,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 
 func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterAdminOps)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, controllerNameAdminOps)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -225,7 +225,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}()
 
-	logger := r.parent.loggerFor(ctx, req, constants.ControllerNameOpenBaoClusterAdminOps)
+	logger := r.parent.loggerFor(ctx, req, controllerNameAdminOps)
 	logger.Info("Reconciling OpenBaoCluster admin operations")
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
@@ -259,7 +259,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 
 func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameOpenBaoClusterStatus)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, controllerNameStatus)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -275,7 +275,7 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 	}()
 
-	logger := r.parent.loggerFor(ctx, req, constants.ControllerNameOpenBaoClusterStatus)
+	logger := r.parent.loggerFor(ctx, req, controllerNameStatus)
 	logger.Info("Reconciling OpenBaoCluster status")
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{}

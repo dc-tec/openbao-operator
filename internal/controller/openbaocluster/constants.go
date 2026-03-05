@@ -1,5 +1,7 @@
 package openbaocluster
 
+import "time"
+
 // Reason constants for OpenBaoCluster conditions.
 const (
 	ReasonGatewayAPIMissing         = "GatewayAPIMissing"
@@ -36,4 +38,22 @@ const (
 	ReasonStorageResizeNotSupported      = "StorageResizeNotSupported"
 	ReasonStorageClassChangeNotSupported = "StorageClassChangeNotSupported"
 	ReasonStorageRestartRequired         = "StorageRestartRequired"
+
+	reasonReady              = "Ready"
+	reasonPaused             = "Paused"
+	reasonReconciling        = "Reconciling"
+	reasonIdle               = "Idle"
+	reasonUnknown            = "Unknown"
+	reasonBreakGlassRequired = "BreakGlassRequired"
+
+	controllerNameWorkload = "openbaocluster-workload"
+	controllerNameAdminOps = "openbaocluster-adminops"
+	controllerNameStatus   = "openbaocluster-status"
+
+	annotationLastDevelopmentWarning   = "openbao.org/last-development-warning"
+	annotationLastProfileNotSetWarning = "openbao.org/last-profile-not-set-warning"
+	annotationLastRootTokenWarning     = "openbao.org/last-root-token-warning"
+	annotationLastStaticUnsealWarning  = "openbao.org/last-static-unseal-warning"
 )
+
+const securityWarningInterval = time.Hour

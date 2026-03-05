@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 )
@@ -46,7 +47,7 @@ func TestEffectiveBackupJWTRole(t *testing.T) {
 					SelfInit: &openbaov1alpha1.SelfInitConfig{OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}},
 				},
 			},
-			want: constants.RoleNameBackup,
+			want: auth.RoleNameBackup,
 		},
 		{
 			name: "oidc disabled leaves empty role",
@@ -162,8 +163,8 @@ func TestBuildEnvVars_OIDCDefaultsJWTAuthRole(t *testing.T) {
 	env := BuildEnvVars(cluster, Options{}, "/tmp/token")
 	got := envMap(env)
 
-	if got[constants.EnvBackupJWTAuthRole] != constants.RoleNameBackup {
-		t.Fatalf("EnvBackupJWTAuthRole=%q, want %q", got[constants.EnvBackupJWTAuthRole], constants.RoleNameBackup)
+	if got[constants.EnvBackupJWTAuthRole] != auth.RoleNameBackup {
+		t.Fatalf("EnvBackupJWTAuthRole=%q, want %q", got[constants.EnvBackupJWTAuthRole], auth.RoleNameBackup)
 	}
 	if got[constants.EnvBackupAuthMethod] != "jwt" {
 		t.Fatalf("EnvBackupAuthMethod=%q, want jwt", got[constants.EnvBackupAuthMethod])

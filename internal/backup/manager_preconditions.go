@@ -118,7 +118,7 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 	// If jwtAuthRole is empty, check if OIDC is enabled (operator will auto-create the backup role).
 	hasJWTAuth := strings.TrimSpace(backupCfg.JWTAuthRole) != ""
 	if !hasJWTAuth && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		// Operator will auto-create the backup role with name constants.RoleNameBackup.
+		// Operator will auto-create the backup role with name auth.RoleNameBackup.
 		hasJWTAuth = true
 	}
 

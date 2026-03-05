@@ -9,7 +9,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionReady bool, admissionSummary string) (metav1.ConditionStatus, string, string) {
@@ -96,7 +95,7 @@ func buildDegradedCondition(
 		return metav1.Condition{
 			Type:    string(openbaov1alpha1.ConditionDegraded),
 			Status:  metav1.ConditionTrue,
-			Reason:  constants.ReasonBreakGlassRequired,
+			Reason:  reasonBreakGlassRequired,
 			Message: "Break glass required; see status.breakGlass for recovery steps",
 		}
 	}
@@ -145,7 +144,7 @@ func buildDegradedCondition(
 	return metav1.Condition{
 		Type:    string(openbaov1alpha1.ConditionDegraded),
 		Status:  metav1.ConditionFalse,
-		Reason:  constants.ReasonReconciling,
+		Reason:  reasonReconciling,
 		Message: "No degradation has been recorded by the controller",
 	}
 }
@@ -190,7 +189,7 @@ func buildUpgradingCondition(cluster *openbaov1alpha1.OpenBaoCluster) metav1.Con
 	return metav1.Condition{
 		Type:    string(openbaov1alpha1.ConditionUpgrading),
 		Status:  metav1.ConditionFalse,
-		Reason:  constants.ReasonIdle,
+		Reason:  reasonIdle,
 		Message: "No upgrade is currently in progress",
 	}
 }
@@ -214,7 +213,7 @@ func buildBackupCondition(backupInProgress bool, backupJobName string) metav1.Co
 	return metav1.Condition{
 		Type:    string(openbaov1alpha1.ConditionBackingUp),
 		Status:  metav1.ConditionFalse,
-		Reason:  constants.ReasonIdle,
+		Reason:  reasonIdle,
 		Message: "No backup is currently in progress",
 	}
 }
@@ -226,7 +225,7 @@ func buildInitializedCondition(initialized, present bool) metav1.Condition {
 		return metav1.Condition{
 			Type:    string(openbaov1alpha1.ConditionOpenBaoInitialized),
 			Status:  metav1.ConditionUnknown,
-			Reason:  constants.ReasonUnknown,
+			Reason:  reasonUnknown,
 			Message: "OpenBao initialization state is not yet available via service registration",
 		}
 	}
@@ -255,7 +254,7 @@ func buildSealedCondition(sealed, present bool) metav1.Condition {
 		return metav1.Condition{
 			Type:    string(openbaov1alpha1.ConditionOpenBaoSealed),
 			Status:  metav1.ConditionUnknown,
-			Reason:  constants.ReasonUnknown,
+			Reason:  reasonUnknown,
 			Message: "OpenBao seal state is not yet available via service registration",
 		}
 	}
@@ -412,7 +411,7 @@ func applyNodeSecurityCapabilityMismatchCondition(cluster *openbaov1alpha1.OpenB
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: gen,
 		LastTransitionTime: now,
-		Reason:             constants.ReasonReady,
+		Reason:             reasonReady,
 		Message:            "No node security capability mismatch detected for enabled workload hardening settings",
 	}
 

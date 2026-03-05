@@ -6,16 +6,19 @@ import (
 )
 
 const (
-	envOpenBaoJWTAudience        = "OPENBAO_JWT_AUDIENCE"
-	tokenAudienceOpenBaoInternal = "openbao-internal"
+	envOpenBaoJWTAudience = "OPENBAO_JWT_AUDIENCE"
+
+	// TokenAudienceOpenBaoInternal is the Kubernetes projected ServiceAccount token
+	// audience used for OpenBao JWT authentication.
+	TokenAudienceOpenBaoInternal = "openbao-internal"
 )
 
 // OpenBaoJWTAudience returns the configured JWT audience for OpenBao auth tokens.
-// Defaults to tokenAudienceOpenBaoInternal when unset.
+// Defaults to TokenAudienceOpenBaoInternal when unset.
 func OpenBaoJWTAudience() string {
 	raw := strings.TrimSpace(os.Getenv(envOpenBaoJWTAudience))
 	if raw == "" {
-		return tokenAudienceOpenBaoInternal
+		return TokenAudienceOpenBaoInternal
 	}
 	return raw
 }

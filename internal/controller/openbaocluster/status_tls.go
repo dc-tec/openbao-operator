@@ -40,7 +40,7 @@ func (r *OpenBaoClusterReconciler) setTLSReadyCondition(ctx context.Context, clu
 			Status:             metav1.ConditionUnknown,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             constants.ReasonUnknown,
+			Reason:             reasonUnknown,
 			Message:            "TLS is managed by OpenBao via ACME; the operator does not evaluate certificate readiness",
 		})
 		return
@@ -69,7 +69,7 @@ func (r *OpenBaoClusterReconciler) setTLSReadyCondition(ctx context.Context, clu
 			Status:             metav1.ConditionUnknown,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             constants.ReasonUnknown,
+			Reason:             reasonUnknown,
 			Message:            "Failed to get TLS secret",
 		})
 		return
@@ -83,7 +83,7 @@ func (r *OpenBaoClusterReconciler) setTLSReadyCondition(ctx context.Context, clu
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cluster.Generation,
 			LastTransitionTime: now,
-			Reason:             constants.ReasonReady,
+			Reason:             reasonReady,
 			Message:            "TLS assets are provisioned",
 		})
 	} else {

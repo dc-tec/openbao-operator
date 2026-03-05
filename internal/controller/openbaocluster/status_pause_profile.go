@@ -9,7 +9,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -24,7 +23,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 		Status:             metav1.ConditionUnknown,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             constants.ReasonPaused,
+		Reason:             reasonPaused,
 		Message:            "Reconciliation is paused; availability is not being evaluated",
 	})
 
@@ -33,7 +32,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             constants.ReasonPaused,
+		Reason:             reasonPaused,
 		Message:            "Cluster is paused; no new degradation has been evaluated",
 	})
 
@@ -42,7 +41,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 		Status:             metav1.ConditionUnknown,
 		ObservedGeneration: cluster.Generation,
 		LastTransitionTime: now,
-		Reason:             constants.ReasonPaused,
+		Reason:             reasonPaused,
 		Message:            "TLS readiness is not being evaluated while reconciliation is paused",
 	})
 

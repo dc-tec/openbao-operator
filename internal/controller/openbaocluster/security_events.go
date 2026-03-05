@@ -13,7 +13,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -34,20 +33,20 @@ func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context
 	}
 
 	if cluster.Spec.Profile == "" {
-		maybeWarn(constants.AnnotationLastProfileNotSetWarning, ReasonProfileNotSet, "spec.profile is not set; reconciliation is blocked until spec.profile is explicitly set to Hardened or Development")
+		maybeWarn(annotationLastProfileNotSetWarning, ReasonProfileNotSet, "spec.profile is not set; reconciliation is blocked until spec.profile is explicitly set to Hardened or Development")
 	}
 
 	if cluster.Spec.Profile == openbaov1alpha1.ProfileDevelopment {
-		maybeWarn(constants.AnnotationLastDevelopmentWarning, ReasonDevelopmentProfile, "Cluster is using Development profile; this is not suitable for production")
+		maybeWarn(annotationLastDevelopmentWarning, ReasonDevelopmentProfile, "Cluster is using Development profile; this is not suitable for production")
 	}
 
 	if isStaticUnseal(cluster) {
-		maybeWarn(constants.AnnotationLastStaticUnsealWarning, ReasonStaticUnsealInUse, "Cluster is using static auto-unseal; the unseal key is stored in a Kubernetes Secret and is not suitable for production without etcd encryption at rest and strict RBAC")
+		maybeWarn(annotationLastStaticUnsealWarning, ReasonStaticUnsealInUse, "Cluster is using static auto-unseal; the unseal key is stored in a Kubernetes Secret and is not suitable for production without etcd encryption at rest and strict RBAC")
 	}
 
 	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
 	if !selfInitEnabled {
-		maybeWarn(constants.AnnotationLastRootTokenWarning, ReasonRootTokenStored, "SelfInit is disabled; the operator will store a root token in a Kubernetes Secret during bootstrap, which is not suitable for production")
+		maybeWarn(annotationLastRootTokenWarning, ReasonRootTokenStored, "SelfInit is disabled; the operator will store a root token in a Kubernetes Secret during bootstrap, which is not suitable for production")
 	}
 
 	if len(annotationUpdates) == 0 {
@@ -91,5 +90,5 @@ func shouldEmitSecurityWarning(annotations map[string]string, annotationKey stri
 		return true
 	}
 
-	return now.Sub(last) >= constants.SecurityWarningInterval
+	return now.Sub(last) >= securityWarningInterval
 }

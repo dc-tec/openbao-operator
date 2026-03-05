@@ -6,7 +6,7 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
@@ -108,7 +108,7 @@ func ObservedVersionFromPods(state *StatusState) string {
 			pod := &state.Pods[i]
 			if pod.Name == state.LeaderName {
 				if pod.Labels != nil {
-					if raw, ok := pod.Labels[constants.LabelOpenBaoVersion]; ok {
+					if raw, ok := pod.Labels[openbaoapi.LabelVersion]; ok {
 						v := strings.TrimSpace(raw)
 						if v != "" {
 							return v
@@ -121,7 +121,7 @@ func ObservedVersionFromPods(state *StatusState) string {
 	}
 
 	if state.Pod0 != nil && state.Pod0.Labels != nil {
-		if raw, ok := state.Pod0.Labels[constants.LabelOpenBaoVersion]; ok {
+		if raw, ok := state.Pod0.Labels[openbaoapi.LabelVersion]; ok {
 			v := strings.TrimSpace(raw)
 			if v != "" {
 				return v
@@ -135,7 +135,7 @@ func ObservedVersionFromPods(state *StatusState) string {
 		if pod.Labels == nil {
 			return ""
 		}
-		raw, ok := pod.Labels[constants.LabelOpenBaoVersion]
+		raw, ok := pod.Labels[openbaoapi.LabelVersion]
 		if !ok {
 			return ""
 		}

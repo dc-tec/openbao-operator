@@ -14,7 +14,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/provisioner"
 )
 
@@ -98,6 +97,6 @@ func (r *TenantSecretsRBACReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: 3,
 			RateLimiter:             workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
 		}).
-		Named(constants.ControllerNameNamespaceProvisioner + "-tenant-secrets").
+		Named(controllerNameNamespaceProvisioner + "-tenant-secrets").
 		Complete(r)
 }

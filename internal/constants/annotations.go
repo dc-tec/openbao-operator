@@ -16,14 +16,4 @@ const (
 	AnnotationRestartAt = "openbao.org/restart-at"
 	// AnnotationRetryRollingUpgrade is a manual trigger to retry a failed rolling upgrade.
 	AnnotationRetryRollingUpgrade = "openbao.org/retry-rolling-upgrade"
-
-	// AnnotationLastDevelopmentWarning is the last time the operator emitted a Development profile warning event.
-	AnnotationLastDevelopmentWarning = "openbao.org/last-development-warning"
-	// AnnotationLastProfileNotSetWarning is the last time the operator emitted a missing profile warning event.
-	AnnotationLastProfileNotSetWarning = "openbao.org/last-profile-not-set-warning"
-	// AnnotationLastRootTokenWarning is the last time the operator emitted a root token storage warning event.
-	// #nosec G101 -- This is a Kubernetes annotation key name, not a credential.
-	AnnotationLastRootTokenWarning = "openbao.org/last-root-token-warning"
-	// AnnotationLastStaticUnsealWarning is the last time the operator emitted a static unseal warning event.
-	AnnotationLastStaticUnsealWarning = "openbao.org/last-static-unseal-warning"
 )

@@ -11,7 +11,11 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/deletionops"
-	"github.com/dc-tec/openbao-operator/internal/constants"
+)
+
+const (
+	deletionSecretSuffixUnsealKey = "-unseal-key"
+	deletionSecretSuffixRootToken = "-root-token"
 )
 
 // DeletionDependencies defines dependencies for OpenBaoCluster deletion orchestration.
@@ -42,7 +46,7 @@ func RemoveOwnerReferences(ctx context.Context, logger logr.Logger, kubeClient c
 
 func defaultRetentionSecrets(cluster *openbaov1alpha1.OpenBaoCluster) []string {
 	return []string{
-		cluster.Name + constants.SuffixUnsealKey,
-		cluster.Name + constants.SuffixRootToken,
+		cluster.Name + deletionSecretSuffixUnsealKey,
+		cluster.Name + deletionSecretSuffixRootToken,
 	}
 }
