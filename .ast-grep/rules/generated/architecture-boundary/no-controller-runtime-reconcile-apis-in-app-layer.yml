@@ -9,7 +9,6 @@ files:
     - internal/app/**/*.go
 ignores:
     - '**/*_test.go'
-    - internal/app/openbaocluster/workload.go
 rule:
     all:
         - kind: import_spec

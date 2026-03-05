@@ -8,7 +8,6 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/events"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -68,7 +67,7 @@ func RunWorkloadReconcilers(
 	reconcilers []SubReconciler,
 	recordError ErrorRecorder,
 	policy WorkloadResultPolicy,
-) (ctrl.Result, error) {
+) (recon.Result, error) {
 	if cluster.Status.Workload == nil {
 		cluster.Status.Workload = &openbaov1alpha1.WorkloadControllerStatus{}
 	}
@@ -83,51 +82,51 @@ func RunWorkloadReconcilers(
 
 			// Persist status changes before returning to avoid losing in-memory updates.
 			if statusErr := PatchWorkloadOwnedFields(ctx, c, logger, original, cluster, "workload-error"); statusErr != nil {
-				return ctrl.Result{}, statusErr
+				return recon.Result{}, statusErr
 			}
 
 			if handled, ok := workloadResultForError(err, cluster.Status.Workload.LastError, policy); ok {
 				return handled, nil
 			}
 
-			return ctrl.Result{}, err
+			return recon.Result{}, err
 		}
 
 		if result.RequeueAfter > 0 {
 			if statusErr := PatchWorkloadOwnedFields(ctx, c, logger, original, cluster, "workload-requeue"); statusErr != nil {
-				return ctrl.Result{}, statusErr
+				return recon.Result{}, statusErr
 			}
-			return ctrl.Result{RequeueAfter: result.RequeueAfter}, nil
+			return recon.Result{RequeueAfter: result.RequeueAfter}, nil
 		}
 	}
 
 	// Clear previous workload error after a successful reconcile.
 	cluster.Status.Workload.LastError = nil
 	if err := PatchWorkloadOwnedFields(ctx, c, logger, original, cluster, "workload-complete"); err != nil {
-		return ctrl.Result{}, err
+		return recon.Result{}, err
 	}
 
-	return ctrl.Result{}, nil
+	return recon.Result{}, nil
 }
 
 func workloadResultForError(
 	err error,
 	lastError *openbaov1alpha1.ControllerErrorStatus,
 	policy WorkloadResultPolicy,
-) (ctrl.Result, bool) {
+) (recon.Result, bool) {
 	if lastError != nil {
 		switch lastError.Reason {
 		case policy.PrerequisitesMissingReason:
-			return ctrl.Result{RequeueAfter: workloadRequeueShort(policy)}, true
+			return recon.Result{RequeueAfter: workloadRequeueShort(policy)}, true
 		case policy.GatewayAPIMissingReason:
 			safetyNetJitter := workloadRequeueSafetyNetJitter(policy)
 			jitterNanos := time.Now().UnixNano() % int64(safetyNetJitter)
 			requeueAfter := workloadRequeueSafetyNetBase(policy) + time.Duration(jitterNanos)
-			return ctrl.Result{RequeueAfter: requeueAfter}, true
+			return recon.Result{RequeueAfter: requeueAfter}, true
 		default:
 			if _, ok := policy.PermanentConfigurationReason[lastError.Reason]; ok {
 				// Permanent configuration issue; wait for user changes rather than hot-looping.
-				return ctrl.Result{}, true
+				return recon.Result{}, true
 			}
 		}
 	}
@@ -136,13 +135,13 @@ func workloadResultForError(
 		shouldRequeue, requeueAfter := operatorerrors.ShouldRequeue(err)
 		if shouldRequeue {
 			if requeueAfter > 0 {
-				return ctrl.Result{RequeueAfter: requeueAfter}, true
+				return recon.Result{RequeueAfter: requeueAfter}, true
 			}
-			return ctrl.Result{RequeueAfter: workloadRequeueShort(policy)}, true
+			return recon.Result{RequeueAfter: workloadRequeueShort(policy)}, true
 		}
 	}
 
-	return ctrl.Result{}, false
+	return recon.Result{}, false
 }
 
 // autopilotConfigReconciler reconciles Raft Autopilot configuration for initialized clusters.

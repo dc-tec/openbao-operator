@@ -205,7 +205,6 @@ globalImportBoundaries:
     ignores:
       - "**/*_test.go"
       # Transitional bridge points pending decomposition away from ctrl.Result/ctrl.Request.
-      - internal/app/openbaocluster/workload.go
     disallowExternalImports:
       - sigs.k8s.io/controller-runtime/pkg/reconcile
     disallowExternalExactImports:
