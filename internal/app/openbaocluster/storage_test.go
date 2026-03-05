@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
@@ -161,7 +162,7 @@ func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 			Client:    c,
 			APIReader: c,
 			Recorder:  events.NewFakeRecorder(10),
-			ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (openbao.ClusterActions, error) {
+			ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (StoragePodClient, error) {
 				return &openbao.MockClusterActions{
 					IsLeaderFunc: func(ctx context.Context) (bool, error) { return false, nil },
 				}, nil
@@ -215,7 +216,7 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 			Name:      "test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				openbao.LabelActive: "true",
+				constants.LabelOpenBaoActive: "true",
 			},
 		},
 		Status: corev1.PodStatus{
@@ -233,7 +234,7 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 			Client:    c,
 			APIReader: c,
 			Recorder:  events.NewFakeRecorder(10),
-			ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (openbao.ClusterActions, error) {
+			ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (StoragePodClient, error) {
 				return &openbao.MockClusterActions{
 					IsLeaderFunc: func(ctx context.Context) (bool, error) { return true, nil },
 					StepDownLeaderFunc: func(ctx context.Context) error {

@@ -8,9 +8,9 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/admission"
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
-	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // OpenBaoClusterReconciler reconciles a OpenBaoCluster object.
@@ -30,7 +30,7 @@ type OpenBaoClusterReconciler struct {
 	// When true, the controller uses Owns() watches for event-driven reconciliation
 	// and caching is enabled for the watched namespace.
 	SingleTenantMode      bool
-	SmartClientConfig     openbao.ClientConfig
+	SmartClientConfig     portopenbao.ClientConfig
 	ImageVerifier         imageverify.Verifier
 	OperatorImageVerifier imageverify.Verifier
 	Platform              string

@@ -9,8 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
-	"github.com/dc-tec/openbao-operator/internal/revision"
+	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
 func TestObservedVersionFromPods_UsesLeaderWhenUnambiguous(t *testing.T) {
@@ -18,7 +18,7 @@ func TestObservedVersionFromPods_UsesLeaderWhenUnambiguous(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-0",
 			Labels: map[string]string{
-				openbaolabels.LabelVersion: "2.0.0",
+				constants.LabelOpenBaoVersion: "2.0.0",
 			},
 		},
 	}
@@ -26,7 +26,7 @@ func TestObservedVersionFromPods_UsesLeaderWhenUnambiguous(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-1",
 			Labels: map[string]string{
-				openbaolabels.LabelVersion: "2.1.0",
+				constants.LabelOpenBaoVersion: "2.1.0",
 			},
 		},
 	}
@@ -47,7 +47,7 @@ func TestObservedVersionFromPods_IgnoresLeaderVersionWhenAmbiguous(t *testing.T)
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-0",
 			Labels: map[string]string{
-				openbaolabels.LabelVersion: "2.0.0",
+				constants.LabelOpenBaoVersion: "2.0.0",
 			},
 		},
 	}
@@ -55,7 +55,7 @@ func TestObservedVersionFromPods_IgnoresLeaderVersionWhenAmbiguous(t *testing.T)
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-1",
 			Labels: map[string]string{
-				openbaolabels.LabelVersion: "2.1.0",
+				constants.LabelOpenBaoVersion: "2.1.0",
 			},
 		},
 	}
@@ -143,7 +143,7 @@ func TestMaybeAdvanceCurrentVersionForBlueGreen_AdvancesOnCompletion(t *testing.
 			CurrentVersion: "2.4.3",
 			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
 				Phase:        openbaov1alpha1.PhaseIdle,
-				BlueRevision: revision.OpenBaoClusterRevision("2.4.4", "openbao/openbao:2.4.4", 3),
+				BlueRevision: upgrade.OpenBaoClusterRevision("2.4.4", "openbao/openbao:2.4.4", 3),
 			},
 		},
 	}

@@ -10,7 +10,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/kube"
 )
 
 const (
@@ -58,7 +57,7 @@ func PatchWorkloadOwnedFields(
 		},
 	}
 
-	applyConfig, err := kube.ToApplyConfiguration(applyCluster, c)
+	applyConfig, err := toApplyConfiguration(applyCluster, c)
 	if err != nil {
 		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
 	}
@@ -112,7 +111,7 @@ func PatchAdminOpsOwnedFields(
 		},
 	}
 
-	applyConfig, err := kube.ToApplyConfiguration(applyCluster, c)
+	applyConfig, err := toApplyConfiguration(applyCluster, c)
 	if err != nil {
 		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
 	}

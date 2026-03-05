@@ -13,9 +13,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	initmanager "github.com/dc-tec/openbao-operator/internal/init"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
-	"github.com/dc-tec/openbao-operator/internal/raft"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
@@ -33,6 +31,7 @@ type WorkloadResultPolicy struct {
 func AppendInitAndAutopilotReconcilers(
 	reconcilers []SubReconciler,
 	initMgr initmanagerport.Manager,
+	autopilotRuntime initmanagerport.AutopilotRuntime,
 	recorder events.EventRecorder,
 	requeueShort time.Duration,
 ) []SubReconciler {
@@ -42,16 +41,11 @@ func AppendInitAndAutopilotReconcilers(
 
 	reconcilers = append(reconcilers, initMgr)
 
-	// Add autopilot config reconciler for Day 2 operations only when the concrete
-	// init manager exposes a raft manager.
-	var raftMgr *raft.Manager
-	if typedInitMgr, ok := initMgr.(*initmanager.Manager); ok {
-		raftMgr = typedInitMgr.RaftManager()
-	}
-	if raftMgr != nil {
+	// Add autopilot config reconciler for Day 2 operations when an autopilot runtime is available.
+	if autopilotRuntime != nil {
 		reconcilers = append(reconcilers, &autopilotConfigReconciler{
-			raftManager: raftMgr,
-			recorder:    recorder,
+			autopilotRuntime: autopilotRuntime,
+			recorder:         recorder,
 			requeueShort: func() time.Duration {
 				if requeueShort > 0 {
 					return requeueShort
@@ -154,9 +148,9 @@ func workloadResultForError(
 // autopilotConfigReconciler reconciles Raft Autopilot configuration for initialized clusters.
 // This handles Day 2 operations like scaling replicas or changing autopilot settings.
 type autopilotConfigReconciler struct {
-	raftManager  *raft.Manager
-	recorder     events.EventRecorder
-	requeueShort time.Duration
+	autopilotRuntime initmanagerport.AutopilotRuntime
+	recorder         events.EventRecorder
+	requeueShort     time.Duration
 }
 
 // Reconcile reconciles the Raft Autopilot configuration for an initialized cluster.
@@ -170,7 +164,7 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 		return recon.Result{}, nil
 	}
 
-	if err := r.raftManager.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
+	if err := r.autopilotRuntime.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
 		if operatorerrors.IsTransient(err) {
 			logger.V(1).Info("Transient error reconciling autopilot config; will retry", "error", err)
 			return recon.Result{RequeueAfter: r.requeueShort}, nil

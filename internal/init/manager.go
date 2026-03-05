@@ -21,6 +21,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	"github.com/dc-tec/openbao-operator/internal/openbao"
+	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 	"github.com/dc-tec/openbao-operator/internal/raft"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
@@ -62,6 +63,11 @@ func NewManager(config *rest.Config, clientset kubernetes.Interface, clientMgr *
 
 // RaftManager returns the Raft Manager for autopilot configuration.
 func (m *Manager) RaftManager() *raft.Manager {
+	return m.raftManager
+}
+
+// AutopilotRuntime returns the optional day-2 autopilot runtime.
+func (m *Manager) AutopilotRuntime() initmanagerport.AutopilotRuntime {
 	return m.raftManager
 }
 
