@@ -14,13 +14,13 @@ import (
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
 	provisionermanager "github.com/dc-tec/openbao-operator/internal/provisioner"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
 func newTenantScheme(t *testing.T) *k8sruntime.Scheme {
@@ -65,7 +65,7 @@ func setAdmissionReady(t *testing.T, ready bool) {
 }
 
 func TestReconcileOpenBaoTenant_Validation(t *testing.T) {
-	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "tenant", Namespace: "ns"}}
+	req := types.NamespacedName{Name: "tenant", Namespace: "ns"}
 	if _, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), TenantRuntime{}); err == nil || !strings.Contains(err.Error(), "client is required") {
 		t.Fatalf("expected client required error, got %v", err)
 	}
@@ -83,11 +83,11 @@ func TestReconcileOpenBaoTenant_SecurityViolation(t *testing.T) {
 	}
 	runtime := newTenantRuntime(t, tenant)
 
-	result, err := ReconcileOpenBaoTenant(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "tenant", Namespace: "team-a"}}, logr.Discard(), runtime)
+	result, err := ReconcileOpenBaoTenant(context.Background(), types.NamespacedName{Name: "tenant", Namespace: "team-a"}, logr.Discard(), runtime)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != (ctrl.Result{}) {
+	if result != (recon.Result{}) {
 		t.Fatalf("result=%v, want zero", result)
 	}
 
@@ -112,7 +112,7 @@ func TestReconcileOpenBaoTenant_FinalizerAndProvisioning(t *testing.T) {
 	}
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant-ns"}}
 	runtime := newTenantRuntime(t, tenant, ns)
-	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}}
+	req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
 
 	result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
 	if err != nil {
@@ -126,12 +126,12 @@ func TestReconcileOpenBaoTenant_FinalizerAndProvisioning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reconcile 2: %v", err)
 	}
-	if result != (ctrl.Result{}) {
+	if result != (recon.Result{}) {
 		t.Fatalf("result=%v, want zero", result)
 	}
 
 	updated := &openbaov1alpha1.OpenBaoTenant{}
-	if getErr := runtime.Client.Get(context.Background(), req.NamespacedName, updated); getErr != nil {
+	if getErr := runtime.Client.Get(context.Background(), req, updated); getErr != nil {
 		t.Fatalf("get updated tenant: %v", getErr)
 	}
 	if !containsFinalizer(updated.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
@@ -163,7 +163,7 @@ func TestReconcileOpenBaoTenant_TargetNamespaceMissing(t *testing.T) {
 		Spec: openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "missing-ns"},
 	}
 	runtime := newTenantRuntime(t, tenant)
-	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}}
+	req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
 
 	result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
 	if err != nil {
@@ -174,7 +174,7 @@ func TestReconcileOpenBaoTenant_TargetNamespaceMissing(t *testing.T) {
 	}
 
 	updated := &openbaov1alpha1.OpenBaoTenant{}
-	if getErr := runtime.Client.Get(context.Background(), req.NamespacedName, updated); getErr != nil {
+	if getErr := runtime.Client.Get(context.Background(), req, updated); getErr != nil {
 		t.Fatalf("get updated tenant: %v", getErr)
 	}
 	if updated.Status.Provisioned {
@@ -198,7 +198,7 @@ func TestReconcileOpenBaoTenant_AdmissionNotReadyRequeues(t *testing.T) {
 	}
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant-ns"}}
 	runtime := newTenantRuntime(t, tenant, ns)
-	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}}
+	req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
 
 	result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
 	if err != nil {
@@ -209,7 +209,7 @@ func TestReconcileOpenBaoTenant_AdmissionNotReadyRequeues(t *testing.T) {
 	}
 
 	updated := &openbaov1alpha1.OpenBaoTenant{}
-	if getErr := runtime.Client.Get(context.Background(), req.NamespacedName, updated); getErr != nil {
+	if getErr := runtime.Client.Get(context.Background(), req, updated); getErr != nil {
 		t.Fatalf("get updated tenant: %v", getErr)
 	}
 	if updated.Status.Provisioned {
@@ -238,7 +238,7 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 		cluster := &openbaov1alpha1.OpenBaoCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "tenant-ns"}}
 		runtime := newTenantRuntime(t, tenant, ns, cluster)
 
-		result, err := ReconcileOpenBaoTenant(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}}, logr.Discard(), runtime)
+		result, err := ReconcileOpenBaoTenant(context.Background(), types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}, logr.Discard(), runtime)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -260,18 +260,18 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 		}
 		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant-ns"}}
 		runtime := newTenantRuntime(t, tenant, ns)
-		req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}}
+		req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
 
 		result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if result != (ctrl.Result{}) {
+		if result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero", result)
 		}
 
 		updated := &openbaov1alpha1.OpenBaoTenant{}
-		if getErr := runtime.Client.Get(context.Background(), req.NamespacedName, updated); getErr != nil {
+		if getErr := runtime.Client.Get(context.Background(), req, updated); getErr != nil {
 			if !apierrors.IsNotFound(getErr) {
 				t.Fatalf("get updated tenant: %v", getErr)
 			}

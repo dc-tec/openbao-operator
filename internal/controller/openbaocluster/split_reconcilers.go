@@ -194,7 +194,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 		},
 	}
 
-	return appopenbaocluster.RunWorkloadReconcilers(
+	appResult, appErr := appopenbaocluster.RunWorkloadReconcilers(
 		ctx,
 		r.parent.Client,
 		logger,
@@ -204,6 +204,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 		recordError,
 		policy,
 	)
+	return ctrl.Result{RequeueAfter: appResult.RequeueAfter}, appErr
 }
 
 func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
@@ -240,7 +241,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	original := cluster.DeepCopy()
-	return appopenbaocluster.ReconcileAdminOps(ctx, logger, appopenbaocluster.AdminOpsDependencies{
+	appResult, appErr := appopenbaocluster.ReconcileAdminOps(ctx, logger, appopenbaocluster.AdminOpsDependencies{
 		Client:                r.parent.Client,
 		APIReader:             r.parent.APIReader,
 		Scheme:                r.parent.Scheme,
@@ -253,6 +254,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 		RequeueShort:          constants.RequeueShort,
 		Platform:              r.parent.Platform,
 	}, original, cluster, recordError)
+	return ctrl.Result{RequeueAfter: appResult.RequeueAfter}, appErr
 }
 
 func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {

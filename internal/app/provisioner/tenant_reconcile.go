@@ -11,13 +11,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/admission"
 	"github.com/dc-tec/openbao-operator/internal/logging"
 	provisionermanager "github.com/dc-tec/openbao-operator/internal/provisioner"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
 const (
@@ -39,21 +39,21 @@ type TenantRuntime struct {
 }
 
 // ReconcileOpenBaoTenant runs the business flow for namespace provisioning.
-func ReconcileOpenBaoTenant(ctx context.Context, req ctrl.Request, logger logr.Logger, runtime TenantRuntime) (ctrl.Result, error) {
+func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logger logr.Logger, runtime TenantRuntime) (recon.Result, error) {
 	if runtime.Client == nil {
-		return ctrl.Result{}, fmt.Errorf("client is required")
+		return recon.Result{}, fmt.Errorf("client is required")
 	}
 	if runtime.Provisioner == nil {
-		return ctrl.Result{}, fmt.Errorf("provisioner manager is required")
+		return recon.Result{}, fmt.Errorf("provisioner manager is required")
 	}
 
 	tenant := &openbaov1alpha1.OpenBaoTenant{}
-	if err := runtime.Client.Get(ctx, req.NamespacedName, tenant); err != nil {
+	if err := runtime.Client.Get(ctx, key, tenant); err != nil {
 		if apierrors.IsNotFound(err) {
 			// OpenBaoTenant deleted - nothing to do.
-			return ctrl.Result{}, nil
+			return recon.Result{}, nil
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoTenant %s: %w", req.NamespacedName, err)
+		return recon.Result{}, fmt.Errorf("failed to get OpenBaoTenant %s: %w", key, err)
 	}
 
 	targetNS := tenant.Spec.TargetNamespace
@@ -83,24 +83,24 @@ func ReconcileOpenBaoTenant(ctx context.Context, req ctrl.Request, logger logr.L
 			Message:            err.Error(),
 		})
 		if patchErr := patchStatus(ctx, runtime.Client, tenant, original); patchErr != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to patch status for security violation: %w", patchErr)
+			return recon.Result{}, fmt.Errorf("failed to patch status for security violation: %w", patchErr)
 		}
 
 		// Do not requeue. User must fix the CR.
-		return ctrl.Result{}, nil
+		return recon.Result{}, nil
 	}
 
 	if !tenant.DeletionTimestamp.IsZero() {
-		return reconcileDeletion(ctx, logger, runtime, tenant, targetNS, req)
+		return reconcileDeletion(ctx, logger, runtime, tenant, targetNS, key)
 	}
 
 	if !containsFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
 		tenant.Finalizers = append(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer)
 		if err := runtime.Client.Update(ctx, tenant); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to add finalizer to OpenBaoTenant %s: %w", req.NamespacedName, err)
+			return recon.Result{}, fmt.Errorf("failed to add finalizer to OpenBaoTenant %s: %w", key, err)
 		}
 		// Requeue to observe the resource with the finalizer attached.
-		return ctrl.Result{RequeueAfter: resolveRequeueShort(runtime)}, nil
+		return recon.Result{RequeueAfter: resolveRequeueShort(runtime)}, nil
 	}
 
 	ns := &corev1.Namespace{}
@@ -110,12 +110,12 @@ func ReconcileOpenBaoTenant(ctx context.Context, req ctrl.Request, logger logr.L
 			tenant.Status.Provisioned = false
 			tenant.Status.LastError = fmt.Sprintf("target namespace %s not found", targetNS)
 			if patchErr := patchStatus(ctx, runtime.Client, tenant, original); patchErr != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", patchErr)
+				return recon.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", patchErr)
 			}
 			logger.Info("Target namespace not found; will retry", "target_namespace", targetNS)
-			return ctrl.Result{RequeueAfter: resolveRequeueStandard(runtime)}, nil
+			return recon.Result{RequeueAfter: resolveRequeueStandard(runtime)}, nil
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to get namespace %s: %w", targetNS, err)
+		return recon.Result{}, fmt.Errorf("failed to get namespace %s: %w", targetNS, err)
 	}
 
 	ready, result := ensureAdmissionDependenciesReady(ctx, logger, runtime, tenant)
@@ -129,16 +129,16 @@ func ReconcileOpenBaoTenant(ctx context.Context, req ctrl.Request, logger logr.L
 		tenant.Status.Provisioned = false
 		tenant.Status.LastError = err.Error()
 		if statusErr := patchStatus(ctx, runtime.Client, tenant, original); statusErr != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w (original error: %w)", statusErr, err)
+			return recon.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w (original error: %w)", statusErr, err)
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to ensure tenant RBAC for namespace %s: %w", targetNS, err)
+		return recon.Result{}, fmt.Errorf("failed to ensure tenant RBAC for namespace %s: %w", targetNS, err)
 	}
 
 	original := tenant.DeepCopy()
 	tenant.Status.Provisioned = true
 	tenant.Status.LastError = ""
 	if err := patchStatus(ctx, runtime.Client, tenant, original); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
+		return recon.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
 	}
 
 	logger.Info("Successfully provisioned tenant RBAC", "target_namespace", targetNS)
@@ -147,7 +147,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, req ctrl.Request, logger logr.L
 		"tenant_name":      tenant.Name,
 		"target_namespace": targetNS,
 	})
-	return ctrl.Result{}, nil
+	return recon.Result{}, nil
 }
 
 func reconcileDeletion(
@@ -156,10 +156,10 @@ func reconcileDeletion(
 	runtime TenantRuntime,
 	tenant *openbaov1alpha1.OpenBaoTenant,
 	targetNS string,
-	req ctrl.Request,
-) (ctrl.Result, error) {
+	key types.NamespacedName,
+) (recon.Result, error) {
 	if !containsFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
-		return ctrl.Result{}, nil
+		return recon.Result{}, nil
 	}
 
 	logger.Info("OpenBaoTenant is being deleted", "target_namespace", targetNS)
@@ -167,18 +167,18 @@ func reconcileDeletion(
 	// Keep tenant RBAC while OpenBaoCluster finalizers may still need it.
 	clusterList := &openbaov1alpha1.OpenBaoClusterList{}
 	if err := runtime.Client.List(ctx, clusterList, client.InNamespace(targetNS)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to list keys in namespace %s: %w", targetNS, err)
+		return recon.Result{}, fmt.Errorf("failed to list keys in namespace %s: %w", targetNS, err)
 	}
 	if len(clusterList.Items) > 0 {
 		logger.Info("Waiting for OpenBaoClusters to be deleted before cleaning up RBAC",
 			"target_namespace", targetNS,
 			"cluster_count", len(clusterList.Items))
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		return recon.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
 	logger.Info("No OpenBaoClusters found; cleaning up tenant RBAC", "target_namespace", targetNS)
 	if err := runtime.Provisioner.CleanupTenantRBAC(ctx, targetNS); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to cleanup tenant RBAC for namespace %s: %w", targetNS, err)
+		return recon.Result{}, fmt.Errorf("failed to cleanup tenant RBAC for namespace %s: %w", targetNS, err)
 	}
 	logging.LogAuditEvent(logger, logging.EventTenantRBACCleaned, map[string]string{
 		"tenant_namespace": tenant.Namespace,
@@ -188,10 +188,10 @@ func reconcileDeletion(
 
 	tenant.Finalizers = removeFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer)
 	if err := runtime.Client.Update(ctx, tenant); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from OpenBaoTenant %s: %w", req.NamespacedName, err)
+		return recon.Result{}, fmt.Errorf("failed to remove finalizer from OpenBaoTenant %s: %w", key, err)
 	}
 
-	return ctrl.Result{}, nil
+	return recon.Result{}, nil
 }
 
 func ensureAdmissionDependenciesReady(
@@ -199,14 +199,14 @@ func ensureAdmissionDependenciesReady(
 	logger logr.Logger,
 	runtime TenantRuntime,
 	tenant *openbaov1alpha1.OpenBaoTenant,
-) (bool, ctrl.Result) {
+) (bool, recon.Result) {
 	// Fail-closed privileged actions when admission policies are not ready.
 	if admission.UnsafeAdmissionDisabled() {
 		admission.SetAdmissionDependenciesReady(true)
-		return true, ctrl.Result{}
+		return true, recon.Result{}
 	}
 	if admission.AdmissionDependenciesReady() {
-		return true, ctrl.Result{}
+		return true, recon.Result{}
 	}
 
 	reader := runtime.APIReader
@@ -225,12 +225,12 @@ func ensureAdmissionDependenciesReady(
 	if err != nil {
 		admission.SetAdmissionDependenciesReady(false)
 		logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "error", err)
-		return false, ctrl.Result{RequeueAfter: admissionDependencyRequeueAfter}
+		return false, recon.Result{RequeueAfter: admissionDependencyRequeueAfter}
 	}
 
 	admission.SetAdmissionDependenciesReady(status.OverallReady)
 	if status.OverallReady {
-		return true, ctrl.Result{}
+		return true, recon.Result{}
 	}
 
 	original := tenant.DeepCopy()
@@ -240,7 +240,7 @@ func ensureAdmissionDependenciesReady(
 	_ = patchStatus(ctx, runtime.Client, tenant, original)
 
 	logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "summary", status.SummaryMessage())
-	return false, ctrl.Result{RequeueAfter: admissionDependencyRequeueAfter}
+	return false, recon.Result{RequeueAfter: admissionDependencyRequeueAfter}
 }
 
 func patchStatus(ctx context.Context, c client.Client, tenant *openbaov1alpha1.OpenBaoTenant, original *openbaov1alpha1.OpenBaoTenant) error {
