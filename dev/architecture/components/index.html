@@ -2054,15 +2054,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-internal-managers" class="md-nav__link">
+  <a href="#3-app-orchestration-and-managers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Internal Managers
+        3. App Orchestration and Managers
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="3. Internal Managers">
+    <nav class="md-nav" aria-label="3. App Orchestration and Managers">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -4299,15 +4299,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-internal-managers" class="md-nav__link">
+  <a href="#3-app-orchestration-and-managers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Internal Managers
+        3. App Orchestration and Managers
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="3. Internal Managers">
+    <nav class="md-nav" aria-label="3. App Orchestration and Managers">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -4421,35 +4421,37 @@
 <p>Restores are reconciled via the separate <code>OpenBaoRestore</code> controller, which orchestrates restore Jobs and acquires the cluster operation lock.</p>
 </div>
 <hr />
-<h2 id="3-internal-managers">3. Internal Managers<a class="headerlink" href="#3-internal-managers" title="Permanent link">&para;</a></h2>
-<p>Controllers delegate complex business logic to specialized <strong>Internal Managers</strong>.</p>
-<pre class="mermaid"><code>classDiagram
-    class OpenBaoClusterReconciler {
-        +Reconcile()
-    }
+<h2 id="3-app-orchestration-and-managers">3. App Orchestration and Managers<a class="headerlink" href="#3-app-orchestration-and-managers" title="Permanent link">&para;</a></h2>
+<p>Controllers delegate orchestration to <code>internal/app/*</code> packages first. The app layer then coordinates domain managers and focused subpackages.</p>
+<pre class="mermaid"><code>graph TD
+    OBC["OpenBaoCluster controllers (workload/adminops/status)"] --&gt; OBCApp["internal/app/openbaocluster facade"]
+    OBR["OpenBaoRestore controller"] --&gt; OBRApp["internal/app/openbaorestore"]
+    Prov["Provisioner controller"] --&gt; ProvApp["internal/app/provisioner"]
 
-    class InfraManager {
-        +SyncStatefulSet()
-        +SyncService()
-    }
+    OBCApp --&gt; Workload["Workload orchestration"]
+    OBCApp --&gt; AdminOps["AdminOps orchestration"]
+    OBCApp --&gt; StatusOps["Status and deletion orchestration"]
 
-    class CertManager {
-        +SyncPKI()
-        +RotateCerts()
-    }
+    Workload --&gt; Infra["Infra Manager"]
+    Workload --&gt; Cert["Cert Manager"]
+    Workload --&gt; Init["Init Manager"]
+    AdminOps --&gt; Upgrade["Upgrade Manager"]
+    AdminOps --&gt; Backup["Backup Manager"]
 
-    class UpgradeManager {
-        +ReconcileUpdate()
-    }
+    OBRApp --&gt; Restore["Restore Manager"]
+    ProvApp --&gt; ProvMgr["Provisioner Manager"]
 
-    OpenBaoClusterReconciler --&gt; InfraManager : Uses
-    OpenBaoClusterReconciler --&gt; CertManager : Uses
-    OpenBaoClusterReconciler --&gt; UpgradeManager : Uses
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
 
-    style OpenBaoClusterReconciler fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff
-    style InfraManager fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff
-    style CertManager fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff
-    style UpgradeManager fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff</code></pre>
+    class OBC,OBR,Prov write;
+    class OBCApp,OBRApp,ProvApp,Workload,AdminOps,StatusOps process;
+    class Infra,Cert,Init,Upgrade,Backup,Restore,ProvMgr read;</code></pre>
+<div class="admonition note">
+<p class="admonition-title">Boundary Contract</p>
+<p>Controller import surfaces are intentionally narrow and enforced by generated architecture-boundary rules from <code>.ast-grep/policy/architecture-boundaries.yml</code>.</p>
+</div>
 <h3 id="domain-managers">Domain Managers<a class="headerlink" href="#domain-managers" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><a href="../infra-manager/">Infrastructure Manager</a></strong>: The "heart" of the operator. Generates <code>config.hcl</code> and manages the <code>StatefulSet</code>.</li>
@@ -4457,6 +4459,7 @@
 <li><strong><a href="../init-manager/">Init Manager</a></strong>: Initializes new clusters (when self-init is disabled), handling <code>PUT /v1/sys/init</code> and storing the root token in a Secret.</li>
 <li><strong><a href="../upgrade-manager/">Upgrade Manager</a></strong>: Powering both <strong>Rolling</strong> and <strong>Blue/Green</strong> upgrades. Manages the state machine for complex transitions.</li>
 <li><strong><a href="../backup-manager/">Backup Manager</a></strong>: Runs snapshot jobs on a Cron schedule.</li>
+<li><strong><a href="../restore-manager/">Restore Manager</a></strong>: Coordinates restore Jobs and lock lifecycle for <code>OpenBaoRestore</code>.</li>
 </ul>
 <h3 id="shared-libraries">Shared Libraries<a class="headerlink" href="#shared-libraries" title="Permanent link">&para;</a></h3>
 <ul>

@@ -2195,10 +2195,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-upgrade-strategies" class="md-nav__link">
+  <a href="#1-architectural-placement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Upgrade Strategies
+        1. Architectural Placement
       
     </span>
   </a>
@@ -2206,15 +2206,26 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-upgrade-state-machine" class="md-nav__link">
+  <a href="#2-upgrade-strategies" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Upgrade State Machine
+        2. Upgrade Strategies
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Upgrade State Machine">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-upgrade-state-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Upgrade State Machine
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Upgrade State Machine">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2256,10 +2267,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-reconciliation-semantics" class="md-nav__link">
+  <a href="#4-reconciliation-semantics" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Reconciliation Semantics
+        4. Reconciliation Semantics
       
     </span>
   </a>
@@ -4288,10 +4299,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-upgrade-strategies" class="md-nav__link">
+  <a href="#1-architectural-placement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Upgrade Strategies
+        1. Architectural Placement
       
     </span>
   </a>
@@ -4299,15 +4310,26 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-upgrade-state-machine" class="md-nav__link">
+  <a href="#2-upgrade-strategies" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Upgrade State Machine
+        2. Upgrade Strategies
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Upgrade State Machine">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-upgrade-state-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Upgrade State Machine
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Upgrade State Machine">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -4349,10 +4371,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-reconciliation-semantics" class="md-nav__link">
+  <a href="#4-reconciliation-semantics" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Reconciliation Semantics
+        4. Reconciliation Semantics
       
     </span>
   </a>
@@ -4385,7 +4407,15 @@
 <p>For operational instructions, see the <a href="../../user-guide/openbaocluster/operations/upgrades/">Upgrades User Guide</a>.</p>
 </div>
 <p><strong>Responsibility:</strong> Orchestrate safe version updates while maintaining Raft consensus.</p>
-<h2 id="1-upgrade-strategies">1. Upgrade Strategies<a class="headerlink" href="#1-upgrade-strategies" title="Permanent link">&para;</a></h2>
+<h2 id="1-architectural-placement">1. Architectural Placement<a class="headerlink" href="#1-architectural-placement" title="Permanent link">&para;</a></h2>
+<p>Upgrade execution belongs to the AdminOps orchestration path:</p>
+<ol>
+<li><code>internal/controller/openbaocluster</code> (adminops reconciler) receives the reconcile event.</li>
+<li>It delegates to <code>internal/app/openbaocluster</code> facade functions.</li>
+<li>The app layer calls <code>internal/app/openbaocluster/adminops</code>, which invokes rolling (<code>internal/upgrade/rolling</code>) or blue/green (<code>internal/upgrade/bluegreen</code>) manager flows.</li>
+</ol>
+<p>This keeps controller code focused on reconcile wiring while the upgrade domain stays in dedicated manager packages.</p>
+<h2 id="2-upgrade-strategies">2. Upgrade Strategies<a class="headerlink" href="#2-upgrade-strategies" title="Permanent link">&para;</a></h2>
 <p>The Manager supports two distinct strategies, controlled by <code>spec.upgrade.strategy</code>.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Rolling Update (Default)</label><label for="__tabbed_1_2">Blue/Green</label></div>
 <div class="tabbed-content">
@@ -4523,7 +4553,7 @@
 </div>
 </div>
 </div>
-<h2 id="2-upgrade-state-machine">2. Upgrade State Machine<a class="headerlink" href="#2-upgrade-state-machine" title="Permanent link">&para;</a></h2>
+<h2 id="3-upgrade-state-machine">3. Upgrade State Machine<a class="headerlink" href="#3-upgrade-state-machine" title="Permanent link">&para;</a></h2>
 <h3 id="resumability">Resumability<a class="headerlink" href="#resumability" title="Permanent link">&para;</a></h3>
 <p>Upgrades are designed to survive Operator restarts. All state is stored in <code>Status</code>:</p>
 <ul>
@@ -4543,7 +4573,7 @@
 <li><code>spec.operatorImageVerification</code> applies to operator-managed helper images (for example, upgrade executor Jobs).</li>
 <li>Helper image verification does not fall back to <code>spec.imageVerification</code> when <code>spec.operatorImageVerification</code> is unset.</li>
 </ul>
-<h2 id="3-reconciliation-semantics">3. Reconciliation Semantics<a class="headerlink" href="#3-reconciliation-semantics" title="Permanent link">&para;</a></h2>
+<h2 id="4-reconciliation-semantics">4. Reconciliation Semantics<a class="headerlink" href="#4-reconciliation-semantics" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Idempotency:</strong> Re-running a phase multiple times does not cause side effects (e.g., "Join" checks if already joined).</li>
 <li><strong>Safety:</strong> The OpenBao Operator prioritizes <strong>Availability</strong> over Progress. Rolling pauses/retries until healthy. Blue/Green aborts in early phases and rolls back in later phases.</li>

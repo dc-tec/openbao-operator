@@ -2139,10 +2139,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-reconciliation-pipeline" class="md-nav__link">
+  <a href="#1-architectural-placement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Reconciliation Pipeline
+        1. Architectural Placement
       
     </span>
   </a>
@@ -2150,10 +2150,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-configuration-generation" class="md-nav__link">
+  <a href="#2-reconciliation-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Configuration Generation
+        2. Reconciliation Pipeline
       
     </span>
   </a>
@@ -2161,10 +2161,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-auto-unseal-integration" class="md-nav__link">
+  <a href="#3-configuration-generation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Auto-Unseal Integration
+        3. Configuration Generation
       
     </span>
   </a>
@@ -2172,10 +2172,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-image-verification-cosign" class="md-nav__link">
+  <a href="#4-auto-unseal-integration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Image Verification (Cosign)
+        4. Auto-Unseal Integration
       
     </span>
   </a>
@@ -2183,10 +2183,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-reconciliation-semantics" class="md-nav__link">
+  <a href="#5-image-verification-cosign" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Reconciliation Semantics
+        5. Image Verification (Cosign)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-reconciliation-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Reconciliation Semantics
       
     </span>
   </a>
@@ -4271,10 +4282,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-reconciliation-pipeline" class="md-nav__link">
+  <a href="#1-architectural-placement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Reconciliation Pipeline
+        1. Architectural Placement
       
     </span>
   </a>
@@ -4282,10 +4293,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-configuration-generation" class="md-nav__link">
+  <a href="#2-reconciliation-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Configuration Generation
+        2. Reconciliation Pipeline
       
     </span>
   </a>
@@ -4293,10 +4304,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-auto-unseal-integration" class="md-nav__link">
+  <a href="#3-configuration-generation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Auto-Unseal Integration
+        3. Configuration Generation
       
     </span>
   </a>
@@ -4304,10 +4315,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-image-verification-cosign" class="md-nav__link">
+  <a href="#4-auto-unseal-integration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Image Verification (Cosign)
+        4. Auto-Unseal Integration
       
     </span>
   </a>
@@ -4315,10 +4326,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-reconciliation-semantics" class="md-nav__link">
+  <a href="#5-image-verification-cosign" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Reconciliation Semantics
+        5. Image Verification (Cosign)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-reconciliation-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Reconciliation Semantics
       
     </span>
   </a>
@@ -4347,7 +4369,15 @@
 
 <h1 id="infrastructuremanager-config-statefulset">InfrastructureManager (Config &amp; StatefulSet)<a class="headerlink" href="#infrastructuremanager-config-statefulset" title="Permanent link">&para;</a></h1>
 <p><strong>Responsibility:</strong> The "Heart" of the operator. It translates the high-level <code>OpenBaoCluster</code> spec into a running <code>StatefulSet</code> with a valid <code>config.hcl</code>.</p>
-<h2 id="1-reconciliation-pipeline">1. Reconciliation Pipeline<a class="headerlink" href="#1-reconciliation-pipeline" title="Permanent link">&para;</a></h2>
+<h2 id="1-architectural-placement">1. Architectural Placement<a class="headerlink" href="#1-architectural-placement" title="Permanent link">&para;</a></h2>
+<p>Infrastructure reconciliation belongs to the workload orchestration path:</p>
+<ol>
+<li><code>internal/controller/openbaocluster</code> (workload reconciler) receives the reconcile event.</li>
+<li>It delegates to <code>internal/app/openbaocluster</code> facade functions.</li>
+<li>The app layer invokes workload orchestration, which calls <code>internal/infra</code> for rendered resources and apply logic.</li>
+</ol>
+<p>This preserves controller thinness and keeps StatefulSet/config domain logic in the infrastructure manager layer.</p>
+<h2 id="2-reconciliation-pipeline">2. Reconciliation Pipeline<a class="headerlink" href="#2-reconciliation-pipeline" title="Permanent link">&para;</a></h2>
 <p>The Manager follows a strict <strong>Render-Then-Apply</strong> pipeline to ensure configuration consistency.</p>
 <pre class="mermaid"><code>graph TD
     Spec[OpenBaoCluster Spec] --&gt;|Render| Config[config.hcl]
@@ -4370,7 +4400,7 @@
     class Config,Resources process;
     class UpdateCM,UpdateSS,Rollout write;</code></pre>
 <p>Config changes are tracked via the <code>openbao.org/config-hash</code> annotation on the StatefulSet Pod template, which triggers a safe rollout.</p>
-<h2 id="2-configuration-generation">2. Configuration Generation<a class="headerlink" href="#2-configuration-generation" title="Permanent link">&para;</a></h2>
+<h2 id="3-configuration-generation">3. Configuration Generation<a class="headerlink" href="#3-configuration-generation" title="Permanent link">&para;</a></h2>
 <p>We do not use a static ConfigMap. We generate it dynamically from the Spec.</p>
 <div class="language-hcl highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="na">ui</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">true</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -4401,7 +4431,7 @@
 <li>Enables automatic peer discovery without manual <code>join</code> commands.</li>
 <li>Ensures Pods register themselves as endpoints.</li>
 </ol>
-<h2 id="3-auto-unseal-integration">3. Auto-Unseal Integration<a class="headerlink" href="#3-auto-unseal-integration" title="Permanent link">&para;</a></h2>
+<h2 id="4-auto-unseal-integration">4. Auto-Unseal Integration<a class="headerlink" href="#4-auto-unseal-integration" title="Permanent link">&para;</a></h2>
 <p>The Manager automatically configures the <code>seal</code> stanza based on <code>spec.unseal</code>.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Static (Default)</label><label for="__tabbed_1_2">External KMS</label></div>
 <div class="tabbed-content">
@@ -4434,7 +4464,7 @@
 </div>
 </div>
 </div>
-<h2 id="4-image-verification-cosign">4. Image Verification (Cosign)<a class="headerlink" href="#4-image-verification-cosign" title="Permanent link">&para;</a></h2>
+<h2 id="5-image-verification-cosign">5. Image Verification (Cosign)<a class="headerlink" href="#5-image-verification-cosign" title="Permanent link">&para;</a></h2>
 <p>When image verification is enabled (or implicitly enabled by the Hardened profile when verification blocks are omitted),
 we enforce supply chain security.</p>
 <pre class="mermaid"><code>sequenceDiagram
@@ -4470,7 +4500,7 @@ we enforce supply chain security.</p>
 </tr>
 </tbody>
 </table>
-<h2 id="5-reconciliation-semantics">5. Reconciliation Semantics<a class="headerlink" href="#5-reconciliation-semantics" title="Permanent link">&para;</a></h2>
+<h2 id="6-reconciliation-semantics">6. Reconciliation Semantics<a class="headerlink" href="#6-reconciliation-semantics" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>OwnerReferences</strong>: All resources (ConfigMaps, Services, StatefulSets) are owned by the <code>OpenBaoCluster</code> CR. Deleting the CR deletes the cluster.</li>
 <li><strong>Least Privilege</strong>: In multi-tenant mode, the controller avoids list/watch on tenant resources and uses direct API reads plus requeue-based polling for child objects.</li>

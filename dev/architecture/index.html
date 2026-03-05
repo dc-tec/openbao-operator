@@ -2060,10 +2060,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#15-assumptions" class="md-nav__link">
+  <a href="#15-architectural-guardrails" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1.5 Assumptions
+        1.5 Architectural Guardrails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-assumptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 Assumptions
       
     </span>
   </a>
@@ -4411,10 +4422,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#15-assumptions" class="md-nav__link">
+  <a href="#15-architectural-guardrails" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1.5 Assumptions
+        1.5 Architectural Guardrails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-assumptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 Assumptions
       
     </span>
   </a>
@@ -4603,22 +4625,22 @@
 <tr>
 <td style="text-align: left;"><code>L1</code></td>
 <td style="text-align: left;">Entrypoints/bootstrap</td>
-<td style="text-align: left;"><code>cmd/controller</code>, <code>cmd/provisioner</code>, <code>internal/entrypoint</code></td>
+<td style="text-align: left;"><code>cmd/controller</code>, <code>cmd/provisioner</code>, <code>cmd/bao-backup</code>, <code>cmd/bao-upgrade</code>, <code>cmd/bao-probe</code>, <code>internal/entrypoint</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>L2</code></td>
 <td style="text-align: left;">Controller plumbing</td>
-<td style="text-align: left;"><code>internal/controller/openbaocluster</code>, <code>internal/controller/openbaorestore</code></td>
+<td style="text-align: left;"><code>internal/controller/openbaocluster</code>, <code>internal/controller/openbaorestore</code>, <code>internal/controller/provisioner</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>L3</code></td>
 <td style="text-align: left;">App orchestration</td>
-<td style="text-align: left;"><code>internal/app/openbaocluster</code>, <code>internal/app/openbaorestore</code>, <code>internal/app/provisioner</code></td>
+<td style="text-align: left;"><code>internal/app/openbaocluster</code> (facade + <code>statusops</code>, <code>deletionops</code>, <code>adminops</code>), <code>internal/app/openbaorestore</code>, <code>internal/app/provisioner</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>L4</code></td>
 <td style="text-align: left;">Services/managers</td>
-<td style="text-align: left;"><code>internal/backup</code>, <code>internal/restore</code>, <code>internal/upgrade</code>, <code>internal/infra</code>, <code>internal/certs</code>, <code>internal/init</code>, <code>internal/opslifecycle</code></td>
+<td style="text-align: left;"><code>internal/backup</code>, <code>internal/restore</code>, <code>internal/upgrade</code>, <code>internal/infra</code>, <code>internal/certs</code>, <code>internal/init</code>, <code>internal/provisioner</code>, <code>internal/opslifecycle</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>L5</code></td>
@@ -4628,12 +4650,12 @@
 <tr>
 <td style="text-align: left;"><code>L6</code></td>
 <td style="text-align: left;">Adapters/integrations</td>
-<td style="text-align: left;"><code>internal/storage</code>, <code>internal/openbao</code>, <code>internal/kube</code>, <code>internal/security</code>, <code>internal/raft</code></td>
+<td style="text-align: left;"><code>internal/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>L7</code></td>
 <td style="text-align: left;">Cross-cutting utilities</td>
-<td style="text-align: left;"><code>internal/errors</code>, <code>internal/logging</code>, <code>internal/reconcile</code>, <code>internal/observability</code>, <code>internal/predicates</code>, <code>internal/admission</code></td>
+<td style="text-align: left;"><code>internal/{errors,logging,reconcile,constants,predicates,observability,admission}</code></td>
 </tr>
 </tbody>
 </table>
@@ -4660,7 +4682,20 @@
             AdminOps-&gt;&gt;Pods: Trigger Snapshot
         end
     end</code></pre>
-<h3 id="15-assumptions">1.5 Assumptions<a class="headerlink" href="#15-assumptions" title="Permanent link">&para;</a></h3>
+<h3 id="15-architectural-guardrails">1.5 Architectural Guardrails<a class="headerlink" href="#15-architectural-guardrails" title="Permanent link">&para;</a></h3>
+<p>Architecture boundaries are enforced from policy and verified in CI.</p>
+<ul>
+<li>Policy source of truth: <code>.ast-grep/policy/architecture-boundaries.yml</code></li>
+<li>Generated architecture-boundary rules: <code>.ast-grep/rules/generated/architecture-boundary/</code></li>
+<li>Dependency graph/report tooling: <code>make report-internal-deps</code></li>
+</ul>
+<p>Run the local architecture checks:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>generate-ast-rules
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>verify-arch-policy
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>make<span class="w"> </span>report-internal-deps
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>make<span class="w"> </span>lint-ast
+</span></code></pre></div>
+<h3 id="16-assumptions">1.6 Assumptions<a class="headerlink" href="#16-assumptions" title="Permanent link">&para;</a></h3>
 <div class="admonition note">
 <p class="admonition-title">Core Assumptions</p>
 <ul>
@@ -4695,18 +4730,22 @@
 </table>
 <h2 id="api-specification">API Specification<a class="headerlink" href="#api-specification" title="Permanent link">&para;</a></h2>
 <p>The <code>OpenBaoCluster</code> CRD defines the desired state.</p>
+<div class="admonition note">
+<p class="admonition-title">Additional CRDs</p>
+<p>The operator also reconciles <code>OpenBaoTenant</code> (Provisioner) and <code>OpenBaoRestore</code> (Restore lifecycle). This section focuses on the primary <code>OpenBaoCluster</code> architecture surface.</p>
+</div>
 <h3 id="spec-desired-state">Spec (Desired State)<a class="headerlink" href="#spec-desired-state" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoCluster</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2.4.4&quot;</span><span class="w">       </span><span class="c1"># (1)!</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;openbao:2.4.4&quot;</span><span class="w"> </span><span class="c1"># (2)!</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w">            </span><span class="c1"># (3)!</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">        </span><span class="c1"># (4)!</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">unseal</span><span class="p">:</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awskms</span><span class="w">         </span><span class="c1"># (5)!</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Hardened</span><span class="w">      </span><span class="c1"># (6)!</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoCluster</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2.4.4&quot;</span><span class="w">       </span><span class="c1"># (1)!</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;openbao:2.4.4&quot;</span><span class="w"> </span><span class="c1"># (2)!</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w">            </span><span class="c1"># (3)!</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">        </span><span class="c1"># (4)!</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nt">unseal</span><span class="p">:</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awskms</span><span class="w">         </span><span class="c1"># (5)!</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Hardened</span><span class="w">      </span><span class="c1"># (6)!</span>
 </span></code></pre></div>
 <ol>
 <li>Semantic OpenBao version.</li>
@@ -4717,13 +4756,13 @@
 <li>Security posture (<code>Hardened</code> or <code>Development</code>).</li>
 </ol>
 <h3 id="status-observability">Status (Observability)<a class="headerlink" href="#status-observability" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">status</span><span class="p">:</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">phase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Running</span><span class="w">  </span><span class="c1"># (1)!</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">activeLeader</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pod-0</span><span class="w">  </span><span class="c1"># (2)!</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">readyReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w">  </span><span class="c1"># (3)!</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">conditions</span><span class="p">:</span><span class="w">  </span><span class="c1"># (4)!</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Available</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">      </span><span class="nt">Status</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">True</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">status</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">phase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Running</span><span class="w">  </span><span class="c1"># (1)!</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">activeLeader</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pod-0</span><span class="w">  </span><span class="c1"># (2)!</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">readyReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w">  </span><span class="c1"># (3)!</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">conditions</span><span class="p">:</span><span class="w">  </span><span class="c1"># (4)!</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Available</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">      </span><span class="nt">Status</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">True</span>
 </span></code></pre></div>
 <ol>
 <li>High-level lifecycle phase.</li>

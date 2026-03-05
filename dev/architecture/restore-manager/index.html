@@ -110,7 +110,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#openbaorestore-controller-restore-lifecycle" class="md-skip">
+        <a href="#restore-manager-openbaorestore-lifecycle" class="md-skip">
           Skip to content
         </a>
       
@@ -2251,10 +2251,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-design-philosophy" class="md-nav__link">
+  <a href="#1-architectural-placement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Design Philosophy
+        1. Architectural Placement
       
     </span>
   </a>
@@ -2262,10 +2262,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-restore-lifecycle" class="md-nav__link">
+  <a href="#2-design-philosophy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Restore Lifecycle
+        2. Design Philosophy
       
     </span>
   </a>
@@ -2273,10 +2273,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-workflow-steps" class="md-nav__link">
+  <a href="#3-restore-lifecycle" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Workflow Steps
+        3. Restore Lifecycle
       
     </span>
   </a>
@@ -2284,10 +2284,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-interaction-with-other-managers" class="md-nav__link">
+  <a href="#4-workflow-steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Interaction with Other Managers
+        4. Workflow Steps
       
     </span>
   </a>
@@ -2295,10 +2295,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-see-also" class="md-nav__link">
+  <a href="#5-interaction-with-other-managers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. See Also
+        5. Interaction with Other Managers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. See Also
       
     </span>
   </a>
@@ -4271,10 +4282,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-design-philosophy" class="md-nav__link">
+  <a href="#1-architectural-placement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Design Philosophy
+        1. Architectural Placement
       
     </span>
   </a>
@@ -4282,10 +4293,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-restore-lifecycle" class="md-nav__link">
+  <a href="#2-design-philosophy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Restore Lifecycle
+        2. Design Philosophy
       
     </span>
   </a>
@@ -4293,10 +4304,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-workflow-steps" class="md-nav__link">
+  <a href="#3-restore-lifecycle" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Workflow Steps
+        3. Restore Lifecycle
       
     </span>
   </a>
@@ -4304,10 +4315,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-interaction-with-other-managers" class="md-nav__link">
+  <a href="#4-workflow-steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Interaction with Other Managers
+        4. Workflow Steps
       
     </span>
   </a>
@@ -4315,10 +4326,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-see-also" class="md-nav__link">
+  <a href="#5-interaction-with-other-managers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. See Also
+        5. Interaction with Other Managers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. See Also
       
     </span>
   </a>
@@ -4345,7 +4367,7 @@
   
 
 
-<h1 id="openbaorestore-controller-restore-lifecycle">OpenBaoRestore Controller (Restore Lifecycle)<a class="headerlink" href="#openbaorestore-controller-restore-lifecycle" title="Permanent link">&para;</a></h1>
+<h1 id="restore-manager-openbaorestore-lifecycle">Restore Manager (OpenBaoRestore Lifecycle)<a class="headerlink" href="#restore-manager-openbaorestore-lifecycle" title="Permanent link">&para;</a></h1>
 <div class="admonition abstract">
 <p class="admonition-title">Responsibility</p>
 <p>Reconcile <code>OpenBaoRestore</code> resources and orchestrate snapshot restores via a Kubernetes Job.</p>
@@ -4354,14 +4376,22 @@
 <p class="admonition-title">User Guide</p>
 <p>For operational instructions, see the <a href="../../user-guide/openbaorestore/restore/">Restore User Guide</a>.</p>
 </div>
-<h2 id="1-design-philosophy">1. Design Philosophy<a class="headerlink" href="#1-design-philosophy" title="Permanent link">&para;</a></h2>
+<h2 id="1-architectural-placement">1. Architectural Placement<a class="headerlink" href="#1-architectural-placement" title="Permanent link">&para;</a></h2>
+<p>Restore orchestration follows a dedicated controller path:</p>
+<ol>
+<li><code>internal/controller/openbaorestore</code> receives the reconcile event.</li>
+<li>It delegates orchestration to <code>internal/app/openbaorestore</code>.</li>
+<li>The app layer invokes <code>internal/restore</code> manager logic for validation, lock lifecycle, and Job flow.</li>
+</ol>
+<p>This keeps the restore controller focused on reconcile plumbing and preserves domain ownership in the restore manager package.</p>
+<h2 id="2-design-philosophy">2. Design Philosophy<a class="headerlink" href="#2-design-philosophy" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>CRD-Based</strong>: Restores are modeled as <code>OpenBaoRestore</code> objects, not as a mode of <code>OpenBaoCluster</code>. This ensures GitOps stability and provides an audit log of restore operations.</li>
 <li><strong>Immutable Request</strong>: <code>OpenBaoRestore.spec</code> is immutable after creation. To change inputs, create a new restore object.</li>
 <li><strong>Stateless Controller</strong>: The controller polls the restore Job rather than watching it, minimizing RBAC requirements.</li>
 <li><strong>Safety First</strong>: Restores use a distinct <strong>Operation Lock</strong> to prevent conflicts with Backups or Upgrades.</li>
 </ul>
-<h2 id="2-restore-lifecycle">2. Restore Lifecycle<a class="headerlink" href="#2-restore-lifecycle" title="Permanent link">&para;</a></h2>
+<h2 id="3-restore-lifecycle">3. Restore Lifecycle<a class="headerlink" href="#3-restore-lifecycle" title="Permanent link">&para;</a></h2>
 <p>The controller drives the <code>OpenBaoRestore</code> through a defined phase machine.</p>
 <pre class="mermaid"><code>graph TD
     Start[User Creates OpenBaoRestore] --&gt; Pending
@@ -4394,7 +4424,7 @@
     class Pending,Validating,Lock,Running,Execution,Retrying process;
     class Completed write;
     class Failed security;</code></pre>
-<h2 id="3-workflow-steps">3. Workflow Steps<a class="headerlink" href="#3-workflow-steps" title="Permanent link">&para;</a></h2>
+<h2 id="4-workflow-steps">4. Workflow Steps<a class="headerlink" href="#4-workflow-steps" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Validation:</strong><ul>
 <li>Target Cluster exists.</li>
@@ -4424,7 +4454,7 @@
 </ul>
 </li>
 </ol>
-<h2 id="4-interaction-with-other-managers">4. Interaction with Other Managers<a class="headerlink" href="#4-interaction-with-other-managers" title="Permanent link">&para;</a></h2>
+<h2 id="5-interaction-with-other-managers">5. Interaction with Other Managers<a class="headerlink" href="#5-interaction-with-other-managers" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
 <p class="admonition-title">Conflict Prevention</p>
 <p>The <strong>Operation Lock</strong> is the primary mechanism for safety.</p>
@@ -4435,7 +4465,7 @@
 </div>
 <p>To override this check during emergencies (e.g., restoring a broken cluster where the lock is stuck), use <code>OpenBaoRestore.spec.overrideOperationLock</code>.
 This requires <code>OpenBaoRestore.spec.force: true</code>.</p>
-<h2 id="5-see-also">5. See Also<a class="headerlink" href="#5-see-also" title="Permanent link">&para;</a></h2>
+<h2 id="6-see-also">6. See Also<a class="headerlink" href="#6-see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../backup-manager/">Backup Manager</a></li>
 <li><a href="../lifecycle/">Lifecycle Flows</a></li>
