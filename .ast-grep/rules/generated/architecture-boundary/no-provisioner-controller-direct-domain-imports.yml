@@ -12,5 +12,5 @@ ignores:
 rule:
     all:
         - kind: import_spec
-        - regex: '"github\.com/dc-tec/openbao-operator/(internal/infra(/[^"]*)?|internal/logging(/[^"]*)?|internal/revision(/[^"]*)?|internal/upgrade(/[^"]*)?)"'
+        - regex: '"github\.com/dc-tec/openbao-operator/(internal/adapter/revision(/[^"]*)?|internal/platform/logging(/[^"]*)?|internal/service/infra(/[^"]*)?|internal/service/upgrade(/[^"]*)?)"'
 note: Keep Provisioner controller focused on reconcile plumbing and route domain orchestration through internal/app/provisioner.

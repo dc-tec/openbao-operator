@@ -2,12 +2,12 @@ id: no-deprecated-new-client-factory
 snapshots:
   ? |
     package p
-    import openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+    import openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
     func f() {
       _ = openbao.NewClientFactory(openbao.ClientConfig{})
     }
   : labels:
     - source: openbao.NewClientFactory(openbao.ClientConfig{})
       style: primary
-      start: 96
-      end: 144
+      start: 104
+      end: 152

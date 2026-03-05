@@ -12,5 +12,5 @@ ignores:
 rule:
     all:
         - kind: import_spec
-        - regex: '"github\.com/dc-tec/openbao-operator/(internal/backup(/[^"]*)?|internal/infra(/[^"]*)?|internal/init(/[^"]*)?|internal/opslifecycle(/[^"]*)?|internal/provisioner(/[^"]*)?|internal/restore(/[^"]*)?|internal/upgrade(/[^"]*)?)"'
-note: 'Approved service imports for this controller: internal/certs.'
+        - regex: '"github\.com/dc-tec/openbao-operator/(internal/service/backup(/[^"]*)?|internal/service/infra(/[^"]*)?|internal/service/init(/[^"]*)?|internal/service/opslifecycle(/[^"]*)?|internal/service/provisioner(/[^"]*)?|internal/service/restore(/[^"]*)?|internal/service/upgrade(/[^"]*)?)"'
+note: 'Approved service imports for this controller: internal/service/certs.'

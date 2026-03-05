@@ -1,2 +1,2 @@
 # source<TAB>dependency<TAB>reason
-internal/raft	internal/openbao	Raft autopilot operations require OpenBao API client helpers.
+internal/adapter/raft	internal/adapter/openbao	Raft autopilot operations require OpenBao API client helpers.

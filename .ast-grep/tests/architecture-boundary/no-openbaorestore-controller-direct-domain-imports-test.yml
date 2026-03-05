@@ -7,5 +7,5 @@ valid:
 invalid:
   - |
     package p
-    import logging "github.com/dc-tec/openbao-operator/internal/logging"
+    import logging "github.com/dc-tec/openbao-operator/internal/platform/logging"
     var _ = logging.NewNopLogger

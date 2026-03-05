@@ -7,6 +7,6 @@ valid:
 invalid:
   - |
     package p
-    import revision "github.com/dc-tec/openbao-operator/internal/revision"
+    import revision "github.com/dc-tec/openbao-operator/internal/adapter/revision"
     var _ = revision.GetOpenBaoImageVersionFromLabel
 

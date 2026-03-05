@@ -9,7 +9,7 @@ files:
   - cmd/**/*.go
 ignores:
   - '**/*_test.go'
-  - internal/openbao/**/*.go
+  - internal/adapter/openbao/**/*.go
 rule:
   all:
     - pattern: $F($CFG)

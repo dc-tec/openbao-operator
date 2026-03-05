@@ -2,10 +2,10 @@ id: no-openbaorestore-controller-direct-domain-imports
 snapshots:
   ? |
     package p
-    import logging "github.com/dc-tec/openbao-operator/internal/logging"
+    import logging "github.com/dc-tec/openbao-operator/internal/platform/logging"
     var _ = logging.NewNopLogger
   : labels:
-    - source: logging "github.com/dc-tec/openbao-operator/internal/logging"
+    - source: logging "github.com/dc-tec/openbao-operator/internal/platform/logging"
       style: primary
       start: 17
-      end: 78
+      end: 87

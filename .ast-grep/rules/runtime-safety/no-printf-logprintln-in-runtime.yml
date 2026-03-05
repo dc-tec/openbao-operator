@@ -10,7 +10,7 @@ files:
   - cmd/provisioner/**/*.go
 ignores:
   - '**/*_test.go'
-  - internal/security/fetch_trusted_root.go
+  - internal/adapter/security/fetch_trusted_root.go
 rule:
   all:
     - kind: call_expression

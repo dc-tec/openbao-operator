@@ -2,7 +2,7 @@ id: no-deprecated-new-client-factory
 valid:
   - |
     package p
-    import openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+    import openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
     func f(ca []byte) {
       mgr := openbao.NewClientManager(openbao.ClientConfig{})
       _ = mgr.FactoryFor("ns/name", ca)
@@ -10,7 +10,7 @@ valid:
 invalid:
   - |
     package p
-    import openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+    import openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
     func f() {
       _ = openbao.NewClientFactory(openbao.ClientConfig{})
     }

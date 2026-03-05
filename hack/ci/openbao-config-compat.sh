@@ -18,9 +18,9 @@ if [ ${#VERSIONS[@]} -eq 0 ]; then
   VERSIONS=("2.4.0" "2.4.4")
 fi
 
-FILES=( "$ROOT_DIR"/internal/config/testdata/*.hcl )
+FILES=( "$ROOT_DIR"/internal/adapter/config/testdata/*.hcl )
 if [ ${#FILES[@]} -eq 0 ]; then
-  echo "error: no HCL fixtures found under internal/config/testdata" >&2
+  echo "error: no HCL fixtures found under internal/adapter/config/testdata" >&2
   exit 1
 fi
 

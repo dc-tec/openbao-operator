@@ -2,10 +2,10 @@ id: no-provisioner-controller-unapproved-service-imports
 snapshots:
   ? |
     package p
-    import upgrade "github.com/dc-tec/openbao-operator/internal/upgrade"
+    import upgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade"
     var _ = upgrade.Service
   : labels:
-    - source: upgrade "github.com/dc-tec/openbao-operator/internal/upgrade"
+    - source: upgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade"
       style: primary
       start: 17
-      end: 78
+      end: 86

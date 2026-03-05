@@ -14,10 +14,10 @@
 !vendor/modules.txt
 
 # Re-include embedded trusted root JSON file for keyless verification
-!internal/security/trusted_root.json
+!internal/adapter/security/trusted_root.json
 
 # Re-include embedded trusted root JSON file for keyless verification
-!internal/security/trusted_root.json
+!internal/adapter/security/trusted_root.json
 
 # Re-include compiled Linux binaries for fast builds (excludes local mac/others)
 !bin/linux_amd64/
