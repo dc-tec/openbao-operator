@@ -62,7 +62,7 @@ type NamespaceProvisionerReconciler struct {
 // specified in the CRD.
 func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	start := time.Now()
-	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, constants.ControllerNameNamespaceProvisioner)
+	reconcileMetrics := observability.NewReconcileMetrics(req.Namespace, req.Name, controllerNameNamespaceProvisioner)
 	recordedError := false
 	recordError := func(e error) {
 		if e == nil {
@@ -92,7 +92,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		APIReader:                r.APIReader,
 		Provisioner:              r.Provisioner,
 		OperatorNamespace:        r.OperatorNamespace,
-		ConditionTypeProvisioned: constants.ConditionTypeProvisioned,
+		ConditionTypeProvisioned: conditionTypeProvisioned,
 		RequeueShort:             constants.RequeueShort,
 		RequeueStandard:          constants.RequeueStandard,
 	})
@@ -118,6 +118,6 @@ func (r *NamespaceProvisionerReconciler) SetupWithManager(mgr ctrl.Manager) erro
 			MaxConcurrentReconciles: 3,
 			RateLimiter:             workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
 		}).
-		Named(constants.ControllerNameNamespaceProvisioner).
+		Named(controllerNameNamespaceProvisioner).
 		Complete(r)
 }

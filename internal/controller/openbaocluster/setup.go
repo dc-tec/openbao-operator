@@ -12,7 +12,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 	operatorpredicates "github.com/dc-tec/openbao-operator/internal/predicates"
 )
@@ -74,7 +73,7 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 			MaxConcurrentReconciles: 2,
 			RateLimiter:             sharedOptions.RateLimiter,
 		}).
-		Named(constants.ControllerNameOpenBaoClusterWorkload).
+		Named(controllerNameWorkload).
 		Complete(&openBaoClusterWorkloadReconciler{parent: r}); err != nil {
 		return err
 	}
@@ -91,7 +90,7 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 			MaxConcurrentReconciles: 1,
 			RateLimiter:             sharedOptions.RateLimiter,
 		}).
-		Named(constants.ControllerNameOpenBaoClusterAdminOps).
+		Named(controllerNameAdminOps).
 		Complete(&openBaoClusterAdminOpsReconciler{parent: r}); err != nil {
 		return err
 	}
@@ -111,7 +110,7 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 			MaxConcurrentReconciles: 1,
 			RateLimiter:             sharedOptions.RateLimiter,
 		}).
-		Named(constants.ControllerNameOpenBaoClusterStatus).
+		Named(controllerNameStatus).
 		Complete(&openBaoClusterStatusReconciler{parent: r}); err != nil {
 		return err
 	}
@@ -147,7 +146,7 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 			MaxConcurrentReconciles: 2,
 			RateLimiter:             sharedOptions.RateLimiter,
 		}).
-		Named(constants.ControllerNameOpenBaoClusterWorkload).
+		Named(controllerNameWorkload).
 		Complete(&openBaoClusterWorkloadReconciler{parent: r}); err != nil {
 		return err
 	}
@@ -163,7 +162,7 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 			MaxConcurrentReconciles: 1,
 			RateLimiter:             sharedOptions.RateLimiter,
 		}).
-		Named(constants.ControllerNameOpenBaoClusterAdminOps).
+		Named(controllerNameAdminOps).
 		Complete(&openBaoClusterAdminOpsReconciler{parent: r}); err != nil {
 		return err
 	}
@@ -183,7 +182,7 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 			MaxConcurrentReconciles: 1,
 			RateLimiter:             sharedOptions.RateLimiter,
 		}).
-		Named(constants.ControllerNameOpenBaoClusterStatus).
+		Named(controllerNameStatus).
 		Complete(&openBaoClusterStatusReconciler{parent: r}); err != nil {
 		return err
 	}

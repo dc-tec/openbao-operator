@@ -141,5 +141,5 @@ func OpenBaoJWTAudience() string {
 // when OIDC is enabled and the role is empty.
 func EffectiveBackupJWTRole(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	oidcEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled
-	return storageenv.EffectiveJWTRole(cluster.Spec.Backup.JWTAuthRole, oidcEnabled, constants.RoleNameBackup)
+	return storageenv.EffectiveJWTRole(cluster.Spec.Backup.JWTAuthRole, oidcEnabled, auth.RoleNameBackup)
 }

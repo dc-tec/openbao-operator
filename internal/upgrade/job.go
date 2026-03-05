@@ -223,8 +223,8 @@ func buildUpgradeExecutorJob(
 		jwtRole = strings.TrimSpace(upgradeCfg.JWTAuthRole)
 	}
 	if jwtRole == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		// Operator will auto-create the upgrade role with name constants.RoleNameUpgrade
-		jwtRole = constants.RoleNameUpgrade
+		// Operator will auto-create the upgrade role with name auth.RoleNameUpgrade
+		jwtRole = auth.RoleNameUpgrade
 	}
 	if jwtRole == "" {
 		return nil, fmt.Errorf("upgrade Jobs require JWT auth: Configure JWT auth and set the role name in spec.upgrade.jwtAuthRole")

@@ -317,5 +317,5 @@ func buildRestoreVolumeMounts(restore *openbaov1alpha1.OpenBaoRestore, cluster *
 
 func effectiveRestoreJWTRole(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) string {
 	oidcEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled
-	return storageenv.EffectiveJWTRole(restore.Spec.JWTAuthRole, oidcEnabled, constants.RoleNameRestore)
+	return storageenv.EffectiveJWTRole(restore.Spec.JWTAuthRole, oidcEnabled, auth.RoleNameRestore)
 }

@@ -13,8 +13,6 @@ var (
 	RequeueSafetyNetBase   = 20 * time.Minute
 	RequeueSafetyNetJitter = 5 * time.Minute
 
-	SecurityWarningInterval = 1 * time.Hour
-
 	ImageVerificationTimeout = 5 * time.Second
 )
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dc-tec/openbao-operator/internal/auth"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
@@ -144,8 +145,8 @@ func TestBuildUpgradeExecutorJob_AllowsOIDCWithoutUpgradeConfig(t *testing.T) {
 	for _, env := range job.Spec.Template.Spec.Containers[0].Env {
 		if env.Name == constants.EnvUpgradeJWTAuthRole {
 			foundRole = true
-			if env.Value != constants.RoleNameUpgrade {
-				t.Fatalf("UPGRADE_JWT_AUTH_ROLE = %q, want %q", env.Value, constants.RoleNameUpgrade)
+			if env.Value != auth.RoleNameUpgrade {
+				t.Fatalf("UPGRADE_JWT_AUTH_ROLE = %q, want %q", env.Value, auth.RoleNameUpgrade)
 			}
 		}
 	}
