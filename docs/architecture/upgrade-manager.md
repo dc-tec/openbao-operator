@@ -5,7 +5,17 @@
 
 **Responsibility:** Orchestrate safe version updates while maintaining Raft consensus.
 
-## 1. Upgrade Strategies
+## 1. Architectural Placement
+
+Upgrade execution belongs to the AdminOps orchestration path:
+
+1. `internal/controller/openbaocluster` (adminops reconciler) receives the reconcile event.
+2. It delegates to `internal/app/openbaocluster` facade functions.
+3. The app layer calls `internal/app/openbaocluster/adminops`, which invokes rolling (`internal/upgrade/rolling`) or blue/green (`internal/upgrade/bluegreen`) manager flows.
+
+This keeps controller code focused on reconcile wiring while the upgrade domain stays in dedicated manager packages.
+
+## 2. Upgrade Strategies
 
 The Manager supports two distinct strategies, controlled by `spec.upgrade.strategy`.
 
@@ -117,7 +127,7 @@ The Manager supports two distinct strategies, controlled by `spec.upgrade.strate
     !!! warning
         Rollback is possible until irreversible cleanup has completed.
 
-## 2. Upgrade State Machine
+## 3. Upgrade State Machine
 
 ### Resumability
 
@@ -140,7 +150,7 @@ If the Operator crashes, it reads the Status on startup and **resumes** exactly 
 - `spec.operatorImageVerification` applies to operator-managed helper images (for example, upgrade executor Jobs).
 - Helper image verification does not fall back to `spec.imageVerification` when `spec.operatorImageVerification` is unset.
 
-## 3. Reconciliation Semantics
+## 4. Reconciliation Semantics
 
 - **Idempotency:** Re-running a phase multiple times does not cause side effects (e.g., "Join" checks if already joined).
 - **Safety:** The OpenBao Operator prioritizes **Availability** over Progress. Rolling pauses/retries until healthy. Blue/Green aborts in early phases and rolls back in later phases.

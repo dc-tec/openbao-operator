@@ -1,4 +1,4 @@
-# OpenBaoRestore Controller (Restore Lifecycle)
+# Restore Manager (OpenBaoRestore Lifecycle)
 
 !!! abstract "Responsibility"
     Reconcile `OpenBaoRestore` resources and orchestrate snapshot restores via a Kubernetes Job.
@@ -6,14 +6,24 @@
 !!! tip "User Guide"
     For operational instructions, see the [Restore User Guide](../user-guide/openbaorestore/restore.md).
 
-## 1. Design Philosophy
+## 1. Architectural Placement
+
+Restore orchestration follows a dedicated controller path:
+
+1. `internal/controller/openbaorestore` receives the reconcile event.
+2. It delegates orchestration to `internal/app/openbaorestore`.
+3. The app layer invokes `internal/restore` manager logic for validation, lock lifecycle, and Job flow.
+
+This keeps the restore controller focused on reconcile plumbing and preserves domain ownership in the restore manager package.
+
+## 2. Design Philosophy
 
 - **CRD-Based**: Restores are modeled as `OpenBaoRestore` objects, not as a mode of `OpenBaoCluster`. This ensures GitOps stability and provides an audit log of restore operations.
 - **Immutable Request**: `OpenBaoRestore.spec` is immutable after creation. To change inputs, create a new restore object.
 - **Stateless Controller**: The controller polls the restore Job rather than watching it, minimizing RBAC requirements.
 - **Safety First**: Restores use a distinct **Operation Lock** to prevent conflicts with Backups or Upgrades.
 
-## 2. Restore Lifecycle
+## 3. Restore Lifecycle
 
 The controller drives the `OpenBaoRestore` through a defined phase machine.
 
@@ -51,7 +61,7 @@ graph TD
     class Failed security;
 ```
 
-## 3. Workflow Steps
+## 4. Workflow Steps
 
 1. **Validation:**
     - Target Cluster exists.
@@ -73,7 +83,7 @@ graph TD
     - Terminal restores (`Completed`/`Failed`) re-run lock cleanup on subsequent reconciles until release succeeds.
     - The cluster may need to be unsealed manually or via auto-unseal.
 
-## 4. Interaction with Other Managers
+## 5. Interaction with Other Managers
 
 !!! note "Conflict Prevention"
     The **Operation Lock** is the primary mechanism for safety.
@@ -84,7 +94,7 @@ graph TD
 To override this check during emergencies (e.g., restoring a broken cluster where the lock is stuck), use `OpenBaoRestore.spec.overrideOperationLock`.
 This requires `OpenBaoRestore.spec.force: true`.
 
-## 5. See Also
+## 6. See Also
 
 - [Backup Manager](backup-manager.md)
 - [Lifecycle Flows](lifecycle/index.md)
