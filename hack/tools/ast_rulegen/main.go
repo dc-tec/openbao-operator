@@ -227,16 +227,16 @@ func validatePolicy(policy architecturePolicy) error {
 		if len(boundary.Files) == 0 {
 			return fmt.Errorf("globalImportBoundaries[%s].files must not be empty", boundary.ID)
 		}
-			if len(boundary.DisallowImports) == 0 &&
-				len(boundary.DisallowExternalImports) == 0 &&
-				len(boundary.DisallowExternalExactImports) == 0 {
-				return fmt.Errorf(
-					"globalImportBoundaries[%s] must define at least one of "+
-						"disallowImports, disallowExternalImports, or disallowExternalExactImports",
-					boundary.ID,
-				)
-			}
+		if len(boundary.DisallowImports) == 0 &&
+			len(boundary.DisallowExternalImports) == 0 &&
+			len(boundary.DisallowExternalExactImports) == 0 {
+			return fmt.Errorf(
+				"globalImportBoundaries[%s] must define at least one of "+
+					"disallowImports, disallowExternalImports, or disallowExternalExactImports",
+				boundary.ID,
+			)
 		}
+	}
 
 	return nil
 }
