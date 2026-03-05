@@ -58,7 +58,11 @@ func TestImportRegexWithMixedImports(t *testing.T) {
 		t.Fatalf("importRegex returned error: %v", err)
 	}
 
-	expected := `"(github\.com/dc-tec/openbao-operator/internal/upgrade(/[^"]*)?|sigs\.k8s\.io/controller-runtime/pkg/reconcile(/[^"]*)?|sigs\.k8s\.io/controller-runtime)"`
+	expected := strings.Join([]string{
+		`"(github\.com/dc-tec/openbao-operator/internal/upgrade(/[^"]*)?|`,
+		`sigs\.k8s\.io/controller-runtime/pkg/reconcile(/[^"]*)?|`,
+		`sigs\.k8s\.io/controller-runtime)"`,
+	}, "")
 	if regex != expected {
 		t.Fatalf("unexpected regex:\nwant: %s\ngot:  %s", expected, regex)
 	}
