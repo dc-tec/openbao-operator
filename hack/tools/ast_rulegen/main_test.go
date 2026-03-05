@@ -12,7 +12,7 @@ func TestImportRegex(t *testing.T) {
 
 	regex, err := importRegex(
 		"github.com/dc-tec/openbao-operator",
-		[]string{"internal/upgrade", "internal/revision", "internal/upgrade"},
+		[]string{"internal/service/upgrade", "internal/adapter/revision", "internal/service/upgrade"},
 		nil,
 		nil,
 	)
@@ -20,7 +20,10 @@ func TestImportRegex(t *testing.T) {
 		t.Fatalf("importRegex returned error: %v", err)
 	}
 
-	expected := `"github\.com/dc-tec/openbao-operator/(internal/revision(/[^"]*)?|internal/upgrade(/[^"]*)?)"`
+	expected := strings.Join([]string{
+		`"github\.com/dc-tec/openbao-operator/(internal/adapter/revision(/[^"]*)?|`,
+		`internal/service/upgrade(/[^"]*)?)"`,
+	}, "")
 	if regex != expected {
 		t.Fatalf("unexpected regex:\nwant: %s\ngot:  %s", expected, regex)
 	}
@@ -50,7 +53,7 @@ func TestImportRegexWithMixedImports(t *testing.T) {
 
 	regex, err := importRegex(
 		"github.com/dc-tec/openbao-operator",
-		[]string{"internal/upgrade"},
+		[]string{"internal/service/upgrade"},
 		[]string{"sigs.k8s.io/controller-runtime/pkg/reconcile"},
 		[]string{"sigs.k8s.io/controller-runtime"},
 	)
@@ -59,7 +62,7 @@ func TestImportRegexWithMixedImports(t *testing.T) {
 	}
 
 	expected := strings.Join([]string{
-		`"(github\.com/dc-tec/openbao-operator/internal/upgrade(/[^"]*)?|`,
+		`"(github\.com/dc-tec/openbao-operator/internal/service/upgrade(/[^"]*)?|`,
 		`sigs\.k8s\.io/controller-runtime/pkg/reconcile(/[^"]*)?|`,
 		`sigs\.k8s\.io/controller-runtime)"`,
 	}, "")
@@ -98,11 +101,11 @@ func TestDifferenceRoots(t *testing.T) {
 	t.Parallel()
 
 	got := differenceRoots(
-		[]string{"internal/certs", "internal/upgrade", "internal/infra"},
-		[]string{"internal/certs"},
+		[]string{"internal/service/certs", "internal/service/upgrade", "internal/service/infra"},
+		[]string{"internal/service/certs"},
 	)
 
-	want := []string{"internal/infra", "internal/upgrade"}
+	want := []string{"internal/service/infra", "internal/service/upgrade"}
 	if len(got) != len(want) {
 		t.Fatalf("unexpected length: want %d got %d", len(want), len(got))
 	}
@@ -136,6 +139,71 @@ func TestVerifyLayerCoverage(t *testing.T) {
 
 	if err := verifyLayerCoverage(policy); err != nil {
 		t.Fatalf("verifyLayerCoverage returned error: %v", err)
+	}
+}
+
+func TestVerifyLayerCoverageWithGroupedPackages(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "internal")
+	for _, rel := range []string{
+		"app",
+		"controller",
+		"port",
+		"service/upgrade",
+		"service/restore",
+		"adapter/config",
+		"adapter/openbao",
+		"platform/constants",
+		"platform/reconcile",
+	} {
+		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(rel)), 0o755); err != nil {
+			t.Fatalf("create %s dir: %v", rel, err)
+		}
+	}
+
+	policy := architecturePolicy{
+		LayerCoverage: layerCoverage{
+			Root: root,
+			Layers: map[string][]string{
+				"app":        {"app"},
+				"controller": {"controller"},
+				"port":       {"port"},
+				"service":    {"service/restore", "service/upgrade"},
+				"adapter":    {"adapter/config", "adapter/openbao"},
+				"platform":   {"platform/constants", "platform/reconcile"},
+			},
+		},
+	}
+
+	if err := verifyLayerCoverage(policy); err != nil {
+		t.Fatalf("verifyLayerCoverage returned error: %v", err)
+	}
+}
+
+func TestVerifyLayerCoverageRejectsDeepPath(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "internal")
+	if err := os.MkdirAll(filepath.Join(root, "platform", "testutil", "robustness"), 0o755); err != nil {
+		t.Fatalf("create nested dir: %v", err)
+	}
+
+	policy := architecturePolicy{
+		LayerCoverage: layerCoverage{
+			Root: root,
+			Layers: map[string][]string{
+				"platform": {"platform/testutil/robustness"},
+			},
+		},
+	}
+
+	err := verifyLayerCoverage(policy)
+	if err == nil {
+		t.Fatalf("expected verifyLayerCoverage to reject deep grouped paths")
+	}
+	if !strings.Contains(err.Error(), "internal/<pkg> or internal/<group>/<pkg>") {
+		t.Fatalf("expected depth error, got: %v", err)
 	}
 }
 
@@ -196,8 +264,8 @@ func TestValidatePolicyGlobalBoundaryExternalOnly(t *testing.T) {
 
 	policy := architecturePolicy{
 		ModulePath:         "github.com/dc-tec/openbao-operator",
-		ServiceImportRoots: []string{"internal/infra"},
-		AdapterImportRoots: []string{"internal/kube"},
+		ServiceImportRoots: []string{"internal/service/infra"},
+		AdapterImportRoots: []string{"internal/adapter/kube"},
 		GlobalImportBoundaries: []globalImportBoundary{
 			{
 				ID:                           "external-only",
@@ -218,8 +286,8 @@ func TestValidatePolicyGlobalBoundaryMissingDisallowLists(t *testing.T) {
 
 	policy := architecturePolicy{
 		ModulePath:         "github.com/dc-tec/openbao-operator",
-		ServiceImportRoots: []string{"internal/infra"},
-		AdapterImportRoots: []string{"internal/kube"},
+		ServiceImportRoots: []string{"internal/service/infra"},
+		AdapterImportRoots: []string{"internal/adapter/kube"},
 		GlobalImportBoundaries: []globalImportBoundary{
 			{
 				ID:      "missing-disallow",
