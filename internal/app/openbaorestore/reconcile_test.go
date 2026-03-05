@@ -12,22 +12,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	ctrl "sigs.k8s.io/controller-runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
 type fakeRestoreManager struct {
-	result       ctrl.Result
+	result       recon.Result
 	err          error
 	called       bool
 	observedName string
 }
 
-func (f *fakeRestoreManager) Reconcile(_ context.Context, _ logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
+func (f *fakeRestoreManager) Reconcile(_ context.Context, _ logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (recon.Result, error) {
 	f.called = true
 	if restore != nil {
 		f.observedName = restore.Name
@@ -72,7 +73,7 @@ func newRestoreClientWithGetError(t *testing.T, matchName string, err error, obj
 func TestReconcileOpenBaoRestore(t *testing.T) {
 	t.Parallel()
 
-	req := ctrl.Request{NamespacedName: client.ObjectKey{Namespace: "ns", Name: "restore"}}
+	req := types.NamespacedName{Namespace: "ns", Name: "restore"}
 	restoreObj := &openbaov1alpha1.OpenBaoRestore{
 		ObjectMeta: metav1.ObjectMeta{Name: "restore", Namespace: "ns"},
 		Spec:       openbaov1alpha1.OpenBaoRestoreSpec{Cluster: "cluster-a"},
@@ -91,7 +92,7 @@ func TestReconcileOpenBaoRestore(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if result != (ctrl.Result{}) {
+		if result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero", result)
 		}
 		if mgr.called {
@@ -123,7 +124,7 @@ func TestReconcileOpenBaoRestore(t *testing.T) {
 	})
 
 	t.Run("manager result is passed through", func(t *testing.T) {
-		mgr := &fakeRestoreManager{result: ctrl.Result{RequeueAfter: 9 * time.Second}}
+		mgr := &fakeRestoreManager{result: recon.Result{RequeueAfter: 9 * time.Second}}
 		result, err := ReconcileOpenBaoRestore(context.Background(), newRestoreClient(t, restoreObj.DeepCopy()), req, logr.Discard(), mgr)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -140,7 +141,7 @@ func TestReconcileOpenBaoRestore(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if result != (ctrl.Result{}) {
+		if result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero", result)
 		}
 		if mgr.called {
