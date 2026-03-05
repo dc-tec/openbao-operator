@@ -84,10 +84,7 @@ controllerBoundaries:
     appFacadeRoot: internal/app/openbaocluster
     allowServiceImports:
       - internal/certs
-    allowAdapterImports:
-      - internal/kube
-      - internal/openbao
-      - internal/security
+    allowAdapterImports: []
   - name: openbaorestore
     displayName: OpenBaoRestore
     files:
@@ -156,7 +153,6 @@ globalImportBoundaries:
       - internal/app/**/*.go
     ignores:
       - "**/*_test.go"
-      - internal/app/openbaocluster/**/*.go
     disallowImports:
       - internal/auth
       - internal/cluster

@@ -6,8 +6,7 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
-	"github.com/dc-tec/openbao-operator/internal/revision"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/upgrade"
 )
 
@@ -70,7 +69,7 @@ func MaybeAdvanceCurrentVersionForBlueGreen(logger logr.Logger, cluster *openbao
 		return
 	}
 
-	currentSpecRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+	currentSpecRevision := upgrade.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
 	if cluster.Status.BlueGreen.BlueRevision != currentSpecRevision {
 		return
 	}
@@ -109,7 +108,7 @@ func ObservedVersionFromPods(state *StatusState) string {
 			pod := &state.Pods[i]
 			if pod.Name == state.LeaderName {
 				if pod.Labels != nil {
-					if raw, ok := pod.Labels[openbaolabels.LabelVersion]; ok {
+					if raw, ok := pod.Labels[constants.LabelOpenBaoVersion]; ok {
 						v := strings.TrimSpace(raw)
 						if v != "" {
 							return v
@@ -122,7 +121,7 @@ func ObservedVersionFromPods(state *StatusState) string {
 	}
 
 	if state.Pod0 != nil && state.Pod0.Labels != nil {
-		if raw, ok := state.Pod0.Labels[openbaolabels.LabelVersion]; ok {
+		if raw, ok := state.Pod0.Labels[constants.LabelOpenBaoVersion]; ok {
 			v := strings.TrimSpace(raw)
 			if v != "" {
 				return v
@@ -136,7 +135,7 @@ func ObservedVersionFromPods(state *StatusState) string {
 		if pod.Labels == nil {
 			return ""
 		}
-		raw, ok := pod.Labels[openbaolabels.LabelVersion]
+		raw, ok := pod.Labels[constants.LabelOpenBaoVersion]
 		if !ok {
 			return ""
 		}

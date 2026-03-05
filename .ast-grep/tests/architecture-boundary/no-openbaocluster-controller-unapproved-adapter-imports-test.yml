@@ -2,10 +2,10 @@ id: no-openbaocluster-controller-unapproved-adapter-imports
 valid:
   - |
     package p
-    import kube "github.com/dc-tec/openbao-operator/internal/kube"
-    var _ = kube.Client
+    import "github.com/dc-tec/openbao-operator/internal/constants"
+    var _ = constants.LabelManagedBy
 invalid:
   - |
     package p
-    import revision "github.com/dc-tec/openbao-operator/internal/revision"
-    var _ = revision.Reader
+    import kube "github.com/dc-tec/openbao-operator/internal/kube"
+    var _ = kube.Client

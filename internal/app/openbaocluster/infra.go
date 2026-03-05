@@ -19,13 +19,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/auth"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
-	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 const (
@@ -38,9 +36,8 @@ const (
 	defaultReasonImageVerificationFailed             = "ImageVerificationFailed"
 	defaultReasonInitImageVerificationFailed         = "InitContainerImageVerificationFailed"
 
-	infraOpenBaoImageRepoEnv  = "RELATED_IMAGE_OPENBAO"
-	infraDefaultOpenBaoImage  = "openbao/openbao"
-	infraOpenBaoRevisionLabel = "openbao.org/revision"
+	infraOpenBaoImageRepoEnv = "RELATED_IMAGE_OPENBAO"
+	infraDefaultOpenBaoImage = "openbao/openbao"
 
 	infraImageVerificationTimeout = 5 * time.Second
 	infraRequeueShort             = 5 * time.Second
@@ -106,26 +103,35 @@ func (p InfraReasonPolicy) initContainerImageVerificationReason() string {
 
 type verifyImageFunc func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
 type verifyOperatorImageFunc func(ctx context.Context, logger logr.Logger, verifier imageverify.Verifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)
-type podClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (openbao.ClusterActions, error)
+type imageVerificationEnabledFunc func(cluster *openbaov1alpha1.OpenBaoCluster) bool
+type oidcDiscoveryStatusCodeFunc func(err error) (int, bool)
+type ScaleDownPodClient interface {
+	IsLeader(ctx context.Context) (bool, error)
+	StepDownLeader(ctx context.Context) error
+}
+type ScaleDownPodClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error)
 type discoverOIDCConfigFunc func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error)
 
 // InfraDependencies provides external dependencies for infrastructure reconciliation.
 type InfraDependencies struct {
-	Client                client.Client
-	APIReader             client.Reader
-	Scheme                *runtime.Scheme
-	RestConfig            *rest.Config
-	OperatorNamespace     string
-	OIDCIssuer            string
-	OIDCJWTKeys           []string
-	OperatorImageVerifier imageverify.Verifier
-	VerifyImageFunc       verifyImageFunc
-	VerifyOperatorImage   verifyOperatorImageFunc
-	Recorder              events.EventRecorder
-	Platform              string
-	SmartClientConfig     openbao.ClientConfig
-	ClientForPodFunc      podClientFactory
-	DiscoverOIDCConfig    discoverOIDCConfigFunc
+	Client                             client.Client
+	APIReader                          client.Reader
+	Scheme                             *runtime.Scheme
+	RestConfig                         *rest.Config
+	OperatorNamespace                  string
+	OIDCIssuer                         string
+	OIDCJWTKeys                        []string
+	OperatorImageVerifier              imageverify.Verifier
+	VerifyImageFunc                    verifyImageFunc
+	VerifyOperatorImage                verifyOperatorImageFunc
+	IsMainImageVerificationEnabled     imageVerificationEnabledFunc
+	IsOperatorImageVerificationEnabled imageVerificationEnabledFunc
+	Recorder                           events.EventRecorder
+	Platform                           string
+	SmartClientConfig                  portopenbao.ClientConfig
+	ClientForPodFunc                   ScaleDownPodClientFactory
+	DiscoverOIDCConfig                 discoverOIDCConfigFunc
+	OIDCDiscoveryStatusCode            oidcDiscoveryStatusCodeFunc
 }
 
 type infraReconciler struct {
@@ -145,20 +151,19 @@ func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 		cluster.Spec.SelfInit.OIDC.Enabled
 }
 
-func oidcDiscoveryStatusCode(err error) (int, bool) {
-	var statusErr *auth.HTTPStatusError
-	if errors.As(err, &statusErr) {
-		return statusErr.StatusCode, true
+func (r *infraReconciler) oidcDiscoveryStatusCode(err error) (int, bool) {
+	if r == nil || r.deps.OIDCDiscoveryStatusCode == nil {
+		return 0, false
 	}
-	return 0, false
+	return r.deps.OIDCDiscoveryStatusCode(err)
 }
 
-func oidcDiscoveryError(err error) error {
+func (r *infraReconciler) oidcDiscoveryError(err error) error {
 	if err == nil {
 		return nil
 	}
 
-	if statusCode, ok := oidcDiscoveryStatusCode(err); ok {
+	if statusCode, ok := r.oidcDiscoveryStatusCode(err); ok {
 		switch statusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
 			return operatorerrors.WrapPermanentConfig(fmt.Errorf(
@@ -184,17 +189,6 @@ func oidcDiscoveryError(err error) error {
 	return operatorerrors.WrapTransientKubernetesAPI(operatorerrors.WrapTransientConnection(err))
 }
 
-func defaultDiscoverOIDCConfig(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
-	discovered, err := auth.DiscoverConfig(ctx, cfg, "")
-	if err != nil {
-		return nil, err
-	}
-	if discovered == nil {
-		return nil, nil
-	}
-	return &OIDCConfig{IssuerURL: discovered.IssuerURL, JWKSKeys: discovered.JWKSKeys}, nil
-}
-
 func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, []string, error) {
 	effectiveIssuer := r.deps.OIDCIssuer
 	effectiveKeys := r.deps.OIDCJWTKeys
@@ -209,7 +203,7 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 
 	discover := r.deps.DiscoverOIDCConfig
 	if discover == nil {
-		discover = defaultDiscoverOIDCConfig
+		return "", nil, operatorerrors.WrapPermanentConfig(fmt.Errorf("OIDC discovery function is not configured"))
 	}
 
 	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -217,7 +211,7 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 
 	discovered, err := discover(discoveryCtx, r.deps.RestConfig)
 	if err != nil {
-		return "", nil, oidcDiscoveryError(err)
+		return "", nil, r.oidcDiscoveryError(err)
 	}
 	if discovered == nil || strings.TrimSpace(discovered.IssuerURL) == "" {
 		return "", nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned empty issuer"))
@@ -250,6 +244,30 @@ func operatorImageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoClus
 		return defaultImageVerificationFailurePolicyBlock
 	}
 	return failurePolicy
+}
+
+func defaultIsMainImageVerificationEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster == nil {
+		return false
+	}
+
+	if cluster.Spec.ImageVerification != nil {
+		return cluster.Spec.ImageVerification.Enabled
+	}
+
+	return cluster.Spec.Profile == openbaov1alpha1.ProfileHardened
+}
+
+func defaultIsOperatorImageVerificationEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster == nil {
+		return false
+	}
+
+	if cluster.Spec.OperatorImageVerification != nil {
+		return cluster.Spec.OperatorImageVerification.Enabled
+	}
+
+	return cluster.Spec.Profile == openbaov1alpha1.ProfileHardened
 }
 
 type imageVerificationOptions struct {
@@ -301,8 +319,13 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 }
 
 func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
+	isMainImageVerificationEnabled := r.deps.IsMainImageVerificationEnabled
+	if isMainImageVerificationEnabled == nil {
+		isMainImageVerificationEnabled = defaultIsMainImageVerificationEnabled
+	}
+
 	opts := imageVerificationOptions{
-		enabled:              security.IsMainImageVerificationEnabled(cluster),
+		enabled:              isMainImageVerificationEnabled(cluster),
 		imageRef:             imageRef,
 		failurePolicy:        imageVerificationFailurePolicy(cluster),
 		failureReason:        r.reasons.imageVerificationFailedReason(),
@@ -320,7 +343,11 @@ func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr
 }
 
 func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
-	if !security.IsOperatorImageVerificationEnabled(cluster) {
+	isOperatorImageVerificationEnabled := r.deps.IsOperatorImageVerificationEnabled
+	if isOperatorImageVerificationEnabled == nil {
+		isOperatorImageVerificationEnabled = defaultIsOperatorImageVerificationEnabled
+	}
+	if !isOperatorImageVerificationEnabled(cluster) {
 		return "", nil
 	}
 
@@ -336,7 +363,7 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 
 	verifyFunc := r.deps.VerifyOperatorImage
 	if verifyFunc == nil {
-		verifyFunc = security.VerifyOperatorImageForCluster
+		return "", fmt.Errorf("verifyOperatorImage is required")
 	}
 
 	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
@@ -528,17 +555,15 @@ func (r *infraReconciler) handleScaleDownSafety(ctx context.Context, cluster *op
 	return nil
 }
 
-func (r *infraReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (openbao.ClusterActions, error) {
+func (r *infraReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error) {
 	if r.deps.ClientForPodFunc != nil {
 		return r.deps.ClientForPodFunc(cluster, podName)
 	}
 
 	headlessServiceName := cluster.Name
 	podDNS := fmt.Sprintf("%s.%s.%s.svc:8200", podName, headlessServiceName, cluster.Namespace)
-	baseURL := "https://" + podDNS
-
 	cfg := r.deps.SmartClientConfig
-	cfg.BaseURL = baseURL
+	cfg.BaseURL = "https://" + podDNS
 
-	return openbao.NewClient(cfg)
+	return portopenbao.NewClient(cfg)
 }

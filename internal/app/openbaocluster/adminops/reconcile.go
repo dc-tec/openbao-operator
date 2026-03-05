@@ -15,8 +15,8 @@ import (
 	backupmanager "github.com/dc-tec/openbao-operator/internal/backup"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
-	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/upgrade/bluegreen"
 	rollingupgrade "github.com/dc-tec/openbao-operator/internal/upgrade/rolling"
@@ -30,7 +30,7 @@ type Dependencies struct {
 	OperatorNamespace     string
 	OIDCIssuer            string
 	OIDCJWTKeys           []string
-	SmartClientConfig     openbao.ClientConfig
+	SmartClientConfig     portopenbao.ClientConfig
 	ImageVerifier         imageverify.Verifier
 	OperatorImageVerifier imageverify.Verifier
 	RequeueShort          time.Duration

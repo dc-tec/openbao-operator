@@ -13,8 +13,8 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/constants"
+	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 	operatorpredicates "github.com/dc-tec/openbao-operator/internal/predicates"
-	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 // SetupWithManager sets up the OpenBaoCluster controllers with the Manager.
@@ -27,18 +27,16 @@ import (
 func (r *OpenBaoClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Initialize ImageVerifier with embedded trusted root (nil config)
 	// This ensures we reuse the same verifier (and its internal caches) across reconciliations.
-	r.ImageVerifier = security.NewImageVerifier(
+	r.ImageVerifier = portsecurity.NewImageVerifier(
 		mgr.GetLogger().WithName("image-verifier"),
 		r.Client,
-		nil,
 	)
 
 	// Initialize OperatorImageVerifier with embedded trusted root (nil config)
 	// This ensures we reuse the same verifier (and its internal caches) across reconciliations.
-	r.OperatorImageVerifier = security.NewImageVerifier(
+	r.OperatorImageVerifier = portsecurity.NewImageVerifier(
 		mgr.GetLogger().WithName("operator-image-verifier"),
 		r.Client,
-		nil,
 	)
 
 	if r.SingleTenantMode {

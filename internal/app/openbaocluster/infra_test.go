@@ -104,7 +104,7 @@ func TestHandleScaleDownSafety(t *testing.T) {
 				Build()
 
 			// Mock OpenBao Client for victim pod
-			clientFunc := func(c *openbaov1alpha1.OpenBaoCluster, podName string) (openbao.ClusterActions, error) {
+			clientFunc := func(c *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error) {
 				if tt.victimError {
 					return nil, fmt.Errorf("network error")
 				}

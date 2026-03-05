@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
-	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
 // LabelConfig supplies labels used during status observation.
@@ -203,20 +203,20 @@ func gatherPodState(
 		if pod.Name == pod0Name {
 			state.Pod0 = pod
 
-			initialized, present, err := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelInitialized)
+			initialized, present, err := constants.ParseBoolLabel(pod.Labels, constants.LabelOpenBaoInitialized)
 			if err == nil {
 				state.Initialized = initialized
 				state.InitializedKnown = present
 			}
 
-			sealed, present, err := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelSealed)
+			sealed, present, err := constants.ParseBoolLabel(pod.Labels, constants.LabelOpenBaoSealed)
 			if err == nil {
 				state.Sealed = sealed
 				state.SealedKnown = present
 			}
 		}
 
-		active, present, err := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelActive)
+		active, present, err := constants.ParseBoolLabel(pod.Labels, constants.LabelOpenBaoActive)
 		if err == nil && present && active {
 			state.LeaderCount++
 			if state.LeaderCount == 1 {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -15,6 +16,9 @@ import (
 	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
 	"github.com/dc-tec/openbao-operator/internal/constants"
 	"github.com/dc-tec/openbao-operator/internal/observability"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
+	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 )
 
 type openBaoClusterWorkloadReconciler struct {
@@ -89,23 +93,45 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	recordError func(error),
 ) (ctrl.Result, error) {
+	var autopilotRuntime initmanagerport.AutopilotRuntime
+	if provider, ok := r.parent.InitManager.(initmanagerport.AutopilotProvider); ok {
+		autopilotRuntime = provider.AutopilotRuntime()
+	}
+
 	original := cluster.DeepCopy()
 	reconcilers := []appopenbaocluster.SubReconciler{
 		certmanager.NewManagerWithReloader(r.parent.Client, r.parent.Scheme, r.parent.TLSReload),
 		appopenbaocluster.NewInfraReconciler(
 			appopenbaocluster.InfraDependencies{
-				Client:                r.parent.Client,
-				APIReader:             r.parent.APIReader,
-				Scheme:                r.parent.Scheme,
-				RestConfig:            r.parent.RestConfig,
-				OperatorNamespace:     r.parent.OperatorNamespace,
-				OIDCIssuer:            r.parent.OIDCIssuer,
-				OIDCJWTKeys:           r.parent.OIDCJWTKeys,
-				OperatorImageVerifier: r.parent.OperatorImageVerifier,
-				VerifyImageFunc:       r.parent.verifyImageRef,
-				Recorder:              r.parent.Recorder,
-				Platform:              r.parent.Platform,
-				SmartClientConfig:     r.parent.SmartClientConfig,
+				Client:                             r.parent.Client,
+				APIReader:                          r.parent.APIReader,
+				Scheme:                             r.parent.Scheme,
+				RestConfig:                         r.parent.RestConfig,
+				OperatorNamespace:                  r.parent.OperatorNamespace,
+				OIDCIssuer:                         r.parent.OIDCIssuer,
+				OIDCJWTKeys:                        r.parent.OIDCJWTKeys,
+				OperatorImageVerifier:              r.parent.OperatorImageVerifier,
+				VerifyImageFunc:                    r.parent.verifyImageRef,
+				VerifyOperatorImage:                portsecurity.VerifyOperatorImageForCluster,
+				IsMainImageVerificationEnabled:     portsecurity.IsMainImageVerificationEnabled,
+				IsOperatorImageVerificationEnabled: portsecurity.IsOperatorImageVerificationEnabled,
+				DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*appopenbaocluster.OIDCConfig, error) {
+					discovered, err := portauth.DiscoverConfig(ctx, cfg, "")
+					if err != nil {
+						return nil, err
+					}
+					if discovered == nil {
+						return nil, nil
+					}
+					return &appopenbaocluster.OIDCConfig{
+						IssuerURL: discovered.IssuerURL,
+						JWKSKeys:  discovered.JWKSKeys,
+					}, nil
+				},
+				OIDCDiscoveryStatusCode: portauth.DiscoveryStatusCode,
+				Recorder:                r.parent.Recorder,
+				Platform:                r.parent.Platform,
+				SmartClientConfig:       r.parent.SmartClientConfig,
 			},
 			appopenbaocluster.InfraReasonPolicy{
 				GatewayAPIMissing:                   ReasonGatewayAPIMissing,
@@ -145,7 +171,13 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 			},
 		),
 	}
-	reconcilers = appopenbaocluster.AppendInitAndAutopilotReconcilers(reconcilers, r.parent.InitManager, r.parent.Recorder, constants.RequeueShort)
+	reconcilers = appopenbaocluster.AppendInitAndAutopilotReconcilers(
+		reconcilers,
+		r.parent.InitManager,
+		autopilotRuntime,
+		r.parent.Recorder,
+		constants.RequeueShort,
+	)
 
 	policy := appopenbaocluster.WorkloadResultPolicy{
 		PrerequisitesMissingReason: ReasonPrerequisitesMissing,

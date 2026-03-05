@@ -2,6 +2,15 @@ id: no-openbaocluster-controller-unapproved-adapter-imports
 snapshots:
   ? |
     package p
+    import kube "github.com/dc-tec/openbao-operator/internal/kube"
+    var _ = kube.Client
+  : labels:
+    - source: kube "github.com/dc-tec/openbao-operator/internal/kube"
+      style: primary
+      start: 17
+      end: 72
+  ? |
+    package p
     import revision "github.com/dc-tec/openbao-operator/internal/revision"
     var _ = revision.Reader
   : labels:

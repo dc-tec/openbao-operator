@@ -16,9 +16,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
-	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
@@ -263,16 +264,22 @@ func expandPVCs(
 	return patched, nil
 }
 
-// PodClientFactory constructs pod-targeted OpenBao API clients.
-type PodClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (openbao.ClusterActions, error)
+// StoragePodClient exposes pod-targeted OpenBao API actions needed for storage restarts.
+type StoragePodClient interface {
+	IsLeader(ctx context.Context) (bool, error)
+	StepDownLeader(ctx context.Context) error
+}
+
+// StoragePodClientFactory constructs pod-targeted OpenBao API clients.
+type StoragePodClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (StoragePodClient, error)
 
 // StorageResizeRestartDependencies provides dependencies for filesystem resize restarts.
 type StorageResizeRestartDependencies struct {
 	Client            client.Client
 	APIReader         client.Reader
 	Recorder          events.EventRecorder
-	SmartClientConfig openbao.ClientConfig
-	ClientForPodFunc  PodClientFactory
+	SmartClientConfig portopenbao.ClientConfig
+	ClientForPodFunc  StoragePodClientFactory
 }
 
 type storageResizeRestartReconciler struct {
@@ -476,7 +483,7 @@ func nextPodNeedingFSResizeRestart(
 			}
 		}
 
-		active, present, _ := openbao.ParseBoolLabel(pod.Labels, openbao.LabelActive)
+		active, present, _ := constants.ParseBoolLabel(pod.Labels, constants.LabelOpenBaoActive)
 		if present && active {
 			leaderCandidate = pod
 			continue
@@ -491,21 +498,19 @@ func nextPodNeedingFSResizeRestart(
 func clientForPod(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	podName string,
-	smartClientConfig openbao.ClientConfig,
-	factory PodClientFactory,
-) (openbao.ClusterActions, error) {
+	smartClientConfig portopenbao.ClientConfig,
+	factory StoragePodClientFactory,
+) (StoragePodClient, error) {
 	if factory != nil {
 		return factory(cluster, podName)
 	}
 
 	headlessServiceName := cluster.Name
 	podDNS := fmt.Sprintf("%s.%s.%s.svc:8200", podName, headlessServiceName, cluster.Namespace)
-	baseURL := "https://" + podDNS
-
 	cfg := smartClientConfig
-	cfg.BaseURL = baseURL
+	cfg.BaseURL = "https://" + podDNS
 
-	return openbao.NewClient(cfg)
+	return portopenbao.NewClient(cfg)
 }
 
 func pvcHasFileSystemResizePending(pvc *corev1.PersistentVolumeClaim) bool {
