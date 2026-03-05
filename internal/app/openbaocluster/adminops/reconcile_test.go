@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -199,7 +198,7 @@ func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if result != (ctrl.Result{}) {
+		if result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero result", result)
 		}
 		if len(patchReasons) != 1 || patchReasons[0] != "adminops-complete" {

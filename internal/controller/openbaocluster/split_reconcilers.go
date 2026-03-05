@@ -19,6 +19,7 @@ import (
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
 type openBaoClusterWorkloadReconciler struct {
@@ -240,7 +241,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	original := cluster.DeepCopy()
-	return appopenbaocluster.ReconcileAdminOps(ctx, logger, appopenbaocluster.AdminOpsDependencies{
+	appResult, appErr := appopenbaocluster.ReconcileAdminOps(ctx, logger, appopenbaocluster.AdminOpsDependencies{
 		Client:                r.parent.Client,
 		APIReader:             r.parent.APIReader,
 		Scheme:                r.parent.Scheme,
@@ -253,6 +254,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 		RequeueShort:          constants.RequeueShort,
 		Platform:              r.parent.Platform,
 	}, original, cluster, recordError)
+	return controllerResult(appResult), appErr
 }
 
 func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
@@ -347,6 +349,10 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 
 	requeueAfter := safetyNetRequeueAfter(time.Now())
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
+}
+
+func controllerResult(result recon.Result) ctrl.Result {
+	return ctrl.Result{RequeueAfter: result.RequeueAfter}
 }
 
 func safetyNetRequeueAfter(now time.Time) time.Duration {
