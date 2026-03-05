@@ -8,7 +8,6 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -69,7 +68,7 @@ func Reconcile(
 	recordError ErrorRecorder,
 	patchStatus StatusPatcher,
 	errorStatus ErrorStatusBuilder,
-) (ctrl.Result, error) {
+) (recon.Result, error) {
 	if cluster.Status.AdminOps == nil {
 		cluster.Status.AdminOps = &openbaov1alpha1.AdminOpsControllerStatus{}
 	}
@@ -88,7 +87,7 @@ func Reconcile(
 
 			if patchStatus != nil {
 				if statusErr := patchStatus(ctx, deps.Client, logger, original, cluster, "adminops-error"); statusErr != nil {
-					return ctrl.Result{}, statusErr
+					return recon.Result{}, statusErr
 				}
 			}
 
@@ -96,24 +95,24 @@ func Reconcile(
 				shouldRequeue, requeueAfter := operatorerrors.ShouldRequeue(err)
 				if shouldRequeue {
 					if requeueAfter > 0 {
-						return ctrl.Result{RequeueAfter: requeueAfter}, nil
+						return recon.Result{RequeueAfter: requeueAfter}, nil
 					}
-					return ctrl.Result{RequeueAfter: resolveRequeueShort(deps.RequeueShort)}, nil
+					return recon.Result{RequeueAfter: resolveRequeueShort(deps.RequeueShort)}, nil
 				}
 			}
 			if operatorerrors.IsPermanent(err) {
-				return ctrl.Result{}, err
+				return recon.Result{}, err
 			}
-			return ctrl.Result{}, err
+			return recon.Result{}, err
 		}
 
 		if result.RequeueAfter > 0 {
 			if patchStatus != nil {
 				if statusErr := patchStatus(ctx, deps.Client, logger, original, cluster, "adminops-requeue"); statusErr != nil {
-					return ctrl.Result{}, statusErr
+					return recon.Result{}, statusErr
 				}
 			}
-			return ctrl.Result{RequeueAfter: result.RequeueAfter}, nil
+			return recon.Result{RequeueAfter: result.RequeueAfter}, nil
 		}
 	}
 
@@ -121,11 +120,11 @@ func Reconcile(
 	cluster.Status.AdminOps.LastError = nil
 	if patchStatus != nil {
 		if err := patchStatus(ctx, deps.Client, logger, original, cluster, "adminops-complete"); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to patch adminops owned fields: %w", err)
+			return recon.Result{}, fmt.Errorf("failed to patch adminops owned fields: %w", err)
 		}
 	}
 
-	return ctrl.Result{}, nil
+	return recon.Result{}, nil
 }
 
 func buildReconcilers(deps Dependencies) []subReconciler {
