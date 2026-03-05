@@ -51,39 +51,40 @@ graph TD
 
 ---
 
-## 3. Internal Managers
+## 3. App Orchestration and Managers
 
-Controllers delegate complex business logic to specialized **Internal Managers**.
+Controllers delegate orchestration to `internal/app/*` packages first. The app layer then coordinates domain managers and focused subpackages.
 
 ```mermaid
-classDiagram
-    class OpenBaoClusterReconciler {
-        +Reconcile()
-    }
+graph TD
+    OBC["OpenBaoCluster controllers (workload/adminops/status)"] --> OBCApp["internal/app/openbaocluster facade"]
+    OBR["OpenBaoRestore controller"] --> OBRApp["internal/app/openbaorestore"]
+    Prov["Provisioner controller"] --> ProvApp["internal/app/provisioner"]
 
-    class InfraManager {
-        +SyncStatefulSet()
-        +SyncService()
-    }
-    
-    class CertManager {
-        +SyncPKI()
-        +RotateCerts()
-    }
-    
-    class UpgradeManager {
-        +ReconcileUpdate()
-    }
+    OBCApp --> Workload["Workload orchestration"]
+    OBCApp --> AdminOps["AdminOps orchestration"]
+    OBCApp --> StatusOps["Status and deletion orchestration"]
 
-    OpenBaoClusterReconciler --> InfraManager : Uses
-    OpenBaoClusterReconciler --> CertManager : Uses
-    OpenBaoClusterReconciler --> UpgradeManager : Uses
+    Workload --> Infra["Infra Manager"]
+    Workload --> Cert["Cert Manager"]
+    Workload --> Init["Init Manager"]
+    AdminOps --> Upgrade["Upgrade Manager"]
+    AdminOps --> Backup["Backup Manager"]
 
-    style OpenBaoClusterReconciler fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff
-    style InfraManager fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff
-    style CertManager fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff
-    style UpgradeManager fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff
+    OBRApp --> Restore["Restore Manager"]
+    ProvApp --> ProvMgr["Provisioner Manager"]
+
+    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+
+    class OBC,OBR,Prov write;
+    class OBCApp,OBRApp,ProvApp,Workload,AdminOps,StatusOps process;
+    class Infra,Cert,Init,Upgrade,Backup,Restore,ProvMgr read;
 ```
+
+!!! note "Boundary Contract"
+    Controller import surfaces are intentionally narrow and enforced by generated architecture-boundary rules from `.ast-grep/policy/architecture-boundaries.yml`.
 
 ### Domain Managers
 
@@ -92,6 +93,7 @@ classDiagram
 - **[Init Manager](init-manager.md)**: Initializes new clusters (when self-init is disabled), handling `PUT /v1/sys/init` and storing the root token in a Secret.
 - **[Upgrade Manager](upgrade-manager.md)**: Powering both **Rolling** and **Blue/Green** upgrades. Manages the state machine for complex transitions.
 - **[Backup Manager](backup-manager.md)**: Runs snapshot jobs on a Cron schedule.
+- **[Restore Manager](restore-manager.md)**: Coordinates restore Jobs and lock lifecycle for `OpenBaoRestore`.
 
 ### Shared Libraries
 
