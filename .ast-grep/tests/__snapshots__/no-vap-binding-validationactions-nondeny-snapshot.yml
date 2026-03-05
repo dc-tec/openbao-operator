@@ -1,0 +1,31 @@
+id: no-vap-binding-validationactions-nondeny
+snapshots:
+  ? |
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: b
+    spec:
+      policyName: p
+      validationActions:
+        - Warn
+  : labels:
+    - source: |
+        validationActions:
+            - Warn
+      style: primary
+      start: 127
+      end: 157
+  ? |
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: b
+    spec:
+      policyName: p
+      validationActions: [Audit]
+  : labels:
+    - source: 'validationActions: [Audit]'
+      style: primary
+      start: 127
+      end: 153

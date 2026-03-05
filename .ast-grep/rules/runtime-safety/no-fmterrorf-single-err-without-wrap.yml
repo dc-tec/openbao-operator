@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-fmterrorf-single-err-without-wrap
+message: fmt.Errorf with err must use %w to preserve error chains.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - pattern: fmt.Errorf($FMT, err)
+    - not:
+        regex: '%w'
+note: 'Use fmt.Errorf("context: %w", err) so callers can rely on errors.Is/errors.As.'

@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-log-sensitive-kv-keys
+message: Avoid structured log keys that imply secret/token material.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - any:
+        - pattern: $F($MSG, $KEY, $VAL)
+        - pattern: $F($MSG, $K1, $V1, $KEY, $VAL)
+        - pattern: $F($MSG, $K1, $V1, $K2, $V2, $KEY, $VAL)
+        - pattern: $F($ERR, $MSG, $KEY, $VAL)
+        - pattern: $F($ERR, $MSG, $K1, $V1, $KEY, $VAL)
+        - pattern: $F($ERR, $MSG, $K1, $V1, $K2, $V2, $KEY, $VAL)
+constraints:
+  F:
+    regex: '\.(Info|Error)$'
+  KEY:
+    regex: '(?i)"(token|root_token|jwt|password|private_key|privatekey|unseal|unseal_key|credential|credentials|secret_data|secret_key|access_key)"'
+note: Structured logs should avoid direct secret-bearing fields; log metadata and object references instead.

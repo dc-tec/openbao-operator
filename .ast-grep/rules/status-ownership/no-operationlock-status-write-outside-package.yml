@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-operationlock-status-write-outside-package
+message: Only internal/operationlock should mutate status.operationLock directly.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+ignores:
+  - '**/*_test.go'
+  - internal/operationlock/**/*.go
+rule:
+  pattern: $OBJ.Status.OperationLock = $VALUE
+note: Centralize lock mutation semantics in internal/operationlock to avoid split ownership.

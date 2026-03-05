@@ -1,0 +1,11 @@
+id: no-openbaorestore-controller-app-subpackage-imports
+valid:
+  - |
+    package p
+    import app "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
+    var _ = app.ReconcileOpenBaoRestore
+invalid:
+  - |
+    package p
+    import subpkg "github.com/dc-tec/openbao-operator/internal/app/openbaorestore/reconcileops"
+    var _ = subpkg.Run

@@ -1,0 +1,11 @@
+id: no-provisioner-controller-unapproved-service-imports
+snapshots:
+  ? |
+    package p
+    import upgrade "github.com/dc-tec/openbao-operator/internal/upgrade"
+    var _ = upgrade.Service
+  : labels:
+    - source: upgrade "github.com/dc-tec/openbao-operator/internal/upgrade"
+      style: primary
+      start: 17
+      end: 78

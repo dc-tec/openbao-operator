@@ -1,0 +1,19 @@
+id: no-workload-lasterror-write-outside-workload-package
+valid:
+  - |
+    package p
+    type Cluster struct { Status struct{ Phase string } }
+    func f(cluster *Cluster) {
+      cluster.Status.Phase = "Running"
+    }
+invalid:
+  - |
+    package p
+    type LastError struct{}
+    type Workload struct { LastError *LastError }
+    type Status struct { Workload Workload }
+    type Cluster struct { Status Status }
+    func f(cluster *Cluster, err *LastError) {
+      cluster.Status.Workload.LastError = err
+    }
+

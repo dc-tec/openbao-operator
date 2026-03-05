@@ -1,0 +1,12 @@
+id: no-adapter-imports-in-app-layer
+valid:
+  - |
+    package p
+    import port "github.com/dc-tec/openbao-operator/internal/port/blobstore"
+    var _ = port.Client(nil)
+invalid:
+  - |
+    package p
+    import openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+    var _ = openbao.LabelActive
+

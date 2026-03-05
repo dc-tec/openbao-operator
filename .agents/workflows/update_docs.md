@@ -8,13 +8,19 @@ This workflow is for working on the project documentation.
 Start a local server to preview changes to the documentation:
 
 ```bash
-mkdocs serve
+make docs-serve
 ```
 
-# Generate Config
+# Validate Documentation
 
-If you need to verify or regenerate any configuration related docs (if applicable via valid make targets):
+Run strict docs validation:
 
 ```bash
-make generate
+make docs-build
 ```
+
+# Style Guide
+
+Follow:
+
+- `docs/contributing/docs-style-guide.md`

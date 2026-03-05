@@ -1,0 +1,12 @@
+id: no-adapter-to-adapter-imports
+valid:
+  - |
+    package p
+    import "net/http"
+    var _ = http.MethodGet
+invalid:
+  - |
+    package p
+    import openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+    var _ = openbao.LabelActive
+

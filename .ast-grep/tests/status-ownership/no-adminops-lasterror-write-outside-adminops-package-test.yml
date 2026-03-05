@@ -1,0 +1,19 @@
+id: no-adminops-lasterror-write-outside-adminops-package
+valid:
+  - |
+    package p
+    type Cluster struct { Status struct{ Phase string } }
+    func f(cluster *Cluster) {
+      cluster.Status.Phase = "Running"
+    }
+invalid:
+  - |
+    package p
+    type LastError struct{}
+    type AdminOps struct { LastError *LastError }
+    type Status struct { AdminOps AdminOps }
+    type Cluster struct { Status Status }
+    func f(cluster *Cluster, err *LastError) {
+      cluster.Status.AdminOps.LastError = err
+    }
+

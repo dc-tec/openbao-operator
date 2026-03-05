@@ -1,0 +1,22 @@
+id: no-owns-watches-in-multitenant-setup
+snapshots:
+  ? |
+    package p
+    type OpenBaoClusterReconciler struct{}
+    func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr any) error {
+      ctrl.NewControllerManagedBy(mgr).Owns(&corev1.Secret{})
+      return nil
+    }
+  : labels:
+    - source: ctrl.NewControllerManagedBy(mgr).Owns(&corev1.Secret{})
+      style: primary
+      start: 124
+      end: 179
+    - source: |-
+        func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr any) error {
+          ctrl.NewControllerManagedBy(mgr).Owns(&corev1.Secret{})
+          return nil
+        }
+      style: secondary
+      start: 49
+      end: 194

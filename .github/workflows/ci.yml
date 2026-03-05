@@ -143,8 +143,29 @@ jobs:
           path: bin/
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
 
+      - name: Setup Node (for ast-grep install)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: .github/tools/package-lock.json
+
+      - name: Install ast-grep
+        run: npm ci --prefix .github/tools
+
+      - name: Add local npm tools to PATH
+        run: echo "${GITHUB_WORKSPACE}/.github/tools/node_modules/.bin" >> "${GITHUB_PATH}"
+
+      - name: Verify ast-grep version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(ast-grep --version)"
+          echo "${version}"
+          test "${version}" = "ast-grep 0.41.0"
+
       - name: Run linter
-        run: make lint-config lint
+        run: make lint-ci
 
   verify-fmt:
     name: Verify Formatting

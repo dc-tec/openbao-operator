@@ -1,0 +1,20 @@
+id: no-tenant-status-write-outside-provisioner-app
+snapshots:
+  ? |
+    package p
+    type TenantStatus struct {
+      Provisioned bool
+      LastError string
+    }
+    type Tenant struct {
+      Status TenantStatus
+    }
+    func f(t *Tenant) {
+      t.Status.Provisioned = false
+      t.Status.LastError = "boom"
+    }
+  : labels:
+    - source: t.Status.Provisioned = false
+      style: primary
+      start: 144
+      end: 172

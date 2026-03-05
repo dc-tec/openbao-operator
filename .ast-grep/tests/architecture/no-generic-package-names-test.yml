@@ -1,0 +1,12 @@
+id: no-generic-package-names
+valid:
+  - |
+    package operationlock
+    func f() {}
+invalid:
+  - |
+    package util
+    func f() {}
+  - |
+    package helpers
+    func f() {}

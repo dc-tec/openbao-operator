@@ -1,0 +1,15 @@
+id: no-operationlock-status-write-outside-package
+valid:
+  - |
+    package p
+    type Cluster struct { Status struct{ OperationLock any } }
+    func f(cluster *Cluster) any {
+      return cluster.Status.OperationLock
+    }
+invalid:
+  - |
+    package p
+    type Cluster struct { Status struct{ OperationLock any } }
+    func f(cluster *Cluster) {
+      cluster.Status.OperationLock = nil
+    }

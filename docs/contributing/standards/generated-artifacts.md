@@ -13,8 +13,9 @@ This project contains several artifacts that are automatically generated from so
 | `api/v1alpha1/*.go` | `make manifests generate` | `verify-generated` |
 | `api/v1alpha1/*.go` (API reference docs) | `make api-reference` | `verify-generated` |
 | `dist/install.yaml` | `make helm-sync` | `verify-helm` |
+| `.ast-grep/policy/architecture-boundaries.yml` | `make generate-ast-rules` | `verify-arch-policy` |
 | `internal/config/*.go` | `make test-update-golden` | `test` (fails if mismatch) |
-| **I don't know** | `make generate manifests api-reference helm-sync` | `verify-generated` |
+| **I don't know** | `make generate manifests api-reference helm-sync generate-ast-rules` | `verify-generated`, `verify-arch-policy` |
 
 ## Artifact details
 
@@ -56,14 +57,22 @@ We use "Golden Files" to verify complex HCL configuration generation reliability
 - **Output:** `internal/config/testdata/*.golden.hcl`
 - **Command:** `make test-update-golden`
 
+### 5. Ast-Grep Architecture Boundary Rules
+
+Architecture boundary rules are generated from policy for CI enforcement.
+
+- **Source:** `.ast-grep/policy/architecture-boundaries.yml`
+- **Output:** `.ast-grep/rules/generated/architecture-boundary/*.yml`
+- **Command:** `make generate-ast-rules`
+
 ## Troubleshooting
 
 ### CI Failure: "Diff found in generated files"
 
-If the `verify-generated` or `verify-helm` job fails in CI, it means you forgot to check in the updated artifacts.
+If `verify-generated`, `verify-helm`, or `verify-arch-policy` fails in CI, it means generated artifacts are out of date.
 
 **Fix:**
 
-1. Run the suggested command locally (e.g., `make manifests generate api-reference helm-sync`).
+1. Run the suggested command locally (e.g., `make manifests generate api-reference helm-sync generate-ast-rules`).
 2. Verify you see changes in `config/`, `docs/reference/`, or `charts/`.
 3. Commit and push those changes.

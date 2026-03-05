@@ -8,7 +8,7 @@ This workflow helps maintain code quality by running linters and verifying confi
 Run the same lint flow used in CI:
 
 ```bash
-make lint-config lint
+make lint-ci
 ```
 
 # Optional Auto-Fix

@@ -1,0 +1,13 @@
+id: no-context-todo-internal
+snapshots:
+  ? |
+    package p
+    import "context"
+    func f() {
+      _ = context.TODO()
+    }
+  : labels:
+    - source: context.TODO()
+      style: primary
+      start: 44
+      end: 58

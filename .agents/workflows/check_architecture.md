@@ -40,6 +40,6 @@ Layer intent:
 # 4) Validate code health
 
 ```bash
-make lint-config lint
-go test ./...
+make lint-ci
+make test-ci
 ```

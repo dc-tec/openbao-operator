@@ -1,0 +1,13 @@
+id: require-innamespace-on-runtime-client-list
+snapshots:
+  ? |
+    package p
+    type Manager struct { client struct{ List func(any, any, ...any) error } }
+    func f(m *Manager, ctx any, podList any) error {
+      return m.client.List(ctx, podList)
+    }
+  : labels:
+    - source: m.client.List(ctx, podList)
+      style: primary
+      start: 143
+      end: 170

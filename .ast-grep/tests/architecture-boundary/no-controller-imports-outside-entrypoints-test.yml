@@ -1,0 +1,12 @@
+id: no-controller-imports-outside-entrypoints
+valid:
+  - |
+    package p
+    import app "github.com/dc-tec/openbao-operator/internal/app/provisioner"
+    var _ = app.ReconcileOpenBaoTenant
+invalid:
+  - |
+    package p
+    import c "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
+    var _ = c.NewOpenBaoClusterReconciler
+

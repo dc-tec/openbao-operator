@@ -84,7 +84,9 @@ Use `make help` to see all available commands, or refer to this cheatsheet:
 | | `make docker-build` | Build the container image. |
 | **Deploy** | `make install` / `uninstall` | Install/Remove CRDs. |
 | | `make deploy` / `undeploy` | Deploy/Remove Operator & RBAC. |
-| **Verify** | `make lint` | Run code linters. |
+| **Verify** | `make lint-ci` | Run code linters and ast-grep guardrails. |
+| | `make generate-ast-rules` | Generate ast-grep architecture boundary rules from policy. |
+| | `make verify-arch-policy` | Verify generated ast-grep architecture rules are up-to-date. |
 | | `make test` | Run unit tests. |
 | | `make test-integration` | Run integration tests (envtest). |
 | | `make report-internal-deps` | Generate local internal dependency graph/report artifacts. |
@@ -131,6 +133,23 @@ You can override the compared files when needed:
 
 ```sh
 BASELINE_REPORT=/path/to/old-report.md CURRENT_REPORT=/path/to/new-report.md make report-internal-deps-diff
+```
+
+## Ast-Grep Architecture Policy
+
+Ast-grep architecture boundary rules are generated from:
+
+- `.ast-grep/policy/architecture-boundaries.yml`
+
+When adding new top-level `internal/*` packages or new controller packages, update this policy first so coverage checks stay complete.
+
+Regenerate and verify before pushing:
+
+```sh
+make generate-ast-rules
+make verify-arch-policy
+make test-ast
+make lint-ast
 ```
 
 ## Troubleshooting

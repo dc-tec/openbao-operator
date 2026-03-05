@@ -269,7 +269,7 @@ graph BT
 
 ## Code Quality Standards
 
-We enforce strict quality gates via `make lint`.
+We enforce strict quality gates via `make lint-ci`.
 
 <div class="grid cards" markdown>
 
@@ -278,6 +278,21 @@ We enforce strict quality gates via `make lint`.
     Static analysis for bugs and anti-patterns.
 
     `make lint`
+
+- **Ast-Grep Guardrails**
+
+    Policy- and rule-driven checks for architecture and runtime safety.
+
+    ```sh
+    make generate-ast-rules
+    make verify-arch-policy
+    make test-ast
+    make lint-ast
+    ```
+
+    Full lint gate (CI-equivalent):
+
+    `make lint-ci`
 
 - **Formatting**
 

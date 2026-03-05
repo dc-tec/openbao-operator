@@ -1,0 +1,15 @@
+id: no-controller-runtime-reconcile-apis-in-app-layer
+valid:
+  - |
+    package p
+    import "sigs.k8s.io/controller-runtime/pkg/client"
+    type Runtime struct { C client.Client }
+invalid:
+  - |
+    package p
+    import ctrl "sigs.k8s.io/controller-runtime"
+    var _ = ctrl.Result{}
+  - |
+    package p
+    import "sigs.k8s.io/controller-runtime/pkg/reconcile"
+    var _ = reconcile.Request{}

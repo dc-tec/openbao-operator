@@ -1,0 +1,11 @@
+id: no-kubebuilder-rbac-marker-openbaocluster-controller
+snapshots:
+  ? |
+    package p
+    // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list
+    func f() {}
+  : labels:
+    - source: // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list
+      style: primary
+      start: 10
+      end: 70

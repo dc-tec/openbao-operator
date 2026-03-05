@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-context-background-internal
+message: Avoid context.Background in internal runtime code; thread ctx through call boundaries.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  pattern: context.Background()
+note: Derive from the reconcile/request context to preserve cancellation and deadlines.

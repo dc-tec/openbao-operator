@@ -100,6 +100,10 @@ Disallowed direction:
 For architecture-impacting changes, run:
 
 ```sh
+make generate-ast-rules
+make verify-arch-policy
+make test-ast
+make lint-ast
 make report-internal-deps
 ```
 
@@ -107,7 +111,9 @@ Review:
 
 - `dist/architecture/internal-dependency-report.md`
 - `hack/architecture/dependency-policy-exceptions.tsv`
+- `.ast-grep/policy/architecture-boundaries.yml`
 
 Expectation:
 
 - Keep dependency policy warnings at `None` unless adding a deliberate, documented exception.
+- Keep ast-grep architecture and reconcile guardrails green.

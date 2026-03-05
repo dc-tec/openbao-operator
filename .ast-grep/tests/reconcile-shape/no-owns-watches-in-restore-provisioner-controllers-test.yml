@@ -1,0 +1,13 @@
+id: no-owns-watches-in-restore-provisioner-controllers
+valid:
+  - |
+    package p
+    func setup(mgr any) error {
+      return ctrl.NewControllerManagedBy(mgr).For(&openbaov1alpha1.OpenBaoRestore{}).Complete(nil)
+    }
+invalid:
+  - |
+    package p
+    func setup(mgr any) error {
+      return ctrl.NewControllerManagedBy(mgr).For(&openbaov1alpha1.OpenBaoRestore{}).Owns(&batchv1.Job{}).Complete(nil)
+    }

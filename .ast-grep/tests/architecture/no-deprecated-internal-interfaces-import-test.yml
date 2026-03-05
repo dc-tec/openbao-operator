@@ -1,0 +1,12 @@
+id: no-deprecated-internal-interfaces-import
+valid:
+  - |
+    package p
+    import "github.com/dc-tec/openbao-operator/internal/reconcile"
+    var _ = reconcile.Result{}
+invalid:
+  - |
+    package p
+    import legacy "github.com/dc-tec/openbao-operator/internal/interfaces"
+    var _ = legacy.Client
+

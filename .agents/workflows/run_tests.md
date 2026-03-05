@@ -42,7 +42,7 @@ To run a specific subset of E2E tests (e.g., only Backup related):
 make test-e2e E2E_FOCUS="Backup"
 ```
 
-To run a specfic subset of E2E tests using test labels (eg., only smoke, slow, backup)
+To run a specific subset of E2E tests using test labels (e.g., only smoke, slow, backup)
 
 ```bash
 make test-e2e E2E_LABEL_FILTER="smoke"
@@ -59,5 +59,9 @@ make test-e2e E2E_PARALLEL_NODES=4
 After structural/package-boundary changes:
 
 ```bash
+make generate-ast-rules
+make verify-arch-policy
+make test-ast
+make lint-ast
 make report-internal-deps
 ```

@@ -1,0 +1,13 @@
+id: no-exec-in-controller-runtime
+snapshots:
+  ? |
+    package p
+    import "os/exec"
+    func f() {
+      _ = exec.Command("kubectl", "get", "pods")
+    }
+  : labels:
+    - source: exec.Command("kubectl", "get", "pods")
+      style: primary
+      start: 44
+      end: 82

@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-owns-watches-in-restore-provisioner-controllers
+message: Restore and provisioner controllers must not register Owns/Watches child-resource watches.
+severity: warning
+language: Go
+files:
+  - internal/controller/openbaorestore/**/*.go
+  - internal/controller/provisioner/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - any:
+        - pattern: $F($A)
+        - pattern: $F($A, $B)
+        - pattern: $F($A, $B, $C)
+        - pattern: $F($A, $B, $C, $D)
+constraints:
+  F:
+    regex: '\.(Owns|Watches)$'
+note: Multi-tenant zero-trust mode avoids cluster-wide list/watch on child resources for these controllers.

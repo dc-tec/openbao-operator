@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-status-subresource-write-in-service-adapter-packages
+message: Service/adapter packages should not persist CR status via status subresource clients.
+severity: warning
+language: Go
+files:
+  - internal/backup/**/*.go
+  - internal/certs/**/*.go
+  - internal/infra/**/*.go
+  - internal/init/**/*.go
+  - internal/opslifecycle/**/*.go
+  - internal/provisioner/**/*.go
+  - internal/restore/**/*.go
+  - internal/upgrade/**/*.go
+  - internal/auth/**/*.go
+  - internal/cluster/**/*.go
+  - internal/config/**/*.go
+  - internal/kube/**/*.go
+  - internal/openbao/**/*.go
+  - internal/operationlock/**/*.go
+  - internal/probe/**/*.go
+  - internal/raft/**/*.go
+  - internal/revision/**/*.go
+  - internal/security/**/*.go
+  - internal/storage/**/*.go
+  - internal/storageenv/**/*.go
+ignores:
+  - '**/*_test.go'
+  # Transitional legacy write points pending app-layer ownership consolidation.
+  - internal/backup/manager_status.go
+  - internal/operationlock/lock.go
+  - internal/restore/manager.go
+  - internal/upgrade/rolling/lifecycle.go
+  - internal/upgrade/rolling/retry.go
+  - internal/upgrade/rolling/status_patch.go
+rule:
+  all:
+    - kind: call_expression
+    - regex: '\.Status\(\)\.(Apply|Patch|Update)\('
+note: Keep status persistence ownership in controller/app orchestration boundaries, not service/adapter runtime packages.

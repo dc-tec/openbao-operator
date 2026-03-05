@@ -1,0 +1,15 @@
+id: no-fmterrorf-multi-err-without-wrap
+valid:
+  - |
+    package p
+    import "fmt"
+    func f(legacyErr error, err error) error {
+      return fmt.Errorf("legacy=%v bundle=%w", legacyErr, err)
+    }
+invalid:
+  - |
+    package p
+    import "fmt"
+    func f(legacyErr error, err error) error {
+      return fmt.Errorf("legacy=%v bundle=%v", legacyErr, err)
+    }

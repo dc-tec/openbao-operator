@@ -10,7 +10,7 @@ See [Error Handling](docs/contributing/standards/error-handling.md).
 
 ## Wrapping Errors
 
-ALWAYS wrap errors with context:
+Wrap propagated errors with context:
 
 ```go
 // Bad
@@ -21,6 +21,9 @@ return fmt.Errorf("failed to create TLS secret: %w", err)
 ```
 
 Use `%w` to preserve error chain for `errors.Is()` / `errors.As()`.
+
+Ast guardrails currently enforce `%w` usage for `fmt.Errorf(..., err)` patterns.
+Bare `return err` may still be valid at narrow boundaries, but prefer adding context when crossing package/domain layers.
 
 ## Guard Clauses
 

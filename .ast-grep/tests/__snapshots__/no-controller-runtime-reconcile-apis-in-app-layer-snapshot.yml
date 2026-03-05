@@ -1,0 +1,20 @@
+id: no-controller-runtime-reconcile-apis-in-app-layer
+snapshots:
+  ? |
+    package p
+    import "sigs.k8s.io/controller-runtime/pkg/reconcile"
+    var _ = reconcile.Request{}
+  : labels:
+    - source: '"sigs.k8s.io/controller-runtime/pkg/reconcile"'
+      style: primary
+      start: 17
+      end: 63
+  ? |
+    package p
+    import ctrl "sigs.k8s.io/controller-runtime"
+    var _ = ctrl.Result{}
+  : labels:
+    - source: ctrl "sigs.k8s.io/controller-runtime"
+      style: primary
+      start: 17
+      end: 54

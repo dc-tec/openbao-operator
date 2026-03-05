@@ -1,0 +1,16 @@
+id: no-workload-lasterror-write-outside-workload-package
+snapshots:
+  ? |
+    package p
+    type LastError struct{}
+    type Workload struct { LastError *LastError }
+    type Status struct { Workload Workload }
+    type Cluster struct { Status Status }
+    func f(cluster *Cluster, err *LastError) {
+      cluster.Status.Workload.LastError = err
+    }
+  : labels:
+    - source: cluster.Status.Workload.LastError = err
+      style: primary
+      start: 204
+      end: 243

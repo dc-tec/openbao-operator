@@ -1,0 +1,16 @@
+id: no-adminops-lasterror-write-outside-adminops-package
+snapshots:
+  ? |
+    package p
+    type LastError struct{}
+    type AdminOps struct { LastError *LastError }
+    type Status struct { AdminOps AdminOps }
+    type Cluster struct { Status Status }
+    func f(cluster *Cluster, err *LastError) {
+      cluster.Status.AdminOps.LastError = err
+    }
+  : labels:
+    - source: cluster.Status.AdminOps.LastError = err
+      style: primary
+      start: 204
+      end: 243

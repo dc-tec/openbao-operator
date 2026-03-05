@@ -20,7 +20,13 @@ See [Kubernetes Patterns](docs/contributing/standards/kubernetes-patterns.md).
 ## Spec vs Status
 
 - **Spec**: Read-only desired state (user input)
-- **Status**: Observed state, update via `r.Status().Update()`
+- **Status**: Observed state; in controller `Reconcile`, delegate status persistence to focused helpers/facades (avoid direct `r.Status().Update/Patch/Apply` there)
+
+## Controller Boundary
+
+- Keep controllers as observe/delegate/patch-requeue plumbing
+- Delegate orchestration/domain behavior to `internal/app/*`
+- Avoid direct domain package orchestration in controller `Reconcile`
 
 ## Logging
 

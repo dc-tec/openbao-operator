@@ -71,7 +71,21 @@ To keep code reviews high-signal, adhere to these scoping rules:
 - [ ] **No Drive-By Changes**: Do not reformat unrelated files.
 - [ ] **Update Generated Files**: If you change `api/`, run `make manifests generate`.
 
-## 4. Observability Standards
+## 4. Architecture Boundary Policy
+
+Architecture boundaries are policy-driven and enforced in CI.
+
+- **Source of truth:** `.ast-grep/policy/architecture-boundaries.yml`
+- **Generated rules:** `.ast-grep/rules/generated/architecture-boundary/`
+- **Verification:** `make verify-arch-policy`
+
+When introducing a new top-level `internal/*` package or a new controller package:
+
+1. Update `.ast-grep/policy/architecture-boundaries.yml`.
+2. Run `make generate-ast-rules`.
+3. Run `make verify-arch-policy test-ast lint-ast`.
+
+## 5. Observability Standards
 
 ### Metrics
 
@@ -84,9 +98,9 @@ Must use the `openbao_` prefix and standard labels.
 
 ### Logging
 
-See [Kubernetes Patterns](kubernetes-patterns.md#4-structured-logging) for detailed logging rules.
+See [Kubernetes Patterns](kubernetes-patterns.md#5-structured-logging) for detailed logging rules.
 
-## 5. Testing Requirements
+## 6. Testing Requirements
 
 Every change requires verification.
 
@@ -101,7 +115,7 @@ Every change requires verification.
     Changes to `internal/config/builder.go` will often break tests.
     Run `make test-update-golden` to update the expected output in `internal/config/testdata/`.
 
-## 6. CRD Evolution
+## 7. CRD Evolution
 
 Breaking changes to `OpenBaoCluster` are **expensive**.
 

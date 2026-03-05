@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-new-manager-in-controller-reconcile
+message: Keep Reconcile thin; construct managers in setup/wiring and delegate orchestration.
+severity: warning
+language: Go
+files:
+  - internal/controller/**/*.go
+ignores:
+  - '**/*_test.go'
+  - internal/controller/openbaorestore/controller.go
+rule:
+  all:
+    - kind: call_expression
+    - regex: '\.NewManager(WithReader|WithReloader)?\('
+    - inside:
+        all:
+          - kind: method_declaration
+          - regex: 'Reconcile\('
+        stopBy: end
+note: Reconcile methods should remain coordination entrypoints; inject heavy dependencies during setup.

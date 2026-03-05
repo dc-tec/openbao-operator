@@ -1,0 +1,29 @@
+id: no-for-loop-in-controller-reconcile
+snapshots:
+  ? |
+    package p
+    import "context"
+    type Reconciler struct{}
+    type Request struct{}
+    type Result struct{}
+    func (r *Reconciler) Reconcile(ctx context.Context, req Request) (result Result, err error) {
+      for i := 0; i < 3; i++ {
+      }
+      return Result{}, nil
+    }
+  : labels:
+    - source: |-
+        for i := 0; i < 3; i++ {
+          }
+      style: primary
+      start: 191
+      end: 219
+    - source: |-
+        func (r *Reconciler) Reconcile(ctx context.Context, req Request) (result Result, err error) {
+          for i := 0; i < 3; i++ {
+          }
+          return Result{}, nil
+        }
+      style: secondary
+      start: 95
+      end: 244

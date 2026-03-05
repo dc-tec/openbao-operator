@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-tenant-status-write-outside-provisioner-app
+message: OpenBaoTenant status writes are owned by internal/app/provisioner tenant reconcile flow.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+ignores:
+  - '**/*_test.go'
+  - internal/app/provisioner/tenant_reconcile.go
+rule:
+  any:
+    - pattern: $TENANT.Status.Provisioned = $VALUE
+    - pattern: $TENANT.Status.LastError = $VALUE
+note: Centralize OpenBaoTenant status ownership in the provisioner app orchestration package.
+

@@ -14,7 +14,7 @@ graph TD
     Check -- Yes --> Child[Fetch Child Resources]
     Child --> Diff{Diff State}
     Diff -- "Drift Detected" --> Act[Create / Update]
-    Diff -- "Synced" --> Status[Update Status]
+    Diff -- "Synced" --> Status["Patch Status (via helper/facade)"]
     Act --> Status
     Status --> End([End: Requeue if needed])
 
@@ -72,7 +72,34 @@ Always check if a resource exists before creating it. Check if it matches spec b
     }
     ```
 
-## 3. Concurrency & Context
+## 3. Controller Boundary Pattern
+
+Controllers should stay as reconcile plumbing and delegate orchestration to the app layer.
+
+=== ":material-check: Good Pattern"
+    ```go
+    // Controller path: observe + delegate + patch/requeue
+    result, err := appopenbaocluster.ReconcileAdminOps(ctx, r.Client, req, log, deps)
+    if err != nil {
+        return ctrl.Result{}, err
+    }
+    return result, nil
+    ```
+
+=== ":material-close: Bad Pattern"
+    ```go
+    // Controller directly orchestrates deep domain flow
+    if err := upgrademanager.NewManager(...).ReconcileUpdate(ctx, cluster); err != nil {
+        return ctrl.Result{}, err
+    }
+    ```
+
+!!! note "Policy-Enforced"
+    Architecture boundaries are enforced by ast-grep rules generated from `.ast-grep/policy/architecture-boundaries.yml`.
+    When adding a new controller or top-level internal package, update policy first and run:
+    `make generate-ast-rules verify-arch-policy test-ast lint-ast` (or run `make lint-ci`).
+
+## 4. Concurrency & Context
 
 ### No Unmanaged Goroutines
 
@@ -109,7 +136,7 @@ Never block the reconcile thread with `time.Sleep`. This starves other resources
     time.Sleep(10 * time.Second)
     ```
 
-## 4. Structured Logging
+## 5. Structured Logging
 
 Use the context-aware logger. It automatically attaches `reconcile_id` and other metadata.
 

@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-fmterrorf-multi-err-without-wrap
+message: fmt.Errorf with final err argument must include %w in the format string.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - any:
+        - pattern: fmt.Errorf($FMT, $A, err)
+        - pattern: fmt.Errorf($FMT, $A, $B, err)
+        - pattern: fmt.Errorf($FMT, $A, $B, $C, err)
+    - not:
+        regex: '%w'
+note: "Keep the terminal propagated error wrapped with %w; use %v only for supplemental context values."

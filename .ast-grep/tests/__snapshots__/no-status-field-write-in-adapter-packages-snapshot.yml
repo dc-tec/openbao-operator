@@ -1,0 +1,15 @@
+id: no-status-field-write-in-adapter-packages
+snapshots:
+  ? |
+    package p
+    type Cluster struct {
+      Status struct{ Phase string }
+    }
+    func mutate(c *Cluster) {
+      c.Status.Phase = "Ready"
+    }
+  : labels:
+    - source: c.Status.Phase = "Ready"
+      style: primary
+      start: 94
+      end: 118

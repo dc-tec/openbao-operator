@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: require-innamespace-on-runtime-client-list
+message: Runtime controller/client List calls should include client.InNamespace(...).
+severity: warning
+language: Go
+files:
+  - internal/controller/**/*.go
+  - internal/app/**/*.go
+  - internal/backup/**/*.go
+  - internal/restore/**/*.go
+  - internal/upgrade/**/*.go
+  - internal/infra/**/*.go
+  - internal/provisioner/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - any:
+        - pattern: $CLIENT.List($CTX, $LIST)
+        - pattern: $CLIENT.List($CTX, $LIST, $OPT)
+        - pattern: $CLIENT.List($CTX, $LIST, $OPT1, $OPT2)
+    - not:
+        regex: client\.InNamespace\(
+constraints:
+  CLIENT:
+    regex: '^(m\.client|r\.Client|runtime\.Client|apiReader|reader|c)$'
+note: Namespace-scoped list operations preserve least-privilege and reduce accidental cross-namespace access.

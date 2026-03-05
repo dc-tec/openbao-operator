@@ -1,0 +1,16 @@
+id: no-status-subresource-write-in-service-adapter-packages
+snapshots:
+  ? |
+    package p
+    type StatusWriter interface {
+      Status() StatusWriter
+      Patch(any, any, ...any) error
+    }
+    func persist(c StatusWriter, obj any) error {
+      return c.Status().Patch(nil, obj)
+    }
+  : labels:
+    - source: c.Status().Patch(nil, obj)
+      style: primary
+      start: 153
+      end: 179

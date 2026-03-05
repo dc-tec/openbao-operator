@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-panic-runtime
+message: Avoid panic in runtime operator code; return typed/wrapped errors instead.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/controller/**/*.go
+  - cmd/provisioner/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  pattern: panic($EXPR)
+note: Panics can crash the manager process and impact all reconciliations.

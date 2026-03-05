@@ -1,0 +1,15 @@
+id: no-status-field-write-in-adapter-packages
+valid:
+  - |
+    package p
+    type Pod struct { Status string }
+    func observe(p Pod) string { return p.Status }
+invalid:
+  - |
+    package p
+    type Cluster struct {
+      Status struct{ Phase string }
+    }
+    func mutate(c *Cluster) {
+      c.Status.Phase = "Ready"
+    }

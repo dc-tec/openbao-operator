@@ -1,0 +1,11 @@
+id: no-deprecated-internal-interfaces-import
+snapshots:
+  ? |
+    package p
+    import legacy "github.com/dc-tec/openbao-operator/internal/interfaces"
+    var _ = legacy.Client
+  : labels:
+    - source: legacy "github.com/dc-tec/openbao-operator/internal/interfaces"
+      style: primary
+      start: 17
+      end: 80

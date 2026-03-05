@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-for-loop-in-controller-reconcile
+message: Avoid broad orchestration loops in controller Reconcile methods; delegate iterative logic to lower layers.
+severity: warning
+language: Go
+files:
+  - internal/controller/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - pattern: for $COND { $$$BODY }
+    - inside:
+        all:
+          - kind: method_declaration
+          - regex: 'Reconcile\('
+        stopBy: end
+note: Controller Reconcile methods should stay as thin coordinators and delegate loops to app/service packages.
+

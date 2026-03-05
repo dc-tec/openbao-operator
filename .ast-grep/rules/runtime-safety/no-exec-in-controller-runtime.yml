@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-exec-in-controller-runtime
+message: Do not execute external binaries in runtime controller/internal packages.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/controller/**/*.go
+  - cmd/provisioner/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - any:
+        - pattern: $F($A)
+        - pattern: $F($A, $B)
+        - pattern: $F($A, $B, $C)
+        - pattern: $F($A, $B, $C, $D)
+        - pattern: $F($A, $B, $C, $D, $E)
+constraints:
+  F:
+    regex: '^exec\.Command(Context)?$'
+note: Use Kubernetes/Go clients instead of shelling out from operator runtime paths.

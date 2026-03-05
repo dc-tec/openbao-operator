@@ -1,0 +1,13 @@
+id: no-panic-runtime
+valid:
+  - |
+    package p
+    func f() error {
+      return nil
+    }
+invalid:
+  - |
+    package p
+    func f() {
+      panic("boom")
+    }

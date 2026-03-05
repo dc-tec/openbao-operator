@@ -1,0 +1,18 @@
+id: no-any-interface-in-core-logic
+snapshots:
+  ? |
+    package p
+    type Payload map[string]any
+  : labels:
+    - source: map[string]any
+      style: primary
+      start: 23
+      end: 37
+  ? |
+    package p
+    var decoded interface{}
+  : labels:
+    - source: var decoded interface{}
+      style: primary
+      start: 10
+      end: 33

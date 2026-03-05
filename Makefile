@@ -83,7 +83,7 @@ endif
 	@echo "✅ All CI checks passed!"
 
 .PHONY: ci-core
-ci-core: security-scan lint-config lint verify-fmt verify-tidy verify-vendor verify-generated test-ci verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
+ci-core: security-scan lint-ci verify-fmt verify-tidy verify-vendor verify-generated test-ci verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
 
 .PHONY: pentest-smoke
 pentest-smoke: ## Run "pentest" labeled e2e tests against an existing cluster (requires E2E_OPERATOR_IMAGE).
@@ -177,6 +177,36 @@ report-openbao-config-schema-drift: ## Report upstream OpenBao config schema dri
 .PHONY: report-openbao-operator-schema-drift
 report-openbao-operator-schema-drift: ## Report operator-vs-upstream OpenBao config schema drift (non-failing).
 	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
+
+.PHONY: report-ast
+report-ast: generate-ast-rules ## Run ast-grep rules in report mode (non-failing; warnings only).
+	@"$(AST_GREP)" scan -c .ast-grep/sgconfig.yml --report-style=medium .
+
+.PHONY: lint-ast
+lint-ast: generate-ast-rules ## Run ast-grep rules in strict mode (treat all findings as errors).
+	@"$(AST_GREP)" scan -c .ast-grep/sgconfig.yml --report-style=medium --error .
+
+.PHONY: test-ast
+test-ast: generate-ast-rules ## Run ast-grep rule tests.
+	@"$(AST_GREP)" test -c .ast-grep/sgconfig.yml
+
+.PHONY: generate-ast-rules
+generate-ast-rules: ## Generate ast-grep architecture boundary rules from policy.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/ast_rulegen \
+		-policy .ast-grep/policy/architecture-boundaries.yml \
+		-out-dir .ast-grep/rules/generated/architecture-boundary
+
+.PHONY: verify-ast-rules-generated
+verify-ast-rules-generated: generate-ast-rules ## Verify generated ast-grep rules are up-to-date.
+	@status="$$(git status --porcelain -- .ast-grep/rules/generated/architecture-boundary)"; \
+	if [ -n "$$status" ]; then \
+		echo "Generated ast-grep rules are out of date. Run 'make generate-ast-rules' and commit the result."; \
+		echo "$$status"; \
+		exit 1; \
+	fi
+
+.PHONY: verify-arch-policy
+verify-arch-policy: verify-ast-rules-generated ## Verify architecture policy generation integrity.
 
 .PHONY: report-internal-deps
 report-internal-deps: ## Generate internal runtime dependency graph/report locally (report-only; non-failing).
@@ -601,6 +631,9 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	"$(GOLANGCI_LINT)" config verify
 
+.PHONY: lint-ci
+lint-ci: lint-config lint verify-arch-policy test-ast lint-ast ## Run CI lint gates (golangci-lint + ast-grep tests/scans).
+
 .PHONY: vulncheck
 vulncheck: govulncheck ## Run govulncheck to scan for known vulnerabilities (production code only). Findings listed in .govulnignore are ignored. Set VULNCHECK_SHOW_IGNORED=true to print traces even if all findings are ignored.
 	@go run ./hack/govulncheck_wrapper/ -govulncheck "$(GOVULNCHECK)" -ignore .govulnignore -show-ignored="$${VULNCHECK_SHOW_IGNORED:-false}" ./...
@@ -796,6 +829,7 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 GINKGO ?= $(LOCALBIN)/ginkgo
 GOVULNCHECK ?= $(LOCALBIN)/govulncheck
 GOMU ?= $(LOCALBIN)/gomu
+AST_GREP ?= ast-grep
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.7.1

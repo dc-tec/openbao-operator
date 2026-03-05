@@ -1,0 +1,11 @@
+id: no-openbaorestore-controller-app-subpackage-imports
+snapshots:
+  ? |
+    package p
+    import subpkg "github.com/dc-tec/openbao-operator/internal/app/openbaorestore/reconcileops"
+    var _ = subpkg.Run
+  : labels:
+    - source: subpkg "github.com/dc-tec/openbao-operator/internal/app/openbaorestore/reconcileops"
+      style: primary
+      start: 17
+      end: 101

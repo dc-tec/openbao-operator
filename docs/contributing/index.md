@@ -55,7 +55,7 @@ Follow this checklist to ensure your Pull Request is ready for review:
 
     ```bash
     # 1. Linting & Formatting
-    make lint-config lint verify-fmt verify-tidy
+    make lint-ci verify-arch-policy verify-fmt verify-tidy
 
     # 2. Generated Artifacts
     make verify-generated verify-helm

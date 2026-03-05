@@ -29,6 +29,10 @@ Use this skill for a focused review of operator changes that affect Hardened/ACM
 When the PR touches package boundaries/imports, request or generate:
 
 ```sh
+make generate-ast-rules
+make verify-arch-policy
+make test-ast
+make lint-ast
 make report-internal-deps
 ```
 
@@ -36,3 +40,4 @@ Review:
 
 - `dist/architecture/internal-dependency-report.md`
 - `hack/architecture/dependency-policy-exceptions.tsv`
+- `.ast-grep/policy/architecture-boundaries.yml`

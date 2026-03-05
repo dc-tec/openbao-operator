@@ -91,7 +91,7 @@ Run these commands locally to reproduce CI behavior.
 ### 2.1 Core PR-equivalent checks
 
 ```sh
-make lint-config lint
+make lint-ci
 make verify-fmt
 make verify-tidy
 make verify-vendor
@@ -102,11 +102,14 @@ make verify-openbao-config-compat
 make docs-build
 ```
 
+!!! note
+    `make lint-ci` includes ast-grep policy generation/verification, rule tests, and strict scans. It requires the `ast-grep` CLI to be available on your `PATH`.
+
 ### 2.2 Job-to-command mapping
 
 | CI Job | Local Command | Notes |
 | :--- | :--- | :--- |
-| `Lint` | `make lint-config lint` | Linter config + lint run |
+| `Lint` | `make lint-ci` | GolangCI-Lint config + lint run, plus ast-grep policy verification, rule tests, and strict scan |
 | `Verify Formatting` | `make verify-fmt` | Checks `gofmt` compliance |
 | `Verify go.mod/go.sum` | `make verify-tidy` | Ensures module files are clean |
 | `Verify vendor/` | `make verify-vendor` | Fails on stale vendored dependencies |
