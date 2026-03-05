@@ -31,8 +31,8 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 	"github.com/dc-tec/openbao-operator/internal/restore"
-	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 // OpenBaoRestoreReconciler reconciles a OpenBaoRestore object.
@@ -101,7 +101,7 @@ func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.Recorder = mgr.GetEventRecorder("openbaorestore")
 	}
 	if r.OperatorImageVerifier == nil {
-		r.OperatorImageVerifier = security.NewImageVerifier(log.Log.WithName("openbaorestore-image-verifier"), r.Client, nil)
+		r.OperatorImageVerifier = portsecurity.NewImageVerifier(log.Log.WithName("openbaorestore-image-verifier"), r.Client)
 	}
 	r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder, r.OperatorImageVerifier, r.Platform)
 

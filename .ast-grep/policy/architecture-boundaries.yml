@@ -99,8 +99,7 @@ controllerBoundaries:
     appFacadeRoot: internal/app/openbaorestore
     allowServiceImports:
       - internal/restore
-    allowAdapterImports:
-      - internal/security
+    allowAdapterImports: []
   - name: provisioner
     displayName: Provisioner
     files:

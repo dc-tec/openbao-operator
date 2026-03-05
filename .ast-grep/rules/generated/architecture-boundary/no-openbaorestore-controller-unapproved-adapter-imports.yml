@@ -12,5 +12,5 @@ ignores:
 rule:
     all:
         - kind: import_spec
-        - regex: '"github\.com/dc-tec/openbao-operator/(internal/auth(/[^"]*)?|internal/cluster(/[^"]*)?|internal/config(/[^"]*)?|internal/kube(/[^"]*)?|internal/openbao(/[^"]*)?|internal/operationlock(/[^"]*)?|internal/probe(/[^"]*)?|internal/raft(/[^"]*)?|internal/revision(/[^"]*)?|internal/storage(/[^"]*)?|internal/storageenv(/[^"]*)?)"'
-note: 'Approved adapter imports for this controller: internal/security.'
+        - regex: '"github\.com/dc-tec/openbao-operator/(internal/auth(/[^"]*)?|internal/cluster(/[^"]*)?|internal/config(/[^"]*)?|internal/kube(/[^"]*)?|internal/openbao(/[^"]*)?|internal/operationlock(/[^"]*)?|internal/probe(/[^"]*)?|internal/raft(/[^"]*)?|internal/revision(/[^"]*)?|internal/security(/[^"]*)?|internal/storage(/[^"]*)?|internal/storageenv(/[^"]*)?)"'
+note: 'Approved adapter imports for this controller: (none).'

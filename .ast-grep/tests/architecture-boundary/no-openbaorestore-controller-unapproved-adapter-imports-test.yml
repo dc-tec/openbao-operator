@@ -2,8 +2,8 @@ id: no-openbaorestore-controller-unapproved-adapter-imports
 valid:
   - |
     package p
-    import security "github.com/dc-tec/openbao-operator/internal/security"
-    var _ = security.Provider
+    import "github.com/dc-tec/openbao-operator/internal/constants"
+    var _ = constants.LabelManagedBy
 invalid:
   - |
     package p
