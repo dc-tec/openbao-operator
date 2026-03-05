@@ -97,13 +97,13 @@ The runtime code is organized into layered packages to keep controller plumbing,
 | Layer | Purpose | Package examples |
 | :--- | :--- | :--- |
 | `L0` | API types | `api/v1alpha1` |
-| `L1` | Entrypoints/bootstrap | `cmd/controller`, `cmd/provisioner`, `internal/entrypoint` |
-| `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore` |
-| `L3` | App orchestration | `internal/app/openbaocluster`, `internal/app/openbaorestore`, `internal/app/provisioner` |
-| `L4` | Services/managers | `internal/backup`, `internal/restore`, `internal/upgrade`, `internal/infra`, `internal/certs`, `internal/init`, `internal/opslifecycle` |
+| `L1` | Entrypoints/bootstrap | `cmd/controller`, `cmd/provisioner`, `cmd/bao-backup`, `cmd/bao-upgrade`, `cmd/bao-probe`, `internal/entrypoint` |
+| `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore`, `internal/controller/provisioner` |
+| `L3` | App orchestration | `internal/app/openbaocluster` (facade + `statusops`, `deletionops`, `adminops`), `internal/app/openbaorestore`, `internal/app/provisioner` |
+| `L4` | Services/managers | `internal/backup`, `internal/restore`, `internal/upgrade`, `internal/infra`, `internal/certs`, `internal/init`, `internal/provisioner`, `internal/opslifecycle` |
 | `L5` | Ports/contracts | `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/initmanager` |
-| `L6` | Adapters/integrations | `internal/storage`, `internal/openbao`, `internal/kube`, `internal/security`, `internal/raft` |
-| `L7` | Cross-cutting utilities | `internal/errors`, `internal/logging`, `internal/reconcile`, `internal/observability`, `internal/predicates`, `internal/admission` |
+| `L6` | Adapters/integrations | `internal/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}` |
+| `L7` | Cross-cutting utilities | `internal/{errors,logging,reconcile,constants,predicates,observability,admission}` |
 
 Dependency intent is top-down across layers: higher layers depend on lower layers through narrow contracts, and adapters do not import controller packages.
 
@@ -133,7 +133,24 @@ sequenceDiagram
     end
 ```
 
-### 1.5 Assumptions
+### 1.5 Architectural Guardrails
+
+Architecture boundaries are enforced from policy and verified in CI.
+
+- Policy source of truth: `.ast-grep/policy/architecture-boundaries.yml`
+- Generated architecture-boundary rules: `.ast-grep/rules/generated/architecture-boundary/`
+- Dependency graph/report tooling: `make report-internal-deps`
+
+Run the local architecture checks:
+
+```sh
+make generate-ast-rules
+make verify-arch-policy
+make report-internal-deps
+make lint-ast
+```
+
+### 1.6 Assumptions
 
 !!! note "Core Assumptions"
     - **Storage**: Default StorageClass available.
@@ -153,6 +170,9 @@ sequenceDiagram
 ## API Specification
 
 The `OpenBaoCluster` CRD defines the desired state.
+
+!!! note "Additional CRDs"
+    The operator also reconciles `OpenBaoTenant` (Provisioner) and `OpenBaoRestore` (Restore lifecycle). This section focuses on the primary `OpenBaoCluster` architecture surface.
 
 ### Spec (Desired State)
 

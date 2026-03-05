@@ -6,9 +6,19 @@
 !!! tip "User Guide"
     For operational instructions, see the [Backups User Guide](../user-guide/openbaocluster/operations/backups.md) and [Restore User Guide](../user-guide/openbaorestore/restore.md).
 
-## 1. Backup Workflow
+## 1. Architectural Placement
 
-The Manager uses a **stateless executor pattern**: the Operator only schedules Kubernetes Jobs; it does not handle data itself.
+Backup execution belongs to the AdminOps orchestration path:
+
+1. `internal/controller/openbaocluster` (adminops reconciler) receives the reconcile event.
+2. It delegates to `internal/app/openbaocluster` facade functions.
+3. The app layer calls `internal/app/openbaocluster/adminops`, which invokes `internal/backup`.
+
+This keeps controller code as reconcile plumbing while BackupManager owns backup domain behavior.
+
+## 2. Backup Workflow
+
+The BackupManager uses a **stateless executor pattern**: the Operator only schedules Kubernetes Jobs; it does not handle data itself.
 
 ```mermaid
 graph TD
@@ -36,7 +46,7 @@ graph TD
     class Status,StatusFail write;
 ```
 
-## 2. Execution Phases
+## 3. Execution Phases
 
 ### Phase 1: Pre-flight Checks
 
@@ -57,7 +67,7 @@ The Operator creates a Kubernetes Job named `backup-<cluster>-<timestamp>`. This
 - Connects to the active Leader.
 - **Streams** the snapshot directly to object storage (no local disk buffering required).
 
-## 3. Storage Providers
+## 4. Storage Providers
 
 The BackupManager supports multiple object storage providers:
 
@@ -119,7 +129,7 @@ The BackupManager supports multiple object storage providers:
     - **Connection String:** Secret with `connectionString`
     - **Managed Identity:** Omit `credentialsSecretRef` when using AKS pod identity
 
-## 4. Scheduling & Retention
+## 5. Scheduling & Retention
 
 - **Cron:** Uses standard cron syntax (e.g., `0 2 * * *` for daily at 2 AM).
 - **Retention:** The Operator enforces retention policies configured in `spec.backup.retention`:
@@ -128,7 +138,7 @@ The BackupManager supports multiple object storage providers:
   - Applied after successful backup execution
   - Applies to all storage providers (S3, GCS, Azure)
 
-## 5. Naming Convention
+## 6. Naming Convention
 
 Backups are stored with a predictable path structure for easy retrieval during disaster recovery:
 

@@ -17,13 +17,6 @@ The policy currently encodes:
   - `disallowExternalImports`: external import roots (matches root and subpackages)
   - `disallowExternalExactImports`: exact external import paths only
 
-## Why policy is here (not under `hack/`)
-
-`hack/` is used for tooling implementation.  
-`.ast-grep/policy/` is used for guardrail intent and ownership, next to the rules and tests it drives.
-
-This keeps policy updates and ast-grep validation changes in one place while still allowing generator code to live in `hack/tools/`.
-
 ## Workflow
 
 1. Edit `.ast-grep/policy/architecture-boundaries.yml`.
