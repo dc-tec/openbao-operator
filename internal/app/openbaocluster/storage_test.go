@@ -16,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 )
 
@@ -42,7 +41,7 @@ func TestStorageReconciler_ExpandsPVCs(t *testing.T) {
 			Name:      "data-test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				storageLabelOpenBaoCluster: "test",
+				labelOpenBaoCluster: "test",
 			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -90,7 +89,7 @@ func TestStorageReconciler_RejectsShrink(t *testing.T) {
 			Name:      "data-test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				storageLabelOpenBaoCluster: "test",
+				labelOpenBaoCluster: "test",
 			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -133,7 +132,7 @@ func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 			Name:      "data-test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				storageLabelOpenBaoCluster: "test",
+				labelOpenBaoCluster: "test",
 			},
 		},
 		Status: corev1.PersistentVolumeClaimStatus{
@@ -201,7 +200,7 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 			Name:      "data-test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				storageLabelOpenBaoCluster: "test",
+				labelOpenBaoCluster: "test",
 			},
 		},
 		Status: corev1.PersistentVolumeClaimStatus{
@@ -216,7 +215,7 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 			Name:      "test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelOpenBaoActive: "true",
+				openbao.LabelActive: "true",
 			},
 		},
 		Status: corev1.PodStatus{
@@ -273,7 +272,7 @@ func TestStorageResizeRestartReconciler_RequiresMaintenance(t *testing.T) {
 			Name:      "data-test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				storageLabelOpenBaoCluster: "test",
+				labelOpenBaoCluster: "test",
 			},
 		},
 		Status: corev1.PersistentVolumeClaimStatus{

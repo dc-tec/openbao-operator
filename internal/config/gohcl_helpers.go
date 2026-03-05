@@ -12,7 +12,6 @@ import (
 	"github.com/zclconf/go-cty/cty"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 type hclCoreAttributes struct {
@@ -273,8 +272,8 @@ func boolPtrTrue(v bool) *bool {
 func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, error) {
 	listener := hclListenerTCP{
 		Type:               "tcp",
-		Address:            fmt.Sprintf("[::]:%d", constants.PortAPI),
-		ClusterAddress:     fmt.Sprintf("[::]:%d", constants.PortCluster),
+		Address:            fmt.Sprintf("[::]:%d", openBaoAPIPort),
+		ClusterAddress:     fmt.Sprintf("[::]:%d", openBaoClusterPort),
 		TLSDisable:         0,
 		MaxRequestDuration: configMaxRequestDuration,
 	}
@@ -311,9 +310,9 @@ func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Bloc
 			listener.TLSACMECARoot = stringPtr(cluster.Spec.Configuration.ACMECARoot)
 		}
 	} else {
-		listener.TLSCertFile = stringPtr(constants.PathTLSServerCert)
-		listener.TLSKeyFile = stringPtr(constants.PathTLSServerKey)
-		listener.TLSClientCAFile = stringPtr(constants.PathTLSCACert)
+		listener.TLSCertFile = stringPtr(openBaoPathTLSServerCert)
+		listener.TLSKeyFile = stringPtr(openBaoPathTLSServerKey)
+		listener.TLSClientCAFile = stringPtr(openBaoPathTLSCACert)
 	}
 
 	return gohcl.EncodeAsBlock(listener, "listener"), nil
@@ -322,7 +321,7 @@ func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Bloc
 func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDetails) *hclwrite.Block {
 	storageAttrs := hclStorageRaft{
 		Type:   "raft",
-		Path:   constants.PathData,
+		Path:   openBaoPathData,
 		NodeID: configNodeIDTemplate,
 	}
 
@@ -335,9 +334,9 @@ func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra Infrastruc
 		autoJoinExpr = fmt.Sprintf(
 			`provider=k8s namespace=%s label_selector="%s=%s,%s=%s"`,
 			infra.Namespace,
-			constants.LabelOpenBaoCluster,
+			openBaoLabelCluster,
 			cluster.Name,
-			constants.LabelOpenBaoRevision,
+			openBaoLabelRevision,
 			infra.TargetRevisionForJoin,
 		)
 		storageAttrs.RetryJoinAsNonVoter = boolPtrValue(true)
@@ -346,7 +345,7 @@ func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra Infrastruc
 		autoJoinExpr = fmt.Sprintf(
 			`provider=k8s namespace=%s label_selector="%s=%s"`,
 			infra.Namespace,
-			constants.LabelOpenBaoCluster,
+			openBaoLabelCluster,
 			cluster.Name,
 		)
 	}
@@ -357,9 +356,9 @@ func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra Infrastruc
 	}
 
 	if cluster.Spec.TLS.Mode != openbaov1alpha1.TLSModeACME {
-		retryJoinAttrs.LeaderCACertFile = stringPtr(constants.PathTLSCACert)
-		retryJoinAttrs.LeaderClientCertFile = stringPtr(constants.PathTLSServerCert)
-		retryJoinAttrs.LeaderClientKeyFile = stringPtr(constants.PathTLSServerKey)
+		retryJoinAttrs.LeaderCACertFile = stringPtr(openBaoPathTLSCACert)
+		retryJoinAttrs.LeaderClientCertFile = stringPtr(openBaoPathTLSServerCert)
+		retryJoinAttrs.LeaderClientKeyFile = stringPtr(openBaoPathTLSServerKey)
 	} else if cluster.Spec.Configuration != nil && strings.TrimSpace(cluster.Spec.Configuration.ACMECARoot) != "" {
 		// When using a private ACME CA (like infra-bao PKI), the issued leaf certificate is not
 		// trusted by system roots. If tls_acme_ca_root is configured (to trust the ACME directory

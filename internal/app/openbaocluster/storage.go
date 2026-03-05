@@ -16,9 +16,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
+	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
@@ -29,11 +29,8 @@ const (
 	defaultReasonStorageResizeNotSupported      = "StorageResizeNotSupported"
 	defaultReasonStorageClassChangeNotSupported = "StorageClassChangeNotSupported"
 	defaultReasonStorageRestartRequired         = "StorageRestartRequired"
-
-	storageLabelOpenBaoCluster  = "openbao.org/cluster"
-	storageLabelOpenBaoRevision = "openbao.org/revision"
-	storageVolumeDataPrefix     = "data-"
-	storageRequeueShort         = 5 * time.Second
+	storageVolumeDataPrefix                     = "data-"
+	storageRequeueShort                         = 5 * time.Second
 )
 
 // StorageReasonPolicy configures storage-related error reason values.
@@ -167,7 +164,7 @@ func listClusterPVCs(ctx context.Context, c client.Client, cluster *openbaov1alp
 	var pvcList corev1.PersistentVolumeClaimList
 	if err := c.List(ctx, &pvcList,
 		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(map[string]string{storageLabelOpenBaoCluster: cluster.Name}),
+		client.MatchingLabels(map[string]string{labelOpenBaoCluster: cluster.Name}),
 	); err != nil {
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
 			return nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
@@ -322,7 +319,7 @@ func ReconcileStorageResizeRestart(
 	var pvcList corev1.PersistentVolumeClaimList
 	if err := apiReader.List(ctx, &pvcList,
 		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(map[string]string{storageLabelOpenBaoCluster: cluster.Name}),
+		client.MatchingLabels(map[string]string{labelOpenBaoCluster: cluster.Name}),
 	); err != nil {
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
 			return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
@@ -478,12 +475,12 @@ func nextPodNeedingFSResizeRestart(
 		}
 
 		if wantRev != "" {
-			if gotRev := strings.TrimSpace(pod.Labels[storageLabelOpenBaoRevision]); gotRev != wantRev {
+			if gotRev := strings.TrimSpace(pod.Labels[labelOpenBaoRevision]); gotRev != wantRev {
 				continue
 			}
 		}
 
-		active, present, _ := constants.ParseBoolLabel(pod.Labels, constants.LabelOpenBaoActive)
+		active, present, _ := openbao.ParseBoolLabel(pod.Labels, openbao.LabelActive)
 		if present && active {
 			leaderCandidate = pod
 			continue

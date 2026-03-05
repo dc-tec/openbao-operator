@@ -7,16 +7,12 @@ const (
 	LabelAppManagedBy = "app.kubernetes.io/managed-by"
 	LabelAppComponent = "app.kubernetes.io/component"
 
-	LabelOpenBaoCluster     = "openbao.org/cluster"
-	LabelOpenBaoComponent   = "openbao.org/component"
-	LabelOpenBaoBackupType  = "openbao.org/backup-type"
-	LabelOpenBaoTenant      = "openbao.org/tenant"
-	LabelOpenBaoRevision    = "openbao.org/revision"
-	LabelOpenBaoVersion     = "openbao-version"
-	LabelOpenBaoActive      = "openbao-active"
-	LabelOpenBaoInitialized = "openbao-initialized"
-	LabelOpenBaoSealed      = "openbao-sealed"
-	LabelOpenBaoProfile     = "openbao.org/profile"
+	LabelOpenBaoCluster    = "openbao.org/cluster"
+	LabelOpenBaoComponent  = "openbao.org/component"
+	LabelOpenBaoBackupType = "openbao.org/backup-type"
+	LabelOpenBaoTenant     = "openbao.org/tenant"
+	LabelOpenBaoRevision   = "openbao.org/revision"
+	LabelOpenBaoProfile    = "openbao.org/profile"
 	// LabelOpenBaoDigestEnforcement indicates whether digest-only image refs are required.
 	LabelOpenBaoDigestEnforcement = "openbao.org/digest-enforcement"
 )

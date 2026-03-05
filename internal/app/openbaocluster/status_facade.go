@@ -9,7 +9,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/statusops"
-	"github.com/dc-tec/openbao-operator/internal/constants"
 )
 
 // StatusDependencies provides dependencies needed for status state observation.
@@ -31,15 +30,15 @@ func GatherStatusState(
 		return nil, fmt.Errorf("status reader dependency is required")
 	}
 	return statusops.GatherState(ctx, logger, deps.Reader, cluster, statusops.LabelConfig{
-		AppInstanceKey:       constants.LabelAppInstance,
-		AppManagedByKey:      constants.LabelAppManagedBy,
-		AppManagedByValue:    constants.LabelValueAppManagedByOpenBaoOperator,
-		OpenBaoClusterKey:    constants.LabelOpenBaoCluster,
-		OpenBaoComponentKey:  constants.LabelOpenBaoComponent,
-		BackupComponentValue: constants.ComponentBackup,
-		AppNameKey:           constants.LabelAppName,
-		AppNameValue:         constants.LabelValueAppNameOpenBao,
-		OpenBaoRevisionKey:   constants.LabelOpenBaoRevision,
+		AppInstanceKey:       labelAppInstance,
+		AppManagedByKey:      labelAppManagedBy,
+		AppManagedByValue:    labelValueAppManagedByOpenBaoOperator,
+		OpenBaoClusterKey:    labelOpenBaoCluster,
+		OpenBaoComponentKey:  labelOpenBaoComponent,
+		BackupComponentValue: componentBackup,
+		AppNameKey:           labelAppName,
+		AppNameValue:         labelValueAppNameOpenBao,
+		OpenBaoRevisionKey:   labelOpenBaoRevision,
 	})
 }
 
