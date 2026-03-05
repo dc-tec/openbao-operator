@@ -20,6 +20,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -31,8 +32,9 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
 	observability "github.com/dc-tec/openbao-operator/internal/observability"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
+	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/restore"
-	"github.com/dc-tec/openbao-operator/internal/security"
 )
 
 // OpenBaoRestoreReconciler reconciles a OpenBaoRestore object.
@@ -46,6 +48,15 @@ type OpenBaoRestoreReconciler struct {
 }
 
 const controllerNameOpenBaoRestore = "openbaorestore"
+
+type restoreManagerAdapter struct {
+	manager *restore.Manager
+}
+
+func (a restoreManagerAdapter) Reconcile(ctx context.Context, logger logr.Logger, restoreResource *openbaov1alpha1.OpenBaoRestore) (recon.Result, error) {
+	result, err := a.manager.Reconcile(ctx, logger, restoreResource)
+	return recon.Result{RequeueAfter: result.RequeueAfter}, err
+}
 
 // SECURITY: RBAC is provided via namespace-scoped tenant Roles, not cluster-wide.
 // The controller uses direct API calls for Jobs (GET, not list/watch) to check status,
@@ -81,7 +92,15 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder, r.OperatorImageVerifier, r.Platform)
 	}
 
-	result, err = appopenbaorestore.ReconcileOpenBaoRestore(ctx, r.Client, req, logger, r.RestoreManager)
+	appResult, appErr := appopenbaorestore.ReconcileOpenBaoRestore(
+		ctx,
+		r.Client,
+		req.NamespacedName,
+		logger,
+		restoreManagerAdapter{manager: r.RestoreManager},
+	)
+	result = ctrl.Result{RequeueAfter: appResult.RequeueAfter}
+	err = appErr
 	if err != nil {
 		recordError(err)
 		return result, err
@@ -101,7 +120,7 @@ func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.Recorder = mgr.GetEventRecorder("openbaorestore")
 	}
 	if r.OperatorImageVerifier == nil {
-		r.OperatorImageVerifier = security.NewImageVerifier(log.Log.WithName("openbaorestore-image-verifier"), r.Client, nil)
+		r.OperatorImageVerifier = portsecurity.NewImageVerifier(log.Log.WithName("openbaorestore-image-verifier"), r.Client)
 	}
 	r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder, r.OperatorImageVerifier, r.Platform)
 

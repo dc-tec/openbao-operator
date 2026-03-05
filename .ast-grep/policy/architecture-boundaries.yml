@@ -99,8 +99,7 @@ controllerBoundaries:
     appFacadeRoot: internal/app/openbaorestore
     allowServiceImports:
       - internal/restore
-    allowAdapterImports:
-      - internal/security
+    allowAdapterImports: []
   - name: provisioner
     displayName: Provisioner
     files:
@@ -206,7 +205,6 @@ globalImportBoundaries:
     ignores:
       - "**/*_test.go"
       # Transitional bridge points pending decomposition away from ctrl.Result/ctrl.Request.
-      - internal/app/openbaorestore/reconcile.go
       - internal/app/provisioner/tenant_reconcile.go
       - internal/app/openbaocluster/adminops.go
       - internal/app/openbaocluster/adminops/reconcile.go
