@@ -1,0 +1,8 @@
+{
+  "name": "openbao-ci-tools",
+  "private": true,
+  "description": "Pinned CI tooling for OpenBao Operator workflows.",
+  "devDependencies": {
+    "@ast-grep/cli": "0.41.0"
+  }
+}
