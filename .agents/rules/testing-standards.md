@@ -20,7 +20,7 @@ See [Testing Guide](docs/contributing/testing.md) for full documentation.
 ## Patterns
 
 1. **Table-Driven Tests**: Use for unit tests in `internal/`
-2. **Golden Files**: For HCL output verification (`internal/config/testdata/`)
+2. **Golden Files**: For HCL output verification (`internal/adapter/config/testdata/`)
 3. **EnvTest**: For integration tests behind `-tags=integration` (prefer `test/integration/`)
 4. **Ginkgo/Gomega**: For E2E tests with Kind
 

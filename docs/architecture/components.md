@@ -97,5 +97,5 @@ graph TD
 
 ### Shared Libraries
 
-- **`internal/provisioner`**: Handles RBAC and Namespace creation for Tenants.
-- **`internal/config`**: A pure-functional HCL generator that renders OpenBao configuration.
+- **`internal/service/provisioner`**: Handles RBAC and Namespace creation for Tenants.
+- **`internal/adapter/config`**: A pure-functional HCL generator that renders OpenBao configuration.

@@ -21,7 +21,7 @@ Confirm:
 
 - Cycle check is acyclic
 - Policy warnings are `None` (or intentionally justified)
-- Hotspots stay within current targets (`internal/constants` fan-in, `internal/controller/openbaocluster` fan-out)
+- Hotspots stay within current targets (`internal/platform/constants` fan-in, `internal/controller/openbaocluster` fan-out)
 
 # 3) Verify boundary intent from layer model
 

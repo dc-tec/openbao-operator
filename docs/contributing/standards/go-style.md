@@ -162,7 +162,7 @@ import (
     appsv1 "k8s.io/api/apps/v1"
     "sigs.k8s.io/controller-runtime/pkg/client"
 
-    "github.com/dc-tec/openbao-operator/internal/config"
+    "github.com/dc-tec/openbao-operator/internal/adapter/config"
 )
 ```
 

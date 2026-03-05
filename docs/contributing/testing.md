@@ -72,7 +72,7 @@ graph BT
     
     **Targets:**
     
-    - HCL Config Generation (`internal/config`)
+    - HCL Config Generation (`internal/adapter/config`)
     - PKI Helpers (Cert rotation math)
     - State Machine Logic (Upgrade paths)
     
@@ -113,7 +113,7 @@ graph BT
     
     For complex output like HCL generation, we use **Golden Files**.
     
-    - **Location**: `internal/config/testdata/`
+    - **Location**: `internal/adapter/config/testdata/`
     - **Update Command**: `make test-update-golden`
     
     !!! warning "Golden File Review"

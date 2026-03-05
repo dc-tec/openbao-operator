@@ -8,7 +8,7 @@ Infrastructure reconciliation belongs to the workload orchestration path:
 
 1. `internal/controller/openbaocluster` (workload reconciler) receives the reconcile event.
 2. It delegates to `internal/app/openbaocluster` facade functions.
-3. The app layer invokes workload orchestration, which calls `internal/infra` for rendered resources and apply logic.
+3. The app layer invokes workload orchestration, which calls `internal/service/infra` for rendered resources and apply logic.
 
 This preserves controller thinness and keeps StatefulSet/config domain logic in the infrastructure manager layer.
 

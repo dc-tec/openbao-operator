@@ -11,13 +11,13 @@ See [Architecture Documentation](docs/architecture/index.md).
 ## Layer Model (L0-L7)
 
 - `L0` API types: `api/v1alpha1`
-- `L1` Entrypoints/bootstrap: `cmd/*`, `internal/entrypoint`
+- `L1` Entrypoints/bootstrap: `cmd/*`, `internal/platform/entrypoint`
 - `L2` Controller plumbing: `internal/controller/*`
 - `L3` App orchestration: `internal/app/*`
-- `L4` Services/managers: `internal/{backup,restore,upgrade,infra,certs,init,provisioner,opslifecycle}`
+- `L4` Services/managers: `internal/service/{backup,restore,upgrade,infra,certs,init,provisioner,opslifecycle}`
 - `L5` Ports/contracts: `internal/port/*`
-- `L6` Adapters/integrations: `internal/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}`
-- `L7` Cross-cutting utilities: `internal/{errors,logging,reconcile,constants,predicates,observability,admission}`
+- `L6` Adapters/integrations: `internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}`
+- `L7` Platform/cross-cutting: `internal/platform/{errors,logging,reconcile,constants,predicates,observability,admission}`
 
 ## Separation of Concerns
 
@@ -37,15 +37,15 @@ Controller-local dependency adapters are allowed for import-surface management, 
 
 App packages coordinate domain workflows and phase sequencing.
 
-App packages may call services/managers, ports, and cross-cutting utilities.
+App packages may call services/managers, ports, and platform utilities.
 
-### Services/Managers (`internal/*`, L4)
+### Services/Managers (`internal/service/*`, L4)
 
 Services implement domain behavior and should consume adapters through `internal/port/*` contracts.
 
 Services must not import controller packages.
 
-### Adapters (`internal/*`, L6)
+### Adapters (`internal/adapter/*`, L6)
 
 Adapters implement ports and integration logic.
 

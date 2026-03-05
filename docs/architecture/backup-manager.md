@@ -12,7 +12,7 @@ Backup execution belongs to the AdminOps orchestration path:
 
 1. `internal/controller/openbaocluster` (adminops reconciler) receives the reconcile event.
 2. It delegates to `internal/app/openbaocluster` facade functions.
-3. The app layer calls `internal/app/openbaocluster/adminops`, which invokes `internal/backup`.
+3. The app layer calls `internal/app/openbaocluster/adminops`, which invokes `internal/service/backup`.
 
 This keeps controller code as reconcile plumbing while BackupManager owns backup domain behavior.
 

@@ -52,7 +52,7 @@ When creating files, use the most restrictive permissions possible.
 
 ### Certificates
 
-Do not implement custom certificate logic. Use the `internal/certs` package and shared certificate helpers.
+Do not implement custom certificate logic. Use the `internal/service/certs` package and shared certificate helpers.
 
 ## 3. No Shelling Out
 

@@ -31,7 +31,7 @@ secretName := fmt.Sprintf("%s-%d", cluster.Name, time.Now().Unix())
 
 ## Constants
 
-- Use `internal/constants/` for shared constants
+- Use `internal/platform/constants/` for shared constants
 - Use typed constants, not raw strings:
 
 ```go

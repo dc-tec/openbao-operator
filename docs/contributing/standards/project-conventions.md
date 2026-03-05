@@ -112,8 +112,8 @@ Every change requires verification.
 | **Critical Path** | End-to-End Test | `make test-e2e` |
 
 !!! tip "Golden Files"
-    Changes to `internal/config/builder.go` will often break tests.
-    Run `make test-update-golden` to update the expected output in `internal/config/testdata/`.
+    Changes to `internal/adapter/config/builder.go` will often break tests.
+    Run `make test-update-golden` to update the expected output in `internal/adapter/config/testdata/`.
 
 ## 7. CRD Evolution
 

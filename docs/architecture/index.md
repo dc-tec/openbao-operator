@@ -97,13 +97,13 @@ The runtime code is organized into layered packages to keep controller plumbing,
 | Layer | Purpose | Package examples |
 | :--- | :--- | :--- |
 | `L0` | API types | `api/v1alpha1` |
-| `L1` | Entrypoints/bootstrap | `cmd/controller`, `cmd/provisioner`, `cmd/bao-backup`, `cmd/bao-upgrade`, `cmd/bao-probe`, `internal/entrypoint` |
+| `L1` | Entrypoints/bootstrap | `cmd/controller`, `cmd/provisioner`, `cmd/bao-backup`, `cmd/bao-upgrade`, `cmd/bao-probe`, `internal/platform/entrypoint` |
 | `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore`, `internal/controller/provisioner` |
 | `L3` | App orchestration | `internal/app/openbaocluster` (facade + `statusops`, `deletionops`, `adminops`), `internal/app/openbaorestore`, `internal/app/provisioner` |
-| `L4` | Services/managers | `internal/backup`, `internal/restore`, `internal/upgrade`, `internal/infra`, `internal/certs`, `internal/init`, `internal/provisioner`, `internal/opslifecycle` |
+| `L4` | Services/managers | `internal/service/backup`, `internal/service/restore`, `internal/service/upgrade`, `internal/service/infra`, `internal/service/certs`, `internal/service/init`, `internal/service/provisioner`, `internal/service/opslifecycle` |
 | `L5` | Ports/contracts | `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/initmanager` |
-| `L6` | Adapters/integrations | `internal/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}` |
-| `L7` | Cross-cutting utilities | `internal/{errors,logging,reconcile,constants,predicates,observability,admission}` |
+| `L6` | Adapters/integrations | `internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}` |
+| `L7` | Platform/cross-cutting | `internal/platform/{errors,logging,reconcile,constants,predicates,observability,admission}` |
 
 Dependency intent is top-down across layers: higher layers depend on lower layers through narrow contracts, and adapters do not import controller packages.
 
