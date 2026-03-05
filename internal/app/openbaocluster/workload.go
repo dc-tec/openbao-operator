@@ -11,9 +11,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
 )
 
 // WorkloadResultPolicy configures known workload error handling behavior.

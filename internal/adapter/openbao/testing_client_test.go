@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
 func TestChaosClient_InsertsTransientFailures(t *testing.T) {

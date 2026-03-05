@@ -7,8 +7,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
 // SubReconciler is the shared contract for OpenBaoCluster app orchestration steps.

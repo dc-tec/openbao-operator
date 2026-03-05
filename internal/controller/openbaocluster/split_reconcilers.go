@@ -13,12 +13,12 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/observability"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
+	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
 )
 
 type openBaoClusterWorkloadReconciler struct {

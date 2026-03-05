@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	backupconfig "github.com/dc-tec/openbao-operator/internal/backup"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/storage"
+	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
 )
 
 func TestAuthenticate_Token(t *testing.T) {

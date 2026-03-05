@@ -14,9 +14,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	clusterpkg "github.com/dc-tec/openbao-operator/internal/cluster"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	"github.com/dc-tec/openbao-operator/internal/kube"
+	clusterpkg "github.com/dc-tec/openbao-operator/internal/adapter/cluster"
+	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
 // Manager handles the provisioning of RBAC resources for tenant namespaces.

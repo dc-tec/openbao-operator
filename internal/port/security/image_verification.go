@@ -7,8 +7,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	internalsecurity "github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	internalsecurity "github.com/dc-tec/openbao-operator/internal/security"
 )
 
 // NewImageVerifier creates the default cluster image verifier implementation.

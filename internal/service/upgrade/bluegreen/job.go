@@ -16,8 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/kube"
-	"github.com/dc-tec/openbao-operator/internal/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 const (

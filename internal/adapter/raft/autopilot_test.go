@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 )
 
 func ptrToInt32(v int32) *int32 {

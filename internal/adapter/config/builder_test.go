@@ -316,7 +316,7 @@ func compareGolden(t *testing.T, name string, got []byte) {
 
 	if gotStr != wantStr {
 		t.Errorf("HCL output does not match golden file %q", name)
-		t.Errorf("To update the golden file, run: UPDATE_GOLDEN=true go test ./internal/config -run %s", t.Name())
+		t.Errorf("To update the golden file, run: UPDATE_GOLDEN=true go test ./internal/adapter/config -run %s", t.Name())
 
 		// Show a simple line-by-line diff for better readability
 		gotLines := strings.Split(gotStr, "\n")

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/operationlock"
+	"github.com/dc-tec/openbao-operator/internal/adapter/operationlock"
 )
 
 func TestOperationLockIsHeldBy(t *testing.T) {

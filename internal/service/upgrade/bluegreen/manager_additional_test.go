@@ -9,8 +9,8 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/opslifecycle"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 )
 
 func TestManager_ShouldReconcileBlueGreen(t *testing.T) {

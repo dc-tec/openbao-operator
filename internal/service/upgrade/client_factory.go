@@ -1,6 +1,6 @@
 package upgrade
 
-import openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+import openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 
 // OpenBaoClientFactory creates OpenBao API clients for connecting to cluster pods.
 // This is primarily used for testing to inject mock clients.

@@ -10,9 +10,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/logging"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
 func (m *Manager) shouldHaltForBreakGlass(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) bool {

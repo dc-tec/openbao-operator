@@ -87,7 +87,7 @@ func TestDefaultDependencies(t *testing.T) {
 func TestDefaultDependenciesCoverConfigPolicyValidatingPolicies(t *testing.T) {
 	t.Parallel()
 
-	configPolicies, err := readConfigPolicyNames(filepath.Join("..", "..", "config", "policy"))
+	configPolicies, err := readConfigPolicyNames(filepath.Join("..", "..", "..", "config", "policy"))
 	if err != nil {
 		t.Fatalf("read config policy names: %v", err)
 	}

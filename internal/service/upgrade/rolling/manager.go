@@ -10,14 +10,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/logging"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
-	"github.com/dc-tec/openbao-operator/internal/opslifecycle"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 const (

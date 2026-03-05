@@ -11,9 +11,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	"github.com/dc-tec/openbao-operator/internal/logging"
-	"github.com/dc-tec/openbao-operator/internal/upgrade"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // initializeUpgrade sets up the upgrade state and locks the StatefulSet partition.

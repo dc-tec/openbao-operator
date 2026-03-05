@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 // PodURLForService returns the OpenBao API base URL for the given pod name via a headless Service.

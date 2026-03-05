@@ -5,7 +5,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func (r *OpenBaoClusterReconciler) determineStatusRequeue(logger logr.Logger, state *clusterState, original, cluster *openbaov1alpha1.OpenBaoCluster) ctrl.Result {

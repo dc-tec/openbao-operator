@@ -8,7 +8,7 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // performPodByPodUpgrade executes the rolling update, one pod at a time.

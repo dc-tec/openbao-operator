@@ -10,11 +10,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
-	"github.com/dc-tec/openbao-operator/internal/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // ensurePreUpgradeSnapshotJob creates or checks the status of the pre-upgrade snapshot Job.

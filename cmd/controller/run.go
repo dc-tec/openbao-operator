@@ -49,18 +49,18 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/admission"
-	"github.com/dc-tec/openbao-operator/internal/auth"
-	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
+	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	openbaoclustercontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
 	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
-	"github.com/dc-tec/openbao-operator/internal/entrypoint"
-	initmanager "github.com/dc-tec/openbao-operator/internal/init"
-	"github.com/dc-tec/openbao-operator/internal/logging"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
+	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
+	initmanager "github.com/dc-tec/openbao-operator/internal/service/init"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
-	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 )
 
 var (

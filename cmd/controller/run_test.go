@@ -20,7 +20,7 @@ import (
 	"testing"
 )
 
-// Note: OIDC/JWKS tests have been moved to internal/auth/oidc_test.go
+// Note: OIDC/JWKS tests have been moved to internal/adapter/auth/oidc_test.go
 // These tests verify the controller's integration with the auth package.
 
 // TestRun verifies that Run can be called without panicking.

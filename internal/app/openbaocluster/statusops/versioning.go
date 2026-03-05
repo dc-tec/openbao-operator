@@ -7,7 +7,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // ReconcileCurrentVersion aligns CurrentVersion with observed workload version

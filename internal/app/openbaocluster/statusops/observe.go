@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 // LabelConfig supplies labels used during status observation.

@@ -2,7 +2,7 @@
 // +build ignore
 
 // This is a temporary helper program to fetch the trusted_root.json file.
-// It should be run via: go run internal/security/fetch_trusted_root.go
+// It should be run via: go run internal/adapter/security/fetch_trusted_root.go
 package main
 
 import (

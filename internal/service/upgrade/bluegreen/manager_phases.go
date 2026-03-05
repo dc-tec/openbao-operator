@@ -13,12 +13,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/logging"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/upgrade"
+	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // handlePhaseIdle transitions from Idle to DeployingGreen when an upgrade is detected.

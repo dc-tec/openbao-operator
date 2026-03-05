@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"k8s.io/utils/ptr"
 )
 

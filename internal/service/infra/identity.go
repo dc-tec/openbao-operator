@@ -11,8 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/revision"
+	"github.com/dc-tec/openbao-operator/internal/adapter/revision"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 // ensureServiceAccount manages the ServiceAccount for the OpenBaoCluster using Server-Side Apply.

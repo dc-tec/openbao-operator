@@ -16,8 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/auth"
-	configbuilder "github.com/dc-tec/openbao-operator/internal/config"
+	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
+	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
 )
 
 // usesStaticSeal returns true if the cluster is configured to use the static seal

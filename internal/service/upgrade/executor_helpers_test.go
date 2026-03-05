@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 )
 
 func TestReasonCodeFromContextError(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 )
 
 type fakeRaftPeerDemoter struct {

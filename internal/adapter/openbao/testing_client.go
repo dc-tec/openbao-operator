@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
 // MockClusterActions is a mock implementation of ClusterActions for testing.

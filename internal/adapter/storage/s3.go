@@ -26,7 +26,7 @@ import (
 	"gocloud.dev/blob/s3blob"
 	"gocloud.dev/gcerrors"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 

@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/client-go/rest"
 
-	internalauth "github.com/dc-tec/openbao-operator/internal/auth"
+	internalauth "github.com/dc-tec/openbao-operator/internal/adapter/auth"
 )
 
 // OIDCConfig contains discovered issuer and key material for JWT bootstrap.

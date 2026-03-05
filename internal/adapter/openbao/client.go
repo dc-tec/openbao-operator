@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"time"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
 const (

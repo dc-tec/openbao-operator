@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	backupconfig "github.com/dc-tec/openbao-operator/internal/backup"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
-	"github.com/dc-tec/openbao-operator/internal/storage"
+	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
 )
 
 const (

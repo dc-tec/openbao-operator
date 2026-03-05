@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"golang.org/x/time/rate"
 )
 

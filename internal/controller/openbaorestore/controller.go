@@ -29,12 +29,12 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	observability "github.com/dc-tec/openbao-operator/internal/observability"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/restore"
+	"github.com/dc-tec/openbao-operator/internal/service/restore"
 )
 
 // OpenBaoRestoreReconciler reconciles a OpenBaoRestore object.

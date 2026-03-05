@@ -1,6 +1,6 @@
 package openbao
 
-import internalopenbao "github.com/dc-tec/openbao-operator/internal/openbao"
+import internalopenbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 
 const (
 	// LabelActive is set by OpenBao's Kubernetes service registration.

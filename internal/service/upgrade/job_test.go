@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dc-tec/openbao-operator/internal/auth"
-	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/openbao"
+	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 )
 
 func TestBuildUpgradeExecutorJob_SecurityContext(t *testing.T) {

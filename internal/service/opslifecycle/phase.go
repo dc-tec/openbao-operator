@@ -3,7 +3,7 @@ package opslifecycle
 import (
 	"github.com/go-logr/logr"
 
-	"github.com/dc-tec/openbao-operator/internal/logging"
+	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 )
 
 // LogPhaseTransition emits a consistent audit event for phase transitions.

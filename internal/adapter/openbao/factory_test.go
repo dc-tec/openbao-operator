@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func TestClientFactory_New_NilReceiver(t *testing.T) {

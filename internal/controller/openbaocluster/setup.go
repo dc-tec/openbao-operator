@@ -12,8 +12,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	operatorpredicates "github.com/dc-tec/openbao-operator/internal/platform/predicates"
 	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
-	operatorpredicates "github.com/dc-tec/openbao-operator/internal/predicates"
 )
 
 // SetupWithManager sets up the OpenBaoCluster controllers with the Manager.

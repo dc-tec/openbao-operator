@@ -6,11 +6,11 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/dc-tec/openbao-operator/internal/admission"
-	certmanager "github.com/dc-tec/openbao-operator/internal/certs"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
 )
 
 // OpenBaoClusterReconciler reconciles a OpenBaoCluster object.

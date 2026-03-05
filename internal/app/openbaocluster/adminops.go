@@ -7,7 +7,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	adminopsapp "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminops"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
 // AdminOpsDependencies holds dependencies required to build admin operations reconcilers.

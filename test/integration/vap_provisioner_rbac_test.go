@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	provisionerpkg "github.com/dc-tec/openbao-operator/internal/provisioner"
+	provisionerpkg "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
 // Use the legacy/double-prefixed provisioner username to keep upgrade/migration paths covered.
