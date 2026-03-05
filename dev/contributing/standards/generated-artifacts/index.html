@@ -3608,6 +3608,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#5-ast-grep-architecture-boundary-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Ast-Grep Architecture Boundary Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4382,6 +4393,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#5-ast-grep-architecture-boundary-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Ast-Grep Architecture Boundary Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4468,14 +4490,19 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <td style="text-align: left;"><code>verify-helm</code></td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>.ast-grep/policy/architecture-boundaries.yml</code></td>
+<td style="text-align: left;"><code>make generate-ast-rules</code></td>
+<td style="text-align: left;"><code>verify-arch-policy</code></td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>internal/config/*.go</code></td>
 <td style="text-align: left;"><code>make test-update-golden</code></td>
 <td style="text-align: left;"><code>test</code> (fails if mismatch)</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>I don't know</strong></td>
-<td style="text-align: left;"><code>make generate manifests api-reference helm-sync</code></td>
-<td style="text-align: left;"><code>verify-generated</code></td>
+<td style="text-align: left;"><code>make generate manifests api-reference helm-sync generate-ast-rules</code></td>
+<td style="text-align: left;"><code>verify-generated</code>, <code>verify-arch-policy</code></td>
 </tr>
 </tbody>
 </table>
@@ -4514,12 +4541,19 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <li><strong>Output:</strong> <code>internal/config/testdata/*.golden.hcl</code></li>
 <li><strong>Command:</strong> <code>make test-update-golden</code></li>
 </ul>
+<h3 id="5-ast-grep-architecture-boundary-rules">5. Ast-Grep Architecture Boundary Rules<a class="headerlink" href="#5-ast-grep-architecture-boundary-rules" title="Permanent link">&para;</a></h3>
+<p>Architecture boundary rules are generated from policy for CI enforcement.</p>
+<ul>
+<li><strong>Source:</strong> <code>.ast-grep/policy/architecture-boundaries.yml</code></li>
+<li><strong>Output:</strong> <code>.ast-grep/rules/generated/architecture-boundary/*.yml</code></li>
+<li><strong>Command:</strong> <code>make generate-ast-rules</code></li>
+</ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="ci-failure-diff-found-in-generated-files">CI Failure: "Diff found in generated files"<a class="headerlink" href="#ci-failure-diff-found-in-generated-files" title="Permanent link">&para;</a></h3>
-<p>If the <code>verify-generated</code> or <code>verify-helm</code> job fails in CI, it means you forgot to check in the updated artifacts.</p>
+<p>If <code>verify-generated</code>, <code>verify-helm</code>, or <code>verify-arch-policy</code> fails in CI, it means generated artifacts are out of date.</p>
 <p><strong>Fix:</strong></p>
 <ol>
-<li>Run the suggested command locally (e.g., <code>make manifests generate api-reference helm-sync</code>).</li>
+<li>Run the suggested command locally (e.g., <code>make manifests generate api-reference helm-sync generate-ast-rules</code>).</li>
 <li>Verify you see changes in <code>config/</code>, <code>docs/reference/</code>, or <code>charts/</code>.</li>
 <li>Commit and push those changes.</li>
 </ol>

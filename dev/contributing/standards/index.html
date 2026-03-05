@@ -4394,11 +4394,13 @@
 <ul class="task-list">
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Format Code:</strong> Always run <code>gofmt</code> or <code>goimports</code>.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Linting:</strong> Pass <code>golangci-lint</code> with the default configuration.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Respect Architecture Boundaries:</strong> Keep controller imports and package layering aligned with <code>.ast-grep/policy/architecture-boundaries.yml</code>.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Keep ast-grep Rule Families Green:</strong> Ensure <code>architecture-boundary</code>, <code>runtime-safety</code>, <code>reconcile-shape</code>, <code>status-ownership</code>, and <code>rbac-vap</code> checks pass.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Wrap Errors:</strong> Use <code>fmt.Errorf("...: %w", err)</code> to preserve context.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Structured Logs:</strong> Use <code>log.Info("msg", "key", "value")</code> instead of <code>Printf</code>.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Test Logic:</strong> Write table-driven unit tests for all business logic.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Verify:</strong> Run the full check suite:
-    <code>make lint verify-fmt verify-tidy verify-generated verify-helm test-ci</code></li>
+    <code>make lint-ci verify-arch-policy verify-fmt verify-tidy verify-generated verify-helm test-ci</code></li>
 </ul>
 </div>
 <div class="admonition failure">

@@ -4686,7 +4686,7 @@
 <h2 id="2-ci-vs-local-commands">2. CI vs Local Commands<a class="headerlink" href="#2-ci-vs-local-commands" title="Permanent link">&para;</a></h2>
 <p>Run these commands locally to reproduce CI behavior.</p>
 <h3 id="21-core-pr-equivalent-checks">2.1 Core PR-equivalent checks<a class="headerlink" href="#21-core-pr-equivalent-checks" title="Permanent link">&para;</a></h3>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>lint-config<span class="w"> </span>lint
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>lint-ci
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>verify-fmt
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>make<span class="w"> </span>verify-tidy
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>make<span class="w"> </span>verify-vendor
@@ -4696,6 +4696,10 @@
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>make<span class="w"> </span>verify-openbao-config-compat
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>make<span class="w"> </span>docs-build
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code>make lint-ci</code> includes ast-grep policy generation/verification, rule tests, and strict scans. It requires the <code>ast-grep</code> CLI to be available on your <code>PATH</code>.</p>
+</div>
 <h3 id="22-job-to-command-mapping">2.2 Job-to-command mapping<a class="headerlink" href="#22-job-to-command-mapping" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -4708,8 +4712,8 @@
 <tbody>
 <tr>
 <td style="text-align: left;"><code>Lint</code></td>
-<td style="text-align: left;"><code>make lint-config lint</code></td>
-<td style="text-align: left;">Linter config + lint run</td>
+<td style="text-align: left;"><code>make lint-ci</code></td>
+<td style="text-align: left;">GolangCI-Lint config + lint run, plus ast-grep policy verification, rule tests, and strict scan</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Verify Formatting</code></td>

@@ -4668,13 +4668,24 @@ set <code>E2E_STORAGE_CLASS=&lt;name&gt;</code> to a class with <code>allowVolum
 </div>
 </div>
 <h2 id="code-quality-standards">Code Quality Standards<a class="headerlink" href="#code-quality-standards" title="Permanent link">&para;</a></h2>
-<p>We enforce strict quality gates via <code>make lint</code>.</p>
+<p>We enforce strict quality gates via <code>make lint-ci</code>.</p>
 <div class="grid cards">
 <ul>
 <li>
 <p><strong>GolangCI-Lint</strong></p>
 <p>Static analysis for bugs and anti-patterns.</p>
 <p><code>make lint</code></p>
+</li>
+<li>
+<p><strong>Ast-Grep Guardrails</strong></p>
+<p>Policy- and rule-driven checks for architecture and runtime safety.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>generate-ast-rules
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>make<span class="w"> </span>verify-arch-policy
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>make<span class="w"> </span>test-ast
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>make<span class="w"> </span>lint-ast
+</span></code></pre></div>
+<p>Full lint gate (CI-equivalent):</p>
+<p><code>make lint-ci</code></p>
 </li>
 <li>
 <p><strong>Formatting</strong></p>

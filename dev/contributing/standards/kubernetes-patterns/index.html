@@ -3609,15 +3609,26 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-concurrency-context" class="md-nav__link">
+  <a href="#3-controller-boundary-pattern" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Concurrency &amp; Context
+        3. Controller Boundary Pattern
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="3. Concurrency &amp; Context">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-concurrency-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Concurrency &amp; Context
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Concurrency &amp; Context">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3648,15 +3659,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-structured-logging" class="md-nav__link">
+  <a href="#5-structured-logging" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Structured Logging
+        5. Structured Logging
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="4. Structured Logging">
+    <nav class="md-nav" aria-label="5. Structured Logging">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -4372,15 +4383,26 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-concurrency-context" class="md-nav__link">
+  <a href="#3-controller-boundary-pattern" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Concurrency &amp; Context
+        3. Controller Boundary Pattern
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="3. Concurrency &amp; Context">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-concurrency-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Concurrency &amp; Context
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Concurrency &amp; Context">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -4411,15 +4433,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-structured-logging" class="md-nav__link">
+  <a href="#5-structured-logging" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Structured Logging
+        5. Structured Logging
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="4. Structured Logging">
+    <nav class="md-nav" aria-label="5. Structured Logging">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -4480,7 +4502,7 @@
     Check -- Yes --&gt; Child[Fetch Child Resources]
     Child --&gt; Diff{Diff State}
     Diff -- "Drift Detected" --&gt; Act[Create / Update]
-    Diff -- "Synced" --&gt; Status[Update Status]
+    Diff -- "Synced" --&gt; Status["Patch Status (via helper/facade)"]
     Act --&gt; Status
     Status --&gt; End([End: Requeue if needed])
 
@@ -4534,43 +4556,71 @@
 </div>
 </div>
 </div>
-<h2 id="3-concurrency-context">3. Concurrency &amp; Context<a class="headerlink" href="#3-concurrency-context" title="Permanent link">&para;</a></h2>
-<h3 id="no-unmanaged-goroutines">No Unmanaged Goroutines<a class="headerlink" href="#no-unmanaged-goroutines" title="Permanent link">&para;</a></h3>
-<p>The Controller Runtime manages concurrency for you. Do <strong>not</strong> spawn goroutines inside a Reconciler.</p>
+<h2 id="3-controller-boundary-pattern">3. Controller Boundary Pattern<a class="headerlink" href="#3-controller-boundary-pattern" title="Permanent link">&para;</a></h2>
+<p>Controllers should stay as reconcile plumbing and delegate orchestration to the app layer.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 7 9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59z"/></svg></span> Good Pattern</label><label for="__tabbed_2_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></span> Bad Pattern</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-go highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">heavyOperation</span><span class="p">(</span><span class="nx">ctx</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">ctrl</span><span class="p">.</span><span class="nx">Result</span><span class="p">{},</span><span class="w"> </span><span class="nx">err</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="p">}</span>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">// Controller path: observe + delegate + patch/requeue</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nx">result</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">appopenbaocluster</span><span class="p">.</span><span class="nx">ReconcileAdminOps</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">Client</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">,</span><span class="w"> </span><span class="nx">log</span><span class="p">,</span><span class="w"> </span><span class="nx">deps</span><span class="p">)</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">ctrl</span><span class="p">.</span><span class="nx">Result</span><span class="p">{},</span><span class="w"> </span><span class="nx">err</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">}</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">return</span><span class="w"> </span><span class="nx">result</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-go highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">go</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="c1">// Race conditions, lost errors, potential crash</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nx">r</span><span class="p">.</span><span class="nx">heavyOperation</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p">}()</span>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1">// Controller directly orchestrates deep domain flow</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">upgrademanager</span><span class="p">.</span><span class="nx">NewManager</span><span class="p">(</span><span class="o">...</span><span class="p">).</span><span class="nx">ReconcileUpdate</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">cluster</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">ctrl</span><span class="p">.</span><span class="nx">Result</span><span class="p">{},</span><span class="w"> </span><span class="nx">err</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p">}</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Policy-Enforced</p>
+<p>Architecture boundaries are enforced by ast-grep rules generated from <code>.ast-grep/policy/architecture-boundaries.yml</code>.
+When adding a new controller or top-level internal package, update policy first and run:
+<code>make generate-ast-rules verify-arch-policy test-ast lint-ast</code> (or run <code>make lint-ci</code>).</p>
+</div>
+<h2 id="4-concurrency-context">4. Concurrency &amp; Context<a class="headerlink" href="#4-concurrency-context" title="Permanent link">&para;</a></h2>
+<h3 id="no-unmanaged-goroutines">No Unmanaged Goroutines<a class="headerlink" href="#no-unmanaged-goroutines" title="Permanent link">&para;</a></h3>
+<p>The Controller Runtime manages concurrency for you. Do <strong>not</strong> spawn goroutines inside a Reconciler.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 7 9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59z"/></svg></span> Good Pattern</label><label for="__tabbed_3_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></span> Bad Pattern</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-go highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">heavyOperation</span><span class="p">(</span><span class="nx">ctx</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">ctrl</span><span class="p">.</span><span class="nx">Result</span><span class="p">{},</span><span class="w"> </span><span class="nx">err</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="p">}</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-go highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">go</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="c1">// Race conditions, lost errors, potential crash</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nx">r</span><span class="p">.</span><span class="nx">heavyOperation</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="p">}()</span>
 </span></code></pre></div>
 </div>
 </div>
 </div>
 <h3 id="no-blocking">No Blocking<a class="headerlink" href="#no-blocking" title="Permanent link">&para;</a></h3>
 <p>Never block the reconcile thread with <code>time.Sleep</code>. This starves other resources from being reconciled.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 7 9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59z"/></svg></span> Good Pattern</label><label for="__tabbed_3_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></span> Bad Pattern</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 7 9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59z"/></svg></span> Good Pattern</label><label for="__tabbed_4_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></span> Bad Pattern</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-go highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">// Re-run this loop in 10 seconds</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">return</span><span class="w"> </span><span class="nx">ctrl</span><span class="p">.</span><span class="nx">Result</span><span class="p">{</span><span class="nx">RequeueAfter</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">},</span><span class="w"> </span><span class="kc">nil</span>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">// Re-run this loop in 10 seconds</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">return</span><span class="w"> </span><span class="nx">ctrl</span><span class="p">.</span><span class="nx">Result</span><span class="p">{</span><span class="nx">RequeueAfter</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">},</span><span class="w"> </span><span class="kc">nil</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-go highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1">// Blocks the thread completely</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="mi">10</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// Blocks the thread completely</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="mi">10</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
 </span></code></pre></div>
 </div>
 </div>
 </div>
-<h2 id="4-structured-logging">4. Structured Logging<a class="headerlink" href="#4-structured-logging" title="Permanent link">&para;</a></h2>
+<h2 id="5-structured-logging">5. Structured Logging<a class="headerlink" href="#5-structured-logging" title="Permanent link">&para;</a></h2>
 <p>Use the context-aware logger. It automatically attaches <code>reconcile_id</code> and other metadata.</p>
 <h3 id="standard-fields">Standard Fields<a class="headerlink" href="#standard-fields" title="Permanent link">&para;</a></h3>
 <table>
@@ -4596,20 +4646,20 @@
 </tbody>
 </table>
 <h3 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h3>
-<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 7 9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59z"/></svg></span> Good Pattern</label><label for="__tabbed_4_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></span> Bad Pattern</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 7 9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59z"/></svg></span> Good Pattern</label><label for="__tabbed_5_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></span> Bad Pattern</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-go highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nx">log</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">log</span><span class="p">.</span><span class="nx">FromContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nx">log</span><span class="p">.</span><span class="nx">Info</span><span class="p">(</span><span class="s">&quot;Reconciling connection&quot;</span><span class="p">,</span><span class="w"> </span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="s">&quot;cluster_name&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Name</span><span class="p">,</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="s">&quot;mode&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;production&quot;</span><span class="p">,</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="p">)</span>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nx">log</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">log</span><span class="p">.</span><span class="nx">FromContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nx">log</span><span class="p">.</span><span class="nx">Info</span><span class="p">(</span><span class="s">&quot;Reconciling connection&quot;</span><span class="p">,</span><span class="w"> </span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="s">&quot;cluster_name&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Name</span><span class="p">,</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="s">&quot;mode&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;production&quot;</span><span class="p">,</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">)</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-go highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// Losing context</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nx">fmt</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;Reconciling %s\n&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Name</span><span class="p">)</span>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1">// Losing context</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nx">fmt</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;Reconciling %s\n&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Name</span><span class="p">)</span>
 </span></code></pre></div>
 </div>
 </div>

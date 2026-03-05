@@ -3743,15 +3743,26 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-observability-standards" class="md-nav__link">
+  <a href="#4-architecture-boundary-policy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Observability Standards
+        4. Architecture Boundary Policy
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="4. Observability Standards">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-observability-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Observability Standards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Observability Standards">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3782,10 +3793,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-testing-requirements" class="md-nav__link">
+  <a href="#6-testing-requirements" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Testing Requirements
+        6. Testing Requirements
       
     </span>
   </a>
@@ -3793,10 +3804,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-crd-evolution" class="md-nav__link">
+  <a href="#7-crd-evolution" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. CRD Evolution
+        7. CRD Evolution
       
     </span>
   </a>
@@ -4455,15 +4466,26 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-observability-standards" class="md-nav__link">
+  <a href="#4-architecture-boundary-policy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Observability Standards
+        4. Architecture Boundary Policy
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="4. Observability Standards">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-observability-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Observability Standards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Observability Standards">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -4494,10 +4516,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-testing-requirements" class="md-nav__link">
+  <a href="#6-testing-requirements" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Testing Requirements
+        6. Testing Requirements
       
     </span>
   </a>
@@ -4505,10 +4527,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-crd-evolution" class="md-nav__link">
+  <a href="#7-crd-evolution" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. CRD Evolution
+        7. CRD Evolution
       
     </span>
   </a>
@@ -4611,7 +4633,20 @@ It defeats compile-time safety and requires runtime type assertions.</p>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>No Drive-By Changes</strong>: Do not reformat unrelated files.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Update Generated Files</strong>: If you change <code>api/</code>, run <code>make manifests generate</code>.</li>
 </ul>
-<h2 id="4-observability-standards">4. Observability Standards<a class="headerlink" href="#4-observability-standards" title="Permanent link">&para;</a></h2>
+<h2 id="4-architecture-boundary-policy">4. Architecture Boundary Policy<a class="headerlink" href="#4-architecture-boundary-policy" title="Permanent link">&para;</a></h2>
+<p>Architecture boundaries are policy-driven and enforced in CI.</p>
+<ul>
+<li><strong>Source of truth:</strong> <code>.ast-grep/policy/architecture-boundaries.yml</code></li>
+<li><strong>Generated rules:</strong> <code>.ast-grep/rules/generated/architecture-boundary/</code></li>
+<li><strong>Verification:</strong> <code>make verify-arch-policy</code></li>
+</ul>
+<p>When introducing a new top-level <code>internal/*</code> package or a new controller package:</p>
+<ol>
+<li>Update <code>.ast-grep/policy/architecture-boundaries.yml</code>.</li>
+<li>Run <code>make generate-ast-rules</code>.</li>
+<li>Run <code>make verify-arch-policy test-ast lint-ast</code>.</li>
+</ol>
+<h2 id="5-observability-standards">5. Observability Standards<a class="headerlink" href="#5-observability-standards" title="Permanent link">&para;</a></h2>
 <h3 id="metrics">Metrics<a class="headerlink" href="#metrics" title="Permanent link">&para;</a></h3>
 <p>Must use the <code>openbao_</code> prefix and standard labels.</p>
 <table>
@@ -4636,8 +4671,8 @@ It defeats compile-time safety and requires runtime type assertions.</p>
 </tbody>
 </table>
 <h3 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h3>
-<p>See <a href="../kubernetes-patterns/#4-structured-logging">Kubernetes Patterns</a> for detailed logging rules.</p>
-<h2 id="5-testing-requirements">5. Testing Requirements<a class="headerlink" href="#5-testing-requirements" title="Permanent link">&para;</a></h2>
+<p>See <a href="../kubernetes-patterns/#5-structured-logging">Kubernetes Patterns</a> for detailed logging rules.</p>
+<h2 id="6-testing-requirements">6. Testing Requirements<a class="headerlink" href="#6-testing-requirements" title="Permanent link">&para;</a></h2>
 <p>Every change requires verification.</p>
 <table>
 <thead>
@@ -4675,7 +4710,7 @@ It defeats compile-time safety and requires runtime type assertions.</p>
 <p>Changes to <code>internal/config/builder.go</code> will often break tests.
 Run <code>make test-update-golden</code> to update the expected output in <code>internal/config/testdata/</code>.</p>
 </div>
-<h2 id="6-crd-evolution">6. CRD Evolution<a class="headerlink" href="#6-crd-evolution" title="Permanent link">&para;</a></h2>
+<h2 id="7-crd-evolution">7. CRD Evolution<a class="headerlink" href="#7-crd-evolution" title="Permanent link">&para;</a></h2>
 <p>Breaking changes to <code>OpenBaoCluster</code> are <strong>expensive</strong>.</p>
 <ol>
 <li><strong>Prefer Additive Changes</strong>: Add new optional fields; do not rename or remove existing ones.</li>

@@ -3415,6 +3415,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ast-grep-architecture-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ast-Grep Architecture Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4315,6 +4326,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ast-grep-architecture-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ast-Grep Architecture Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4463,8 +4485,18 @@
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Verify</strong></td>
-<td style="text-align: left;"><code>make lint</code></td>
-<td style="text-align: left;">Run code linters.</td>
+<td style="text-align: left;"><code>make lint-ci</code></td>
+<td style="text-align: left;">Run code linters and ast-grep guardrails.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make generate-ast-rules</code></td>
+<td style="text-align: left;">Generate ast-grep architecture boundary rules from policy.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make verify-arch-policy</code></td>
+<td style="text-align: left;">Verify generated ast-grep architecture rules are up-to-date.</td>
 </tr>
 <tr>
 <td style="text-align: left;"></td>
@@ -4533,11 +4565,23 @@ To track trends locally across refactors, save a baseline snapshot and compare a
 <p>You can override the compared files when needed:</p>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nv">BASELINE_REPORT</span><span class="o">=</span>/path/to/old-report.md<span class="w"> </span><span class="nv">CURRENT_REPORT</span><span class="o">=</span>/path/to/new-report.md<span class="w"> </span>make<span class="w"> </span>report-internal-deps-diff
 </span></code></pre></div>
+<h2 id="ast-grep-architecture-policy">Ast-Grep Architecture Policy<a class="headerlink" href="#ast-grep-architecture-policy" title="Permanent link">&para;</a></h2>
+<p>Ast-grep architecture boundary rules are generated from:</p>
+<ul>
+<li><code>.ast-grep/policy/architecture-boundaries.yml</code></li>
+</ul>
+<p>When adding new top-level <code>internal/*</code> packages or new controller packages, update this policy first so coverage checks stay complete.</p>
+<p>Regenerate and verify before pushing:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>make<span class="w"> </span>generate-ast-rules
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>make<span class="w"> </span>verify-arch-policy
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>make<span class="w"> </span>test-ast
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>make<span class="w"> </span>lint-ast
+</span></code></pre></div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <details class="question">
 <summary>RBAC Errors during <code>make deploy</code>?</summary>
 <p>Ensure your current kubeconfig user has <code>cluster-admin</code> privileges.
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>clusterrolebinding<span class="w"> </span>my-admin<span class="w"> </span>--clusterrole<span class="o">=</span>cluster-admin<span class="w"> </span>--user<span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>config<span class="w"> </span>get-value<span class="w"> </span>account<span class="k">)</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>clusterrolebinding<span class="w"> </span>my-admin<span class="w"> </span>--clusterrole<span class="o">=</span>cluster-admin<span class="w"> </span>--user<span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>config<span class="w"> </span>get-value<span class="w"> </span>account<span class="k">)</span>
 </span></code></pre></div></p>
 </details>
 <details class="question">
