@@ -173,9 +173,9 @@ spec:
     # Storage Immutability: Prevent storage class changes (immutable in StatefulSet)
     - expression: >-
         oldObject == null ||
-        !has(oldObject.spec.storage.storageClassName) ||
-        object.spec.storage.storageClassName == oldObject.spec.storage.storageClassName
-      message: "spec.storage.storageClassName is immutable."
+        (has(object.spec.storage.storageClassName) ? object.spec.storage.storageClassName : "") ==
+        (has(oldObject.spec.storage.storageClassName) ? oldObject.spec.storage.storageClassName : "")
+      message: "spec.storage.storageClassName is immutable after creation; set it explicitly before PVCs are created."
     # Storage Expansion: Prevent shrinking storage
     - expression: >-
         oldObject == null ||

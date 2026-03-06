@@ -30,7 +30,7 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
 !!! tip "Resource Planning"
     - [ ] **Resources**: Set explicit `requests` and `limits`. Minimum **256Mi** memory for small clusters; scale CPU based on expected request rate.
         - [Learn more](../configuration/resources-storage.md)
-    - [ ] **Storage Class**: Use a high-performance (SSD), low-latency StorageClass. Raft requires low fsync latency.
+    - [ ] **Storage Class**: Use a high-performance (SSD), low-latency StorageClass and set `spec.storage.storageClassName` explicitly on new clusters. Raft requires low fsync latency, and the effective storage class is immutable after PVC creation.
     - [ ] **Volume Size**: Plan for growth. Raft snapshots can consume significant space.
 
 !!! tip "Availability"
