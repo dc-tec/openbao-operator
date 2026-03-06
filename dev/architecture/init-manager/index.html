@@ -2342,6 +2342,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provisioner-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant Provisioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operation-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operation Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4484,10 +4540,10 @@ The initialization response is held in memory only for the duration of the reque
 </ul>
 <hr />
 <h2 id="4-autopilot-configuration">4. Autopilot Configuration<a class="headerlink" href="#4-autopilot-configuration" title="Permanent link">&para;</a></h2>
-<p>After successful initialization, the InitManager configures <strong>Raft Autopilot</strong> for automatic dead server cleanup.</p>
+<p>After successful initialization, the InitManager configures <strong>Raft Autopilot</strong> for automatic dead server cleanup and quorum safety defaults.</p>
 <div class="admonition note">
-<p class="admonition-title">Always-On Feature</p>
-<p>Autopilot dead server cleanup is <strong>enabled by default</strong> for all clusters. This prevents orphaned Raft peers from accumulating when pods are terminated.</p>
+<p class="admonition-title">Default Behavior</p>
+<p>Autopilot configuration is reconciled for every initialized cluster. Dead server cleanup defaults to <code>true</code>, but the operator forces it to <code>false</code> for small clusters when <code>min_quorum &lt; 3</code> and the user did not explicitly override <code>cleanupDeadServers</code>. This keeps the rendered configuration valid for OpenBao.</p>
 </div>
 <h3 id="default-configuration">Default Configuration<a class="headerlink" href="#default-configuration" title="Permanent link">&para;</a></h3>
 <table>
@@ -4501,8 +4557,8 @@ The initialization response is held in memory only for the duration of the reque
 <tbody>
 <tr>
 <td style="text-align: left;"><code>cleanup_dead_servers</code></td>
-<td style="text-align: left;"><code>true</code></td>
-<td style="text-align: left;">Enable automatic removal of failed peers</td>
+<td style="text-align: left;"><code>true</code> by default; forced to <code>false</code> when <code>min_quorum &lt; 3</code> and the user did not explicitly override it</td>
+<td style="text-align: left;">Enable automatic removal of failed peers only when OpenBao accepts the configuration</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>dead_server_last_contact_threshold</code></td>
@@ -4510,9 +4566,24 @@ The initialization response is held in memory only for the duration of the reque
 <td style="text-align: left;">Time before a server is considered dead</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>last_contact_threshold</code></td>
+<td style="text-align: left;"><code>10s</code></td>
+<td style="text-align: left;">Maximum acceptable heartbeat delay before a peer is considered unhealthy</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>server_stabilization_time</code></td>
+<td style="text-align: left;"><code>10s</code></td>
+<td style="text-align: left;">Required stabilization period before a server is considered stable</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_trailing_logs</code></td>
+<td style="text-align: left;"><code>1000</code></td>
+<td style="text-align: left;">Maximum replication lag before Autopilot considers a server unhealthy</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>min_quorum</code></td>
-<td style="text-align: left;"><code>max(3, replicas/2+1)</code></td>
-<td style="text-align: left;">Minimum servers before pruning allowed</td>
+<td style="text-align: left;"><code>Hardened</code>: <code>3</code>, or <code>replicas</code> when <code>replicas &gt; 3</code>; other profiles: <code>max(1, replicas)</code></td>
+<td style="text-align: left;">Minimum cluster size required before dead-server cleanup can proceed</td>
 </tr>
 </tbody>
 </table>
@@ -4524,8 +4595,12 @@ The initialization response is held in memory only for the duration of the reque
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">      </span><span class="nt">autopilot</span><span class="p">:</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">        </span><span class="nt">cleanupDeadServers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">        </span><span class="nt">deadServerLastContactThreshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5m&quot;</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">        </span><span class="nt">minQuorum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">        </span><span class="nt">minQuorum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Cleanup Requires <code>minQuorum &gt;= 3</code></p>
+<p>OpenBao requires <code>cleanupDeadServers=true</code> to be paired with <code>minQuorum &gt;= 3</code>. If you intentionally set a lower <code>minQuorum</code>, also set <code>cleanupDeadServers: false</code>.</p>
+</div>
 <h3 id="disabling-autopilot-cleanup">Disabling Autopilot Cleanup<a class="headerlink" href="#disabling-autopilot-cleanup" title="Permanent link">&para;</a></h3>
 <p>To disable automatic dead server cleanup:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">spec</span><span class="p">:</span>

@@ -2342,6 +2342,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provisioner-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant Provisioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operation-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operation Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4412,7 +4468,7 @@
 <ol>
 <li><code>internal/controller/openbaocluster</code> (adminops reconciler) receives the reconcile event.</li>
 <li>It delegates to <code>internal/app/openbaocluster</code> facade functions.</li>
-<li>The app layer calls <code>internal/app/openbaocluster/adminops</code>, which invokes rolling (<code>internal/upgrade/rolling</code>) or blue/green (<code>internal/upgrade/bluegreen</code>) manager flows.</li>
+<li>The app layer calls <code>internal/app/openbaocluster/adminops</code>, which invokes rolling (<code>internal/service/upgrade/rolling</code>) or blue/green (<code>internal/service/upgrade/bluegreen</code>) manager flows.</li>
 </ol>
 <p>This keeps controller code focused on reconcile wiring while the upgrade domain stays in dedicated manager packages.</p>
 <h2 id="2-upgrade-strategies">2. Upgrade Strategies<a class="headerlink" href="#2-upgrade-strategies" title="Permanent link">&para;</a></h2>

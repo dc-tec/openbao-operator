@@ -2409,6 +2409,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="provisioner-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant Provisioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="operation-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operation Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4607,13 +4663,13 @@
     class Operator,Workload,AdminOps,Status,Restore,Provisioner,ProvisionerMgr process;
     class STS,Svc,ObjStore,Pods,PVC write;</code></pre>
 <h3 id="13-code-package-model">1.3 Code Package Model<a class="headerlink" href="#13-code-package-model" title="Permanent link">&para;</a></h3>
-<p>The runtime code is organized into layered packages to keep controller plumbing, orchestration, and adapters separated.</p>
+<p>The runtime code is organized into layered packages to keep controller plumbing, orchestration, and integration code separated.</p>
 <table>
 <thead>
 <tr>
 <th style="text-align: left;">Layer</th>
 <th style="text-align: left;">Purpose</th>
-<th style="text-align: left;">Package examples</th>
+<th style="text-align: left;">Current package roots</th>
 </tr>
 </thead>
 <tbody>
@@ -4625,7 +4681,7 @@
 <tr>
 <td style="text-align: left;"><code>L1</code></td>
 <td style="text-align: left;">Entrypoints/bootstrap</td>
-<td style="text-align: left;"><code>cmd/controller</code>, <code>cmd/provisioner</code>, <code>cmd/bao-backup</code>, <code>cmd/bao-upgrade</code>, <code>cmd/bao-probe</code>, <code>internal/entrypoint</code></td>
+<td style="text-align: left;"><code>cmd/controller</code>, <code>cmd/provisioner</code>, <code>cmd/bao-backup</code>, <code>cmd/bao-upgrade</code>, <code>cmd/bao-probe</code>, <code>internal/platform/entrypoint</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>L2</code></td>
@@ -4640,26 +4696,27 @@
 <tr>
 <td style="text-align: left;"><code>L4</code></td>
 <td style="text-align: left;">Services/managers</td>
-<td style="text-align: left;"><code>internal/backup</code>, <code>internal/restore</code>, <code>internal/upgrade</code>, <code>internal/infra</code>, <code>internal/certs</code>, <code>internal/init</code>, <code>internal/provisioner</code>, <code>internal/opslifecycle</code></td>
+<td style="text-align: left;"><code>internal/service/backup</code>, <code>internal/service/restore</code>, <code>internal/service/upgrade</code>, <code>internal/service/infra</code>, <code>internal/service/certs</code>, <code>internal/service/init</code>, <code>internal/service/provisioner</code>, <code>internal/service/opslifecycle</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>L5</code></td>
 <td style="text-align: left;">Ports/contracts</td>
-<td style="text-align: left;"><code>internal/port/blobstore</code>, <code>internal/port/imageverify</code>, <code>internal/port/initmanager</code></td>
+<td style="text-align: left;"><code>internal/port/auth</code>, <code>internal/port/backup</code>, <code>internal/port/blobstore</code>, <code>internal/port/imageverify</code>, <code>internal/port/infra</code>, <code>internal/port/initmanager</code>, <code>internal/port/openbao</code>, <code>internal/port/security</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>L6</code></td>
 <td style="text-align: left;">Adapters/integrations</td>
-<td style="text-align: left;"><code>internal/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}</code></td>
+<td style="text-align: left;"><code>internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>L7</code></td>
-<td style="text-align: left;">Cross-cutting utilities</td>
-<td style="text-align: left;"><code>internal/{errors,logging,reconcile,constants,predicates,observability,admission}</code></td>
+<td style="text-align: left;">Platform/cross-cutting</td>
+<td style="text-align: left;"><code>internal/platform/{admission,constants,entrypoint,errors,logging,observability,predicates,reconcile,testutil}</code></td>
 </tr>
 </tbody>
 </table>
-<p>Dependency intent is top-down across layers: higher layers depend on lower layers through narrow contracts, and adapters do not import controller packages.</p>
+<p>The authoritative layer inventory lives in <code>.ast-grep/policy/architecture-boundaries.yml</code>.
+App packages stay independent from adapters, ports stay contract-only, service packages own domain behavior and may depend on focused adapters or ports, and adapters never depend upward on app or service packages.</p>
 <h3 id="14-component-interaction">1.4 Component Interaction<a class="headerlink" href="#14-component-interaction" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>sequenceDiagram
     autonumber

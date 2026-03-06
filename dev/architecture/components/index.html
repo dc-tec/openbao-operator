@@ -2077,10 +2077,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#shared-libraries" class="md-nav__link">
+  <a href="#shared-coordination-services" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Shared Libraries
+        Shared Coordination Services
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supporting-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supporting Libraries
       
     </span>
   </a>
@@ -2307,6 +2318,62 @@
     
   
     Restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provisioner-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant Provisioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operation-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operation Lifecycle
   
 
     
@@ -4322,10 +4389,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#shared-libraries" class="md-nav__link">
+  <a href="#shared-coordination-services" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Shared Libraries
+        Shared Coordination Services
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supporting-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supporting Libraries
       
     </span>
   </a>
@@ -4422,7 +4500,7 @@
 </div>
 <hr />
 <h2 id="3-app-orchestration-and-managers">3. App Orchestration and Managers<a class="headerlink" href="#3-app-orchestration-and-managers" title="Permanent link">&para;</a></h2>
-<p>Controllers delegate orchestration to <code>internal/app/*</code> packages first. The app layer then coordinates domain managers and focused subpackages.</p>
+<p>Controllers delegate orchestration to <code>internal/app/*</code> packages first. The app layer then coordinates domain managers, shared lifecycle services, and focused subpackages.</p>
 <pre class="mermaid"><code>graph TD
     OBC["OpenBaoCluster controllers (workload/adminops/status)"] --&gt; OBCApp["internal/app/openbaocluster facade"]
     OBR["OpenBaoRestore controller"] --&gt; OBRApp["internal/app/openbaorestore"]
@@ -4460,11 +4538,15 @@
 <li><strong><a href="../upgrade-manager/">Upgrade Manager</a></strong>: Powering both <strong>Rolling</strong> and <strong>Blue/Green</strong> upgrades. Manages the state machine for complex transitions.</li>
 <li><strong><a href="../backup-manager/">Backup Manager</a></strong>: Runs snapshot jobs on a Cron schedule.</li>
 <li><strong><a href="../restore-manager/">Restore Manager</a></strong>: Coordinates restore Jobs and lock lifecycle for <code>OpenBaoRestore</code>.</li>
+<li><strong><a href="../provisioner-manager/">Provisioner Manager</a></strong>: Reconciles tenant namespace RBAC, Secret allowlists, Pod Security labels, and quota scaffolding for <code>OpenBaoTenant</code>.</li>
 </ul>
-<h3 id="shared-libraries">Shared Libraries<a class="headerlink" href="#shared-libraries" title="Permanent link">&para;</a></h3>
+<h3 id="shared-coordination-services">Shared Coordination Services<a class="headerlink" href="#shared-coordination-services" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>internal/provisioner</code></strong>: Handles RBAC and Namespace creation for Tenants.</li>
-<li><strong><code>internal/config</code></strong>: A pure-functional HCL generator that renders OpenBao configuration.</li>
+<li><strong><a href="../operation-lifecycle/">Operation Lifecycle Coordination</a></strong>: Provides shared operation-lock, retry, and phase-transition helpers used by backup, restore, and upgrade flows.</li>
+</ul>
+<h3 id="supporting-libraries">Supporting Libraries<a class="headerlink" href="#supporting-libraries" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>internal/adapter/config</code></strong>: A pure-functional HCL generator that renders OpenBao configuration.</li>
 </ul>
 
 

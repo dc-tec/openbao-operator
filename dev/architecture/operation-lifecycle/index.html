@@ -6,17 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+        <meta name="description" content="Shared operation lifecycle architecture for backup, restore, and upgrade flows, including locks, retry classes, and phase audit helpers.">
       
       
       
-        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/contributing/sdlc/">
+        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/architecture/operation-lifecycle/">
       
       
-        <link rel="prev" href="../distribution/">
+        <link rel="prev" href="../provisioner-manager/">
       
       
-        <link rel="next" href="../docs-style-guide/">
+        <link rel="next" href="../lifecycle/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>SDLC - OpenBao Operator</title>
+        <title>Operation Lifecycle - OpenBao Operator</title>
       
     
     
@@ -71,19 +71,19 @@
   
 
   <meta property="og:type" content="website">
-  <meta property="og:title" content="SDLC">
+  <meta property="og:title" content="Operation Lifecycle">
   
-    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+    <meta property="og:description" content="Shared operation lifecycle architecture for backup, restore, and upgrade flows, including locks, retry classes, and phase audit helpers.">
   
-  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/contributing/sdlc/">
+  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/architecture/operation-lifecycle/">
   
     <meta property="og:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
   
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="SDLC">
+  <meta name="twitter:title" content="Operation Lifecycle">
   
-    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+    <meta name="twitter:description" content="Shared operation lifecycle architecture for backup, restore, and upgrade flows, including locks, retry classes, and phase audit helpers.">
   
   
     <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
@@ -110,7 +110,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#software-development-lifecycle-sdlc" class="md-skip">
+        <a href="#operation-lifecycle-coordination" class="md-skip">
           Skip to content
         </a>
       
@@ -149,7 +149,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              SDLC
+              Operation Lifecycle
             
           </span>
         </div>
@@ -1887,8 +1887,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -1899,13 +1901,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
@@ -1926,7 +1926,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1944,7 +1944,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/" class="md-nav__link">
+      <a href="../" class="md-nav__link">
         
   
   
@@ -1972,7 +1972,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/components/" class="md-nav__link">
+      <a href="../components/" class="md-nav__link">
         
   
   
@@ -1997,6 +1997,8 @@
                 
   
   
+    
+  
   
   
     
@@ -2006,13 +2008,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
@@ -2033,7 +2033,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2051,7 +2051,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/cert-manager/" class="md-nav__link">
+      <a href="../cert-manager/" class="md-nav__link">
         
   
   
@@ -2079,7 +2079,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/infra-manager/" class="md-nav__link">
+      <a href="../infra-manager/" class="md-nav__link">
         
   
   
@@ -2107,7 +2107,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/init-manager/" class="md-nav__link">
+      <a href="../init-manager/" class="md-nav__link">
         
   
   
@@ -2135,7 +2135,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/upgrade-manager/" class="md-nav__link">
+      <a href="../upgrade-manager/" class="md-nav__link">
         
   
   
@@ -2163,7 +2163,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/backup-manager/" class="md-nav__link">
+      <a href="../backup-manager/" class="md-nav__link">
         
   
   
@@ -2191,7 +2191,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/restore-manager/" class="md-nav__link">
+      <a href="../restore-manager/" class="md-nav__link">
         
   
   
@@ -2219,7 +2219,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/provisioner-manager/" class="md-nav__link">
+      <a href="../provisioner-manager/" class="md-nav__link">
         
   
   
@@ -2244,10 +2244,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../architecture/operation-lifecycle/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operation Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2263,6 +2290,92 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-architectural-placement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Architectural Placement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-responsibilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Responsibilities
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-coordination-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Coordination Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-shared-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Shared Primitives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-design-intent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Design Intent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2334,7 +2447,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/lifecycle/" class="md-nav__link">
+      <a href="../lifecycle/" class="md-nav__link">
         
   
   
@@ -2362,7 +2475,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/lifecycle/day0-provisioning/" class="md-nav__link">
+      <a href="../lifecycle/day0-provisioning/" class="md-nav__link">
         
   
   
@@ -2390,7 +2503,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/lifecycle/day1-creation/" class="md-nav__link">
+      <a href="../lifecycle/day1-creation/" class="md-nav__link">
         
   
   
@@ -2418,7 +2531,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/lifecycle/day2-operations/" class="md-nav__link">
+      <a href="../lifecycle/day2-operations/" class="md-nav__link">
         
   
   
@@ -2446,7 +2559,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/lifecycle/dayN-backups/" class="md-nav__link">
+      <a href="../lifecycle/dayN-backups/" class="md-nav__link">
         
   
   
@@ -3203,8 +3316,6 @@
       
   
   
-    
-  
   
   
     
@@ -3217,11 +3328,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -3242,7 +3355,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3260,7 +3373,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../contributing/" class="md-nav__link">
         
   
   
@@ -3339,7 +3452,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../getting-started/" class="md-nav__link">
+      <a href="../../contributing/getting-started/" class="md-nav__link">
         
   
   
@@ -3367,7 +3480,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../getting-started/development/" class="md-nav__link">
+      <a href="../../contributing/getting-started/development/" class="md-nav__link">
         
   
   
@@ -3454,7 +3567,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/" class="md-nav__link">
+      <a href="../../contributing/standards/" class="md-nav__link">
         
   
   
@@ -3482,7 +3595,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/go-style/" class="md-nav__link">
+      <a href="../../contributing/standards/go-style/" class="md-nav__link">
         
   
   
@@ -3510,7 +3623,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/error-handling/" class="md-nav__link">
+      <a href="../../contributing/standards/error-handling/" class="md-nav__link">
         
   
   
@@ -3538,7 +3651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/generated-artifacts/" class="md-nav__link">
+      <a href="../../contributing/standards/generated-artifacts/" class="md-nav__link">
         
   
   
@@ -3566,7 +3679,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/kubernetes-patterns/" class="md-nav__link">
+      <a href="../../contributing/standards/kubernetes-patterns/" class="md-nav__link">
         
   
   
@@ -3594,7 +3707,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/security-practices/" class="md-nav__link">
+      <a href="../../contributing/standards/security-practices/" class="md-nav__link">
         
   
   
@@ -3622,7 +3735,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/conventional-commits/" class="md-nav__link">
+      <a href="../../contributing/standards/conventional-commits/" class="md-nav__link">
         
   
   
@@ -3650,7 +3763,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../standards/project-conventions/" class="md-nav__link">
+      <a href="../../contributing/standards/project-conventions/" class="md-nav__link">
         
   
   
@@ -3737,7 +3850,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../testing/" class="md-nav__link">
+      <a href="../../contributing/testing/" class="md-nav__link">
         
   
   
@@ -3773,7 +3886,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ci/" class="md-nav__link">
+      <a href="../../contributing/ci/" class="md-nav__link">
         
   
   
@@ -3801,7 +3914,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../release-management/" class="md-nav__link">
+      <a href="../../contributing/release-management/" class="md-nav__link">
         
   
   
@@ -3829,7 +3942,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../supply-chain-security/" class="md-nav__link">
+      <a href="../../contributing/supply-chain-security/" class="md-nav__link">
         
   
   
@@ -3857,7 +3970,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../distribution/" class="md-nav__link">
+      <a href="../../contributing/distribution/" class="md-nav__link">
         
   
   
@@ -3882,37 +3995,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    SDLC
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../contributing/sdlc/" class="md-nav__link">
         
   
   
@@ -3928,59 +4014,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#1-lifecycle-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Lifecycle Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-phase-detail" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Phase Detail
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-secure-by-design" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Secure by Design
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -3993,7 +4026,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../docs-style-guide/" class="md-nav__link">
+      <a href="../../contributing/docs-style-guide/" class="md-nav__link">
         
   
   
@@ -4305,10 +4338,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-lifecycle-overview" class="md-nav__link">
+  <a href="#1-architectural-placement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Lifecycle Overview
+        1. Architectural Placement
       
     </span>
   </a>
@@ -4316,10 +4349,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-phase-detail" class="md-nav__link">
+  <a href="#2-responsibilities" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Phase Detail
+        2. Responsibilities
       
     </span>
   </a>
@@ -4327,10 +4360,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-secure-by-design" class="md-nav__link">
+  <a href="#3-coordination-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Secure by Design
+        3. Coordination Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-shared-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Shared Primitives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-design-intent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Design Intent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. See Also
       
     </span>
   </a>
@@ -4357,139 +4423,92 @@
   
 
 
-<h1 id="software-development-lifecycle-sdlc">Software Development Lifecycle (SDLC)<a class="headerlink" href="#software-development-lifecycle-sdlc" title="Permanent link">&para;</a></h1>
-<p>The OpenBao Operator follows a secure-by-default SDLC, integrating security checks, automated verification, and provenance at every stage.</p>
-<h2 id="1-lifecycle-overview">1. Lifecycle Overview<a class="headerlink" href="#1-lifecycle-overview" title="Permanent link">&para;</a></h2>
+<h1 id="operation-lifecycle-coordination">Operation Lifecycle Coordination<a class="headerlink" href="#operation-lifecycle-coordination" title="Permanent link">&para;</a></h1>
+<p><code>internal/service/opslifecycle</code> provides shared service-layer primitives for long-running operations. It does not own a single controller or CRD. Instead, it gives backup, restore, and upgrade flows a consistent model for operation locks, requeue timing, and phase-transition audit logging.</p>
+<h2 id="1-architectural-placement">1. Architectural Placement<a class="headerlink" href="#1-architectural-placement" title="Permanent link">&para;</a></h2>
+<p>Operation lifecycle coordination sits in the service layer and is used by multiple domain managers:</p>
+<ul>
+<li><code>internal/service/backup</code></li>
+<li><code>internal/service/restore</code></li>
+<li><code>internal/service/upgrade</code></li>
+</ul>
+<p>It wraps the concrete lock adapter in <code>internal/adapter/operationlock</code>, so controllers and app packages do not need to duplicate operation-lock semantics.</p>
+<h2 id="2-responsibilities">2. Responsibilities<a class="headerlink" href="#2-responsibilities" title="Permanent link">&para;</a></h2>
+<p>The package centralizes three concerns:</p>
+<ul>
+<li><strong>Lock ownership:</strong> Acquire, renew, and release <code>OpenBaoCluster.status.operationLock</code>.</li>
+<li><strong>Retry intent:</strong> Map lock contention and progress polling to consistent requeue delays.</li>
+<li><strong>Phase audit logging:</strong> Emit consistent audit fields when long-running operations change phase.</li>
+</ul>
+<h2 id="3-coordination-model">3. Coordination Model<a class="headerlink" href="#3-coordination-model" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>graph TD
-    Plan --&gt; Design
-    Design --&gt; Code
-    Code --&gt; Secure
-    Secure --&gt; Verify
-    Verify --&gt; Release
-    Release --&gt; Deploy
-    Deploy --&gt; Operate
-    Operate --&gt; Plan
+    Backup["Backup Manager"] --&gt; Ops["Operation Lifecycle"]
+    Restore["Restore Manager"] --&gt; Ops
+    Upgrade["Upgrade Manager"] --&gt; Ops
+    Ops --&gt; Lock["Operation Lock Adapter"]
+    Ops --&gt; Status["OpenBaoCluster.status.operationLock"]
 
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
     classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    class Plan,Design,Code,Secure,Verify,Release,Deploy,Operate process;</code></pre>
-<h2 id="2-phase-detail">2. Phase Detail<a class="headerlink" href="#2-phase-detail" title="Permanent link">&para;</a></h2>
-<p>The lifecycle maps directly to our documentation and toolchain.</p>
-<div class="grid cards">
-<ul>
-<li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2M7 8h2v4H8V9H7zm3 9v1H7v-.92L9 15H7v-1h2.25c.41 0 .75.34.75.75 0 .2-.08.39-.21.52L8.12 17zm1-13c0-.55.45-1 1-1s1 .45 1 1-.45 1-1 1-1-.45-1-1m6 13h-5v-2h5zm0-6h-5V9h5z"/></svg></span> <strong>Plan &amp; Design</strong></p>
-<hr />
-<p>Define requirements and architecture.</p>
-<ul>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 3c-1.27 0-2.4.8-2.82 2H3v2h1.95L2 14c-.47 2 1 3 3.5 3s4.06-1 3.5-3L6.05 7h3.12c.33.85.98 1.5 1.83 1.83V20H2v2h20v-2h-9V8.82c.85-.32 1.5-.97 1.82-1.82h3.13L15 14c-.47 2 1 3 3.5 3s4.06-1 3.5-3l-2.95-7H21V5h-6.17C14.4 3.8 13.27 3 12 3m0 2a1 1 0 0 1 1 1 1 1 0 0 1-1 1 1 1 0 0 1-1-1 1 1 0 0 1 1-1m-6.5 5.25L7 14H4zm13 0L20 14h-3z"/></svg></span> <a href="../../reference/compatibility/">Compatibility Policy</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 2c-1.11 0-2 .89-2 2v3c0 1.11.89 2 2 2h1v2H2v2h4v2H5c-1.11 0-2 .89-2 2v3c0 1.11.89 2 2 2h4c1.11 0 2-.89 2-2v-3c0-1.11-.89-2-2-2H8v-2h8v2h-1c-1.11 0-2 .89-2 2v3c0 1.11.89 2 2 2h4c1.11 0 2-.89 2-2v-3c0-1.11-.89-2-2-2h-1v-2h4v-2h-9V9h1c1.11 0 2-.89 2-2V4c0-1.11-.89-2-2-2zm0 2h4v3h-4zM5 17h4v3H5zm10 0h4v3h-4z"/></svg></span> <a href="../../architecture/">Architecture Overview</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6V5a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v1h-2V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v1H3v14h18V6Z"/></svg></span> <a href="../../architecture/components/">Components</a></li>
-</ul>
-</li>
-<li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8 3a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2H3v2h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h2v-2H8v-5a2 2 0 0 0-2-2 2 2 0 0 0 2-2V5h2V3m6 0a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1v2h-1a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2v-2h2v-5a2 2 0 0 1 2-2 2 2 0 0 1-2-2V5h-2V3z"/></svg></span> <strong>Code &amp; Implement</strong></p>
-<hr />
-<p>Write code adhering to strict standards.</p>
-<ul>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 9h5.5L13 3.5zM6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4c0-1.11.89-2 2-2m.12 13.5 3.74 3.74 1.42-1.41-2.33-2.33 2.33-2.33-1.42-1.41zm11.16 0-3.74-3.74-1.42 1.41 2.33 2.33-2.33 2.33 1.42 1.41z"/></svg></span> <a href="../standards/">Coding Standards</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 6h16v10H4m16 2a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4c-1.11 0-2 .89-2 2v10a2 2 0 0 0 2 2H0v2h24v-2z"/></svg></span> <a href="../getting-started/development/">Dev Setup</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 7 9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59z"/></svg></span> <a href="../standards/project-conventions/">Project Conventions</a></li>
-</ul>
-</li>
-<li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10 17-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9m-6-8L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5z"/></svg></span> <strong>Secure &amp; Verify</strong></p>
-<hr />
-<p>Automated gates ensure quality and safety.</p>
-<ul>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10 17-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9m-6-8L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5z"/></svg></span> <a href="../standards/security-practices/">Security Practices</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 2v2h1v14a4 4 0 0 0 4 4 4 4 0 0 0 4-4V4h1V2zm4 14c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1m2-4c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1m1-5h-4V4h4z"/></svg></span> <a href="../ci/">CI Pipeline</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3v3l2-1 2 1v-3h3a2 2 0 0 0 2-2V7m-5 8v2l-2-1-2 1v-2l-2-1 2-1v-2l2 1 2-1v2l2 1m-3-6V3.5L17.5 8Z"/></svg></span> <a href="../supply-chain-security/">Supply Chain Security</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.5 11 13 7.5l1.4-1.4 2.1 2.1L20.7 4l1.4 1.4zM11 7H2v2h9zm10 6.4L19.6 12 17 14.6 14.4 12 13 13.4l2.6 2.6-2.6 2.6 1.4 1.4 2.6-2.6 2.6 2.6 1.4-1.4-2.6-2.6zM11 15H2v2h9z"/></svg></span> <a href="../../security/fundamentals/threat-model/">Threat Model</a></li>
-</ul>
-</li>
-<li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m13.13 22.19-1.63-3.83c1.57-.58 3.04-1.36 4.4-2.27zM5.64 12.5l-3.83-1.63 6.1-2.77C7 9.46 6.22 10.93 5.64 12.5M21.61 2.39S16.66.269 11 5.93c-2.19 2.19-3.5 4.6-4.35 6.71-.28.75-.09 1.57.46 2.13l2.13 2.12c.55.56 1.37.74 2.12.46A19.1 19.1 0 0 0 18.07 13c5.66-5.66 3.54-10.61 3.54-10.61m-7.07 7.07c-.78-.78-.78-2.05 0-2.83s2.05-.78 2.83 0c.77.78.78 2.05 0 2.83s-2.05.78-2.83 0m-5.66 7.07-1.41-1.41zM6.24 22l3.64-3.64c-.34-.09-.67-.24-.97-.45L4.83 22zM2 22h1.41l4.77-4.76-1.42-1.41L2 20.59zm0-2.83 4.09-4.08c-.21-.3-.36-.62-.45-.97L2 17.76z"/></svg></span> <strong>Release &amp; Deploy</strong></p>
-<hr />
-<p>Build once, sign, and promote.</p>
-<ul>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m13.13 22.19-1.63-3.83c1.57-.58 3.04-1.36 4.4-2.27zM5.64 12.5l-3.83-1.63 6.1-2.77C7 9.46 6.22 10.93 5.64 12.5M21.61 2.39S16.66.269 11 5.93c-2.19 2.19-3.5 4.6-4.35 6.71-.28.75-.09 1.57.46 2.13l2.13 2.12c.55.56 1.37.74 2.12.46A19.1 19.1 0 0 0 18.07 13c5.66-5.66 3.54-10.61 3.54-10.61m-7.07 7.07c-.78-.78-.78-2.05 0-2.83s2.05-.78 2.83 0c.77.78.78 2.05 0 2.83s-2.05.78-2.83 0m-5.66 7.07-1.41-1.41zM6.24 22l3.64-3.64c-.34-.09-.67-.24-.97-.45L4.83 22zM2 22h1.41l4.77-4.76-1.42-1.41L2 20.59zm0-2.83 4.09-4.08c-.21-.3-.36-.62-.45-.97L2 17.76z"/></svg></span> <a href="../release-management/">Release Process</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 22H2v-2h20zM6.2 17.3l-.7.7-1.4-1.4L2.7 18l-.7-.7 1.4-1.4L2 14.5l.7-.7 1.4 1.4 1.4-1.4.7.7-1.4 1.4zm10.02-2.87c0-.58-.72-1.23-2.16-1.97-1.83-.92-3.06-1.67-3.7-2.22-.65-.56-.97-1.18-.97-1.87 0-1.78.91-3.25 2.73-4.42s3.31-1.76 4.45-1.76c.74 0 1.28.13 1.61.39.32.25.5.69.5 1.32 0 .28-.12.52-.37.73-.24.2-.44.3-.57.3-.11 0-.31-.1-.61-.29l-.58-.26c-.47 0-1.41.33-2.84 1q-2.13.99-2.13 2.25c0 .51.24.97.74 1.37.5.42 1.39.93 2.68 1.53 1.03.47 1.86.97 2.5 1.54.6.54.91 1.18.91 1.93 0 1.34-.94 2.41-2.83 3.17-1.88.77-3.68 1.15-5.39 1.15-1.44 0-2.19-.49-2.19-1.46 0-.36.19-.59.5-.75.33-.16.66-.24 1-.24l.75.13.72.13c.98 0 2.03-.16 3.16-.49 1.13-.32 1.83-.73 2.09-1.21"/></svg></span> <a href="../release-management/#5-verifying-artifacts">Artifact Verification</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 10.96a.985.985 0 0 1-.37-1.37L3.13 7c.11-.2.28-.34.47-.42l7.83-4.4c.16-.12.36-.18.57-.18s.41.06.57.18l7.9 4.44c.19.1.35.26.44.46l1.45 2.52c.28.48.11 1.09-.36 1.36l-1 .58v4.96c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18s-.41-.06-.57-.18l-7.9-4.44A.99.99 0 0 1 3 16.5v-5.54c-.3.17-.68.18-1 0m10-6.81v6.7l5.96-3.35zM5 15.91l6 3.38v-6.71L5 9.21zm14 0v-3.22l-5 2.9c-.33.18-.7.17-1 .01v3.69zm-5.15-2.55 6.28-3.63-.58-1.01-6.28 3.63z"/></svg></span> <a href="https://github.com/dc-tec/openbao-operator/tree/main/charts/openbao-operator">Helm Charts</a></li>
-</ul>
-</li>
-<li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 19h1a1 1 0 0 1 1 1h7v2h-7a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1H2v-2h7a1 1 0 0 1 1-1h1v-2H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-7zM4 3h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1m5 4h1V5H9zm0 8h1v-2H9zM5 5v2h2V5zm0 8v2h2v-2z"/></svg></span> <strong>Operate &amp; Monitor</strong></p>
-<hr />
-<p>Run reliably in production.</p>
-<ul>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m19 2-5 4.5v11l5-4.5zM6.5 5C4.55 5 2.45 5.4 1 6.5v14.66c0 .25.25.5.5.5.1 0 .15-.07.25-.07 1.35-.65 3.3-1.09 4.75-1.09 1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.31 4.75 1.06.1.05.15.03.25.03.25 0 .5-.25.5-.5V6.5c-.6-.45-1.25-.75-2-1V19c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V6.5C10.55 5.4 8.45 5 6.5 5"/></svg></span> <a href="../../user-guide/">User Guides</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 12h7c-.53 4.11-3.28 7.78-7 8.92zH5V6.3l7-3.11M12 1 3 5v6c0 5.55 3.84 10.73 9 12 5.16-1.27 9-6.45 9-12V5z"/></svg></span> <a href="../../security/">Security Posture</a></li>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 8c.56 0 1 .43 1 1a1 1 0 0 1-1 1c-.57 0-1-.45-1-1 0-.57.43-1 1-1M2 2v9c0 2.96 2.19 5.5 5.14 5.91.62 3.01 3.28 5.09 6.36 5.09a6.5 6.5 0 0 0 6.5-6.5v-3.69c1.16-.42 2-1.52 2-2.81a3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 1.29.84 2.4 2 2.81v3.6c0 2.5-2 4.5-4.5 4.5-2 0-3.68-1.21-4.28-3.01C12 16.3 14 13.8 14 11V2h-4v3h2v6a4 4 0 0 1-4 4 4 4 0 0 1-4-4V5h2V2z"/></svg></span> <a href="../../user-guide/openbaocluster/recovery/no-leader/">Troubleshooting</a></li>
-</ul>
-</li>
-</ul>
-</div>
-<h2 id="3-secure-by-design">3. Secure by Design<a class="headerlink" href="#3-secure-by-design" title="Permanent link">&para;</a></h2>
-<p>Security is not a separate phase; it is injected into every step of the process.</p>
+
+    class Backup,Restore,Upgrade process;
+    class Ops process;
+    class Lock read;
+    class Status write;</code></pre>
+<h2 id="4-shared-primitives">4. Shared Primitives<a class="headerlink" href="#4-shared-primitives" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th style="text-align: left;">Phase</th>
-<th style="text-align: left;">Tooling</th>
-<th style="text-align: left;">Check</th>
+<th style="text-align: left;">Primitive</th>
+<th style="text-align: left;">Purpose</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>Code</strong></td>
-<td style="text-align: left;"><code>golangci-lint</code></td>
-<td style="text-align: left;">Static analysis for bugs and style</td>
+<td style="text-align: left;"><code>OperationLock</code></td>
+<td style="text-align: left;">Describes the expected lock identity for an operation.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Deps</strong></td>
-<td style="text-align: left;"><code>dependabot</code></td>
-<td style="text-align: left;">Automated dependency updates</td>
+<td style="text-align: left;"><code>Acquire</code> / <code>Release</code></td>
+<td style="text-align: left;">Wrap lock adapter behavior for status-based lock ownership.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Build Inputs</strong></td>
-<td style="text-align: left;">Go vendoring (<code>-mod=vendor</code>)</td>
-<td style="text-align: left;">Deterministic dependency resolution in CI/release paths</td>
+<td style="text-align: left;"><code>RetryClass</code> / <code>RequeueDelay</code></td>
+<td style="text-align: left;">Keep lock-contention and progress-poll retries consistent across managers.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Verify</strong></td>
-<td style="text-align: left;"><code>govulncheck</code></td>
-<td style="text-align: left;">Known vulnerability scanning</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Build</strong></td>
-<td style="text-align: left;"><code>trivy</code></td>
-<td style="text-align: left;">Container filesystem scanning</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Release</strong></td>
-<td style="text-align: left;"><code>cosign</code></td>
-<td style="text-align: left;">Keyless signing of images, chart, and release checksum subject</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Publish</strong></td>
-<td style="text-align: left;"><code>gh attestation</code></td>
-<td style="text-align: left;">Enforced provenance verification gates before release publication</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Reproducibility</strong></td>
-<td style="text-align: left;"><code>verify-byte-reproducibility</code> + report workflow</td>
-<td style="text-align: left;">Byte-for-byte checks across images, chart, manifests, checksums, and SBOMs</td>
+<td style="text-align: left;"><code>LogPhaseTransition</code></td>
+<td style="text-align: left;">Emit stable audit fields for phase changes.</td>
 </tr>
 </tbody>
 </table>
+<h2 id="5-design-intent">5. Design Intent<a class="headerlink" href="#5-design-intent" title="Permanent link">&para;</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Why This Exists</p>
+<p>Operation coordination belongs in the service layer so backup, restore, and upgrade flows share the same safety model without recreating lock and retry logic inside each controller.</p>
+</div>
+<p>This keeps long-running operations consistent:</p>
+<ul>
+<li>Only one disruptive cluster operation should own the lock at a time.</li>
+<li>Lock contention should requeue predictably rather than fail noisily.</li>
+<li>Phase changes should produce comparable audit events across managers.</li>
+</ul>
+<h2 id="6-see-also">6. See Also<a class="headerlink" href="#6-see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../backup-manager/">Backup Manager</a></li>
+<li><a href="../restore-manager/">Restore Manager</a></li>
+<li><a href="../upgrade-manager/">Upgrade Manager</a></li>
+</ul>
 
 
 
 
 
 
+
+  
+  
 
 
 

@@ -16,7 +16,7 @@
         <link rel="prev" href="../backup-manager/">
       
       
-        <link rel="next" href="../lifecycle/">
+        <link rel="next" href="../provisioner-manager/">
       
       
         
@@ -2325,6 +2325,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provisioner-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant Provisioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operation-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operation Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4381,7 +4437,7 @@
 <ol>
 <li><code>internal/controller/openbaorestore</code> receives the reconcile event.</li>
 <li>It delegates orchestration to <code>internal/app/openbaorestore</code>.</li>
-<li>The app layer invokes <code>internal/restore</code> manager logic for validation, lock lifecycle, and Job flow.</li>
+<li>The app layer invokes <code>internal/service/restore</code> manager logic for validation, lock lifecycle, and Job flow.</li>
 </ol>
 <p>This keeps the restore controller focused on reconcile plumbing and preserves domain ownership in the restore manager package.</p>
 <h2 id="2-design-philosophy">2. Design Philosophy<a class="headerlink" href="#2-design-philosophy" title="Permanent link">&para;</a></h2>

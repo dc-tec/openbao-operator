@@ -2212,6 +2212,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provisioner-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant Provisioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operation-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operation Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4413,14 +4469,14 @@
     Op-&gt;&gt;K: Clear OpenBaoCluster.status.upgrade</code></pre>
 </div>
 <div class="tabbed-block">
-<p>Blue/Green upgrades provide zero-downtime updates by creating a parallel "Green" standby cluster.</p>
+<p>Blue/Green upgrades provide zero-downtime updates by creating a parallel "Green" standby cluster and advancing it through explicit consensus phases.</p>
 <ol>
 <li><strong>Drift Detection:</strong> User updates <code>OpenBaoCluster</code> spec with a new version or image, using the Blue/Green strategy.</li>
 <li><strong>Green Creation:</strong> The operator creates a new "Green" StatefulSet with the new version.</li>
-<li><strong>Join &amp; Standby:</strong> Green pods start and join the existing "Blue" Raft cluster as non-voters (or voters, depending on strategy). They replicate data but do not serve traffic.</li>
-<li><strong>Health Check:</strong> Operator verifies the Green cluster is healthy and fully replicated.</li>
-<li><strong>Cutover:</strong> Operator updates the Service selector to point to the Green pods. Traffic switches instantly.</li>
-<li><strong>Cleanup:</strong> After a verification period or manual confirmation, the old "Blue" StatefulSet is scaled down and terminated.</li>
+<li><strong>Join as Non-Voters:</strong> Green pods start and join the existing "Blue" Raft cluster as non-voters.</li>
+<li><strong>Sync and Promote:</strong> The operator waits for Green replication to converge, then promotes Green pods to voters.</li>
+<li><strong>Demote Blue and Verify Leader:</strong> The operator demotes Blue voters, forces leadership transfer when needed, and waits until a Green leader is observed.</li>
+<li><strong>Cutover During Cleanup:</strong> The operator switches the Service selector to Green, removes Blue peers, and deletes the Blue StatefulSet. Rollback remains possible until irreversible cleanup completes.</li>
 </ol>
 <h3 id="sequence-diagram-bluegreen">Sequence Diagram (Blue/Green)<a class="headerlink" href="#sequence-diagram-bluegreen" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>sequenceDiagram
@@ -4435,10 +4491,13 @@
     K--&gt;&gt;Op: Watch OpenBaoCluster
     Op-&gt;&gt;K: Create Green StatefulSet (v2)
     K--&gt;&gt;Green: Start Green Pods
-    Green-&gt;&gt;Blue: Join Raft Cluster (Standby)
-    Op-&gt;&gt;Green: Wait for Healthy
+    Green-&gt;&gt;Blue: Join Raft Cluster (Non-Voters)
+    Op-&gt;&gt;Green: Wait for Sync
+    Op-&gt;&gt;Green: Promote to Voters
+    Op-&gt;&gt;Blue: Demote Blue Voters / Step Down Leader
+    Op-&gt;&gt;Green: Verify Green Leader
     Op-&gt;&gt;K: Switch Service Selector to Green
-    Op-&gt;&gt;Blue: Scale Down / Terminate</code></pre>
+    Op-&gt;&gt;Blue: Remove Peers / Delete Blue StatefulSet</code></pre>
 </div>
 </div>
 </div>

@@ -2212,6 +2212,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/provisioner-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant Provisioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/operation-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operation Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4459,7 +4515,7 @@
 <p>Unit tests focus on deterministic, in-process logic with <strong>no external I/O</strong>.</p>
 <p><strong>Targets:</strong></p>
 <ul>
-<li>HCL Config Generation (<code>internal/config</code>)</li>
+<li>HCL Config Generation (<code>internal/adapter/config</code>)</li>
 <li>PKI Helpers (Cert rotation math)</li>
 <li>State Machine Logic (Upgrade paths)</li>
 </ul>
@@ -4495,7 +4551,7 @@
 <h3 id="golden-files">Golden Files<a class="headerlink" href="#golden-files" title="Permanent link">&para;</a></h3>
 <p>For complex output like HCL generation, we use <strong>Golden Files</strong>.</p>
 <ul>
-<li><strong>Location</strong>: <code>internal/config/testdata/</code></li>
+<li><strong>Location</strong>: <code>internal/adapter/config/testdata/</code></li>
 <li><strong>Update Command</strong>: <code>make test-update-golden</code></li>
 </ul>
 <div class="admonition warning">

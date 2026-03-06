@@ -2353,6 +2353,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provisioner-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant Provisioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operation-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operation Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4437,7 +4493,7 @@
 <ol>
 <li><code>internal/controller/openbaocluster</code> (adminops reconciler) receives the reconcile event.</li>
 <li>It delegates to <code>internal/app/openbaocluster</code> facade functions.</li>
-<li>The app layer calls <code>internal/app/openbaocluster/adminops</code>, which invokes <code>internal/backup</code>.</li>
+<li>The app layer calls <code>internal/app/openbaocluster/adminops</code>, which invokes <code>internal/service/backup</code>.</li>
 </ol>
 <p>This keeps controller code as reconcile plumbing while BackupManager owns backup domain behavior.</p>
 <h2 id="2-backup-workflow">2. Backup Workflow<a class="headerlink" href="#2-backup-workflow" title="Permanent link">&para;</a></h2>

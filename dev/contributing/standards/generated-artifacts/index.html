@@ -2212,6 +2212,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/provisioner-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant Provisioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/operation-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operation Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4495,7 +4551,7 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <td style="text-align: left;"><code>verify-arch-policy</code></td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>internal/config/*.go</code></td>
+<td style="text-align: left;"><code>internal/adapter/config/*.go</code></td>
 <td style="text-align: left;"><code>make test-update-golden</code></td>
 <td style="text-align: left;"><code>test</code> (fails if mismatch)</td>
 </tr>
@@ -4537,8 +4593,8 @@ Always edit the <strong>Source</strong> file and run the appropriate <strong>Mak
 <h3 id="4-golden-test-files">4. Golden Test Files<a class="headerlink" href="#4-golden-test-files" title="Permanent link">&para;</a></h3>
 <p>We use "Golden Files" to verify complex HCL configuration generation reliability.</p>
 <ul>
-<li><strong>Source:</strong> <code>internal/config/builder.go</code> logic changes</li>
-<li><strong>Output:</strong> <code>internal/config/testdata/*.golden.hcl</code></li>
+<li><strong>Source:</strong> <code>internal/adapter/config/builder.go</code> logic changes</li>
+<li><strong>Output:</strong> <code>internal/adapter/config/testdata/*.golden.hcl</code></li>
 <li><strong>Command:</strong> <code>make test-update-golden</code></li>
 </ul>
 <h3 id="5-ast-grep-architecture-boundary-rules">5. Ast-Grep Architecture Boundary Rules<a class="headerlink" href="#5-ast-grep-architecture-boundary-rules" title="Permanent link">&para;</a></h3>
