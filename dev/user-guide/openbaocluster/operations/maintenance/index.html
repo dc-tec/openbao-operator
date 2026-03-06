@@ -4593,8 +4593,9 @@
 <div class="admonition warning">
 <p class="admonition-title">Drain Timeouts</p>
 <p>If multiple OpenBao pods are scheduled on the same node, draining that node
-may take longer as pods are evicted sequentially. Consider using pod
-anti-affinity to spread pods across nodes.</p>
+may take longer as pods are evicted sequentially. The Operator adds soft
+node and zone spreading, but you still need enough nodes and topology
+labels for that policy to be effective.</p>
 </div>
 <h3 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h3>
 <p>The PDB only protects against <strong>voluntary disruptions</strong>:</p>
