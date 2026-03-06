@@ -1,0 +1,21 @@
+id: no-const-reexports-in-adapter-layer
+valid:
+  - |
+    package openbao
+    const defaultRequestTimeout = 10
+  - |
+    package openbao
+    const (
+      defaultRequestTimeout = 10
+    )
+invalid:
+  - |
+    package openbao
+    import portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+    const DefaultRequestTimeout = portopenbao.DefaultRequestTimeout
+  - |
+    package openbao
+    import portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+    const (
+      DefaultRequestTimeout = portopenbao.DefaultRequestTimeout
+    )

@@ -6,7 +6,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/openbao"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // JobBuildOptions configures pre-upgrade snapshot backup job creation.
@@ -14,7 +14,7 @@ type JobBuildOptions struct {
 	JobName                string
 	FilenamePrefix         string
 	VerifiedExecutorDigest string
-	ClientConfig           openbao.ClientConfig
+	ClientConfig           portopenbao.ClientConfig
 	Platform               string
 	TargetStatefulSetName  string
 }

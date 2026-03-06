@@ -29,12 +29,12 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	observability "github.com/dc-tec/openbao-operator/internal/observability"
-	operatorpredicates "github.com/dc-tec/openbao-operator/internal/predicates"
-	"github.com/dc-tec/openbao-operator/internal/provisioner"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
+	operatorpredicates "github.com/dc-tec/openbao-operator/internal/platform/predicates"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
 // NamespaceProvisionerReconciler reconciles OpenBaoTenant objects to provision

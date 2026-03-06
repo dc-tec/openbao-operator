@@ -347,16 +347,16 @@ helm-uninstall: ## Uninstall the Helm chart from the cluster.
 	@helm uninstall openbao-operator --namespace openbao-operator-system || true
 
 .PHONY: test-update-golden
-test-update-golden: ## Update golden files for HCL generation tests. Run this when modifying internal/config/builder.go or related config generation logic.
-	UPDATE_GOLDEN=true go test ./internal/config/... -v
+test-update-golden: ## Update golden files for HCL generation tests. Run this when modifying internal/adapter/config/builder.go or related config generation logic.
+	UPDATE_GOLDEN=true go test ./internal/adapter/config/... -v
 
 .PHONY: verify-trusted-root
 verify-trusted-root: ## Verify that trusted_root.json exists and is valid JSON.
-	@if [ ! -f internal/security/trusted_root.json ]; then \
+	@if [ ! -f internal/adapter/security/trusted_root.json ]; then \
 		echo "Error: trusted_root.json not found. Run 'make update-trusted-root' to download it."; \
 		exit 1; \
 	fi
-	@python3 -m json.tool internal/security/trusted_root.json > /dev/null 2>&1 || { \
+	@python3 -m json.tool internal/adapter/security/trusted_root.json > /dev/null 2>&1 || { \
 		echo "Error: trusted_root.json is not valid JSON. Run 'make update-trusted-root' to fix it."; \
 		exit 1; \
 	}
@@ -436,7 +436,7 @@ PERF_THRESHOLDS_OUT ?= hack/perf/thresholds/kind-v1.34.3.yaml
 
 # Mutation testing defaults (gomu, local workflow).
 # MUTATION_PATHS accepts a comma-separated list of target paths.
-MUTATION_TARGET_PATH ?= ./internal/operationlock
+MUTATION_TARGET_PATH ?= ./internal/adapter/operationlock
 MUTATION_PATHS ?= $(shell find ./internal -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort | paste -sd, -)
 MUTATION_WORKERS ?= 1
 MUTATION_TIMEOUT ?= 30
@@ -569,7 +569,7 @@ verify-perf-smoke: ## Run a lightweight performance smoke gate (PR-focused).
 mutation-smoke: gomu ## Run a fast mutation smoke check (operationlock package).
 	@out="dist/mutation/smoke-$$(date -u +%Y%m%dT%H%M%SZ)"; \
 	GOMU_BIN="$(GOMU)" bash hack/ci/run-gomu.sh \
-		--path "./internal/operationlock" \
+		--path "./internal/adapter/operationlock" \
 		--workers "1" \
 		--timeout "20" \
 		--incremental "false" \
@@ -643,7 +643,7 @@ vulncheck: govulncheck ## Run govulncheck to scan for known vulnerabilities (pro
 .PHONY: update-trusted-root
 update-trusted-root: ## Download/update the embedded trusted_root.json file for keyless verification.
 	@echo "Fetching latest trusted_root.json from Sigstore TUF repository..."
-	@go run internal/security/fetch_trusted_root.go
+	@go run internal/adapter/security/fetch_trusted_root.go
 
 .PHONY: build
 build: verify-trusted-root manifests generate fmt vet ## Build manager binary (dispatcher for provisioner and controller).

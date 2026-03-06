@@ -2,11 +2,11 @@ id: no-adapter-import-controller-or-service
 valid:
   - |
     package p
-    import "github.com/dc-tec/openbao-operator/internal/errors"
+    import "github.com/dc-tec/openbao-operator/internal/platform/errors"
     var _ = errors.Is
 invalid:
   - |
     package p
-    import backup "github.com/dc-tec/openbao-operator/internal/backup"
+    import backup "github.com/dc-tec/openbao-operator/internal/service/backup"
     var _ = backup.NewManager
 

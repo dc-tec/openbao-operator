@@ -53,7 +53,7 @@ graph TD
 
 ## 3. App Orchestration and Managers
 
-Controllers delegate orchestration to `internal/app/*` packages first. The app layer then coordinates domain managers and focused subpackages.
+Controllers delegate orchestration to `internal/app/*` packages first. The app layer then coordinates domain managers, shared lifecycle services, and focused subpackages.
 
 ```mermaid
 graph TD
@@ -94,8 +94,12 @@ graph TD
 - **[Upgrade Manager](upgrade-manager.md)**: Powering both **Rolling** and **Blue/Green** upgrades. Manages the state machine for complex transitions.
 - **[Backup Manager](backup-manager.md)**: Runs snapshot jobs on a Cron schedule.
 - **[Restore Manager](restore-manager.md)**: Coordinates restore Jobs and lock lifecycle for `OpenBaoRestore`.
+- **[Provisioner Manager](provisioner-manager.md)**: Reconciles tenant namespace RBAC, Secret allowlists, Pod Security labels, and quota scaffolding for `OpenBaoTenant`.
 
-### Shared Libraries
+### Shared Coordination Services
 
-- **`internal/provisioner`**: Handles RBAC and Namespace creation for Tenants.
-- **`internal/config`**: A pure-functional HCL generator that renders OpenBao configuration.
+- **[Operation Lifecycle Coordination](operation-lifecycle.md)**: Provides shared operation-lock, retry, and phase-transition helpers used by backup, restore, and upgrade flows.
+
+### Supporting Libraries
+
+- **`internal/adapter/config`**: A pure-functional HCL generator that renders OpenBao configuration.

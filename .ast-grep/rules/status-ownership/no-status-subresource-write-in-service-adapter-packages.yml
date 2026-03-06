@@ -5,35 +5,35 @@ message: Service/adapter packages should not persist CR status via status subres
 severity: warning
 language: Go
 files:
-  - internal/backup/**/*.go
-  - internal/certs/**/*.go
-  - internal/infra/**/*.go
-  - internal/init/**/*.go
-  - internal/opslifecycle/**/*.go
-  - internal/provisioner/**/*.go
-  - internal/restore/**/*.go
-  - internal/upgrade/**/*.go
-  - internal/auth/**/*.go
-  - internal/cluster/**/*.go
-  - internal/config/**/*.go
-  - internal/kube/**/*.go
-  - internal/openbao/**/*.go
-  - internal/operationlock/**/*.go
-  - internal/probe/**/*.go
-  - internal/raft/**/*.go
-  - internal/revision/**/*.go
-  - internal/security/**/*.go
-  - internal/storage/**/*.go
-  - internal/storageenv/**/*.go
+  - internal/service/backup/**/*.go
+  - internal/service/certs/**/*.go
+  - internal/service/infra/**/*.go
+  - internal/service/init/**/*.go
+  - internal/service/opslifecycle/**/*.go
+  - internal/service/provisioner/**/*.go
+  - internal/service/restore/**/*.go
+  - internal/service/upgrade/**/*.go
+  - internal/adapter/auth/**/*.go
+  - internal/adapter/cluster/**/*.go
+  - internal/adapter/config/**/*.go
+  - internal/adapter/kube/**/*.go
+  - internal/adapter/openbao/**/*.go
+  - internal/adapter/operationlock/**/*.go
+  - internal/adapter/probe/**/*.go
+  - internal/adapter/raft/**/*.go
+  - internal/adapter/revision/**/*.go
+  - internal/adapter/security/**/*.go
+  - internal/adapter/storage/**/*.go
+  - internal/adapter/storageenv/**/*.go
 ignores:
   - '**/*_test.go'
   # Transitional legacy write points pending app-layer ownership consolidation.
-  - internal/backup/manager_status.go
-  - internal/operationlock/lock.go
-  - internal/restore/manager.go
-  - internal/upgrade/rolling/lifecycle.go
-  - internal/upgrade/rolling/retry.go
-  - internal/upgrade/rolling/status_patch.go
+  - internal/service/backup/manager_status.go
+  - internal/adapter/operationlock/lock.go
+  - internal/service/restore/manager.go
+  - internal/service/upgrade/rolling/lifecycle.go
+  - internal/service/upgrade/rolling/retry.go
+  - internal/service/upgrade/rolling/status_patch.go
 rule:
   all:
     - kind: call_expression

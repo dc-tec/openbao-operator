@@ -16,7 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestStorageReconciler_ExpandsPVCs(t *testing.T) {
@@ -215,7 +216,7 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 			Name:      "test-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				openbao.LabelActive: "true",
+				portopenbao.LabelActive: "true",
 			},
 		},
 		Status: corev1.PodStatus{

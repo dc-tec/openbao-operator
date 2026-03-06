@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-type-aliases-in-adapter-layer
+message: Adapter packages must not re-export types via aliases; move shared contracts to port or platform packages and update callers.
+severity: warning
+language: Go
+files:
+  - internal/adapter/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  pattern: type $NAME = $VALUE
+note: Keep adapter packages focused on concrete implementations instead of preserving legacy import paths.

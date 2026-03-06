@@ -14,10 +14,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/admission"
-	"github.com/dc-tec/openbao-operator/internal/logging"
-	provisionermanager "github.com/dc-tec/openbao-operator/internal/provisioner"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	provisionermanager "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
 const (

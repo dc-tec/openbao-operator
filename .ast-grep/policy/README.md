@@ -8,7 +8,9 @@ This directory is the source of truth for architecture boundary guardrails that 
 
 The policy currently encodes:
 
-- `layerCoverage`: required classification for top-level `internal/*` packages
+- `layerCoverage`: required classification for runtime package roots under `internal/`
+  - top-level entries such as `controller`, `app`, and `port`
+  - grouped entries such as `service/upgrade`, `adapter/config`, and `platform/constants`
 - `controllerCoverage`: required explicit policy entries for controller packages
 - `serviceImportRoots` and `adapterImportRoots`: global import domains for controller approval rules
 - `controllerBoundaries`: per-controller app facade and approved import allowlists
@@ -24,7 +26,7 @@ The policy currently encodes:
 3. Run `make verify-arch-policy`.
 4. Run `make test-ast lint-ast`.
 
-When adding a new `internal/*` top-level package or a new controller package:
+When adding a new top-level runtime package, grouped layer package, or controller package:
 
 - update `layerCoverage`
 - update `controllerBoundaries` (or `controllerCoverage.exempt`, if intentionally exempt)

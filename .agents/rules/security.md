@@ -23,8 +23,8 @@ This operator uses a **Zero Trust RBAC model**:
 - Controller does NOT have cluster-wide permissions
 - Provisioner grants permissions per-namespace
 - Do NOT add `// +kubebuilder:rbac` to `internal/controller/openbaocluster/`
-- New permissions go in `internal/provisioner/rbac.go`
-- Update `internal/provisioner/rbac_test.go` to lock permissions
+- New permissions go in `internal/service/provisioner/rbac.go`
+- Update `internal/service/provisioner/rbac_test.go` to lock permissions
 
 ## Secrets Handling
 

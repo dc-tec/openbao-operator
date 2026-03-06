@@ -147,6 +147,8 @@ nav:
                       - Upgrade: architecture/upgrade-manager.md
                       - Backup: architecture/backup-manager.md
                       - Restore: architecture/restore-manager.md
+                      - Tenant Provisioning: architecture/provisioner-manager.md
+                      - Operation Lifecycle: architecture/operation-lifecycle.md
               - Lifecycle Management:
                       - Overview: architecture/lifecycle/index.md
                       - Day 0 (Provisioning): architecture/lifecycle/day0-provisioning.md

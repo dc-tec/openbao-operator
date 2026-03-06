@@ -11,7 +11,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	"github.com/dc-tec/openbao-operator/internal/observability"
+	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 )
 
 // patchStatusSSA updates the cluster status using Server-Side Apply.

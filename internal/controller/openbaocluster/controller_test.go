@@ -37,9 +37,9 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/infra"
-	security "github.com/dc-tec/openbao-operator/internal/security"
+	security "github.com/dc-tec/openbao-operator/internal/adapter/security"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 type testCompositeReconciler struct {

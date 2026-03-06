@@ -11,13 +11,13 @@ See [Architecture Documentation](docs/architecture/index.md).
 ## Layer Model (L0-L7)
 
 - `L0` API types: `api/v1alpha1`
-- `L1` Entrypoints/bootstrap: `cmd/*`, `internal/entrypoint`
+- `L1` Entrypoints/bootstrap: `cmd/*`, `internal/platform/entrypoint`
 - `L2` Controller plumbing: `internal/controller/*`
 - `L3` App orchestration: `internal/app/*`
-- `L4` Services/managers: `internal/{backup,restore,upgrade,infra,certs,init,provisioner,opslifecycle}`
-- `L5` Ports/contracts: `internal/port/*`
-- `L6` Adapters/integrations: `internal/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}`
-- `L7` Cross-cutting utilities: `internal/{errors,logging,reconcile,constants,predicates,observability,admission}`
+- `L4` Services/managers: `internal/service/{backup,restore,upgrade,infra,certs,init,provisioner,opslifecycle}`
+- `L5` Ports/contracts: `internal/port/{auth,backup,blobstore,imageverify,infra,initmanager,openbao,security}`
+- `L6` Adapters/integrations: `internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}`
+- `L7` Platform/cross-cutting: `internal/platform/{admission,constants,entrypoint,errors,logging,observability,predicates,reconcile,testutil}`
 
 ## Separation of Concerns
 
@@ -37,15 +37,17 @@ Controller-local dependency adapters are allowed for import-surface management, 
 
 App packages coordinate domain workflows and phase sequencing.
 
-App packages may call services/managers, ports, and cross-cutting utilities.
+App packages may call services/managers, ports, and platform utilities.
 
-### Services/Managers (`internal/*`, L4)
+### Services/Managers (`internal/service/*`, L4)
 
-Services implement domain behavior and should consume adapters through `internal/port/*` contracts.
+Service packages own domain behavior.
+Prefer `internal/port/*` when a stable contract or neutral type improves reuse, but focused direct adapter imports are acceptable when a service package is the correct home for concrete apply/build/integration logic.
+Ports stay contract-only: they may contain interfaces, neutral types, and domain helpers, but they must not import concrete adapter packages.
 
 Services must not import controller packages.
 
-### Adapters (`internal/*`, L6)
+### Adapters (`internal/adapter/*`, L6)
 
 Adapters implement ports and integration logic.
 
@@ -66,6 +68,9 @@ Each domain manager should:
 - Expose focused methods with explicit inputs/outputs
 - Depend on narrow ports/interfaces where external dependencies are needed
 
+Not every service package must expose a `Manager` type.
+Shared coordination packages such as `internal/service/opslifecycle` are still service-layer code and should stay narrow, explicit, and domain-scoped.
+
 ## No God Objects
 
 Do NOT pass entire Reconciler to helpers:
@@ -85,12 +90,14 @@ Allowed direction:
 - `L1 -> L2/L3/L7`
 - `L2 -> L3/L7/(small focused L4 usage when unavoidable)`
 - `L3 -> L4/L5/L7`
-- `L4 -> L5/L7`
+- `L4 -> L5/L6/L7`
 - `L6 -> L5/L7`
 - Any layer may consume `L0` types as needed
 
 Disallowed direction:
 
+- `L3 -> L6` (app importing adapters directly)
+- `L5 -> L6` (ports importing adapters directly)
 - `L4/L6 -> L2` (service/adapter importing controllers)
 - `L6 -> L4` (adapter importing services/managers)
 - Re-introducing `internal/interfaces` as a generic dependency bucket

@@ -11,7 +11,7 @@ Upgrade execution belongs to the AdminOps orchestration path:
 
 1. `internal/controller/openbaocluster` (adminops reconciler) receives the reconcile event.
 2. It delegates to `internal/app/openbaocluster` facade functions.
-3. The app layer calls `internal/app/openbaocluster/adminops`, which invokes rolling (`internal/upgrade/rolling`) or blue/green (`internal/upgrade/bluegreen`) manager flows.
+3. The app layer calls `internal/app/openbaocluster/adminops`, which invokes rolling (`internal/service/upgrade/rolling`) or blue/green (`internal/service/upgrade/bluegreen`) manager flows.
 
 This keeps controller code focused on reconcile wiring while the upgrade domain stays in dedicated manager packages.
 

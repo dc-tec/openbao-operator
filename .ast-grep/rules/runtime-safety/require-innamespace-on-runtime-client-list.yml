@@ -7,11 +7,11 @@ language: Go
 files:
   - internal/controller/**/*.go
   - internal/app/**/*.go
-  - internal/backup/**/*.go
-  - internal/restore/**/*.go
-  - internal/upgrade/**/*.go
-  - internal/infra/**/*.go
-  - internal/provisioner/**/*.go
+  - internal/service/backup/**/*.go
+  - internal/service/restore/**/*.go
+  - internal/service/upgrade/**/*.go
+  - internal/service/infra/**/*.go
+  - internal/service/provisioner/**/*.go
 ignores:
   - '**/*_test.go'
 rule:

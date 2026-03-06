@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+POLICY_FILE="${REPO_ROOT}/.ast-grep/policy/architecture-boundaries.yml"
 
 OUT_DIR="${OUT_DIR:-${REPO_ROOT}/dist/architecture}"
 EDGE_FILE="${OUT_DIR}/internal-dependency-edges.tsv"
@@ -12,6 +13,28 @@ REPORT_FILE="${OUT_DIR}/internal-dependency-report.md"
 ADAPTER_AUDIT_FILE="${OUT_DIR}/adapter-boundary-audit.md"
 
 mkdir -p "${OUT_DIR}"
+
+extract_policy_list() {
+  local key="$1"
+
+  awk -v key="${key}" '
+    $0 ~ "^" key ":" {
+      in_list = 1
+      next
+    }
+    in_list && $0 ~ /^[^[:space:]]/ {
+      in_list = 0
+    }
+    in_list && $0 ~ /^[[:space:]]*-/ {
+      line = $0
+      sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+      sub(/[[:space:]]+#.*$/, "", line)
+      if (line != "") {
+        print line
+      }
+    }
+  ' "${POLICY_FILE}"
+}
 
 cd "${REPO_ROOT}"
 MODULE_PATH="$(go list -m)"
@@ -54,6 +77,21 @@ WARNINGS_FILE="${TMP_DIR}/warnings.txt"
 ADAPTER_AUDIT_TMP_FILE="${TMP_DIR}/adapter-boundary-audit.tsv"
 ACTIVE_EXCEPTIONS_FILE="${TMP_DIR}/active-policy-exceptions.tsv"
 POLICY_EXCEPTIONS_FILE="${SCRIPT_DIR}/dependency-policy-exceptions.tsv"
+SERVICE_IMPORT_ROOTS_FILE="${TMP_DIR}/service-import-roots.txt"
+ADAPTER_IMPORT_ROOTS_FILE="${TMP_DIR}/adapter-import-roots.txt"
+
+extract_policy_list "serviceImportRoots" > "${SERVICE_IMPORT_ROOTS_FILE}"
+extract_policy_list "adapterImportRoots" > "${ADAPTER_IMPORT_ROOTS_FILE}"
+
+if [ ! -s "${SERVICE_IMPORT_ROOTS_FILE}" ]; then
+  echo "error: failed to load serviceImportRoots from ${POLICY_FILE}" >&2
+  exit 1
+fi
+
+if [ ! -s "${ADAPTER_IMPORT_ROOTS_FILE}" ]; then
+  echo "error: failed to load adapterImportRoots from ${POLICY_FILE}" >&2
+  exit 1
+fi
 
 awk -F'\t' -v mod="${MODULE_PATH}" '
   function rel(p) {
@@ -88,10 +126,18 @@ awk -F'\t' -v mod="${MODULE_PATH}" '
 ' "${EDGE_FILE}" | sort -nr | head -n 15 > "${TOP_OUT_FILE}"
 
 # Policy warnings (report-only)
-awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FILE}" -v active_exceptions="${ACTIVE_EXCEPTIONS_FILE}" '
+awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FILE}" -v service_roots_file="${SERVICE_IMPORT_ROOTS_FILE}" -v adapter_roots_file="${ADAPTER_IMPORT_ROOTS_FILE}" -v active_exceptions="${ACTIVE_EXCEPTIONS_FILE}" '
   function rel(p) {
     sub(mod "/", "", p)
     return p
+  }
+  function is_under_roots(p, roots, root) {
+    for (root in roots) {
+      if (p == root || index(p, root "/") == 1) {
+        return 1
+      }
+    }
+    return 0
   }
   BEGIN {
     while ((getline line < policy_exceptions) > 0) {
@@ -109,15 +155,21 @@ awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FIL
       }
     }
     close(policy_exceptions)
-  }
-  function is_service_pkg(p) {
-    return p ~ /^internal\/(backup|restore|upgrade|upgrade\/bluegreen|upgrade\/rolling|infra|certs|init|provisioner)$/
+    while ((getline line < service_roots_file) > 0) {
+      if (line != "") {
+        service_roots[line] = 1
+      }
+    }
+    close(service_roots_file)
+    while ((getline line < adapter_roots_file) > 0) {
+      if (line != "") {
+        adapter_roots[line] = 1
+      }
+    }
+    close(adapter_roots_file)
   }
   function is_controller_impl_pkg(p) {
     return p ~ /^internal\/controller\//
-  }
-  function is_adapter_pkg(p) {
-    return p ~ /^internal\/(kube|openbao|storage|auth|cluster|config|raft|security|storageenv|operationlock|revision|probe)$/
   }
   {
     src = rel($1)
@@ -126,13 +178,13 @@ awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FIL
     if (dep == "internal/controller" && !is_controller_impl_pkg(src) && src != "internal/controller") {
       print "[shared-controller-import] " src " -> " dep
     }
-    if (is_adapter_pkg(src) && is_controller_impl_pkg(dep)) {
+    if (is_under_roots(src, adapter_roots) && is_controller_impl_pkg(dep)) {
       print "[adapter->controller] " src " -> " dep
     }
-    if (is_adapter_pkg(src) && is_service_pkg(dep)) {
+    if (is_under_roots(src, adapter_roots) && is_under_roots(dep, service_roots)) {
       print "[adapter->service] " src " -> " dep
     }
-    if (is_adapter_pkg(src) && is_adapter_pkg(dep) && src != dep) {
+    if (is_under_roots(src, adapter_roots) && is_under_roots(dep, adapter_roots) && src != dep) {
       key = src SUBSEP dep
       if (adapter_adapter_exception[key]) {
         if (!seen_exception[key]) {
@@ -151,13 +203,18 @@ awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FIL
 ' "${EDGE_FILE}" | sort -u > "${WARNINGS_FILE}"
 
 # Adapter-to-adapter edge audit (report-only)
-awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FILE}" '
+awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FILE}" -v adapter_roots_file="${ADAPTER_IMPORT_ROOTS_FILE}" '
   function rel(p) {
     sub(mod "/", "", p)
     return p
   }
-  function is_adapter_pkg(p) {
-    return p ~ /^internal\/(kube|openbao|storage|auth|cluster|config|raft|security|storageenv|operationlock|revision|probe)$/
+  function is_under_roots(p, roots, root) {
+    for (root in roots) {
+      if (p == root || index(p, root "/") == 1) {
+        return 1
+      }
+    }
+    return 0
   }
   BEGIN {
     while ((getline line < policy_exceptions) > 0) {
@@ -175,11 +232,17 @@ awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FIL
       }
     }
     close(policy_exceptions)
+    while ((getline line < adapter_roots_file) > 0) {
+      if (line != "") {
+        adapter_roots[line] = 1
+      }
+    }
+    close(adapter_roots_file)
   }
   {
     src = rel($1)
     dep = rel($2)
-    if (!is_adapter_pkg(src) || !is_adapter_pkg(dep) || src == dep) {
+    if (!is_under_roots(src, adapter_roots) || !is_under_roots(dep, adapter_roots) || src == dep) {
       next
     }
     key = src SUBSEP dep
@@ -194,14 +257,14 @@ awk -F'\t' -v mod="${MODULE_PATH}" -v policy_exceptions="${POLICY_EXCEPTIONS_FIL
 ' "${EDGE_FILE}" | sort -u > "${ADAPTER_AUDIT_TMP_FILE}"
 
 if [ "${root_controller_pkg_present}" = "true" ]; then
-  printf '[shared-controller-package-present] internal/controller package exists; keep shared helpers in internal/predicates or internal/observability\n' >> "${WARNINGS_FILE}"
+  printf '[shared-controller-package-present] internal/controller package exists; keep shared helpers in internal/platform/predicates or internal/platform/observability\n' >> "${WARNINGS_FILE}"
 fi
 
-constants_in="$(awk -F'\t' -v mod="${MODULE_PATH}" '$2 == mod "/internal/constants" {count++} END {print count + 0}' "${EDGE_FILE}")"
+constants_in="$(awk -F'\t' -v mod="${MODULE_PATH}" '$2 == mod "/internal/platform/constants" {count++} END {print count + 0}' "${EDGE_FILE}")"
 openbaocluster_out="$(awk -F'\t' -v mod="${MODULE_PATH}" '$1 == mod "/internal/controller/openbaocluster" {count++} END {print count + 0}' "${EDGE_FILE}")"
 
 if [ "${constants_in}" -gt 12 ]; then
-  printf '[threshold] internal/constants fan-in %s exceeds target <= 12\n' "${constants_in}" >> "${WARNINGS_FILE}"
+  printf '[threshold] internal/platform/constants fan-in %s exceeds target <= 12\n' "${constants_in}" >> "${WARNINGS_FILE}"
 fi
 
 if [ "${openbaocluster_out}" -gt 12 ]; then

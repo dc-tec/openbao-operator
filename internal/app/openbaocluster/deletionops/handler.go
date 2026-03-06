@@ -9,8 +9,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
-	"github.com/dc-tec/openbao-operator/internal/observability"
+	"github.com/dc-tec/openbao-operator/internal/platform/observability"
+	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 // Dependencies contains external collaborators required for deletion orchestration.

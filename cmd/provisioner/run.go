@@ -41,11 +41,11 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/admission"
 	provisionercontroller "github.com/dc-tec/openbao-operator/internal/controller/provisioner"
-	"github.com/dc-tec/openbao-operator/internal/entrypoint"
-	"github.com/dc-tec/openbao-operator/internal/logging"
-	"github.com/dc-tec/openbao-operator/internal/provisioner"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
+	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )

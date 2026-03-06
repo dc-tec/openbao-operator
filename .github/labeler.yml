@@ -37,7 +37,7 @@ security:
           - '**/security/**/*'
           - '.trivy*'
           - '.github/workflows/dependency-review.yml'
-          - 'internal/security/**/*'
+          - 'internal/adapter/security/**/*'
 
 # RBAC changes
 rbac:
@@ -77,7 +77,7 @@ controller:
 provisioner:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/provisioner/**/*'
+      - 'internal/service/provisioner/**/*'
       - 'cmd/provisioner/**/*'
       - '**/provisioner*'
 
@@ -85,55 +85,55 @@ provisioner:
 cluster:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/cluster/**/*'
+      - 'internal/adapter/cluster/**/*'
 
 # Storage backend changes (S3, GCS, Azure)
 storage:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/storage/**/*'
+      - 'internal/adapter/storage/**/*'
       - '**/storage*'
 
 # Admission controller changes
 admission:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/admission/**/*'
+      - 'internal/platform/admission/**/*'
       - '**/admission*'
 
 # Authentication changes
 auth:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/auth/**/*'
+      - 'internal/adapter/auth/**/*'
       - '**/auth*'
 
 # Certificate management changes
 certs:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/certs/**/*'
+      - 'internal/service/certs/**/*'
       - '**/cert*'
 
 # Raft consensus changes
 raft:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/raft/**/*'
+      - 'internal/adapter/raft/**/*'
       - '**/raft*'
 
 # Logging changes
 logging:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/logging/**/*'
+      - 'internal/platform/logging/**/*'
 
 # Networking changes
 networking:
   - changed-files:
     - any-glob-to-any-file:
       - 'config/network-policy/**/*'
-      - 'internal/infra/network*'
+      - 'internal/service/infra/network*'
 
 # Observability / monitoring changes
 observability:
@@ -163,7 +163,7 @@ devops:
 infra:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/infra/**/*'
+      - 'internal/service/infra/**/*'
       - 'config/manager/**/*'
       - 'config/default/**/*'
       - 'config/overlays/**/*'
@@ -173,14 +173,14 @@ infra:
 openbao:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/openbao/**/*'
+      - 'internal/adapter/openbao/**/*'
       - 'cmd/bao*/**/*'
 
 # Backup changes
 backup:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/backup/**/*'
+      - 'internal/service/backup/**/*'
       - 'cmd/bao-backup/**/*'
       - 'Dockerfile.backup'
 
@@ -188,7 +188,7 @@ backup:
 restore:
   - changed-files:
     - any-glob-to-any-file:
-      - 'internal/restore/**/*'
+      - 'internal/service/restore/**/*'
 
 # VAP (Validating Admission Policy) changes
 vap:
@@ -201,15 +201,15 @@ vap:
 operations:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/operationlock/**/*'
-          - 'internal/reconcile/**/*'
+          - 'internal/adapter/operationlock/**/*'
+          - 'internal/platform/reconcile/**/*'
           - 'cmd/bao-wrapper/**/*'
 
 # Upgrades related
 upgrades:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/upgrade/**/*'
+          - 'internal/service/upgrade/**/*'
           - 'cmd/bao-upgrade/**/*'
           - 'Dockerfile.upgrade'
 
@@ -217,7 +217,7 @@ upgrades:
 config:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/config/**/*'
+          - 'internal/adapter/config/**/*'
           - 'cmd/bao-config-init/**/*'
           - 'Dockerfile.init'
 
@@ -225,19 +225,19 @@ config:
 constants:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/constants/**/*'
+          - 'internal/platform/constants/**/*'
 
 # Errors package
 errors:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/errors/**/*'
+          - 'internal/platform/errors/**/*'
 
 # Initialization
 init:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/init/**/*'
+          - 'internal/service/init/**/*'
 
 # Interfaces
 interfaces:
@@ -249,17 +249,17 @@ interfaces:
 kube:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/kube/**/*'
+          - 'internal/adapter/kube/**/*'
 
 # Probes
 probe:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/probe/**/*'
+          - 'internal/adapter/probe/**/*'
           - 'cmd/bao-probe/**/*'
 
 # Revision management
 revision:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/revision/**/*'
+          - 'internal/adapter/revision/**/*'

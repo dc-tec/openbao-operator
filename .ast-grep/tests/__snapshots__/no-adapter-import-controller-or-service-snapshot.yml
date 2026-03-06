@@ -2,10 +2,10 @@ id: no-adapter-import-controller-or-service
 snapshots:
   ? |
     package p
-    import backup "github.com/dc-tec/openbao-operator/internal/backup"
+    import backup "github.com/dc-tec/openbao-operator/internal/service/backup"
     var _ = backup.NewManager
   : labels:
-    - source: backup "github.com/dc-tec/openbao-operator/internal/backup"
+    - source: backup "github.com/dc-tec/openbao-operator/internal/service/backup"
       style: primary
       start: 17
-      end: 76
+      end: 84

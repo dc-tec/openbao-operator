@@ -2,10 +2,10 @@ id: no-openbaocluster-controller-direct-domain-imports
 snapshots:
   ? |
     package p
-    import revision "github.com/dc-tec/openbao-operator/internal/revision"
+    import revision "github.com/dc-tec/openbao-operator/internal/adapter/revision"
     var _ = revision.GetOpenBaoImageVersionFromLabel
   : labels:
-    - source: revision "github.com/dc-tec/openbao-operator/internal/revision"
+    - source: revision "github.com/dc-tec/openbao-operator/internal/adapter/revision"
       style: primary
       start: 17
-      end: 80
+      end: 88

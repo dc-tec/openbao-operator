@@ -21,7 +21,7 @@ Confirm:
 
 - Cycle check is acyclic
 - Policy warnings are `None` (or intentionally justified)
-- Hotspots stay within current targets (`internal/constants` fan-in, `internal/controller/openbaocluster` fan-out)
+- Hotspots stay within current targets (`internal/platform/constants` fan-in, `internal/controller/openbaocluster` fan-out)
 
 # 3) Verify boundary intent from layer model
 
@@ -35,6 +35,7 @@ Layer intent:
 
 - Controllers (`internal/controller/*`) delegate orchestration to `internal/app/*`
 - Services consume ports (`internal/port/*`) and shared utilities
+- Ports stay contract-only and do not import `internal/adapter/*`
 - Adapters implement ports and avoid service/controller imports
 
 # 4) Validate code health

@@ -6,22 +6,22 @@ message: Adapter packages must not import controller or service-layer packages d
 severity: warning
 language: Go
 files:
-    - internal/auth/**/*.go
-    - internal/cluster/**/*.go
-    - internal/config/**/*.go
-    - internal/kube/**/*.go
-    - internal/openbao/**/*.go
-    - internal/operationlock/**/*.go
-    - internal/probe/**/*.go
-    - internal/raft/**/*.go
-    - internal/revision/**/*.go
-    - internal/security/**/*.go
-    - internal/storage/**/*.go
-    - internal/storageenv/**/*.go
+    - internal/adapter/auth/**/*.go
+    - internal/adapter/cluster/**/*.go
+    - internal/adapter/config/**/*.go
+    - internal/adapter/kube/**/*.go
+    - internal/adapter/openbao/**/*.go
+    - internal/adapter/operationlock/**/*.go
+    - internal/adapter/probe/**/*.go
+    - internal/adapter/raft/**/*.go
+    - internal/adapter/revision/**/*.go
+    - internal/adapter/security/**/*.go
+    - internal/adapter/storage/**/*.go
+    - internal/adapter/storageenv/**/*.go
 ignores:
     - '**/*_test.go'
 rule:
     all:
         - kind: import_spec
-        - regex: '"github\.com/dc-tec/openbao-operator/(internal/backup(/[^"]*)?|internal/certs(/[^"]*)?|internal/controller(/[^"]*)?|internal/infra(/[^"]*)?|internal/init(/[^"]*)?|internal/opslifecycle(/[^"]*)?|internal/provisioner(/[^"]*)?|internal/restore(/[^"]*)?|internal/upgrade(/[^"]*)?)"'
+        - regex: '"github\.com/dc-tec/openbao-operator/(internal/controller(/[^"]*)?|internal/service/backup(/[^"]*)?|internal/service/certs(/[^"]*)?|internal/service/infra(/[^"]*)?|internal/service/init(/[^"]*)?|internal/service/opslifecycle(/[^"]*)?|internal/service/provisioner(/[^"]*)?|internal/service/restore(/[^"]*)?|internal/service/upgrade(/[^"]*)?)"'
 note: Keep adapter packages behind contracts and prevent upward-layer coupling.

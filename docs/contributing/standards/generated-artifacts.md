@@ -14,7 +14,7 @@ This project contains several artifacts that are automatically generated from so
 | `api/v1alpha1/*.go` (API reference docs) | `make api-reference` | `verify-generated` |
 | `dist/install.yaml` | `make helm-sync` | `verify-helm` |
 | `.ast-grep/policy/architecture-boundaries.yml` | `make generate-ast-rules` | `verify-arch-policy` |
-| `internal/config/*.go` | `make test-update-golden` | `test` (fails if mismatch) |
+| `internal/adapter/config/*.go` | `make test-update-golden` | `test` (fails if mismatch) |
 | **I don't know** | `make generate manifests api-reference helm-sync generate-ast-rules` | `verify-generated`, `verify-arch-policy` |
 
 ## Artifact details
@@ -53,8 +53,8 @@ We maintain a standalone Helm chart that must stay in sync with our core manifes
 
 We use "Golden Files" to verify complex HCL configuration generation reliability.
 
-- **Source:** `internal/config/builder.go` logic changes
-- **Output:** `internal/config/testdata/*.golden.hcl`
+- **Source:** `internal/adapter/config/builder.go` logic changes
+- **Output:** `internal/adapter/config/testdata/*.golden.hcl`
 - **Command:** `make test-update-golden`
 
 ### 5. Ast-Grep Architecture Boundary Rules

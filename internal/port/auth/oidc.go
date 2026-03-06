@@ -5,8 +5,6 @@ import (
 	"errors"
 
 	"k8s.io/client-go/rest"
-
-	internalauth "github.com/dc-tec/openbao-operator/internal/auth"
 )
 
 // OIDCConfig contains discovered issuer and key material for JWT bootstrap.
@@ -15,27 +13,22 @@ type OIDCConfig struct {
 	JWKSKeys  []string
 }
 
-// DiscoverConfig fetches Kubernetes OIDC discovery configuration.
-func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*OIDCConfig, error) {
-	discovered, err := internalauth.DiscoverConfig(ctx, cfg, baseURL)
-	if err != nil {
-		return nil, err
-	}
-	if discovered == nil {
-		return nil, nil
-	}
+// DiscoverConfigFunc discovers OIDC configuration for a Kubernetes API server.
+type DiscoverConfigFunc func(ctx context.Context, cfg *rest.Config, baseURL string) (*OIDCConfig, error)
 
-	return &OIDCConfig{
-		IssuerURL: discovered.IssuerURL,
-		JWKSKeys:  discovered.JWKSKeys,
-	}, nil
+// DiscoveryStatusCodeFunc extracts HTTP status codes from discovery failures.
+type DiscoveryStatusCodeFunc func(err error) (int, bool)
+
+type httpStatusCoder interface {
+	error
+	HTTPStatusCode() int
 }
 
 // DiscoveryStatusCode extracts an HTTP status code from an OIDC discovery error when available.
 func DiscoveryStatusCode(err error) (int, bool) {
-	var statusErr *internalauth.HTTPStatusError
+	var statusErr httpStatusCoder
 	if errors.As(err, &statusErr) {
-		return statusErr.StatusCode, true
+		return statusErr.HTTPStatusCode(), true
 	}
 	return 0, false
 }

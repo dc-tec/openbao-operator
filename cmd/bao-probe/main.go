@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/probe"
+	"github.com/dc-tec/openbao-operator/internal/adapter/probe"
 )
 
 const (

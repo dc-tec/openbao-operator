@@ -7,5 +7,5 @@ valid:
 invalid:
   - |
     package p
-    import openbao "github.com/dc-tec/openbao-operator/internal/openbao"
+    import openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
     var _ = openbao.Client

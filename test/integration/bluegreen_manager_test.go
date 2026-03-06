@@ -16,12 +16,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/backup"
-	"github.com/dc-tec/openbao-operator/internal/constants"
-	"github.com/dc-tec/openbao-operator/internal/infra"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/openbao"
-	"github.com/dc-tec/openbao-operator/internal/security"
-	"github.com/dc-tec/openbao-operator/internal/upgrade/bluegreen"
+	openbaotest "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/adapter/security"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/backup"
+	"github.com/dc-tec/openbao-operator/internal/service/infra"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
 )
 
 func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
@@ -57,7 +58,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 				constants.LabelAppInstance:     cluster.Name,
 				constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
 				constants.LabelOpenBaoRevision: "green456",
-				openbaoapi.LabelActive:         "true",
+				portopenbao.LabelActive:        "true",
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -75,7 +76,16 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	}
 
 	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
-	manager := bluegreen.NewManager(k8sClient, k8sScheme, infraMgr, backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := bluegreen.NewManager(
+		k8sClient,
+		k8sScheme,
+		infraMgr,
+		backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme),
+		portopenbao.ClientConfig{},
+		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+		"",
+	)
 
 	// Phase: JoiningMesh -> create join job
 	latestCluster := &openbaov1alpha1.OpenBaoCluster{}
@@ -200,7 +210,7 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 				constants.LabelAppInstance:     cluster.Name,
 				constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
 				constants.LabelOpenBaoRevision: "green456",
-				openbaoapi.LabelSealed:         "false",
+				portopenbao.LabelSealed:        "false",
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -242,13 +252,13 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 	}
 
 	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
-	mgr := bluegreen.NewManagerWithClientFactory(k8sClient, k8sScheme, infraMgr, backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
-		return &openbaoapi.MockClusterActions{
+	mgr := bluegreen.NewManagerWithClientFactory(k8sClient, k8sScheme, infraMgr, backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+		return &openbaotest.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {
 				return true, nil
 			},
 		}, nil
-	}, openbaoapi.ClientConfig{},
+	}, portopenbao.ClientConfig{},
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
 		"")

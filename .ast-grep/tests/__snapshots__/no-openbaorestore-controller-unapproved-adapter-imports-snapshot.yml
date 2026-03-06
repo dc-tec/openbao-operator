@@ -2,10 +2,10 @@ id: no-openbaorestore-controller-unapproved-adapter-imports
 snapshots:
   ? |
     package p
-    import kube "github.com/dc-tec/openbao-operator/internal/kube"
+    import kube "github.com/dc-tec/openbao-operator/internal/adapter/kube"
     var _ = kube.Client
   : labels:
-    - source: kube "github.com/dc-tec/openbao-operator/internal/kube"
+    - source: kube "github.com/dc-tec/openbao-operator/internal/adapter/kube"
       style: primary
       start: 17
-      end: 72
+      end: 80

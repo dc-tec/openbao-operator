@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/config"
+	"github.com/dc-tec/openbao-operator/internal/adapter/config"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

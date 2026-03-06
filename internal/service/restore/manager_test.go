@@ -1,0 +1,1130 @@
+package restore
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/go-logr/logr"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/adapter/security"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/testutil/robustness"
+)
+
+// testLogger returns a no-op logger for testing.
+func testLogger() logr.Logger {
+	return logr.Discard()
+}
+
+// setTestResourceVersion sets ResourceVersion on test objects for fake client SSA compatibility.
+// Controller-runtime 0.23 sets ResourceVersion for SSA operations, so test objects need it to avoid conflicts.
+func setTestResourceVersion(obj metav1.Object) {
+	if obj.GetResourceVersion() == "" {
+		obj.SetResourceVersion("1")
+	}
+}
+
+// TestRestoreJobName tests the deterministic job name generation.
+func TestRestoreJobName(t *testing.T) {
+	tests := []struct {
+		name        string
+		restoreName string
+		wantPrefix  string
+	}{
+		{
+			name:        "simple name",
+			restoreName: "my-restore",
+			wantPrefix:  RestoreJobNamePrefix + "my-restore",
+		},
+		{
+			name:        "with namespace-like name",
+			restoreName: "ns-restore-backup",
+			wantPrefix:  RestoreJobNamePrefix + "ns-restore-backup",
+		},
+		{
+			name:        "short name",
+			restoreName: "r",
+			wantPrefix:  RestoreJobNamePrefix + "r",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: tt.restoreName,
+				},
+			}
+
+			got := restoreJobName(restore)
+			assert.Equal(t, tt.wantPrefix, got, "restoreJobName() should be deterministic")
+		})
+	}
+}
+
+// TestRestoreServiceAccountName tests the service account naming.
+func TestRestoreServiceAccountName(t *testing.T) {
+	tests := []struct {
+		name        string
+		clusterName string
+		wantSuffix  string
+	}{
+		{
+			name:        "simple cluster",
+			clusterName: "my-cluster",
+			wantSuffix:  "my-cluster" + RestoreServiceAccountSuffix,
+		},
+		{
+			name:        "long cluster name",
+			clusterName: "production-openbao-cluster",
+			wantSuffix:  "production-openbao-cluster" + RestoreServiceAccountSuffix,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: tt.clusterName,
+				},
+			}
+
+			got := restoreServiceAccountName(cluster)
+			assert.Equal(t, tt.wantSuffix, got, "restoreServiceAccountName() should use cluster name + suffix")
+		})
+	}
+}
+
+// TestRestoreLabels tests the standard labels generation.
+func TestRestoreLabels(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cluster",
+		},
+	}
+
+	got := restoreLabels(cluster)
+
+	assert.NotNil(t, got)
+	assert.Equal(t, "test-cluster", got["openbao.org/cluster"])
+	assert.Equal(t, ComponentRestore, got["openbao.org/component"])
+	assert.Contains(t, got, "app.kubernetes.io/managed-by")
+}
+
+// TestReconcilePending tests the Pending to Validating phase transition.
+func TestReconcilePending(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test-restore",
+			Namespace:       "default",
+			ResourceVersion: "1", // Set initial ResourceVersion for fake client SSA compatibility
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhasePending,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.handlePending(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.True(t, result.RequeueAfter > 0, "should requeue after pending")
+
+	// Verify status was updated
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseValidating, updated.Status.Phase)
+	assert.NotNil(t, updated.Status.StartTime)
+	assert.Equal(t, "backup-key", updated.Status.SnapshotKey)
+}
+
+func TestReconcilePending_AfterGet(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test-restore",
+			Namespace:       "default",
+			ResourceVersion: "1",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhasePending,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		Build()
+
+	fetched := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, fetched))
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.handlePending(context.Background(), testLogger(), fetched)
+	require.NoError(t, err)
+	assert.True(t, result.RequeueAfter > 0, "should requeue after pending")
+}
+
+// TestReconcilePhaseRouting tests that Reconcile correctly routes by phase.
+func TestReconcilePhaseRouting(t *testing.T) {
+	tests := []struct {
+		name           string
+		phase          openbaov1alpha1.RestorePhase
+		expectRequeue  bool
+		expectNoAction bool
+	}{
+		{
+			name:          "pending phase transitions to validating",
+			phase:         openbaov1alpha1.RestorePhasePending,
+			expectRequeue: true,
+		},
+		{
+			name:           "completed phase is terminal",
+			phase:          openbaov1alpha1.RestorePhaseCompleted,
+			expectNoAction: true,
+		},
+		{
+			name:           "failed phase is terminal",
+			phase:          openbaov1alpha1.RestorePhaseFailed,
+			expectNoAction: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+			require.NoError(t, corev1.AddToScheme(scheme))
+
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-restore",
+					Namespace:  "default",
+					Finalizers: []string{openbaov1alpha1.OpenBaoRestoreFinalizer},
+				},
+				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+					Cluster: "test-cluster",
+				},
+				Status: openbaov1alpha1.OpenBaoRestoreStatus{
+					Phase: tt.phase,
+				},
+			}
+			setTestResourceVersion(restore)
+
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(restore).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
+				WithReturnManagedFields().
+				Build()
+
+			mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+			result, err := mgr.Reconcile(context.Background(), testLogger(), restore)
+			require.NoError(t, err)
+
+			if tt.expectNoAction {
+				assert.Equal(t, int64(0), int64(result.RequeueAfter), "terminal phases should not requeue")
+			}
+			if tt.expectRequeue {
+				assert.True(t, result.RequeueAfter > 0, "should requeue")
+			}
+		})
+	}
+}
+
+func TestReconcileTerminalPhase_ReleasesOperationLock(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			UID:       "cluster-uid",
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationRestore,
+				Holder:    constants.ControllerNameOpenBaoRestore + "/test-restore",
+				Message:   "restore default/test-restore",
+			},
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshot-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseCompleted,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.Reconcile(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), int64(result.RequeueAfter))
+
+	updatedCluster := &openbaov1alpha1.OpenBaoCluster{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-cluster", Namespace: "default"}, updatedCluster))
+	assert.Nil(t, updatedCluster.Status.OperationLock)
+}
+
+func TestReconcileTerminalPhase_RetriesLockReleaseAfterTransientFailure(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			UID:       "cluster-uid",
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationRestore,
+				Holder:    constants.ControllerNameOpenBaoRestore + "/test-restore",
+				Message:   "restore default/test-restore",
+			},
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshot-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseCompleted,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	failStatusPatchOnce := true
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+				if subResourceName == "status" {
+					if _, isCluster := obj.(*openbaov1alpha1.OpenBaoCluster); isCluster && failStatusPatchOnce {
+						failStatusPatchOnce = false
+						return apierrors.NewInternalError(fmt.Errorf("transient status patch failure"))
+					}
+				}
+				return c.Status().Patch(ctx, obj, patch, opts...)
+			},
+		}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	// First terminal reconcile fails lock release due to transient patch error.
+	result, err := mgr.Reconcile(context.Background(), testLogger(), restore)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to release cluster operation lock for terminal restore")
+	assert.Equal(t, int64(0), int64(result.RequeueAfter))
+	assert.False(t, failStatusPatchOnce, "expected injected transient patch failure to be consumed")
+
+	lockedCluster := &openbaov1alpha1.OpenBaoCluster{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-cluster", Namespace: "default"}, lockedCluster))
+	assert.NotNil(t, lockedCluster.Status.OperationLock, "lock should still be present after first failed release")
+
+	// Second terminal reconcile should succeed and clear the lock.
+	freshRestore := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, freshRestore))
+
+	result, err = mgr.Reconcile(context.Background(), testLogger(), freshRestore)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), int64(result.RequeueAfter))
+
+	unlockedCluster := &openbaov1alpha1.OpenBaoCluster{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-cluster", Namespace: "default"}, unlockedCluster))
+	assert.Nil(t, unlockedCluster.Status.OperationLock, "lock should be released on subsequent terminal reconcile")
+}
+
+func TestHandleValidating_PersistsOperationLockOverrideCondition(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, rbacv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			UID:       "cluster-uid",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: true,
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationBackup,
+				Holder:    "openbao-adminops-support-controller/backup",
+				Message:   "backup job",
+			},
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+			UID:       "restore-uid",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster:               "test-cluster",
+			JWTAuthRole:           "restore-role",
+			OverrideOperationLock: true,
+			Force:                 true,
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshot-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.handleValidating(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.True(t, result.RequeueAfter > 0)
+
+	updatedRestore := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updatedRestore))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseRunning, updatedRestore.Status.Phase)
+
+	foundOverrideCondition := false
+	for i := range updatedRestore.Status.Conditions {
+		cond := updatedRestore.Status.Conditions[i]
+		if cond.Type != constants.ConditionTypeOperationLockOverride {
+			continue
+		}
+		foundOverrideCondition = true
+		assert.Equal(t, metav1.ConditionTrue, cond.Status)
+		assert.Equal(t, constants.ReasonOperationLockOverridden, cond.Reason)
+		break
+	}
+	assert.True(t, foundOverrideCondition, "expected operation lock override condition to be persisted")
+}
+
+func TestHandleRunning_RestoreJobAlreadyExistsDuringCreate(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, rbacv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileDevelopment,
+			Replicas: 3,
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster:     "test-cluster",
+			Image:       "ghcr.io/example/restore:0.1.0",
+			JWTAuthRole: "restore",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshot-key",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "https://s3.example.com",
+					Bucket:   "example-backups",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseRunning,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if _, ok := obj.(*batchv1.Job); ok {
+					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
+				}
+				return c.Create(ctx, obj, opts...)
+			},
+		}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.handleRunning(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.Equal(t, 10*time.Second, result.RequeueAfter)
+}
+
+func TestReconcilePending_AddsFinalizerThenPatchesStatus(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test-restore",
+			Namespace:       "default",
+			ResourceVersion: "1",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhasePending,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.Reconcile(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.True(t, result.RequeueAfter > 0)
+}
+
+// TestValidatingClusterNotFound tests validation failure when cluster doesn't exist.
+func TestValidatingClusterNotFound(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "nonexistent-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	// No cluster object in the fake client
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	_, err := mgr.handleValidating(context.Background(), testLogger(), restore)
+	require.NoError(t, err) // failRestore returns nil error
+
+	// Verify status was updated to Failed
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseFailed, updated.Status.Phase)
+	assert.Contains(t, updated.Status.Message, "not found")
+}
+
+// TestValidatingUninitializedCluster tests validation with uninitialized cluster.
+func TestValidatingUninitializedCluster(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: false, // Not initialized
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-key",
+			},
+			Force: false, // Force is not set
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	_, err := mgr.handleValidating(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+
+	// Verify status was updated to Failed
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseFailed, updated.Status.Phase)
+	assert.Contains(t, updated.Status.Message, "not initialized")
+}
+
+// TestValidatingNoAuthentication tests validation failure when no auth is configured.
+func TestValidatingNoAuthentication(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			UID:       "test-uid",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: true, // Cluster is initialized
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	// Restore with NO auth configured - neither jwtAuthRole nor tokenSecretRef
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-key",
+			},
+			// JWTAuthRole and TokenSecretRef are NOT set
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	_, err := mgr.handleValidating(context.Background(), testLogger(), restore)
+	require.NoError(t, err) // failRestore returns nil error
+
+	// Verify status was updated to Failed with auth error message
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseFailed, updated.Status.Phase)
+	assert.Contains(t, updated.Status.Message, "authentication is required")
+}
+
+// TestGetRestoreExecutorImage tests restore image resolution.
+func TestGetRestoreExecutorImage(t *testing.T) {
+	tests := []struct {
+		name          string
+		restoreImage  string
+		clusterImage  string
+		expectedImage string
+		expectError   bool
+	}{
+		{
+			name:          "restore image takes precedence",
+			restoreImage:  "custom/restore:v1",
+			clusterImage:  "custom/backup:v2",
+			expectedImage: "custom/restore:v1",
+			expectError:   false,
+		},
+		{
+			name:          "fallback to cluster backup image",
+			restoreImage:  "",
+			clusterImage:  "custom/backup:v2",
+			expectedImage: "custom/backup:v2",
+			expectError:   false,
+		},
+		{
+			name:          "no image specified returns error",
+			restoreImage:  "",
+			clusterImage:  "",
+			expectedImage: "",
+			expectError:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+					Image: tt.restoreImage,
+				},
+			}
+
+			var backupSchedule *openbaov1alpha1.BackupSchedule
+			if tt.clusterImage != "" {
+				backupSchedule = &openbaov1alpha1.BackupSchedule{
+					Image: tt.clusterImage,
+				}
+			}
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Backup: backupSchedule,
+				},
+			}
+
+			got, err := getRestoreExecutorImage(restore, cluster)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedImage, got)
+			}
+		})
+	}
+}
+
+// TestBuildRestoreEnvVars tests environment variable generation.
+func TestBuildRestoreEnvVars(t *testing.T) {
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-2024-01-01.snap",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint:     "https://s3.example.com",
+					Bucket:       "my-bucket",
+					Region:       "us-east-1",
+					UsePathStyle: true,
+				},
+			},
+			JWTAuthRole: "restore-role",
+		},
+	}
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+		},
+	}
+
+	envVars := buildRestoreEnvVars(restore, cluster)
+
+	// Verify required env vars are present
+	envMap := make(map[string]string)
+	for _, env := range envVars {
+		if env.Value != "" {
+			envMap[env.Name] = env.Value
+		}
+	}
+
+	assert.Equal(t, "restore", envMap["EXECUTOR_MODE"])
+	assert.Equal(t, "test-cluster", envMap["CLUSTER_NAME"])
+	assert.Equal(t, "default", envMap["CLUSTER_NAMESPACE"])
+	assert.Equal(t, "3", envMap["CLUSTER_REPLICAS"])
+	assert.Equal(t, "backup-2024-01-01.snap", envMap["RESTORE_KEY"])
+	assert.Equal(t, "my-bucket", envMap["RESTORE_BUCKET"])
+	assert.Equal(t, "https://s3.example.com", envMap["RESTORE_ENDPOINT"])
+	assert.Equal(t, "restore-role", envMap["BACKUP_JWT_AUTH_ROLE"])
+	assert.Equal(t, "jwt", envMap["BACKUP_AUTH_METHOD"])
+}
+
+// TestBuildRestoreVolumes tests volume generation.
+func TestBuildRestoreVolumes(t *testing.T) {
+	tests := []struct {
+		name                string
+		tlsEnabled          bool
+		jwtAuthRole         string
+		tokenSecretRef      *corev1.LocalObjectReference
+		credentialsSecret   *corev1.LocalObjectReference
+		expectedVolumeNames []string
+	}{
+		{
+			name:                "TLS only",
+			tlsEnabled:          true,
+			expectedVolumeNames: []string{"tls-ca"},
+		},
+		{
+			name:                "JWT auth",
+			tlsEnabled:          true,
+			jwtAuthRole:         "restore-role",
+			expectedVolumeNames: []string{"tls-ca", "jwt-token"},
+		},
+		{
+			name:                "token auth",
+			tlsEnabled:          true,
+			tokenSecretRef:      &corev1.LocalObjectReference{Name: "token-secret"},
+			expectedVolumeNames: []string{"tls-ca", "restore-token"},
+		},
+		{
+			name:                "with storage credentials",
+			tlsEnabled:          true,
+			credentialsSecret:   &corev1.LocalObjectReference{Name: "s3-creds"},
+			expectedVolumeNames: []string{"tls-ca", "storage-credentials"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+					JWTAuthRole:    tt.jwtAuthRole,
+					TokenSecretRef: tt.tokenSecretRef,
+					Source: openbaov1alpha1.RestoreSource{
+						Target: openbaov1alpha1.BackupTarget{
+							CredentialsSecretRef: tt.credentialsSecret,
+						},
+					},
+				},
+			}
+
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test"},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					TLS: openbaov1alpha1.TLSConfig{Enabled: tt.tlsEnabled},
+				},
+			}
+
+			volumes := buildRestoreVolumes(restore, cluster)
+
+			volumeNames := make([]string, len(volumes))
+			for i, vol := range volumes {
+				volumeNames[i] = vol.Name
+			}
+
+			for _, expected := range tt.expectedVolumeNames {
+				assert.Contains(t, volumeNames, expected, "should contain volume %s", expected)
+			}
+		})
+	}
+}
+
+// TestBuildRestoreVolumeMounts tests volume mount generation.
+func TestBuildRestoreVolumeMounts(t *testing.T) {
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			JWTAuthRole: "restore-role",
+		},
+	}
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			TLS: openbaov1alpha1.TLSConfig{Enabled: true},
+		},
+	}
+
+	mounts := buildRestoreVolumeMounts(restore, cluster)
+
+	assert.Len(t, mounts, 2) // TLS + JWT
+	for _, mount := range mounts {
+		assert.True(t, mount.ReadOnly, "all mounts should be read-only for security")
+	}
+}
+
+// TestFinalizer tests finalizer addition and removal.
+func TestEnsureFinalizer(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore).
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	err := mgr.ensureFinalizer(context.Background(), restore)
+	require.NoError(t, err)
+
+	// Verify finalizer was added
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Contains(t, updated.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
+
+	// Second call should be idempotent
+	restore.Finalizers = updated.Finalizers
+	err = mgr.ensureFinalizer(context.Background(), restore)
+	require.NoError(t, err)
+}
+
+func TestEnsureFinalizer_TransientPatchFailureThenSuccess(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+	}
+
+	expected := errors.New("transient patch failure")
+	injector := robustness.NewInjector(map[robustness.Operation]robustness.Rule{
+		robustness.OpPatch: robustness.Once(expected),
+	})
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore).
+		WithInterceptorFuncs(injector.InterceptorFuncs()).
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	firstErr := mgr.ensureFinalizer(context.Background(), restore)
+	require.Error(t, firstErr)
+	assert.Contains(t, firstErr.Error(), "failed to add finalizer")
+	assert.Contains(t, firstErr.Error(), expected.Error())
+
+	freshRestore := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, freshRestore))
+	require.NotContains(t, freshRestore.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
+
+	require.NoError(t, mgr.ensureFinalizer(context.Background(), freshRestore))
+
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Contains(t, updated.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
+
+	require.NoError(t, mgr.ensureFinalizer(context.Background(), updated))
+}
+
+// TestHandleDeletion tests the deletion handling.
+func TestHandleDeletion(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	now := metav1.Now()
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-restore",
+			Namespace:         "default",
+			DeletionTimestamp: &now,
+			Finalizers:        []string{openbaov1alpha1.OpenBaoRestoreFinalizer},
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "nonexistent-cluster", // Cluster doesn't exist
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore).
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.handleDeletion(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), int64(result.RequeueAfter))
+
+	// The handleDeletion removed the finalizer. With a deletion timestamp set,
+	// the fake client now removes the object entirely, which is correct behavior.
+	// We don't need to verify finalizers since successful return indicates
+	// the finalizer was removed and deletion proceeded.
+}
+
+// TestReleaseClusterLock tests the cluster lock release.
+func TestReleaseClusterLock_ClusterNotFound(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "nonexistent-cluster",
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	err := mgr.releaseClusterLock(context.Background(), testLogger(), restore)
+	require.NoError(t, err, "should not error when cluster not found")
+}
+
+// TestReleaseClusterLock_EmptyCluster tests release with empty cluster name.
+func TestReleaseClusterLock_EmptyCluster(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "", // Empty cluster name
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	err := mgr.releaseClusterLock(context.Background(), testLogger(), restore)
+	require.NoError(t, err, "should return nil for empty cluster name")
+}
+
+// TestNewManagerCreation tests the manager constructor.
+func TestNewManager(t *testing.T) {
+	scheme := runtime.NewScheme()
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	assert.NotNil(t, mgr)
+	assert.NotNil(t, mgr.client)
+	assert.NotNil(t, mgr.scheme)
+}

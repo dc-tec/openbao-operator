@@ -73,10 +73,10 @@ For runtime code changes, apply the layer model in `.agents/rules/architecture.m
 
 - `L2` controllers: `internal/controller/*`
 - `L3` app orchestration: `internal/app/*`
-- `L4` services/managers: `internal/{backup,restore,upgrade,infra,certs,init,provisioner}`
+- `L4` services/managers: `internal/service/{backup,restore,upgrade,infra,certs,init,provisioner}`
 - `L5` ports: `internal/port/*`
-- `L6` adapters: `internal/{kube,openbao,storage,auth,raft,security,storageenv,...}`
-- `L7` cross-cutting: `internal/{errors,logging,reconcile,constants,predicates,observability}`
+- `L6` adapters: `internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,...}`
+- `L7` platform/cross-cutting: `internal/platform/{errors,logging,reconcile,constants,predicates,observability}`
 
 Guardrails:
 

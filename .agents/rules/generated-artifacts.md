@@ -25,7 +25,7 @@ make manifests generate # CRDs + deepcopy (controller-gen)
 make helm-sync          # charts/openbao-operator (CRDs + install.yaml.tpl)
 make generate-ast-rules # generate architecture-boundary rules from policy
 make verify-arch-policy # verify generated ast rules are up to date
-make test-update-golden # internal/config/testdata golden HCL
+make test-update-golden # internal/adapter/config/testdata golden HCL
 ```
 
 ## Heuristics (When to Run What)
@@ -34,5 +34,5 @@ make test-update-golden # internal/config/testdata golden HCL
 - Touching `go.mod` or `go.sum`: run `make verify-vendor` (or `go mod vendor`) and commit `vendor/` updates.
 - Touching `dist/install.yaml` or `charts/openbao-operator/`: run `make helm-sync`.
 - Touching `.ast-grep/policy/architecture-boundaries.yml`: run `make generate-ast-rules verify-arch-policy`.
-- Touching `internal/provisioner/rbac.go` or `hack/gen-rbac/`: run `make rbac-sync`.
-- Touching `internal/config/*`: consider `make test-update-golden`.
+- Touching `internal/service/provisioner/rbac.go` or `hack/gen-rbac/`: run `make rbac-sync`.
+- Touching `internal/adapter/config/*`: consider `make test-update-golden`.

@@ -65,19 +65,19 @@ jobs:
             echo "e2e=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/backup/|internal/restore/|cmd/bao-backup/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
+          if echo "${changed}" | grep -qE '^(internal/service/backup/|internal/service/restore/|cmd/bao-backup/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
             echo "e2e_backup=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_backup=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/upgrade/|cmd/bao-upgrade/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
+          if echo "${changed}" | grep -qE '^(internal/service/upgrade/|cmd/bao-upgrade/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
             echo "e2e_upgrade=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_upgrade=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/security/|internal/admission/|internal/provisioner/|cmd/provisioner/|config/policy/|internal/controller/|cmd/controller/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
+          if echo "${changed}" | grep -qE '^(internal/adapter/security/|internal/platform/admission/|internal/service/provisioner/|cmd/provisioner/|config/policy/|internal/controller/|cmd/controller/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
             echo "e2e_hardened=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_hardened=false" >> "${GITHUB_OUTPUT}"

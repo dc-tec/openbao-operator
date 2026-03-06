@@ -5,22 +5,22 @@ message: Adapter packages should not mutate CR status fields directly.
 severity: warning
 language: Go
 files:
-  - internal/auth/**/*.go
-  - internal/cluster/**/*.go
-  - internal/config/**/*.go
-  - internal/kube/**/*.go
-  - internal/openbao/**/*.go
-  - internal/operationlock/**/*.go
-  - internal/probe/**/*.go
-  - internal/raft/**/*.go
-  - internal/revision/**/*.go
-  - internal/security/**/*.go
-  - internal/storage/**/*.go
-  - internal/storageenv/**/*.go
+  - internal/adapter/auth/**/*.go
+  - internal/adapter/cluster/**/*.go
+  - internal/adapter/config/**/*.go
+  - internal/adapter/kube/**/*.go
+  - internal/adapter/openbao/**/*.go
+  - internal/adapter/operationlock/**/*.go
+  - internal/adapter/probe/**/*.go
+  - internal/adapter/raft/**/*.go
+  - internal/adapter/revision/**/*.go
+  - internal/adapter/security/**/*.go
+  - internal/adapter/storage/**/*.go
+  - internal/adapter/storageenv/**/*.go
 ignores:
   - '**/*_test.go'
   # Transitional ownership exception tracked separately.
-  - internal/operationlock/**/*.go
+  - internal/adapter/operationlock/**/*.go
 rule:
   any:
     - pattern: $OBJ.Status = $VALUE

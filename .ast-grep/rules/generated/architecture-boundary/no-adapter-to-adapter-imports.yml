@@ -6,23 +6,21 @@ message: Adapter packages should not depend on other adapters; use ports/contrac
 severity: warning
 language: Go
 files:
-    - internal/auth/**/*.go
-    - internal/cluster/**/*.go
-    - internal/config/**/*.go
-    - internal/kube/**/*.go
-    - internal/openbao/**/*.go
-    - internal/operationlock/**/*.go
-    - internal/probe/**/*.go
-    - internal/raft/**/*.go
-    - internal/revision/**/*.go
-    - internal/security/**/*.go
-    - internal/storage/**/*.go
-    - internal/storageenv/**/*.go
+    - internal/adapter/auth/**/*.go
+    - internal/adapter/cluster/**/*.go
+    - internal/adapter/config/**/*.go
+    - internal/adapter/kube/**/*.go
+    - internal/adapter/openbao/**/*.go
+    - internal/adapter/operationlock/**/*.go
+    - internal/adapter/probe/**/*.go
+    - internal/adapter/raft/**/*.go
+    - internal/adapter/revision/**/*.go
+    - internal/adapter/security/**/*.go
+    - internal/adapter/storage/**/*.go
+    - internal/adapter/storageenv/**/*.go
 ignores:
     - '**/*_test.go'
-    - internal/raft/**/*.go
 rule:
     all:
         - kind: import_spec
-        - regex: '"github\.com/dc-tec/openbao-operator/(internal/auth(/[^"]*)?|internal/cluster(/[^"]*)?|internal/config(/[^"]*)?|internal/kube(/[^"]*)?|internal/openbao(/[^"]*)?|internal/operationlock(/[^"]*)?|internal/probe(/[^"]*)?|internal/raft(/[^"]*)?|internal/revision(/[^"]*)?|internal/security(/[^"]*)?|internal/storage(/[^"]*)?|internal/storageenv(/[^"]*)?)"'
-note: Current exception internal/raft -> internal/openbao is tracked via dependency-policy-exceptions.tsv.
+        - regex: '"github\.com/dc-tec/openbao-operator/(internal/adapter/auth(/[^"]*)?|internal/adapter/cluster(/[^"]*)?|internal/adapter/config(/[^"]*)?|internal/adapter/kube(/[^"]*)?|internal/adapter/openbao(/[^"]*)?|internal/adapter/operationlock(/[^"]*)?|internal/adapter/probe(/[^"]*)?|internal/adapter/raft(/[^"]*)?|internal/adapter/revision(/[^"]*)?|internal/adapter/security(/[^"]*)?|internal/adapter/storage(/[^"]*)?|internal/adapter/storageenv(/[^"]*)?)"'

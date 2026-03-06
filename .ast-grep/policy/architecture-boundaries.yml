@@ -8,66 +8,66 @@ layerCoverage:
     app:
       - app
     service:
-      - backup
-      - certs
-      - infra
-      - init
-      - opslifecycle
-      - provisioner
-      - restore
-      - upgrade
+      - service/backup
+      - service/certs
+      - service/infra
+      - service/init
+      - service/opslifecycle
+      - service/provisioner
+      - service/restore
+      - service/upgrade
     adapter:
-      - auth
-      - cluster
-      - config
-      - kube
-      - openbao
-      - operationlock
-      - probe
-      - raft
-      - revision
-      - security
-      - storage
-      - storageenv
+      - adapter/auth
+      - adapter/cluster
+      - adapter/config
+      - adapter/kube
+      - adapter/openbao
+      - adapter/operationlock
+      - adapter/probe
+      - adapter/raft
+      - adapter/revision
+      - adapter/security
+      - adapter/storage
+      - adapter/storageenv
     port:
       - port
-    utility:
-      - admission
-      - constants
-      - entrypoint
-      - errors
-      - logging
-      - observability
-      - predicates
-      - reconcile
-      - testutil
+    platform:
+      - platform/admission
+      - platform/constants
+      - platform/entrypoint
+      - platform/errors
+      - platform/logging
+      - platform/observability
+      - platform/predicates
+      - platform/reconcile
+      - platform/testutil
 
 controllerCoverage:
   root: internal/controller
 
 serviceImportRoots:
-  - internal/backup
-  - internal/certs
-  - internal/infra
-  - internal/init
-  - internal/opslifecycle
-  - internal/provisioner
-  - internal/restore
-  - internal/upgrade
+  - internal/service/backup
+  - internal/service/certs
+  - internal/service/infra
+  - internal/service/init
+  - internal/service/opslifecycle
+  - internal/service/provisioner
+  - internal/service/restore
+  - internal/service/upgrade
 
 adapterImportRoots:
-  - internal/auth
-  - internal/cluster
-  - internal/config
-  - internal/kube
-  - internal/openbao
-  - internal/operationlock
-  - internal/probe
-  - internal/raft
-  - internal/revision
-  - internal/security
-  - internal/storage
-  - internal/storageenv
+  - internal/adapter/auth
+  - internal/adapter/cluster
+  - internal/adapter/config
+  - internal/adapter/kube
+  - internal/adapter/openbao
+  - internal/adapter/operationlock
+  - internal/adapter/probe
+  - internal/adapter/raft
+  - internal/adapter/revision
+  - internal/adapter/security
+  - internal/adapter/storage
+  - internal/adapter/storageenv
 
 controllerBoundaries:
   - name: openbaocluster
@@ -77,13 +77,13 @@ controllerBoundaries:
     ignores:
       - "**/*_test.go"
     disallowImports:
-      - internal/infra
-      - internal/upgrade
-      - internal/revision
-      - internal/logging
+      - internal/service/infra
+      - internal/service/upgrade
+      - internal/adapter/revision
+      - internal/platform/logging
     appFacadeRoot: internal/app/openbaocluster
     allowServiceImports:
-      - internal/certs
+      - internal/service/certs
     allowAdapterImports: []
   - name: openbaorestore
     displayName: OpenBaoRestore
@@ -92,13 +92,13 @@ controllerBoundaries:
     ignores:
       - "**/*_test.go"
     disallowImports:
-      - internal/infra
-      - internal/upgrade
-      - internal/revision
-      - internal/logging
+      - internal/service/infra
+      - internal/service/upgrade
+      - internal/adapter/revision
+      - internal/platform/logging
     appFacadeRoot: internal/app/openbaorestore
     allowServiceImports:
-      - internal/restore
+      - internal/service/restore
     allowAdapterImports: []
   - name: provisioner
     displayName: Provisioner
@@ -107,13 +107,13 @@ controllerBoundaries:
     ignores:
       - "**/*_test.go"
     disallowImports:
-      - internal/infra
-      - internal/upgrade
-      - internal/revision
-      - internal/logging
+      - internal/service/infra
+      - internal/service/upgrade
+      - internal/adapter/revision
+      - internal/platform/logging
     appFacadeRoot: internal/app/provisioner
     allowServiceImports:
-      - internal/provisioner
+      - internal/service/provisioner
     allowAdapterImports: []
 
 globalImportBoundaries:
@@ -121,30 +121,30 @@ globalImportBoundaries:
     message: Adapter packages must not import controller or service-layer packages directly.
     note: Keep adapter packages behind contracts and prevent upward-layer coupling.
     files:
-      - internal/auth/**/*.go
-      - internal/cluster/**/*.go
-      - internal/config/**/*.go
-      - internal/kube/**/*.go
-      - internal/openbao/**/*.go
-      - internal/operationlock/**/*.go
-      - internal/probe/**/*.go
-      - internal/raft/**/*.go
-      - internal/revision/**/*.go
-      - internal/security/**/*.go
-      - internal/storage/**/*.go
-      - internal/storageenv/**/*.go
+      - internal/adapter/auth/**/*.go
+      - internal/adapter/cluster/**/*.go
+      - internal/adapter/config/**/*.go
+      - internal/adapter/kube/**/*.go
+      - internal/adapter/openbao/**/*.go
+      - internal/adapter/operationlock/**/*.go
+      - internal/adapter/probe/**/*.go
+      - internal/adapter/raft/**/*.go
+      - internal/adapter/revision/**/*.go
+      - internal/adapter/security/**/*.go
+      - internal/adapter/storage/**/*.go
+      - internal/adapter/storageenv/**/*.go
     ignores:
       - "**/*_test.go"
     disallowImports:
       - internal/controller
-      - internal/backup
-      - internal/certs
-      - internal/infra
-      - internal/init
-      - internal/opslifecycle
-      - internal/provisioner
-      - internal/restore
-      - internal/upgrade
+      - internal/service/backup
+      - internal/service/certs
+      - internal/service/infra
+      - internal/service/init
+      - internal/service/opslifecycle
+      - internal/service/provisioner
+      - internal/service/restore
+      - internal/service/upgrade
   - id: no-adapter-imports-in-app-layer
     message: App layer should not import adapter packages directly; depend on ports/contracts.
     note: Keep app orchestration layer independent from concrete adapters.
@@ -153,50 +153,68 @@ globalImportBoundaries:
     ignores:
       - "**/*_test.go"
     disallowImports:
-      - internal/auth
-      - internal/cluster
-      - internal/config
-      - internal/kube
-      - internal/openbao
-      - internal/operationlock
-      - internal/probe
-      - internal/raft
-      - internal/revision
-      - internal/security
-      - internal/storage
-      - internal/storageenv
-  - id: no-adapter-to-adapter-imports
-    message: Adapter packages should not depend on other adapters; use ports/contracts.
-    note: Current exception internal/raft -> internal/openbao is tracked via dependency-policy-exceptions.tsv.
+      - internal/adapter/auth
+      - internal/adapter/cluster
+      - internal/adapter/config
+      - internal/adapter/kube
+      - internal/adapter/openbao
+      - internal/adapter/operationlock
+      - internal/adapter/probe
+      - internal/adapter/raft
+      - internal/adapter/revision
+      - internal/adapter/security
+      - internal/adapter/storage
+      - internal/adapter/storageenv
+  - id: no-adapter-imports-in-port-layer
+    message: Port packages must not import adapter packages directly.
+    note: Keep ports limited to contracts, neutral types, and domain helpers.
     files:
-      - internal/auth/**/*.go
-      - internal/cluster/**/*.go
-      - internal/config/**/*.go
-      - internal/kube/**/*.go
-      - internal/openbao/**/*.go
-      - internal/operationlock/**/*.go
-      - internal/probe/**/*.go
-      - internal/raft/**/*.go
-      - internal/revision/**/*.go
-      - internal/security/**/*.go
-      - internal/storage/**/*.go
-      - internal/storageenv/**/*.go
+      - internal/port/**/*.go
     ignores:
       - "**/*_test.go"
-      - internal/raft/**/*.go
     disallowImports:
-      - internal/auth
-      - internal/cluster
-      - internal/config
-      - internal/kube
-      - internal/openbao
-      - internal/operationlock
-      - internal/probe
-      - internal/raft
-      - internal/revision
-      - internal/security
-      - internal/storage
-      - internal/storageenv
+      - internal/adapter/auth
+      - internal/adapter/cluster
+      - internal/adapter/config
+      - internal/adapter/kube
+      - internal/adapter/openbao
+      - internal/adapter/operationlock
+      - internal/adapter/probe
+      - internal/adapter/raft
+      - internal/adapter/revision
+      - internal/adapter/security
+      - internal/adapter/storage
+      - internal/adapter/storageenv
+  - id: no-adapter-to-adapter-imports
+    message: Adapter packages should not depend on other adapters; use ports/contracts.
+    files:
+      - internal/adapter/auth/**/*.go
+      - internal/adapter/cluster/**/*.go
+      - internal/adapter/config/**/*.go
+      - internal/adapter/kube/**/*.go
+      - internal/adapter/openbao/**/*.go
+      - internal/adapter/operationlock/**/*.go
+      - internal/adapter/probe/**/*.go
+      - internal/adapter/raft/**/*.go
+      - internal/adapter/revision/**/*.go
+      - internal/adapter/security/**/*.go
+      - internal/adapter/storage/**/*.go
+      - internal/adapter/storageenv/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/adapter/auth
+      - internal/adapter/cluster
+      - internal/adapter/config
+      - internal/adapter/kube
+      - internal/adapter/openbao
+      - internal/adapter/operationlock
+      - internal/adapter/probe
+      - internal/adapter/raft
+      - internal/adapter/revision
+      - internal/adapter/security
+      - internal/adapter/storage
+      - internal/adapter/storageenv
   - id: no-controller-runtime-reconcile-apis-in-app-layer
     message: App layer should not depend on controller-runtime reconcile APIs directly.
     note: Keep reconcile request/result ownership in controller layer and use app-domain return types/facades.

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -142,18 +143,18 @@ func run(policyPath, outDir string) error {
 	return nil
 }
 
-func loadPolicy(path string) (architecturePolicy, error) {
+func loadPolicy(policyPath string) (architecturePolicy, error) {
 	var policy architecturePolicy
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(policyPath)
 	if err != nil {
-		return architecturePolicy{}, fmt.Errorf("read policy %s: %w", path, err)
+		return architecturePolicy{}, fmt.Errorf("read policy %s: %w", policyPath, err)
 	}
 
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&policy); err != nil {
-		return architecturePolicy{}, fmt.Errorf("parse policy %s: %w", path, err)
+		return architecturePolicy{}, fmt.Errorf("parse policy %s: %w", policyPath, err)
 	}
 
 	return policy, nil
@@ -348,42 +349,14 @@ func verifyLayerCoverage(policy architecturePolicy) error {
 		return fmt.Errorf("read layer coverage root %s: %w", root, err)
 	}
 
-	layerAssignments := make(map[string]string, len(policy.LayerCoverage.Layers))
-	for layer, packages := range policy.LayerCoverage.Layers {
-		for _, pkg := range normalizedUnique(packages) {
-			if prev, exists := layerAssignments[pkg]; exists {
-				return fmt.Errorf(
-					"layer coverage duplicates package %q in layers %q and %q",
-					pkg,
-					prev,
-					layer,
-				)
-			}
-			layerAssignments[pkg] = layer
-		}
+	layerAssignments, exempt, err := buildLayerCoverageMaps(policy.LayerCoverage)
+	if err != nil {
+		return err
 	}
 
-	exempt := make(map[string]struct{}, len(policy.LayerCoverage.Exempt))
-	for _, name := range normalizedUnique(policy.LayerCoverage.Exempt) {
-		exempt[name] = struct{}{}
-	}
-
-	missing := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if strings.HasPrefix(name, ".") {
-			continue
-		}
-		if _, ok := layerAssignments[name]; ok {
-			continue
-		}
-		if _, ok := exempt[name]; ok {
-			continue
-		}
-		missing = append(missing, name)
+	missing, err := findMissingLayerCoverage(root, entries, layerAssignments, exempt)
+	if err != nil {
+		return err
 	}
 	sort.Strings(missing)
 	if len(missing) > 0 {
@@ -393,20 +366,9 @@ func verifyLayerCoverage(policy architecturePolicy) error {
 		)
 	}
 
-	var unknown []string
-	for name := range layerAssignments {
-		path := filepath.Join(root, name)
-		info, err := os.Stat(path)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				unknown = append(unknown, name)
-				continue
-			}
-			return fmt.Errorf("stat layer coverage path %s: %w", path, err)
-		}
-		if !info.IsDir() {
-			return fmt.Errorf("configured layer package path %s is not a directory", path)
-		}
+	unknown, err := findUnknownLayerCoveragePaths(root, layerAssignments, exempt)
+	if err != nil {
+		return err
 	}
 	sort.Strings(unknown)
 	if len(unknown) > 0 {
@@ -417,6 +379,240 @@ func verifyLayerCoverage(policy architecturePolicy) error {
 	}
 
 	return nil
+}
+
+func buildLayerCoverageMaps(
+	coverage layerCoverage,
+) (map[string]string, map[string]struct{}, error) {
+	layerAssignments := make(map[string]string, len(coverage.Layers))
+	for layer, packages := range coverage.Layers {
+		for _, pkg := range normalizedLayerCoveragePaths(packages) {
+			if prev, exists := layerAssignments[pkg]; exists {
+				return nil, nil, fmt.Errorf(
+					"layer coverage duplicates package %q in layers %q and %q",
+					pkg,
+					prev,
+					layer,
+				)
+			}
+			if err := validateLayerCoveragePath(pkg); err != nil {
+				return nil, nil, err
+			}
+			layerAssignments[pkg] = layer
+		}
+	}
+
+	exempt := make(map[string]struct{}, len(coverage.Exempt))
+	for _, name := range normalizedLayerCoveragePaths(coverage.Exempt) {
+		if err := validateLayerCoveragePath(name); err != nil {
+			return nil, nil, err
+		}
+		exempt[name] = struct{}{}
+	}
+
+	return layerAssignments, exempt, nil
+}
+
+func findMissingLayerCoverage(
+	root string,
+	entries []os.DirEntry,
+	layerAssignments map[string]string,
+	exempt map[string]struct{},
+) ([]string, error) {
+	missing := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		entryMissing, err := missingLayerCoverageForEntry(root, entry, layerAssignments, exempt)
+		if err != nil {
+			return nil, err
+		}
+		missing = append(missing, entryMissing...)
+	}
+	return missing, nil
+}
+
+func missingLayerCoverageForEntry(
+	root string,
+	entry os.DirEntry,
+	layerAssignments map[string]string,
+	exempt map[string]struct{},
+) ([]string, error) {
+	if !entry.IsDir() {
+		return nil, nil
+	}
+
+	name := entry.Name()
+	if strings.HasPrefix(name, ".") {
+		return nil, nil
+	}
+	if _, ok := layerAssignments[name]; ok {
+		return nil, nil
+	}
+	if _, ok := exempt[name]; ok {
+		return nil, nil
+	}
+
+	if !hasNestedLayerCoverage(name, layerAssignments, exempt) {
+		return []string{name}, nil
+	}
+
+	return missingGroupedLayerCoverage(root, name, layerAssignments, exempt)
+}
+
+func missingGroupedLayerCoverage(
+	root, group string,
+	layerAssignments map[string]string,
+	exempt map[string]struct{},
+) ([]string, error) {
+	children, err := os.ReadDir(filepath.Join(root, group))
+	if err != nil {
+		return nil, fmt.Errorf("read grouped layer path %s: %w", filepath.Join(root, group), err)
+	}
+
+	groupCovered := false
+	missing := make([]string, 0, len(children))
+	for _, child := range children {
+		if !child.IsDir() {
+			continue
+		}
+		childName := child.Name()
+		if strings.HasPrefix(childName, ".") {
+			continue
+		}
+		groupCovered = true
+		rel := path.Join(group, childName)
+		if _, ok := layerAssignments[rel]; ok {
+			continue
+		}
+		if _, ok := exempt[rel]; ok {
+			continue
+		}
+		missing = append(missing, rel)
+	}
+
+	if !groupCovered {
+		return []string{group}, nil
+	}
+
+	return missing, nil
+}
+
+func findUnknownLayerCoveragePaths(
+	root string,
+	layerAssignments map[string]string,
+	exempt map[string]struct{},
+) ([]string, error) {
+	unknown, err := appendUnknownLayerCoveragePaths(root, mapKeys(layerAssignments))
+	if err != nil {
+		return nil, err
+	}
+
+	exemptUnknown, err := appendUnknownLayerCoveragePaths(root, setKeys(exempt))
+	if err != nil {
+		return nil, err
+	}
+
+	return append(unknown, exemptUnknown...), nil
+}
+
+func appendUnknownLayerCoveragePaths(root string, names []string) ([]string, error) {
+	unknown := make([]string, 0, len(names))
+	for _, name := range names {
+		coveragePath := filepath.Join(root, filepath.FromSlash(name))
+		info, err := os.Stat(coveragePath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				unknown = append(unknown, name)
+				continue
+			}
+			return nil, fmt.Errorf("stat layer coverage path %s: %w", coveragePath, err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("configured layer coverage path %s is not a directory", coveragePath)
+		}
+	}
+	return unknown, nil
+}
+
+func normalizedLayerCoveragePaths(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+
+	for _, value := range values {
+		normalized := normalizeLayerCoveragePath(value)
+		if normalized == "" {
+			continue
+		}
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		result = append(result, normalized)
+	}
+
+	return result
+}
+
+func normalizeLayerCoveragePath(value string) string {
+	normalized := strings.Trim(strings.TrimSpace(value), "/")
+	if normalized == "" {
+		return ""
+	}
+	normalized = path.Clean(normalized)
+	if normalized == "." {
+		return ""
+	}
+	return strings.Trim(normalized, "/")
+}
+
+func validateLayerCoveragePath(pkg string) error {
+	parts := strings.Split(pkg, "/")
+	if len(parts) == 0 || len(parts) > 2 {
+		return fmt.Errorf(
+			"layer coverage path %q must be relative to internal and use depth internal/<pkg> or internal/<group>/<pkg>",
+			pkg,
+		)
+	}
+	for _, part := range parts {
+		if strings.TrimSpace(part) == "" || part == "." || part == ".." {
+			return fmt.Errorf("layer coverage path %q contains invalid segment %q", pkg, part)
+		}
+	}
+	return nil
+}
+
+func hasNestedLayerCoverage(
+	root string,
+	layerAssignments map[string]string,
+	exempt map[string]struct{},
+) bool {
+	prefix := root + "/"
+	for pkg := range layerAssignments {
+		if strings.HasPrefix(pkg, prefix) {
+			return true
+		}
+	}
+	for pkg := range exempt {
+		if strings.HasPrefix(pkg, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func mapKeys(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func setKeys(values map[string]struct{}) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 func buildRuleSpecs(policy architecturePolicy) ([]ruleSpec, error) {
@@ -741,9 +937,9 @@ func writeRuleSpecs(policyPath, outDir string, specs []ruleSpec) error {
 	if err != nil {
 		return fmt.Errorf("list existing generated rule files: %w", err)
 	}
-	for _, path := range existingFiles {
-		if err := os.Remove(path); err != nil {
-			return fmt.Errorf("remove stale generated rule %s: %w", path, err)
+	for _, existingPath := range existingFiles {
+		if err := os.Remove(existingPath); err != nil {
+			return fmt.Errorf("remove stale generated rule %s: %w", existingPath, err)
 		}
 	}
 
@@ -778,9 +974,9 @@ func writeRuleSpecs(policyPath, outDir string, specs []ruleSpec) error {
 		)
 		builder.Write(data)
 
-		path := filepath.Join(outDir, spec.ID+".yml")
-		if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
-			return fmt.Errorf("write generated rule %s: %w", path, err)
+		rulePath := filepath.Join(outDir, spec.ID+".yml")
+		if err := os.WriteFile(rulePath, []byte(builder.String()), 0o644); err != nil {
+			return fmt.Errorf("write generated rule %s: %w", rulePath, err)
 		}
 	}
 

@@ -18,9 +18,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/admission"
-	provisionermanager "github.com/dc-tec/openbao-operator/internal/provisioner"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	provisionermanager "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
 func newTenantScheme(t *testing.T) *k8sruntime.Scheme {

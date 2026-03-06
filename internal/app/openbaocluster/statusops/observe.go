@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 // LabelConfig supplies labels used during status observation.
@@ -203,20 +203,20 @@ func gatherPodState(
 		if pod.Name == pod0Name {
 			state.Pod0 = pod
 
-			initialized, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelInitialized)
+			initialized, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelInitialized)
 			if err == nil {
 				state.Initialized = initialized
 				state.InitializedKnown = present
 			}
 
-			sealed, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelSealed)
+			sealed, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelSealed)
 			if err == nil {
 				state.Sealed = sealed
 				state.SealedKnown = present
 			}
 		}
 
-		active, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+		active, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelActive)
 		if err == nil && present && active {
 			state.LeaderCount++
 			if state.LeaderCount == 1 {

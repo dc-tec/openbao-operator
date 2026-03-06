@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	openbaolabels "github.com/dc-tec/openbao-operator/internal/openbao"
+	openbaolabels "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestObservedVersionFromPods_UsesLeaderWhenUnambiguous(t *testing.T) {

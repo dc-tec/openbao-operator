@@ -57,14 +57,14 @@ Day 2 operations cover the ongoing management of the cluster, including version 
 
 === "Blue/Green Upgrade"
 
-    Blue/Green upgrades provide zero-downtime updates by creating a parallel "Green" standby cluster.
+    Blue/Green upgrades provide zero-downtime updates by creating a parallel "Green" standby cluster and advancing it through explicit consensus phases.
 
     1.  **Drift Detection:** User updates `OpenBaoCluster` spec with a new version or image, using the Blue/Green strategy.
     2.  **Green Creation:** The operator creates a new "Green" StatefulSet with the new version.
-    3.  **Join & Standby:** Green pods start and join the existing "Blue" Raft cluster as non-voters (or voters, depending on strategy). They replicate data but do not serve traffic.
-    4.  **Health Check:** Operator verifies the Green cluster is healthy and fully replicated.
-    5.  **Cutover:** Operator updates the Service selector to point to the Green pods. Traffic switches instantly.
-    6.  **Cleanup:** After a verification period or manual confirmation, the old "Blue" StatefulSet is scaled down and terminated.
+    3.  **Join as Non-Voters:** Green pods start and join the existing "Blue" Raft cluster as non-voters.
+    4.  **Sync and Promote:** The operator waits for Green replication to converge, then promotes Green pods to voters.
+    5.  **Demote Blue and Verify Leader:** The operator demotes Blue voters, forces leadership transfer when needed, and waits until a Green leader is observed.
+    6.  **Cutover During Cleanup:** The operator switches the Service selector to Green, removes Blue peers, and deletes the Blue StatefulSet. Rollback remains possible until irreversible cleanup completes.
 
     ### Sequence Diagram (Blue/Green)
 
@@ -81,10 +81,13 @@ Day 2 operations cover the ongoing management of the cluster, including version 
         K-->>Op: Watch OpenBaoCluster
         Op->>K: Create Green StatefulSet (v2)
         K-->>Green: Start Green Pods
-        Green->>Blue: Join Raft Cluster (Standby)
-        Op->>Green: Wait for Healthy
+        Green->>Blue: Join Raft Cluster (Non-Voters)
+        Op->>Green: Wait for Sync
+        Op->>Green: Promote to Voters
+        Op->>Blue: Demote Blue Voters / Step Down Leader
+        Op->>Green: Verify Green Leader
         Op->>K: Switch Service Selector to Green
-        Op->>Blue: Scale Down / Terminate
+        Op->>Blue: Remove Peers / Delete Blue StatefulSet
     ```
 
 ## Maintenance / Manual Recovery

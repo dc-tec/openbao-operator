@@ -11,14 +11,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	backupmanager "github.com/dc-tec/openbao-operator/internal/backup"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/errors"
-	inframanager "github.com/dc-tec/openbao-operator/internal/infra"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	recon "github.com/dc-tec/openbao-operator/internal/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/upgrade/bluegreen"
-	rollingupgrade "github.com/dc-tec/openbao-operator/internal/upgrade/rolling"
+	backupmanager "github.com/dc-tec/openbao-operator/internal/service/backup"
+	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
+	rollingupgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade/rolling"
 )
 
 // Dependencies holds dependencies required to build admin operations reconcilers.

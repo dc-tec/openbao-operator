@@ -12,7 +12,7 @@ Restore orchestration follows a dedicated controller path:
 
 1. `internal/controller/openbaorestore` receives the reconcile event.
 2. It delegates orchestration to `internal/app/openbaorestore`.
-3. The app layer invokes `internal/restore` manager logic for validation, lock lifecycle, and Job flow.
+3. The app layer invokes `internal/service/restore` manager logic for validation, lock lifecycle, and Job flow.
 
 This keeps the restore controller focused on reconcile plumbing and preserves domain ownership in the restore manager package.
 
