@@ -92,20 +92,21 @@ graph TD
 
 ### 1.3 Code Package Model
 
-The runtime code is organized into layered packages to keep controller plumbing, orchestration, and adapters separated.
+The runtime code is organized into layered packages to keep controller plumbing, orchestration, and integration code separated.
 
-| Layer | Purpose | Package examples |
+| Layer | Purpose | Current package roots |
 | :--- | :--- | :--- |
 | `L0` | API types | `api/v1alpha1` |
 | `L1` | Entrypoints/bootstrap | `cmd/controller`, `cmd/provisioner`, `cmd/bao-backup`, `cmd/bao-upgrade`, `cmd/bao-probe`, `internal/platform/entrypoint` |
 | `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore`, `internal/controller/provisioner` |
 | `L3` | App orchestration | `internal/app/openbaocluster` (facade + `statusops`, `deletionops`, `adminops`), `internal/app/openbaorestore`, `internal/app/provisioner` |
 | `L4` | Services/managers | `internal/service/backup`, `internal/service/restore`, `internal/service/upgrade`, `internal/service/infra`, `internal/service/certs`, `internal/service/init`, `internal/service/provisioner`, `internal/service/opslifecycle` |
-| `L5` | Ports/contracts | `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/initmanager`, `internal/port/openbao`, `internal/port/security`, `internal/port/auth` |
+| `L5` | Ports/contracts | `internal/port/auth`, `internal/port/backup`, `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/infra`, `internal/port/initmanager`, `internal/port/openbao`, `internal/port/security` |
 | `L6` | Adapters/integrations | `internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}` |
-| `L7` | Platform/cross-cutting | `internal/platform/{errors,logging,reconcile,constants,predicates,observability,admission}` |
+| `L7` | Platform/cross-cutting | `internal/platform/{admission,constants,entrypoint,errors,logging,observability,predicates,reconcile,testutil}` |
 
-Dependency intent is top-down across layers: higher layers depend on lower layers through narrow contracts, ports stay contract-only, and concrete adapters are wired in entrypoints or explicit dependency injection.
+The authoritative layer inventory lives in `.ast-grep/policy/architecture-boundaries.yml`.
+App packages stay independent from adapters, ports stay contract-only, service packages own domain behavior and may depend on focused adapters or ports, and adapters never depend upward on app or service packages.
 
 ### 1.4 Component Interaction
 

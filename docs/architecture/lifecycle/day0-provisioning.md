@@ -21,6 +21,10 @@ Day 0 operations focus on onboarding tenants and ensuring they have the necessar
 - The tenant receives their authentication credentials (e.g., Kubeconfig limited to their namespace).
 - The tenant verifies access by listing resources in their namespace.
 
+## See Also
+
+- [Provisioner Manager](../provisioner-manager.md)
+
 ## Sequence Diagram
 
 ```mermaid

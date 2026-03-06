@@ -85,18 +85,21 @@ sequenceDiagram
 
 ## 4. Autopilot Configuration
 
-After successful initialization, the InitManager configures **Raft Autopilot** for automatic dead server cleanup.
+After successful initialization, the InitManager configures **Raft Autopilot** for automatic dead server cleanup and quorum safety defaults.
 
-!!! note "Always-On Feature"
-    Autopilot dead server cleanup is **enabled by default** for all clusters. This prevents orphaned Raft peers from accumulating when pods are terminated.
+!!! note "Default Behavior"
+    Autopilot configuration is reconciled for every initialized cluster. Dead server cleanup defaults to `true`, but the operator forces it to `false` for small clusters when `min_quorum < 3` and the user did not explicitly override `cleanupDeadServers`. This keeps the rendered configuration valid for OpenBao.
 
 ### Default Configuration
 
 | Setting | Default Value | Description |
 | :--- | :--- | :--- |
-| `cleanup_dead_servers` | `true` | Enable automatic removal of failed peers |
+| `cleanup_dead_servers` | `true` by default; forced to `false` when `min_quorum < 3` and the user did not explicitly override it | Enable automatic removal of failed peers only when OpenBao accepts the configuration |
 | `dead_server_last_contact_threshold` | `5m` | Time before a server is considered dead |
-| `min_quorum` | `max(3, replicas/2+1)` | Minimum servers before pruning allowed |
+| `last_contact_threshold` | `10s` | Maximum acceptable heartbeat delay before a peer is considered unhealthy |
+| `server_stabilization_time` | `10s` | Required stabilization period before a server is considered stable |
+| `max_trailing_logs` | `1000` | Maximum replication lag before Autopilot considers a server unhealthy |
+| `min_quorum` | `Hardened`: `3`, or `replicas` when `replicas > 3`; other profiles: `max(1, replicas)` | Minimum cluster size required before dead-server cleanup can proceed |
 
 ### Customization
 
@@ -109,8 +112,11 @@ spec:
       autopilot:
         cleanupDeadServers: true
         deadServerLastContactThreshold: "5m"
-        minQuorum: 2
+        minQuorum: 3
 ```
+
+!!! warning "Cleanup Requires `minQuorum >= 3`"
+    OpenBao requires `cleanupDeadServers=true` to be paired with `minQuorum >= 3`. If you intentionally set a lower `minQuorum`, also set `cleanupDeadServers: false`.
 
 ### Disabling Autopilot Cleanup
 
