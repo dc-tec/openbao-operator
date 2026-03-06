@@ -35,8 +35,9 @@ kubectl get pdb -n <namespace>
 
 !!! warning "Drain Timeouts"
     If multiple OpenBao pods are scheduled on the same node, draining that node
-    may take longer as pods are evicted sequentially. Consider using pod
-    anti-affinity to spread pods across nodes.
+    may take longer as pods are evicted sequentially. The Operator adds soft
+    node and zone spreading, but you still need enough nodes and topology
+    labels for that policy to be effective.
 
 ### Limitations
 
