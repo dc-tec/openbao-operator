@@ -1,0 +1,11 @@
+id: no-type-aliases-in-adapter-layer
+snapshots:
+  ? |
+    package openbao
+    import portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+    type ClientConfig = portopenbao.ClientConfig
+  : labels:
+    - source: type ClientConfig = portopenbao.ClientConfig
+      style: primary
+      start: 94
+      end: 138

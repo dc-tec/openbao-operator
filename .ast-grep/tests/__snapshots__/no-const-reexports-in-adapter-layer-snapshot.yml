@@ -1,0 +1,22 @@
+id: no-const-reexports-in-adapter-layer
+snapshots:
+  ? |
+    package openbao
+    import portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+    const (
+      DefaultRequestTimeout = portopenbao.DefaultRequestTimeout
+    )
+  : labels:
+    - source: DefaultRequestTimeout = portopenbao.DefaultRequestTimeout
+      style: primary
+      start: 104
+      end: 161
+  ? |
+    package openbao
+    import portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+    const DefaultRequestTimeout = portopenbao.DefaultRequestTimeout
+  : labels:
+    - source: DefaultRequestTimeout = portopenbao.DefaultRequestTimeout
+      style: primary
+      start: 100
+      end: 157

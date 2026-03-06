@@ -9,6 +9,7 @@ import (
 	"time"
 
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"golang.org/x/time/rate"
 )
 
@@ -52,7 +53,7 @@ type clientState struct {
 
 // newClientState creates a new clientState with the given configuration.
 // This is used by ClientManager for explicit state management.
-func newClientState(cfg ClientConfig) *clientState {
+func newClientState(cfg portopenbao.ClientConfig) *clientState {
 	qps := cfg.RateLimitQPS
 	if qps <= 0 {
 		qps = defaultRateLimitQPS

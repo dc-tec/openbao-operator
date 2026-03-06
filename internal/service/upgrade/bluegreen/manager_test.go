@@ -13,8 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/infra"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
@@ -48,7 +48,7 @@ func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {
 		WithObjects(cluster).
 		Build()
 	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
-	mgr := NewManager(c, scheme, infraMgr, backup.NewUpgradeStrategyRuntime(c, scheme), openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
+	mgr := NewManager(c, scheme, infraMgr, backup.NewUpgradeStrategyRuntime(c, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	result, err := mgr.Reconcile(context.Background(), logr.Discard(), cluster)
 	if err != nil {
@@ -109,7 +109,7 @@ func TestEnsureIdleAndCleanupGreen_CleansStaleGreenAndReleasesLock(t *testing.T)
 	c := clientBuilder.Build()
 
 	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
-	manager := NewManager(c, scheme, infraMgr, backup.NewUpgradeStrategyRuntime(c, scheme), openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
+	manager := NewManager(c, scheme, infraMgr, backup.NewUpgradeStrategyRuntime(c, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	if err := manager.ensureIdleAndCleanupGreen(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("ensureIdleAndCleanupGreen: %v", err)

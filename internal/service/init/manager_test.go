@@ -20,6 +20,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
@@ -95,7 +96,7 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 			}
 
 			clientset := kubernetesfake.NewClientset(pod)
-			clientMgr := openbao.NewClientManager(openbao.ClientConfig{})
+			clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
 			manager := NewManager(&rest.Config{}, clientset, clientMgr)
 
 			if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
@@ -155,7 +156,7 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 	}
 
 	clientset := kubernetesfake.NewClientset(pod)
-	clientMgr := openbao.NewClientManager(openbao.ClientConfig{})
+	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
 	manager := NewManager(&rest.Config{}, clientset, clientMgr)
 
 	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
@@ -212,7 +213,7 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clientset := kubernetesfake.NewClientset()
-			clientMgr := openbao.NewClientManager(openbao.ClientConfig{})
+			clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
 			manager := NewManager(&rest.Config{}, clientset, clientMgr)
 
 			createFailuresObserved := 0
@@ -299,7 +300,7 @@ func TestEnsureRootTokenSecretPresent(t *testing.T) {
 			},
 		}
 		clientset := kubernetesfake.NewClientset(secret)
-		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
 
 		if err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster()); err != nil {
 			t.Fatalf("ensureRootTokenSecretPresent() error = %v, want nil", err)
@@ -308,7 +309,7 @@ func TestEnsureRootTokenSecretPresent(t *testing.T) {
 
 	t.Run("returns transient error when root token Secret is missing", func(t *testing.T) {
 		clientset := kubernetesfake.NewClientset()
-		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
 
 		err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster())
 		if err == nil {
@@ -324,7 +325,7 @@ func TestEnsureRootTokenSecretPresent(t *testing.T) {
 		clientset.PrependReactor("get", "secrets", func(clienttesting.Action) (bool, runtime.Object, error) {
 			return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, "cluster-root-token", fmt.Errorf("forbidden"))
 		})
-		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
 
 		err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster())
 		if err == nil {
@@ -340,7 +341,7 @@ func TestEnsureRootTokenSecretPresent(t *testing.T) {
 		clientset.PrependReactor("get", "secrets", func(clienttesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("boom")
 		})
-		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
 
 		err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster())
 		if err == nil {

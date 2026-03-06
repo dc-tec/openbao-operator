@@ -12,10 +12,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestBackupReconcile_HardenedRequiresEgressRules(t *testing.T) {
@@ -50,7 +50,7 @@ func TestBackupReconcile_HardenedRequiresEgressRules(t *testing.T) {
 		WithReturnManagedFields().
 		Build()
 
-	manager := NewManager(k8sClient, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	_, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.Error(t, err)

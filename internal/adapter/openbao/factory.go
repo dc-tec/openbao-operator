@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 type cachedToken struct {
@@ -18,7 +20,7 @@ type cachedToken struct {
 //
 // Callers remain responsible for sourcing CA material (mounted files, Kubernetes Secrets, etc.).
 type ClientFactory struct {
-	template ClientConfig
+	template portopenbao.ClientConfig
 
 	mu         sync.RWMutex
 	clients    map[string]*http.Client
@@ -33,7 +35,7 @@ type ClientFactory struct {
 //
 // Deprecated: This function creates a factory without shared state management.
 // New code should use ClientManager.FactoryFor() for explicit state management.
-func NewClientFactory(template ClientConfig) *ClientFactory {
+func NewClientFactory(template portopenbao.ClientConfig) *ClientFactory {
 	t := template
 	t.BaseURL = ""
 	t.Token = ""
@@ -46,7 +48,7 @@ func NewClientFactory(template ClientConfig) *ClientFactory {
 
 // newClientFactoryWithState is the internal constructor used by ClientManager.
 // The factory will use the provided clientState.
-func newClientFactoryWithState(template ClientConfig, state *clientState) *ClientFactory {
+func newClientFactoryWithState(template portopenbao.ClientConfig, state *clientState) *ClientFactory {
 	t := template
 	t.BaseURL = ""
 	t.Token = ""

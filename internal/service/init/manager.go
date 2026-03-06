@@ -199,12 +199,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
-	initializedLabel, hasInitializedLabel, err := openbao.ParseBoolLabel(pod.Labels, openbao.LabelInitialized)
+	initializedLabel, hasInitializedLabel, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelInitialized)
 	if err != nil {
 		logger.V(1).Info("Invalid OpenBao initialized label value", "pod", pod.Name, "error", err)
 	}
 
-	sealedLabel, hasSealedLabel, err := openbao.ParseBoolLabel(pod.Labels, openbao.LabelSealed)
+	sealedLabel, hasSealedLabel, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelSealed)
 	if err != nil {
 		logger.V(1).Info("Invalid OpenBao sealed label value", "pod", pod.Name, "error", err)
 	}

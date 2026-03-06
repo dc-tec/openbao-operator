@@ -13,6 +13,7 @@ import (
 
 	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -379,7 +380,7 @@ func raftAutopilotServerMatchesPod(server openbao.RaftAutopilotServerState, podN
 	return strings.Contains(server.Address, podName)
 }
 
-func countMissingGreenServers(cfg *ExecutorConfig, config *openbao.RaftConfigurationResponse) int {
+func countMissingGreenServers(cfg *ExecutorConfig, config *portopenbao.RaftConfigurationResponse) int {
 	if cfg == nil || config == nil {
 		return 0
 	}
@@ -613,7 +614,7 @@ func findInitialLeader(ctx context.Context, logger logr.Logger, cfg *ExecutorCon
 }
 
 type leaderTransferClient interface {
-	ReadRaftConfiguration(context.Context) (*openbao.RaftConfigurationResponse, error)
+	ReadRaftConfiguration(context.Context) (*portopenbao.RaftConfigurationResponse, error)
 	DemoteRaftPeer(context.Context, string) error
 	StepDown(context.Context) error
 }
@@ -668,7 +669,7 @@ func ensureGreenLeaderBySteppingDownBlueWithFuncs(
 		attemptNumber := attempt + 1
 		state := leaderTransferStateResolveCurrentLeader
 		var client leaderTransferClient
-		var config *openbao.RaftConfigurationResponse
+		var config *portopenbao.RaftConfigurationResponse
 		var leaderID string
 		var leaderIsBlue bool
 
@@ -763,7 +764,7 @@ func clientForLeaderURL(ctx context.Context, cfg *ExecutorConfig, factory *openb
 	return client, nil
 }
 
-func raftLeaderInfo(config *openbao.RaftConfigurationResponse, bluePrefix string) (string, bool) {
+func raftLeaderInfo(config *portopenbao.RaftConfigurationResponse, bluePrefix string) (string, bool) {
 	if config == nil {
 		return "", false
 	}
@@ -792,7 +793,7 @@ func demoteBlueVotersExceptLeader(
 	logger logr.Logger,
 	cfg *ExecutorConfig,
 	client raftPeerDemoter,
-	config *openbao.RaftConfigurationResponse,
+	config *portopenbao.RaftConfigurationResponse,
 	leaderID string,
 	bluePrefix string,
 ) error {
@@ -1388,7 +1389,7 @@ func newOpenBaoClientFactory(cfg *ExecutorConfig) (*openbao.ClientFactory, func(
 		return nil, nil, fmt.Errorf("config is required")
 	}
 
-	mgr := openbao.NewClientManager(openbao.ClientConfig{
+	mgr := openbao.NewClientManager(portopenbao.ClientConfig{
 		ClusterKey:                     fmt.Sprintf("%s/%s", cfg.ClusterNamespace, cfg.ClusterName),
 		CACert:                         cfg.TLSCACert,
 		RateLimitQPS:                   cfg.ClientQPS,

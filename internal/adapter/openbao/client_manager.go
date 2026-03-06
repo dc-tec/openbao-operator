@@ -2,6 +2,8 @@ package openbao
 
 import (
 	"sync"
+
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // ClientManager centralizes OpenBao client lifecycle
@@ -10,12 +12,12 @@ type ClientManager struct {
 	states map[string]*clientState
 
 	// defaults holds the default configuration for smart client state.
-	defaults ClientConfig
+	defaults portopenbao.ClientConfig
 }
 
 // NewClientManager creates a new ClientManager with the given default limits.
 // The defaults are applied when creating client state for new clusters.
-func NewClientManager(defaults ClientConfig) *ClientManager {
+func NewClientManager(defaults portopenbao.ClientConfig) *ClientManager {
 	return &ClientManager{
 		states:   make(map[string]*clientState),
 		defaults: defaults,

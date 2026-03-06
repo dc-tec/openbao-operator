@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-const-reexports-in-adapter-layer
+message: Adapter packages must not re-export constants from other packages; move shared constants to port or platform packages and update callers.
+severity: warning
+language: Go
+files:
+  - internal/adapter/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - kind: const_spec
+    - regex: '^[A-Za-z_][A-Za-z0-9_]*\s*=\s*[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$'
+note: Shared constants should live at their canonical layer instead of being re-exported through adapters.

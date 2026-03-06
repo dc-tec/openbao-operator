@@ -13,6 +13,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
 )
 
@@ -40,7 +41,7 @@ type restoreSettings struct {
 // after scale-up operations.
 func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, error) {
 	// Create a ClientManager for this operation
-	mgr := openbao.NewClientManager(openbao.ClientConfig{
+	mgr := openbao.NewClientManager(portopenbao.ClientConfig{
 		CACert:                         cfg.TLSCACert,
 		RateLimitQPS:                   cfg.RateLimitQPS,
 		RateLimitBurst:                 cfg.RateLimitBurst,
@@ -119,7 +120,7 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 // authenticate authenticates to OpenBao and returns a token.
 func authenticate(ctx context.Context, cfg *backupconfig.ExecutorConfig, leaderURL string) (string, error) {
 	if cfg.AuthMethod == constants.BackupAuthMethodJWT {
-		mgr := openbao.NewClientManager(openbao.ClientConfig{
+		mgr := openbao.NewClientManager(portopenbao.ClientConfig{
 			CACert:                         cfg.TLSCACert,
 			RateLimitQPS:                   cfg.RateLimitQPS,
 			RateLimitBurst:                 cfg.RateLimitBurst,
@@ -161,7 +162,7 @@ func run(ctx context.Context) error {
 
 	// Create OpenBao client for leader
 	// Create OpenBao client for leader
-	clientMgr := openbao.NewClientManager(openbao.ClientConfig{
+	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{
 		CACert:                         cfg.TLSCACert,
 		RateLimitQPS:                   cfg.RateLimitQPS,
 		RateLimitBurst:                 cfg.RateLimitBurst,
@@ -289,7 +290,7 @@ func runRestore(ctx context.Context) error {
 
 	// Create OpenBao client for leader
 	// Create OpenBao client for leader
-	clientMgr := openbao.NewClientManager(openbao.ClientConfig{
+	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{
 		CACert:                         cfg.TLSCACert,
 		RateLimitQPS:                   cfg.RateLimitQPS,
 		RateLimitBurst:                 cfg.RateLimitBurst,

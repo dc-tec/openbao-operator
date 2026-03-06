@@ -19,6 +19,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestHandleScaleDownSafety(t *testing.T) {
@@ -135,7 +136,7 @@ func TestHandleScaleDownSafety(t *testing.T) {
 				// Note: server is not closed, leaking resources in test but acceptable for short unit test
 
 				// Important: Use server URL
-				clientConfig := openbao.ClientConfig{
+				clientConfig := portopenbao.ClientConfig{
 					BaseURL: server.URL,
 					Token:   "root", // required for step-down
 				}

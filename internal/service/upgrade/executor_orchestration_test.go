@@ -7,9 +7,8 @@ import (
 	"testing"
 	"time"
 
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/go-logr/logr"
-
-	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 )
 
 func TestRunExecutor(t *testing.T) {
@@ -952,7 +951,7 @@ func TestRaftLeaderInfo(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		config     *openbao.RaftConfigurationResponse
+		config     *portopenbao.RaftConfigurationResponse
 		bluePrefix string
 		wantID     string
 		wantBlue   bool
@@ -966,9 +965,9 @@ func TestRaftLeaderInfo(t *testing.T) {
 		},
 		{
 			name: "no leader in config",
-			config: &openbao.RaftConfigurationResponse{
-				Config: openbao.RaftConfiguration{
-					Servers: []openbao.RaftServer{
+			config: &portopenbao.RaftConfigurationResponse{
+				Config: portopenbao.RaftConfiguration{
+					Servers: []portopenbao.RaftServer{
 						{NodeID: "openbao-blue-0", Leader: false},
 					},
 				},
@@ -979,9 +978,9 @@ func TestRaftLeaderInfo(t *testing.T) {
 		},
 		{
 			name: "leader is blue by node id",
-			config: &openbao.RaftConfigurationResponse{
-				Config: openbao.RaftConfiguration{
-					Servers: []openbao.RaftServer{
+			config: &portopenbao.RaftConfigurationResponse{
+				Config: portopenbao.RaftConfiguration{
+					Servers: []portopenbao.RaftServer{
 						{NodeID: "openbao-blue-1", Leader: true},
 					},
 				},
@@ -992,9 +991,9 @@ func TestRaftLeaderInfo(t *testing.T) {
 		},
 		{
 			name: "leader is blue by address",
-			config: &openbao.RaftConfigurationResponse{
-				Config: openbao.RaftConfiguration{
-					Servers: []openbao.RaftServer{
+			config: &portopenbao.RaftConfigurationResponse{
+				Config: portopenbao.RaftConfiguration{
+					Servers: []portopenbao.RaftServer{
 						{
 							NodeID:  "node-1",
 							Address: "https://openbao-blue-2.openbao.default.svc:8201",
@@ -1009,9 +1008,9 @@ func TestRaftLeaderInfo(t *testing.T) {
 		},
 		{
 			name: "leader is not blue",
-			config: &openbao.RaftConfigurationResponse{
-				Config: openbao.RaftConfiguration{
-					Servers: []openbao.RaftServer{
+			config: &portopenbao.RaftConfigurationResponse{
+				Config: portopenbao.RaftConfiguration{
+					Servers: []portopenbao.RaftServer{
 						{NodeID: "openbao-green-0", Leader: true},
 					},
 				},

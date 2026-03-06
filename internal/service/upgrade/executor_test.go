@@ -6,9 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/go-logr/logr"
-
-	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 )
 
 type fakeRaftPeerDemoter struct {
@@ -25,12 +24,12 @@ func (f *fakeRaftPeerDemoter) DemoteRaftPeer(_ context.Context, serverID string)
 }
 
 type fakeLeaderTransferClient struct {
-	readConfigFn func(context.Context) (*openbao.RaftConfigurationResponse, error)
+	readConfigFn func(context.Context) (*portopenbao.RaftConfigurationResponse, error)
 	demoteFn     func(context.Context, string) error
 	stepDownFn   func(context.Context) error
 }
 
-func (f *fakeLeaderTransferClient) ReadRaftConfiguration(ctx context.Context) (*openbao.RaftConfigurationResponse, error) {
+func (f *fakeLeaderTransferClient) ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftConfigurationResponse, error) {
 	if f.readConfigFn != nil {
 		return f.readConfigFn(ctx)
 	}
@@ -155,9 +154,9 @@ func TestDemoteBlueVotersExceptLeader(t *testing.T) {
 	bluePrefix := "cluster-blue-"
 	leaderID := "cluster-blue-0"
 
-	config := &openbao.RaftConfigurationResponse{
-		Config: openbao.RaftConfiguration{
-			Servers: []openbao.RaftServer{
+	config := &portopenbao.RaftConfigurationResponse{
+		Config: portopenbao.RaftConfiguration{
+			Servers: []portopenbao.RaftServer{
 				{NodeID: "cluster-blue-0", Address: "cluster-blue-0.cluster.ns.svc:8201", Voter: true, Leader: true},
 				{NodeID: "cluster-blue-1", Address: "cluster-blue-1.cluster.ns.svc:8201", Voter: true},
 				{NodeID: "cluster-blue-2", Address: "cluster-blue-2.cluster.ns.svc:8201", Voter: false},
@@ -192,9 +191,9 @@ func TestDemoteBlueVotersExceptLeaderFatal(t *testing.T) {
 		ClusterName:     "cluster",
 		ClusterReplicas: 3,
 	}
-	config := &openbao.RaftConfigurationResponse{
-		Config: openbao.RaftConfiguration{
-			Servers: []openbao.RaftServer{
+	config := &portopenbao.RaftConfigurationResponse{
+		Config: portopenbao.RaftConfiguration{
+			Servers: []portopenbao.RaftServer{
 				{NodeID: "cluster-blue-0", Voter: true, Leader: true},
 				{NodeID: "cluster-blue-1", Voter: true},
 			},
@@ -305,9 +304,9 @@ func TestEnsureGreenLeaderBySteppingDownBlueWithFuncs(t *testing.T) {
 			GreenRevision:   "green",
 			ClusterReplicas: 3,
 		}
-		blueLeaderConfig := &openbao.RaftConfigurationResponse{
-			Config: openbao.RaftConfiguration{
-				Servers: []openbao.RaftServer{
+		blueLeaderConfig := &portopenbao.RaftConfigurationResponse{
+			Config: portopenbao.RaftConfiguration{
+				Servers: []portopenbao.RaftServer{
 					{NodeID: "cluster-blue-0", Leader: true, Voter: true},
 					{NodeID: "cluster-blue-1", Voter: true},
 				},
@@ -318,7 +317,7 @@ func TestEnsureGreenLeaderBySteppingDownBlueWithFuncs(t *testing.T) {
 		stepDownCalls := 0
 		waitCalls := 0
 		fakeClient := &fakeLeaderTransferClient{
-			readConfigFn: func(context.Context) (*openbao.RaftConfigurationResponse, error) {
+			readConfigFn: func(context.Context) (*portopenbao.RaftConfigurationResponse, error) {
 				return blueLeaderConfig, nil
 			},
 			demoteFn: func(context.Context, string) error {
@@ -374,9 +373,9 @@ func TestEnsureGreenLeaderBySteppingDownBlueWithFuncs(t *testing.T) {
 			GreenRevision:   "green",
 			ClusterReplicas: 3,
 		}
-		blueLeaderConfig := &openbao.RaftConfigurationResponse{
-			Config: openbao.RaftConfiguration{
-				Servers: []openbao.RaftServer{
+		blueLeaderConfig := &portopenbao.RaftConfigurationResponse{
+			Config: portopenbao.RaftConfiguration{
+				Servers: []portopenbao.RaftServer{
 					{NodeID: "cluster-blue-0", Leader: true, Voter: true},
 					{NodeID: "cluster-blue-1", Voter: true},
 				},
@@ -385,7 +384,7 @@ func TestEnsureGreenLeaderBySteppingDownBlueWithFuncs(t *testing.T) {
 
 		waitCalls := 0
 		fakeClient := &fakeLeaderTransferClient{
-			readConfigFn: func(context.Context) (*openbao.RaftConfigurationResponse, error) {
+			readConfigFn: func(context.Context) (*portopenbao.RaftConfigurationResponse, error) {
 				return blueLeaderConfig, nil
 			},
 			demoteFn: func(context.Context, string) error {

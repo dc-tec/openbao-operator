@@ -12,8 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -202,7 +202,7 @@ func (m *Manager) checkPodHealth(ctx context.Context, logger logr.Logger, cluste
 			healthyCount++
 		}
 
-		isLeader, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+		isLeader, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelActive)
 		if err != nil {
 			logger.V(1).Info("Invalid OpenBao leader label value", "pod", pod.Name, "error", err)
 			continue

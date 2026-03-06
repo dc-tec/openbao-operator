@@ -10,7 +10,6 @@ const (
 
 type ClientConfig = portopenbao.ClientConfig
 type AutopilotConfig = portopenbao.AutopilotConfig
-type AutopilotConfigurer = portopenbao.AutopilotConfigurer
 type RaftServer = portopenbao.RaftServer
 type RaftConfiguration = portopenbao.RaftConfiguration
 type RaftConfigurationResponse = portopenbao.RaftConfigurationResponse

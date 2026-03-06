@@ -14,10 +14,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -38,7 +38,7 @@ func (m *Manager) currentLeaderPodByLabel(ctx context.Context, cluster *openbaov
 	leaders := make([]string, 0, 1)
 	for i := range podList.Items {
 		pod := &podList.Items[i]
-		leader, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+		leader, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelActive)
 		if err != nil || !present {
 			continue
 		}
@@ -160,7 +160,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		return false, nil // Requeue
 	}
 
-	stillLeader, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+	stillLeader, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelActive)
 	if err != nil {
 		logger.V(1).Info("Invalid OpenBao leader label value after step-down", "error", err)
 		return false, nil // Requeue

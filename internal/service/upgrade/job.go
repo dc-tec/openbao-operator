@@ -21,10 +21,10 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -66,7 +66,7 @@ func EnsureExecutorJob(
 	runID string,
 	blueRevision string,
 	greenRevision string,
-	clientConfig openbao.ClientConfig,
+	clientConfig portopenbao.ClientConfig,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
 ) (*JobResult, error) {
@@ -99,7 +99,7 @@ func ensureUpgradeExecutorJob(
 	runID string,
 	blueRevision string,
 	greenRevision string,
-	clientConfig openbao.ClientConfig,
+	clientConfig portopenbao.ClientConfig,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
 ) (*executorJobResult, error) {
@@ -198,7 +198,7 @@ func buildUpgradeExecutorJob(
 	blueRevision string,
 	greenRevision string,
 	verifiedExecutorDigest string,
-	clientConfig openbao.ClientConfig,
+	clientConfig portopenbao.ClientConfig,
 	platform string,
 ) (*batchv1.Job, error) {
 	upgradeCfg := cluster.Spec.Upgrade

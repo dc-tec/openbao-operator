@@ -16,12 +16,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 )
 
@@ -41,14 +41,14 @@ var backupOperationLock = opslifecycle.OperationLock{
 type Manager struct {
 	client                client.Client
 	scheme                *runtime.Scheme
-	clientConfig          openbao.ClientConfig
+	clientConfig          portopenbao.ClientConfig
 	operatorImageVerifier imageverify.Verifier
 	Platform              string
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
-func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig openbao.ClientConfig, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig portopenbao.ClientConfig, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
 	return &Manager{
 		client:                c,
 		scheme:                scheme,

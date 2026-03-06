@@ -13,11 +13,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 type fakeBlobStore struct {
@@ -217,7 +217,7 @@ func TestApplyRetention_UsesProviderAndDeletesOldBackups(t *testing.T) {
 				openBlobStoreFn = originalOpenBlobStoreFn
 			}()
 
-			manager := NewManager(client, testScheme, openbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), client, nil), "")
+			manager := NewManager(client, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), client, nil), "")
 			if err := manager.applyRetention(context.Background(), logr.Discard(), cluster, NewMetrics(cluster.Namespace, cluster.Name)); err != nil {
 				t.Fatalf("applyRetention() error = %v", err)
 			}

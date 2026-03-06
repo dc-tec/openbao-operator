@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestDefaultOpenBaoClientFactory(t *testing.T) {
@@ -12,17 +12,17 @@ func TestDefaultOpenBaoClientFactory(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		config  openbao.ClientConfig
+		config  portopenbao.ClientConfig
 		wantErr string
 	}{
 		{
 			name:    "missing base url",
-			config:  openbao.ClientConfig{},
+			config:  portopenbao.ClientConfig{},
 			wantErr: "baseURL is required",
 		},
 		{
 			name: "valid configuration",
-			config: openbao.ClientConfig{
+			config: portopenbao.ClientConfig{
 				BaseURL: "https://openbao.example.svc:8200",
 				Token:   "token",
 			},

@@ -6,6 +6,7 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 )
 
 func TestBuildUpgradeExecutorJob_SecurityContext(t *testing.T) {
@@ -77,7 +77,7 @@ func TestBuildUpgradeExecutorJob_SecurityContext(t *testing.T) {
 				"",
 				"",
 				"",
-				openbao.ClientConfig{},
+				portopenbao.ClientConfig{},
 				tt.platform,
 			)
 			if err != nil {
@@ -130,7 +130,7 @@ func TestBuildUpgradeExecutorJob_AllowsOIDCWithoutUpgradeConfig(t *testing.T) {
 		"",
 		"",
 		"",
-		openbao.ClientConfig{},
+		portopenbao.ClientConfig{},
 		constants.PlatformKubernetes,
 	)
 	if err != nil {
@@ -183,7 +183,7 @@ func TestBuildUpgradeExecutorJob_RequiresJWTAuthWhenOIDCDisabled(t *testing.T) {
 		"",
 		"",
 		"",
-		openbao.ClientConfig{},
+		portopenbao.ClientConfig{},
 		constants.PlatformKubernetes,
 	)
 	if err == nil {
@@ -249,7 +249,7 @@ func TestEnsureExecutorJob_CreateAlreadyExists(t *testing.T) {
 		"run-1",
 		"",
 		"",
-		openbao.ClientConfig{},
+		portopenbao.ClientConfig{},
 		nil,
 		"",
 	)

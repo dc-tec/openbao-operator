@@ -1,0 +1,15 @@
+id: no-type-aliases-in-adapter-layer
+valid:
+  - |
+    package openbao
+    type Client struct{}
+  - |
+    package openbao
+    type (
+      Client struct{}
+    )
+invalid:
+  - |
+    package openbao
+    import portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+    type ClientConfig = portopenbao.ClientConfig

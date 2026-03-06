@@ -14,10 +14,10 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -114,7 +114,7 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 	blueReady := false
 	for _, pod := range bluePods {
 		if isPodReady(&pod) {
-			sealed, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelSealed)
+			sealed, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelSealed)
 			if err == nil && present && !sealed {
 				blueReady = true
 				break
@@ -204,7 +204,7 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 	}
 
 	for _, pod := range greenPods {
-		sealed, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelSealed)
+		sealed, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelSealed)
 		if err != nil {
 			return phaseOutcome{}, fmt.Errorf("failed to parse sealed label on pod %s: %w", pod.Name, err)
 		}

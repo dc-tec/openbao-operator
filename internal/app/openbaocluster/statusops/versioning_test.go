@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -18,7 +18,7 @@ func TestObservedVersionFromPods_UsesLeaderWhenUnambiguous(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-0",
 			Labels: map[string]string{
-				openbao.LabelVersion: "2.0.0",
+				portopenbao.LabelVersion: "2.0.0",
 			},
 		},
 	}
@@ -26,7 +26,7 @@ func TestObservedVersionFromPods_UsesLeaderWhenUnambiguous(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-1",
 			Labels: map[string]string{
-				openbao.LabelVersion: "2.1.0",
+				portopenbao.LabelVersion: "2.1.0",
 			},
 		},
 	}
@@ -47,7 +47,7 @@ func TestObservedVersionFromPods_IgnoresLeaderVersionWhenAmbiguous(t *testing.T)
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-0",
 			Labels: map[string]string{
-				openbao.LabelVersion: "2.0.0",
+				portopenbao.LabelVersion: "2.0.0",
 			},
 		},
 	}
@@ -55,7 +55,7 @@ func TestObservedVersionFromPods_IgnoresLeaderVersionWhenAmbiguous(t *testing.T)
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-1",
 			Labels: map[string]string{
-				openbao.LabelVersion: "2.1.0",
+				portopenbao.LabelVersion: "2.1.0",
 			},
 		},
 	}

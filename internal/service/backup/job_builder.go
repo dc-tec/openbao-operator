@@ -11,9 +11,9 @@ import (
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup/jobenv"
 )
 
@@ -43,7 +43,7 @@ type JobOptions struct {
 	// Only used when BackupKey is empty.
 	FilenamePrefix string
 	// ClientConfig holds the smart client configuration to be injected as environment variables.
-	ClientConfig openbao.ClientConfig
+	ClientConfig portopenbao.ClientConfig
 	// Platform indicates the target platform (e.g., "kubernetes", "openshift").
 	Platform string
 	// TargetStatefulSetName is the name of the StatefulSet to target for pod discovery.

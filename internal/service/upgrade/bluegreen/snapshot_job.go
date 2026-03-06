@@ -10,10 +10,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -134,13 +134,13 @@ func podSnapshotsFromPods(pods []corev1.Pod) ([]podSnapshot, error) {
 	for i := range pods {
 		pod := &pods[i]
 
-		sealed, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelSealed)
+		sealed, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelSealed)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse sealed label on pod %s: %w", pod.Name, err)
 		}
 
 		active := false
-		isActive, isActivePresent, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+		isActive, isActivePresent, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelActive)
 		if err == nil && isActivePresent && isActive {
 			active = true
 		}

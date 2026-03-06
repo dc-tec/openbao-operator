@@ -337,7 +337,7 @@ func Run(args []string) {
 	reloadSignaler := certmanager.NewKubernetesReloadSignaler(clientset)
 
 	// Create smart client configuration
-	smartClientConfig := openbao.ClientConfig{
+	smartClientConfig := portopenbao.ClientConfig{
 		RateLimitQPS:                   clientQPS,
 		RateLimitBurst:                 clientBurst,
 		CircuitBreakerFailureThreshold: clientCBFailureThreshold,

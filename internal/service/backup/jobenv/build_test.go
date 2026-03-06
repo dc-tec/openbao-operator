@@ -9,8 +9,8 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
-	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func envMap(env []corev1.EnvVar) map[string]string {
@@ -99,7 +99,7 @@ func TestBuildEnvVars_S3TokenFallbackAndClientSettings(t *testing.T) {
 		BackupKey:             "key-123",
 		FilenamePrefix:        "pre-upgrade",
 		TargetStatefulSetName: "cluster-a-green",
-		ClientConfig: openbao.ClientConfig{
+		ClientConfig: portopenbao.ClientConfig{
 			RateLimitQPS:                   3.5,
 			RateLimitBurst:                 12,
 			CircuitBreakerFailureThreshold: 7,

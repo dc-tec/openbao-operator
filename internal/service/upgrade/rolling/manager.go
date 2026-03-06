@@ -10,12 +10,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
@@ -36,7 +36,7 @@ type Manager struct {
 	scheme                *runtime.Scheme
 	backupRuntime         portbackup.PreUpgradeSnapshotRuntime
 	clientFactory         upgrade.OpenBaoClientFactory
-	clientConfig          openbaoapi.ClientConfig
+	clientConfig          portopenbao.ClientConfig
 	operatorImageVerifier imageverify.Verifier
 	Platform              string
 }
@@ -46,7 +46,7 @@ func NewManager(
 	c client.Client,
 	scheme *runtime.Scheme,
 	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
-	clientConfig openbaoapi.ClientConfig,
+	clientConfig portopenbao.ClientConfig,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
 ) *Manager {
@@ -68,7 +68,7 @@ func NewManagerWithClientFactory(
 	scheme *runtime.Scheme,
 	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
 	factory upgrade.OpenBaoClientFactory,
-	clientConfig openbaoapi.ClientConfig,
+	clientConfig portopenbao.ClientConfig,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
 ) *Manager {

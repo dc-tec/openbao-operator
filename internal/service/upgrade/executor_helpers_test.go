@@ -8,6 +8,7 @@ import (
 	"time"
 
 	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestReasonCodeFromContextError(t *testing.T) {
@@ -773,7 +774,7 @@ func TestCountMissingGreenServers(t *testing.T) {
 	tests := []struct {
 		name   string
 		cfg    *ExecutorConfig
-		config *openbao.RaftConfigurationResponse
+		config *portopenbao.RaftConfigurationResponse
 		want   int
 	}{
 		{
@@ -789,9 +790,9 @@ func TestCountMissingGreenServers(t *testing.T) {
 				GreenRevision:   "green",
 				ClusterReplicas: 3,
 			},
-			config: &openbao.RaftConfigurationResponse{
-				Config: openbao.RaftConfiguration{
-					Servers: []openbao.RaftServer{
+			config: &portopenbao.RaftConfigurationResponse{
+				Config: portopenbao.RaftConfiguration{
+					Servers: []portopenbao.RaftServer{
 						{NodeID: "openbao-green-0"},
 						{NodeID: "openbao-green-1"},
 						{NodeID: "openbao-green-2"},
@@ -807,9 +808,9 @@ func TestCountMissingGreenServers(t *testing.T) {
 				GreenRevision:   "green",
 				ClusterReplicas: 4,
 			},
-			config: &openbao.RaftConfigurationResponse{
-				Config: openbao.RaftConfiguration{
-					Servers: []openbao.RaftServer{
+			config: &portopenbao.RaftConfigurationResponse{
+				Config: portopenbao.RaftConfiguration{
+					Servers: []portopenbao.RaftServer{
 						{NodeID: "openbao-green-0"},
 						{Address: "https://openbao-green-1.openbao.default.svc:8201"},
 						{NodeID: "openbao-blue-0"},

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // HealthResponse represents the response from GET /v1/sys/health.
@@ -60,7 +61,7 @@ type Client struct {
 
 // NewClient creates a new OpenBao API client with the given configuration.
 // The client is configured to trust the provided CA certificate for TLS verification.
-func NewClient(config ClientConfig) (*Client, error) {
+func NewClient(config portopenbao.ClientConfig) (*Client, error) {
 	if config.BaseURL == "" {
 		return nil, fmt.Errorf("baseURL is required")
 	}
@@ -71,12 +72,12 @@ func NewClient(config ClientConfig) (*Client, error) {
 
 	connectionTimeout := config.ConnectionTimeout
 	if connectionTimeout == 0 {
-		connectionTimeout = DefaultConnectionTimeout
+		connectionTimeout = portopenbao.DefaultConnectionTimeout
 	}
 
 	requestTimeout := config.RequestTimeout
 	if requestTimeout == 0 {
-		requestTimeout = DefaultRequestTimeout
+		requestTimeout = portopenbao.DefaultRequestTimeout
 	}
 
 	// Parse the base URL to extract the hostname for server name verification
@@ -131,7 +132,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 
 // newClientWithState creates a Client with explicit client state.
 // This is used by ClientFactory when created via ClientManager.
-func newClientWithState(config ClientConfig, state *clientState) (*Client, error) {
+func newClientWithState(config portopenbao.ClientConfig, state *clientState) (*Client, error) {
 	if config.BaseURL == "" {
 		return nil, fmt.Errorf("baseURL is required")
 	}
@@ -142,12 +143,12 @@ func newClientWithState(config ClientConfig, state *clientState) (*Client, error
 
 	connectionTimeout := config.ConnectionTimeout
 	if connectionTimeout == 0 {
-		connectionTimeout = DefaultConnectionTimeout
+		connectionTimeout = portopenbao.DefaultConnectionTimeout
 	}
 
 	requestTimeout := config.RequestTimeout
 	if requestTimeout == 0 {
-		requestTimeout = DefaultRequestTimeout
+		requestTimeout = portopenbao.DefaultRequestTimeout
 	}
 
 	// Parse the base URL to extract the hostname for server name verification
@@ -406,7 +407,7 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 	// The snapshot could be large and take a while to transfer
 	snapshotClient := &http.Client{
 		Transport: c.httpClient.Transport,
-		Timeout:   DefaultSnapshotTimeout,
+		Timeout:   portopenbao.DefaultSnapshotTimeout,
 	}
 
 	resp, err := c.doRequest(req, snapshotClient, "failed to execute snapshot request")
@@ -475,7 +476,7 @@ func (c *Client) Restore(ctx context.Context, reader io.Reader) error {
 	// The restore could take a while for large snapshots
 	restoreClient := &http.Client{
 		Transport: c.httpClient.Transport,
-		Timeout:   DefaultSnapshotTimeout,
+		Timeout:   portopenbao.DefaultSnapshotTimeout,
 	}
 
 	resp, body, err := c.doAndReadAll(req, restoreClient, "failed to execute restore request")
@@ -690,7 +691,7 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 //
 // This is used to check synchronization status by comparing
 // last_log_index values between Blue and Green nodes.
-func (c *Client) ReadRaftConfiguration(ctx context.Context) (*RaftConfigurationResponse, error) {
+func (c *Client) ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftConfigurationResponse, error) {
 	if c.token == "" {
 		return nil, fmt.Errorf("authentication token required for raft configuration read")
 	}
@@ -712,8 +713,8 @@ func (c *Client) ReadRaftConfiguration(ctx context.Context) (*RaftConfigurationR
 	}
 
 	type raftConfigEnvelope struct {
-		Data *RaftConfigurationResponse `json:"data,omitempty"`
-		RaftConfigurationResponse
+		Data *portopenbao.RaftConfigurationResponse `json:"data,omitempty"`
+		portopenbao.RaftConfigurationResponse
 	}
 
 	var envelope raftConfigEnvelope
@@ -804,7 +805,7 @@ func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*RaftAutopilotStat
 // update capability on sys/storage/raft/autopilot/configuration.
 //
 // This is used to enable dead server cleanup and configure thresholds.
-func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config AutopilotConfig) error {
+func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config portopenbao.AutopilotConfig) error {
 	if c.token == "" {
 		return fmt.Errorf("authentication token required for raft autopilot configuration")
 	}
@@ -987,7 +988,7 @@ func (c *Client) DemoteRaftPeer(ctx context.Context, serverID string) error {
 // UpdateRaftConfigurationRequest represents the payload sent to PUT /v1/sys/storage/raft/configuration.
 type UpdateRaftConfigurationRequest struct {
 	// Servers is the list of servers in the cluster with updated configuration.
-	Servers []RaftServer `json:"servers"`
+	Servers []portopenbao.RaftServer `json:"servers"`
 }
 
 // UpdateRaftConfiguration updates the Raft cluster configuration.
@@ -996,7 +997,7 @@ type UpdateRaftConfigurationRequest struct {
 //
 // This is used during blue/green upgrades to promote Green nodes to voters
 // or demote Blue nodes to non-voters.
-func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []RaftServer) error {
+func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []portopenbao.RaftServer) error {
 	if c.token == "" {
 		return fmt.Errorf("authentication token required for raft configuration update")
 	}

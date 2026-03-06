@@ -12,7 +12,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/revision"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
@@ -20,6 +19,7 @@ import (
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portinfra "github.com/dc-tec/openbao-operator/internal/port/infra"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
@@ -39,7 +39,7 @@ type Manager struct {
 	backupRuntime         portbackup.PreUpgradeSnapshotRuntime
 	clientFactory         upgrade.OpenBaoClientFactory
 	clusterOps            ClusterOps
-	clientConfig          openbaoapi.ClientConfig
+	clientConfig          portopenbao.ClientConfig
 	imageVerifier         imageverify.Verifier
 	operatorImageVerifier imageverify.Verifier
 	Platform              string
@@ -51,7 +51,7 @@ func NewManager(
 	scheme *runtime.Scheme,
 	infraRuntime portinfra.BlueGreenRuntime,
 	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
-	clientConfig openbaoapi.ClientConfig,
+	clientConfig portopenbao.ClientConfig,
 	imageVerifier imageverify.Verifier,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
@@ -77,7 +77,7 @@ func NewManagerWithClientFactory(
 	infraRuntime portinfra.BlueGreenRuntime,
 	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
 	clientFactory upgrade.OpenBaoClientFactory,
-	clientConfig openbaoapi.ClientConfig,
+	clientConfig portopenbao.ClientConfig,
 	imageVerifier imageverify.Verifier,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,

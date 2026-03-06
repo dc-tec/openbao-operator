@@ -55,7 +55,7 @@ func TestHandlePreUpgradeSnapshot_NotEnabled(t *testing.T) {
 		WithObjects(cluster).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "should return nil when preUpgradeSnapshot is disabled")
@@ -89,7 +89,7 @@ func TestHandlePreUpgradeSnapshot_NoBackupConfig(t *testing.T) {
 		WithObjects(cluster).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.Error(t, err, "should return error when backup config is missing")
@@ -148,7 +148,7 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 		WithObjects(cluster, secret).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "should create backup job successfully")
@@ -210,7 +210,7 @@ func TestHandlePreUpgradeSnapshot_CreateAlreadyExists(t *testing.T) {
 		}).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "AlreadyExists on create should be treated as idempotent")
@@ -273,7 +273,7 @@ func TestHandlePreUpgradeSnapshot_CreatesJobWithOIDCDefaultRole(t *testing.T) {
 		WithObjects(cluster, secret).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "should create backup job successfully when OIDC is enabled")
@@ -326,7 +326,7 @@ func TestHandlePreUpgradeSnapshot_HardenedRequiresEgressRules(t *testing.T) {
 		WithObjects(cluster).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.Error(t, err)
@@ -393,7 +393,7 @@ func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
 		WithObjects(cluster, runningJob).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "should return nil when job is running (requeue)")
@@ -459,7 +459,7 @@ func TestHandlePreUpgradeSnapshot_JobCompleted(t *testing.T) {
 		WithObjects(cluster, completedJob).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "should return nil when job is completed")
@@ -538,7 +538,7 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 		WithObjects(objs...).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	// With max retries exceeded, should return error
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
@@ -606,7 +606,7 @@ func TestHandlePreUpgradeSnapshot_JobFailedRetriesOnFirstFailure(t *testing.T) {
 		WithObjects(cluster, failedJob).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	// With single failure, should delete and return nil to trigger retry
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
@@ -712,7 +712,7 @@ func TestHandlePreUpgradeSnapshot_IgnoresFailedJobsFromPreviousGenerations(t *te
 		WithReturnManagedFields().
 		Build()
 
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "historical failed jobs from older generations must not consume current retry budget")
@@ -847,7 +847,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 	// Mock Client Factory that uses MockClusterActions to avoid HTTP servers
 	// verifyClusterHealth expects: healthyCount >= quorum, leaderCount == 1.
 	// We need 1 leader, 2 standbys.
-	mockFactory := func(config openbaoapi.ClientConfig) (portopenbao.ClusterActions, error) {
+	mockFactory := func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		// Determine if this should be the leader based on the pod name in BaseURL
 		isLeader := strings.Contains(config.BaseURL, "-0.")
 
@@ -861,7 +861,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 		}, nil
 	}
 
-	manager := NewManagerWithClientFactory(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), mockFactory, openbaoapi.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := NewManagerWithClientFactory(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), mockFactory, portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	// Call Reconcile - it should handle pre-upgrade snapshot and requeue
 	_, err := manager.Reconcile(context.Background(), testLogger(), cluster)

@@ -57,9 +57,9 @@ func TestWaitForFinalizationConverged_WaitsForStatefulSetConvergence(t *testing.
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
-	}, openbaoapi.ClientConfig{}, nil, "")
+	}, portopenbao.ClientConfig{}, nil, "")
 
 	converged, err := mgr.waitForFinalizationConverged(context.Background(), testr.New(t), cluster)
 	if err != nil {
@@ -147,13 +147,13 @@ func TestWaitForFinalizationConverged_SucceedsWhenStatefulSetPodsAndHealthConver
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod0, pod1, pod2, caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsHealthyFunc: func(ctx context.Context) (bool, error) {
 				return true, nil
 			},
 		}, nil
-	}, openbaoapi.ClientConfig{}, nil, "")
+	}, portopenbao.ClientConfig{}, nil, "")
 
 	converged, err := mgr.waitForFinalizationConverged(context.Background(), testr.New(t), cluster)
 	if err != nil {
@@ -191,7 +191,7 @@ func TestPatchFinalizedUpgradeStatus_PersistsCurrentVersionAndClearsUpgrade(t *t
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
 		Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, openbaoapi.ClientConfig{}, nil, "")
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, portopenbao.ClientConfig{}, nil, "")
 
 	if err := mgr.patchFinalizedUpgradeStatus(context.Background(), cluster); err != nil {
 		t.Fatalf("expected no error, got %v", err)

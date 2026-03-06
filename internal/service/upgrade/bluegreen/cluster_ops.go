@@ -13,8 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -67,7 +67,7 @@ func (o *openBaoClusterOps) FindLeaderPod(ctx context.Context, logger logr.Logge
 			continue
 		}
 
-		active, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelActive)
+		active, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelActive)
 		if err != nil {
 			logger.V(1).Info("Invalid OpenBao leader label value", "pod", pod.Name, "error", err)
 			continue
@@ -96,12 +96,12 @@ func (o *openBaoClusterOps) FindLeaderPod(ctx context.Context, logger logr.Logge
 			continue
 		}
 
-		sealed, present, err := openbaoapi.ParseBoolLabel(pod.Labels, openbaoapi.LabelSealed)
+		sealed, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelSealed)
 		if err == nil && present && sealed {
 			continue
 		}
 
-		apiClient, err := o.clientFactory(openbaoapi.ClientConfig{
+		apiClient, err := o.clientFactory(portopenbao.ClientConfig{
 			ClusterKey:          clusterKey,
 			BaseURL:             o.podURL(cluster, pod.Name),
 			CACert:              caCert,
