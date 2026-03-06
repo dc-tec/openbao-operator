@@ -353,7 +353,11 @@ func Run(args []string) {
 	// Create initialization manager
 	initMgr := initmanager.NewManager(config, clientset, clientMgr)
 	imageVerifier := security.NewImageVerifier(mgr.GetLogger().WithName("image-verifier"), mgr.GetClient(), nil)
-	operatorImageVerifier := security.NewImageVerifier(mgr.GetLogger().WithName("operator-image-verifier"), mgr.GetClient(), nil)
+	operatorImageVerifier := security.NewImageVerifier(
+		mgr.GetLogger().WithName("operator-image-verifier"),
+		mgr.GetClient(),
+		nil,
+	)
 
 	// Get operator namespace from POD_NAMESPACE environment variable (set by Kubernetes)
 	// Default to "openbao-operator-system" for backward compatibility
