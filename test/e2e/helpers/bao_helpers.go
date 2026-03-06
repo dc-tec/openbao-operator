@@ -15,8 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaolabels "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -199,7 +199,7 @@ func ResolveActiveOpenBaoAddress(ctx context.Context, c client.Client, namespace
 	candidates := make([]candidate, 0, len(pods.Items))
 	for i := range pods.Items {
 		pod := &pods.Items[i]
-		active, activePresent, activeErr := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelActive)
+		active, activePresent, activeErr := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelActive)
 		if activeErr != nil {
 			continue
 		}
@@ -207,7 +207,7 @@ func ResolveActiveOpenBaoAddress(ctx context.Context, c client.Client, namespace
 			continue
 		}
 
-		sealed, sealedPresent, sealedErr := openbaolabels.ParseBoolLabel(pod.Labels, openbaolabels.LabelSealed)
+		sealed, sealedPresent, sealedErr := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelSealed)
 		if sealedErr != nil {
 			continue
 		}
