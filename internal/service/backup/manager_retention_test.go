@@ -71,8 +71,8 @@ func TestApplyRetention_UsesProviderAndDeletesOldBackups(t *testing.T) {
 			name:     "s3 retention cleanup",
 			provider: constants.StorageProviderS3,
 			credentialsData: map[string][]byte{
-				storage.SecretKeyAccessKeyID:     []byte("test-ak"),
-				storage.SecretKeySecretAccessKey: []byte("test-sk"),
+				blobstore.SecretKeyAccessKeyID:     []byte("test-ak"),
+				blobstore.SecretKeySecretAccessKey: []byte("test-sk"),
 			},
 			targetMutator: func(target *openbaov1alpha1.BackupTarget) {
 				target.Region = "us-east-1"

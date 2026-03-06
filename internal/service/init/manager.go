@@ -38,11 +38,6 @@ const (
 	rootTokenStoreTimeout = 2 * time.Minute
 )
 
-// errRetryLater is a marker error indicating that initialization should be retried
-// on the next reconcile, rather than being treated as a failure or success.
-// This is kept for backward compatibility but new code should use operatorerrors.WrapTransientConnection.
-var errRetryLater = operatorerrors.ErrTransientConnection
-
 // Manager handles OpenBao cluster initialization.
 type Manager struct {
 	config      *rest.Config
@@ -292,7 +287,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if err := m.initializeCluster(ctx, logger, cluster); err != nil {
 		// If initialization should be retried later (e.g., pod not ready), return nil
 		// to allow the reconciliation loop to requeue without marking as failed.
-		if operatorerrors.IsTransient(err) || errors.Is(err, errRetryLater) {
+		if operatorerrors.IsTransient(err) {
 			logger.Info("Initialization will be retried on next reconcile", "cluster", cluster.Name)
 			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}

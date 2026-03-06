@@ -24,6 +24,7 @@ import (
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
@@ -846,7 +847,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 	// Mock Client Factory that uses MockClusterActions to avoid HTTP servers
 	// verifyClusterHealth expects: healthyCount >= quorum, leaderCount == 1.
 	// We need 1 leader, 2 standbys.
-	mockFactory := func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mockFactory := func(config openbaoapi.ClientConfig) (portopenbao.ClusterActions, error) {
 		// Determine if this should be the leader based on the pod name in BaseURL
 		isLeader := strings.Contains(config.BaseURL, "-0.")
 

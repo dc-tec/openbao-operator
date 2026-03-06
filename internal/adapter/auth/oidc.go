@@ -44,8 +44,6 @@ func (e *HTTPStatusError) HTTPStatusCode() int {
 	return e.StatusCode
 }
 
-type OIDCConfig = portauth.OIDCConfig
-
 // DiscoverConfig fetches the Kubernetes OIDC issuer configuration from the Kubernetes API server.
 // baseURL allows tests (or specialized environments) to override the default
 // Kubernetes API DNS name. When empty, it defaults to:

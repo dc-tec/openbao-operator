@@ -374,7 +374,7 @@ func Run(args []string) {
 		// the Reconciler will fail then. This allows the operator to run on clusters
 		// without OIDC if they only use Development mode.
 		if oidcConfig == nil {
-			oidcConfig = &auth.OIDCConfig{}
+			oidcConfig = &portauth.OIDCConfig{}
 		}
 	} else {
 		setupLog.Info("Discovered Kubernetes OIDC configuration", "issuer", oidcConfig.IssuerURL)

@@ -15,6 +15,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 )
 
@@ -56,7 +57,7 @@ func TestWaitForFinalizationConverged_WaitsForStatefulSetConvergence(t *testing.
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
 	}, openbaoapi.ClientConfig{}, nil, "")
 
@@ -146,7 +147,7 @@ func TestWaitForFinalizationConverged_SucceedsWhenStatefulSetPodsAndHealthConver
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod0, pod1, pod2, caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (openbaoapi.ClusterActions, error) {
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config openbaoapi.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsHealthyFunc: func(ctx context.Context) (bool, error) {
 				return true, nil

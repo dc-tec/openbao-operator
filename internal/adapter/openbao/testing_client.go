@@ -9,6 +9,7 @@ import (
 	"time"
 
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // MockClusterActions is a mock implementation of ClusterActions for testing.
@@ -100,14 +101,14 @@ type ChaosConfig struct {
 
 // ChaosClient wraps ClusterActions and injects transient failures.
 type ChaosClient struct {
-	inner ClusterActions
+	inner portopenbao.ClusterActions
 	cfg   ChaosConfig
 
 	mu  sync.Mutex
 	rng *rand.Rand
 }
 
-func NewChaosClient(inner ClusterActions, cfg ChaosConfig) *ChaosClient {
+func NewChaosClient(inner portopenbao.ClusterActions, cfg ChaosConfig) *ChaosClient {
 	seed := cfg.Seed
 	if seed == 0 {
 		seed = time.Now().UnixNano()

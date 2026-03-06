@@ -35,20 +35,6 @@ const (
 	DefaultUploadTimeout = 30 * time.Minute
 )
 
-// SecretKey constants define the expected keys in credentials Secrets.
-// Kept as aliases for compatibility; new code should use port/blobstore.
-const (
-	SecretKeyAccessKeyID     = blobstore.SecretKeyAccessKeyID
-	SecretKeySecretAccessKey = blobstore.SecretKeySecretAccessKey
-	SecretKeySessionToken    = blobstore.SecretKeySessionToken
-	SecretKeyRegion          = blobstore.SecretKeyRegion
-	SecretKeyCACert          = blobstore.SecretKeyCACert
-)
-
-// ObjectInfo is an alias for blobstore.ObjectInfo.
-// This type is provided for convenience; new code should use blobstore.ObjectInfo directly.
-type ObjectInfo = blobstore.ObjectInfo
-
 // Bucket wraps a Go CDK blob.Bucket with a simplified interface.
 // It implements the common operations needed for backup/restore functionality.
 type Bucket struct {
@@ -98,8 +84,8 @@ func (b *Bucket) DeleteBatch(ctx context.Context, keys []string) error {
 
 // List returns metadata for all objects matching the given prefix.
 // Results are sorted by key name ascending.
-func (b *Bucket) List(ctx context.Context, prefix string) ([]ObjectInfo, error) {
-	var result []ObjectInfo
+func (b *Bucket) List(ctx context.Context, prefix string) ([]blobstore.ObjectInfo, error) {
+	var result []blobstore.ObjectInfo
 	iter := b.bucket.List(&blob.ListOptions{Prefix: prefix})
 	for {
 		obj, err := iter.Next(ctx)
@@ -109,7 +95,7 @@ func (b *Bucket) List(ctx context.Context, prefix string) ([]ObjectInfo, error) 
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, ObjectInfo{
+		result = append(result, blobstore.ObjectInfo{
 			Key:          obj.Key,
 			Size:         obj.Size,
 			LastModified: obj.ModTime,
@@ -126,7 +112,7 @@ func (b *Bucket) List(ctx context.Context, prefix string) ([]ObjectInfo, error) 
 
 // Head retrieves metadata for a single object without downloading its contents.
 // Returns nil and no error if the object does not exist.
-func (b *Bucket) Head(ctx context.Context, key string) (*ObjectInfo, error) {
+func (b *Bucket) Head(ctx context.Context, key string) (*blobstore.ObjectInfo, error) {
 	attrs, err := b.bucket.Attributes(ctx, key)
 	if err != nil {
 		if gcerrors.Code(err) == gcerrors.NotFound {
@@ -134,7 +120,7 @@ func (b *Bucket) Head(ctx context.Context, key string) (*ObjectInfo, error) {
 		}
 		return nil, err
 	}
-	return &ObjectInfo{
+	return &blobstore.ObjectInfo{
 		Key:          key,
 		Size:         attrs.Size,
 		LastModified: attrs.ModTime,
@@ -181,10 +167,6 @@ type S3ClientConfig struct {
 	// EnsureExists checks if the bucket exists and tries to create it if not.
 	EnsureExists bool
 }
-
-// Credentials aliases the shared blobstore credential contract.
-// New code should import internal/port/blobstore directly.
-type Credentials = blobstore.Credentials
 
 // OpenS3Bucket opens an S3-compatible bucket using Go CDK.
 // It returns a BlobStore interface that provides standardized blob operations.

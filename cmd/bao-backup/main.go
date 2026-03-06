@@ -321,7 +321,7 @@ func runRestore(ctx context.Context) error {
 
 	// Ensure region is set in credentials for S3
 	if restoreCfg.StorageCredentials == nil {
-		restoreCfg.StorageCredentials = &storage.Credentials{
+		restoreCfg.StorageCredentials = &blobstore.Credentials{
 			Region: settings.region,
 		}
 	} else if restoreCfg.StorageCredentials.Region == "" {
@@ -496,7 +496,7 @@ func buildStorageConfig(cfg *backupconfig.ExecutorConfig) (storage.Config, error
 		if cfg.StorageCredentials != nil {
 			storageConfig.Credentials = cfg.StorageCredentials
 		} else {
-			storageConfig.Credentials = &storage.Credentials{
+			storageConfig.Credentials = &blobstore.Credentials{
 				Region: cfg.BackupRegion,
 			}
 		}

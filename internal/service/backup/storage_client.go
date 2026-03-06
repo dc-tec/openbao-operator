@@ -77,21 +77,21 @@ func configureS3StorageConfig(storageConfig *storage.Config, target openbaov1alp
 		region = constants.DefaultS3Region
 	}
 
-	credentials := &storage.Credentials{Region: region}
+	credentials := &blobstore.Credentials{Region: region}
 	if credsSecret != nil {
-		if v, ok := credsSecret.Data[storage.SecretKeyAccessKeyID]; ok {
+		if v, ok := credsSecret.Data[blobstore.SecretKeyAccessKeyID]; ok {
 			credentials.AccessKeyID = strings.TrimSpace(string(v))
 		}
-		if v, ok := credsSecret.Data[storage.SecretKeySecretAccessKey]; ok {
+		if v, ok := credsSecret.Data[blobstore.SecretKeySecretAccessKey]; ok {
 			credentials.SecretAccessKey = strings.TrimSpace(string(v))
 		}
-		if v, ok := credsSecret.Data[storage.SecretKeySessionToken]; ok {
+		if v, ok := credsSecret.Data[blobstore.SecretKeySessionToken]; ok {
 			credentials.SessionToken = strings.TrimSpace(string(v))
 		}
-		if v, ok := credsSecret.Data[storage.SecretKeyRegion]; ok && strings.TrimSpace(string(v)) != "" {
+		if v, ok := credsSecret.Data[blobstore.SecretKeyRegion]; ok && strings.TrimSpace(string(v)) != "" {
 			credentials.Region = strings.TrimSpace(string(v))
 		}
-		if v, ok := credsSecret.Data[storage.SecretKeyCACert]; ok {
+		if v, ok := credsSecret.Data[blobstore.SecretKeyCACert]; ok {
 			credentials.CACert = v
 		}
 	}
@@ -116,7 +116,7 @@ func configureGCSStorageConfig(storageConfig *storage.Config, target openbaov1al
 		if v, ok := credsSecret.Data["credentials.json"]; ok {
 			gcsOptions.CredentialsJSON = v
 		}
-		if v, ok := credsSecret.Data[storage.SecretKeyCACert]; ok {
+		if v, ok := credsSecret.Data[blobstore.SecretKeyCACert]; ok {
 			gcsOptions.CACert = v
 		}
 	}
@@ -149,7 +149,7 @@ func configureAzureStorageConfig(storageConfig *storage.Config, target openbaov1
 		if v, ok := credsSecret.Data["connectionString"]; ok {
 			azureOptions.ConnectionString = strings.TrimSpace(string(v))
 		}
-		if v, ok := credsSecret.Data[storage.SecretKeyCACert]; ok {
+		if v, ok := credsSecret.Data[blobstore.SecretKeyCACert]; ok {
 			azureOptions.CACert = v
 		}
 	}

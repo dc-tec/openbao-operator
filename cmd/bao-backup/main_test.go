@@ -15,6 +15,7 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
 )
 
@@ -200,7 +201,7 @@ func TestBuildStorageConfig(t *testing.T) {
 			BackupBucket:   "bucket",
 			BackupEndpoint: "https://s3.example.test",
 			BackupRegion:   "us-west-2",
-			StorageCredentials: &storage.Credentials{
+			StorageCredentials: &blobstore.Credentials{
 				AccessKeyID: "akid",
 				Region:      "custom-region",
 			},

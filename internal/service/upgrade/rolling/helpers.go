@@ -16,6 +16,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -95,7 +96,7 @@ func (m *Manager) getPodURL(cluster *openbaov1alpha1.OpenBaoCluster, podName str
 }
 
 // newPodClient builds an OpenBao API client targeting a specific pod.
-func (m *Manager) newPodClient(cluster *openbaov1alpha1.OpenBaoCluster, podName string, caCert []byte) (openbaoapi.ClusterActions, error) {
+func (m *Manager) newPodClient(cluster *openbaov1alpha1.OpenBaoCluster, podName string, caCert []byte) (portopenbao.ClusterActions, error) {
 	podURL := m.getPodURL(cluster, podName)
 	apiClient, err := m.clientFactory(openbaoapi.ClientConfig{
 		ClusterKey: fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),

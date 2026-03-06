@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
 // ExecutorConfig holds the backup executor configuration.
@@ -52,7 +52,7 @@ type ExecutorConfig struct {
 	InsecureSkipVerify bool
 
 	// Storage credentials (provider-agnostic)
-	StorageCredentials *storage.Credentials
+	StorageCredentials *blobstore.Credentials
 
 	// GCS-specific credentials
 	GCSCredentialsJSON []byte
@@ -394,8 +394,8 @@ func validatePath(baseDir, filePath string) (string, error) {
 }
 
 // loadStorageCredentials loads S3 credentials from the mounted directory.
-func loadStorageCredentials(credsPath string) (*storage.Credentials, error) {
-	creds := &storage.Credentials{}
+func loadStorageCredentials(credsPath string) (*blobstore.Credentials, error) {
+	creds := &blobstore.Credentials{}
 
 	// Validate and clean the base credentials path
 	cleanCredsPath, err := validatePath("/", credsPath)

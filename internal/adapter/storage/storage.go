@@ -55,7 +55,7 @@ type Config struct {
 	Region string
 
 	// Credentials holds authentication credentials.
-	Credentials *Credentials
+	Credentials *blobstore.Credentials
 
 	// S3 contains S3-specific configuration.
 	S3 *S3Options
