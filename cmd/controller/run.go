@@ -55,12 +55,15 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
 	initmanager "github.com/dc-tec/openbao-operator/internal/service/init"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 )
 
 var (
@@ -349,6 +352,8 @@ func Run(args []string) {
 
 	// Create initialization manager
 	initMgr := initmanager.NewManager(config, clientset, clientMgr)
+	imageVerifier := security.NewImageVerifier(mgr.GetLogger().WithName("image-verifier"), mgr.GetClient(), nil)
+	operatorImageVerifier := security.NewImageVerifier(mgr.GetLogger().WithName("operator-image-verifier"), mgr.GetClient(), nil)
 
 	// Get operator namespace from POD_NAMESPACE environment variable (set by Kubernetes)
 	// Default to "openbao-operator-system" for backward compatibility
@@ -468,7 +473,14 @@ func Run(args []string) {
 		Recorder:          mgr.GetEventRecorder(controllerNameOpenBaoCluster),
 		SingleTenantMode:  singleTenantMode,
 		SmartClientConfig: smartClientConfig,
-		Platform:          platform,
+		OpenBaoClientFactory: func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+			return openbao.NewClient(config)
+		},
+		DiscoverOIDCConfig:    auth.DiscoverConfig,
+		OIDCStatusCode:        portauth.DiscoveryStatusCode,
+		ImageVerifier:         imageVerifier,
+		OperatorImageVerifier: operatorImageVerifier,
+		Platform:              platform,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
 		os.Exit(1)
@@ -476,10 +488,11 @@ func Run(args []string) {
 
 	// Set up OpenBaoRestore controller
 	if err := (&openbaorestorecontroller.OpenBaoRestoreReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorder(controllerNameOpenBaoRestore),
-		Platform: platform,
+		Client:                mgr.GetClient(),
+		Scheme:                mgr.GetScheme(),
+		Recorder:              mgr.GetEventRecorder(controllerNameOpenBaoRestore),
+		OperatorImageVerifier: operatorImageVerifier,
+		Platform:              platform,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoRestore")
 		os.Exit(1)

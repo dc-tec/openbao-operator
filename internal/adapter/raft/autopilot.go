@@ -13,8 +13,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -26,17 +26,30 @@ const (
 	portAPI            = 8200
 )
 
+type Client interface {
+	portopenbao.AutopilotConfigurer
+}
+
+type ClientFactory interface {
+	NewWithJWT(ctx context.Context, baseURL, role, jwtToken string) (Client, error)
+	NewWithToken(baseURL, token string) (Client, error)
+}
+
+type ClientFactoryProvider interface {
+	FactoryFor(clusterKey string, caCert []byte) ClientFactory
+}
+
 // Manager handles Raft Autopilot configuration for OpenBao clusters.
 type Manager struct {
-	clientset kubernetes.Interface
-	clientMgr *openbao.ClientManager
+	clientset             kubernetes.Interface
+	clientFactoryProvider ClientFactoryProvider
 }
 
 // NewManager creates a new Raft Autopilot Manager.
-func NewManager(clientset kubernetes.Interface, clientMgr *openbao.ClientManager) *Manager {
+func NewManager(clientset kubernetes.Interface, clientFactoryProvider ClientFactoryProvider) *Manager {
 	return &Manager{
-		clientset: clientset,
-		clientMgr: clientMgr,
+		clientset:             clientset,
+		clientFactoryProvider: clientFactoryProvider,
 	}
 }
 
@@ -44,9 +57,9 @@ func NewManager(clientset kubernetes.Interface, clientMgr *openbao.ClientManager
 // It uses profile-aware logic to calculate safe defaults for min_quorum:
 // - Hardened: Never drop below 3, or use replicas if replicas > 3
 // - Development: Use replicas (minimum 1) to allow single-node clusters
-func BuildAutopilotConfig(cluster *openbaov1alpha1.OpenBaoCluster) openbao.AutopilotConfig {
+func BuildAutopilotConfig(cluster *openbaov1alpha1.OpenBaoCluster) portopenbao.AutopilotConfig {
 	// Initialize with defaults
-	config := openbao.AutopilotConfig{
+	config := portopenbao.AutopilotConfig{
 		CleanupDeadServers:             true,
 		DeadServerLastContactThreshold: "5m",
 		LastContactThreshold:           "10s",
@@ -141,7 +154,7 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 	// For SelfInit clusters, use ClientManager which handles JWT authentication
 	// For non-SelfInit clusters, use root token from Secret
 	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
-	var client *openbao.Client
+	var client Client
 	var err error
 
 	if selfInitEnabled {
@@ -227,7 +240,7 @@ func (m *Manager) ConfigureAutopilot(ctx context.Context, logger logr.Logger, cl
 
 // newOpenBaoClient constructs an authenticated OpenBao client for talking to the pod-0 instance
 // using JWT authentication via ClientManager.
-func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*openbao.Client, error) {
+func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (Client, error) {
 	if strings.TrimSpace(cluster.Name) == "" || strings.TrimSpace(cluster.Namespace) == "" {
 		return nil, fmt.Errorf("cluster name and namespace are required")
 	}
@@ -242,9 +255,9 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, clus
 
 	// Get client factory
 	clusterKey := fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)
-	factory := m.clientMgr.FactoryFor(clusterKey, caCert)
+	factory := m.clientFactory(clusterKey, caCert)
 	if factory == nil {
-		return nil, fmt.Errorf("client manager returned nil factory for cluster %s", clusterKey)
+		return nil, fmt.Errorf("client factory provider returned nil factory for cluster %s", clusterKey)
 	}
 
 	// Get JWT Token (Hybrid: Projected Volume -> TokenRequest)
@@ -325,7 +338,7 @@ func (m *Manager) handleJWTAuthError(cluster *openbaov1alpha1.OpenBaoCluster, er
 }
 
 // newOpenBaoClientWithToken creates an authenticated OpenBao client with the given token.
-func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, token string) (*openbao.Client, error) {
+func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, token string) (Client, error) {
 	if strings.TrimSpace(cluster.Name) == "" || strings.TrimSpace(cluster.Namespace) == "" {
 		return nil, fmt.Errorf("cluster name and namespace are required to build OpenBao client")
 	}
@@ -350,9 +363,9 @@ func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openba
 
 	// Create OpenBao client using the ClientManager for proper state isolation.
 	clusterKey := fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)
-	factory := m.clientMgr.FactoryFor(clusterKey, caCert)
+	factory := m.clientFactory(clusterKey, caCert)
 	if factory == nil {
-		return nil, fmt.Errorf("client manager returned nil factory for cluster %s", clusterKey)
+		return nil, fmt.Errorf("client factory provider returned nil factory for cluster %s", clusterKey)
 	}
 
 	client, err := factory.NewWithToken(baseURL, token)
@@ -361,6 +374,13 @@ func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openba
 	}
 
 	return client, nil
+}
+
+func (m *Manager) clientFactory(clusterKey string, caCert []byte) ClientFactory {
+	if m == nil || m.clientFactoryProvider == nil {
+		return nil
+	}
+	return m.clientFactoryProvider.FactoryFor(clusterKey, caCert)
 }
 
 // autopilotBaseURL returns a stable in-cluster address for performing Raft autopilot operations.

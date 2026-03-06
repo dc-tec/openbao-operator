@@ -42,6 +42,7 @@ App packages may call services/managers, ports, and platform utilities.
 ### Services/Managers (`internal/service/*`, L4)
 
 Services implement domain behavior and should consume adapters through `internal/port/*` contracts.
+Ports stay contract-only: they may contain interfaces, neutral types, and domain helpers, but they must not import concrete adapter packages.
 
 Services must not import controller packages.
 

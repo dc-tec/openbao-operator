@@ -22,7 +22,6 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
@@ -128,7 +127,6 @@ type InfraDependencies struct {
 	IsOperatorImageVerificationEnabled imageVerificationEnabledFunc
 	Recorder                           events.EventRecorder
 	Platform                           string
-	SmartClientConfig                  portopenbao.ClientConfig
 	ClientForPodFunc                   ScaleDownPodClientFactory
 	DiscoverOIDCConfig                 discoverOIDCConfigFunc
 	OIDCDiscoveryStatusCode            oidcDiscoveryStatusCodeFunc
@@ -559,11 +557,5 @@ func (r *infraReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, 
 	if r.deps.ClientForPodFunc != nil {
 		return r.deps.ClientForPodFunc(cluster, podName)
 	}
-
-	headlessServiceName := cluster.Name
-	podDNS := fmt.Sprintf("%s.%s.%s.svc:8200", podName, headlessServiceName, cluster.Namespace)
-	cfg := r.deps.SmartClientConfig
-	cfg.BaseURL = "https://" + podDNS
-
-	return portopenbao.NewClient(cfg)
+	return nil, fmt.Errorf("OpenBao pod client factory is not configured")
 }

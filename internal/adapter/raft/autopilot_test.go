@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func ptrToInt32(v int32) *int32 {
@@ -19,7 +19,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		cluster *openbaov1alpha1.OpenBaoCluster
-		want    openbao.AutopilotConfig
+		want    portopenbao.AutopilotConfig
 		wantErr bool
 	}{
 		{
@@ -30,7 +30,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					Replicas: 3,
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             true,
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -47,7 +47,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					Replicas: 5,
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             true,
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -64,7 +64,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					Replicas: 1,
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             true,
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -81,7 +81,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					Replicas: 1,
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             false, // Auto-disabled because MinQuorum < 3
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -98,7 +98,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					Replicas: 2,
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             false, // Auto-disabled because MinQuorum < 3
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -115,7 +115,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					Replicas: 3,
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             true,
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -139,7 +139,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					},
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             true,
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -163,7 +163,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					},
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             false, // Auto-disabled because MinQuorum < 3
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -187,7 +187,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					},
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             false, // Auto-disabled because MinQuorum < 3
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -211,7 +211,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					},
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             false, // Auto-disabled because MinQuorum < 3
 				DeadServerLastContactThreshold: "1m",  // User override respected
 				LastContactThreshold:           "10s",
@@ -235,7 +235,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					},
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             false, // User override respected
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -259,7 +259,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					},
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             false, // Auto-disabled because MinQuorum < 3
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "30s", // User override respected
@@ -283,7 +283,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					},
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             false, // Auto-disabled because MinQuorum < 3
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",
@@ -312,7 +312,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					},
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             false,
 				DeadServerLastContactThreshold: "10m",
 				LastContactThreshold:           "30s",
@@ -329,7 +329,7 @@ func TestBuildAutopilotConfig(t *testing.T) {
 					Replicas: 0,
 				},
 			},
-			want: openbao.AutopilotConfig{
+			want: portopenbao.AutopilotConfig{
 				CleanupDeadServers:             false, // Auto-disabled because MinQuorum < 3
 				DeadServerLastContactThreshold: "5m",
 				LastContactThreshold:           "10s",

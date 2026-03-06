@@ -24,6 +24,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -50,6 +51,18 @@ type Manager struct {
 	raftManager *raft.Manager
 }
 
+type raftClientFactoryProvider struct {
+	clientMgr *openbao.ClientManager
+}
+
+type raftClientFactoryAdapter struct {
+	factory *openbao.ClientFactory
+}
+
+type raftClientAdapter struct {
+	client *openbao.Client
+}
+
 // NewManager creates a new initialization Manager.
 // The clientMgr is used to create OpenBao clients with proper state isolation.
 func NewManager(config *rest.Config, clientset kubernetes.Interface, clientMgr *openbao.ClientManager) *Manager {
@@ -57,8 +70,54 @@ func NewManager(config *rest.Config, clientset kubernetes.Interface, clientMgr *
 		config:      config,
 		clientset:   clientset,
 		clientMgr:   clientMgr,
-		raftManager: raft.NewManager(clientset, clientMgr),
+		raftManager: raft.NewManager(clientset, raftClientFactoryProvider{clientMgr: clientMgr}),
 	}
+}
+
+func (p raftClientFactoryProvider) FactoryFor(clusterKey string, caCert []byte) raft.ClientFactory {
+	if p.clientMgr == nil {
+		return nil
+	}
+
+	factory := p.clientMgr.FactoryFor(clusterKey, caCert)
+	if factory == nil {
+		return nil
+	}
+
+	return raftClientFactoryAdapter{factory: factory}
+}
+
+func (a raftClientFactoryAdapter) NewWithJWT(ctx context.Context, baseURL, role, jwtToken string) (raft.Client, error) {
+	if a.factory == nil {
+		return nil, fmt.Errorf("OpenBao client factory is required")
+	}
+
+	client, err := a.factory.NewWithJWT(ctx, baseURL, role, jwtToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return raftClientAdapter{client: client}, nil
+}
+
+func (a raftClientFactoryAdapter) NewWithToken(baseURL, token string) (raft.Client, error) {
+	if a.factory == nil {
+		return nil, fmt.Errorf("OpenBao client factory is required")
+	}
+
+	client, err := a.factory.NewWithToken(baseURL, token)
+	if err != nil {
+		return nil, err
+	}
+
+	return raftClientAdapter{client: client}, nil
+}
+
+func (a raftClientAdapter) ConfigureRaftAutopilot(ctx context.Context, config portopenbao.AutopilotConfig) error {
+	if a.client == nil {
+		return fmt.Errorf("OpenBao client is required")
+	}
+	return a.client.ConfigureRaftAutopilot(ctx, config)
 }
 
 // RaftManager returns the Raft Manager for autopilot configuration.

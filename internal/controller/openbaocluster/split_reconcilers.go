@@ -15,7 +15,6 @@ import (
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
@@ -116,7 +115,10 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 				IsMainImageVerificationEnabled:     portsecurity.IsMainImageVerificationEnabled,
 				IsOperatorImageVerificationEnabled: portsecurity.IsOperatorImageVerificationEnabled,
 				DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*appopenbaocluster.OIDCConfig, error) {
-					discovered, err := portauth.DiscoverConfig(ctx, cfg, "")
+					if r.parent.DiscoverOIDCConfig == nil {
+						return nil, fmt.Errorf("OIDC discovery is not configured")
+					}
+					discovered, err := r.parent.DiscoverOIDCConfig(ctx, cfg, "")
 					if err != nil {
 						return nil, err
 					}
@@ -128,10 +130,17 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 						JWKSKeys:  discovered.JWKSKeys,
 					}, nil
 				},
-				OIDCDiscoveryStatusCode: portauth.DiscoveryStatusCode,
-				Recorder:                r.parent.Recorder,
-				Platform:                r.parent.Platform,
-				SmartClientConfig:       r.parent.SmartClientConfig,
+				OIDCDiscoveryStatusCode: func(err error) (int, bool) {
+					if r.parent.OIDCStatusCode == nil {
+						return 0, false
+					}
+					return r.parent.OIDCStatusCode(err)
+				},
+				Recorder: r.parent.Recorder,
+				Platform: r.parent.Platform,
+				ClientForPodFunc: func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (appopenbaocluster.ScaleDownPodClient, error) {
+					return r.parent.clientForPod(cluster, podName)
+				},
 			},
 			appopenbaocluster.InfraReasonPolicy{
 				GatewayAPIMissing:                   ReasonGatewayAPIMissing,
@@ -157,10 +166,12 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 		),
 		appopenbaocluster.NewStorageResizeRestartReconciler(
 			appopenbaocluster.StorageResizeRestartDependencies{
-				Client:            r.parent.Client,
-				APIReader:         r.parent.APIReader,
-				Recorder:          r.parent.Recorder,
-				SmartClientConfig: r.parent.SmartClientConfig,
+				Client:    r.parent.Client,
+				APIReader: r.parent.APIReader,
+				Recorder:  r.parent.Recorder,
+				ClientForPodFunc: func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (appopenbaocluster.StoragePodClient, error) {
+					return r.parent.clientForPod(cluster, podName)
+				},
 			},
 			appopenbaocluster.StorageReasonPolicy{
 				InvalidSize:             ReasonStorageInvalidSize,

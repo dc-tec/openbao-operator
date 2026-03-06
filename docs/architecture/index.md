@@ -101,11 +101,11 @@ The runtime code is organized into layered packages to keep controller plumbing,
 | `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore`, `internal/controller/provisioner` |
 | `L3` | App orchestration | `internal/app/openbaocluster` (facade + `statusops`, `deletionops`, `adminops`), `internal/app/openbaorestore`, `internal/app/provisioner` |
 | `L4` | Services/managers | `internal/service/backup`, `internal/service/restore`, `internal/service/upgrade`, `internal/service/infra`, `internal/service/certs`, `internal/service/init`, `internal/service/provisioner`, `internal/service/opslifecycle` |
-| `L5` | Ports/contracts | `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/initmanager` |
+| `L5` | Ports/contracts | `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/initmanager`, `internal/port/openbao`, `internal/port/security`, `internal/port/auth` |
 | `L6` | Adapters/integrations | `internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}` |
 | `L7` | Platform/cross-cutting | `internal/platform/{errors,logging,reconcile,constants,predicates,observability,admission}` |
 
-Dependency intent is top-down across layers: higher layers depend on lower layers through narrow contracts, and adapters do not import controller packages.
+Dependency intent is top-down across layers: higher layers depend on lower layers through narrow contracts, ports stay contract-only, and concrete adapters are wired in entrypoints or explicit dependency injection.
 
 ### 1.4 Component Interaction
 

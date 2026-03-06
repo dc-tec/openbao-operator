@@ -15,15 +15,6 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
-const (
-	// DefaultConnectionTimeout is the default timeout for establishing connections.
-	DefaultConnectionTimeout = 5 * time.Second
-	// DefaultRequestTimeout is the default timeout for individual API requests.
-	DefaultRequestTimeout = 10 * time.Second
-	// DefaultSnapshotTimeout is the default timeout for snapshot operations.
-	DefaultSnapshotTimeout = 30 * time.Minute
-)
-
 // HealthResponse represents the response from GET /v1/sys/health.
 // The health endpoint returns different status codes based on cluster state:
 // - 200: initialized, unsealed, and active
@@ -65,46 +56,6 @@ type Client struct {
 	httpClient *http.Client
 
 	state *clientState
-}
-
-// ClientConfig holds configuration for creating a new Client.
-type ClientConfig struct {
-	// ClusterKey is an optional per-cluster identifier used to share client state
-	// (rate limiting and circuit breakers) across multiple Client instances.
-	//
-	// Recommended format: "<namespace>/<name>".
-	// If empty, BaseURL hostname is used as a fallback (best-effort).
-	ClusterKey string
-
-	// BaseURL is the OpenBao API URL (e.g., "https://pod-0.cluster.ns.svc:8200").
-	BaseURL string
-	// Token is the authentication token for OpenBao API calls.
-	Token string
-	// CACert is the PEM-encoded CA certificate for TLS verification.
-	// If empty, the system certificate pool is used.
-	CACert []byte
-	// ConnectionTimeout is the timeout for establishing connections.
-	// Defaults to DefaultConnectionTimeout if zero.
-	ConnectionTimeout time.Duration
-	// RequestTimeout is the timeout for individual requests.
-	// Defaults to DefaultRequestTimeout if zero.
-	RequestTimeout time.Duration
-
-	// SmartClientDisabled disables rate limiting and circuit breaker behavior.
-	// By default, smart client features are enabled with conservative defaults.
-	SmartClientDisabled bool
-	// RateLimitQPS is the per-cluster rate limit applied to OpenBao API calls.
-	// Defaults to 2.0 if zero or negative.
-	RateLimitQPS float64
-	// RateLimitBurst is the per-cluster burst size for the rate limiter.
-	// Defaults to 4 if zero or negative.
-	RateLimitBurst int
-	// CircuitBreakerFailureThreshold is the number of consecutive failures before opening the circuit.
-	// Defaults to 50 if zero or negative.
-	CircuitBreakerFailureThreshold int
-	// CircuitBreakerOpenDuration is the amount of time the circuit stays open before probing again.
-	// Defaults to 30s if zero.
-	CircuitBreakerOpenDuration time.Duration
 }
 
 // NewClient creates a new OpenBao API client with the given configuration.
@@ -733,38 +684,6 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 	return nil
 }
 
-// RaftServer represents a server in the Raft configuration.
-type RaftServer struct {
-	// NodeID is the unique identifier for this node.
-	NodeID string `json:"node_id"`
-	// Address is the API address of this node.
-	Address string `json:"address"`
-	// Leader indicates whether this node is the current leader.
-	Leader bool `json:"leader,omitempty"`
-	// ProtocolVersion is the Raft protocol version.
-	ProtocolVersion string `json:"protocol_version,omitempty"`
-	// Voter indicates whether this node is a voter (participates in quorum).
-	Voter bool `json:"voter,omitempty"`
-	// LastIndex is the last log index on this node.
-	LastIndex uint64 `json:"last_index,omitempty"`
-	// LastTerm is the last log term on this node.
-	LastTerm uint64 `json:"last_term,omitempty"`
-}
-
-// RaftConfiguration represents the current Raft cluster configuration.
-type RaftConfiguration struct {
-	// Servers is the list of servers in the cluster.
-	Servers []RaftServer `json:"servers"`
-	// Index is the configuration index.
-	Index uint64 `json:"index"`
-}
-
-// RaftConfigurationResponse represents the response from GET /v1/sys/storage/raft/configuration.
-type RaftConfigurationResponse struct {
-	// Config is the Raft configuration.
-	Config RaftConfiguration `json:"config"`
-}
-
 // ReadRaftConfiguration reads the current Raft cluster configuration.
 // This endpoint requires authentication with a token that has
 // read capability on sys/storage/raft/configuration.
@@ -878,30 +797,6 @@ func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*RaftAutopilotStat
 	}
 
 	return &envelope.RaftAutopilotStateResponse, nil
-}
-
-// AutopilotConfig represents the configuration for Raft Autopilot.
-// This is used with POST /v1/sys/storage/raft/autopilot/configuration.
-type AutopilotConfig struct {
-	// CleanupDeadServers controls whether dead servers are removed from
-	// the Raft peer list periodically. Requires MinQuorum to be set.
-	CleanupDeadServers bool `json:"cleanup_dead_servers"`
-	// DeadServerLastContactThreshold is the limit on the amount of time
-	// a server can go without leader contact before being considered failed.
-	// Minimum: "1m". Default: "24h".
-	DeadServerLastContactThreshold string `json:"dead_server_last_contact_threshold,omitempty"`
-	// MinQuorum is the minimum number of servers allowed in a cluster before
-	// autopilot can prune dead servers. This should be at least 3.
-	MinQuorum int `json:"min_quorum,omitempty"`
-	// LastContactThreshold is the limit on the amount of time a server can
-	// go without leader contact before being considered unhealthy.
-	LastContactThreshold string `json:"last_contact_threshold,omitempty"`
-	// MaxTrailingLogs is the amount of entries in the Raft Log that a server
-	// can be behind before being considered unhealthy. Default: 1000.
-	MaxTrailingLogs int `json:"max_trailing_logs,omitempty"`
-	// ServerStabilizationTime is the minimum amount of time a server must
-	// be in a stable, healthy state before it can be added to the cluster.
-	ServerStabilizationTime string `json:"server_stabilization_time,omitempty"`
 }
 
 // ConfigureRaftAutopilot sets the Raft Autopilot configuration.

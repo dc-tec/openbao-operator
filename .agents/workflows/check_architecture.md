@@ -35,6 +35,7 @@ Layer intent:
 
 - Controllers (`internal/controller/*`) delegate orchestration to `internal/app/*`
 - Services consume ports (`internal/port/*`) and shared utilities
+- Ports stay contract-only and do not import `internal/adapter/*`
 - Adapters implement ports and avoid service/controller imports
 
 # 4) Validate code health

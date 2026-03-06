@@ -165,9 +165,28 @@ globalImportBoundaries:
       - internal/adapter/security
       - internal/adapter/storage
       - internal/adapter/storageenv
+  - id: no-adapter-imports-in-port-layer
+    message: Port packages must not import adapter packages directly.
+    note: Keep ports limited to contracts, neutral types, and domain helpers.
+    files:
+      - internal/port/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/adapter/auth
+      - internal/adapter/cluster
+      - internal/adapter/config
+      - internal/adapter/kube
+      - internal/adapter/openbao
+      - internal/adapter/operationlock
+      - internal/adapter/probe
+      - internal/adapter/raft
+      - internal/adapter/revision
+      - internal/adapter/security
+      - internal/adapter/storage
+      - internal/adapter/storageenv
   - id: no-adapter-to-adapter-imports
     message: Adapter packages should not depend on other adapters; use ports/contracts.
-    note: Current exception internal/adapter/raft -> internal/adapter/openbao is tracked via dependency-policy-exceptions.tsv.
     files:
       - internal/adapter/auth/**/*.go
       - internal/adapter/cluster/**/*.go
@@ -183,7 +202,6 @@ globalImportBoundaries:
       - internal/adapter/storageenv/**/*.go
     ignores:
       - "**/*_test.go"
-      - internal/adapter/raft/**/*.go
     disallowImports:
       - internal/adapter/auth
       - internal/adapter/cluster

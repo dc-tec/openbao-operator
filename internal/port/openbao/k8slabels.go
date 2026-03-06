@@ -1,19 +1,43 @@
 package openbao
 
-import internalopenbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+import (
+	"fmt"
+	"strings"
+)
 
 const (
 	// LabelActive is set by OpenBao's Kubernetes service registration.
-	LabelActive = internalopenbao.LabelActive
+	LabelActive = "openbao-active"
 	// LabelInitialized is set by OpenBao's Kubernetes service registration.
-	LabelInitialized = internalopenbao.LabelInitialized
+	LabelInitialized = "openbao-initialized"
 	// LabelSealed is set by OpenBao's Kubernetes service registration.
-	LabelSealed = internalopenbao.LabelSealed
+	LabelSealed = "openbao-sealed"
 	// LabelVersion is set by OpenBao's Kubernetes service registration.
-	LabelVersion = internalopenbao.LabelVersion
+	LabelVersion = "openbao-version"
 )
 
 // ParseBoolLabel parses a boolean-like Kubernetes label value.
 func ParseBoolLabel(labels map[string]string, key string) (bool, bool, error) {
-	return internalopenbao.ParseBoolLabel(labels, key)
+	if labels == nil {
+		return false, false, nil
+	}
+
+	raw, ok := labels[key]
+	if !ok {
+		return false, false, nil
+	}
+
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return false, false, nil
+	}
+
+	switch strings.ToLower(value) {
+	case "true":
+		return true, true, nil
+	case "false":
+		return false, true, nil
+	default:
+		return false, true, fmt.Errorf("invalid boolean label value %q for %q (expected true/false)", value, key)
+	}
 }

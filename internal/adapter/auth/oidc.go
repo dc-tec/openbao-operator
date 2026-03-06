@@ -12,10 +12,11 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"os"
 	"time"
 
 	"k8s.io/client-go/rest"
+
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 // HTTPStatusError represents a non-200 response when calling an HTTP endpoint.
@@ -35,12 +36,15 @@ func (e *HTTPStatusError) Error() string {
 	return fmt.Sprintf("%s returned status %d", e.URL, e.StatusCode)
 }
 
-// OIDCConfig holds the discovered OIDC configuration.
-type OIDCConfig struct {
-	IssuerURL string
-	CABundle  string
-	JWKSKeys  []string
+// HTTPStatusCode returns the HTTP status associated with the discovery failure.
+func (e *HTTPStatusError) HTTPStatusCode() int {
+	if e == nil {
+		return 0
+	}
+	return e.StatusCode
 }
+
+type OIDCConfig = portauth.OIDCConfig
 
 // DiscoverConfig fetches the Kubernetes OIDC issuer configuration from the Kubernetes API server.
 // baseURL allows tests (or specialized environments) to override the default
@@ -50,7 +54,7 @@ type OIDCConfig struct {
 //
 // Returns an error if discovery fails. The operator can still run for Development
 // profile clusters without OIDC, but Hardened profile requires OIDC.
-func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*OIDCConfig, error) {
+func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*portauth.OIDCConfig, error) {
 	if baseURL == "" {
 		baseURL = "https://kubernetes.default.svc"
 	}
@@ -95,39 +99,22 @@ func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*OID
 
 	issuerURL := oidcConfig.Issuer
 
-	// Get CA bundle from REST config
-	var caBundle string
-	if len(cfg.CAData) > 0 {
-		caBundle = string(cfg.CAData)
-	} else if cfg.CAFile != "" {
-		data, err := os.ReadFile(cfg.CAFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read CA file: %w", err)
-		}
-		caBundle = string(data)
-	} else {
-		// No CA configured - use system cert pool (may be empty)
-		caBundle = ""
-	}
-
 	// Fetch JWKS keys if JWKS URI is available
 	var jwksKeys []string
 	if oidcConfig.JWKSURI != "" {
 		keys, err := FetchJWKSKeys(ctx, cfg, oidcConfig.JWKSURI)
 		if err != nil {
 			// Log but don't fail - JWKS keys are optional for some configurations
-			return &OIDCConfig{
+			return &portauth.OIDCConfig{
 				IssuerURL: issuerURL,
-				CABundle:  caBundle,
 				JWKSKeys:  nil,
 			}, fmt.Errorf("failed to fetch JWKS keys: %w", err)
 		}
 		jwksKeys = keys
 	}
 
-	return &OIDCConfig{
+	return &portauth.OIDCConfig{
 		IssuerURL: issuerURL,
-		CABundle:  caBundle,
 		JWKSKeys:  jwksKeys,
 	}, nil
 }

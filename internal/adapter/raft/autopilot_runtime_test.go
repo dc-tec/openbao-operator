@@ -17,7 +17,6 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
@@ -101,7 +100,7 @@ func TestGetTLSCACert(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster-a-tls-ca", Namespace: "tenant-ns"},
 			Data:       map[string][]byte{"ca.crt": []byte("pem-data")},
 		})
-		mgr := NewManager(clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+		mgr := NewManager(clientset, nil)
 
 		ca, err := mgr.getTLSCACert(context.Background(), cluster)
 		if err != nil {
@@ -113,7 +112,7 @@ func TestGetTLSCACert(t *testing.T) {
 	})
 
 	t.Run("missing secret", func(t *testing.T) {
-		mgr := NewManager(k8sfake.NewClientset(), openbao.NewClientManager(openbao.ClientConfig{}))
+		mgr := NewManager(k8sfake.NewClientset(), nil)
 		_, err := mgr.getTLSCACert(context.Background(), cluster)
 		if err == nil || !strings.Contains(err.Error(), "failed to get TLS CA Secret") {
 			t.Fatalf("expected missing secret error, got %v", err)
@@ -124,7 +123,7 @@ func TestGetTLSCACert(t *testing.T) {
 		clientset := k8sfake.NewClientset(&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster-a-tls-ca", Namespace: "tenant-ns"},
 		})
-		mgr := NewManager(clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+		mgr := NewManager(clientset, nil)
 		_, err := mgr.getTLSCACert(context.Background(), cluster)
 		if err == nil || !strings.Contains(err.Error(), "missing 'ca.crt' key") {
 			t.Fatalf("expected missing key error, got %v", err)
@@ -136,7 +135,7 @@ func TestGetTLSCACert(t *testing.T) {
 		clientset.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, apierrors.NewForbidden(schema.GroupResource{Group: "", Resource: "secrets"}, "cluster-a-tls-ca", errors.New("forbidden"))
 		})
-		mgr := NewManager(clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+		mgr := NewManager(clientset, nil)
 		_, err := mgr.getTLSCACert(context.Background(), cluster)
 		if err == nil {
 			t.Fatalf("expected forbidden error")
@@ -165,7 +164,7 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 	t.Parallel()
 
 	t.Run("cluster not initialized is no-op", func(t *testing.T) {
-		mgr := NewManager(k8sfake.NewClientset(), openbao.NewClientManager(openbao.ClientConfig{}))
+		mgr := NewManager(k8sfake.NewClientset(), nil)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
 			Spec:       openbaov1alpha1.OpenBaoClusterSpec{Replicas: 3},
@@ -177,7 +176,7 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 	})
 
 	t.Run("missing root token secret is skipped", func(t *testing.T) {
-		mgr := NewManager(k8sfake.NewClientset(), openbao.NewClientManager(openbao.ClientConfig{}))
+		mgr := NewManager(k8sfake.NewClientset(), nil)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
 			Spec:       openbaov1alpha1.OpenBaoClusterSpec{Replicas: 3},
@@ -190,7 +189,7 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 
 	t.Run("root token secret without token is skipped", func(t *testing.T) {
 		clientset := k8sfake.NewClientset(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "cluster-root-token", Namespace: "ns"}})
-		mgr := NewManager(clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+		mgr := NewManager(clientset, nil)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
 			Spec:       openbaov1alpha1.OpenBaoClusterSpec{Replicas: 3},
@@ -206,7 +205,7 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster-root-token", Namespace: "ns"},
 			Data:       map[string][]byte{"token": []byte("root-token")},
 		})
-		mgr := NewManager(clientset, openbao.NewClientManager(openbao.ClientConfig{}))
+		mgr := NewManager(clientset, nil)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
 			Spec:       openbaov1alpha1.OpenBaoClusterSpec{Replicas: 3},
