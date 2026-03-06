@@ -30,22 +30,6 @@ type ClientFactory struct {
 	clientState *clientState
 }
 
-// NewClientFactory returns a factory that creates clients based on the provided template.
-// The template's BaseURL and Token are ignored; per-request values are provided to New/NewWithToken.
-//
-// Deprecated: This function creates a factory without shared state management.
-// New code should use ClientManager.FactoryFor() for explicit state management.
-func NewClientFactory(template portopenbao.ClientConfig) *ClientFactory {
-	t := template
-	t.BaseURL = ""
-	t.Token = ""
-	return &ClientFactory{
-		template:   t,
-		clients:    make(map[string]*http.Client),
-		tokenCache: make(map[string]cachedToken),
-	}
-}
-
 // newClientFactoryWithState is the internal constructor used by ClientManager.
 // The factory will use the provided clientState.
 func newClientFactoryWithState(template portopenbao.ClientConfig, state *clientState) *ClientFactory {

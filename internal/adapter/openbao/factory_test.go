@@ -12,6 +12,10 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
+func newTestClientFactory(template ClientConfig) *ClientFactory {
+	return newClientFactoryWithState(template, newClientState(template))
+}
+
 func TestClientFactory_New_NilReceiver(t *testing.T) {
 	var factory *ClientFactory
 
@@ -21,7 +25,7 @@ func TestClientFactory_New_NilReceiver(t *testing.T) {
 }
 
 func TestClientFactory_NewWithToken_UsesProvidedValues(t *testing.T) {
-	factory := NewClientFactory(ClientConfig{
+	factory := newTestClientFactory(ClientConfig{
 		BaseURL: "http://should-not-be-used",
 		Token:   "should-not-be-used",
 	})
@@ -40,7 +44,7 @@ func TestClientFactory_NewWithToken_UsesProvidedValues(t *testing.T) {
 }
 
 func TestClientFactory_New_InvalidCACert(t *testing.T) {
-	factory := NewClientFactory(ClientConfig{
+	factory := newTestClientFactory(ClientConfig{
 		CACert: []byte("not a cert"),
 	})
 
@@ -81,7 +85,7 @@ func TestClientFactory_LoginJWT(t *testing.T) {
 	}))
 	defer server.Close()
 
-	factory := NewClientFactory(ClientConfig{})
+	factory := newTestClientFactory(ClientConfig{})
 
 	token, err := factory.LoginJWT(context.Background(), server.URL, "role", "jwt")
 	if err != nil {
@@ -105,7 +109,7 @@ func TestClientFactory_NewWithJWT(t *testing.T) {
 	}))
 	defer server.Close()
 
-	factory := NewClientFactory(ClientConfig{})
+	factory := newTestClientFactory(ClientConfig{})
 	client, err := factory.NewWithJWT(context.Background(), server.URL, "role", "jwt")
 	if err != nil {
 		t.Fatalf("NewWithJWT() error: %v", err)
@@ -116,7 +120,7 @@ func TestClientFactory_NewWithJWT(t *testing.T) {
 }
 
 func TestClientFactory_New_ReusesHTTPClient(t *testing.T) {
-	factory := NewClientFactory(ClientConfig{})
+	factory := newTestClientFactory(ClientConfig{})
 	url1 := "http://example.com/1"
 	url2 := "http://example.com/2"
 
@@ -167,7 +171,7 @@ func TestClientFactory_LoginJWT_Caching(t *testing.T) {
 	}))
 	defer server.Close()
 
-	factory := NewClientFactory(ClientConfig{})
+	factory := newTestClientFactory(ClientConfig{})
 
 	// First login - hits server
 	token, err := factory.LoginJWT(context.Background(), server.URL, "role", "jwt")
