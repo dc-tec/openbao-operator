@@ -190,6 +190,111 @@ func TestBuildBackupCondition(t *testing.T) {
 	}
 }
 
+func TestBuildStorageConfiguredCondition(t *testing.T) {
+	className := "fast-ssd"
+
+	tests := []struct {
+		name       string
+		cluster    *openbaov1alpha1.OpenBaoCluster
+		state      *clusterState
+		wantStatus metav1.ConditionStatus
+		wantReason string
+		wantInMsg  string
+	}{
+		{
+			name: "explicit storage class before pvc creation",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Storage: openbaov1alpha1.StorageConfig{
+						StorageClassName: &className,
+					},
+				},
+			},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonStorageClassConfigured,
+			wantInMsg:  "Configured to request",
+		},
+		{
+			name: "default storage class pending",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{},
+			},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionUnknown,
+			wantReason: ReasonStorageClassPending,
+			wantInMsg:  "rely on the default StorageClass",
+		},
+		{
+			name: "default storage class resolved from pvcs",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{},
+			},
+			state: &clusterState{
+				DataPVCCount:             3,
+				DataPVCStorageClassNames: []string{"gp3"},
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonStorageClassDefaulted,
+			wantInMsg:  "Using default StorageClass",
+		},
+		{
+			name: "configured storage class mismatch",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Storage: openbaov1alpha1.StorageConfig{
+						StorageClassName: &className,
+					},
+				},
+			},
+			state: &clusterState{
+				DataPVCCount:             1,
+				DataPVCStorageClassNames: []string{"gp3"},
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: ReasonStorageClassMismatch,
+			wantInMsg:  "does not match",
+		},
+		{
+			name: "inconsistent storage classes across pvcs",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{},
+			},
+			state: &clusterState{
+				DataPVCCount:             3,
+				DataPVCStorageClassNames: []string{"fast", "slow"},
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: ReasonStorageClassInconsistent,
+			wantInMsg:  "inconsistent StorageClass values",
+		},
+		{
+			name: "pvcs created without storage class",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{},
+			},
+			state: &clusterState{
+				DataPVCCount:             2,
+				DataPVCStorageClassUnset: true,
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonStorageClassUnset,
+			wantInMsg:  "without a StorageClass",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cond := buildStorageConfiguredCondition(tt.cluster, tt.state)
+
+			assert.Equal(t, string(openbaov1alpha1.ConditionStorageConfigured), cond.Type)
+			assert.Equal(t, tt.wantStatus, cond.Status)
+			assert.Equal(t, tt.wantReason, cond.Reason)
+			assert.Contains(t, cond.Message, tt.wantInMsg)
+		})
+	}
+}
+
 func TestBuildLeaderCondition(t *testing.T) {
 	tests := []struct {
 		name        string

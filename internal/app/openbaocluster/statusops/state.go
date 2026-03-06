@@ -13,6 +13,11 @@ type StatusState struct {
 	Available     bool
 	StatusStale   bool // StatefulSet status may lag behind reality.
 
+	// Data PVC storage state.
+	DataPVCCount             int
+	DataPVCStorageClassNames []string
+	DataPVCStorageClassUnset bool
+
 	// Pod state.
 	Pods             []corev1.Pod
 	Pod0             *corev1.Pod

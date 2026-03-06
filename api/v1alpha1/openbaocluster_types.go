@@ -89,6 +89,9 @@ const (
 	// with workload hardening options that are not supported by the underlying
 	// node/Kubernetes environment (for example, AppArmor not available).
 	ConditionNodeSecurityCapabilityMismatch ConditionType = "NodeSecurityCapabilityMismatch"
+	// ConditionStorageConfigured indicates persistent storage has either been
+	// explicitly configured or consistently resolved from observed PVCs.
+	ConditionStorageConfigured ConditionType = "StorageConfigured"
 )
 
 // TLSMode controls who manages the certificate lifecycle.

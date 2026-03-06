@@ -38,6 +38,12 @@ const (
 	ReasonStorageResizeNotSupported      = "StorageResizeNotSupported"
 	ReasonStorageClassChangeNotSupported = "StorageClassChangeNotSupported"
 	ReasonStorageRestartRequired         = "StorageRestartRequired"
+	ReasonStorageClassConfigured         = "StorageClassConfigured"
+	ReasonStorageClassPending            = "StorageClassPending"
+	ReasonStorageClassDefaulted          = "StorageClassDefaulted"
+	ReasonStorageClassUnset              = "StorageClassUnset"
+	ReasonStorageClassMismatch           = "StorageClassMismatch"
+	ReasonStorageClassInconsistent       = "StorageClassInconsistent"
 
 	reasonReady              = "Ready"
 	reasonPaused             = "Paused"

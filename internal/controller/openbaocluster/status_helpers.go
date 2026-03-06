@@ -2,6 +2,7 @@ package openbaocluster
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -218,6 +219,97 @@ func buildBackupCondition(backupInProgress bool, backupJobName string) metav1.Co
 	}
 }
 
+// buildStorageConfiguredCondition reports whether the workload is using an explicit
+// or consistently resolved storage class, so users can see the effective one-shot choice.
+func buildStorageConfiguredCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+	desiredStorageClassName := ""
+	if cluster.Spec.Storage.StorageClassName != nil {
+		desiredStorageClassName = strings.TrimSpace(*cluster.Spec.Storage.StorageClassName)
+	}
+
+	if state == nil {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionStorageConfigured),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Storage configuration has not been observed yet",
+		}
+	}
+
+	if state.DataPVCCount == 0 {
+		if desiredStorageClassName != "" {
+			return metav1.Condition{
+				Type:    string(openbaov1alpha1.ConditionStorageConfigured),
+				Status:  metav1.ConditionTrue,
+				Reason:  ReasonStorageClassConfigured,
+				Message: fmt.Sprintf("Configured to request StorageClass %q when data PVCs are created. This choice becomes effectively immutable after PVC creation.", desiredStorageClassName),
+			}
+		}
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionStorageConfigured),
+			Status:  metav1.ConditionUnknown,
+			Reason:  ReasonStorageClassPending,
+			Message: "No data PVCs are present yet and spec.storage.storageClassName is unset. The cluster will rely on the default StorageClass when PVCs are created; set it explicitly on new clusters if you need a specific class.",
+		}
+	}
+
+	if state.DataPVCStorageClassUnset && len(state.DataPVCStorageClassNames) == 0 {
+		if desiredStorageClassName != "" {
+			return metav1.Condition{
+				Type:    string(openbaov1alpha1.ConditionStorageConfigured),
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonStorageClassMismatch,
+				Message: fmt.Sprintf("spec.storage.storageClassName=%q does not match the observed data PVCs, which were created without a StorageClass. Storage class selection is effectively immutable after PVC creation.", desiredStorageClassName),
+			}
+		}
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionStorageConfigured),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonStorageClassUnset,
+			Message: fmt.Sprintf("All %d data PVCs were created without a StorageClass. Set spec.storage.storageClassName explicitly on new clusters if you need a specific class; the effective storage path is immutable after PVC creation.", state.DataPVCCount),
+		}
+	}
+
+	if state.DataPVCStorageClassUnset || len(state.DataPVCStorageClassNames) > 1 {
+		observed := append([]string{}, state.DataPVCStorageClassNames...)
+		if state.DataPVCStorageClassUnset {
+			observed = append(observed, "<unset>")
+		}
+		sort.Strings(observed)
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionStorageConfigured),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonStorageClassInconsistent,
+			Message: fmt.Sprintf("Observed inconsistent StorageClass values across %d data PVCs: %s. All OpenBao data PVCs should use one effective storage class.", state.DataPVCCount, strings.Join(observed, ", ")),
+		}
+	}
+
+	observedStorageClassName := state.DataPVCStorageClassNames[0]
+	if desiredStorageClassName == "" {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionStorageConfigured),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonStorageClassDefaulted,
+			Message: fmt.Sprintf("Using default StorageClass %q on %d data PVCs. Set spec.storage.storageClassName explicitly on new clusters if you need a specific class; this choice is effectively immutable after PVC creation.", observedStorageClassName, state.DataPVCCount),
+		}
+	}
+	if desiredStorageClassName != observedStorageClassName {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionStorageConfigured),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonStorageClassMismatch,
+			Message: fmt.Sprintf("spec.storage.storageClassName=%q does not match the observed data PVC StorageClass %q. Storage class selection is effectively immutable after PVC creation.", desiredStorageClassName, observedStorageClassName),
+		}
+	}
+
+	return metav1.Condition{
+		Type:    string(openbaov1alpha1.ConditionStorageConfigured),
+		Status:  metav1.ConditionTrue,
+		Reason:  ReasonStorageClassConfigured,
+		Message: fmt.Sprintf("Using configured StorageClass %q on %d data PVCs. This choice is effectively immutable after PVC creation.", observedStorageClassName, state.DataPVCCount),
+	}
+}
+
 // buildInitializedCondition builds the OpenBaoInitialized condition from pod labels.
 // ObservedGeneration and LastTransitionTime must be set by the caller.
 func buildInitializedCondition(initialized, present bool) metav1.Condition {
@@ -355,6 +447,12 @@ func applyAllConditions(
 	backupCond.ObservedGeneration = gen
 	backupCond.LastTransitionTime = now
 	meta.SetStatusCondition(&cluster.Status.Conditions, backupCond)
+
+	// Storage configuration condition
+	storageCond := buildStorageConfiguredCondition(cluster, state)
+	storageCond.ObservedGeneration = gen
+	storageCond.LastTransitionTime = now
+	meta.SetStatusCondition(&cluster.Status.Conditions, storageCond)
 
 	// Etcd encryption warning (always set)
 	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
