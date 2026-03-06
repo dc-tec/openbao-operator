@@ -101,7 +101,7 @@ jobs:
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
 
       - name: Run vulncheck
         env:
@@ -141,7 +141,7 @@ jobs:
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
 
       - name: Setup Node (for ast-grep install)
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
@@ -186,7 +186,7 @@ jobs:
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
 
       - name: Verify gofmt
         run: make verify-fmt
@@ -210,7 +210,7 @@ jobs:
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
 
       - name: Verify tidy
         run: make verify-tidy
@@ -251,7 +251,7 @@ jobs:
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
 
       - name: Verify generated files
         run: make verify-generated
@@ -296,7 +296,7 @@ jobs:
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
 
       - name: Run integration tests
         run: |
@@ -349,7 +349,7 @@ jobs:
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
 
       - name: Verify Helm chart synced inputs
         env:
@@ -392,7 +392,7 @@ jobs:
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
 
       - name: Setup Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
@@ -683,7 +683,7 @@ jobs:
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.sum') }}
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
 
       - name: Install kind (pinned)
         if: env.SHOULD_RUN == 'true'

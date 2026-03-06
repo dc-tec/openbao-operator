@@ -928,20 +928,23 @@ security-scan: ## Run Trivy security scans (filesystem and container image)
 		--skip-version-check \
 		${IMG}
 
-# go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
+# go-install-tool will 'go install' any package with custom target and name of binary, if the
+# package version or active Go toolchain changed.
 # $1 - target path with name of binary
 # $2 - package url which can be installed
 # $3 - specific version of package
 define go-install-tool
-@[ -f "$(1)-$(3)" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$(1)-$(3)" ] || { \
-set -e; \
+@set -e; \
+toolchain="$$(go env GOVERSION)"; \
+target="$(1)-$(3)-$${toolchain}"; \
+[ -f "$$target" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$$target" ] || { \
 package=$(2)@$(3) ;\
-echo "Downloading $${package}" ;\
+echo "Downloading $${package} with $${toolchain}" ;\
 rm -f "$(1)" ;\
 GOFLAGS="-mod=mod" GOBIN="$(LOCALBIN)" go install $${package} ;\
-mv "$(LOCALBIN)/$$(basename "$(1)")" "$(1)-$(3)" ;\
+mv "$(LOCALBIN)/$$(basename "$(1)")" "$$target" ;\
 } ;\
-ln -sf "$$(realpath "$(1)-$(3)")" "$(1)"
+ln -sf "$$(realpath "$$target")" "$(1)"
 endef
 
 define gomodver
