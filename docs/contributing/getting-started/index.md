@@ -55,7 +55,7 @@ Ensure you have the following tools installed before starting:
 
 <div class="grid cards" markdown>
 
-- :simple-go: **Go 1.25+**
+- :simple-go: **Go 1.26+**
 
     ---
 
