@@ -1,6 +1,7 @@
 package infra
 
 import (
+	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -133,5 +134,90 @@ func TestBuildStatefulSet_MaintenanceAnnotations(t *testing.T) {
 
 	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != "2026-01-19T00:00:00Z" {
 		t.Fatalf("expected Pod template annotation %q to be set, got %q", constants.AnnotationRestartAt, got)
+	}
+}
+
+func TestBuildStatefulSet_DefaultPlacementPolicy(t *testing.T) {
+	cluster := newMinimalCluster("spread-cluster", "default")
+
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
+	}
+
+	if got := statefulSet.Spec.Template.Labels[constants.LabelOpenBaoComponent]; got != constants.ComponentOpenBaoCluster {
+		t.Fatalf("expected Pod label %q=%q, got %q", constants.LabelOpenBaoComponent, constants.ComponentOpenBaoCluster, got)
+	}
+
+	placementLabels := statefulSetPlacementLabels(cluster)
+
+	affinity := statefulSet.Spec.Template.Spec.Affinity
+	if affinity == nil || affinity.PodAntiAffinity == nil {
+		t.Fatal("expected preferred pod anti-affinity to be configured")
+	}
+
+	terms := affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution
+	if len(terms) != 1 {
+		t.Fatalf("expected 1 preferred anti-affinity term, got %d", len(terms))
+	}
+
+	term := terms[0]
+	if term.Weight != statefulSetPlacementPreferredWeight {
+		t.Fatalf("expected anti-affinity weight %d, got %d", statefulSetPlacementPreferredWeight, term.Weight)
+	}
+	if term.PodAffinityTerm.TopologyKey != statefulSetTopologyKeyHostname {
+		t.Fatalf("expected anti-affinity topology key %q, got %q", statefulSetTopologyKeyHostname, term.PodAffinityTerm.TopologyKey)
+	}
+	if term.PodAffinityTerm.LabelSelector == nil {
+		t.Fatal("expected anti-affinity label selector")
+	}
+	if !reflect.DeepEqual(term.PodAffinityTerm.LabelSelector.MatchLabels, placementLabels) {
+		t.Fatalf("anti-affinity MatchLabels = %#v, want %#v", term.PodAffinityTerm.LabelSelector.MatchLabels, placementLabels)
+	}
+
+	constraints := statefulSet.Spec.Template.Spec.TopologySpreadConstraints
+	if len(constraints) != 2 {
+		t.Fatalf("expected 2 topology spread constraints, got %d", len(constraints))
+	}
+
+	wantTopologyKeys := []string{statefulSetTopologyKeyHostname, statefulSetTopologyKeyZone}
+	for i, wantTopologyKey := range wantTopologyKeys {
+		constraint := constraints[i]
+		if constraint.MaxSkew != 1 {
+			t.Fatalf("constraint %d MaxSkew = %d, want 1", i, constraint.MaxSkew)
+		}
+		if constraint.TopologyKey != wantTopologyKey {
+			t.Fatalf("constraint %d TopologyKey = %q, want %q", i, constraint.TopologyKey, wantTopologyKey)
+		}
+		if constraint.WhenUnsatisfiable != corev1.ScheduleAnyway {
+			t.Fatalf("constraint %d WhenUnsatisfiable = %q, want %q", i, constraint.WhenUnsatisfiable, corev1.ScheduleAnyway)
+		}
+		if constraint.LabelSelector == nil {
+			t.Fatalf("constraint %d missing LabelSelector", i)
+		}
+		if !reflect.DeepEqual(constraint.LabelSelector.MatchLabels, placementLabels) {
+			t.Fatalf("constraint %d MatchLabels = %#v, want %#v", i, constraint.LabelSelector.MatchLabels, placementLabels)
+		}
+	}
+}
+
+func TestBuildStatefulSet_PlacementPolicySpansRevisions(t *testing.T) {
+	cluster := newMinimalCluster("bluegreen-cluster", "default")
+
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "green-revision", false, constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
+	}
+
+	if got := statefulSet.Spec.Template.Labels[constants.LabelOpenBaoRevision]; got != "green-revision" {
+		t.Fatalf("expected Pod label %q=%q, got %q", constants.LabelOpenBaoRevision, "green-revision", got)
+	}
+
+	selector := statefulSet.Spec.Template.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution[0].PodAffinityTerm.LabelSelector
+	if selector == nil {
+		t.Fatal("expected anti-affinity selector")
+	}
+	if _, ok := selector.MatchLabels[constants.LabelOpenBaoRevision]; ok {
+		t.Fatalf("expected placement selector to omit %q so it spans all cluster revisions", constants.LabelOpenBaoRevision)
 	}
 }

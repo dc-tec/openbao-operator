@@ -34,7 +34,7 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
     - [ ] **Volume Size**: Plan for growth. Raft snapshots can consume significant space.
 
 !!! tip "Availability"
-    - [ ] **Topology Spread**: Ensure your `Kubernetes` cluster has nodes in multiple zones. The Operator automatically sets standard anti-affinity.
+    - [ ] **Topology Spread**: Ensure your `Kubernetes` cluster has nodes in multiple zones. The Operator adds soft node and zone spread constraints plus preferred anti-affinity.
     - [ ] **Replica Count**: Use at least **3 replicas** for high availability.
 
 ## Day 2 Operations

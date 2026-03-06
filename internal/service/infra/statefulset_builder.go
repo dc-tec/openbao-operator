@@ -13,6 +13,12 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
+const (
+	statefulSetPlacementPreferredWeight = 100
+	statefulSetTopologyKeyHostname      = "kubernetes.io/hostname"
+	statefulSetTopologyKeyZone          = "topology.kubernetes.io/zone"
+)
+
 // buildStatefulSetWithRevision constructs a StatefulSet for the given OpenBaoCluster.
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
 // verifiedInitContainerDigest is the verified init container image digest to use (if provided, overrides cluster.Spec.InitContainer.Image).
@@ -72,6 +78,9 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 					// the OpenBao process directly, eliminating the need for ShareProcessNamespace
 					// and the tls-reloader sidecar. This restores container isolation.
 					ShareProcessNamespace: ptr.To(false),
+					// Use soft spread defaults so production clusters distribute Raft members
+					// across nodes/zones without making small dev clusters unschedulable.
+					Affinity: buildStatefulSetAffinity(cluster),
 					// SECURITY: Explicitly disable automount for all containers, then mount
 					// ServiceAccount token only where needed (OpenBao container for Kubernetes Auth)
 					AutomountServiceAccountToken: ptr.To(false),
@@ -80,6 +89,7 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 					InitContainers:               initContainers,
 					Containers:                   buildContainers(cluster, verifiedImageDigest, renderedConfigDir, probes),
 					ImagePullSecrets:             cluster.Spec.ImagePullSecrets,
+					TopologySpreadConstraints:    buildStatefulSetTopologySpreadConstraints(cluster),
 					Volumes:                      volumes,
 				},
 			},
@@ -92,4 +102,54 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 	security.AddManagedWorkloadSecurityLabels(statefulSet.Labels, cluster)
 
 	return statefulSet, nil
+}
+
+func buildStatefulSetAffinity(cluster *openbaov1alpha1.OpenBaoCluster) *corev1.Affinity {
+	return &corev1.Affinity{
+		PodAntiAffinity: &corev1.PodAntiAffinity{
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+				{
+					Weight: statefulSetPlacementPreferredWeight,
+					PodAffinityTerm: corev1.PodAffinityTerm{
+						LabelSelector: &metav1.LabelSelector{
+							MatchLabels: statefulSetPlacementLabels(cluster),
+						},
+						TopologyKey: statefulSetTopologyKeyHostname,
+					},
+				},
+			},
+		},
+	}
+}
+
+func buildStatefulSetTopologySpreadConstraints(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.TopologySpreadConstraint {
+	placementLabels := statefulSetPlacementLabels(cluster)
+
+	return []corev1.TopologySpreadConstraint{
+		{
+			MaxSkew:           1,
+			TopologyKey:       statefulSetTopologyKeyHostname,
+			WhenUnsatisfiable: corev1.ScheduleAnyway,
+			LabelSelector: &metav1.LabelSelector{
+				MatchLabels: placementLabels,
+			},
+		},
+		{
+			MaxSkew:           1,
+			TopologyKey:       statefulSetTopologyKeyZone,
+			WhenUnsatisfiable: corev1.ScheduleAnyway,
+			LabelSelector: &metav1.LabelSelector{
+				MatchLabels: placementLabels,
+			},
+		},
+	}
+}
+
+func statefulSetPlacementLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
+	labels := podSelectorLabels(cluster)
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[constants.LabelOpenBaoComponent] = constants.ComponentOpenBaoCluster
+	return labels
 }
