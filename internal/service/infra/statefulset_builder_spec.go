@@ -140,6 +140,7 @@ func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoClu
 	if podLabels == nil {
 		podLabels = make(map[string]string)
 	}
+	podLabels[constants.LabelOpenBaoComponent] = constants.ComponentOpenBaoCluster
 	annotations := map[string]string{
 		configHashAnnotation: configHash,
 	}
