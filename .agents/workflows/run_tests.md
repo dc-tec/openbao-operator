@@ -5,7 +5,15 @@ This workflow guides local test execution for standard changes and refactors.
 
 # Fast Local Tests
 
-Run standard local tests:
+Run standard local tests with readable output and saved artifacts:
+
+```bash
+make test-sum
+```
+
+Artifacts are written under `dist/test/`.
+
+If you only want the plain Go test output:
 
 ```bash
 make test
@@ -13,7 +21,13 @@ make test
 
 # CI-Equivalent Unit + Integration
 
-Run the CI-style non-E2E test lane:
+Run the main local pre-PR gate:
+
+```bash
+make ci-core
+```
+
+If you only want the test lane:
 
 ```bash
 make verify-vendor
@@ -21,6 +35,12 @@ make test-ci
 ```
 
 # Integration Tests (envtest)
+
+```bash
+make test-integration-sum
+```
+
+If you do not need the extra gotestsum artifacts:
 
 ```bash
 make test-integration

@@ -83,7 +83,7 @@ These coding standards ensure consistency and quality across the OpenBao Operato
     - [x] **Structured Logs:** Use `log.Info("msg", "key", "value")` instead of `Printf`.
     - [x] **Test Logic:** Write table-driven unit tests for all business logic.
     - [x] **Verify:** Run the full check suite:
-        `make lint-ci verify-arch-policy verify-fmt verify-tidy verify-generated verify-helm test-ci`
+        `make bootstrap && make doctor && make ci-core`
 
 !!! failure "Must NOT Do"
     - [ ] **No `interface{}`:** Avoid `any` types without rigorous justification.

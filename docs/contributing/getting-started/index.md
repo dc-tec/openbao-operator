@@ -25,7 +25,7 @@ Welcome! We are excited that you are interested in contributing to the OpenBao O
 
     ---
 
-    Install the necessary tools (Go, Docker, Kind) to run the operator locally.
+    Install the required tools or open the devcontainer, then run `make bootstrap` and `make doctor`.
 
     [:material-arrow-right: Setup Guide](development.md)
 
@@ -43,7 +43,7 @@ Welcome! We are excited that you are interested in contributing to the OpenBao O
 
     ---
 
-    Run the test suite and open a Pull Request.
+    Run `make ci-core`, then open a Pull Request.
 
     [:material-arrow-right: Testing Guide](../testing.md)
 
@@ -78,6 +78,18 @@ Ensure you have the following tools installed before starting:
     ---
 
     CLI for interacting with the cluster.
+
+- :simple-node-dot-js: **Node.js + npm**
+
+    ---
+
+    Required to bootstrap local `ast-grep` for `make lint-ci`.
+
+- :simple-helm: **Helm + Trivy + Python**
+
+    ---
+
+    Required for the full local PR-equivalent gate (`make ci-core`).
 
 </div>
 

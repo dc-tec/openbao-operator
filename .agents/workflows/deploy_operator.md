@@ -13,7 +13,21 @@ Ensure you have a Kind cluster running. This command will create one if it doesn
 make setup-test-e2e
 ```
 
-# Deploy Operator
+# Preferred: Tilt local cluster loop
+
+For repeated controller changes against a local cluster, use Tilt for rebuilds, deploys, and logs:
+
+```bash
+make tilt-up
+```
+
+Stop the session when finished:
+
+```bash
+make tilt-down
+```
+
+# Manual build and deploy
 
 Build and deploy the operator to the current cluster:
 

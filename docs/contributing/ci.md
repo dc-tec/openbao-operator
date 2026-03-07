@@ -91,19 +91,13 @@ Run these commands locally to reproduce CI behavior.
 ### 2.1 Core PR-equivalent checks
 
 ```sh
-make lint-ci
-make verify-fmt
-make verify-tidy
-make verify-vendor
-make verify-generated
-make verify-helm
-make test-ci
-make verify-openbao-config-compat
-make docs-build
+make bootstrap
+make doctor
+make ci-core
 ```
 
 !!! note
-    `make lint-ci` includes ast-grep policy generation/verification, rule tests, and strict scans. It requires the `ast-grep` CLI to be available on your `PATH`.
+    `make lint-ci` bootstraps `ast-grep` locally through `npm` if needed. `npm` must still be available on your `PATH`.
 
 ### 2.2 Job-to-command mapping
 
@@ -115,13 +109,13 @@ make docs-build
 | `Verify vendor/` | `make verify-vendor` | Fails on stale vendored dependencies |
 | `Verify Generated Artifacts` | `make verify-generated` | Checks generated files drift (`api/v1alpha1`, `config/crd/bases`, `docs/reference/api.md`) |
 | `Helm Chart` | `make verify-helm && make helm-test` | Includes Helm sync, lint, template, and OpenShift rendering checks |
-| `Security (vulncheck + Trivy FS)` | `make vulncheck` and `make security-scan IMG=ghcr.io/dc-tec/openbao-operator:edge` | Trivy scan checks filesystem and the provided image |
+| `Security (vulncheck + Trivy FS)` | `make security-ci` | Runs `govulncheck` plus the CI-equivalent Trivy filesystem scan |
 | `Unit Tests` + `Envtest Integration` | `make test-ci` | Runs unit + integration test stack |
 | `OpenBao Config Compatibility` | `make verify-openbao-config-compat` | Validates generated HCL fixtures against upstream parser |
 | `Docs Build` | `make docs-build` | Strict MkDocs build |
 
 !!! tip
-    You can run `make ci-core` as a broad local gate, but set `IMG` first so the image scan stage is meaningful.
+    `make security-scan-image IMG=<image>` is available as an extra local hardening check when you want to scan a built image in addition to the CI-equivalent gates.
 
 ## 3. Pull Request Standards Gates
 

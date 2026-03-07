@@ -50,4 +50,8 @@ dist/crds.yaml
 dist/checksums.txt
 dist/sbom-*.spdx.json
 dist/architecture/
+dist/bench/
+dist/test/
 dist/mutation/
+tmp/air/
+__debug*

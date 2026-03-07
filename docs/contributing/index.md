@@ -54,14 +54,14 @@ Follow this checklist to ensure your Pull Request is ready for review:
 3. **Validation:** Run the local verification suite:
 
     ```bash
-    # 1. Linting & Formatting
-    make lint-ci verify-arch-policy verify-fmt verify-tidy
+    # 1. Install repo-managed tools
+    make bootstrap
 
-    # 2. Generated Artifacts
-    make verify-generated verify-helm
+    # 2. Validate your workstation
+    make doctor
 
-    # 3. Tests
-    make test-ci
+    # 3. Run the PR-equivalent local gate
+    make ci-core
     ```
 
 4. **Commits:** Write clear, descriptive commit messages.

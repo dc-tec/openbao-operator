@@ -26,10 +26,7 @@ We welcome AI-assisted contributions. However, all code must meet our quality st
 ## Local Checks (PR-equivalent)
 
 ```sh
-make lint-config lint
-make verify-fmt
-make verify-tidy
-make verify-generated
-make verify-helm
-make test-ci
+make bootstrap
+make doctor
+make ci-core
 ```
