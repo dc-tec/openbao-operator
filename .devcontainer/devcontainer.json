@@ -1,5 +1,5 @@
 {
-  "name": "Kubebuilder DevContainer",
+  "name": "OpenBao Operator DevContainer",
   "image": "golang:1.26.1",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
@@ -7,18 +7,26 @@
   },
 
   "runArgs": ["--network=host"],
+  "remoteEnv": {
+    "PATH": "${containerWorkspaceFolder}/bin:${containerWorkspaceFolder}/.venv-docs/bin:${containerEnv:PATH}"
+  },
 
   "customizations": {
     "vscode": {
       "settings": {
-        "terminal.integrated.shell.linux": "/bin/bash"
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "go.toolsManagement.autoUpdate": false
       },
       "extensions": [
+        "golang.Go",
         "ms-kubernetes-tools.vscode-kubernetes-tools",
-        "ms-azuretools.vscode-docker"
+        "ms-azuretools.vscode-docker",
+        "ms-vscode.makefile-tools",
+        "redhat.vscode-yaml"
       ]
     }
   },
 
-  "onCreateCommand": "bash .devcontainer/post-install.sh"
+  "onCreateCommand": "bash .devcontainer/post-install.sh",
+  "postCreateCommand": "bash -lc 'make bootstrap && make doctor'"
 }

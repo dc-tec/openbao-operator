@@ -29,8 +29,13 @@ make bootstrap
 make doctor
 ```
 
-If you use Tilt for the local Kubernetes inner loop, install it separately from the
-[official Tilt docs](https://docs.tilt.dev/install.html).
+If you use Tilt for the local Kubernetes inner loop on your host machine, install it separately
+from the [official Tilt docs](https://docs.tilt.dev/install.html). The provided devcontainer
+preinstalls Tilt together with the other external prerequisites.
+
+If you open the repository in the provided devcontainer, these external prerequisites are
+preinstalled for you and the container runs `make bootstrap && make doctor` automatically
+after creation.
 
 ## Development Workflow
 

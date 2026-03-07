@@ -25,7 +25,7 @@ Welcome! We are excited that you are interested in contributing to the OpenBao O
 
     ---
 
-    Install the required tools, then run `make bootstrap` and `make doctor`.
+    Install the required tools or open the devcontainer, then run `make bootstrap` and `make doctor`.
 
     [:material-arrow-right: Setup Guide](development.md)
 
