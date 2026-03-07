@@ -109,6 +109,14 @@ func seedKubernetesService() {
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
 // This mirrors the controller suites so tests can be run directly (e.g., from an IDE).
 func getFirstFoundEnvTestBinaryDir() string {
+	if assetsDir := os.Getenv("KUBEBUILDER_ASSETS"); assetsDir != "" {
+		absoluteAssetsDir, err := filepath.Abs(assetsDir)
+		if err != nil {
+			return ""
+		}
+		return absoluteAssetsDir
+	}
+
 	basePath := filepath.Join("..", "..", "bin", "k8s")
 	entries, err := os.ReadDir(basePath)
 	if err != nil {
@@ -116,7 +124,11 @@ func getFirstFoundEnvTestBinaryDir() string {
 	}
 	for _, entry := range entries {
 		if entry.IsDir() {
-			return filepath.Join(basePath, entry.Name())
+			assetsDir, err := filepath.Abs(filepath.Join(basePath, entry.Name()))
+			if err != nil {
+				return ""
+			}
+			return assetsDir
 		}
 	}
 	return ""
