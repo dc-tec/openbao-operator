@@ -6,7 +6,7 @@ This guide walks you through creating your first OpenBaoCluster. Choose the path
 
 - **OpenBao Operator**: Installed and running (see [Installation](../operator/installation.md))
 - **Tenancy**: In multi-tenant mode, the target namespace must be onboarded via `OpenBaoTenant` (see [Tenant Onboarding](../openbaotenant/onboarding.md)).
-- **Storage Class**: Default storage class configured in the cluster
+- **Storage Class**: A suitable StorageClass is available in the cluster. For production, prefer setting `spec.storage.storageClassName` explicitly before the first reconcile.
 
 ## Choose Your Path
 
@@ -138,6 +138,7 @@ Look for:
   - `Available` — Cluster is serving requests
   - `TLSReady` — TLS certificates are valid
   - `ProductionReady` — Security requirements met (Hardened only)
+  - `StorageConfigured` — Shows whether the effective StorageClass was explicit, defaulted, or inconsistent
   - `Degraded` — Issues detected
 
 ## Next Steps

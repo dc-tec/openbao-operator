@@ -40,6 +40,9 @@ graph TD
 
 The operator supports **expanding** persistent storage by increasing `spec.storage.size`.
 
+- **Pick `spec.storage.storageClassName` up front** if you need a specific class. Once data PVCs exist, the effective storage class becomes immutable.
+- **Default StorageClass is allowed but explicit is safer**: if `spec.storage.storageClassName` is omitted, Kubernetes will use the cluster default StorageClass when PVCs are created.
+  The operator surfaces the resolved outcome in the `StorageConfigured` status condition so you can see whether the class was explicit, defaulted, or inconsistent.
 - **Expansion only**: decreasing `spec.storage.size` is rejected.
 - **PVCs are the source of truth**: the operator patches existing PVCs to the new requested size.
 - **StatefulSet claim templates remain unchanged** after initial creation (Kubernetes treats them as immutable).

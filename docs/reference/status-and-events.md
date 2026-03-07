@@ -33,6 +33,7 @@ Condition types defined in `api/v1alpha1`:
 | `ProductionReady` | Hardened production posture validation | `ProductionReady`, `ProfileNotSet`, `DevelopmentProfile`, `AdmissionPoliciesNotReady`, `OperatorManagedTLS`, `StaticUnsealInUse`, `RootTokenStored` |
 | `Upgrading` | Upgrade state | `InProgress`, `Idle`, or upgrade failure reason |
 | `BackingUp` | Backup job state | `InProgress`, `Idle` |
+| `StorageConfigured` | Persistent storage class selection visibility | `StorageClassConfigured`, `StorageClassPending`, `StorageClassDefaulted`, `StorageClassUnset`, `StorageClassMismatch`, `StorageClassInconsistent` |
 | `Degraded` | Problem requiring attention | `BreakGlassRequired`, upgrade failure reason, workload/adminops error reason, `RootTokenStored`, `Reconciling`, `Paused` |
 | `EtcdEncryptionWarning` | etcd encryption verification warning | `EtcdEncryptionUnknown` |
 | `SecurityRisk` | Relaxed security mode indicator | `DevelopmentProfile` |

@@ -3,6 +3,8 @@ package statusops
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -14,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
@@ -61,6 +64,10 @@ func GatherState(
 		return nil, err
 	}
 
+	if err := gatherPVCState(ctx, reader, cluster, state, labelCfg); err != nil {
+		return nil, err
+	}
+
 	if err := gatherPodState(ctx, reader, cluster, state, labelCfg); err != nil {
 		return nil, err
 	}
@@ -104,6 +111,51 @@ func gatherBackupState(
 		state.BackupJobName = selectedActiveJobName
 		state.BackupInProgress = true
 	}
+
+	return nil
+}
+
+func gatherPVCState(
+	ctx context.Context,
+	reader client.Reader,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	state *StatusState,
+	labelsCfg LabelConfig,
+) error {
+	var pvcList corev1.PersistentVolumeClaimList
+	if err := reader.List(ctx, &pvcList,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabels(map[string]string{labelsCfg.OpenBaoClusterKey: cluster.Name}),
+	); err != nil {
+		return fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
+
+	dataPVCPrefix := constants.VolumeData + "-" + cluster.Name + "-"
+	storageClasses := map[string]struct{}{}
+	for i := range pvcList.Items {
+		pvc := &pvcList.Items[i]
+		if !strings.HasPrefix(pvc.Name, dataPVCPrefix) {
+			continue
+		}
+
+		state.DataPVCCount++
+		if pvc.Spec.StorageClassName == nil || strings.TrimSpace(*pvc.Spec.StorageClassName) == "" {
+			state.DataPVCStorageClassUnset = true
+			continue
+		}
+
+		storageClasses[strings.TrimSpace(*pvc.Spec.StorageClassName)] = struct{}{}
+	}
+
+	if len(storageClasses) == 0 {
+		return nil
+	}
+
+	state.DataPVCStorageClassNames = make([]string, 0, len(storageClasses))
+	for className := range storageClasses {
+		state.DataPVCStorageClassNames = append(state.DataPVCStorageClassNames, className)
+	}
+	sort.Strings(state.DataPVCStorageClassNames)
 
 	return nil
 }

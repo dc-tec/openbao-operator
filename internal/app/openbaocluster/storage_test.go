@@ -113,6 +113,53 @@ func TestStorageReconciler_RejectsShrink(t *testing.T) {
 	require.Contains(t, err.Error(), defaultReasonStorageShrinkNotSupported)
 }
 
+func TestStorageReconciler_RejectsStorageClassChangeWhenPVCClassIsUnset(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, clientgoscheme.AddToScheme(scheme))
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	className := "gp3"
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Storage: openbaov1alpha1.StorageConfig{
+				Size:             "10Gi",
+				StorageClassName: &className,
+			},
+		},
+	}
+
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "data-test-0",
+			Namespace: "default",
+			Labels: map[string]string{
+				labelOpenBaoCluster: "test",
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("10Gi"),
+				},
+			},
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
+	r := NewStorageReconciler(
+		StorageDependencies{Client: c, Recorder: events.NewFakeRecorder(10)},
+		StorageReasonPolicy{},
+	)
+
+	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), defaultReasonStorageClassChangeNotSupported)
+}
+
 func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))

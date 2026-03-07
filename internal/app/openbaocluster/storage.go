@@ -177,13 +177,17 @@ func listClusterPVCs(ctx context.Context, c client.Client, cluster *openbaov1alp
 func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageClassName string, pvcs []corev1.PersistentVolumeClaim, reasons StorageReasonPolicy) error {
 	for i := range pvcs {
 		pvc := &pvcs[i]
+		currentStorageClassName := ""
+		if pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != "" {
+			currentStorageClassName = *pvc.Spec.StorageClassName
+		}
 
-		if desiredStorageClassName != "" && pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != desiredStorageClassName {
+		if desiredStorageClassName != "" && currentStorageClassName != desiredStorageClassName {
 			return operatorerrors.WithReason(
 				reasons.storageClassChangeReason(),
 				operatorerrors.WrapPermanentConfig(fmt.Errorf(
 					"spec.storage.storageClassName cannot be changed for an existing cluster (PVC %s has %q, desired %q)",
-					pvc.Name, *pvc.Spec.StorageClassName, desiredStorageClassName,
+					pvc.Name, currentStorageClassName, desiredStorageClassName,
 				)),
 			)
 		}
