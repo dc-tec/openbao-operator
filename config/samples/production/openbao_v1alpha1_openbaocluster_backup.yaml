@@ -99,8 +99,12 @@ spec:
       # S3-specific options
       region: "us-east-1"
       usePathStyle: false  # Set true for MinIO/S3-compatible stores
-      # Optional: IAM Role ARN for Web Identity (IRSA) - no Secret needed
+      # Optional: IAM Role ARN for the explicit Web Identity flow - no Secret needed
       # roleArn: "arn:aws:iam::123456789012:role/openbao-backup"
+      # Optional: workload identity metadata for provider-managed identity integrations
+      # workloadIdentity:
+      #   serviceAccountAnnotations:
+      #     eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/openbao-backup"
       credentialsSecretRef:
         name: s3-backup-credentials
       # Optional: Tune multipart upload performance
@@ -149,6 +153,10 @@ spec:
 #       pathPrefix: "clusters/openbaocluster-backup-gcs"
 #       gcs:
 #         project: "my-gcp-project"  # Optional if using ADC
+#       # Optional: annotate the generated ServiceAccount for Workload Identity
+#       # workloadIdentity:
+#       #   serviceAccountAnnotations:
+#       #     iam.gke.io/gcp-service-account: "backup@my-project.iam.gserviceaccount.com"
 #       credentialsSecretRef:
 #         name: gcs-backup-credentials
 #     retention:
@@ -187,6 +195,12 @@ spec:
 #       azure:
 #         storageAccount: "mystorageaccount"
 #         container: "openbao-backups"  # Optional, uses bucket if omitted
+#       # Optional: workload identity metadata for Azure Workload Identity
+#       # workloadIdentity:
+#       #   serviceAccountAnnotations:
+#       #     azure.workload.identity/client-id: "00000000-0000-0000-0000-000000000000"
+#       #   podLabels:
+#       #     azure.workload.identity/use: "true"
 #       credentialsSecretRef:
 #         name: azure-backup-credentials
 #     retention:
@@ -204,4 +218,4 @@ spec:
 #   accountKey: "YOUR_STORAGE_ACCOUNT_KEY"
 #   # Option 2: Connection String (alternative to accountKey)
 #   # connectionString: "DefaultEndpointsProtocol=https;AccountName=..."
-# Note: For AKS managed identity, omit credentialsSecretRef
+# Note: For AKS managed identity / Azure Workload Identity, omit credentialsSecretRef

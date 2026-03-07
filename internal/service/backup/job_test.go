@@ -519,6 +519,36 @@ func TestBuildBackupJob_WithRoleARN(t *testing.T) {
 	}
 }
 
+func TestBuildBackupJob_WithWorkloadIdentityPodLabels(t *testing.T) {
+	cluster := newTestClusterWithBackup("test-cluster", "default")
+	cluster.Spec.Backup.Target.WorkloadIdentity = &openbaov1alpha1.WorkloadIdentityConfig{
+		PodLabels: map[string]string{
+			"azure.workload.identity/use": "true",
+			constants.LabelOpenBaoCluster: "should-not-override",
+		},
+	}
+
+	job, err := BuildJob(cluster, JobOptions{
+		JobName:   testBackupJobName,
+		JobType:   JobTypeScheduled,
+		BackupKey: "test",
+		Platform:  constants.PlatformKubernetes,
+	})
+	if err != nil {
+		t.Fatalf("BuildJob() error = %v", err)
+	}
+
+	if got := job.Spec.Template.Labels["azure.workload.identity/use"]; got != "true" {
+		t.Fatalf("pod label azure.workload.identity/use=%q, want true", got)
+	}
+	if got := job.Spec.Template.Labels[constants.LabelOpenBaoCluster]; got != cluster.Name {
+		t.Fatalf("pod label %s=%q, want %q", constants.LabelOpenBaoCluster, got, cluster.Name)
+	}
+	if _, exists := job.Labels["azure.workload.identity/use"]; exists {
+		t.Fatalf("job labels should not include workload identity pod labels")
+	}
+}
+
 func TestBuildBackupJob_WithTokenSecret(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	cluster.Spec.Backup.TokenSecretRef = &corev1.LocalObjectReference{

@@ -153,6 +153,9 @@ func configureAzureStorageConfig(storageConfig *storage.Config, target openbaov1
 			azureOptions.CACert = v
 		}
 	}
+	if azureOptions.AccountKey == "" && azureOptions.ConnectionString == "" {
+		azureOptions.UseManagedIdentity = true
+	}
 
 	storageConfig.Azure = azureOptions
 }

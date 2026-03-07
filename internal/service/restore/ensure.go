@@ -12,12 +12,19 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
 
 const ssaFieldOwner = "openbao-operator"
 
 // EnsureRestoreServiceAccount creates or updates the ServiceAccount for restore Jobs.
-func EnsureRestoreServiceAccount(ctx context.Context, c client.Client, scheme *runtime.Scheme, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func EnsureRestoreServiceAccount(
+	ctx context.Context,
+	c client.Client,
+	scheme *runtime.Scheme,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	target openbaov1alpha1.BackupTarget,
+) error {
 	saName := restoreServiceAccountName(cluster)
 	sa := &corev1.ServiceAccount{
 		TypeMeta: metav1.TypeMeta{
@@ -25,9 +32,10 @@ func EnsureRestoreServiceAccount(ctx context.Context, c client.Client, scheme *r
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      saName,
-			Namespace: cluster.Namespace,
-			Labels:    restoreLabels(cluster),
+			Name:        saName,
+			Namespace:   cluster.Namespace,
+			Labels:      restoreLabels(cluster),
+			Annotations: workloadidentity.ServiceAccountAnnotations(target),
 		},
 	}
 

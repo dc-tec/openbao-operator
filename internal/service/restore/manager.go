@@ -682,8 +682,13 @@ func restoreJobName(restore *openbaov1alpha1.OpenBaoRestore) string {
 }
 
 // ensureRestoreServiceAccount creates the ServiceAccount for restore jobs using Server-Side Apply.
-func (m *Manager) ensureRestoreServiceAccount(ctx context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	return EnsureRestoreServiceAccount(ctx, m.client, m.scheme, cluster)
+func (m *Manager) ensureRestoreServiceAccount(
+	ctx context.Context,
+	_ logr.Logger,
+	restore *openbaov1alpha1.OpenBaoRestore,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) error {
+	return EnsureRestoreServiceAccount(ctx, m.client, m.scheme, cluster, restore.Spec.Source.Target)
 }
 
 // ensureRestoreRBAC creates RBAC for the restore service account using Server-Side Apply.

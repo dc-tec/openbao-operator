@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
 
 const ssaFieldOwner = "openbao-operator"
@@ -24,9 +25,10 @@ func EnsureBackupServiceAccount(ctx context.Context, c client.Client, scheme *ru
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      saName,
-			Namespace: cluster.Namespace,
-			Labels:    backupLabels(cluster),
+			Name:        saName,
+			Namespace:   cluster.Namespace,
+			Labels:      backupLabels(cluster),
+			Annotations: workloadidentity.ServiceAccountAnnotations(cluster.Spec.Backup.Target),
 		},
 	}
 

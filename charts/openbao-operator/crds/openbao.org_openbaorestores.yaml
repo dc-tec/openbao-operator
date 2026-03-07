@@ -150,12 +150,13 @@ spec:
                       credentialsSecretRef:
                         description: |-
                           CredentialsSecretRef optionally references a Secret containing credentials for the object store.
-                          The Secret must exist in the same namespace as the OpenBaoCluster.
+                          The Secret must exist in the same namespace as the owning OpenBao resource.
                           Cross-namespace references are not allowed for security reasons.
 
                           For S3: Expected keys are "accessKeyId" and "secretAccessKey" (optional: "sessionToken", "region", "caCert").
                           For GCS: Expected key is "credentials.json" containing a service account JSON key.
                           For Azure: Expected keys are "accountKey" or "connectionString".
+                          Omit this field when relying on ambient workload identity or another default credential chain.
                         properties:
                           name:
                             default: ""
@@ -224,8 +225,9 @@ spec:
                       roleArn:
                         description: |-
                           RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
-                          When set, the backup Job mounts a projected ServiceAccount token and relies on the
-                          cloud provider SDK default credential chain (for example, AWS IRSA).
+                          When set, backup and restore Jobs mount a projected ServiceAccount token and set the
+                          AWS Web Identity environment variables explicitly.
+                          Leave this empty when relying on ambient workload identity or provider-managed default credentials instead.
                           Only used when Provider is "s3".
                         type: string
                       usePathStyle:
@@ -237,6 +239,29 @@ spec:
                           Set to false for AWS S3 (default, as AWS is deprecating path-style).
                           Only used when Provider is "s3".
                         type: boolean
+                      workloadIdentity:
+                        description: |-
+                          WorkloadIdentity optionally applies provider-specific metadata required by cloud workload identity integrations.
+                          Use this for ambient identity setups such as EKS Pod Identity or IRSA, GKE Workload Identity, or Azure Workload Identity.
+                          When omitted, backup and restore workloads can still use any credentials exposed through the pod's default provider chain.
+                        properties:
+                          podLabels:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              PodLabels are merged into the generated backup or restore Job pod template.
+                              This is typically used for provider-specific selectors such as Azure Workload Identity.
+                              Operator-managed labels take precedence if the same key is specified here.
+                            type: object
+                          serviceAccountAnnotations:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              ServiceAccountAnnotations are merged into the generated backup or restore ServiceAccount.
+                              This is typically used for provider-specific bindings such as GKE Workload Identity
+                              or webhook-based AWS/Azure workload identity integrations.
+                            type: object
+                        type: object
                     required:
                     - bucket
                     type: object

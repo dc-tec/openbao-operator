@@ -75,6 +75,83 @@ func TestBuildRestoreJob_PodSecurityContext_Platform(t *testing.T) {
 	})
 }
 
+func TestBuildRestoreJob_WithRoleARNAndWorkloadIdentity(t *testing.T) {
+	restoreObj := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshots/test.snap",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "https://s3.amazonaws.com",
+					Bucket:   "bao",
+					Region:   "eu-central-1",
+					RoleARN:  "arn:aws:iam::123456789012:role/openbao-restore",
+					WorkloadIdentity: &openbaov1alpha1.WorkloadIdentityConfig{
+						PodLabels: map[string]string{
+							"azure.workload.identity/use": "true",
+							constants.LabelOpenBaoCluster: "should-not-override",
+						},
+					},
+				},
+			},
+			Image: "example.com/restore-executor:v1",
+		},
+	}
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+		},
+	}
+
+	mgr := &Manager{Platform: constants.PlatformKubernetes}
+	job, err := mgr.buildRestoreJob(restoreObj, cluster, "")
+	require.NoError(t, err)
+
+	envMap := make(map[string]string)
+	for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+		envMap[env.Name] = env.Value
+	}
+	assert.Equal(t, restoreObj.Spec.Source.Target.RoleARN, envMap[constants.EnvAWSRoleARN])
+	assert.Equal(t, restoreAWSIdentityTokenFile, envMap[constants.EnvAWSWebIdentityTokenFile])
+
+	assert.Equal(t, "true", job.Spec.Template.Labels["azure.workload.identity/use"])
+	assert.Equal(t, cluster.Name, job.Spec.Template.Labels[constants.LabelOpenBaoCluster])
+	assert.NotContains(t, job.Labels, "azure.workload.identity/use")
+
+	var hasTokenMount bool
+	for _, mount := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if mount.Name == restoreAWSIdentityVolume {
+			hasTokenMount = true
+			assert.Equal(t, restoreAWSIdentityMountPath, mount.MountPath)
+			assert.True(t, mount.ReadOnly)
+		}
+	}
+	assert.True(t, hasTokenMount)
+
+	var hasTokenVolume bool
+	for _, volume := range job.Spec.Template.Spec.Volumes {
+		if volume.Name != restoreAWSIdentityVolume {
+			continue
+		}
+		hasTokenVolume = true
+		require.NotNil(t, volume.Projected)
+		require.Len(t, volume.Projected.Sources, 1)
+		require.NotNil(t, volume.Projected.Sources[0].ServiceAccountToken)
+		assert.Equal(t, restoreAWSIdentityAudience, volume.Projected.Sources[0].ServiceAccountToken.Audience)
+		assert.Equal(t, "token", volume.Projected.Sources[0].ServiceAccountToken.Path)
+	}
+	assert.True(t, hasTokenVolume)
+}
+
 func TestBuildRestoreEnvVars_S3(t *testing.T) {
 	restore := &openbaov1alpha1.OpenBaoRestore{
 		ObjectMeta: metav1.ObjectMeta{
