@@ -128,8 +128,8 @@ func TestBuildStatefulSet_MaintenanceAnnotations(t *testing.T) {
 		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
 	}
 
-	if got := statefulSet.Annotations[constants.AnnotationMaintenance]; got != "true" {
-		t.Fatalf("expected StatefulSet annotation %q to be %q, got %q", constants.AnnotationMaintenance, "true", got)
+	if got := statefulSet.Annotations[constants.AnnotationMaintenance]; got != maintenanceAnnotationEnabledValue {
+		t.Fatalf("expected StatefulSet annotation %q to be %q, got %q", constants.AnnotationMaintenance, maintenanceAnnotationEnabledValue, got)
 	}
 
 	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != "2026-01-19T00:00:00Z" {

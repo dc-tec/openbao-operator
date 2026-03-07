@@ -71,7 +71,7 @@ func TestReconcileMaintenanceAnnotationsForPods(t *testing.T) {
 				},
 			},
 			wantAnnotations: map[string]map[string]string{
-				"pod-0": {constants.AnnotationMaintenance: "true"},
+				"pod-0": {constants.AnnotationMaintenance: maintenanceAnnotationEnabledValue},
 			},
 		},
 		{
@@ -89,7 +89,7 @@ func TestReconcileMaintenanceAnnotationsForPods(t *testing.T) {
 						Namespace: namespace,
 						Labels:    podLabels,
 						Annotations: map[string]string{
-							constants.AnnotationMaintenance: "true",
+							constants.AnnotationMaintenance: maintenanceAnnotationEnabledValue,
 							"other":                         "value",
 						},
 					},
@@ -109,13 +109,13 @@ func TestReconcileMaintenanceAnnotationsForPods(t *testing.T) {
 						Namespace: namespace,
 						Labels:    podLabels,
 						Annotations: map[string]string{
-							constants.AnnotationMaintenance: "true",
+							constants.AnnotationMaintenance: maintenanceAnnotationEnabledValue,
 						},
 					},
 				},
 			},
 			wantAnnotations: map[string]map[string]string{
-				"pod-0": {constants.AnnotationMaintenance: "true"},
+				"pod-0": {constants.AnnotationMaintenance: maintenanceAnnotationEnabledValue},
 			},
 		},
 		{
