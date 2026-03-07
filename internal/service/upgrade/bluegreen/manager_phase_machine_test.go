@@ -1,0 +1,674 @@
+package bluegreen
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+)
+
+func newPhaseMachineCluster() *openbaov1alpha1.OpenBaoCluster {
+	cluster := newBlueGreenCluster()
+	cluster.Spec.TLS = openbaov1alpha1.TLSConfig{
+		Enabled:        true,
+		RotationPeriod: "720h",
+	}
+	cluster.Spec.Storage = openbaov1alpha1.StorageConfig{
+		Size: "10Gi",
+	}
+	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
+		Image: "openbao/openbao-init:2.5.0",
+	}
+	cluster.Spec.Upgrade.BlueGreen = &openbaov1alpha1.BlueGreenConfig{
+		AutoPromote: true,
+	}
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseDeployingGreen
+	cluster.Status.BlueGreen.GreenRevision = "green"
+	return cluster
+}
+
+func newRevisionPod(cluster *openbaov1alpha1.OpenBaoCluster, revision, name string) *corev1.Pod {
+	pod := newGreenPod(cluster, revision, name)
+	pod.Status.Phase = corev1.PodRunning
+	return pod
+}
+
+func markPodReadyUnsealed(pod *corev1.Pod) {
+	if pod.Labels == nil {
+		pod.Labels = map[string]string{}
+	}
+	pod.Labels[portopenbao.LabelSealed] = "false"
+	pod.Status.Conditions = []corev1.PodCondition{{
+		Type:   corev1.PodReady,
+		Status: corev1.ConditionTrue,
+	}}
+}
+
+func succeededExecutorJob(cluster *openbaov1alpha1.OpenBaoCluster, action upgrade.ExecutorAction) *batchv1.Job {
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      upgrade.ExecutorJobName(cluster.Name, action, "", cluster.Status.BlueGreen.BlueRevision, cluster.Status.BlueGreen.GreenRevision),
+			Namespace: cluster.Namespace,
+		},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{{
+				Type:   batchv1.JobComplete,
+				Status: corev1.ConditionTrue,
+			}},
+			Succeeded: 1,
+		},
+	}
+}
+
+func succeededExecutorJobWithRunID(cluster *openbaov1alpha1.OpenBaoCluster, action upgrade.ExecutorAction, runID string) *batchv1.Job {
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      upgrade.ExecutorJobName(cluster.Name, action, runID, cluster.Status.BlueGreen.BlueRevision, cluster.Status.BlueGreen.GreenRevision),
+			Namespace: cluster.Namespace,
+		},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{{
+				Type:   batchv1.JobComplete,
+				Status: corev1.ConditionTrue,
+			}},
+			Succeeded: 1,
+		},
+	}
+}
+
+type clusterOpsStub struct {
+	podName string
+	source  string
+	ok      bool
+}
+
+const testBoolTrue = "true"
+
+func (s *clusterOpsStub) FindLeaderPod(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ []corev1.Pod) (string, string, bool) {
+	return s.podName, s.source, s.ok
+}
+
+func TestHandlePhaseDeployingGreen_WaitsForBlueClusterReadiness(t *testing.T) {
+	t.Parallel()
+
+	t.Run("requeues when no blue pods exist", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		manager := &Manager{
+			client: fake.NewClientBuilder().WithScheme(scheme).Build(),
+			scheme: scheme,
+		}
+
+		outcome, err := manager.handlePhaseDeployingGreen(context.Background(), logr.Discard(), cluster, "")
+		if err != nil {
+			t.Fatalf("handlePhaseDeployingGreen() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeRequeueAfter || outcome.after != constants.RequeueShort {
+			t.Fatalf("handlePhaseDeployingGreen() outcome = %+v, want short requeue", outcome)
+		}
+	})
+
+	t.Run("requeues when blue revision labels are missing", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		bluePod := newRevisionPod(cluster, cluster.Status.BlueGreen.BlueRevision, "blue-0")
+		markPodReadyUnsealed(bluePod)
+		delete(bluePod.Labels, constants.LabelOpenBaoRevision)
+
+		manager := &Manager{
+			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(bluePod).Build(),
+			scheme: scheme,
+		}
+
+		outcome, err := manager.handlePhaseDeployingGreen(context.Background(), logr.Discard(), cluster, "")
+		if err != nil {
+			t.Fatalf("handlePhaseDeployingGreen() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeRequeueAfter || outcome.after != constants.RequeueShort {
+			t.Fatalf("handlePhaseDeployingGreen() outcome = %+v, want short requeue", outcome)
+		}
+	})
+
+	t.Run("requeues until a blue pod is ready and unsealed", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		bluePod := newRevisionPod(cluster, cluster.Status.BlueGreen.BlueRevision, "blue-0")
+		bluePod.Labels[portopenbao.LabelSealed] = testBoolTrue
+
+		manager := &Manager{
+			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(bluePod).Build(),
+			scheme: scheme,
+		}
+
+		outcome, err := manager.handlePhaseDeployingGreen(context.Background(), logr.Discard(), cluster, "")
+		if err != nil {
+			t.Fatalf("handlePhaseDeployingGreen() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeRequeueAfter || outcome.after != constants.RequeueShort {
+			t.Fatalf("handlePhaseDeployingGreen() outcome = %+v, want short requeue", outcome)
+		}
+	})
+}
+
+func TestHandlePhaseDeployingGreen_CreatesGreenStatefulSet(t *testing.T) {
+	t.Parallel()
+
+	scheme := newBlueGreenTestScheme(t)
+	cluster := newPhaseMachineCluster()
+	bluePod := newRevisionPod(cluster, cluster.Status.BlueGreen.BlueRevision, "blue-0")
+	markPodReadyUnsealed(bluePod)
+	runtime := &infraRuntimeStub{}
+	manager := &Manager{
+		client:       fake.NewClientBuilder().WithScheme(scheme).WithObjects(bluePod).Build(),
+		scheme:       scheme,
+		infraRuntime: runtime,
+	}
+
+	outcome, err := manager.handlePhaseDeployingGreen(context.Background(), logr.Discard(), cluster, "")
+	if err != nil {
+		t.Fatalf("handlePhaseDeployingGreen() error = %v", err)
+	}
+	if outcome.kind != phaseOutcomeRequeueAfter || outcome.after != constants.RequeueShort {
+		t.Fatalf("handlePhaseDeployingGreen() outcome = %+v, want short requeue", outcome)
+	}
+	if !runtime.ensureStatefulSetCalled {
+		t.Fatal("expected infra runtime to create the Green StatefulSet")
+	}
+	if runtime.lastRevision != cluster.Status.BlueGreen.GreenRevision {
+		t.Fatalf("revision = %q, want %q", runtime.lastRevision, cluster.Status.BlueGreen.GreenRevision)
+	}
+	if runtime.lastVerifiedImage != cluster.Spec.Image {
+		t.Fatalf("image = %q, want %q", runtime.lastVerifiedImage, cluster.Spec.Image)
+	}
+	if runtime.lastVerifiedInitImage != "" {
+		t.Fatalf("init image digest = %q, want empty when operator image verification is disabled", runtime.lastVerifiedInitImage)
+	}
+	if !runtime.lastDisableSelfInit {
+		t.Fatal("expected Green StatefulSet to be created with self-init disabled")
+	}
+	if !strings.Contains(runtime.lastConfigContent, cluster.Status.BlueGreen.BlueRevision) {
+		t.Fatalf("expected rendered config to reference blue revision %q", cluster.Status.BlueGreen.BlueRevision)
+	}
+}
+
+func TestHandlePhaseDeployingGreen_TransitionsWhenGreenIsReady(t *testing.T) {
+	t.Parallel()
+
+	scheme := newBlueGreenTestScheme(t)
+	cluster := newPhaseMachineCluster()
+	bluePod := newRevisionPod(cluster, cluster.Status.BlueGreen.BlueRevision, "blue-0")
+	markPodReadyUnsealed(bluePod)
+
+	replicas := cluster.Spec.Replicas
+	greenStatefulSet := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-" + cluster.Status.BlueGreen.GreenRevision,
+			Namespace: cluster.Namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &replicas,
+		},
+		Status: appsv1.StatefulSetStatus{
+			ReadyReplicas: replicas,
+		},
+	}
+	greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
+	markPodReadyUnsealed(greenPod)
+
+	manager := &Manager{
+		client: fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(bluePod, greenStatefulSet, greenPod).
+			Build(),
+		scheme: scheme,
+	}
+
+	outcome, err := manager.handlePhaseDeployingGreen(context.Background(), logr.Discard(), cluster, "")
+	if err != nil {
+		t.Fatalf("handlePhaseDeployingGreen() error = %v", err)
+	}
+	if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhaseJoiningMesh {
+		t.Fatalf("handlePhaseDeployingGreen() outcome = %+v, want advance to JoiningMesh", outcome)
+	}
+}
+
+func TestHandlePhaseDeployingGreen_FailsOnInvalidGreenSealLabel(t *testing.T) {
+	t.Parallel()
+
+	scheme := newBlueGreenTestScheme(t)
+	cluster := newPhaseMachineCluster()
+	bluePod := newRevisionPod(cluster, cluster.Status.BlueGreen.BlueRevision, "blue-0")
+	markPodReadyUnsealed(bluePod)
+
+	replicas := cluster.Spec.Replicas
+	greenStatefulSet := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-" + cluster.Status.BlueGreen.GreenRevision,
+			Namespace: cluster.Namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &replicas,
+		},
+		Status: appsv1.StatefulSetStatus{
+			ReadyReplicas: replicas,
+		},
+	}
+	greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
+	markPodReadyUnsealed(greenPod)
+	greenPod.Labels[portopenbao.LabelSealed] = "invalid"
+
+	manager := &Manager{
+		client: fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(bluePod, greenStatefulSet, greenPod).
+			Build(),
+		scheme: scheme,
+	}
+
+	if _, err := manager.handlePhaseDeployingGreen(context.Background(), logr.Discard(), cluster, ""); err == nil {
+		t.Fatal("expected invalid seal label to fail")
+	}
+}
+
+func TestPhaseHandlers_ExecutorDrivenTransitions(t *testing.T) {
+	t.Parallel()
+
+	scheme := newBlueGreenTestScheme(t)
+
+	tests := []struct {
+		name      string
+		phase     openbaov1alpha1.BlueGreenPhase
+		action    upgrade.ExecutorAction
+		call      func(*Manager, context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error)
+		nextPhase openbaov1alpha1.BlueGreenPhase
+	}{
+		{
+			name:   "joining mesh advances to syncing",
+			phase:  openbaov1alpha1.PhaseJoiningMesh,
+			action: ActionJoinGreenNonVoters,
+			call: func(m *Manager, ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
+				return m.handlePhaseJoiningMesh(ctx, logger, cluster)
+			},
+			nextPhase: openbaov1alpha1.PhaseSyncing,
+		},
+		{
+			name:   "promoting advances to demoting blue",
+			phase:  openbaov1alpha1.PhasePromoting,
+			action: ActionPromoteGreenVoters,
+			call: func(m *Manager, ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
+				return m.handlePhasePromoting(ctx, logger, cluster)
+			},
+			nextPhase: openbaov1alpha1.PhaseDemotingBlue,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cluster := newPhaseMachineCluster()
+			cluster.Status.BlueGreen.Phase = tt.phase
+			job := succeededExecutorJob(cluster, tt.action)
+			manager := &Manager{
+				client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build(),
+				scheme: scheme,
+			}
+
+			outcome, err := tt.call(manager, context.Background(), logr.Discard(), cluster)
+			if err != nil {
+				t.Fatalf("phase handler error = %v", err)
+			}
+			if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != tt.nextPhase {
+				t.Fatalf("phase handler outcome = %+v, want advance to %s", outcome, tt.nextPhase)
+			}
+		})
+	}
+}
+
+func TestHandlePhaseSyncing_Branches(t *testing.T) {
+	t.Parallel()
+
+	t.Run("waits for minimum sync duration", func(t *testing.T) {
+		t.Parallel()
+
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
+		cluster.Status.BlueGreen.StartTime = &metav1.Time{Time: time.Now()}
+		cluster.Spec.Upgrade.BlueGreen.Verification = &openbaov1alpha1.VerificationConfig{
+			MinSyncDuration: "10m",
+		}
+
+		manager := &Manager{}
+		outcome, err := manager.handlePhaseSyncing(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("handlePhaseSyncing() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeRequeueAfter || outcome.after <= 0 {
+			t.Fatalf("handlePhaseSyncing() outcome = %+v, want positive requeue", outcome)
+		}
+	})
+
+	t.Run("rejects nil start time when minimum sync duration is configured", func(t *testing.T) {
+		t.Parallel()
+
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
+		cluster.Status.BlueGreen.StartTime = nil
+		cluster.Spec.Upgrade.BlueGreen.Verification = &openbaov1alpha1.VerificationConfig{
+			MinSyncDuration: "10m",
+		}
+
+		manager := &Manager{}
+		if _, err := manager.handlePhaseSyncing(context.Background(), logr.Discard(), cluster); err == nil {
+			t.Fatal("expected nil start time to fail")
+		}
+	})
+
+	t.Run("rejects invalid minimum sync duration", func(t *testing.T) {
+		t.Parallel()
+
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
+		cluster.Status.BlueGreen.StartTime = &metav1.Time{Time: time.Now().Add(-time.Minute)}
+		cluster.Spec.Upgrade.BlueGreen.Verification = &openbaov1alpha1.VerificationConfig{
+			MinSyncDuration: "definitely-not-a-duration",
+		}
+
+		manager := &Manager{}
+		if _, err := manager.handlePhaseSyncing(context.Background(), logr.Discard(), cluster); err == nil {
+			t.Fatal("expected invalid min sync duration to fail")
+		}
+	})
+
+	t.Run("holds when auto promote is disabled after sync completes", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
+		cluster.Spec.Upgrade.BlueGreen.AutoPromote = false
+		job := succeededExecutorJob(cluster, ActionWaitGreenSynced)
+		manager := &Manager{
+			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build(),
+			scheme: scheme,
+		}
+
+		outcome, err := manager.handlePhaseSyncing(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("handlePhaseSyncing() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeHold {
+			t.Fatalf("handlePhaseSyncing() outcome = %+v, want hold", outcome)
+		}
+	})
+
+	t.Run("advances to promoting after sync completes", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
+		cluster.Spec.Upgrade.BlueGreen.AutoPromote = true
+		job := succeededExecutorJob(cluster, ActionWaitGreenSynced)
+		manager := &Manager{
+			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build(),
+			scheme: scheme,
+		}
+
+		outcome, err := manager.handlePhaseSyncing(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("handlePhaseSyncing() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhasePromoting {
+			t.Fatalf("handlePhaseSyncing() outcome = %+v, want advance to Promoting", outcome)
+		}
+	})
+}
+
+func TestHandlePhaseDemotingBlue_Branches(t *testing.T) {
+	t.Parallel()
+
+	t.Run("requeues until green pods are ready and unsealed", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseDemotingBlue
+		greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
+		manager := &Manager{
+			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(greenPod).Build(),
+			scheme: scheme,
+		}
+
+		outcome, err := manager.handlePhaseDemotingBlue(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("handlePhaseDemotingBlue() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeRequeueAfter || outcome.after != constants.RequeueShort {
+			t.Fatalf("handlePhaseDemotingBlue() outcome = %+v, want short requeue", outcome)
+		}
+	})
+
+	t.Run("advances to cleanup once demotion succeeds and green leads", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseDemotingBlue
+		cluster.Spec.Replicas = 1
+		greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
+		markPodReadyUnsealed(greenPod)
+		job := succeededExecutorJob(cluster, ActionDemoteBlueNonVotersStepDown)
+		manager := &Manager{
+			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(greenPod, job).Build(),
+			scheme: scheme,
+			clusterOps: &clusterOpsStub{
+				podName: greenPod.Name,
+				source:  "label",
+				ok:      true,
+			},
+		}
+
+		outcome, err := manager.handlePhaseDemotingBlue(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("handlePhaseDemotingBlue() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhaseCleanup {
+			t.Fatalf("handlePhaseDemotingBlue() outcome = %+v, want advance to Cleanup", outcome)
+		}
+		state, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name)
+		if !ok || !state.stepDownCounted {
+			t.Fatal("expected step-down metrics state to be recorded")
+		}
+		deleteUpgradeMetricsState(cluster.Namespace, cluster.Name)
+	})
+}
+
+func TestHandlePhaseCleanup_Branches(t *testing.T) {
+	t.Parallel()
+
+	t.Run("requeues until cleanup preconditions are satisfied", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+		greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
+		manager := &Manager{
+			client:     fake.NewClientBuilder().WithScheme(scheme).WithObjects(greenPod).Build(),
+			scheme:     scheme,
+			clusterOps: &clusterOpsStub{},
+		}
+
+		outcome, err := manager.handlePhaseCleanup(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("handlePhaseCleanup() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeRequeueAfter || outcome.after != constants.RequeueShort {
+			t.Fatalf("handlePhaseCleanup() outcome = %+v, want short requeue", outcome)
+		}
+	})
+
+	t.Run("deletes blue statefulset and requeues", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+		cluster.Spec.Replicas = 1
+		greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
+		markPodReadyUnsealed(greenPod)
+		greenPod.Labels[portopenbao.LabelActive] = testBoolTrue
+		job := succeededExecutorJob(cluster, ActionRemoveBluePeers)
+		blueStatefulSet := &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cluster.Name + "-" + cluster.Status.BlueGreen.BlueRevision,
+				Namespace: cluster.Namespace,
+			},
+		}
+		manager := &Manager{
+			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(greenPod, job, blueStatefulSet).Build(),
+			scheme: scheme,
+		}
+
+		outcome, err := manager.handlePhaseCleanup(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("handlePhaseCleanup() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeRequeueAfter || outcome.after != constants.RequeueShort {
+			t.Fatalf("handlePhaseCleanup() outcome = %+v, want short requeue", outcome)
+		}
+	})
+
+	t.Run("finalizes once blue resources are gone", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+		cluster.Spec.Replicas = 1
+		expectedBlueRevision := cluster.Status.BlueGreen.GreenRevision
+		cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+			Operation: openbaov1alpha1.ClusterOperationUpgrade,
+			Holder:    upgrade.UpgradeOperationLockHolder,
+			Message:   "blue/green upgrade phase Cleanup",
+		}
+		greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
+		markPodReadyUnsealed(greenPod)
+		greenPod.Labels[portopenbao.LabelActive] = testBoolTrue
+		job := succeededExecutorJob(cluster, ActionRemoveBluePeers)
+		manager := &Manager{
+			client: fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+				WithObjects(cluster, greenPod, job).
+				Build(),
+			scheme: scheme,
+		}
+
+		outcome, err := manager.handlePhaseCleanup(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("handlePhaseCleanup() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeRequeueAfter || outcome.after != constants.RequeueShort {
+			t.Fatalf("handlePhaseCleanup() outcome = %+v, want short requeue", outcome)
+		}
+		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
+			t.Fatalf("phase = %s, want Idle", cluster.Status.BlueGreen.Phase)
+		}
+		if cluster.Status.BlueGreen.BlueRevision != expectedBlueRevision {
+			t.Fatalf("blue revision = %q, want %q", cluster.Status.BlueGreen.BlueRevision, expectedBlueRevision)
+		}
+		if cluster.Status.OperationLock != nil {
+			t.Fatal("expected operation lock to be released")
+		}
+	})
+}
+
+func TestHandlePhaseRollingBack_AdvancesWhenConsensusIsRepaired(t *testing.T) {
+	t.Parallel()
+
+	scheme := newBlueGreenTestScheme(t)
+	cluster := newPhaseMachineCluster()
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseRollingBack
+	bluePod := newRevisionPod(cluster, cluster.Status.BlueGreen.BlueRevision, "blue-0")
+	job := succeededExecutorJobWithRunID(cluster, ActionRepairConsensus, rollbackRunID(cluster))
+	manager := &Manager{
+		client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(bluePod, job).Build(),
+		scheme: scheme,
+		clusterOps: &clusterOpsStub{
+			podName: bluePod.Name,
+			source:  "label",
+			ok:      true,
+		},
+	}
+
+	outcome, err := manager.handlePhaseRollingBack(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("handlePhaseRollingBack() error = %v", err)
+	}
+	if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhaseRollbackCleanup {
+		t.Fatalf("handlePhaseRollingBack() outcome = %+v, want advance to RollbackCleanup", outcome)
+	}
+}
+
+func TestHandlePhaseRollbackCleanup_FinalizesRollback(t *testing.T) {
+	t.Parallel()
+
+	scheme := newBlueGreenTestScheme(t)
+	cluster := newPhaseMachineCluster()
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseRollbackCleanup
+	cluster.Status.BlueGreen.RollbackReason = "cleanup failed"
+	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+		Operation: openbaov1alpha1.ClusterOperationUpgrade,
+		Holder:    upgrade.UpgradeOperationLockHolder,
+		Message:   "blue/green upgrade phase RollbackCleanup",
+	}
+	job := succeededExecutorJobWithRunID(cluster, ActionRemoveGreenPeers, rollbackRunID(cluster))
+	greenStatefulSet := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-" + cluster.Status.BlueGreen.GreenRevision,
+			Namespace: cluster.Namespace,
+		},
+	}
+	manager := &Manager{
+		client: fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+			WithObjects(cluster, job, greenStatefulSet).
+			Build(),
+		scheme: scheme,
+	}
+
+	outcome, err := manager.handlePhaseRollbackCleanup(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("handlePhaseRollbackCleanup() error = %v", err)
+	}
+	if outcome.kind != phaseOutcomeDone {
+		t.Fatalf("handlePhaseRollbackCleanup() outcome = %+v, want done", outcome)
+	}
+	if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
+		t.Fatalf("phase = %s, want Idle", cluster.Status.BlueGreen.Phase)
+	}
+	if cluster.Status.OperationLock != nil {
+		t.Fatal("expected operation lock to be released")
+	}
+}

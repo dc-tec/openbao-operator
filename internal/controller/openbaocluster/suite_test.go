@@ -115,6 +115,15 @@ var _ = AfterSuite(func() {
 // setting the 'KUBEBUILDER_ASSETS' environment variable. To ensure the binaries are
 // properly set up, run 'make setup-envtest' beforehand.
 func getFirstFoundEnvTestBinaryDir() string {
+	if assetsDir := os.Getenv("KUBEBUILDER_ASSETS"); assetsDir != "" {
+		absoluteAssetsDir, err := filepath.Abs(assetsDir)
+		if err != nil {
+			logf.Log.Error(err, "Failed to resolve KUBEBUILDER_ASSETS", "path", assetsDir)
+			return ""
+		}
+		return absoluteAssetsDir
+	}
+
 	basePath := filepath.Join("..", "..", "..", "bin", "k8s")
 	entries, err := os.ReadDir(basePath)
 	if err != nil {
@@ -123,7 +132,12 @@ func getFirstFoundEnvTestBinaryDir() string {
 	}
 	for _, entry := range entries {
 		if entry.IsDir() {
-			return filepath.Join(basePath, entry.Name())
+			assetsDir, err := filepath.Abs(filepath.Join(basePath, entry.Name()))
+			if err != nil {
+				logf.Log.Error(err, "Failed to resolve envtest binary path", "path", filepath.Join(basePath, entry.Name()))
+				return ""
+			}
+			return assetsDir
 		}
 	}
 	return ""

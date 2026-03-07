@@ -1,0 +1,309 @@
+package provisioner
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
+)
+
+func newProvisionerManager(t *testing.T, ctx context.Context, k8sClient client.Client) *provisioner.Manager {
+	t.Helper()
+
+	manager, err := provisioner.NewManager(ctx, k8sClient, logr.Discard())
+	if err != nil {
+		t.Fatalf("failed to create provisioner manager: %v", err)
+	}
+	return manager
+}
+
+func TestTenantSecretsRBACReconcile_NilProvisioner(t *testing.T) {
+	setAdmissionReady(t)
+
+	reconciler := &TenantSecretsRBACReconciler{}
+	_, err := reconciler.Reconcile(context.Background(), reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "tenant-a",
+			Name:      "cluster-a",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected reconcile to fail when provisioner manager is nil")
+	}
+}
+
+func TestTenantSecretsRBACReconcile_AdmissionDependenciesNotReady(t *testing.T) {
+	admission.SetAdmissionDependenciesReady(false)
+	t.Cleanup(func() {
+		admission.SetAdmissionDependenciesReady(false)
+	})
+	t.Setenv("OPENBAO_UNSAFE_ADMISSION_DISABLED", "")
+
+	ctx := context.Background()
+	k8sClient := newTestClient(t)
+	reconciler := &TenantSecretsRBACReconciler{
+		Client:      k8sClient,
+		APIReader:   k8sClient,
+		Scheme:      testScheme,
+		Provisioner: newProvisionerManager(t, ctx, k8sClient),
+	}
+
+	result, err := reconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "tenant-a",
+			Name:      "cluster-a",
+		},
+	})
+	if err != nil {
+		t.Fatalf("reconcile error = %v", err)
+	}
+	if result.RequeueAfter != 10*time.Second {
+		t.Fatalf("requeueAfter = %v, want %v", result.RequeueAfter, 10*time.Second)
+	}
+}
+
+func TestTenantSecretsRBACReconcile_UnprovisionedNamespace(t *testing.T) {
+	setAdmissionReady(t)
+
+	ctx := context.Background()
+	k8sClient := newTestClient(t)
+	reconciler := &TenantSecretsRBACReconciler{
+		Client:      k8sClient,
+		APIReader:   k8sClient,
+		Scheme:      testScheme,
+		Provisioner: newProvisionerManager(t, ctx, k8sClient),
+	}
+
+	result, err := reconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "tenant-a",
+			Name:      "cluster-a",
+		},
+	})
+	if err != nil {
+		t.Fatalf("reconcile error = %v", err)
+	}
+	if result.RequeueAfter != 5*time.Second {
+		t.Fatalf("requeueAfter = %v, want %v", result.RequeueAfter, 5*time.Second)
+	}
+}
+
+func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testing.T) {
+	setAdmissionReady(t)
+
+	ctx := context.Background()
+	provisionedBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      provisioner.TenantRoleBindingName,
+			Namespace: "tenant-a",
+		},
+	}
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-a",
+			Namespace: "tenant-a",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Target: openbaov1alpha1.BackupTarget{
+					CredentialsSecretRef: &corev1.LocalObjectReference{Name: "backup-creds"},
+				},
+				TokenSecretRef: &corev1.LocalObjectReference{Name: "backup-token"},
+			},
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				TokenSecretRef: &corev1.LocalObjectReference{Name: "upgrade-token"},
+			},
+			Unseal: &openbaov1alpha1.UnsealConfig{
+				CredentialsSecretRef: &corev1.LocalObjectReference{Name: "unseal-creds"},
+			},
+		},
+	}
+	k8sClient := newTestClient(t, provisionedBinding, cluster)
+	reconciler := &TenantSecretsRBACReconciler{
+		Client:      k8sClient,
+		APIReader:   k8sClient,
+		Scheme:      testScheme,
+		Provisioner: newProvisionerManager(t, ctx, k8sClient),
+	}
+
+	result, err := reconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "tenant-a",
+			Name:      "cluster-a",
+		},
+	})
+	if err != nil {
+		t.Fatalf("reconcile error = %v", err)
+	}
+	if result.RequeueAfter != 0 {
+		t.Fatalf("requeueAfter = %v, want zero", result.RequeueAfter)
+	}
+
+	writerRole := &rbacv1.Role{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: "tenant-a",
+		Name:      provisioner.TenantSecretsWriterRoleName,
+	}, writerRole); err != nil {
+		t.Fatalf("expected writer role: %v", err)
+	}
+	if len(writerRole.Rules) != 2 {
+		t.Fatalf("writer role rules = %d, want 2", len(writerRole.Rules))
+	}
+	wantWriterSecrets := []string{"cluster-a-root-token", "cluster-a-tls-ca", "cluster-a-tls-server", "cluster-a-unseal-key"}
+	gotWriterSecrets := writerRole.Rules[1].ResourceNames
+	if len(gotWriterSecrets) != len(wantWriterSecrets) {
+		t.Fatalf("writer secrets = %v, want %v", gotWriterSecrets, wantWriterSecrets)
+	}
+	for i, want := range wantWriterSecrets {
+		if gotWriterSecrets[i] != want {
+			t.Fatalf("writer secrets[%d] = %q, want %q", i, gotWriterSecrets[i], want)
+		}
+	}
+
+	readerRole := &rbacv1.Role{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: "tenant-a",
+		Name:      provisioner.TenantSecretsReaderRoleName,
+	}, readerRole); err != nil {
+		t.Fatalf("expected reader role: %v", err)
+	}
+	wantReaderSecrets := []string{"backup-creds", "backup-token", "unseal-creds", "upgrade-token"}
+	gotReaderSecrets := readerRole.Rules[0].ResourceNames
+	if len(gotReaderSecrets) != len(wantReaderSecrets) {
+		t.Fatalf("reader secrets = %v, want %v", gotReaderSecrets, wantReaderSecrets)
+	}
+	for i, want := range wantReaderSecrets {
+		if gotReaderSecrets[i] != want {
+			t.Fatalf("reader secrets[%d] = %q, want %q", i, gotReaderSecrets[i], want)
+		}
+	}
+
+	writerBinding := &rbacv1.RoleBinding{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: "tenant-a",
+		Name:      provisioner.TenantSecretsWriterRoleBindingName,
+	}, writerBinding); err != nil {
+		t.Fatalf("expected writer rolebinding: %v", err)
+	}
+	readerBinding := &rbacv1.RoleBinding{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: "tenant-a",
+		Name:      provisioner.TenantSecretsReaderRoleBindingName,
+	}, readerBinding); err != nil {
+		t.Fatalf("expected reader rolebinding: %v", err)
+	}
+}
+
+func TestTenantSecretsRBACReconcile_RemovesStaleSecretRBAC(t *testing.T) {
+	setAdmissionReady(t)
+
+	ctx := context.Background()
+	provisionedBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      provisioner.TenantRoleBindingName,
+			Namespace: "tenant-a",
+		},
+	}
+	readerRole := provisioner.GenerateTenantSecretsReaderRole("tenant-a", []string{"stale-reader"})
+	writerRole := provisioner.GenerateTenantSecretsWriterRole("tenant-a", []string{"stale-writer"})
+	readerBinding := provisioner.GenerateTenantSecretsReaderRoleBinding("tenant-a", provisioner.OperatorServiceAccount{
+		Name:      "openbao-operator-controller",
+		Namespace: "openbao-operator-system",
+	})
+	writerBinding := provisioner.GenerateTenantSecretsWriterRoleBinding("tenant-a", provisioner.OperatorServiceAccount{
+		Name:      "openbao-operator-controller",
+		Namespace: "openbao-operator-system",
+	})
+	k8sClient := newTestClient(t, provisionedBinding, readerRole, writerRole, readerBinding, writerBinding)
+	reconciler := &TenantSecretsRBACReconciler{
+		Client:      k8sClient,
+		APIReader:   k8sClient,
+		Scheme:      testScheme,
+		Provisioner: newProvisionerManager(t, ctx, k8sClient),
+	}
+
+	result, err := reconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "tenant-a",
+			Name:      "cluster-a",
+		},
+	})
+	if err != nil {
+		t.Fatalf("reconcile error = %v", err)
+	}
+	if result.RequeueAfter != 0 {
+		t.Fatalf("requeueAfter = %v, want zero", result.RequeueAfter)
+	}
+
+	for _, key := range []types.NamespacedName{
+		{Namespace: "tenant-a", Name: provisioner.TenantSecretsReaderRoleName},
+		{Namespace: "tenant-a", Name: provisioner.TenantSecretsWriterRoleName},
+	} {
+		role := &rbacv1.Role{}
+		if err := k8sClient.Get(ctx, key, role); err == nil {
+			t.Fatalf("expected role %s/%s to be deleted", key.Namespace, key.Name)
+		}
+	}
+	for _, key := range []types.NamespacedName{
+		{Namespace: "tenant-a", Name: provisioner.TenantSecretsReaderRoleBindingName},
+		{Namespace: "tenant-a", Name: provisioner.TenantSecretsWriterRoleBindingName},
+	} {
+		roleBinding := &rbacv1.RoleBinding{}
+		if err := k8sClient.Get(ctx, key, roleBinding); err == nil {
+			t.Fatalf("expected rolebinding %s/%s to be deleted", key.Namespace, key.Name)
+		}
+	}
+}
+
+func TestTenantSecretsRBACReconcile_UnsafeAdmissionDisabledBypassesDependencyCheck(t *testing.T) {
+	admission.SetAdmissionDependenciesReady(false)
+	t.Cleanup(func() {
+		admission.SetAdmissionDependenciesReady(false)
+	})
+	t.Setenv("OPENBAO_UNSAFE_ADMISSION_DISABLED", "true")
+
+	ctx := context.Background()
+	provisionedBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      provisioner.TenantRoleBindingName,
+			Namespace: "tenant-a",
+		},
+	}
+	k8sClient := newTestClient(t, provisionedBinding)
+	reconciler := &TenantSecretsRBACReconciler{
+		Client:      k8sClient,
+		APIReader:   k8sClient,
+		Scheme:      testScheme,
+		Provisioner: newProvisionerManager(t, ctx, k8sClient),
+	}
+
+	result, err := reconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "tenant-a",
+			Name:      "cluster-a",
+		},
+	})
+	if err != nil {
+		t.Fatalf("reconcile error = %v", err)
+	}
+	if result.RequeueAfter != 0 {
+		t.Fatalf("requeueAfter = %v, want zero", result.RequeueAfter)
+	}
+	if !admission.AdmissionDependenciesReady() {
+		t.Fatal("expected unsafe admission mode to mark dependencies ready")
+	}
+}

@@ -172,6 +172,14 @@ func newTestClientWithObjects(t *testing.T, objs ...client.Object) client.Client
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
 func getFirstFoundEnvTestBinaryDir() string {
+	if assetsDir := os.Getenv("KUBEBUILDER_ASSETS"); assetsDir != "" {
+		absoluteAssetsDir, err := filepath.Abs(assetsDir)
+		if err != nil {
+			return ""
+		}
+		return absoluteAssetsDir
+	}
+
 	basePath := filepath.Join("..", "..", "bin", "k8s")
 	entries, err := filepath.Glob(filepath.Join(basePath, "*"))
 	if err != nil {
