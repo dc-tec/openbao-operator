@@ -31,6 +31,9 @@ OpenBao requires an "unseal key" to decrypt its master key on startup. You must 
     === "AWS KMS"
         ```yaml
         spec:
+          serviceAccount:
+            annotations:
+              eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/openbao-awskms"
           unseal:
             type: awskms
             awskms:
@@ -44,6 +47,9 @@ OpenBao requires an "unseal key" to decrypt its master key on startup. You must 
     === "GCP Cloud KMS"
         ```yaml
         spec:
+          serviceAccount:
+            annotations:
+              iam.gke.io/gcp-service-account: "openbao@my-project.iam.gserviceaccount.com"
           unseal:
             type: gcpckms
             gcpCloudKMS:
@@ -58,6 +64,12 @@ OpenBao requires an "unseal key" to decrypt its master key on startup. You must 
     === "Azure Key Vault"
         ```yaml
         spec:
+          serviceAccount:
+            annotations:
+              azure.workload.identity/client-id: "87654321-4321-4321-4321-210987654321"
+          podMetadata:
+            labels:
+              azure.workload.identity/use: "true"
           unseal:
             type: azurekeyvault
             azureKeyVault:
@@ -67,6 +79,12 @@ OpenBao requires an "unseal key" to decrypt its master key on startup. You must 
               # tenantID: "..."
               # clientID: "..."
         ```
+
+    !!! note "Workload Identity Metadata"
+        For cloud-managed identity on the main OpenBao Pods, configure:
+
+        - `spec.serviceAccount.annotations` for ServiceAccount-bound identities such as EKS IRSA or GKE Workload Identity
+        - `spec.podMetadata.labels` when the platform also requires Pod labels, such as Azure Workload Identity
     
     === "OCI KMS"
         ```yaml

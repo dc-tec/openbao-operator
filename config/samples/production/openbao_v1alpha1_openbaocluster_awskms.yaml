@@ -6,7 +6,7 @@
 #
 # Prerequisites:
 # - AWS KMS key created
-# - IAM permissions for the pod to access KMS (via IRSA or credentials Secret)
+# - IAM permissions for the pod to access KMS (via IRSA, another workload identity integration, or credentials Secret)
 # - If not using IRSA (IAM Roles for Service Accounts), create a credentials Secret
 #
 # See: docs/user-guide/security-considerations.md (section 15.2.2)
@@ -35,6 +35,10 @@ spec:
       format: "json"
       file: "/var/log/openbao/openbao.log"
       rotateDuration: "24h"
+  # Optional: annotate the OpenBao ServiceAccount for IAM-based workload identity
+  # serviceAccount:
+  #   annotations:
+  #     eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/openbao-awskms"
   # External KMS auto-unseal (AWS KMS)
   # No static unseal key Secret is created - the root of trust is AWS KMS
   unseal:

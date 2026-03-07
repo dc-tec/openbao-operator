@@ -840,6 +840,7 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | `version` _string_ | Version is the semantic OpenBao version, used for upgrade orchestration.<br />The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.<br />Versions below 2.4.0 do not support the static seal feature and will fail to start. |  | MinLength: 1 <br /> |
     | `image` _string_ | Image is the container image to run; defaults may be derived from Version. |  | Optional: \{\} <br /> |
     | `serviceAccount` _[ServiceAccountConfig](#serviceaccountconfig)_ | ServiceAccount configures the Kubernetes ServiceAccount used by the OpenBao Pods. |  | Optional: \{\} <br /> |
+    | `podMetadata` _[PodMetadataConfig](#podmetadataconfig)_ | PodMetadata configures additional labels and annotations for the OpenBao Pod template.<br />This is useful for platform integrations that select Pods via metadata, such as<br />Azure Workload Identity. Operator-managed Pod metadata takes precedence. |  | Optional: \{\} <br /> |
     | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core) array_ | ImagePullSecrets is a list of references to secrets in the same namespace<br />to use for pulling any images used by this Cluster (server, init, sidecars). |  | Optional: \{\} <br /> |
     | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configures telemetry and metrics integration. |  | Optional: \{\} <br /> |
     | `replicas` _integer_ | Replicas is the desired number of OpenBao pods. | 3 | Minimum: 1 <br /> |
@@ -1022,6 +1023,23 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | `autoDownload` _boolean_ | AutoDownload controls automatic plugin downloads from OCI registries. |  | Optional: \{\} <br /> |
     | `autoRegister` _boolean_ | AutoRegister controls automatic plugin registration. |  | Optional: \{\} <br /> |
     | `downloadBehavior` _string_ | DownloadBehavior specifies how plugins are downloaded. |  | Enum: [standard direct] <br />Optional: \{\} <br /> |
+
+
+    #### PodMetadataConfig
+
+
+
+    PodMetadataConfig configures additional metadata for the OpenBao Pod template.
+
+
+
+    _Appears in:_
+    - [OpenBaoClusterSpec](#openbaoclusterspec)
+
+    | Field | Description | Default | Validation |
+    | --- | --- | --- | --- |
+    | `labels` _object (keys:string, values:string)_ | Labels are merged into the generated OpenBao Pod template labels.<br />Operator-managed labels take precedence if the same key is specified here. |  | Optional: \{\} <br /> |
+    | `annotations` _object (keys:string, values:string)_ | Annotations are merged into the generated OpenBao Pod template annotations.<br />Operator-managed annotations take precedence if the same key is specified here. |  | Optional: \{\} <br /> |
 
 
     #### Profile

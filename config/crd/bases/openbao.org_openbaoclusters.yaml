@@ -1522,6 +1522,27 @@ spec:
                   - version
                   type: object
                 type: array
+              podMetadata:
+                description: |-
+                  PodMetadata configures additional labels and annotations for the OpenBao Pod template.
+                  This is useful for platform integrations that select Pods via metadata, such as
+                  Azure Workload Identity. Operator-managed Pod metadata takes precedence.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Annotations are merged into the generated OpenBao Pod template annotations.
+                      Operator-managed annotations take precedence if the same key is specified here.
+                    type: object
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Labels are merged into the generated OpenBao Pod template labels.
+                      Operator-managed labels take precedence if the same key is specified here.
+                    type: object
+                type: object
               profile:
                 allOf:
                 - enum:

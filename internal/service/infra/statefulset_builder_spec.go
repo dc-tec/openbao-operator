@@ -135,15 +135,28 @@ func buildStatefulSetPVC(cluster *openbaov1alpha1.OpenBaoCluster) (corev1.Persis
 func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoCluster, revision string, configContent string) (map[string]string, map[string]string) {
 	podLabels := podSelectorLabelsWithRevision(cluster, revision)
 
-	// Compute config hash and add to annotations to trigger rollout on config changes
-	configHash := computeConfigHash(configContent)
 	if podLabels == nil {
 		podLabels = make(map[string]string)
 	}
-	podLabels[constants.LabelOpenBaoComponent] = constants.ComponentOpenBaoCluster
-	annotations := map[string]string{
-		configHashAnnotation: configHash,
+	if cluster.Spec.PodMetadata != nil {
+		for key, value := range cluster.Spec.PodMetadata.Labels {
+			if _, exists := podLabels[key]; exists {
+				continue
+			}
+			podLabels[key] = value
+		}
 	}
+	podLabels[constants.LabelOpenBaoComponent] = constants.ComponentOpenBaoCluster
+
+	annotations := map[string]string{}
+	if cluster.Spec.PodMetadata != nil {
+		for key, value := range cluster.Spec.PodMetadata.Annotations {
+			annotations[key] = value
+		}
+	}
+
+	// Compute config hash and add to annotations to trigger rollout on config changes
+	annotations[configHashAnnotation] = computeConfigHash(configContent)
 
 	if cluster.Spec.Maintenance != nil {
 		if restartAt := strings.TrimSpace(cluster.Spec.Maintenance.RestartAt); restartAt != "" {

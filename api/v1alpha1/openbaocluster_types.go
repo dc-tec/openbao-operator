@@ -1530,6 +1530,11 @@ type OpenBaoClusterSpec struct {
 	// ServiceAccount configures the Kubernetes ServiceAccount used by the OpenBao Pods.
 	// +optional
 	ServiceAccount *ServiceAccountConfig `json:"serviceAccount,omitempty"`
+	// PodMetadata configures additional labels and annotations for the OpenBao Pod template.
+	// This is useful for platform integrations that select Pods via metadata, such as
+	// Azure Workload Identity. Operator-managed Pod metadata takes precedence.
+	// +optional
+	PodMetadata *PodMetadataConfig `json:"podMetadata,omitempty"`
 
 	// ImagePullSecrets is a list of references to secrets in the same namespace
 	// to use for pulling any images used by this Cluster (server, init, sidecars).
@@ -2210,6 +2215,19 @@ type ServiceAccountConfig struct {
 
 	// Annotations to add to the ServiceAccount.
 	// Useful for cloud provider Workload Identity (e.g. eks.amazonaws.com/role-arn).
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// PodMetadataConfig configures additional metadata for the OpenBao Pod template.
+type PodMetadataConfig struct {
+	// Labels are merged into the generated OpenBao Pod template labels.
+	// Operator-managed labels take precedence if the same key is specified here.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations are merged into the generated OpenBao Pod template annotations.
+	// Operator-managed annotations take precedence if the same key is specified here.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 }

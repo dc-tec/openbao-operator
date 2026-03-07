@@ -36,6 +36,13 @@ spec:
       format: "json"
       file: "/var/log/openbao/openbao.log"
       rotateDuration: "24h"
+  # Optional: configure Azure Workload Identity metadata for the OpenBao Pods
+  # serviceAccount:
+  #   annotations:
+  #     azure.workload.identity/client-id: "87654321-4321-4321-4321-210987654321"
+  # podMetadata:
+  #   labels:
+  #     azure.workload.identity/use: "true"
   # Azure Key Vault seal configuration
   unseal:
     type: azurekeyvault
@@ -73,4 +80,3 @@ spec:
 #   AZURE_CLIENT_ID: "87654321-4321-4321-4321-210987654321"
 #   AZURE_CLIENT_SECRET: "your-client-secret"
 #   AZURE_TENANT_ID: "12345678-1234-1234-1234-123456789012"
-

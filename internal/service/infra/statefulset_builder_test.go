@@ -201,6 +201,46 @@ func TestBuildStatefulSet_DefaultPlacementPolicy(t *testing.T) {
 	}
 }
 
+func TestBuildStatefulSet_PodMetadata(t *testing.T) {
+	cluster := newMinimalCluster("metadata-cluster", "default")
+	cluster.Spec.PodMetadata = &openbaov1alpha1.PodMetadataConfig{
+		Labels: map[string]string{
+			"azure.workload.identity/use": "true",
+			constants.LabelOpenBaoCluster: "should-not-override",
+		},
+		Annotations: map[string]string{
+			"example.com/custom":          "enabled",
+			configHashAnnotation:          "should-not-override",
+			constants.AnnotationRestartAt: "should-not-override",
+		},
+	}
+	cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{
+		RestartAt: "2026-01-19T00:00:00Z",
+	}
+
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
+	}
+
+	if got := statefulSet.Spec.Template.Labels["azure.workload.identity/use"]; got != "true" {
+		t.Fatalf("expected custom pod label to be set, got %q", got)
+	}
+	if got := statefulSet.Spec.Template.Labels[constants.LabelOpenBaoCluster]; got != cluster.Name {
+		t.Fatalf("expected operator-managed pod label %q=%q, got %q", constants.LabelOpenBaoCluster, cluster.Name, got)
+	}
+
+	if got := statefulSet.Spec.Template.Annotations["example.com/custom"]; got != "enabled" {
+		t.Fatalf("expected custom pod annotation to be set, got %q", got)
+	}
+	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != "2026-01-19T00:00:00Z" {
+		t.Fatalf("expected operator-managed restart annotation to win, got %q", got)
+	}
+	if got := statefulSet.Spec.Template.Annotations[configHashAnnotation]; got == "" || got == "should-not-override" {
+		t.Fatalf("expected operator-managed config hash annotation to win, got %q", got)
+	}
+}
+
 func TestBuildStatefulSet_PlacementPolicySpansRevisions(t *testing.T) {
 	cluster := newMinimalCluster("bluegreen-cluster", "default")
 
