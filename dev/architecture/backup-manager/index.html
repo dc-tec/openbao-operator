@@ -4556,7 +4556,9 @@
 </span></code></pre></div></p>
 <p><strong>Authentication:</strong>
 - <strong>Static Credentials:</strong> Secret with <code>accessKeyId</code> and <code>secretAccessKey</code>
-- <strong>Web Identity (IRSA):</strong> Set <code>roleArn</code> for AWS EKS (no Secret required)</p>
+- <strong>Explicit Web Identity:</strong> Set <code>roleArn</code> for the operator-managed AWS Web Identity flow
+- <strong>Ambient Workload Identity:</strong> Omit <code>credentialsSecretRef</code> and rely on the pod's default credential chain (for example EKS Pod Identity)
+- <strong>Metadata-Driven Integrations:</strong> Set <code>target.workloadIdentity.serviceAccountAnnotations</code> when your platform binds identity through ServiceAccount annotations</p>
 </div>
 <div class="tabbed-block">
 <p><strong>Configuration:</strong>
@@ -4572,7 +4574,8 @@
 </span></code></pre></div></p>
 <p><strong>Authentication:</strong>
 - <strong>Service Account Key:</strong> Secret with <code>credentials.json</code> (service account JSON)
-- <strong>Application Default Credentials (ADC):</strong> Omit <code>credentialsSecretRef</code> when using Workload Identity or GKE</p>
+- <strong>Application Default Credentials (ADC):</strong> Omit <code>credentialsSecretRef</code> when using Workload Identity or GKE
+- <strong>Workload Identity Metadata:</strong> Use <code>target.workloadIdentity.serviceAccountAnnotations</code> when the generated ServiceAccount needs a cloud-specific annotation</p>
 </div>
 <div class="tabbed-block">
 <p><strong>Configuration:</strong>
@@ -4589,7 +4592,8 @@
 <p><strong>Authentication:</strong>
 - <strong>Account Key:</strong> Secret with <code>accountKey</code>
 - <strong>Connection String:</strong> Secret with <code>connectionString</code>
-- <strong>Managed Identity:</strong> Omit <code>credentialsSecretRef</code> when using AKS pod identity</p>
+- <strong>Managed Identity / Workload Identity:</strong> Omit <code>credentialsSecretRef</code> to use the Azure default credential chain
+- <strong>Kubernetes Metadata:</strong> Use <code>target.workloadIdentity.serviceAccountAnnotations</code> and <code>target.workloadIdentity.podLabels</code> when your Azure setup requires ServiceAccount annotations or pod labels</p>
 </div>
 </div>
 </div>
