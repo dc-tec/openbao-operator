@@ -195,7 +195,10 @@ PY
     {
       echo "=== \"${kind}\""
       echo
-      sed 's/^/    /' "${KIND_BODY_PATH}"
+      awk '
+      NF { print "    " $0; next }
+      { print "" }
+      ' "${KIND_BODY_PATH}"
       echo
     } >> "${OUT_PATH}"
   done
