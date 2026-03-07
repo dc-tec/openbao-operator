@@ -3,8 +3,6 @@ package backup
 import (
 	"context"
 	"errors"
-	"io"
-	"sync"
 	"testing"
 	"time"
 
@@ -14,93 +12,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
-
-type metricsBlobStore struct {
-	headInfo   *blobstore.ObjectInfo
-	headErr    error
-	closeCount int
-}
-
-type capturingLogSink struct {
-	infoCount  int
-	errorCount int
-}
-
-func (c *capturingLogSink) Init(logr.RuntimeInfo) {}
-
-func (c *capturingLogSink) Enabled(int) bool { return true }
-
-func (c *capturingLogSink) Info(int, string, ...interface{}) {
-	c.infoCount++
-}
-
-func (c *capturingLogSink) Error(error, string, ...interface{}) {
-	c.errorCount++
-}
-
-func (c *capturingLogSink) WithValues(...interface{}) logr.LogSink { return c }
-
-func (c *capturingLogSink) WithName(string) logr.LogSink { return c }
-
-func (m *metricsBlobStore) Upload(context.Context, string, io.Reader) error { return nil }
-
-func (m *metricsBlobStore) Download(context.Context, string) (io.ReadCloser, error) { return nil, nil }
-
-func (m *metricsBlobStore) Delete(context.Context, string) error { return nil }
-
-func (m *metricsBlobStore) DeleteBatch(context.Context, []string) error { return nil }
-
-func (m *metricsBlobStore) List(context.Context, string) ([]blobstore.ObjectInfo, error) {
-	return nil, nil
-}
-
-func (m *metricsBlobStore) Head(context.Context, string) (*blobstore.ObjectInfo, error) {
-	return m.headInfo, m.headErr
-}
-
-func (m *metricsBlobStore) Close() error {
-	m.closeCount++
-	return nil
-}
-
-func resetBackupTestState(namespace, name string) {
-	NewMetrics(namespace, name).Clear()
-	backupJobMetricsSeen = sync.Map{}
-}
-
-const (
-	testKeepAnnotationKey   = "openbao.org/keep"
-	testKeepAnnotationValue = "preserved"
-)
-
-func newBackupManager(k8sClient client.Client) *Manager {
-	return &Manager{
-		client: k8sClient,
-		scheme: testScheme,
-	}
-}
-
-func newBackupJobForCluster(cluster *openbaov1alpha1.OpenBaoCluster, name string, createdAt time.Time) *batchv1.Job {
-	return &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              name,
-			Namespace:         cluster.Namespace,
-			UID:               types.UID(name),
-			CreationTimestamp: metav1.NewTime(createdAt),
-			Labels:            backupLabels(cluster),
-		},
-	}
-}
 
 func TestSyncBackupStatusMetricsReflectsClusterStatus(t *testing.T) {
 	cluster := newTestClusterWithBackup("status-metrics", "backup-ns")
@@ -292,7 +211,7 @@ func TestSyncBackupMetricsAndHelperSelection(t *testing.T) {
 
 	t.Run("list error is wrapped", func(t *testing.T) {
 		cluster := newTestClusterWithBackup("sync-error", "backup-ns")
-		client := fake.NewClientBuilder().
+		k8sClient := fake.NewClientBuilder().
 			WithScheme(testScheme).
 			WithInterceptorFuncs(interceptor.Funcs{
 				List: func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
@@ -301,7 +220,7 @@ func TestSyncBackupMetricsAndHelperSelection(t *testing.T) {
 			}).
 			Build()
 
-		err := newBackupManager(client).syncBackupMetrics(context.Background(), logr.Discard(), cluster, NewMetrics(cluster.Namespace, cluster.Name))
+		err := newBackupManager(k8sClient).syncBackupMetrics(context.Background(), logr.Discard(), cluster, NewMetrics(cluster.Namespace, cluster.Name))
 		if err == nil || err.Error() != "failed to list backup jobs for metrics sync: list failed" {
 			t.Fatalf("syncBackupMetrics() error = %v, want wrapped list failure", err)
 		}
@@ -346,199 +265,6 @@ func TestSyncBackupMetricsAndHelperSelection(t *testing.T) {
 			t.Fatalf("backupJobTimestamp(nil) = %v, want zero", got)
 		}
 	})
-}
-
-func TestHandleManualTrigger(t *testing.T) {
-	now := time.Unix(1700000000, 0).UTC()
-
-	t.Run("returns manual trigger when no active job exists", func(t *testing.T) {
-		cluster := newTestClusterWithBackup("manual-backup", "backup-ns")
-		cluster.Annotations = map[string]string{constants.AnnotationTriggerBackup: "now"}
-
-		manager := newBackupManager(newTestClient(t, cluster))
-		manual, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
-		if err != nil {
-			t.Fatalf("handleManualTrigger() error = %v", err)
-		}
-		if !manual {
-			t.Fatal("manual = false, want true")
-		}
-		if !scheduledTime.Equal(now) {
-			t.Fatalf("scheduledTime = %v, want %v", scheduledTime, now)
-		}
-		if cluster.Annotations[constants.AnnotationTriggerBackup] != "now" {
-			t.Fatal("manual trigger annotation was cleared unexpectedly")
-		}
-	})
-
-	t.Run("ignores empty trigger annotation", func(t *testing.T) {
-		cluster := newTestClusterWithBackup("manual-empty", "backup-ns")
-		cluster.Annotations = map[string]string{constants.AnnotationTriggerBackup: ""}
-
-		manager := newBackupManager(newTestClient(t, cluster))
-		manual, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
-		if err != nil {
-			t.Fatalf("handleManualTrigger() error = %v", err)
-		}
-		if manual {
-			t.Fatal("manual = true, want false")
-		}
-		if !scheduledTime.IsZero() {
-			t.Fatalf("scheduledTime = %v, want zero", scheduledTime)
-		}
-	})
-
-	t.Run("clears trigger when backup job already active", func(t *testing.T) {
-		cluster := newTestClusterWithBackup("manual-active", "backup-ns")
-		cluster.Annotations = map[string]string{
-			constants.AnnotationTriggerBackup: "now",
-			testKeepAnnotationKey:             testKeepAnnotationValue,
-		}
-		job := newBackupJobForCluster(cluster, "backup-running", now)
-		job.Status.Active = 1
-
-		k8sClient := fake.NewClientBuilder().
-			WithScheme(testScheme).
-			WithObjects(cluster, job).
-			Build()
-
-		manager := newBackupManager(k8sClient)
-		manual, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
-		if err != nil {
-			t.Fatalf("handleManualTrigger() error = %v", err)
-		}
-		if manual {
-			t.Fatal("manual = true, want false")
-		}
-		if !scheduledTime.IsZero() {
-			t.Fatalf("scheduledTime = %v, want zero", scheduledTime)
-		}
-		if _, ok := cluster.Annotations[constants.AnnotationTriggerBackup]; ok {
-			t.Fatal("manual trigger annotation still present on in-memory object")
-		}
-		if got := cluster.Annotations[testKeepAnnotationKey]; got != testKeepAnnotationValue {
-			t.Fatalf("unrelated annotation = %q, want %s", got, testKeepAnnotationValue)
-		}
-
-		updated := &openbaov1alpha1.OpenBaoCluster{}
-		if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updated); err != nil {
-			t.Fatalf("Get() cluster error = %v", err)
-		}
-		if _, ok := updated.Annotations[constants.AnnotationTriggerBackup]; ok {
-			t.Fatal("manual trigger annotation still present on persisted object")
-		}
-		if got := updated.Annotations[testKeepAnnotationKey]; got != testKeepAnnotationValue {
-			t.Fatalf("persisted unrelated annotation = %q, want %s", got, testKeepAnnotationValue)
-		}
-	})
-
-	t.Run("returns list error", func(t *testing.T) {
-		cluster := newTestClusterWithBackup("manual-error", "backup-ns")
-		cluster.Annotations = map[string]string{constants.AnnotationTriggerBackup: "now"}
-
-		client := fake.NewClientBuilder().
-			WithScheme(testScheme).
-			WithObjects(cluster).
-			WithInterceptorFuncs(interceptor.Funcs{
-				List: func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
-					return errors.New("list failed")
-				},
-			}).
-			Build()
-
-		_, _, err := newBackupManager(client).handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
-		if err == nil || err.Error() != "failed to check for active backup job: failed to list backup jobs: list failed" {
-			t.Fatalf("handleManualTrigger() error = %v, want wrapped list failure", err)
-		}
-	})
-}
-
-func TestClearTriggerAnnotationLogsPatchError(t *testing.T) {
-	cluster := newTestClusterWithBackup("manual-patch-error", "backup-ns")
-	cluster.Annotations = map[string]string{
-		constants.AnnotationTriggerBackup: "now",
-		testKeepAnnotationKey:             testKeepAnnotationValue,
-	}
-
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(testScheme).
-		WithObjects(cluster).
-		WithInterceptorFuncs(interceptor.Funcs{
-			Patch: func(context.Context, client.WithWatch, client.Object, client.Patch, ...client.PatchOption) error {
-				return errors.New("patch failed")
-			},
-		}).
-		Build()
-
-	manager := newBackupManager(k8sClient)
-	logSink := &capturingLogSink{}
-	logger := logr.New(logSink)
-
-	manager.clearTriggerAnnotation(context.Background(), logger, cluster, constants.AnnotationTriggerBackup)
-
-	if logSink.errorCount != 1 {
-		t.Fatalf("error log count = %d, want 1", logSink.errorCount)
-	}
-	if logSink.infoCount != 0 {
-		t.Fatalf("info log count = %d, want 0", logSink.infoCount)
-	}
-	if _, ok := cluster.Annotations[constants.AnnotationTriggerBackup]; ok {
-		t.Fatal("manual trigger annotation still present on in-memory object after patch failure")
-	}
-	if got := cluster.Annotations[testKeepAnnotationKey]; got != testKeepAnnotationValue {
-		t.Fatalf("in-memory unrelated annotation = %q, want %s", got, testKeepAnnotationValue)
-	}
-
-	persisted := &openbaov1alpha1.OpenBaoCluster{}
-	if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, persisted); err != nil {
-		t.Fatalf("Get() cluster error = %v", err)
-	}
-	if _, ok := persisted.Annotations[constants.AnnotationTriggerBackup]; !ok {
-		t.Fatal("persisted manual trigger annotation removed despite patch failure")
-	}
-	if got := persisted.Annotations[testKeepAnnotationKey]; got != testKeepAnnotationValue {
-		t.Fatalf("persisted unrelated annotation = %q, want %s", got, testKeepAnnotationValue)
-	}
-}
-
-func TestRecordBackupAttemptPersistsStatus(t *testing.T) {
-	cluster := newTestClusterWithBackup("record-attempt", "backup-ns")
-	cluster.Status.Backup = nil
-
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(testScheme).
-		WithStatusSubresource(cluster).
-		WithObjects(cluster).
-		Build()
-
-	manager := newBackupManager(k8sClient)
-	now := time.Unix(1700000000, 0).UTC()
-	scheduled := now.Add(5 * time.Minute)
-	nextScheduled := scheduled.Add(24 * time.Hour)
-
-	if err := manager.recordBackupAttempt(context.Background(), cluster, now, scheduled, nextScheduled); err != nil {
-		t.Fatalf("recordBackupAttempt() error = %v", err)
-	}
-	if cluster.Status.Backup == nil {
-		t.Fatal("cluster.Status.Backup = nil, want initialized")
-	}
-	if cluster.Status.Backup.LastAttemptTime == nil || !cluster.Status.Backup.LastAttemptTime.Time.Equal(now) {
-		t.Fatalf("LastAttemptTime = %#v, want %v", cluster.Status.Backup.LastAttemptTime, now)
-	}
-	if cluster.Status.Backup.LastAttemptScheduledTime == nil || !cluster.Status.Backup.LastAttemptScheduledTime.Time.Equal(scheduled) {
-		t.Fatalf("LastAttemptScheduledTime = %#v, want %v", cluster.Status.Backup.LastAttemptScheduledTime, scheduled)
-	}
-	if cluster.Status.Backup.NextScheduledBackup == nil || !cluster.Status.Backup.NextScheduledBackup.Time.Equal(nextScheduled) {
-		t.Fatalf("NextScheduledBackup = %#v, want %v", cluster.Status.Backup.NextScheduledBackup, nextScheduled)
-	}
-
-	updated := &openbaov1alpha1.OpenBaoCluster{}
-	if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updated); err != nil {
-		t.Fatalf("Get() cluster error = %v", err)
-	}
-	if updated.Status.Backup == nil || updated.Status.Backup.LastAttemptTime == nil || !updated.Status.Backup.LastAttemptTime.Time.Equal(now) {
-		t.Fatalf("persisted LastAttemptTime = %#v, want %v", updated.Status.Backup, now)
-	}
 }
 
 func TestJobDurationAndBackupJobKeyAndReadBackupSize(t *testing.T) {
@@ -730,13 +456,13 @@ func TestBackfillBackupGaugesFromLatestSuccess(t *testing.T) {
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "backup-creds", Namespace: cluster.Namespace},
 		}
-		client := fake.NewClientBuilder().
+		k8sClient := fake.NewClientBuilder().
 			WithScheme(testScheme).
 			WithStatusSubresource(cluster).
 			WithObjects(cluster, secret).
 			Build()
 
-		manager := newBackupManager(client)
+		manager := newBackupManager(k8sClient)
 		metrics := NewMetrics(cluster.Namespace, cluster.Name)
 		resetBackupTestState(cluster.Namespace, cluster.Name)
 		defer metrics.Clear()
@@ -780,7 +506,7 @@ func TestBackfillBackupGaugesFromLatestSuccess(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "backup-creds", Namespace: cluster.Namespace},
 		}
 
-		client := fake.NewClientBuilder().
+		k8sClient := fake.NewClientBuilder().
 			WithScheme(testScheme).
 			WithStatusSubresource(cluster).
 			WithObjects(cluster, secret).
@@ -791,7 +517,7 @@ func TestBackfillBackupGaugesFromLatestSuccess(t *testing.T) {
 			}).
 			Build()
 
-		manager := newBackupManager(client)
+		manager := newBackupManager(k8sClient)
 		metrics := NewMetrics(cluster.Namespace, cluster.Name)
 		resetBackupTestState(cluster.Namespace, cluster.Name)
 		defer metrics.Clear()
@@ -807,9 +533,4 @@ func TestBackfillBackupGaugesFromLatestSuccess(t *testing.T) {
 			t.Fatalf("backfillBackupGaugesFromLatestSuccess() error = %v, want wrapped apply failure", err)
 		}
 	})
-}
-
-func ptrToTime(value time.Time) *metav1.Time {
-	metaTime := metav1.NewTime(value)
-	return &metaTime
 }
