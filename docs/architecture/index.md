@@ -100,7 +100,7 @@ The runtime code is organized into layered packages to keep controller plumbing,
 | `L1` | Entrypoints/bootstrap | `cmd/controller`, `cmd/provisioner`, `cmd/bao-backup`, `cmd/bao-upgrade`, `cmd/bao-probe`, `internal/platform/entrypoint` |
 | `L2` | Controller plumbing | `internal/controller/openbaocluster`, `internal/controller/openbaorestore`, `internal/controller/provisioner` |
 | `L3` | App orchestration | `internal/app/openbaocluster` (facade + `statusops`, `deletionops`, `adminops`), `internal/app/openbaorestore`, `internal/app/provisioner` |
-| `L4` | Services/managers | `internal/service/backup`, `internal/service/restore`, `internal/service/upgrade`, `internal/service/infra`, `internal/service/certs`, `internal/service/init`, `internal/service/provisioner`, `internal/service/opslifecycle` |
+| `L4` | Services/managers | `internal/service/backup`, `internal/service/restore`, `internal/service/upgrade`, `internal/service/infra`, `internal/service/certs`, `internal/service/init`, `internal/service/provisioner`, `internal/service/opslifecycle`, `internal/service/workloadidentity` |
 | `L5` | Ports/contracts | `internal/port/auth`, `internal/port/backup`, `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/infra`, `internal/port/initmanager`, `internal/port/openbao`, `internal/port/security` |
 | `L6` | Adapters/integrations | `internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}` |
 | `L7` | Platform/cross-cutting | `internal/platform/{admission,constants,entrypoint,errors,logging,observability,predicates,reconcile,testutil}` |
