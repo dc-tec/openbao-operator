@@ -2,15 +2,20 @@ package bluegreen
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 func TestManager_ShouldReconcileBlueGreen(t *testing.T) {
@@ -98,6 +103,51 @@ func TestManager_MaybeAcquireUpgradeLock_Contention(t *testing.T) {
 	})
 }
 
+func TestManager_MaybeAcquireUpgradeLock_SuccessAndNoop(t *testing.T) {
+	t.Parallel()
+
+	t.Run("skips when no upgrade is active or needed", func(t *testing.T) {
+		cluster := newBlueGreenCluster()
+		mgr := &Manager{}
+
+		handled, result, err := mgr.maybeAcquireUpgradeLock(context.Background(), logr.Discard(), cluster, false, false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if handled {
+			t.Fatalf("expected handled=false")
+		}
+		if result != (recon.Result{}) {
+			t.Fatalf("result=%v, want zero", result)
+		}
+	})
+
+	t.Run("acquires lock when upgrade needs to proceed", func(t *testing.T) {
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newBlueGreenCluster()
+		client := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+			WithObjects(cluster).
+			Build()
+		mgr := &Manager{client: client, scheme: scheme}
+
+		handled, result, err := mgr.maybeAcquireUpgradeLock(context.Background(), logr.Discard(), cluster, false, true)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if handled {
+			t.Fatalf("expected handled=false")
+		}
+		if result != (recon.Result{}) {
+			t.Fatalf("result=%v, want zero", result)
+		}
+		if !upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock) {
+			t.Fatalf("expected upgrade lock to be held by the blue/green manager, got %+v", cluster.Status.OperationLock)
+		}
+	})
+}
+
 func TestManager_HandleNoUpgradeNeeded(t *testing.T) {
 	t.Parallel()
 
@@ -157,6 +207,261 @@ func TestManager_HandleNoUpgradeNeeded(t *testing.T) {
 		}
 		if result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero", result)
+		}
+	})
+}
+
+func TestNewManagerWithClientFactory_UsesProvidedFactory(t *testing.T) {
+	t.Parallel()
+
+	scheme := newBlueGreenTestScheme(t)
+	client := fake.NewClientBuilder().WithScheme(scheme).Build()
+	sentinel := errors.New("factory called")
+	called := false
+	factory := func(_ portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+		called = true
+		return nil, sentinel
+	}
+
+	mgr := NewManagerWithClientFactory(client, scheme, nil, nil, factory, portopenbao.ClientConfig{}, nil, nil, "")
+	if mgr.clusterOps == nil {
+		t.Fatal("expected clusterOps to be initialized")
+	}
+	if _, err := mgr.clientFactory(portopenbao.ClientConfig{}); !errors.Is(err, sentinel) {
+		t.Fatalf("expected custom client factory to be installed, got %v", err)
+	}
+	if !called {
+		t.Fatal("expected custom client factory to be invoked")
+	}
+}
+
+func TestRequeueAfter_TableDriven(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		duration time.Duration
+		want     recon.Result
+	}{
+		{
+			name:     "negative duration returns zero result",
+			duration: -1 * time.Second,
+			want:     recon.Result{},
+		},
+		{
+			name:     "zero duration returns zero result",
+			duration: 0,
+			want:     recon.Result{},
+		},
+		{
+			name:     "positive duration requeues",
+			duration: 3 * time.Second,
+			want:     recon.Result{RequeueAfter: 3 * time.Second},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := requeueAfter(tt.duration); got != tt.want {
+				t.Fatalf("requeueAfter(%v) = %v, want %v", tt.duration, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestManager_ReleaseUpgradeLockIfHeld(t *testing.T) {
+	t.Parallel()
+
+	t.Run("foreign lock is ignored", func(t *testing.T) {
+		cluster := newBlueGreenCluster()
+		cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+			Operation: openbaov1alpha1.ClusterOperationBackup,
+			Holder:    "backup-controller",
+			Message:   "backup running",
+		}
+		mgr := &Manager{}
+
+		if err := mgr.releaseUpgradeLockIfHeld(context.Background(), logr.Discard(), cluster); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cluster.Status.OperationLock == nil {
+			t.Fatalf("expected foreign lock to remain untouched")
+		}
+	})
+
+	t.Run("owned lock is released", func(t *testing.T) {
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newBlueGreenCluster()
+		cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+			Operation: openbaov1alpha1.ClusterOperationUpgrade,
+			Holder:    upgrade.UpgradeOperationLockHolder,
+			Message:   "blue/green upgrade phase Syncing",
+		}
+		client := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+			WithObjects(cluster).
+			Build()
+		mgr := &Manager{client: client, scheme: scheme}
+
+		if err := mgr.releaseUpgradeLockIfHeld(context.Background(), logr.Discard(), cluster); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cluster.Status.OperationLock != nil {
+			t.Fatalf("expected upgrade lock to be released, got %+v", cluster.Status.OperationLock)
+		}
+	})
+}
+
+type infraRuntimeStub struct {
+	ensureBlueGreenStatusCalled bool
+	lastCluster                 *openbaov1alpha1.OpenBaoCluster
+	ensureStatefulSetCalled     bool
+	lastConfigContent           string
+	lastVerifiedImage           string
+	lastVerifiedInitImage       string
+	lastRevision                string
+	lastDisableSelfInit         bool
+	ensureStatefulSetErr        error
+}
+
+func (s *infraRuntimeStub) EnsureBlueGreenStatus(_ context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
+	s.ensureBlueGreenStatusCalled = true
+	s.lastCluster = cluster
+}
+
+func (s *infraRuntimeStub) EnsureStatefulSetWithRevision(_ context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool) error {
+	s.ensureStatefulSetCalled = true
+	s.lastCluster = cluster
+	s.lastConfigContent = configContent
+	s.lastVerifiedImage = verifiedImageDigest
+	s.lastVerifiedInitImage = verifiedInitContainerDigest
+	s.lastRevision = revision
+	s.lastDisableSelfInit = disableSelfInit
+	return s.ensureStatefulSetErr
+}
+
+func TestManager_EnsureBlueGreenStatus(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil infra runtime is a no-op", func(t *testing.T) {
+		cluster := newBlueGreenCluster()
+		mgr := &Manager{}
+
+		mgr.ensureBlueGreenStatus(context.Background(), logr.Discard(), cluster)
+	})
+
+	t.Run("delegates to infra runtime", func(t *testing.T) {
+		cluster := newBlueGreenCluster()
+		runtime := &infraRuntimeStub{}
+		mgr := &Manager{infraRuntime: runtime}
+
+		mgr.ensureBlueGreenStatus(context.Background(), logr.Discard(), cluster)
+
+		if !runtime.ensureBlueGreenStatusCalled {
+			t.Fatal("expected EnsureBlueGreenStatus to be delegated to infra runtime")
+		}
+		if runtime.lastCluster != cluster {
+			t.Fatal("expected infra runtime to receive the cluster being reconciled")
+		}
+	})
+}
+
+func TestManager_CalculateRevision(t *testing.T) {
+	t.Parallel()
+
+	mgr := &Manager{}
+	cluster := newBlueGreenCluster()
+
+	first := mgr.calculateRevision(cluster)
+	second := mgr.calculateRevision(cluster.DeepCopy())
+	if first == "" {
+		t.Fatal("expected non-empty revision")
+	}
+	if first != second {
+		t.Fatalf("expected deterministic revision, got %q and %q", first, second)
+	}
+
+	modified := cluster.DeepCopy()
+	modified.Spec.Image = "openbao/openbao:2.6.0"
+	if got := mgr.calculateRevision(modified); got == first {
+		t.Fatalf("expected revision to change when spec changes, still got %q", got)
+	}
+}
+
+func TestManager_FinalizeBlueGreenMetrics_StateTransitions(t *testing.T) {
+	t.Parallel()
+
+	strategy := string(openbaov1alpha1.UpdateStrategyBlueGreen)
+
+	t.Run("initializes state when upgrade starts", func(t *testing.T) {
+		cluster := newBlueGreenCluster()
+		cluster.Namespace = "metrics-start"
+		cluster.Name = strings.ReplaceAll(t.Name(), "/", "-")
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
+		deleteUpgradeMetricsState(cluster.Namespace, cluster.Name)
+		defer deleteUpgradeMetricsState(cluster.Namespace, cluster.Name)
+
+		mgr := &Manager{}
+		mgr.finalizeBlueGreenMetrics(upgrade.NewMetrics(cluster.Namespace, cluster.Name), strategy, cluster, openbaov1alpha1.PhaseIdle, false)
+
+		if _, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name); !ok {
+			t.Fatal("expected upgrade metrics state to be initialized")
+		}
+	})
+
+	t.Run("marks rollback when rollback starts", func(t *testing.T) {
+		cluster := newBlueGreenCluster()
+		cluster.Namespace = "metrics-rollback"
+		cluster.Name = strings.ReplaceAll(t.Name(), "/", "-")
+		now := metav1.NewTime(time.Now())
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseRollingBack
+		cluster.Status.BlueGreen.RollbackStartTime = &now
+		setUpgradeMetricsState(cluster.Namespace, cluster.Name, upgradeMetricsState{startedAt: time.Now().Add(-2 * time.Minute)})
+		defer deleteUpgradeMetricsState(cluster.Namespace, cluster.Name)
+
+		mgr := &Manager{}
+		mgr.finalizeBlueGreenMetrics(upgrade.NewMetrics(cluster.Namespace, cluster.Name), strategy, cluster, openbaov1alpha1.PhaseSyncing, false)
+
+		state, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name)
+		if !ok {
+			t.Fatal("expected upgrade metrics state to exist")
+		}
+		if !state.lastRollbackSeen {
+			t.Fatal("expected rollback marker to be recorded")
+		}
+	})
+
+	t.Run("successful completion clears state", func(t *testing.T) {
+		cluster := newBlueGreenCluster()
+		cluster.Namespace = "metrics-success"
+		cluster.Name = strings.ReplaceAll(t.Name(), "/", "-")
+		cluster.Status.CurrentVersion = "2.4.4"
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
+		setUpgradeMetricsState(cluster.Namespace, cluster.Name, upgradeMetricsState{startedAt: time.Now().Add(-5 * time.Minute)})
+
+		mgr := &Manager{}
+		mgr.finalizeBlueGreenMetrics(upgrade.NewMetrics(cluster.Namespace, cluster.Name), strategy, cluster, openbaov1alpha1.PhaseCleanup, false)
+
+		if _, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name); ok {
+			t.Fatal("expected upgrade metrics state to be cleared after successful completion")
+		}
+	})
+
+	t.Run("failed completion clears state", func(t *testing.T) {
+		cluster := newBlueGreenCluster()
+		cluster.Namespace = "metrics-failure"
+		cluster.Name = strings.ReplaceAll(t.Name(), "/", "-")
+		cluster.Status.CurrentVersion = "2.4.4"
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
+		setUpgradeMetricsState(cluster.Namespace, cluster.Name, upgradeMetricsState{startedAt: time.Now().Add(-5 * time.Minute)})
+
+		mgr := &Manager{}
+		mgr.finalizeBlueGreenMetrics(upgrade.NewMetrics(cluster.Namespace, cluster.Name), strategy, cluster, openbaov1alpha1.PhaseSyncing, false)
+
+		if _, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name); ok {
+			t.Fatal("expected upgrade metrics state to be cleared after failed completion")
 		}
 	})
 }
