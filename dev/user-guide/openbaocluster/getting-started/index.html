@@ -4451,7 +4451,7 @@
 <ul>
 <li><strong>OpenBao Operator</strong>: Installed and running (see <a href="../../operator/installation/">Installation</a>)</li>
 <li><strong>Tenancy</strong>: In multi-tenant mode, the target namespace must be onboarded via <code>OpenBaoTenant</code> (see <a href="../../openbaotenant/onboarding/">Tenant Onboarding</a>).</li>
-<li><strong>Storage Class</strong>: Default storage class configured in the cluster</li>
+<li><strong>Storage Class</strong>: A suitable StorageClass is available in the cluster. For production, prefer setting <code>spec.storage.storageClassName</code> explicitly before the first reconcile.</li>
 </ul>
 <h2 id="choose-your-path">Choose Your Path<a class="headerlink" href="#choose-your-path" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Development (Local Testing)</label><label for="__tabbed_1_2">Production</label></div>
@@ -4571,6 +4571,7 @@ to ensure proper security configuration.</p>
 <li><code>Available</code> — Cluster is serving requests</li>
 <li><code>TLSReady</code> — TLS certificates are valid</li>
 <li><code>ProductionReady</code> — Security requirements met (Hardened only)</li>
+<li><code>StorageConfigured</code> — Shows whether the effective StorageClass was explicit, defaulted, or inconsistent</li>
 <li><code>Degraded</code> — Issues detected</li>
 </ul>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>

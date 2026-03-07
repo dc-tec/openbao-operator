@@ -4425,7 +4425,7 @@
 <li><a href="../../configuration/resources-storage/">Learn more</a></li>
 </ul>
 </li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Storage Class</strong>: Use a high-performance (SSD), low-latency StorageClass. Raft requires low fsync latency.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Storage Class</strong>: Use a high-performance (SSD), low-latency StorageClass and set <code>spec.storage.storageClassName</code> explicitly on new clusters. Raft requires low fsync latency, and the effective storage class is immutable after PVC creation.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Volume Size</strong>: Plan for growth. Raft snapshots can consume significant space.</li>
 </ul>
 </div>
