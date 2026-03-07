@@ -547,14 +547,20 @@ type BackupTarget struct {
 	// +optional
 	PathPrefix string `json:"pathPrefix,omitempty"`
 	// CredentialsSecretRef optionally references a Secret containing credentials for the object store.
-	// The Secret must exist in the same namespace as the OpenBaoCluster.
+	// The Secret must exist in the same namespace as the owning OpenBao resource.
 	// Cross-namespace references are not allowed for security reasons.
 	//
 	// For S3: Expected keys are "accessKeyId" and "secretAccessKey" (optional: "sessionToken", "region", "caCert").
 	// For GCS: Expected key is "credentials.json" containing a service account JSON key.
 	// For Azure: Expected keys are "accountKey" or "connectionString".
+	// Omit this field when relying on ambient workload identity or another default credential chain.
 	// +optional
 	CredentialsSecretRef *corev1.LocalObjectReference `json:"credentialsSecretRef,omitempty"`
+	// WorkloadIdentity optionally applies provider-specific metadata required by cloud workload identity integrations.
+	// Use this for ambient identity setups such as EKS Pod Identity or IRSA, GKE Workload Identity, or Azure Workload Identity.
+	// When omitted, backup and restore workloads can still use any credentials exposed through the pod's default provider chain.
+	// +optional
+	WorkloadIdentity *WorkloadIdentityConfig `json:"workloadIdentity,omitempty"`
 	// PartSize is the size of each part in multipart uploads (in bytes).
 	// Defaults to 10MB (10485760 bytes). Larger values may improve performance for large snapshots
 	// on fast networks, while smaller values may be better for slow or unreliable networks.
@@ -581,8 +587,9 @@ type BackupTarget struct {
 	// +kubebuilder:default=us-east-1
 	Region string `json:"region,omitempty"`
 	// RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
-	// When set, the backup Job mounts a projected ServiceAccount token and relies on the
-	// cloud provider SDK default credential chain (for example, AWS IRSA).
+	// When set, backup and restore Jobs mount a projected ServiceAccount token and set the
+	// AWS Web Identity environment variables explicitly.
+	// Leave this empty when relying on ambient workload identity or provider-managed default credentials instead.
 	// Only used when Provider is "s3".
 	// +optional
 	RoleARN string `json:"roleArn,omitempty"`
@@ -611,6 +618,20 @@ type BackupTarget struct {
 	// This applies to all providers that support TLS.
 	// +optional
 	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+}
+
+// WorkloadIdentityConfig configures cloud workload identity metadata for backup and restore workloads.
+type WorkloadIdentityConfig struct {
+	// ServiceAccountAnnotations are merged into the generated backup or restore ServiceAccount.
+	// This is typically used for provider-specific bindings such as GKE Workload Identity
+	// or webhook-based AWS/Azure workload identity integrations.
+	// +optional
+	ServiceAccountAnnotations map[string]string `json:"serviceAccountAnnotations,omitempty"`
+	// PodLabels are merged into the generated backup or restore Job pod template.
+	// This is typically used for provider-specific selectors such as Azure Workload Identity.
+	// Operator-managed labels take precedence if the same key is specified here.
+	// +optional
+	PodLabels map[string]string `json:"podLabels,omitempty"`
 }
 
 // GCSTargetConfig holds Google Cloud Storage specific configuration.
@@ -1509,6 +1530,11 @@ type OpenBaoClusterSpec struct {
 	// ServiceAccount configures the Kubernetes ServiceAccount used by the OpenBao Pods.
 	// +optional
 	ServiceAccount *ServiceAccountConfig `json:"serviceAccount,omitempty"`
+	// PodMetadata configures additional labels and annotations for the OpenBao Pod template.
+	// This is useful for platform integrations that select Pods via metadata, such as
+	// Azure Workload Identity. Operator-managed Pod metadata takes precedence.
+	// +optional
+	PodMetadata *PodMetadataConfig `json:"podMetadata,omitempty"`
 
 	// ImagePullSecrets is a list of references to secrets in the same namespace
 	// to use for pulling any images used by this Cluster (server, init, sidecars).
@@ -2189,6 +2215,19 @@ type ServiceAccountConfig struct {
 
 	// Annotations to add to the ServiceAccount.
 	// Useful for cloud provider Workload Identity (e.g. eks.amazonaws.com/role-arn).
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// PodMetadataConfig configures additional metadata for the OpenBao Pod template.
+type PodMetadataConfig struct {
+	// Labels are merged into the generated OpenBao Pod template labels.
+	// Operator-managed labels take precedence if the same key is specified here.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations are merged into the generated OpenBao Pod template annotations.
+	// Operator-managed annotations take precedence if the same key is specified here.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 }

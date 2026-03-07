@@ -13,6 +13,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
+const maintenanceAnnotationEnabledValue = "true"
+
 func (m *Manager) reconcileMaintenanceAnnotationsForPods(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, revision string) error {
 	if cluster == nil {
 		return nil
@@ -40,7 +42,7 @@ func (m *Manager) reconcileMaintenanceAnnotationsForPods(ctx context.Context, lo
 		}
 
 		if enabled {
-			pod.Annotations[constants.AnnotationMaintenance] = "true"
+			pod.Annotations[constants.AnnotationMaintenance] = maintenanceAnnotationEnabledValue
 		} else {
 			delete(pod.Annotations, constants.AnnotationMaintenance)
 		}

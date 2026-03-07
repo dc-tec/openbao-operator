@@ -245,6 +245,20 @@ func TestBuildStorageConfig(t *testing.T) {
 		assert.Equal(t, "storage-account", got.Azure.StorageAccount)
 	})
 
+	t.Run("azure without static credentials uses managed identity", func(t *testing.T) {
+		cfg := &backupconfig.ExecutorConfig{
+			BackupProvider:      constants.StorageProviderAzure,
+			BackupBucket:        "backups",
+			AzureStorageAccount: "storage-account",
+		}
+		got, err := buildStorageConfig(cfg)
+		require.NoError(t, err)
+		require.NotNil(t, got.Azure)
+		assert.True(t, got.Azure.UseManagedIdentity)
+		assert.Empty(t, got.Azure.AccountKey)
+		assert.Empty(t, got.Azure.ConnectionString)
+	})
+
 	t.Run("unknown provider", func(t *testing.T) {
 		cfg := &backupconfig.ExecutorConfig{
 			BackupProvider: "invalid-provider",

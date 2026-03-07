@@ -529,6 +529,7 @@ func buildStorageConfig(cfg *backupconfig.ExecutorConfig) (storage.Config, error
 			StorageAccount:     cfg.AzureStorageAccount,
 			AccountKey:         cfg.AzureAccountKey,
 			ConnectionString:   cfg.AzureConnectionString,
+			UseManagedIdentity: cfg.AzureAccountKey == "" && cfg.AzureConnectionString == "",
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 		}
 		if cfg.AzureContainer != "" {

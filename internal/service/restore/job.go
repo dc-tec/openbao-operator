@@ -2,6 +2,7 @@ package restore
 
 import (
 	"fmt"
+	"maps"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -14,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/adapter/storageenv"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
 
 const (
@@ -26,6 +28,10 @@ const (
 	restoreJWTTokenMountPath    = "/var/run/secrets/tokens" // #nosec G101 -- mount path not credential
 	restoreTokenVolumeName      = "restore-token"
 	restoreTokenMountPath       = "/etc/bao/restore/token" // #nosec G101 -- mount path not credential
+	restoreAWSIdentityVolume    = "aws-iam-token"
+	restoreAWSIdentityMountPath = "/var/run/secrets/aws"
+	restoreAWSIdentityTokenFile = "/var/run/secrets/aws/token" // #nosec G101 -- mount path not credential
+	restoreAWSIdentityAudience  = "sts.amazonaws.com"          // #nosec G101 -- audience constant, not a credential
 )
 
 func getRestoreExecutorImage(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
@@ -43,6 +49,8 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 	jobName := restoreJobName(restore)
 	labels := restoreLabels(cluster)
 	security.AddManagedWorkloadSecurityLabels(labels, cluster)
+	podTemplateLabels := maps.Clone(labels)
+	workloadidentity.MergePodLabels(podTemplateLabels, restore.Spec.Source.Target)
 
 	executorImage, err := getRestoreExecutorImage(restore, cluster)
 	if err != nil {
@@ -103,7 +111,7 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 			TTLSecondsAfterFinished: &ttlSeconds,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Labels: podTemplateLabels,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           restoreServiceAccountName(cluster),
@@ -192,6 +200,12 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 
 	envVars = storageenv.AppendProviderEnvVars(envVars, restore.Spec.Source.Target)
 	envVars = storageenv.AppendRestoreProviderEnvVars(envVars, restore.Spec.Source.Target)
+	if provider == constants.StorageProviderS3 && restore.Spec.Source.Target.RoleARN != "" {
+		envVars = append(envVars,
+			corev1.EnvVar{Name: constants.EnvAWSRoleARN, Value: restore.Spec.Source.Target.RoleARN},
+			corev1.EnvVar{Name: constants.EnvAWSWebIdentityTokenFile, Value: restoreAWSIdentityTokenFile},
+		)
+	}
 
 	// JWT auth configuration
 	jwtRole := effectiveRestoreJWTRole(restore, cluster)
@@ -268,6 +282,25 @@ func buildRestoreVolumes(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 			},
 		})
 	}
+	if restore.Spec.Source.Target.RoleARN != "" {
+		expirationSeconds := int64(3600)
+		volumes = append(volumes, corev1.Volume{
+			Name: restoreAWSIdentityVolume,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{
+						{
+							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+								Audience:          restoreAWSIdentityAudience,
+								ExpirationSeconds: &expirationSeconds,
+								Path:              "token",
+							},
+						},
+					},
+				},
+			},
+		})
+	}
 
 	return volumes
 }
@@ -308,6 +341,13 @@ func buildRestoreVolumeMounts(restore *openbaov1alpha1.OpenBaoRestore, cluster *
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      restoreCredentialsVolume,
 			MountPath: restoreCredentialsMountPath,
+			ReadOnly:  true,
+		})
+	}
+	if restore.Spec.Source.Target.RoleARN != "" {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      restoreAWSIdentityVolume,
+			MountPath: restoreAWSIdentityMountPath,
 			ReadOnly:  true,
 		})
 	}

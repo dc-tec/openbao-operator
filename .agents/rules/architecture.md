@@ -14,7 +14,7 @@ See [Architecture Documentation](docs/architecture/index.md).
 - `L1` Entrypoints/bootstrap: `cmd/*`, `internal/platform/entrypoint`
 - `L2` Controller plumbing: `internal/controller/*`
 - `L3` App orchestration: `internal/app/*`
-- `L4` Services/managers: `internal/service/{backup,restore,upgrade,infra,certs,init,provisioner,opslifecycle}`
+- `L4` Services/managers: `internal/service/{backup,restore,upgrade,infra,certs,init,provisioner,opslifecycle,workloadidentity}`
 - `L5` Ports/contracts: `internal/port/{auth,backup,blobstore,imageverify,infra,initmanager,openbao,security}`
 - `L6` Adapters/integrations: `internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}`
 - `L7` Platform/cross-cutting: `internal/platform/{admission,constants,entrypoint,errors,logging,observability,predicates,reconcile,testutil}`

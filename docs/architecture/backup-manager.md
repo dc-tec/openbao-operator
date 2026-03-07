@@ -88,7 +88,9 @@ The BackupManager supports multiple object storage providers:
 
     **Authentication:**
     - **Static Credentials:** Secret with `accessKeyId` and `secretAccessKey`
-    - **Web Identity (IRSA):** Set `roleArn` for AWS EKS (no Secret required)
+    - **Explicit Web Identity:** Set `roleArn` for the operator-managed AWS Web Identity flow
+    - **Ambient Workload Identity:** Omit `credentialsSecretRef` and rely on the pod's default credential chain (for example EKS Pod Identity)
+    - **Metadata-Driven Integrations:** Set `target.workloadIdentity.serviceAccountAnnotations` when your platform binds identity through ServiceAccount annotations
 
 === "GCS (Google Cloud Storage)"
 
@@ -108,6 +110,7 @@ The BackupManager supports multiple object storage providers:
     **Authentication:**
     - **Service Account Key:** Secret with `credentials.json` (service account JSON)
     - **Application Default Credentials (ADC):** Omit `credentialsSecretRef` when using Workload Identity or GKE
+    - **Workload Identity Metadata:** Use `target.workloadIdentity.serviceAccountAnnotations` when the generated ServiceAccount needs a cloud-specific annotation
 
 === "Azure Blob Storage"
 
@@ -127,7 +130,8 @@ The BackupManager supports multiple object storage providers:
     **Authentication:**
     - **Account Key:** Secret with `accountKey`
     - **Connection String:** Secret with `connectionString`
-    - **Managed Identity:** Omit `credentialsSecretRef` when using AKS pod identity
+    - **Managed Identity / Workload Identity:** Omit `credentialsSecretRef` to use the Azure default credential chain
+    - **Kubernetes Metadata:** Use `target.workloadIdentity.serviceAccountAnnotations` and `target.workloadIdentity.podLabels` when your Azure setup requires ServiceAccount annotations or pod labels
 
 ## 5. Scheduling & Retention
 

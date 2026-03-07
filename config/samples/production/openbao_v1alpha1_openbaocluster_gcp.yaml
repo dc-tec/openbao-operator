@@ -36,6 +36,10 @@ spec:
       format: "json"
       file: "/var/log/openbao/openbao.log"
       rotateDuration: "24h"
+  # Optional: annotate the OpenBao ServiceAccount for GKE Workload Identity
+  # serviceAccount:
+  #   annotations:
+  #     iam.gke.io/gcp-service-account: "openbao@my-project.iam.gserviceaccount.com"
   # GCP Cloud KMS seal configuration
   unseal:
     type: gcpckms
@@ -80,4 +84,3 @@ spec:
 #       "auth_uri": "https://accounts.google.com/o/oauth2/auth",
 #       "token_uri": "https://oauth2.googleapis.com/token"
 #     }
-

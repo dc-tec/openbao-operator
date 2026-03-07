@@ -49,7 +49,7 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 	var statefulSetAnnotations map[string]string
 	if cluster.Spec.Maintenance != nil && cluster.Spec.Maintenance.Enabled {
 		statefulSetAnnotations = map[string]string{
-			constants.AnnotationMaintenance: "true",
+			constants.AnnotationMaintenance: maintenanceAnnotationEnabledValue,
 		}
 	}
 

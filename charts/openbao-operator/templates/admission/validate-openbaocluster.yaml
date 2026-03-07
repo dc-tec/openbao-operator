@@ -118,9 +118,8 @@ spec:
         !variables.has_backup ||
         (object.spec.backup.schedule != "" &&
           ((has(object.spec.backup.jwtAuthRole) && object.spec.backup.jwtAuthRole != "") || has(object.spec.backup.tokenSecretRef) || ((!has(object.spec.backup.jwtAuthRole) || object.spec.backup.jwtAuthRole == "") && has(object.spec.selfInit) && has(object.spec.selfInit.oidc) && object.spec.selfInit.oidc.enabled == true)) &&
-          (object.spec.backup.target.roleArn != "" || has(object.spec.backup.target.credentialsSecretRef)) &&
           object.spec.backup.schedule.matches("^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$"))
-      message: spec.backup requires schedule, OpenBao auth (jwtAuthRole or tokenSecretRef, or OIDC enabled when jwtAuthRole is empty/unset for auto-creation of "openbao-operator-backup" role), storage auth (target.roleArn or target.credentialsSecretRef), and a 5-field cron expression.
+      message: spec.backup requires schedule, OpenBao auth (jwtAuthRole or tokenSecretRef, or OIDC enabled when jwtAuthRole is empty/unset for auto-creation of "openbao-operator-backup" role), and a 5-field cron expression. Storage credentials may come from target.credentialsSecretRef, target.roleArn, or the pod's ambient workload identity/default credential chain.
     - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||

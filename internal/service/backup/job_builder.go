@@ -15,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup/jobenv"
+	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
 
 // JobType distinguishes between scheduled backups and pre-upgrade snapshots.
@@ -124,6 +125,7 @@ func BuildJob(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) (*batchv
 		constants.LabelOpenBaoBackupType: backupType,
 	}
 	security.AddManagedWorkloadSecurityLabels(podTemplateLabels, cluster)
+	workloadidentity.MergePodLabels(podTemplateLabels, cluster.Spec.Backup.Target)
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{

@@ -2,7 +2,8 @@
 
 The Operator provides a robust, Kubernetes-native backup system that streams Raft snapshots directly to object storage.
 
-> **Note:** For restore procedures, see [Restore from Backup](../../openbaorestore/restore.md).
+!!! note
+    For restore procedures, see [Restore from Backup](../../openbaorestore/restore.md).
 
 ## Architecture
 
@@ -26,16 +27,16 @@ flowchart LR
 
 ## Prerequisites
 
-- [ ] **Object Storage**: Configured bucket or container in one of the supported providers:
-  - **S3**: AWS S3 or S3-compatible storage (MinIO, Ceph, etc.)
-  - **GCS**: Google Cloud Storage bucket
-  - **Azure**: Azure Blob Storage container
-- [ ] **Credentials**: Write permissions for the bucket/container
-- [ ] **Network**: Egress allowed to the storage endpoint (Critical for `Hardened` profile)
+- Configure a bucket or container in a supported provider:
+  - S3: AWS S3 or S3-compatible storage such as MinIO or Ceph
+  - GCS: Google Cloud Storage bucket
+  - Azure: Azure Blob Storage container
+- Grant write access to the bucket or container.
+- Allow egress to the storage endpoint. This is required for the `Hardened` profile.
 
 ## Configuration
 
-Select your authentication method. **JWT Auth** is recommended for security (auto-rotating tokens).
+Select an authentication method. Use JWT Auth for automatic token rotation.
 
 === "JWT Auth (Recommended)"
 
@@ -91,6 +92,12 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
               region: "us-east-1"
               pathPrefix: "clusters/backup-cluster"
               usePathStyle: false  # Set true for MinIO/S3-compatible
+              # Optional explicit Web Identity flow managed by the operator:
+              # roleArn: "arn:aws:iam::123456789012:role/openbao-backup"
+              # Optional workload identity metadata for webhook-based integrations:
+              # workloadIdentity:
+              #   serviceAccountAnnotations:
+              #     eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/openbao-backup"
               credentialsSecretRef:
                 name: s3-credentials
         ```
@@ -102,6 +109,11 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
             - `sessionToken`: (optional) Temporary session token
             - `region`: (optional) Override region
             - `caCert`: (optional) Custom CA certificate for self-signed endpoints
+
+            You can also omit `credentialsSecretRef` and use:
+            - `roleArn` for the operator-managed Web Identity path
+            - ambient workload identity/default credentials (for example EKS Pod Identity)
+            - `workloadIdentity.serviceAccountAnnotations` when your platform integration is driven by ServiceAccount metadata
 
     === "GCS (Google Cloud Storage)"
 
@@ -122,6 +134,10 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
               pathPrefix: "clusters/backup-cluster"
               gcs:
                 project: "my-gcp-project"  # Optional if using ADC
+              # Optional workload identity metadata for the generated ServiceAccount:
+              # workloadIdentity:
+              #   serviceAccountAnnotations:
+              #     iam.gke.io/gcp-service-account: "backup@my-project.iam.gserviceaccount.com"
               credentialsSecretRef:
                 name: gcs-credentials
         ```
@@ -136,6 +152,7 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
 
             **Option 2: Application Default Credentials (ADC)**
             If running on GKE or with Workload Identity, omit `credentialsSecretRef` to use ADC.
+            When needed, set `target.workloadIdentity.serviceAccountAnnotations` so the generated backup/restore ServiceAccount carries the required provider annotation.
 
     === "Azure Blob Storage"
 
@@ -157,6 +174,12 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
               azure:
                 storageAccount: "mystorageaccount"
                 container: "openbao-backups"  # Optional, uses bucket if omitted
+              # Optional workload identity metadata:
+              # workloadIdentity:
+              #   serviceAccountAnnotations:
+              #     azure.workload.identity/client-id: "00000000-0000-0000-0000-000000000000"
+              #   podLabels:
+              #     azure.workload.identity/use: "true"
               credentialsSecretRef:
                 name: azure-credentials
         ```
@@ -166,7 +189,10 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
             - `accountKey`: Storage account access key
             - `connectionString`: Full Azure connection string
 
-            For managed identity (AKS), omit `credentialsSecretRef` and ensure the pod identity is configured.
+            For managed identity or Azure Workload Identity, omit `credentialsSecretRef`.
+            If your cluster integration requires Kubernetes metadata, use:
+            - `target.workloadIdentity.serviceAccountAnnotations`
+            - `target.workloadIdentity.podLabels`
 
 === "Static Token (Legacy)"
 
@@ -261,7 +287,7 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
     | :--- | :--- | :--- |
     | `region` | `us-east-1` | AWS region or any value for S3-compatible stores |
     | `usePathStyle` | `false` | Set `true` for MinIO and S3-compatible stores |
-    | `roleArn` | - | IAM role ARN for Web Identity (IRSA) |
+    | `roleArn` | - | IAM role ARN for the explicit AWS Web Identity flow |
 
     ```yaml
     spec:
@@ -308,6 +334,25 @@ Select your authentication method. **JWT Auth** is recommended for security (aut
             storageAccount: "mystorageaccount"
             container: "backups"  # Optional
     ```
+
+### Workload Identity Metadata
+
+Use `target.workloadIdentity` when your cloud identity integration needs ServiceAccount annotations or pod labels on the generated backup and restore workloads.
+
+```yaml
+spec:
+  backup:
+    target:
+      workloadIdentity:
+        serviceAccountAnnotations:
+          iam.gke.io/gcp-service-account: "backup@my-project.iam.gserviceaccount.com"
+          azure.workload.identity/client-id: "00000000-0000-0000-0000-000000000000"
+        podLabels:
+          azure.workload.identity/use: "true"
+```
+
+`serviceAccountAnnotations` are applied to the generated backup/restore ServiceAccounts.
+`podLabels` are applied to backup/restore Job pods without overriding operator-managed labels.
 
 !!! tip "Emulator Support"
     GCS and Azure support custom endpoints for local testing with emulators (fake-gcs-server, Azurite). For self-signed certificates, include the CA certificate in the credentials Secret.
