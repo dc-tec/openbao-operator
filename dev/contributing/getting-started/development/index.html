@@ -3438,6 +3438,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#recommended-first-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended First Run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#development-workflow" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4349,6 +4360,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#recommended-first-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended First Run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#development-workflow" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4433,6 +4455,10 @@
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Go</strong> v1.26.1+ (<code>go version</code>)</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Docker</strong> v28.3.3+ (<code>docker version</code>)</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>kubectl</strong> v1.33+ (<code>kubectl version --client</code>)</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Helm</strong> v3+ (<code>helm version</code>)</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Trivy</strong> (<code>trivy --version</code>)</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Python</strong> 3 with <code>venv</code> support (<code>python3 -m venv --help</code>)</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Node.js</strong> 20+ with <code>npm</code> (<code>npm --version</code>)</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Kubernetes Cluster</strong> v1.33+ (Kind, Minikube, or Cloud)</li>
 </ul>
 </div>
@@ -4441,32 +4467,49 @@
 <ul class="task-list">
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Kind</strong> for running local E2E tests (<code>kind version</code>)</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>k9s</strong> for inspecting the cluster state</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>golangci-lint</strong> for local linting</li>
 </ul>
 </div>
+<h2 id="recommended-first-run">Recommended First Run<a class="headerlink" href="#recommended-first-run" title="Permanent link">&para;</a></h2>
+<p>Bootstrap the repo-managed toolchain once, then validate your workstation:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>bootstrap
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>doctor
+</span></code></pre></div>
+<p>If you use Tilt for the local Kubernetes inner loop on your host machine, install it separately
+from the <a href="https://docs.tilt.dev/install.html">official Tilt docs</a>. The provided devcontainer
+preinstalls Tilt together with the other external prerequisites.</p>
+<p>If you open the repository in the provided devcontainer, these external prerequisites are
+preinstalled for you and the container runs <code>make bootstrap &amp;&amp; make doctor</code> automatically
+after creation.</p>
 <h2 id="development-workflow">Development Workflow<a class="headerlink" href="#development-workflow" title="Permanent link">&para;</a></h2>
 <p>We support two main development workflows. Choose the one that fits your current task.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 6h16v10H4m16 2a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4c-1.11 0-2 .89-2 2v10a2 2 0 0 0 2 2H0v2h24v-2z"/></svg></span> Local Development (Fast Loop)</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10.204 14.35.007.01-.999 2.413a5.17 5.17 0 0 1-2.075-2.597l2.578-.437.004.005a.44.44 0 0 1 .484.606zm-.833-2.129a.44.44 0 0 0 .173-.756l.002-.011L7.585 9.7a5.14 5.14 0 0 0-.73 3.255l2.514-.725zm1.145-1.98a.44.44 0 0 0 .699-.337l.01-.005.15-2.62a5.14 5.14 0 0 0-3.01 1.442l2.147 1.523zm.76 2.75.723.349.722-.347.18-.78-.5-.623h-.804l-.5.623.179.779zm1.5-3.095a.44.44 0 0 0 .7.336l.008.003 2.134-1.513a5.2 5.2 0 0 0-2.992-1.442l.148 2.615zm10.876 5.97-5.773 7.181a1.6 1.6 0 0 1-1.248.594l-9.261.003a1.6 1.6 0 0 1-1.247-.596l-5.776-7.18a1.58 1.58 0 0 1-.307-1.34L2.1 5.573c.108-.47.425-.864.863-1.073L11.305.513a1.6 1.6 0 0 1 1.385 0l8.345 3.985c.438.209.755.604.863 1.073l2.062 8.955c.108.47-.005.963-.308 1.34m-3.289-2.057c-.042-.01-.103-.026-.145-.034-.174-.033-.315-.025-.479-.038-.35-.037-.638-.067-.895-.148-.105-.04-.18-.165-.216-.216l-.201-.059a6.5 6.5 0 0 0-.105-2.332 6.5 6.5 0 0 0-.936-2.163c.052-.047.15-.133.177-.159.008-.09.001-.183.094-.282.197-.185.444-.338.743-.522.142-.084.273-.137.415-.242.032-.024.076-.062.11-.089.24-.191.295-.52.123-.736s-.506-.236-.745-.045c-.034.027-.08.062-.111.088-.134.116-.217.23-.33.35-.246.25-.45.458-.673.609-.097.056-.239.037-.303.033l-.19.135a6.55 6.55 0 0 0-4.146-2.003l-.012-.223c-.065-.062-.143-.115-.163-.25-.022-.268.015-.557.057-.905.023-.163.061-.298.068-.475.001-.04-.001-.099-.001-.142 0-.306-.224-.555-.5-.555-.275 0-.499.249-.499.555l.001.014c0 .041-.002.092 0 .128.006.177.044.312.067.475.042.348.078.637.056.906a.55.55 0 0 1-.162.258l-.012.211a6.42 6.42 0 0 0-4.166 2.003l-.18-.128c-.09.012-.18.04-.297-.029-.223-.15-.427-.358-.673-.608-.113-.12-.195-.234-.329-.349l-.111-.088a.6.6 0 0 0-.348-.132.48.48 0 0 0-.398.176c-.172.216-.117.546.123.737l.007.005.104.083c.142.105.272.159.414.242.299.185.546.338.743.522.076.082.09.226.1.288l.16.143a6.46 6.46 0 0 0-1.02 4.506l-.208.06c-.055.072-.133.184-.215.217-.257.081-.546.11-.895.147-.164.014-.305.006-.48.039-.037.007-.09.02-.133.03l-.004.002-.007.002c-.295.071-.484.342-.423.608.061.267.349.429.645.365l.007-.001.01-.003.129-.029c.17-.046.294-.113.448-.172.33-.118.604-.217.87-.256.112-.009.23.069.288.101l.217-.037a6.5 6.5 0 0 0 2.88 3.596l-.09.218c.033.084.069.199.044.282-.097.252-.263.517-.452.813-.091.136-.185.242-.268.399-.02.037-.045.095-.064.134-.128.275-.034.591.213.71.248.12.556-.007.69-.282v-.002c.02-.039.046-.09.062-.127.07-.162.094-.301.144-.458.132-.332.205-.68.387-.897.05-.06.13-.082.215-.105l.113-.205a6.45 6.45 0 0 0 4.609.012l.106.192c.086.028.18.042.256.155.136.232.229.507.342.84.05.156.074.295.145.457.016.037.043.09.062.129.133.276.442.402.69.282.247-.118.341-.435.213-.71-.02-.039-.045-.096-.065-.134-.083-.156-.177-.261-.268-.398-.19-.296-.346-.541-.443-.793-.04-.13.007-.21.038-.294-.018-.022-.059-.144-.083-.202a6.5 6.5 0 0 0 2.88-3.622c.064.01.176.03.213.038.075-.05.144-.114.28-.104.266.039.54.138.87.256.154.06.277.128.448.173.036.01.088.019.13.028l.009.003.007.001c.297.064.584-.098.645-.365.06-.266-.128-.537-.423-.608M16.4 9.701l-1.95 1.746v.005a.44.44 0 0 0 .173.757l.003.01 2.526.728a5.2 5.2 0 0 0-.108-1.674A5.2 5.2 0 0 0 16.4 9.7zm-4.013 5.325a.44.44 0 0 0-.404-.232.44.44 0 0 0-.372.233h-.002l-1.268 2.292a5.16 5.16 0 0 0 3.326.003l-1.27-2.296zm1.888-1.293a.44.44 0 0 0-.27.036.44.44 0 0 0-.214.572l-.003.004 1.01 2.438a5.15 5.15 0 0 0 2.081-2.615l-2.6-.44z"/></svg></span> Cluster Deployment (Integration Loop)</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 6h16v10H4m16 2a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4c-1.11 0-2 .89-2 2v10a2 2 0 0 0 2 2H0v2h24v-2z"/></svg></span> Local Development (Fast Loop)</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10.204 14.35.007.01-.999 2.413a5.17 5.17 0 0 1-2.075-2.597l2.578-.437.004.005a.44.44 0 0 1 .484.606zm-.833-2.129a.44.44 0 0 0 .173-.756l.002-.011L7.585 9.7a5.14 5.14 0 0 0-.73 3.255l2.514-.725zm1.145-1.98a.44.44 0 0 0 .699-.337l.01-.005.15-2.62a5.14 5.14 0 0 0-3.01 1.442l2.147 1.523zm.76 2.75.723.349.722-.347.18-.78-.5-.623h-.804l-.5.623.179.779zm1.5-3.095a.44.44 0 0 0 .7.336l.008.003 2.134-1.513a5.2 5.2 0 0 0-2.992-1.442l.148 2.615zm10.876 5.97-5.773 7.181a1.6 1.6 0 0 1-1.248.594l-9.261.003a1.6 1.6 0 0 1-1.247-.596l-5.776-7.18a1.58 1.58 0 0 1-.307-1.34L2.1 5.573c.108-.47.425-.864.863-1.073L11.305.513a1.6 1.6 0 0 1 1.385 0l8.345 3.985c.438.209.755.604.863 1.073l2.062 8.955c.108.47-.005.963-.308 1.34m-3.289-2.057c-.042-.01-.103-.026-.145-.034-.174-.033-.315-.025-.479-.038-.35-.037-.638-.067-.895-.148-.105-.04-.18-.165-.216-.216l-.201-.059a6.5 6.5 0 0 0-.105-2.332 6.5 6.5 0 0 0-.936-2.163c.052-.047.15-.133.177-.159.008-.09.001-.183.094-.282.197-.185.444-.338.743-.522.142-.084.273-.137.415-.242.032-.024.076-.062.11-.089.24-.191.295-.52.123-.736s-.506-.236-.745-.045c-.034.027-.08.062-.111.088-.134.116-.217.23-.33.35-.246.25-.45.458-.673.609-.097.056-.239.037-.303.033l-.19.135a6.55 6.55 0 0 0-4.146-2.003l-.012-.223c-.065-.062-.143-.115-.163-.25-.022-.268.015-.557.057-.905.023-.163.061-.298.068-.475.001-.04-.001-.099-.001-.142 0-.306-.224-.555-.5-.555-.275 0-.499.249-.499.555l.001.014c0 .041-.002.092 0 .128.006.177.044.312.067.475.042.348.078.637.056.906a.55.55 0 0 1-.162.258l-.012.211a6.42 6.42 0 0 0-4.166 2.003l-.18-.128c-.09.012-.18.04-.297-.029-.223-.15-.427-.358-.673-.608-.113-.12-.195-.234-.329-.349l-.111-.088a.6.6 0 0 0-.348-.132.48.48 0 0 0-.398.176c-.172.216-.117.546.123.737l.007.005.104.083c.142.105.272.159.414.242.299.185.546.338.743.522.076.082.09.226.1.288l.16.143a6.46 6.46 0 0 0-1.02 4.506l-.208.06c-.055.072-.133.184-.215.217-.257.081-.546.11-.895.147-.164.014-.305.006-.48.039-.037.007-.09.02-.133.03l-.004.002-.007.002c-.295.071-.484.342-.423.608.061.267.349.429.645.365l.007-.001.01-.003.129-.029c.17-.046.294-.113.448-.172.33-.118.604-.217.87-.256.112-.009.23.069.288.101l.217-.037a6.5 6.5 0 0 0 2.88 3.596l-.09.218c.033.084.069.199.044.282-.097.252-.263.517-.452.813-.091.136-.185.242-.268.399-.02.037-.045.095-.064.134-.128.275-.034.591.213.71.248.12.556-.007.69-.282v-.002c.02-.039.046-.09.062-.127.07-.162.094-.301.144-.458.132-.332.205-.68.387-.897.05-.06.13-.082.215-.105l.113-.205a6.45 6.45 0 0 0 4.609.012l.106.192c.086.028.18.042.256.155.136.232.229.507.342.84.05.156.074.295.145.457.016.037.043.09.062.129.133.276.442.402.69.282.247-.118.341-.435.213-.71-.02-.039-.045-.096-.065-.134-.083-.156-.177-.261-.268-.398-.19-.296-.346-.541-.443-.793-.04-.13.007-.21.038-.294-.018-.022-.059-.144-.083-.202a6.5 6.5 0 0 0 2.88-3.622c.064.01.176.03.213.038.075-.05.144-.114.28-.104.266.039.54.138.87.256.154.06.277.128.448.173.036.01.088.019.13.028l.009.003.007.001c.297.064.584-.098.645-.365.06-.266-.128-.537-.423-.608M16.4 9.701l-1.95 1.746v.005a.44.44 0 0 0 .173.757l.003.01 2.526.728a5.2 5.2 0 0 0-.108-1.674A5.2 5.2 0 0 0 16.4 9.7zm-4.013 5.325a.44.44 0 0 0-.404-.232.44.44 0 0 0-.372.233h-.002l-1.268 2.292a5.16 5.16 0 0 0 3.326.003l-1.27-2.296zm1.888-1.293a.44.44 0 0 0-.27.036.44.44 0 0 0-.214.572l-.003.004 1.01 2.438a5.15 5.15 0 0 0 2.081-2.615l-2.6-.44z"/></svg></span> Cluster Deployment (Integration Loop)</label><label for="__tabbed_1_3"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m13.13 22.19-1.63-3.83c1.57-.58 3.04-1.36 4.4-2.27zM5.64 12.5l-3.83-1.63 6.1-2.77C7 9.46 6.22 10.93 5.64 12.5M19.22 4c.28 0 .53 0 .74.05.17 1.39-.02 4.25-3.3 7.53-1.7 1.71-3.73 3.02-6.01 3.89l-2.15-2.1c.92-2.31 2.23-4.34 3.92-6.03C15.18 4.58 17.64 4 19.22 4m0-2c-1.98 0-4.98.69-8.22 3.93-2.19 2.19-3.5 4.6-4.35 6.71-.28.75-.09 1.57.46 2.13l2.13 2.12c.38.38.89.61 1.42.61.23 0 .47-.06.7-.15A19.1 19.1 0 0 0 18.07 13c5.66-5.66 3.54-10.61 3.54-10.61S20.7 2 19.22 2m-4.68 7.46c-.78-.78-.78-2.05 0-2.83s2.05-.78 2.83 0c.77.78.78 2.05 0 2.83s-2.05.78-2.83 0m-5.66 7.07-1.41-1.41zM6.24 22l3.64-3.64c-.34-.09-.67-.24-.97-.45L4.83 22zM2 22h1.41l4.77-4.76-1.42-1.41L2 20.59zm0-2.83 4.09-4.08c-.21-.3-.36-.62-.45-.97L2 17.76z"/></svg></span> Tilt (Fast Cluster Loop)</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p>Best for rapid iteration on logic. The operator runs as a generic Go binary on your laptop and connects to the cluster via your kubeconfig.</p>
 <ol>
 <li>
 <p><strong>Clone the Repo:</strong>
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/dc-tec/openbao-operator.git
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>openbao-operator
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/dc-tec/openbao-operator.git
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">cd</span><span class="w"> </span>openbao-operator
+</span></code></pre></div></p>
+</li>
+<li>
+<p><strong>Bootstrap Tooling:</strong>
+    Install the repo-managed local tools and generated dependencies.
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>bootstrap
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>make<span class="w"> </span>doctor
 </span></code></pre></div></p>
 </li>
 <li>
 <p><strong>Install CRDs:</strong>
     Apply the Custom Resource Definitions to your target cluster.
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>install
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>install
 </span></code></pre></div></p>
 </li>
 <li>
 <p><strong>Run Operator:</strong>
-    Start the controller locally. It will use your <code>~/.kube/config</code>.
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>run
+    Start the cluster controller locally. It will use your <code>~/.kube/config</code>.
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>run-controller
 </span></code></pre></div></p>
 </li>
 </ol>
@@ -4483,25 +4526,64 @@
 <ol>
 <li>
 <p><strong>Start Kind Cluster:</strong>
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kind<span class="w"> </span>create<span class="w"> </span>cluster<span class="w"> </span>--name<span class="w"> </span>openbao-dev
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kind<span class="w"> </span>create<span class="w"> </span>cluster<span class="w"> </span>--name<span class="w"> </span>openbao-dev
+</span></code></pre></div></p>
+</li>
+<li>
+<p><strong>Bootstrap Tooling:</strong>
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>bootstrap
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>make<span class="w"> </span>doctor
 </span></code></pre></div></p>
 </li>
 <li>
 <p><strong>Build &amp; Load Image:</strong>
     Build the docker image and load it directly into Kind (no registry needed).
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>docker-build<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>openbao-operator:dev
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kind<span class="w"> </span>load<span class="w"> </span>docker-image<span class="w"> </span>openbao-operator:dev<span class="w"> </span>--name<span class="w"> </span>openbao-dev
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>docker-build<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>openbao-operator:dev
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>kind<span class="w"> </span>load<span class="w"> </span>docker-image<span class="w"> </span>openbao-operator:dev<span class="w"> </span>--name<span class="w"> </span>openbao-dev
 </span></code></pre></div></p>
 </li>
 <li>
 <p><strong>Deploy:</strong>
     Install CRDs and deploy the operator manifests.
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>deploy<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>openbao-operator:dev
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>deploy<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>openbao-operator:dev
 </span></code></pre></div></p>
 </li>
 <li>
 <p><strong>Verify:</strong>
-    <div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>openbao-operator-system
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>openbao-operator-system
+</span></code></pre></div></p>
+</li>
+</ol>
+</div>
+<div class="tabbed-block">
+<p>Best for repeated controller changes against a local cluster when you want automatic image rebuilds,
+deploys, logs, and a few manual check actions in one UI.</p>
+<ol>
+<li>
+<p><strong>Prepare a Local Cluster:</strong>
+    Tilt is intended for local kube contexts such as <code>kind-*</code>, <code>k3d-*</code>, <code>minikube</code>, or <code>docker-desktop</code>.</p>
+</li>
+<li>
+<p><strong>Bootstrap Tooling:</strong>
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>make<span class="w"> </span>bootstrap
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>make<span class="w"> </span>doctor
+</span></code></pre></div></p>
+</li>
+<li>
+<p><strong>Start Tilt:</strong>
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>make<span class="w"> </span>tilt-up
+</span></code></pre></div></p>
+</li>
+<li>
+<p><strong>Optional: Override Helper Image Defaults</strong>
+    By default, the Tilt workflow uses the locally built manager image and published <code>edge</code> helper images.
+    Override these when needed:
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>tilt<span class="w"> </span>up<span class="w"> </span>--<span class="w"> </span>--operator-version<span class="o">=</span>edge
+</span></code></pre></div></p>
+</li>
+<li>
+<p><strong>Stop Tilt:</strong>
+    <div class="language-sh highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>make<span class="w"> </span>tilt-down
 </span></code></pre></div></p>
 </li>
 </ol>
@@ -4520,6 +4602,21 @@
 </thead>
 <tbody>
 <tr>
+<td style="text-align: left;"><strong>Setup</strong></td>
+<td style="text-align: left;"><code>make bootstrap</code></td>
+<td style="text-align: left;">Install repo-managed tools, envtest assets, docs deps, and ast-grep.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make doctor</code></td>
+<td style="text-align: left;">Validate external prerequisites for the main contributor workflow.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make tilt-up</code> / <code>tilt-down</code></td>
+<td style="text-align: left;">Start or stop the local Kubernetes dev loop in Tilt.</td>
+</tr>
+<tr>
 <td style="text-align: left;"><strong>Build</strong></td>
 <td style="text-align: left;"><code>make build</code></td>
 <td style="text-align: left;">Compile the binary to <code>bin/manager</code>.</td>
@@ -4528,6 +4625,31 @@
 <td style="text-align: left;"></td>
 <td style="text-align: left;"><code>make docker-build</code></td>
 <td style="text-align: left;">Build the container image.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Run / Debug</strong></td>
+<td style="text-align: left;"><code>make air-controller</code></td>
+<td style="text-align: left;">Run the cluster controller with live reload via Air.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make air-provisioner</code></td>
+<td style="text-align: left;">Run the provisioner with live reload via Air.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make debug-controller</code></td>
+<td style="text-align: left;">Launch the controller under Delve.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make debug-provisioner</code></td>
+<td style="text-align: left;">Launch the provisioner under Delve.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make debug-test PKG=./path TEST=TestName</code></td>
+<td style="text-align: left;">Debug a single Go test package with Delve.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Deploy</strong></td>
@@ -4546,6 +4668,11 @@
 </tr>
 <tr>
 <td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make ci-core</code></td>
+<td style="text-align: left;">Run the PR-equivalent local gate (everything except E2E).</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
 <td style="text-align: left;"><code>make generate-ast-rules</code></td>
 <td style="text-align: left;">Generate ast-grep architecture boundary rules from policy.</td>
 </tr>
@@ -4561,8 +4688,18 @@
 </tr>
 <tr>
 <td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make test-sum</code></td>
+<td style="text-align: left;">Run unit tests with gotestsum output and JUnit XML under <code>dist/test/</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
 <td style="text-align: left;"><code>make test-integration</code></td>
 <td style="text-align: left;">Run integration tests (envtest).</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make test-integration-sum</code></td>
+<td style="text-align: left;">Run integration tests with gotestsum output and JUnit XML under <code>dist/test/</code>.</td>
 </tr>
 <tr>
 <td style="text-align: left;"></td>
@@ -4580,6 +4717,21 @@
 <td style="text-align: left;">Compare baseline snapshot vs current report (delta output).</td>
 </tr>
 <tr>
+<td style="text-align: left;"><strong>Perf</strong></td>
+<td style="text-align: left;"><code>make bench</code></td>
+<td style="text-align: left;">Run Go benchmarks (<code>go test -bench</code>) across the selected package set.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make bench-save</code></td>
+<td style="text-align: left;">Save benchmark output under <code>dist/bench/</code> for later comparison.</td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><code>make bench-compare OLD=... NEW=...</code></td>
+<td style="text-align: left;">Compare benchmark runs with <code>benchstat</code>.</td>
+</tr>
+<tr>
 <td style="text-align: left;"><strong>Generate</strong></td>
 <td style="text-align: left;"><code>make manifests</code></td>
 <td style="text-align: left;">Regenerate CRD YAMLs and RBAC.</td>
@@ -4593,7 +4745,7 @@
 </table>
 <h2 id="internal-dependency-report">Internal Dependency Report<a class="headerlink" href="#internal-dependency-report" title="Permanent link">&para;</a></h2>
 <p>Use the local architecture report tooling to inspect internal package dependencies.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>report-internal-deps
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>make<span class="w"> </span>report-internal-deps
 </span></code></pre></div>
 <p>Artifacts are written to <code>dist/architecture/</code>:</p>
 <ul>
@@ -4614,12 +4766,12 @@
 <li><code>untracked</code>: edge is not tracked and should be reviewed before merge.
 To track trends locally across refactors, save a baseline snapshot and compare against it:</li>
 </ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>report-internal-deps-snapshot
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>make<span class="w"> </span>report-internal-deps
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>make<span class="w"> </span>report-internal-deps-diff
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>make<span class="w"> </span>report-internal-deps-snapshot
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>make<span class="w"> </span>report-internal-deps
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>make<span class="w"> </span>report-internal-deps-diff
 </span></code></pre></div>
 <p>You can override the compared files when needed:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nv">BASELINE_REPORT</span><span class="o">=</span>/path/to/old-report.md<span class="w"> </span><span class="nv">CURRENT_REPORT</span><span class="o">=</span>/path/to/new-report.md<span class="w"> </span>make<span class="w"> </span>report-internal-deps-diff
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nv">BASELINE_REPORT</span><span class="o">=</span>/path/to/old-report.md<span class="w"> </span><span class="nv">CURRENT_REPORT</span><span class="o">=</span>/path/to/new-report.md<span class="w"> </span>make<span class="w"> </span>report-internal-deps-diff
 </span></code></pre></div>
 <h2 id="ast-grep-architecture-policy">Ast-Grep Architecture Policy<a class="headerlink" href="#ast-grep-architecture-policy" title="Permanent link">&para;</a></h2>
 <p>Ast-grep architecture boundary rules are generated from:</p>
@@ -4628,21 +4780,34 @@ To track trends locally across refactors, save a baseline snapshot and compare a
 </ul>
 <p>When adding new top-level <code>internal/*</code> packages or new controller packages, update this policy first so coverage checks stay complete.</p>
 <p>Regenerate and verify before pushing:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>make<span class="w"> </span>generate-ast-rules
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>make<span class="w"> </span>verify-arch-policy
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>make<span class="w"> </span>test-ast
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>make<span class="w"> </span>lint-ast
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>make<span class="w"> </span>generate-ast-rules
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>make<span class="w"> </span>verify-arch-policy
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>make<span class="w"> </span>test-ast
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>make<span class="w"> </span>lint-ast
 </span></code></pre></div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <details class="question">
 <summary>RBAC Errors during <code>make deploy</code>?</summary>
 <p>Ensure your current kubeconfig user has <code>cluster-admin</code> privileges.
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>clusterrolebinding<span class="w"> </span>my-admin<span class="w"> </span>--clusterrole<span class="o">=</span>cluster-admin<span class="w"> </span>--user<span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>config<span class="w"> </span>get-value<span class="w"> </span>account<span class="k">)</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>clusterrolebinding<span class="w"> </span>my-admin<span class="w"> </span>--clusterrole<span class="o">=</span>cluster-admin<span class="w"> </span>--user<span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>config<span class="w"> </span>get-value<span class="w"> </span>account<span class="k">)</span>
 </span></code></pre></div></p>
 </details>
 <details class="question">
 <summary>Webhooks failing locally?</summary>
-<p>Validating Webhooks require the K8s API server to reach the operator. When running <code>make run</code>, this is difficult. Use the <strong>Cluster Deployment</strong> method to test webhooks.</p>
+<p>Validating Webhooks require the K8s API server to reach the operator. When running <code>make run-controller</code>, this is difficult. Use the <strong>Cluster Deployment</strong> method to test webhooks.</p>
+</details>
+<details class="question">
+<summary>How do I confirm my workstation has everything required?</summary>
+<p>Run:
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>make<span class="w"> </span>doctor
+</span></code></pre></div>
+The command reports missing external tools and explains which workflows they block.</p>
+</details>
+<details class="question">
+<summary>What does the Tilt workflow build?</summary>
+<p>Tilt rebuilds the manager image locally and deploys the controller and provisioner from <code>config/default</code>.
+It also renders helper-image environment variables so the local operator defaults to published helper images
+that match <code>OPERATOR_VERSION</code> (default: <code>edge</code>).</p>
 </details>
 
 

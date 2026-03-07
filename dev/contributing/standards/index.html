@@ -4456,7 +4456,7 @@
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Structured Logs:</strong> Use <code>log.Info("msg", "key", "value")</code> instead of <code>Printf</code>.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Test Logic:</strong> Write table-driven unit tests for all business logic.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Verify:</strong> Run the full check suite:
-    <code>make lint-ci verify-arch-policy verify-fmt verify-tidy verify-generated verify-helm test-ci</code></li>
+    <code>make bootstrap &amp;&amp; make doctor &amp;&amp; make ci-core</code></li>
 </ul>
 </div>
 <div class="admonition failure">

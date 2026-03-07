@@ -4742,19 +4742,13 @@
 <h2 id="2-ci-vs-local-commands">2. CI vs Local Commands<a class="headerlink" href="#2-ci-vs-local-commands" title="Permanent link">&para;</a></h2>
 <p>Run these commands locally to reproduce CI behavior.</p>
 <h3 id="21-core-pr-equivalent-checks">2.1 Core PR-equivalent checks<a class="headerlink" href="#21-core-pr-equivalent-checks" title="Permanent link">&para;</a></h3>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>lint-ci
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>verify-fmt
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>make<span class="w"> </span>verify-tidy
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>make<span class="w"> </span>verify-vendor
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>make<span class="w"> </span>verify-generated
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>make<span class="w"> </span>verify-helm
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>make<span class="w"> </span>test-ci
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>make<span class="w"> </span>verify-openbao-config-compat
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>make<span class="w"> </span>docs-build
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>bootstrap
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>doctor
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>make<span class="w"> </span>ci-core
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p><code>make lint-ci</code> includes ast-grep policy generation/verification, rule tests, and strict scans. It requires the <code>ast-grep</code> CLI to be available on your <code>PATH</code>.</p>
+<p><code>make lint-ci</code> bootstraps <code>ast-grep</code> locally through <code>npm</code> if needed. <code>npm</code> must still be available on your <code>PATH</code>.</p>
 </div>
 <h3 id="22-job-to-command-mapping">2.2 Job-to-command mapping<a class="headerlink" href="#22-job-to-command-mapping" title="Permanent link">&para;</a></h3>
 <table>
@@ -4798,8 +4792,8 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>Security (vulncheck + Trivy FS)</code></td>
-<td style="text-align: left;"><code>make vulncheck</code> and <code>make security-scan IMG=ghcr.io/dc-tec/openbao-operator:edge</code></td>
-<td style="text-align: left;">Trivy scan checks filesystem and the provided image</td>
+<td style="text-align: left;"><code>make security-ci</code></td>
+<td style="text-align: left;">Runs <code>govulncheck</code> plus the CI-equivalent Trivy filesystem scan</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Unit Tests</code> + <code>Envtest Integration</code></td>
@@ -4820,7 +4814,7 @@
 </table>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
-<p>You can run <code>make ci-core</code> as a broad local gate, but set <code>IMG</code> first so the image scan stage is meaningful.</p>
+<p><code>make security-scan-image IMG=&lt;image&gt;</code> is available as an extra local hardening check when you want to scan a built image in addition to the CI-equivalent gates.</p>
 </div>
 <h2 id="3-pull-request-standards-gates">3. Pull Request Standards Gates<a class="headerlink" href="#3-pull-request-standards-gates" title="Permanent link">&para;</a></h2>
 <p>The <code>PR Standards</code> workflow (<code>.github/workflows/pr-standards.yml</code>) enforces:</p>
