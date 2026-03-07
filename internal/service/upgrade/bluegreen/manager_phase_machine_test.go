@@ -94,6 +94,8 @@ type clusterOpsStub struct {
 	ok      bool
 }
 
+const testBoolTrue = "true"
+
 func (s *clusterOpsStub) FindLeaderPod(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ []corev1.Pod) (string, string, bool) {
 	return s.podName, s.source, s.ok
 }
@@ -149,7 +151,7 @@ func TestHandlePhaseDeployingGreen_WaitsForBlueClusterReadiness(t *testing.T) {
 		scheme := newBlueGreenTestScheme(t)
 		cluster := newPhaseMachineCluster()
 		bluePod := newRevisionPod(cluster, cluster.Status.BlueGreen.BlueRevision, "blue-0")
-		bluePod.Labels[portopenbao.LabelSealed] = "true"
+		bluePod.Labels[portopenbao.LabelSealed] = testBoolTrue
 
 		manager := &Manager{
 			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(bluePod).Build(),
@@ -534,7 +536,7 @@ func TestHandlePhaseCleanup_Branches(t *testing.T) {
 		cluster.Spec.Replicas = 1
 		greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
 		markPodReadyUnsealed(greenPod)
-		greenPod.Labels[portopenbao.LabelActive] = "true"
+		greenPod.Labels[portopenbao.LabelActive] = testBoolTrue
 		job := succeededExecutorJob(cluster, ActionRemoveBluePeers)
 		blueStatefulSet := &appsv1.StatefulSet{
 			ObjectMeta: metav1.ObjectMeta{
@@ -571,7 +573,7 @@ func TestHandlePhaseCleanup_Branches(t *testing.T) {
 		}
 		greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
 		markPodReadyUnsealed(greenPod)
-		greenPod.Labels[portopenbao.LabelActive] = "true"
+		greenPod.Labels[portopenbao.LabelActive] = testBoolTrue
 		job := succeededExecutorJob(cluster, ActionRemoveBluePeers)
 		manager := &Manager{
 			client: fake.NewClientBuilder().

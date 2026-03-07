@@ -146,8 +146,8 @@ func TestCheckAbortConditions_TableDriven(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				cluster := newBlueGreenCluster()
-				cluster.Status.BlueGreen.GreenRevision = "green"
-				pod := newGreenPod(cluster, "green", "green-0")
+				cluster.Status.BlueGreen.GreenRevision = DeploymentNameSuffix
+				pod := newGreenPod(cluster, DeploymentNameSuffix, DeploymentNameSuffix+"-0")
 				tt.mutate(pod)
 
 				scheme := newBlueGreenTestScheme(t)
@@ -169,8 +169,8 @@ func TestCheckAbortConditions_TableDriven(t *testing.T) {
 		t.Parallel()
 
 		cluster := newBlueGreenCluster()
-		cluster.Status.BlueGreen.GreenRevision = "green"
-		pod := newGreenPod(cluster, "green", "green-0")
+		cluster.Status.BlueGreen.GreenRevision = DeploymentNameSuffix
+		pod := newGreenPod(cluster, DeploymentNameSuffix, DeploymentNameSuffix+"-0")
 		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
 			State: corev1.ContainerState{
 				Running: &corev1.ContainerStateRunning{},
@@ -194,14 +194,14 @@ func TestCheckAbortConditions_TableDriven(t *testing.T) {
 func TestMaybeAbortUpgrade_CleansUpGreenAndReleasesLock(t *testing.T) {
 	scheme := newBlueGreenTestScheme(t)
 	cluster := newBlueGreenCluster()
-	cluster.Status.BlueGreen.GreenRevision = "green"
+	cluster.Status.BlueGreen.GreenRevision = DeploymentNameSuffix
 	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
 		Operation: openbaov1alpha1.ClusterOperationUpgrade,
 		Holder:    upgrade.UpgradeOperationLockHolder,
 		Message:   "blue/green upgrade phase Syncing",
 	}
 
-	pod := newGreenPod(cluster, "green", "green-0")
+	pod := newGreenPod(cluster, DeploymentNameSuffix, DeploymentNameSuffix+"-0")
 	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
 		State: corev1.ContainerState{
 			Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
@@ -275,7 +275,7 @@ func TestFinalizeUpgradeTerminalStatePromotesGreenToBlue(t *testing.T) {
 	if err := manager.finalizeUpgradeTerminalState(context.Background(), logr.Discard(), cluster, true); err != nil {
 		t.Fatalf("finalizeUpgradeTerminalState() error = %v", err)
 	}
-	if cluster.Status.BlueGreen.BlueRevision != "green" {
+	if cluster.Status.BlueGreen.BlueRevision != DeploymentNameSuffix {
 		t.Fatalf("blue revision = %q, want green", cluster.Status.BlueGreen.BlueRevision)
 	}
 	if cluster.Status.BlueGreen.BlueImage != cluster.Spec.Image {

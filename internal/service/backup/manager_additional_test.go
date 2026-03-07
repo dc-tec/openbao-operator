@@ -78,9 +78,14 @@ func resetBackupTestState(namespace, name string) {
 	backupJobMetricsSeen = sync.Map{}
 }
 
-func newBackupManager(client client.Client) *Manager {
+const (
+	testKeepAnnotationKey   = "openbao.org/keep"
+	testKeepAnnotationValue = "preserved"
+)
+
+func newBackupManager(k8sClient client.Client) *Manager {
 	return &Manager{
-		client: client,
+		client: k8sClient,
 		scheme: testScheme,
 	}
 }
@@ -387,17 +392,17 @@ func TestHandleManualTrigger(t *testing.T) {
 		cluster := newTestClusterWithBackup("manual-active", "backup-ns")
 		cluster.Annotations = map[string]string{
 			constants.AnnotationTriggerBackup: "now",
-			"openbao.org/keep":                "preserved",
+			testKeepAnnotationKey:             testKeepAnnotationValue,
 		}
 		job := newBackupJobForCluster(cluster, "backup-running", now)
 		job.Status.Active = 1
 
-		client := fake.NewClientBuilder().
+		k8sClient := fake.NewClientBuilder().
 			WithScheme(testScheme).
 			WithObjects(cluster, job).
 			Build()
 
-		manager := newBackupManager(client)
+		manager := newBackupManager(k8sClient)
 		manual, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
 		if err != nil {
 			t.Fatalf("handleManualTrigger() error = %v", err)
@@ -411,19 +416,19 @@ func TestHandleManualTrigger(t *testing.T) {
 		if _, ok := cluster.Annotations[constants.AnnotationTriggerBackup]; ok {
 			t.Fatal("manual trigger annotation still present on in-memory object")
 		}
-		if got := cluster.Annotations["openbao.org/keep"]; got != "preserved" {
-			t.Fatalf("unrelated annotation = %q, want preserved", got)
+		if got := cluster.Annotations[testKeepAnnotationKey]; got != testKeepAnnotationValue {
+			t.Fatalf("unrelated annotation = %q, want %s", got, testKeepAnnotationValue)
 		}
 
 		updated := &openbaov1alpha1.OpenBaoCluster{}
-		if err := client.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updated); err != nil {
+		if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updated); err != nil {
 			t.Fatalf("Get() cluster error = %v", err)
 		}
 		if _, ok := updated.Annotations[constants.AnnotationTriggerBackup]; ok {
 			t.Fatal("manual trigger annotation still present on persisted object")
 		}
-		if got := updated.Annotations["openbao.org/keep"]; got != "preserved" {
-			t.Fatalf("persisted unrelated annotation = %q, want preserved", got)
+		if got := updated.Annotations[testKeepAnnotationKey]; got != testKeepAnnotationValue {
+			t.Fatalf("persisted unrelated annotation = %q, want %s", got, testKeepAnnotationValue)
 		}
 	})
 
@@ -452,10 +457,10 @@ func TestClearTriggerAnnotationLogsPatchError(t *testing.T) {
 	cluster := newTestClusterWithBackup("manual-patch-error", "backup-ns")
 	cluster.Annotations = map[string]string{
 		constants.AnnotationTriggerBackup: "now",
-		"openbao.org/keep":                "preserved",
+		testKeepAnnotationKey:             testKeepAnnotationValue,
 	}
 
-	client := fake.NewClientBuilder().
+	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithObjects(cluster).
 		WithInterceptorFuncs(interceptor.Funcs{
@@ -465,7 +470,7 @@ func TestClearTriggerAnnotationLogsPatchError(t *testing.T) {
 		}).
 		Build()
 
-	manager := newBackupManager(client)
+	manager := newBackupManager(k8sClient)
 	logSink := &capturingLogSink{}
 	logger := logr.New(logSink)
 
@@ -480,19 +485,19 @@ func TestClearTriggerAnnotationLogsPatchError(t *testing.T) {
 	if _, ok := cluster.Annotations[constants.AnnotationTriggerBackup]; ok {
 		t.Fatal("manual trigger annotation still present on in-memory object after patch failure")
 	}
-	if got := cluster.Annotations["openbao.org/keep"]; got != "preserved" {
-		t.Fatalf("in-memory unrelated annotation = %q, want preserved", got)
+	if got := cluster.Annotations[testKeepAnnotationKey]; got != testKeepAnnotationValue {
+		t.Fatalf("in-memory unrelated annotation = %q, want %s", got, testKeepAnnotationValue)
 	}
 
 	persisted := &openbaov1alpha1.OpenBaoCluster{}
-	if err := client.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, persisted); err != nil {
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, persisted); err != nil {
 		t.Fatalf("Get() cluster error = %v", err)
 	}
 	if _, ok := persisted.Annotations[constants.AnnotationTriggerBackup]; !ok {
 		t.Fatal("persisted manual trigger annotation removed despite patch failure")
 	}
-	if got := persisted.Annotations["openbao.org/keep"]; got != "preserved" {
-		t.Fatalf("persisted unrelated annotation = %q, want preserved", got)
+	if got := persisted.Annotations[testKeepAnnotationKey]; got != testKeepAnnotationValue {
+		t.Fatalf("persisted unrelated annotation = %q, want %s", got, testKeepAnnotationValue)
 	}
 }
 
@@ -500,13 +505,13 @@ func TestRecordBackupAttemptPersistsStatus(t *testing.T) {
 	cluster := newTestClusterWithBackup("record-attempt", "backup-ns")
 	cluster.Status.Backup = nil
 
-	client := fake.NewClientBuilder().
+	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithStatusSubresource(cluster).
 		WithObjects(cluster).
 		Build()
 
-	manager := newBackupManager(client)
+	manager := newBackupManager(k8sClient)
 	now := time.Unix(1700000000, 0).UTC()
 	scheduled := now.Add(5 * time.Minute)
 	nextScheduled := scheduled.Add(24 * time.Hour)
@@ -528,7 +533,7 @@ func TestRecordBackupAttemptPersistsStatus(t *testing.T) {
 	}
 
 	updated := &openbaov1alpha1.OpenBaoCluster{}
-	if err := client.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updated); err != nil {
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updated); err != nil {
 		t.Fatalf("Get() cluster error = %v", err)
 	}
 	if updated.Status.Backup == nil || updated.Status.Backup.LastAttemptTime == nil || !updated.Status.Backup.LastAttemptTime.Time.Equal(now) {
