@@ -28,13 +28,13 @@ AST_GREP ?= $(AST_GREP_LOCAL_BIN)
 
 define go-install-tool
 @set -e; \
-toolchain="$$(go env GOVERSION)"; \
+toolchain="$$(env -u GOFLAGS go env GOVERSION)"; \
 target="$(1)-$(3)-$${toolchain}"; \
 [ -f "$$target" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$$target" ] || { \
 package=$(2)@$(3) ;\
 echo "Downloading $${package} with $${toolchain}" ;\
 rm -f "$(1)" ;\
-GOFLAGS="-mod=mod" GOBIN="$(LOCALBIN)" go install $${package} ;\
+env -u GOFLAGS GOBIN="$(LOCALBIN)" GO111MODULE=on go install $${package} ;\
 mv "$(LOCALBIN)/$$(basename "$(1)")" "$$target" ;\
 } ;\
 ln -sf "$$(realpath "$$target")" "$(1)"
