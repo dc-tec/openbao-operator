@@ -544,6 +544,76 @@ jobs:
             sbom-openbao-upgrade.spdx.json
         run: bash hack/ci/verify-byte-reproducibility.sh
 
+      - name: Write reproducibility report
+        env:
+          TAG: ${{ needs.prepare.outputs.version }}
+          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
+          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
+          MANAGER_REBUILD_DIGEST: ${{ needs.rebuild.outputs.manager_digest }}
+          CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
+          CONFIG_INIT_REBUILD_DIGEST: ${{ needs.rebuild.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
+          BACKUP_EXECUTOR_REBUILD_DIGEST: ${{ needs.rebuild.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
+          UPGRADE_EXECUTOR_REBUILD_DIGEST: ${{ needs.rebuild.outputs.upgrade_executor_digest }}
+        run: |
+          set -euo pipefail
+          report_path="dist/reproducibility-report.md"
+          : > "${report_path}"
+
+          emit() {
+            printf '%s\n' "$1" | tee -a "${report_path}" >> "${GITHUB_STEP_SUMMARY}"
+          }
+
+          compare_digest() {
+            local name="$1"
+            local primary="$2"
+            local rebuild="$3"
+            local mark="✅"
+            if [[ "${primary}" != "${rebuild}" ]]; then
+              mark="❌"
+            fi
+            emit "| ${name} | \`${primary}\` | \`${rebuild}\` | ${mark} |"
+          }
+
+          compare_file() {
+            local rel="$1"
+            local primary_path="dist/primary/${rel}"
+            local rebuild_path="dist/rebuild/${rel}"
+            local primary_sha rebuild_sha mark
+            primary_sha="$(sha256sum "${primary_path}" | awk '{print $1}')"
+            rebuild_sha="$(sha256sum "${rebuild_path}" | awk '{print $1}')"
+            mark="✅"
+            if [[ "${primary_sha}" != "${rebuild_sha}" ]]; then
+              mark="❌"
+            fi
+            emit "| ${rel} | \`${primary_sha}\` | \`${rebuild_sha}\` | ${mark} |"
+          }
+
+          emit "## Reproducibility Report"
+          emit ""
+          emit "Tag: \`${TAG}\`"
+          emit ""
+          emit "### Image Digests"
+          emit "| Image | Primary digest | Rebuild digest | Match |"
+          emit "| :--- | :--- | :--- | :---: |"
+          compare_digest "openbao-operator" "${MANAGER_DIGEST}" "${MANAGER_REBUILD_DIGEST}"
+          compare_digest "openbao-init" "${CONFIG_INIT_DIGEST}" "${CONFIG_INIT_REBUILD_DIGEST}"
+          compare_digest "openbao-backup" "${BACKUP_EXECUTOR_DIGEST}" "${BACKUP_EXECUTOR_REBUILD_DIGEST}"
+          compare_digest "openbao-upgrade" "${UPGRADE_EXECUTOR_DIGEST}" "${UPGRADE_EXECUTOR_REBUILD_DIGEST}"
+          emit ""
+          emit "### Artifact Bytes"
+          emit "| Artifact | Primary sha256 | Rebuild sha256 | Match |"
+          emit "| :--- | :--- | :--- | :---: |"
+          compare_file "install.yaml"
+          compare_file "crds.yaml"
+          compare_file "checksums.txt"
+          compare_file "openbao-operator-${CHART_VERSION}.tgz"
+          compare_file "sbom-openbao-operator.spdx.json"
+          compare_file "sbom-openbao-init.spdx.json"
+          compare_file "sbom-openbao-backup.spdx.json"
+          compare_file "sbom-openbao-upgrade.spdx.json"
+
       - name: Upload byte-verified release assets
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
@@ -558,6 +628,13 @@ jobs:
             dist/primary/sbom-openbao-backup.spdx.json
             dist/primary/sbom-openbao-upgrade.spdx.json
           retention-days: 7
+
+      - name: Upload reproducibility report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: release-reproducibility-report
+          path: dist/reproducibility-report.md
+          retention-days: 30
 
   promote:
     name: Promote + Publish Release

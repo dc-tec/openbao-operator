@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  prepare:
-    name: Prepare Variables
+  load-candidate:
+    name: Load Edge Candidate Bundle
     runs-on: &runner ubuntu-24.04
     if: >-
       ${{
@@ -26,112 +26,105 @@ jobs:
         }}
     permissions:
       contents: read
+      actions: read
     outputs:
-      sha: ${{ steps.vars.outputs.sha }}
-      short_sha: ${{ steps.vars.outputs.short_sha }}
-      version: ${{ steps.vars.outputs.version }}
-      chart_version: ${{ steps.vars.outputs.chart_version }}
-      build_tag: ${{ steps.vars.outputs.build_tag }}
-      repro_build_tag: ${{ steps.vars.outputs.repro_build_tag }}
-      source_date_epoch: ${{ steps.vars.outputs.source_date_epoch }}
-      manager_image: ${{ steps.vars.outputs.manager_image }}
-      config_init_image: ${{ steps.vars.outputs.config_init_image }}
-      backup_executor_image: ${{ steps.vars.outputs.backup_executor_image }}
-      upgrade_executor_image: ${{ steps.vars.outputs.upgrade_executor_image }}
+      sha: ${{ steps.meta.outputs.sha }}
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+      version: ${{ steps.meta.outputs.version }}
+      chart_version: ${{ steps.meta.outputs.chart_version }}
+      source_date_epoch: ${{ steps.meta.outputs.source_date_epoch }}
+      source_ref: ${{ steps.meta.outputs.source_ref }}
+      manager_image: ${{ steps.meta.outputs.manager_image }}
+      manager_digest: ${{ steps.meta.outputs.manager_digest }}
+      config_init_image: ${{ steps.meta.outputs.config_init_image }}
+      config_init_digest: ${{ steps.meta.outputs.config_init_digest }}
+      backup_executor_image: ${{ steps.meta.outputs.backup_executor_image }}
+      backup_executor_digest: ${{ steps.meta.outputs.backup_executor_digest }}
+      upgrade_executor_image: ${{ steps.meta.outputs.upgrade_executor_image }}
+      upgrade_executor_digest: ${{ steps.meta.outputs.upgrade_executor_digest }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 0
-
-      - name: Compute edge variables
-        id: vars
+      - name: Download edge candidate bundle from triggering run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
-          sha="$(git rev-parse HEAD)"
-          short_sha="$(git rev-parse --short=12 HEAD)"
-          build_tag="edge-build-${sha}"
-          repro_build_tag="edge-repro-${sha}"
-          source_date_epoch="$(git show -s --format=%ct HEAD)"
-          version="edge-${short_sha}"
-
-          chart_file="charts/openbao-operator/Chart.yaml"
-          chart_version="$(sed -nE 's/^version:[[:space:]]*"?([^"#[:space:]]+)"?[[:space:]]*(#.*)?$/\1/p' "${chart_file}" | head -n1)"
-          if [[ -z "${chart_version}" ]]; then
-            echo "failed to parse chart version from ${chart_file}" >&2
+          mkdir -p dist/upstream dist/candidate
+          gh run download "${RUN_ID}" -n edge-candidate-bundle -D dist/upstream
+          artifact_dir="$(dirname "$(find dist/upstream -type f -name metadata.json -print -quit)")"
+          if [[ -z "${artifact_dir}" || ! -f "${artifact_dir}/metadata.json" ]]; then
+            echo "edge candidate bundle metadata.json not found in upstream artifact" >&2
             exit 1
           fi
+          cp -a "${artifact_dir}/." dist/candidate/
 
-          owner="${GITHUB_REPOSITORY_OWNER}"
-          {
-            echo "sha=${sha}"
-            echo "short_sha=${short_sha}"
-            echo "version=${version}"
-            echo "chart_version=${chart_version}"
-            echo "build_tag=${build_tag}"
-            echo "repro_build_tag=${repro_build_tag}"
-            echo "source_date_epoch=${source_date_epoch}"
-            echo "manager_image=ghcr.io/${owner}/openbao-operator"
-            echo "config_init_image=ghcr.io/${owner}/openbao-init"
-            echo "backup_executor_image=ghcr.io/${owner}/openbao-backup"
-            echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade"
-          } >> "${GITHUB_OUTPUT}"
+      - name: Export metadata outputs
+        id: meta
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          from pathlib import Path
 
-  hardening:
-    name: Build + Verify Channel Integrity
-    needs: prepare
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    uses: ./.github/workflows/reusable-channel-hardening.yml
-    with:
-      ref: ${{ github.event.workflow_run.head_sha }}
-      source_ref: refs/heads/main
-      version: ${{ needs.prepare.outputs.version }}
-      chart_version: ${{ needs.prepare.outputs.chart_version }}
-      build_tag: ${{ needs.prepare.outputs.build_tag }}
-      repro_build_tag: ${{ needs.prepare.outputs.repro_build_tag }}
-      source_date_epoch: ${{ needs.prepare.outputs.source_date_epoch }}
-      manager_image: ${{ needs.prepare.outputs.manager_image }}
-      config_init_image: ${{ needs.prepare.outputs.config_init_image }}
-      backup_executor_image: ${{ needs.prepare.outputs.backup_executor_image }}
-      upgrade_executor_image: ${{ needs.prepare.outputs.upgrade_executor_image }}
-      byte_artifact_name: edge-byte-verified-assets
-    secrets: inherit
+          data = json.loads(Path("dist/candidate/metadata.json").read_text(encoding="utf-8"))
+          images = data["images"]
+          pairs = {
+              "sha": data["sha"],
+              "short_sha": data["short_sha"],
+              "version": data["version"],
+              "chart_version": data["chart_version"],
+              "source_date_epoch": data["source_date_epoch"],
+              "source_ref": data["source_ref"],
+              "manager_image": images["manager"]["ref"],
+              "manager_digest": images["manager"]["digest"],
+              "config_init_image": images["config_init"]["ref"],
+              "config_init_digest": images["config_init"]["digest"],
+              "backup_executor_image": images["backup_executor"]["ref"],
+              "backup_executor_digest": images["backup_executor"]["digest"],
+              "upgrade_executor_image": images["upgrade_executor"]["ref"],
+              "upgrade_executor_digest": images["upgrade_executor"]["digest"],
+          }
+          for key, value in pairs.items():
+              print(f"{key}={value}")
+          PY
+
+      - name: Upload local edge candidate bundle
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: edge-candidate-bundle
+          path: dist/candidate/
+          retention-days: 5
 
   promote:
     name: Promote Edge Tags
     runs-on: *runner
-    needs: [prepare, hardening]
+    needs: load-candidate
     permissions:
       contents: read
       packages: write
       id-token: write
       attestations: write
     env:
-      VERSION: ${{ needs.prepare.outputs.version }}
-      MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-      CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
-      BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
-      UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
-      MANAGER_DIGEST: ${{ needs.hardening.outputs.manager_digest }}
-      CONFIG_INIT_DIGEST: ${{ needs.hardening.outputs.config_init_digest }}
-      BACKUP_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.backup_executor_digest }}
-      UPGRADE_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.upgrade_executor_digest }}
+      VERSION: ${{ needs.load-candidate.outputs.version }}
+      SOURCE_REF: ${{ needs.load-candidate.outputs.source_ref }}
+      MANAGER_IMAGE: ${{ needs.load-candidate.outputs.manager_image }}
+      CONFIG_INIT_IMAGE: ${{ needs.load-candidate.outputs.config_init_image }}
+      BACKUP_EXECUTOR_IMAGE: ${{ needs.load-candidate.outputs.backup_executor_image }}
+      UPGRADE_EXECUTOR_IMAGE: ${{ needs.load-candidate.outputs.upgrade_executor_image }}
+      MANAGER_DIGEST: ${{ needs.load-candidate.outputs.manager_digest }}
+      CONFIG_INIT_DIGEST: ${{ needs.load-candidate.outputs.config_init_digest }}
+      BACKUP_EXECUTOR_DIGEST: ${{ needs.load-candidate.outputs.backup_executor_digest }}
+      UPGRADE_EXECUTOR_DIGEST: ${{ needs.load-candidate.outputs.upgrade_executor_digest }}
     steps:
-      - name: Checkout
+      - name: Checkout trusted workflow sources
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Download byte-verified edge assets
+      - name: Download edge candidate bundle
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
-          name: edge-byte-verified-assets
+          name: edge-candidate-bundle
           path: dist
 
       - name: Login to GHCR
@@ -232,8 +225,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-          SOURCE_REF: refs/heads/main
+          VERSION: ${{ needs.load-candidate.outputs.version }}
+          SOURCE_REF: ${{ needs.load-candidate.outputs.source_ref }}
           OWNER: ${{ github.repository_owner }}
           SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/publish-edge.yml
           VERIFY_CHART: "false"
@@ -244,28 +237,28 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
+          cache: false
 
       - name: Generate edge provenance index
         env:
           REPO: ${{ github.repository }}
           OWNER: ${{ github.repository_owner }}
           CHANNEL: edge
-          VERSION: ${{ needs.prepare.outputs.version }}
-          SHA: ${{ needs.prepare.outputs.sha }}
+          VERSION: ${{ needs.load-candidate.outputs.version }}
+          SHA: ${{ needs.load-candidate.outputs.sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
-          SOURCE_REF: refs/heads/main
-          SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
+          SOURCE_REF: ${{ needs.load-candidate.outputs.source_ref }}
+          SOURCE_DATE_EPOCH: ${{ needs.load-candidate.outputs.source_date_epoch }}
           CHECKSUMS_SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/publish-edge.yml
-          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          MANAGER_DIGEST: ${{ needs.hardening.outputs.manager_digest }}
-          CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
-          CONFIG_INIT_DIGEST: ${{ needs.hardening.outputs.config_init_digest }}
-          BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
-          BACKUP_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.backup_executor_digest }}
-          UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
-          UPGRADE_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.upgrade_executor_digest }}
+          MANAGER_IMAGE: ${{ needs.load-candidate.outputs.manager_image }}
+          MANAGER_DIGEST: ${{ needs.load-candidate.outputs.manager_digest }}
+          CONFIG_INIT_IMAGE: ${{ needs.load-candidate.outputs.config_init_image }}
+          CONFIG_INIT_DIGEST: ${{ needs.load-candidate.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_IMAGE: ${{ needs.load-candidate.outputs.backup_executor_image }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.load-candidate.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_IMAGE: ${{ needs.load-candidate.outputs.upgrade_executor_image }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.load-candidate.outputs.upgrade_executor_digest }}
         run: bash hack/ci/generate-channel-provenance-index.sh
 
       - name: Upload edge publish artifact
@@ -283,24 +276,24 @@ jobs:
   publish-pages:
     name: Publish Edge Manifests (GitHub Pages)
     runs-on: *runner
-    needs: [prepare, hardening, promote]
+    needs: [load-candidate, promote]
     concurrency:
       group: gh-pages
       cancel-in-progress: false
     permissions:
       contents: write
     env:
-      SHA: ${{ needs.prepare.outputs.sha }}
-      SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
-      VERSION: ${{ needs.prepare.outputs.version }}
-      MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-      CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
-      BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
-      UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
-      MANAGER_DIGEST: ${{ needs.hardening.outputs.manager_digest }}
-      CONFIG_INIT_DIGEST: ${{ needs.hardening.outputs.config_init_digest }}
-      BACKUP_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.backup_executor_digest }}
-      UPGRADE_EXECUTOR_DIGEST: ${{ needs.hardening.outputs.upgrade_executor_digest }}
+      SHA: ${{ needs.load-candidate.outputs.sha }}
+      SHORT_SHA: ${{ needs.load-candidate.outputs.short_sha }}
+      VERSION: ${{ needs.load-candidate.outputs.version }}
+      MANAGER_IMAGE: ${{ needs.load-candidate.outputs.manager_image }}
+      CONFIG_INIT_IMAGE: ${{ needs.load-candidate.outputs.config_init_image }}
+      BACKUP_EXECUTOR_IMAGE: ${{ needs.load-candidate.outputs.backup_executor_image }}
+      UPGRADE_EXECUTOR_IMAGE: ${{ needs.load-candidate.outputs.upgrade_executor_image }}
+      MANAGER_DIGEST: ${{ needs.load-candidate.outputs.manager_digest }}
+      CONFIG_INIT_DIGEST: ${{ needs.load-candidate.outputs.config_init_digest }}
+      BACKUP_EXECUTOR_DIGEST: ${{ needs.load-candidate.outputs.backup_executor_digest }}
+      UPGRADE_EXECUTOR_DIGEST: ${{ needs.load-candidate.outputs.upgrade_executor_digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
