@@ -115,28 +115,33 @@ jobs:
     needs: [build]
     permissions:
       contents: read
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      REPO: ${{ github.repository }}
-      VERSION: ${{ inputs.version }}
-      SOURCE_REF: ${{ inputs.source_ref }}
-      MANAGER_IMAGE: ${{ inputs.manager_image }}
-      MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
-      CONFIG_INIT_IMAGE: ${{ inputs.config_init_image }}
-      CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
-      BACKUP_EXECUTOR_IMAGE: ${{ inputs.backup_executor_image }}
-      BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
-      UPGRADE_EXECUTOR_IMAGE: ${{ inputs.upgrade_executor_image }}
-      UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
     steps:
-      - name: Checkout
+      - name: Checkout workflow helper sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .github-workflow-src
+          fetch-depth: 1
+
+      - name: Checkout source ref
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.ref }}
           fetch-depth: 1
 
       - name: Verify image attestations
-        run: bash hack/ci/verify-image-attestations.sh
+        uses: ./.github-workflow-src/.github/actions/verify-image-attestations
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          repo: ${{ github.repository }}
+          version: ${{ inputs.version }}
+          source-ref: ${{ inputs.source_ref }}
+          image-refs: |
+            ${{ inputs.manager_image }}@${{ needs.build.outputs.manager_digest }}
+            ${{ inputs.config_init_image }}@${{ needs.build.outputs.config_init_digest }}
+            ${{ inputs.backup_executor_image }}@${{ needs.build.outputs.backup_executor_digest }}
+            ${{ inputs.upgrade_executor_image }}@${{ needs.build.outputs.upgrade_executor_digest }}
 
   verify-byte-reproducibility:
     name: Verify Byte Reproducibility
@@ -146,6 +151,13 @@ jobs:
       contents: read
       packages: read
     steps:
+      - name: Checkout workflow helper sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .github-workflow-src
+          fetch-depth: 1
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -157,14 +169,10 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
+          cache: false
 
-      - name: Cache Tools
-        id: cache-tools
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
+      - name: Add repo-local tools to PATH
+        run: echo "${GITHUB_WORKSPACE}/bin" >> "${GITHUB_PATH}"
 
       - name: Setup Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
@@ -184,30 +192,18 @@ jobs:
           mkdir -p dist/primary dist/rebuild
 
       - name: Generate primary manifests
-        env:
-          GOFLAGS: -mod=vendor
-          MANAGER_IMAGE: ${{ inputs.manager_image }}
-          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
-          VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${VERSION}"
-          cp dist/install.yaml dist/primary/install.yaml
-          make build-crds
-          cp dist/crds.yaml dist/primary/crds.yaml
+        uses: ./.github-workflow-src/.github/actions/generate-channel-manifests
+        with:
+          image: ${{ inputs.manager_image }}@${{ needs.build.outputs.manager_digest }}
+          operator-version: ${{ inputs.version }}
+          output-dir: dist/primary
 
       - name: Generate rebuild manifests
-        env:
-          GOFLAGS: -mod=vendor
-          MANAGER_IMAGE: ${{ inputs.manager_image }}
-          MANAGER_DIGEST: ${{ needs.rebuild.outputs.manager_digest }}
-          VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${VERSION}"
-          cp dist/install.yaml dist/rebuild/install.yaml
-          make build-crds
-          cp dist/crds.yaml dist/rebuild/crds.yaml
+        uses: ./.github-workflow-src/.github/actions/generate-channel-manifests
+        with:
+          image: ${{ inputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
+          operator-version: ${{ inputs.version }}
+          output-dir: dist/rebuild
 
       - name: Package Helm chart (primary)
         env:

@@ -114,25 +114,25 @@ func main() {
 	}
 
 	operatorRoots := []rootSpec{
-		{Prefix: "", Dir: filepath.Join("internal", "config"), Type: "hclCoreAttributes"},
-		{Prefix: "", Dir: filepath.Join("internal", "config"), Type: "hclUserConfigurationAttributes"},
+		{Prefix: "", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclCoreAttributes"},
+		{Prefix: "", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclUserConfigurationAttributes"},
 
-		{Prefix: "listener", Dir: filepath.Join("internal", "config"), Type: "hclListenerTCP"},
-		{Prefix: "storage", Dir: filepath.Join("internal", "config"), Type: "hclStorageRaft"},
-		{Prefix: "storage.retry_join", Dir: filepath.Join("internal", "config"), Type: "hclRetryJoin"},
+		{Prefix: "listener", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclListenerTCP"},
+		{Prefix: "storage", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclStorageRaft"},
+		{Prefix: "storage.retry_join", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclRetryJoin"},
 
-		{Prefix: "telemetry", Dir: filepath.Join("internal", "config"), Type: "hclTelemetry"},
-		{Prefix: "audit", Dir: filepath.Join("internal", "config"), Type: "hclAuditDevice"},
-		{Prefix: "plugin", Dir: filepath.Join("internal", "config"), Type: "hclPlugin"},
+		{Prefix: "telemetry", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclTelemetry"},
+		{Prefix: "audit", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclAuditDevice"},
+		{Prefix: "plugin", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclPlugin"},
 
-		{Prefix: "seal", Dir: filepath.Join("internal", "config"), Type: "hclSealStatic"},
-		{Prefix: "seal", Dir: filepath.Join("internal", "config"), Type: "hclSealTransit"},
-		{Prefix: "seal", Dir: filepath.Join("internal", "config"), Type: "hclSealAWSKMS"},
-		{Prefix: "seal", Dir: filepath.Join("internal", "config"), Type: "hclSealAzureKeyVault"},
-		{Prefix: "seal", Dir: filepath.Join("internal", "config"), Type: "hclSealGCPCloudKMS"},
-		{Prefix: "seal", Dir: filepath.Join("internal", "config"), Type: "hclSealKMIP"},
-		{Prefix: "seal", Dir: filepath.Join("internal", "config"), Type: "hclSealOCIKMS"},
-		{Prefix: "seal", Dir: filepath.Join("internal", "config"), Type: "hclSealPKCS11"},
+		{Prefix: "seal", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclSealStatic"},
+		{Prefix: "seal", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclSealTransit"},
+		{Prefix: "seal", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclSealAWSKMS"},
+		{Prefix: "seal", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclSealAzureKeyVault"},
+		{Prefix: "seal", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclSealGCPCloudKMS"},
+		{Prefix: "seal", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclSealKMIP"},
+		{Prefix: "seal", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclSealOCIKMS"},
+		{Prefix: "seal", Dir: filepath.Join("internal", "adapter", "config"), Type: "hclSealPKCS11"},
 	}
 
 	upstreamKeys, err := extractKeySet(upstreamRoots)

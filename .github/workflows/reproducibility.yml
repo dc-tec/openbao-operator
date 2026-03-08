@@ -94,15 +94,17 @@ jobs:
 
           source_date_epoch="$(git show -s --format=%ct HEAD)"
           owner="${GITHUB_REPOSITORY_OWNER}"
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "ref=${resolved_sha}" >> "${GITHUB_OUTPUT}"
-          echo "chart_version=${chart_version}" >> "${GITHUB_OUTPUT}"
-          echo "build_tag=repro-${tag}-${GITHUB_RUN_ID}" >> "${GITHUB_OUTPUT}"
-          echo "source_date_epoch=${source_date_epoch}" >> "${GITHUB_OUTPUT}"
-          echo "manager_image=ghcr.io/${owner}/openbao-operator" >> "${GITHUB_OUTPUT}"
-          echo "config_init_image=ghcr.io/${owner}/openbao-init" >> "${GITHUB_OUTPUT}"
-          echo "backup_executor_image=ghcr.io/${owner}/openbao-backup" >> "${GITHUB_OUTPUT}"
-          echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tag=${tag}"
+            echo "ref=${resolved_sha}"
+            echo "chart_version=${chart_version}"
+            echo "build_tag=repro-${tag}-${GITHUB_RUN_ID}"
+            echo "source_date_epoch=${source_date_epoch}"
+            echo "manager_image=ghcr.io/${owner}/openbao-operator"
+            echo "config_init_image=ghcr.io/${owner}/openbao-init"
+            echo "backup_executor_image=ghcr.io/${owner}/openbao-backup"
+            echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade"
+          } >> "${GITHUB_OUTPUT}"
 
   rebuild:
     name: Independent Rebuild
@@ -127,6 +129,13 @@ jobs:
       contents: read
       packages: read
     steps:
+      - name: Checkout workflow helper sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .github-workflow-src
+          fetch-depth: 1
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -139,6 +148,9 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: false
+
+      - name: Add repo-local tools to PATH
+        run: echo "${GITHUB_WORKSPACE}/bin" >> "${GITHUB_PATH}"
 
       - name: Setup Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
@@ -170,10 +182,12 @@ jobs:
           release_digest() {
             docker buildx imagetools inspect "$1" --format '{{json .Manifest.Digest}}' | tr -d '"'
           }
-          echo "manager=$(release_digest "${MANAGER_IMAGE}:${TAG}")" >> "${GITHUB_OUTPUT}"
-          echo "config_init=$(release_digest "${CONFIG_INIT_IMAGE}:${TAG}")" >> "${GITHUB_OUTPUT}"
-          echo "backup_executor=$(release_digest "${BACKUP_EXECUTOR_IMAGE}:${TAG}")" >> "${GITHUB_OUTPUT}"
-          echo "upgrade_executor=$(release_digest "${UPGRADE_EXECUTOR_IMAGE}:${TAG}")" >> "${GITHUB_OUTPUT}"
+          {
+            echo "manager=$(release_digest "${MANAGER_IMAGE}:${TAG}")"
+            echo "config_init=$(release_digest "${CONFIG_INIT_IMAGE}:${TAG}")"
+            echo "backup_executor=$(release_digest "${BACKUP_EXECUTOR_IMAGE}:${TAG}")"
+            echo "upgrade_executor=$(release_digest "${UPGRADE_EXECUTOR_IMAGE}:${TAG}")"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Prepare output directories
         run: |
@@ -181,30 +195,18 @@ jobs:
           mkdir -p dist/release dist/rebuild
 
       - name: Generate release manifests
-        env:
-          GOFLAGS: -mod=vendor
-          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          MANAGER_DIGEST: ${{ steps.release-digests.outputs.manager }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-        run: |
-          set -euo pipefail
-          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${TAG}"
-          cp dist/install.yaml dist/release/install.yaml
-          make build-crds
-          cp dist/crds.yaml dist/release/crds.yaml
+        uses: ./.github-workflow-src/.github/actions/generate-channel-manifests
+        with:
+          image: ${{ needs.prepare.outputs.manager_image }}@${{ steps.release-digests.outputs.manager }}
+          operator-version: ${{ needs.prepare.outputs.tag }}
+          output-dir: dist/release
 
       - name: Generate rebuild manifests
-        env:
-          GOFLAGS: -mod=vendor
-          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          MANAGER_DIGEST: ${{ needs.rebuild.outputs.manager_digest }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-        run: |
-          set -euo pipefail
-          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${TAG}"
-          cp dist/install.yaml dist/rebuild/install.yaml
-          make build-crds
-          cp dist/crds.yaml dist/rebuild/crds.yaml
+        uses: ./.github-workflow-src/.github/actions/generate-channel-manifests
+        with:
+          image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
+          operator-version: ${{ needs.prepare.outputs.tag }}
+          output-dir: dist/rebuild
 
       - name: Package Helm chart (release)
         env:
@@ -399,24 +401,28 @@ jobs:
             echo "| ${rel} | \`${release_sha}\` | \`${rebuild_sha}\` | ${mark} |" >> "${GITHUB_STEP_SUMMARY}"
           }
 
-          cat <<'EOF' >> "${GITHUB_STEP_SUMMARY}"
+          {
+            cat <<'EOF'
           ## Reproducibility Report (Report-Only)
           EOF
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "Tag: \`${TAG}\`" >> "${GITHUB_STEP_SUMMARY}"
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "### Image Digests" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Image | Release digest | Rebuild digest | Match |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| :--- | :--- | :--- | :---: |" >> "${GITHUB_STEP_SUMMARY}"
+            echo ""
+            echo "Tag: \`${TAG}\`"
+            echo ""
+            echo "### Image Digests"
+            echo "| Image | Release digest | Rebuild digest | Match |"
+            echo "| :--- | :--- | :--- | :---: |"
+          } >> "${GITHUB_STEP_SUMMARY}"
           compare_digest "openbao-operator" "${RELEASE_MANAGER_DIGEST}" "${REBUILD_MANAGER_DIGEST}"
           compare_digest "openbao-init" "${RELEASE_CONFIG_INIT_DIGEST}" "${REBUILD_CONFIG_INIT_DIGEST}"
           compare_digest "openbao-backup" "${RELEASE_BACKUP_DIGEST}" "${REBUILD_BACKUP_DIGEST}"
           compare_digest "openbao-upgrade" "${RELEASE_UPGRADE_DIGEST}" "${REBUILD_UPGRADE_DIGEST}"
 
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "### Artifact Bytes" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Artifact | Release sha256 | Rebuild sha256 | Match |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| :--- | :--- | :--- | :---: |" >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo ""
+            echo "### Artifact Bytes"
+            echo "| Artifact | Release sha256 | Rebuild sha256 | Match |"
+            echo "| :--- | :--- | :--- | :---: |"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
           compare_file "install.yaml"
           compare_file "crds.yaml"

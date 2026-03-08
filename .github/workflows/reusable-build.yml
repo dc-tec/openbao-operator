@@ -166,7 +166,9 @@ jobs:
           backup_executor_digest=$(docker buildx imagetools inspect "ghcr.io/${OWNER}/openbao-backup:${BUILD_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
           upgrade_executor_digest=$(docker buildx imagetools inspect "ghcr.io/${OWNER}/openbao-upgrade:${BUILD_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
 
-          echo "manager_digest=${manager_digest}" >> "${GITHUB_OUTPUT}"
-          echo "config_init_digest=${config_init_digest}" >> "${GITHUB_OUTPUT}"
-          echo "backup_executor_digest=${backup_executor_digest}" >> "${GITHUB_OUTPUT}"
-          echo "upgrade_executor_digest=${upgrade_executor_digest}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "manager_digest=${manager_digest}"
+            echo "config_init_digest=${config_init_digest}"
+            echo "backup_executor_digest=${backup_executor_digest}"
+            echo "upgrade_executor_digest=${upgrade_executor_digest}"
+          } >> "${GITHUB_OUTPUT}"

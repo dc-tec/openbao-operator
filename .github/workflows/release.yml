@@ -70,16 +70,17 @@ jobs:
           fi
 
           owner="${GITHUB_REPOSITORY_OWNER}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "chart_version=${chart_version}" >> "${GITHUB_OUTPUT}"
-          echo "build_tag=${build_tag}" >> "${GITHUB_OUTPUT}"
-          echo "repro_build_tag=${repro_build_tag}" >> "${GITHUB_OUTPUT}"
-          echo "source_date_epoch=${source_date_epoch}" >> "${GITHUB_OUTPUT}"
-
-          echo "manager_image=ghcr.io/${owner}/openbao-operator" >> "${GITHUB_OUTPUT}"
-          echo "config_init_image=ghcr.io/${owner}/openbao-init" >> "${GITHUB_OUTPUT}"
-          echo "backup_executor_image=ghcr.io/${owner}/openbao-backup" >> "${GITHUB_OUTPUT}"
-          echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade" >> "${GITHUB_OUTPUT}"
+          {
+            echo "version=${version}"
+            echo "chart_version=${chart_version}"
+            echo "build_tag=${build_tag}"
+            echo "repro_build_tag=${repro_build_tag}"
+            echo "source_date_epoch=${source_date_epoch}"
+            echo "manager_image=ghcr.io/${owner}/openbao-operator"
+            echo "config_init_image=ghcr.io/${owner}/openbao-init"
+            echo "backup_executor_image=ghcr.io/${owner}/openbao-backup"
+            echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Fail fast if draft GitHub Release is missing
         env:
@@ -140,19 +141,8 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
-
-      - name: Cache Tools
-        id: cache-tools
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
 
       - name: Run vulncheck
         env:
@@ -218,19 +208,8 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
-
-      - name: Cache Tools
-        id: cache-tools
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
 
       - name: Login to GHCR (pull)
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
@@ -300,19 +279,8 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
-
-      - name: Cache Tools
-        id: cache-tools
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
 
       - name: Install kind (pinned)
         uses: ./.github/actions/install-kind
@@ -333,27 +301,25 @@ jobs:
     needs: [prepare, build]
     permissions:
       contents: read
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      REPO: ${{ github.repository }}
-      VERSION: ${{ needs.prepare.outputs.version }}
-      MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-      MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
-      CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
-      CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
-      BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
-      BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
-      UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
-      UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
     steps:
-      - name: Checkout
+      - name: Checkout release ref
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.ref }}
           fetch-depth: 1
 
       - name: Verify image attestations
-        run: bash hack/ci/verify-image-attestations.sh
+        uses: ./.github/actions/verify-image-attestations
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          repo: ${{ github.repository }}
+          version: ${{ needs.prepare.outputs.version }}
+          image-refs: |
+            ${{ needs.prepare.outputs.manager_image }}@${{ needs.build.outputs.manager_digest }}
+            ${{ needs.prepare.outputs.config_init_image }}@${{ needs.build.outputs.config_init_digest }}
+            ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.build.outputs.backup_executor_digest }}
+            ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.build.outputs.upgrade_executor_digest }}
 
   verify-byte-reproducibility:
     name: Verify Byte Reproducibility
@@ -369,19 +335,8 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
-
-      - name: Cache Tools
-        id: cache-tools
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
 
       - name: Setup Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
@@ -401,30 +356,18 @@ jobs:
           mkdir -p dist/primary dist/rebuild
 
       - name: Generate primary manifests
-        env:
-          GOFLAGS: -mod=vendor
-          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          set -euo pipefail
-          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${VERSION}"
-          cp dist/install.yaml dist/primary/install.yaml
-          make build-crds
-          cp dist/crds.yaml dist/primary/crds.yaml
+        uses: ./.github/actions/generate-channel-manifests
+        with:
+          image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.build.outputs.manager_digest }}
+          operator-version: ${{ needs.prepare.outputs.version }}
+          output-dir: dist/primary
 
       - name: Generate rebuild manifests
-        env:
-          GOFLAGS: -mod=vendor
-          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          MANAGER_DIGEST: ${{ needs.rebuild.outputs.manager_digest }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          set -euo pipefail
-          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${VERSION}"
-          cp dist/install.yaml dist/rebuild/install.yaml
-          make build-crds
-          cp dist/crds.yaml dist/rebuild/crds.yaml
+        uses: ./.github/actions/generate-channel-manifests
+        with:
+          image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
+          operator-version: ${{ needs.prepare.outputs.version }}
+          output-dir: dist/rebuild
 
       - name: Package Helm chart (primary)
         env:
@@ -783,12 +726,10 @@ jobs:
           CHART_DIGEST: ${{ steps.chart-digest.outputs.chart_digest }}
         run: bash hack/ci/verify-release-artifact-attestations.sh
 
-      - name: Setup Go (for provenance tooling)
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      - name: Setup repo tools (for provenance tooling)
+        uses: ./.github/actions/setup-repo-tools
         with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
+          cache-tools: false
 
       - name: Generate provenance index
         env:

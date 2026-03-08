@@ -20,19 +20,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
-
-      - name: Cache Tools
-        id: cache-tools
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
 
       - name: Run vulncheck
         env:
@@ -61,22 +50,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
         with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
+          cache-tools: false
 
-      - name: Validate HCL fixtures against upstream OpenBao parser
-        env:
-          REPORT_SCHEMA_DRIFT: "true"
-        run: bash hack/ci/openbao-config-compat.sh 2.4.4 2.5.0
-
-      - name: Report operator-vs-upstream config schema drift (informational)
-        env:
-          GOFLAGS: -mod=mod
-        run: go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.5.0
+      - name: Run OpenBao config compatibility
+        uses: ./.github/actions/run-openbao-config-compat
+        with:
+          versions: 2.4.4 2.5.0
+          report-schema-drift: "true"
+          operator-schema-drift-image-tag: 2.5.0
 
   build-artifacts:
     name: Build Artifacts
@@ -85,12 +69,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
         with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
+          cache-tools: false
 
       - name: Build Linux Binaries
         env:
@@ -210,10 +192,12 @@ jobs:
         id: refs
         run: |
           set -euo pipefail
-          echo "manager_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-operator:${{ steps.tag.outputs.value }}" >> "${GITHUB_OUTPUT}"
-          echo "config_init_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-init:${{ steps.tag.outputs.value }}" >> "${GITHUB_OUTPUT}"
-          echo "backup_executor_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-backup:${{ steps.tag.outputs.value }}" >> "${GITHUB_OUTPUT}"
-          echo "upgrade_executor_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-upgrade:${{ steps.tag.outputs.value }}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "manager_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-operator:${{ steps.tag.outputs.value }}"
+            echo "config_init_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-init:${{ steps.tag.outputs.value }}"
+            echo "backup_executor_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-backup:${{ steps.tag.outputs.value }}"
+            echo "upgrade_executor_ref=ghcr.io/${GITHUB_REPOSITORY_OWNER}/openbao-upgrade:${{ steps.tag.outputs.value }}"
+          } >> "${GITHUB_OUTPUT}"
 
   e2e:
     name: E2E (kind ${{ matrix.k8s }})
@@ -236,18 +220,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
-
-      - name: Cache Tools
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: bin/
-          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
 
       - name: Install kind (pinned)
         uses: ./.github/actions/install-kind
@@ -272,7 +246,7 @@ jobs:
       - name: Create Kind Cluster
         run: |
           if ! kind get clusters | grep -q "kind"; then
-            kind create cluster --name kind --image $KIND_NODE_IMAGE
+            kind create cluster --name kind --image "${KIND_NODE_IMAGE}"
           fi
 
       - name: Run full E2E
@@ -321,12 +295,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
         with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
+          cache-tools: false
 
       - name: Verify Helm chart synced inputs
         env:
