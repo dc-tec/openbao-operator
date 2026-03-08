@@ -164,11 +164,15 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
 
-      - name: Setup repo tools
-        uses: ./.github-workflow-src/.github/actions/setup-repo-tools
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
-          cache-go: false
-          cache-tools: false
+          go-version-file: go.mod
+          check-latest: true
+          cache: false
+
+      - name: Add repo-local tools to PATH
+        run: echo "${GITHUB_WORKSPACE}/bin" >> "${GITHUB_PATH}"
 
       - name: Setup Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
