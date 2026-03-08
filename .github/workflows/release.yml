@@ -301,10 +301,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout workflow sources
+      - name: Checkout release ref
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ github.ref }}
           fetch-depth: 1
 
       - name: Verify image attestations
