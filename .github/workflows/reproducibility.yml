@@ -127,6 +127,13 @@ jobs:
       contents: read
       packages: read
     steps:
+      - name: Checkout workflow helper sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .github-workflow-src
+          fetch-depth: 1
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -134,7 +141,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup repo tools
-        uses: ./.github/actions/setup-repo-tools
+        uses: ./.github-workflow-src/.github/actions/setup-repo-tools
         with:
           cache-go: false
 
@@ -179,14 +186,14 @@ jobs:
           mkdir -p dist/release dist/rebuild
 
       - name: Generate release manifests
-        uses: ./.github/actions/generate-channel-manifests
+        uses: ./.github-workflow-src/.github/actions/generate-channel-manifests
         with:
           image: ${{ needs.prepare.outputs.manager_image }}@${{ steps.release-digests.outputs.manager }}
           operator-version: ${{ needs.prepare.outputs.tag }}
           output-dir: dist/release
 
       - name: Generate rebuild manifests
-        uses: ./.github/actions/generate-channel-manifests
+        uses: ./.github-workflow-src/.github/actions/generate-channel-manifests
         with:
           image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
           operator-version: ${{ needs.prepare.outputs.tag }}
