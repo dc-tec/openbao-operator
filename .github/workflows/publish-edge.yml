@@ -64,17 +64,19 @@ jobs:
           fi
 
           owner="${GITHUB_REPOSITORY_OWNER}"
-          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
-          echo "short_sha=${short_sha}" >> "${GITHUB_OUTPUT}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "chart_version=${chart_version}" >> "${GITHUB_OUTPUT}"
-          echo "build_tag=${build_tag}" >> "${GITHUB_OUTPUT}"
-          echo "repro_build_tag=${repro_build_tag}" >> "${GITHUB_OUTPUT}"
-          echo "source_date_epoch=${source_date_epoch}" >> "${GITHUB_OUTPUT}"
-          echo "manager_image=ghcr.io/${owner}/openbao-operator" >> "${GITHUB_OUTPUT}"
-          echo "config_init_image=ghcr.io/${owner}/openbao-init" >> "${GITHUB_OUTPUT}"
-          echo "backup_executor_image=ghcr.io/${owner}/openbao-backup" >> "${GITHUB_OUTPUT}"
-          echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade" >> "${GITHUB_OUTPUT}"
+          {
+            echo "sha=${sha}"
+            echo "short_sha=${short_sha}"
+            echo "version=${version}"
+            echo "chart_version=${chart_version}"
+            echo "build_tag=${build_tag}"
+            echo "repro_build_tag=${repro_build_tag}"
+            echo "source_date_epoch=${source_date_epoch}"
+            echo "manager_image=ghcr.io/${owner}/openbao-operator"
+            echo "config_init_image=ghcr.io/${owner}/openbao-init"
+            echo "backup_executor_image=ghcr.io/${owner}/openbao-backup"
+            echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade"
+          } >> "${GITHUB_OUTPUT}"
 
   hardening:
     name: Build + Verify Channel Integrity
