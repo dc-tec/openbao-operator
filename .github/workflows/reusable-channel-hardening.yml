@@ -166,9 +166,6 @@ jobs:
           check-latest: true
           cache: false
 
-      - name: Add repo-local tools to PATH
-        run: echo "${GITHUB_WORKSPACE}/source-under-test/bin" >> "${GITHUB_PATH}"
-
       - name: Setup Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
@@ -187,20 +184,32 @@ jobs:
           mkdir -p dist/primary dist/rebuild
 
       - name: Generate primary manifests
-        uses: ./.github-workflow-src/.github/actions/generate-channel-manifests
-        with:
-          source-dir: ${{ github.workspace }}/source-under-test
-          image: ${{ inputs.manager_image }}@${{ needs.build.outputs.manager_digest }}
-          operator-version: ${{ inputs.version }}
-          output-dir: ${{ github.workspace }}/dist/primary
+        env:
+          SOURCE_DIR: ${{ github.workspace }}/source-under-test
+          IMAGE: ${{ inputs.manager_image }}@${{ needs.build.outputs.manager_digest }}
+          OPERATOR_VERSION: ${{ inputs.version }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/primary
+        run: |
+          set -euo pipefail
+          bash .github-workflow-src/hack/ci/generate-channel-manifests.sh \
+            "${SOURCE_DIR}" \
+            "${IMAGE}" \
+            "${OPERATOR_VERSION}" \
+            "${OUTPUT_DIR}"
 
       - name: Generate rebuild manifests
-        uses: ./.github-workflow-src/.github/actions/generate-channel-manifests
-        with:
-          source-dir: ${{ github.workspace }}/source-under-test
-          image: ${{ inputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
-          operator-version: ${{ inputs.version }}
-          output-dir: ${{ github.workspace }}/dist/rebuild
+        env:
+          SOURCE_DIR: ${{ github.workspace }}/source-under-test
+          IMAGE: ${{ inputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
+          OPERATOR_VERSION: ${{ inputs.version }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/rebuild
+        run: |
+          set -euo pipefail
+          bash .github-workflow-src/hack/ci/generate-channel-manifests.sh \
+            "${SOURCE_DIR}" \
+            "${IMAGE}" \
+            "${OPERATOR_VERSION}" \
+            "${OUTPUT_DIR}"
 
       - name: Package Helm chart (primary)
         env:
@@ -211,7 +220,7 @@ jobs:
           set -euo pipefail
           work_dir="$(mktemp -d)"
           cp -a source-under-test/charts/openbao-operator "${work_dir}/openbao-operator"
-          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash source-under-test/hack/ci/prepare-release-chart.sh
+          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash .github-workflow-src/hack/ci/prepare-release-chart.sh
           find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
           helm package "${work_dir}/openbao-operator" -d dist/primary
           test -f "dist/primary/openbao-operator-${CHART_VERSION}.tgz"
@@ -225,7 +234,7 @@ jobs:
           set -euo pipefail
           work_dir="$(mktemp -d)"
           cp -a source-under-test/charts/openbao-operator "${work_dir}/openbao-operator"
-          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash source-under-test/hack/ci/prepare-release-chart.sh
+          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash .github-workflow-src/hack/ci/prepare-release-chart.sh
           find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
           helm package "${work_dir}/openbao-operator" -d dist/rebuild
           test -f "dist/rebuild/openbao-operator-${CHART_VERSION}.tgz"
