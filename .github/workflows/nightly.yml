@@ -315,3 +315,161 @@ jobs:
 
       - name: Template
         run: helm template openbao-operator charts/openbao-operator --namespace openbao-operator-system --include-crds > /dev/null
+
+  prepare-nightly-candidate:
+    name: Prepare Nightly Candidate
+    runs-on: *runner
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.vars.outputs.sha }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+      date_utc: ${{ steps.vars.outputs.date_utc }}
+      version: ${{ steps.vars.outputs.version }}
+      chart_version: ${{ steps.vars.outputs.chart_version }}
+      build_tag: ${{ steps.vars.outputs.build_tag }}
+      repro_build_tag: ${{ steps.vars.outputs.repro_build_tag }}
+      source_date_epoch: ${{ steps.vars.outputs.source_date_epoch }}
+      manager_image: ${{ steps.vars.outputs.manager_image }}
+      config_init_image: ${{ steps.vars.outputs.config_init_image }}
+      backup_executor_image: ${{ steps.vars.outputs.backup_executor_image }}
+      upgrade_executor_image: ${{ steps.vars.outputs.upgrade_executor_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Compute nightly variables
+        id: vars
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          date_utc="$(date -u +%Y%m%d)"
+          version="nightly-${date_utc}-${short_sha}"
+          build_tag="nightly-build-${sha}"
+          repro_build_tag="nightly-repro-${sha}"
+          source_date_epoch="$(git show -s --format=%ct HEAD)"
+
+          chart_file="charts/openbao-operator/Chart.yaml"
+          chart_version="$(sed -nE 's/^version:[[:space:]]*"?([^"#[:space:]]+)"?[[:space:]]*(#.*)?$/\1/p' "${chart_file}" | head -n1)"
+          if [[ -z "${chart_version}" ]]; then
+            echo "failed to parse chart version from ${chart_file}" >&2
+            exit 1
+          fi
+
+          owner="${GITHUB_REPOSITORY_OWNER}"
+          {
+            echo "sha=${sha}"
+            echo "short_sha=${short_sha}"
+            echo "date_utc=${date_utc}"
+            echo "version=${version}"
+            echo "chart_version=${chart_version}"
+            echo "build_tag=${build_tag}"
+            echo "repro_build_tag=${repro_build_tag}"
+            echo "source_date_epoch=${source_date_epoch}"
+            echo "manager_image=ghcr.io/${owner}/openbao-operator"
+            echo "config_init_image=ghcr.io/${owner}/openbao-init"
+            echo "backup_executor_image=ghcr.io/${owner}/openbao-backup"
+            echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade"
+          } >> "${GITHUB_OUTPUT}"
+
+  build-nightly-candidate:
+    name: Build + Verify Nightly Candidate
+    needs:
+      - prepare-nightly-candidate
+      - security
+      - openbao-config-compat
+      - docs
+      - helm
+      - e2e
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/reusable-channel-hardening.yml
+    with:
+      ref: ${{ github.sha }}
+      source_ref: refs/heads/main
+      version: ${{ needs.prepare-nightly-candidate.outputs.version }}
+      chart_version: ${{ needs.prepare-nightly-candidate.outputs.chart_version }}
+      build_tag: ${{ needs.prepare-nightly-candidate.outputs.build_tag }}
+      repro_build_tag: ${{ needs.prepare-nightly-candidate.outputs.repro_build_tag }}
+      source_date_epoch: ${{ needs.prepare-nightly-candidate.outputs.source_date_epoch }}
+      manager_image: ${{ needs.prepare-nightly-candidate.outputs.manager_image }}
+      config_init_image: ${{ needs.prepare-nightly-candidate.outputs.config_init_image }}
+      backup_executor_image: ${{ needs.prepare-nightly-candidate.outputs.backup_executor_image }}
+      upgrade_executor_image: ${{ needs.prepare-nightly-candidate.outputs.upgrade_executor_image }}
+      byte_artifact_name: nightly-byte-verified-assets
+    secrets: inherit
+
+  assemble-nightly-candidate-bundle:
+    name: Assemble Nightly Candidate Bundle
+    runs-on: *runner
+    needs: [prepare-nightly-candidate, build-nightly-candidate]
+    permissions:
+      contents: read
+    steps:
+      - name: Download byte-verified nightly assets
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: nightly-byte-verified-assets
+          path: dist/candidate
+
+      - name: Write nightly metadata
+        env:
+          SHA: ${{ needs.prepare-nightly-candidate.outputs.sha }}
+          SHORT_SHA: ${{ needs.prepare-nightly-candidate.outputs.short_sha }}
+          DATE_UTC: ${{ needs.prepare-nightly-candidate.outputs.date_utc }}
+          VERSION: ${{ needs.prepare-nightly-candidate.outputs.version }}
+          CHART_VERSION: ${{ needs.prepare-nightly-candidate.outputs.chart_version }}
+          SOURCE_DATE_EPOCH: ${{ needs.prepare-nightly-candidate.outputs.source_date_epoch }}
+          MANAGER_IMAGE: ${{ needs.prepare-nightly-candidate.outputs.manager_image }}
+          MANAGER_DIGEST: ${{ needs.build-nightly-candidate.outputs.manager_digest }}
+          CONFIG_INIT_IMAGE: ${{ needs.prepare-nightly-candidate.outputs.config_init_image }}
+          CONFIG_INIT_DIGEST: ${{ needs.build-nightly-candidate.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare-nightly-candidate.outputs.backup_executor_image }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.build-nightly-candidate.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare-nightly-candidate.outputs.upgrade_executor_image }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.build-nightly-candidate.outputs.upgrade_executor_digest }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > dist/candidate/metadata.json
+          import json
+          import os
+
+          data = {
+              "channel": "nightly",
+              "source_ref": "refs/heads/main",
+              "sha": os.environ["SHA"],
+              "short_sha": os.environ["SHORT_SHA"],
+              "date_utc": os.environ["DATE_UTC"],
+              "version": os.environ["VERSION"],
+              "chart_version": os.environ["CHART_VERSION"],
+              "source_date_epoch": os.environ["SOURCE_DATE_EPOCH"],
+              "build_run_id": os.environ["GITHUB_RUN_ID"],
+              "build_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "artifacts": {
+                  "install_yaml": "install.yaml",
+                  "crds_yaml": "crds.yaml",
+                  "checksums_txt": "checksums.txt",
+              },
+              "images": {
+                  "manager": {"ref": os.environ["MANAGER_IMAGE"], "digest": os.environ["MANAGER_DIGEST"]},
+                  "config_init": {"ref": os.environ["CONFIG_INIT_IMAGE"], "digest": os.environ["CONFIG_INIT_DIGEST"]},
+                  "backup_executor": {"ref": os.environ["BACKUP_EXECUTOR_IMAGE"], "digest": os.environ["BACKUP_EXECUTOR_DIGEST"]},
+                  "upgrade_executor": {"ref": os.environ["UPGRADE_EXECUTOR_IMAGE"], "digest": os.environ["UPGRADE_EXECUTOR_DIGEST"]},
+              },
+          }
+
+          print(json.dumps(data, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload nightly candidate bundle
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: nightly-candidate-bundle
+          path: dist/candidate/
+          retention-days: 7

@@ -7,435 +7,106 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "SemVer release/prerelease tag to rebuild and compare (e.g. 0.2.0, 0.2.0-rc.1)"
-        required: false
+        description: "SemVer release/prerelease tag to report on (e.g. 0.2.0, 0.2.0-rc.1)"
+        required: true
         type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: reproducibility-${{ github.event.workflow_run.head_sha || github.event.inputs.tag || github.run_id }}
+  group: reproducibility-${{ github.event.workflow_run.id || github.event.inputs.tag || github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  prepare:
-    name: Prepare Inputs
+  resolve-run:
+    name: Resolve Release Run
     runs-on: &runner ubuntu-24.04
     if: >-
       ${{
-        github.event_name != 'workflow_run' ||
+        github.event_name == 'workflow_dispatch' ||
         (github.event.workflow_run.conclusion == 'success' &&
          github.event.workflow_run.event == 'push' &&
          !github.event.workflow_run.repository.fork)
       }}
     permissions:
       contents: read
+      actions: read
     outputs:
-      tag: ${{ steps.vars.outputs.tag }}
-      ref: ${{ steps.vars.outputs.ref }}
-      chart_version: ${{ steps.vars.outputs.chart_version }}
-      build_tag: ${{ steps.vars.outputs.build_tag }}
-      source_date_epoch: ${{ steps.vars.outputs.source_date_epoch }}
-      manager_image: ${{ steps.vars.outputs.manager_image }}
-      config_init_image: ${{ steps.vars.outputs.config_init_image }}
-      backup_executor_image: ${{ steps.vars.outputs.backup_executor_image }}
-      upgrade_executor_image: ${{ steps.vars.outputs.upgrade_executor_image }}
+      run_id: ${{ steps.resolve.outputs.run_id }}
+      tag: ${{ steps.resolve.outputs.tag }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 0
-
-      - name: Compute reproducibility variables
-        id: vars
+      - name: Resolve successful release run
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag=""
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            tag="${{ github.event.inputs.tag }}"
-          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            head_sha="${{ github.event.workflow_run.head_sha }}"
-            mapfile -t tags < <(git tag --points-at "${head_sha}" --sort=-v:refname)
-            for candidate in "${tags[@]}"; do
-              if [[ "${candidate}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
-                tag="${candidate}"
-                break
-              fi
-            done
-            if [[ -z "${tag}" ]]; then
-              echo "No SemVer tag found for workflow_run head sha ${head_sha}" >&2
-              exit 1
-            fi
+          if [[ "${EVENT_NAME}" == "workflow_run" ]]; then
+            echo "run_id=${WORKFLOW_RUN_ID}" >> "${GITHUB_OUTPUT}"
+            echo "tag=${WORKFLOW_RUN_HEAD_BRANCH}" >> "${GITHUB_OUTPUT}"
+            exit 0
           fi
 
-          if ! [[ "${tag}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
-            echo "SemVer tag required (X.Y.Z or X.Y.Z-rc.N). Got: ${tag}" >&2
+          if ! [[ "${INPUT_TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
+            echo "SemVer tag required (X.Y.Z or X.Y.Z-rc.N). Got: ${INPUT_TAG}" >&2
             exit 1
           fi
 
-          git checkout "refs/tags/${tag}" --detach
-          resolved_sha="$(git rev-parse HEAD)"
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            expected_sha="${{ github.event.workflow_run.head_sha }}"
-            if [[ "${resolved_sha}" != "${expected_sha}" ]]; then
-              echo "Resolved tag ${tag} to ${resolved_sha}, expected ${expected_sha}" >&2
-              exit 1
-            fi
-          fi
-
-          chart_file="charts/openbao-operator/Chart.yaml"
-          chart_version="$(sed -nE 's/^version:[[:space:]]*"?([^"#[:space:]]+)"?[[:space:]]*(#.*)?$/\1/p' "${chart_file}" | head -n1)"
-          if [[ -z "${chart_version}" ]]; then
-            echo "failed to parse chart version from ${chart_file}" >&2
-            exit 1
-          fi
-
-          source_date_epoch="$(git show -s --format=%ct HEAD)"
-          owner="${GITHUB_REPOSITORY_OWNER}"
-          {
-            echo "tag=${tag}"
-            echo "ref=${resolved_sha}"
-            echo "chart_version=${chart_version}"
-            echo "build_tag=repro-${tag}-${GITHUB_RUN_ID}"
-            echo "source_date_epoch=${source_date_epoch}"
-            echo "manager_image=ghcr.io/${owner}/openbao-operator"
-            echo "config_init_image=ghcr.io/${owner}/openbao-init"
-            echo "backup_executor_image=ghcr.io/${owner}/openbao-backup"
-            echo "upgrade_executor_image=ghcr.io/${owner}/openbao-upgrade"
-          } >> "${GITHUB_OUTPUT}"
-
-  rebuild:
-    name: Independent Rebuild
-    needs: prepare
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    uses: ./.github/workflows/reusable-build.yml
-    with:
-      build_tag: ${{ needs.prepare.outputs.build_tag }}
-      ref: ${{ needs.prepare.outputs.ref }}
-      source_date_epoch: ${{ needs.prepare.outputs.source_date_epoch }}
-    secrets: inherit
-
-  compare:
-    name: Compare Release vs Rebuild Artifacts (report-only)
-    runs-on: *runner
-    needs: [prepare, rebuild]
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Checkout workflow helper sources
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .github-workflow-src
-          fetch-depth: 1
-
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ needs.prepare.outputs.ref }}
-          fetch-depth: 0
-
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: false
-
-      - name: Add repo-local tools to PATH
-        run: echo "${GITHUB_WORKSPACE}/bin" >> "${GITHUB_PATH}"
-
-      - name: Setup Helm
-        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
-        with:
-          version: v4.1.1
-
-      - name: Login to GHCR (read)
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-        with:
-          version: v0.31.1
-
-      - name: Resolve release digests
-        id: release-digests
-        env:
-          TAG: ${{ needs.prepare.outputs.tag }}
-          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          CONFIG_INIT_IMAGE: ${{ needs.prepare.outputs.config_init_image }}
-          BACKUP_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.backup_executor_image }}
-          UPGRADE_EXECUTOR_IMAGE: ${{ needs.prepare.outputs.upgrade_executor_image }}
-        run: |
-          set -euo pipefail
-          release_digest() {
-            docker buildx imagetools inspect "$1" --format '{{json .Manifest.Digest}}' | tr -d '"'
-          }
-          {
-            echo "manager=$(release_digest "${MANAGER_IMAGE}:${TAG}")"
-            echo "config_init=$(release_digest "${CONFIG_INIT_IMAGE}:${TAG}")"
-            echo "backup_executor=$(release_digest "${BACKUP_EXECUTOR_IMAGE}:${TAG}")"
-            echo "upgrade_executor=$(release_digest "${UPGRADE_EXECUTOR_IMAGE}:${TAG}")"
-          } >> "${GITHUB_OUTPUT}"
-
-      - name: Prepare output directories
-        run: |
-          set -euo pipefail
-          mkdir -p dist/release dist/rebuild
-
-      - name: Generate release manifests
-        uses: ./.github-workflow-src/.github/actions/generate-channel-manifests
-        with:
-          image: ${{ needs.prepare.outputs.manager_image }}@${{ steps.release-digests.outputs.manager }}
-          operator-version: ${{ needs.prepare.outputs.tag }}
-          output-dir: dist/release
-
-      - name: Generate rebuild manifests
-        uses: ./.github-workflow-src/.github/actions/generate-channel-manifests
-        with:
-          image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
-          operator-version: ${{ needs.prepare.outputs.tag }}
-          output-dir: dist/rebuild
-
-      - name: Package Helm chart (release)
-        env:
-          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
-          OWNER: ${{ github.repository_owner }}
-          SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
-        run: |
-          set -euo pipefail
-          work_dir="$(mktemp -d)"
-          cp -a charts/openbao-operator "${work_dir}/openbao-operator"
-          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash hack/ci/prepare-release-chart.sh
-          find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
-          helm package "${work_dir}/openbao-operator" -d dist/release
-
-      - name: Package Helm chart (rebuild)
-        env:
-          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
-          OWNER: ${{ github.repository_owner }}
-          SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
-        run: |
-          set -euo pipefail
-          work_dir="$(mktemp -d)"
-          cp -a charts/openbao-operator "${work_dir}/openbao-operator"
-          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash hack/ci/prepare-release-chart.sh
-          find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
-          helm package "${work_dir}/openbao-operator" -d dist/rebuild
-
-      - name: Generate SBOM (release) - manager
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
-        with:
-          image: ${{ needs.prepare.outputs.manager_image }}@${{ steps.release-digests.outputs.manager }}
-          format: spdx-json
-          output-file: dist/release/sbom-openbao-operator.spdx.json
-          upload-artifact: "false"
-          upload-release-assets: "false"
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate SBOM (release) - config-init
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
-        with:
-          image: ${{ needs.prepare.outputs.config_init_image }}@${{ steps.release-digests.outputs.config_init }}
-          format: spdx-json
-          output-file: dist/release/sbom-openbao-init.spdx.json
-          upload-artifact: "false"
-          upload-release-assets: "false"
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate SBOM (release) - backup
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
-        with:
-          image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ steps.release-digests.outputs.backup_executor }}
-          format: spdx-json
-          output-file: dist/release/sbom-openbao-backup.spdx.json
-          upload-artifact: "false"
-          upload-release-assets: "false"
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate SBOM (release) - upgrade
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
-        with:
-          image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ steps.release-digests.outputs.upgrade_executor }}
-          format: spdx-json
-          output-file: dist/release/sbom-openbao-upgrade.spdx.json
-          upload-artifact: "false"
-          upload-release-assets: "false"
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate SBOM (rebuild) - manager
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
-        with:
-          image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
-          format: spdx-json
-          output-file: dist/rebuild/sbom-openbao-operator.spdx.json
-          upload-artifact: "false"
-          upload-release-assets: "false"
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate SBOM (rebuild) - config-init
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
-        with:
-          image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.rebuild.outputs.config_init_digest }}
-          format: spdx-json
-          output-file: dist/rebuild/sbom-openbao-init.spdx.json
-          upload-artifact: "false"
-          upload-release-assets: "false"
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate SBOM (rebuild) - backup
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
-        with:
-          image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.rebuild.outputs.backup_executor_digest }}
-          format: spdx-json
-          output-file: dist/rebuild/sbom-openbao-backup.spdx.json
-          upload-artifact: "false"
-          upload-release-assets: "false"
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate SBOM (rebuild) - upgrade
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
-        with:
-          image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.rebuild.outputs.upgrade_executor_digest }}
-          format: spdx-json
-          output-file: dist/rebuild/sbom-openbao-upgrade.spdx.json
-          upload-artifact: "false"
-          upload-release-assets: "false"
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Normalize SBOM JSON (deterministic)
-        env:
-          SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
-        run: |
-          set -euo pipefail
-          bash hack/ci/normalize-spdx-json.sh \
-            dist/release/sbom-openbao-operator.spdx.json \
-            dist/release/sbom-openbao-init.spdx.json \
-            dist/release/sbom-openbao-backup.spdx.json \
-            dist/release/sbom-openbao-upgrade.spdx.json \
-            dist/rebuild/sbom-openbao-operator.spdx.json \
-            dist/rebuild/sbom-openbao-init.spdx.json \
-            dist/rebuild/sbom-openbao-backup.spdx.json \
-            dist/rebuild/sbom-openbao-upgrade.spdx.json
-
-      - name: Generate deterministic checksums
-        run: |
-          set -euo pipefail
-          for dir in dist/release dist/rebuild; do
-            (
-              cd "${dir}"
-              mapfile -t sboms < <(find . -maxdepth 1 -type f -name 'sbom-*.spdx.json' -print | LC_ALL=C sort)
-              mapfile -t sbom_names < <(printf '%s\n' "${sboms[@]}" | sed 's#^\./##')
-              sha256sum install.yaml crds.yaml "${sbom_names[@]}" > checksums.txt
-            )
-          done
-
-      - name: Compare reproducibility (report-only)
-        env:
-          TAG: ${{ needs.prepare.outputs.tag }}
-          CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
-          RELEASE_MANAGER_DIGEST: ${{ steps.release-digests.outputs.manager }}
-          REBUILD_MANAGER_DIGEST: ${{ needs.rebuild.outputs.manager_digest }}
-          RELEASE_CONFIG_INIT_DIGEST: ${{ steps.release-digests.outputs.config_init }}
-          REBUILD_CONFIG_INIT_DIGEST: ${{ needs.rebuild.outputs.config_init_digest }}
-          RELEASE_BACKUP_DIGEST: ${{ steps.release-digests.outputs.backup_executor }}
-          REBUILD_BACKUP_DIGEST: ${{ needs.rebuild.outputs.backup_executor_digest }}
-          RELEASE_UPGRADE_DIGEST: ${{ steps.release-digests.outputs.upgrade_executor }}
-          REBUILD_UPGRADE_DIGEST: ${{ needs.rebuild.outputs.upgrade_executor_digest }}
-        run: |
-          set -euo pipefail
-          status=0
-
-          compare_digest() {
-            local name="$1"
-            local release="$2"
-            local rebuild="$3"
-            local mark="✅"
-            if [[ "${release}" != "${rebuild}" ]]; then
-              mark="❌"
-              status=1
-              echo "::warning::Digest mismatch for ${name}: release=${release} rebuild=${rebuild}"
-            fi
-            echo "| ${name} | \`${release}\` | \`${rebuild}\` | ${mark} |" >> "${GITHUB_STEP_SUMMARY}"
-          }
-
-          compare_file() {
-            local rel="$1"
-            local release_path="dist/release/${rel}"
-            local rebuild_path="dist/rebuild/${rel}"
-            local mark="✅"
-            if [[ ! -f "${release_path}" || ! -f "${rebuild_path}" ]]; then
-              mark="❌"
-              status=1
-              echo "::warning::Missing reproducibility file: ${rel}"
-              echo "| ${rel} | missing | missing | ${mark} |" >> "${GITHUB_STEP_SUMMARY}"
-              return
-            fi
-            local release_sha rebuild_sha
-            release_sha="$(sha256sum "${release_path}" | awk '{print $1}')"
-            rebuild_sha="$(sha256sum "${rebuild_path}" | awk '{print $1}')"
-            if [[ "${release_sha}" != "${rebuild_sha}" ]]; then
-              mark="❌"
-              status=1
-              echo "::warning::Byte mismatch for ${rel}: release=${release_sha} rebuild=${rebuild_sha}"
-            fi
-            echo "| ${rel} | \`${release_sha}\` | \`${rebuild_sha}\` | ${mark} |" >> "${GITHUB_STEP_SUMMARY}"
-          }
-
-          {
-            cat <<'EOF'
-          ## Reproducibility Report (Report-Only)
-          EOF
-            echo ""
-            echo "Tag: \`${TAG}\`"
-            echo ""
-            echo "### Image Digests"
-            echo "| Image | Release digest | Rebuild digest | Match |"
-            echo "| :--- | :--- | :--- | :---: |"
-          } >> "${GITHUB_STEP_SUMMARY}"
-          compare_digest "openbao-operator" "${RELEASE_MANAGER_DIGEST}" "${REBUILD_MANAGER_DIGEST}"
-          compare_digest "openbao-init" "${RELEASE_CONFIG_INIT_DIGEST}" "${REBUILD_CONFIG_INIT_DIGEST}"
-          compare_digest "openbao-backup" "${RELEASE_BACKUP_DIGEST}" "${REBUILD_BACKUP_DIGEST}"
-          compare_digest "openbao-upgrade" "${RELEASE_UPGRADE_DIGEST}" "${REBUILD_UPGRADE_DIGEST}"
-
-          {
-            echo ""
-            echo "### Artifact Bytes"
-            echo "| Artifact | Release sha256 | Rebuild sha256 | Match |"
-            echo "| :--- | :--- | :--- | :---: |"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-          compare_file "install.yaml"
-          compare_file "crds.yaml"
-          compare_file "checksums.txt"
-          compare_file "openbao-operator-${CHART_VERSION}.tgz"
-          compare_file "sbom-openbao-operator.spdx.json"
-          compare_file "sbom-openbao-init.spdx.json"
-          compare_file "sbom-openbao-backup.spdx.json"
-          compare_file "sbom-openbao-upgrade.spdx.json"
-
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          if (( status == 0 )); then
-            echo "Result: reproducible across image digests and byte-level artifacts." >> "${GITHUB_STEP_SUMMARY}"
+          ref_json="$(gh api "repos/${REPO}/git/ref/tags/${INPUT_TAG}")"
+          tag_object_type="$(REF_JSON="${ref_json}" python3 -c 'import json, os; print(json.loads(os.environ["REF_JSON"])["object"]["type"])')"
+          tag_object_sha="$(REF_JSON="${ref_json}" python3 -c 'import json, os; print(json.loads(os.environ["REF_JSON"])["object"]["sha"])')"
+          if [[ "${tag_object_type}" == "tag" ]]; then
+            head_sha="$(gh api "repos/${REPO}/git/tags/${tag_object_sha}" --jq '.object.sha')"
           else
-            echo "Result: mismatches detected. This workflow is report-only and does not fail the pipeline." >> "${GITHUB_STEP_SUMMARY}"
+            head_sha="${tag_object_sha}"
           fi
+
+          gh api "repos/${REPO}/actions/workflows/release.yml/runs?event=push&status=completed&per_page=100" > runs.json
+          run_id="$(HEAD_SHA="${head_sha}" python3 -c 'import json, os, pathlib; head_sha=os.environ["HEAD_SHA"]; runs=json.loads(pathlib.Path("runs.json").read_text(encoding="utf-8")).get("workflow_runs", []); print(next((str(run["id"]) for run in runs if run.get("head_sha")==head_sha and run.get("conclusion")=="success"), ""))')"
+
+          if [[ -z "${run_id}" ]]; then
+            echo "No successful Release workflow run found for tag ${INPUT_TAG}" >&2
+            exit 1
+          fi
+
+          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${INPUT_TAG}" >> "${GITHUB_OUTPUT}"
+
+  report:
+    name: Publish Reproducibility Report
+    runs-on: *runner
+    needs: resolve-run
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Download reproducibility report artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ needs.resolve-run.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/upstream dist/report
+          gh run download "${RUN_ID}" -n release-reproducibility-report -D dist/upstream
+          artifact_dir="$(dirname "$(find dist/upstream -type f -name 'reproducibility-report.md' -print -quit)")"
+          if [[ -z "${artifact_dir}" || ! -f "${artifact_dir}/reproducibility-report.md" ]]; then
+            echo "release reproducibility report artifact not found for run ${RUN_ID}" >&2
+            exit 1
+          fi
+          cp "${artifact_dir}/reproducibility-report.md" dist/report/reproducibility-report.md
+
+      - name: Append report to job summary
+        run: cat dist/report/reproducibility-report.md >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload reproducibility report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: reproducibility-report
+          path: dist/report/reproducibility-report.md
+          retention-days: 30

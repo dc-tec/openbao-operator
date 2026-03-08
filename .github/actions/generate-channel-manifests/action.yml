@@ -2,6 +2,10 @@ name: Generate channel manifests
 description: Generate installer and CRD manifests for a channel image digest into a target directory.
 
 inputs:
+  source-dir:
+    description: Repository checkout to generate manifests from.
+    required: false
+    default: .
   image:
     description: Fully qualified image reference, ideally pinned by digest.
     required: true
@@ -22,12 +26,14 @@ runs:
     - name: Generate manifests
       shell: bash
       env:
+        SOURCE_DIR: ${{ inputs.source-dir }}
         GOFLAGS: ${{ inputs.goflags }}
         IMG: ${{ inputs.image }}
         OPERATOR_VERSION: ${{ inputs.operator-version }}
         OUTPUT_DIR: ${{ inputs.output-dir }}
       run: |
         set -euo pipefail
+        cd "${SOURCE_DIR}"
         mkdir -p "${OUTPUT_DIR}"
         make build-installer IMG="${IMG}" OPERATOR_VERSION="${OPERATOR_VERSION}"
         cp dist/install.yaml "${OUTPUT_DIR}/install.yaml"
