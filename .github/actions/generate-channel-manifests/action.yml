@@ -1,0 +1,35 @@
+name: Generate channel manifests
+description: Generate installer and CRD manifests for a channel image digest into a target directory.
+
+inputs:
+  image:
+    description: Fully qualified image reference, ideally pinned by digest.
+    required: true
+  operator-version:
+    description: Operator version label embedded in generated artifacts.
+    required: true
+  output-dir:
+    description: Directory that should receive install.yaml and crds.yaml.
+    required: true
+  goflags:
+    description: GOFLAGS value to use while generating manifests.
+    required: false
+    default: -mod=vendor
+
+runs:
+  using: composite
+  steps:
+    - name: Generate manifests
+      shell: bash
+      env:
+        GOFLAGS: ${{ inputs.goflags }}
+        IMG: ${{ inputs.image }}
+        OPERATOR_VERSION: ${{ inputs.operator-version }}
+        OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        set -euo pipefail
+        mkdir -p "${OUTPUT_DIR}"
+        make build-installer IMG="${IMG}" OPERATOR_VERSION="${OPERATOR_VERSION}"
+        cp dist/install.yaml "${OUTPUT_DIR}/install.yaml"
+        make build-crds
+        cp dist/crds.yaml "${OUTPUT_DIR}/crds.yaml"

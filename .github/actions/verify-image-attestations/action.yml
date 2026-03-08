@@ -1,0 +1,89 @@
+name: Verify image attestations
+description: Verify GitHub attestations for a set of digest-pinned OCI images.
+
+inputs:
+  repo:
+    description: Repository in owner/name form.
+    required: true
+  version:
+    description: Release or channel version label used to derive the default source ref.
+    required: true
+  image-refs:
+    description: Newline-delimited list of fully qualified image@digest references to verify.
+    required: true
+  source-ref:
+    description: Expected source ref. Defaults to refs/tags/<version>.
+    required: false
+    default: ""
+  signer-workflow:
+    description: Expected signer workflow identity.
+    required: false
+    default: ""
+  cert-oidc-issuer:
+    description: Expected OIDC issuer for the signing certificate.
+    required: false
+    default: https://token.actions.githubusercontent.com
+  max-attempts:
+    description: Maximum verification attempts per image.
+    required: false
+    default: "10"
+  retry-seconds:
+    description: Delay between verification retries.
+    required: false
+    default: "6"
+
+runs:
+  using: composite
+  steps:
+    - name: Verify image attestations
+      shell: bash
+      env:
+        REPO: ${{ inputs.repo }}
+        VERSION: ${{ inputs.version }}
+        IMAGE_REFS: ${{ inputs.image-refs }}
+        SOURCE_REF_INPUT: ${{ inputs.source-ref }}
+        SIGNER_WORKFLOW_INPUT: ${{ inputs.signer-workflow }}
+        CERT_OIDC_ISSUER: ${{ inputs.cert-oidc-issuer }}
+        MAX_ATTEMPTS: ${{ inputs.max-attempts }}
+        RETRY_SECONDS: ${{ inputs.retry-seconds }}
+      run: |
+        set -euo pipefail
+
+        source_ref="${SOURCE_REF_INPUT:-}"
+        if [[ -z "${source_ref}" ]]; then
+          source_ref="refs/tags/${VERSION}"
+        fi
+
+        signer_workflow="${SIGNER_WORKFLOW_INPUT:-}"
+        if [[ -z "${signer_workflow}" ]]; then
+          signer_workflow="${REPO}/.github/workflows/reusable-build.yml"
+        fi
+
+        verify_one() {
+          local image_ref="$1"
+          local attempts=0
+
+          while (( attempts < MAX_ATTEMPTS )); do
+            attempts=$((attempts + 1))
+            if gh attestation verify "oci://${image_ref}" \
+              --repo "${REPO}" \
+              --signer-workflow "${signer_workflow}" \
+              --source-ref "${source_ref}" \
+              --cert-oidc-issuer "${CERT_OIDC_ISSUER}" \
+              --deny-self-hosted-runners >/dev/null; then
+              echo "Verified attestation: ${image_ref}"
+              return 0
+            fi
+
+            if (( attempts >= MAX_ATTEMPTS )); then
+              echo "Failed to verify attestation after ${MAX_ATTEMPTS} attempts: ${image_ref}" >&2
+              return 1
+            fi
+            sleep "${RETRY_SECONDS}"
+          done
+        }
+
+        while IFS= read -r image_ref; do
+          [[ -n "${image_ref}" ]] || continue
+          verify_one "${image_ref}"
+        done <<< "${IMAGE_REFS}"

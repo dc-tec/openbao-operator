@@ -133,12 +133,10 @@ jobs:
           ref: ${{ needs.prepare.outputs.ref }}
           fetch-depth: 0
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
         with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: false
+          cache-go: false
 
       - name: Setup Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
@@ -181,30 +179,18 @@ jobs:
           mkdir -p dist/release dist/rebuild
 
       - name: Generate release manifests
-        env:
-          GOFLAGS: -mod=vendor
-          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          MANAGER_DIGEST: ${{ steps.release-digests.outputs.manager }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-        run: |
-          set -euo pipefail
-          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${TAG}"
-          cp dist/install.yaml dist/release/install.yaml
-          make build-crds
-          cp dist/crds.yaml dist/release/crds.yaml
+        uses: ./.github/actions/generate-channel-manifests
+        with:
+          image: ${{ needs.prepare.outputs.manager_image }}@${{ steps.release-digests.outputs.manager }}
+          operator-version: ${{ needs.prepare.outputs.tag }}
+          output-dir: dist/release
 
       - name: Generate rebuild manifests
-        env:
-          GOFLAGS: -mod=vendor
-          MANAGER_IMAGE: ${{ needs.prepare.outputs.manager_image }}
-          MANAGER_DIGEST: ${{ needs.rebuild.outputs.manager_digest }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-        run: |
-          set -euo pipefail
-          make build-installer IMG="${MANAGER_IMAGE}@${MANAGER_DIGEST}" OPERATOR_VERSION="${TAG}"
-          cp dist/install.yaml dist/rebuild/install.yaml
-          make build-crds
-          cp dist/crds.yaml dist/rebuild/crds.yaml
+        uses: ./.github/actions/generate-channel-manifests
+        with:
+          image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
+          operator-version: ${{ needs.prepare.outputs.tag }}
+          output-dir: dist/rebuild
 
       - name: Package Helm chart (release)
         env:

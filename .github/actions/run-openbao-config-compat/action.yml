@@ -1,0 +1,42 @@
+name: Run OpenBao config compatibility
+description: Validate generated HCL fixtures against upstream OpenBao releases and optionally report schema drift.
+
+inputs:
+  versions:
+    description: Space-delimited OpenBao versions to validate.
+    required: false
+    default: 2.4.4 2.5.0
+  report-schema-drift:
+    description: Whether to report upstream OpenBao schema drift across the version range.
+    required: false
+    default: "false"
+  operator-schema-drift-image-tag:
+    description: Optional OpenBao image tag to use for operator-vs-upstream schema drift reporting.
+    required: false
+    default: ""
+  operator-schema-drift-goflags:
+    description: GOFLAGS value to use for the operator schema drift tool.
+    required: false
+    default: -mod=mod
+
+runs:
+  using: composite
+  steps:
+    - name: Validate HCL fixtures against upstream OpenBao parser
+      shell: bash
+      env:
+        REPORT_SCHEMA_DRIFT: ${{ inputs.report-schema-drift }}
+        VERSIONS: ${{ inputs.versions }}
+      run: |
+        set -euo pipefail
+        read -r -a versions <<< "${VERSIONS}"
+        bash hack/ci/openbao-config-compat.sh "${versions[@]}"
+
+    - name: Report operator-vs-upstream config schema drift (informational)
+      if: inputs.operator-schema-drift-image-tag != ''
+      shell: bash
+      env:
+        GOFLAGS: ${{ inputs.operator-schema-drift-goflags }}
+      run: |
+        set -euo pipefail
+        go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag "${{ inputs.operator-schema-drift-image-tag }}"
