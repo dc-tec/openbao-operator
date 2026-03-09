@@ -46,10 +46,26 @@ jobs:
       - name: Download edge candidate bundle from triggering run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
           mkdir -p dist/upstream dist/candidate
+          artifacts_json="$(gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/artifacts")"
+          ARTIFACTS_JSON="${artifacts_json}" ARTIFACT_NAME="edge-candidate-bundle" python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          data = json.loads(os.environ["ARTIFACTS_JSON"])
+          names = [artifact["name"] for artifact in data.get("artifacts", [])]
+          wanted = os.environ["ARTIFACT_NAME"]
+          if wanted in names:
+              sys.exit(0)
+          available = ", ".join(names) if names else "<none>"
+          print(f"expected upstream artifact '{wanted}' not found; available artifacts: {available}", file=sys.stderr)
+          sys.exit(1)
+          PY
           gh run download "${RUN_ID}" -n edge-candidate-bundle -D dist/upstream
           artifact_dir="$(dirname "$(find dist/upstream -type f -name metadata.json -print -quit)")"
           if [[ -z "${artifact_dir}" || ! -f "${artifact_dir}/metadata.json" ]]; then
@@ -93,6 +109,7 @@ jobs:
         with:
           name: edge-candidate-bundle
           path: dist/candidate/
+          if-no-files-found: error
           retention-days: 5
 
   promote:
