@@ -89,10 +89,26 @@ jobs:
       - name: Download reproducibility report artifact
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           RUN_ID: ${{ needs.resolve-run.outputs.run_id }}
         run: |
           set -euo pipefail
           mkdir -p dist/upstream dist/report
+          artifacts_json="$(gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/artifacts")"
+          ARTIFACTS_JSON="${artifacts_json}" ARTIFACT_NAME="release-reproducibility-report" python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          data = json.loads(os.environ["ARTIFACTS_JSON"])
+          names = [artifact["name"] for artifact in data.get("artifacts", [])]
+          wanted = os.environ["ARTIFACT_NAME"]
+          if wanted in names:
+              sys.exit(0)
+          available = ", ".join(names) if names else "<none>"
+          print(f"expected upstream artifact '{wanted}' not found; available artifacts: {available}", file=sys.stderr)
+          sys.exit(1)
+          PY
           gh run download "${RUN_ID}" -n release-reproducibility-report -D dist/upstream
           artifact_dir="$(dirname "$(find dist/upstream -type f -name 'reproducibility-report.md' -print -quit)")"
           if [[ -z "${artifact_dir}" || ! -f "${artifact_dir}/reproducibility-report.md" ]]; then
@@ -109,4 +125,5 @@ jobs:
         with:
           name: reproducibility-report
           path: dist/report/reproducibility-report.md
+          if-no-files-found: error
           retention-days: 30

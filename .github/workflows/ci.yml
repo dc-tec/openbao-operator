@@ -345,7 +345,7 @@ jobs:
     name: Build E2E Images Once
     runs-on: *runner
     needs: [changes, build-artifacts]
-    if: (needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e'))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || ((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e'))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     permissions:
       contents: read
       packages: write
@@ -509,8 +509,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          TRIGGER_E2E="${{ needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}"
-          FULL_E2E="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') }}"
+          IS_MAIN_PUSH="${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
+          TRIGGER_E2E="${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}"
+          FULL_E2E="${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}"
           PR_BACKUP="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'backup') }}"
           PR_UPGRADE="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upgrades') }}"
           PR_HARDENED="${{ github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller')) }}"
@@ -524,6 +525,10 @@ jobs:
             echo "SHOULD_RUN=$SHOULD_RUN" >> "${GITHUB_ENV}"
             echo "::notice::Skipping ${{ matrix.name }} shard (no E2E-triggering changes/labels)"
             exit 0
+          fi
+
+          if [[ "${IS_MAIN_PUSH}" == "true" ]]; then
+            FILTER="!openshift"
           fi
 
           if [[ "${{ matrix.hardened_signed }}" == "true" ]]; then
@@ -806,9 +811,21 @@ jobs:
           print(json.dumps(data, indent=2, sort_keys=True))
           PY
 
+      - name: Validate edge candidate bundle contents
+        run: |
+          set -euo pipefail
+          for path in \
+            dist/candidate/install.yaml \
+            dist/candidate/crds.yaml \
+            dist/candidate/checksums.txt \
+            dist/candidate/metadata.json; do
+            test -f "${path}" || { echo "missing required edge candidate file: ${path}" >&2; exit 1; }
+          done
+
       - name: Upload edge candidate bundle
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: edge-candidate-bundle
           path: dist/candidate/
+          if-no-files-found: error
           retention-days: 7

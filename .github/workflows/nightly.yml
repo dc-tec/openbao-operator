@@ -467,9 +467,21 @@ jobs:
           print(json.dumps(data, indent=2, sort_keys=True))
           PY
 
+      - name: Validate nightly candidate bundle contents
+        run: |
+          set -euo pipefail
+          for path in \
+            dist/candidate/install.yaml \
+            dist/candidate/crds.yaml \
+            dist/candidate/checksums.txt \
+            dist/candidate/metadata.json; do
+            test -f "${path}" || { echo "missing required nightly candidate file: ${path}" >&2; exit 1; }
+          done
+
       - name: Upload nightly candidate bundle
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: nightly-candidate-bundle
           path: dist/candidate/
+          if-no-files-found: error
           retention-days: 7
