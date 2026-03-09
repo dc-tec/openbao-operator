@@ -332,7 +332,7 @@ jobs:
           SOURCE_DATE_EPOCH: ${{ inputs.source_date_epoch }}
         run: |
           set -euo pipefail
-          bash hack/ci/normalize-spdx-json.sh \
+          bash .github-workflow-src/hack/ci/normalize-spdx-json.sh \
             dist/primary/sbom-openbao-operator.spdx.json \
             dist/primary/sbom-openbao-init.spdx.json \
             dist/primary/sbom-openbao-backup.spdx.json \
@@ -375,7 +375,7 @@ jobs:
             sbom-openbao-init.spdx.json
             sbom-openbao-backup.spdx.json
             sbom-openbao-upgrade.spdx.json
-        run: bash hack/ci/verify-byte-reproducibility.sh
+        run: bash .github-workflow-src/hack/ci/verify-byte-reproducibility.sh
 
       - name: Upload byte-verified channel assets
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
