@@ -67,8 +67,8 @@ jobs:
             head_sha="${tag_object_sha}"
           fi
 
-          gh api "repos/${REPO}/actions/workflows/release.yml/runs?event=push&status=completed&per_page=100" > runs.json
-          run_id="$(HEAD_SHA="${head_sha}" python3 -c 'import json, os, pathlib; head_sha=os.environ["HEAD_SHA"]; runs=json.loads(pathlib.Path("runs.json").read_text(encoding="utf-8")).get("workflow_runs", []); print(next((str(run["id"]) for run in runs if run.get("head_sha")==head_sha and run.get("conclusion")=="success"), ""))')"
+          runs_json="$(gh api "repos/${REPO}/actions/workflows/release.yml/runs?event=push&status=completed&head_sha=${head_sha}&per_page=100")"
+          run_id="$(RUNS_JSON="${runs_json}" python3 -c 'import json, os; runs=json.loads(os.environ["RUNS_JSON"]).get("workflow_runs", []); print(next((str(run["id"]) for run in runs if run.get("conclusion")=="success"), ""))')"
 
           if [[ -z "${run_id}" ]]; then
             echo "No successful Release workflow run found for tag ${INPUT_TAG}" >&2
