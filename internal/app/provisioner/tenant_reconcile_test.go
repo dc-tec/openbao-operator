@@ -14,6 +14,7 @@ import (
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -22,6 +23,21 @@ import (
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	provisionermanager "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
+
+func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...string) {
+	t.Helper()
+
+	select {
+	case event := <-recorder.Events:
+		for _, part := range parts {
+			if !strings.Contains(event, part) {
+				t.Fatalf("event %q does not contain %q", event, part)
+			}
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected event, got none")
+	}
+}
 
 func newTenantScheme(t *testing.T) *k8sruntime.Scheme {
 	t.Helper()
@@ -82,6 +98,8 @@ func TestReconcileOpenBaoTenant_SecurityViolation(t *testing.T) {
 		Spec:       openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "team-b"},
 	}
 	runtime := newTenantRuntime(t, tenant)
+	recorder := events.NewFakeRecorder(10)
+	runtime.Recorder = recorder
 
 	result, err := ReconcileOpenBaoTenant(context.Background(), types.NamespacedName{Name: "tenant", Namespace: "team-a"}, logr.Discard(), runtime)
 	if err != nil {
@@ -101,6 +119,8 @@ func TestReconcileOpenBaoTenant_SecurityViolation(t *testing.T) {
 	if !strings.Contains(updated.Status.LastError, "security violation") {
 		t.Fatalf("expected security violation message, got %q", updated.Status.LastError)
 	}
+
+	expectEventContains(t, recorder, "Warning", ReasonTenantProvisioningBlocked)
 }
 
 func TestReconcileOpenBaoTenant_FinalizerAndProvisioning(t *testing.T) {
@@ -112,6 +132,8 @@ func TestReconcileOpenBaoTenant_FinalizerAndProvisioning(t *testing.T) {
 	}
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant-ns"}}
 	runtime := newTenantRuntime(t, tenant, ns)
+	recorder := events.NewFakeRecorder(10)
+	runtime.Recorder = recorder
 	req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
 
 	result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
@@ -140,6 +162,8 @@ func TestReconcileOpenBaoTenant_FinalizerAndProvisioning(t *testing.T) {
 	if !updated.Status.Provisioned || updated.Status.LastError != "" {
 		t.Fatalf("expected successful provision status, got provisioned=%v lastError=%q", updated.Status.Provisioned, updated.Status.LastError)
 	}
+
+	expectEventContains(t, recorder, "Normal", ReasonTenantProvisioned)
 
 	role := &rbacv1.Role{}
 	if getErr := runtime.Client.Get(context.Background(), types.NamespacedName{Name: provisionermanager.TenantRoleName, Namespace: "tenant-ns"}, role); getErr != nil {
@@ -260,6 +284,8 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 		}
 		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant-ns"}}
 		runtime := newTenantRuntime(t, tenant, ns)
+		recorder := events.NewFakeRecorder(10)
+		runtime.Recorder = recorder
 		req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
 
 		result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
@@ -278,6 +304,8 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 		} else if containsFinalizer(updated.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
 			t.Fatalf("expected finalizer to be removed")
 		}
+
+		expectEventContains(t, recorder, "Normal", ReasonTenantRBACCleaned)
 	})
 }
 

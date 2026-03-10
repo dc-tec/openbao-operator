@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -31,6 +32,7 @@ const (
 type TenantRuntime struct {
 	Client                   client.Client
 	APIReader                client.Reader
+	Recorder                 events.EventRecorder
 	Provisioner              *provisionermanager.Manager
 	OperatorNamespace        string
 	ConditionTypeProvisioned string
@@ -71,6 +73,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 			"target_namespace": targetNS,
 			"reason":           ReasonSecurityViolation,
 		})
+		runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked for namespace %s: %v", targetNS, err))
 
 		original := tenant.DeepCopy()
 		tenant.Status.Provisioned = false
@@ -109,6 +112,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 			original := tenant.DeepCopy()
 			tenant.Status.Provisioned = false
 			tenant.Status.LastError = fmt.Sprintf("target namespace %s not found", targetNS)
+			runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked because target namespace %s was not found", targetNS))
 			if patchErr := patchStatus(ctx, runtime.Client, tenant, original); patchErr != nil {
 				return recon.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", patchErr)
 			}
@@ -125,6 +129,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 
 	logger.Info("Provisioning tenant RBAC", "target_namespace", targetNS)
 	if err := runtime.Provisioner.EnsureTenantRBAC(ctx, tenant); err != nil {
+		runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningFailed, fmt.Sprintf("Tenant provisioning failed for namespace %s: %v", targetNS, err))
 		original := tenant.DeepCopy()
 		tenant.Status.Provisioned = false
 		tenant.Status.LastError = err.Error()
@@ -147,6 +152,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 		"tenant_name":      tenant.Name,
 		"target_namespace": targetNS,
 	})
+	runtime.emitTenantNormalEvent(tenant, ReasonTenantProvisioned, fmt.Sprintf("Provisioned tenant RBAC for namespace %s", targetNS))
 	return recon.Result{}, nil
 }
 
@@ -185,6 +191,7 @@ func reconcileDeletion(
 		"tenant_name":      tenant.Name,
 		"target_namespace": targetNS,
 	})
+	runtime.emitTenantNormalEvent(tenant, ReasonTenantRBACCleaned, fmt.Sprintf("Cleaned tenant RBAC for namespace %s", targetNS))
 
 	tenant.Finalizers = removeFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer)
 	if err := runtime.Client.Update(ctx, tenant); err != nil {
@@ -225,6 +232,7 @@ func ensureAdmissionDependenciesReady(
 	if err != nil {
 		admission.SetAdmissionDependenciesReady(false)
 		logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "error", err)
+		runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked until admission dependencies are ready: %v", err))
 		return false, recon.Result{RequeueAfter: admissionDependencyRequeueAfter}
 	}
 
@@ -240,6 +248,7 @@ func ensureAdmissionDependenciesReady(
 	_ = patchStatus(ctx, runtime.Client, tenant, original)
 
 	logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "summary", status.SummaryMessage())
+	runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked until admission dependencies are ready: %s", status.SummaryMessage()))
 	return false, recon.Result{RequeueAfter: admissionDependencyRequeueAfter}
 }
 

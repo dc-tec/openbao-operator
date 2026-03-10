@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
@@ -44,6 +45,7 @@ type Manager struct {
 	clientset   kubernetes.Interface
 	clientMgr   *openbao.ClientManager
 	raftManager *raft.Manager
+	recorder    events.EventRecorder
 }
 
 type raftClientFactoryProvider struct {
@@ -60,12 +62,17 @@ type raftClientAdapter struct {
 
 // NewManager creates a new initialization Manager.
 // The clientMgr is used to create OpenBao clients with proper state isolation.
-func NewManager(config *rest.Config, clientset kubernetes.Interface, clientMgr *openbao.ClientManager) *Manager {
+func NewManager(config *rest.Config, clientset kubernetes.Interface, clientMgr *openbao.ClientManager, recorder ...events.EventRecorder) *Manager {
+	var eventRecorder events.EventRecorder
+	if len(recorder) > 0 {
+		eventRecorder = recorder[0]
+	}
 	return &Manager{
 		config:      config,
 		clientset:   clientset,
 		clientMgr:   clientMgr,
 		raftManager: raft.NewManager(clientset, raftClientFactoryProvider{clientMgr: clientMgr}),
+		recorder:    eventRecorder,
 	}
 }
 
@@ -215,6 +222,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if selfInitEnabled && hasInitializedLabel && hasSealedLabel {
 		if initializedLabel && !sealedLabel {
 			logger.Info("OpenBao service registration labels indicate initialized and unsealed; marking cluster as initialized", "pod", pod.Name)
+			emitNormalEvent(m.recorder, cluster, ReasonInitStarted, "Self-initialization in progress for cluster %s", cluster.Name)
 			cluster.Status.Initialized = true
 			cluster.Status.SelfInitialized = true
 
@@ -225,6 +233,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 				// Non-fatal: log but don't fail initialization; reconciler will retry
 				logger.Error(err, "Failed to configure Raft Autopilot for self-init cluster; will retry via reconciler")
 			}
+			emitNormalEvent(m.recorder, cluster, ReasonInitCompleted, "Self-initialization completed for cluster %s", cluster.Name)
 
 			// Request requeue so InfraReconciler can run again to scale up StatefulSet
 			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
@@ -237,6 +246,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// is unsealed. The infra manager's readiness probe is configured to only pass
 	// once OpenBao is initialized and unsealed.
 	if selfInitEnabled {
+		emitNormalEvent(m.recorder, cluster, ReasonInitStarted, "Self-initialization in progress for cluster %s", cluster.Name)
 		if isPodReady(pod) {
 			logger.Info("OpenBao pod is Ready; marking cluster as initialized", "pod", pod.Name)
 			cluster.Status.Initialized = true
@@ -249,6 +259,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 				// Non-fatal: log but don't fail initialization; reconciler will retry
 				logger.Error(err, "Failed to configure Raft Autopilot for self-init cluster; will retry via reconciler")
 			}
+			emitNormalEvent(m.recorder, cluster, ReasonInitCompleted, "Self-initialization completed for cluster %s", cluster.Name)
 
 			// Request requeue so InfraReconciler can run again to scale up StatefulSet
 			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
@@ -276,6 +287,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// but if the cluster was manually initialized, we cannot retrieve the root token
 	// (it's only returned during the init API call).
 	logger.Info("Attempting to initialize OpenBao cluster using HTTP API")
+	emitNormalEvent(m.recorder, cluster, ReasonInitStarted, "Operator initialization started for cluster %s", cluster.Name)
 
 	// Audit log: Cluster initialization operation
 	logging.LogAuditEvent(logger, logging.EventInitStarted, map[string]string{
@@ -298,6 +310,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			"cluster_name":      cluster.Name,
 			"error":             err.Error(),
 		})
+		emitWarningEvent(m.recorder, cluster, ReasonInitFailed, "Initialization failed for cluster %s: %v", cluster.Name, err)
 		return recon.Result{}, fmt.Errorf("failed to initialize OpenBao cluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
@@ -312,6 +325,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		"cluster_name":      cluster.Name,
 		"self_init_enabled": fmt.Sprintf("%t", selfInitEnabled),
 	})
+	emitNormalEvent(m.recorder, cluster, ReasonInitCompleted, "Initialization completed for cluster %s", cluster.Name)
 
 	// Request requeue so InfraReconciler can run again to scale up StatefulSet
 	return recon.Result{RequeueAfter: constants.RequeueShort}, nil

@@ -46,9 +46,12 @@ func (m *Manager) handleManualTrigger(
 			"cluster_name":      cluster.Name,
 			"reason":            "active_job_in_progress",
 		})
+		m.emitNormalEvent(cluster, ReasonBackupSkipped, "Skipping manual backup because a backup Job is already in progress")
 		m.clearTriggerAnnotation(ctx, logger, cluster, triggerAnnotation)
 		return false, time.Time{}, nil
 	}
+
+	m.emitNormalEvent(cluster, ReasonBackupManualTriggerAccepted, "Accepted manual backup trigger %q", val)
 
 	return true, now, nil
 }

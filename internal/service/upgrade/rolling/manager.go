@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -35,6 +36,7 @@ type Manager struct {
 	client                client.Client
 	scheme                *runtime.Scheme
 	backupRuntime         portbackup.PreUpgradeSnapshotRuntime
+	recorder              events.EventRecorder
 	clientFactory         upgrade.OpenBaoClientFactory
 	clientConfig          portopenbao.ClientConfig
 	operatorImageVerifier imageverify.Verifier
@@ -49,11 +51,17 @@ func NewManager(
 	clientConfig portopenbao.ClientConfig,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
+	recorder ...events.EventRecorder,
 ) *Manager {
+	var eventRecorder events.EventRecorder
+	if len(recorder) > 0 {
+		eventRecorder = recorder[0]
+	}
 	return &Manager{
 		client:                c,
 		scheme:                scheme,
 		backupRuntime:         backupRuntime,
+		recorder:              eventRecorder,
 		clientFactory:         upgrade.DefaultOpenBaoClientFactory,
 		clientConfig:          clientConfig,
 		operatorImageVerifier: operatorImageVerifier,
@@ -71,14 +79,20 @@ func NewManagerWithClientFactory(
 	clientConfig portopenbao.ClientConfig,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
+	recorder ...events.EventRecorder,
 ) *Manager {
 	if factory == nil {
 		factory = upgrade.DefaultOpenBaoClientFactory
+	}
+	var eventRecorder events.EventRecorder
+	if len(recorder) > 0 {
+		eventRecorder = recorder[0]
 	}
 	return &Manager{
 		client:                c,
 		scheme:                scheme,
 		backupRuntime:         backupRuntime,
+		recorder:              eventRecorder,
 		clientFactory:         factory,
 		clientConfig:          clientConfig,
 		operatorImageVerifier: operatorImageVerifier,
@@ -167,6 +181,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			}
 			opslifecycle.AddHeldAuditFields(fields, err)
 			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
+			m.emitWarningEvent(cluster, upgrade.ReasonOperationLockBlocked, "Upgrade blocked by operation lock: %v", err)
 			if cluster.Status.Upgrade != nil {
 				firstFailure := cluster.Status.Upgrade.LastErrorAt == nil
 				upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonUpgradeFailed, "upgrade halted due to concurrent operation lock")
@@ -179,6 +194,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 						"strategy":          strategy,
 						"reason":            upgrade.ReasonUpgradeFailed,
 					})
+					m.emitWarningEvent(cluster, upgrade.ReasonUpgradeFailed, upgrade.MessageUpgradeFailed, "upgrade halted due to concurrent operation lock")
 				}
 				return recon.Result{}, fmt.Errorf("upgrade in progress but operation lock is held by another operation: %w", err)
 			}
@@ -283,6 +299,11 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 				"strategy":          strategy,
 				"reason":            failureReason,
 			})
+			failureMessage := err.Error()
+			if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.LastErrorMessage != "" {
+				failureMessage = cluster.Status.Upgrade.LastErrorMessage
+			}
+			m.emitWarningEvent(cluster, failureReason, upgrade.MessageUpgradeFailed, failureMessage)
 		}
 
 		// Update status using SSA (eliminates race conditions)

@@ -351,7 +351,7 @@ func Run(args []string) {
 	// for the lifetime of the operator process.
 
 	// Create initialization manager
-	initMgr := initmanager.NewManager(config, clientset, clientMgr)
+	initMgr := initmanager.NewManager(config, clientset, clientMgr, mgr.GetEventRecorder(controllerNameOpenBaoCluster))
 	imageVerifier := security.NewImageVerifier(mgr.GetLogger().WithName("image-verifier"), mgr.GetClient(), nil)
 	operatorImageVerifier := security.NewImageVerifier(
 		mgr.GetLogger().WithName("operator-image-verifier"),

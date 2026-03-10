@@ -259,6 +259,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 		Client:                r.parent.Client,
 		APIReader:             r.parent.APIReader,
 		Scheme:                r.parent.Scheme,
+		Recorder:              r.parent.Recorder,
 		OperatorNamespace:     r.parent.OperatorNamespace,
 		OIDCIssuer:            r.parent.OIDCIssuer,
 		OIDCJWTKeys:           r.parent.OIDCJWTKeys,

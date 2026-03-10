@@ -13,6 +13,7 @@ import (
 	"github.com/robfig/cron/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -41,6 +42,7 @@ var backupOperationLock = opslifecycle.OperationLock{
 type Manager struct {
 	client                client.Client
 	scheme                *runtime.Scheme
+	recorder              events.EventRecorder
 	clientConfig          portopenbao.ClientConfig
 	operatorImageVerifier imageverify.Verifier
 	Platform              string
@@ -48,10 +50,15 @@ type Manager struct {
 
 // NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
-func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig portopenbao.ClientConfig, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig portopenbao.ClientConfig, operatorImageVerifier imageverify.Verifier, platform string, recorder ...events.EventRecorder) *Manager {
+	var eventRecorder events.EventRecorder
+	if len(recorder) > 0 {
+		eventRecorder = recorder[0]
+	}
 	return &Manager{
 		client:                c,
 		scheme:                scheme,
+		recorder:              eventRecorder,
 		clientConfig:          clientConfig,
 		operatorImageVerifier: operatorImageVerifier,
 		Platform:              platform,
@@ -78,36 +85,6 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	// even when backups are infrequent.
 	if err := m.syncBackupMetrics(ctx, logger, cluster, metrics); err != nil {
 		return recon.Result{}, err
-	}
-
-	// If a restore is in progress for this cluster, do not start new backups.
-	// This prevents scheduled backups from repeatedly acquiring the operation lock
-	// and starving the restore controller.
-	restoreInProgress, err := m.hasInProgressRestore(ctx, logger, cluster)
-	if err != nil {
-		return recon.Result{}, err
-	}
-	if restoreInProgress {
-		if backupOperationLock.IsHeldBy(cluster.Status.OperationLock) {
-			hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
-			if err != nil {
-				return recon.Result{}, fmt.Errorf("failed to check for active backup job while restore is in progress: %w", err)
-			}
-			if !hasActiveJob {
-				if err := opslifecycle.Release(ctx, m.client, cluster, backupOperationLock); err != nil && !opslifecycle.IsLockHeld(err) {
-					logger.Error(err, "Failed to release backup operation lock while restore is in progress")
-				} else if err == nil {
-					logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
-						"cluster_namespace": cluster.Namespace,
-						"cluster_name":      cluster.Name,
-						"operation":         string(openbaov1alpha1.ClusterOperationBackup),
-						"holder":            backupOperationLockHolder,
-					})
-				}
-			}
-		}
-		logger.Info("Restore in progress; skipping backup reconciliation")
-		return recon.Result{}, nil
 	}
 
 	// Ensure backup ServiceAccount exists (for JWT Auth)
@@ -147,11 +124,52 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if !manualTrigger {
 		scheduledTime = cluster.Status.Backup.NextScheduledBackup.Time
 	}
+	backupDue := manualTrigger || !now.Before(scheduledTime)
+
+	// If a restore is in progress for this cluster, do not start new backups.
+	// This prevents scheduled backups from repeatedly acquiring the operation lock
+	// and starving the restore controller.
+	restoreInProgress, err := m.hasInProgressRestore(ctx, logger, cluster)
+	if err != nil {
+		return recon.Result{}, err
+	}
+	if restoreInProgress {
+		if backupOperationLock.IsHeldBy(cluster.Status.OperationLock) {
+			hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
+			if err != nil {
+				return recon.Result{}, fmt.Errorf("failed to check for active backup job while restore is in progress: %w", err)
+			}
+			if !hasActiveJob {
+				if err := opslifecycle.Release(ctx, m.client, cluster, backupOperationLock); err != nil && !opslifecycle.IsLockHeld(err) {
+					logger.Error(err, "Failed to release backup operation lock while restore is in progress")
+				} else if err == nil {
+					logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
+						"cluster_namespace": cluster.Namespace,
+						"cluster_name":      cluster.Name,
+						"operation":         string(openbaov1alpha1.ClusterOperationBackup),
+						"holder":            backupOperationLockHolder,
+					})
+				}
+			}
+		}
+		if backupDue {
+			m.emitNormalEvent(cluster, ReasonBackupSkipped, "Skipping backup because a restore is in progress for cluster %s", cluster.Name)
+		}
+		logger.Info("Restore in progress; skipping backup reconciliation")
+		return recon.Result{}, nil
+	}
 
 	// Pre-flight checks
 	if err := m.checkPreconditions(ctx, logger, cluster); err != nil {
-		logger.Info("Backup preconditions not met", "reason", err.Error())
-		return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
+		var preconditionErr *backupPreconditionError
+		if errors.As(err, &preconditionErr) {
+			logger.Info("Backup preconditions not met", "reason", preconditionErr.Error())
+			if backupDue {
+				m.emitPreconditionEvent(cluster, preconditionErr)
+			}
+			return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
+		}
+		return recon.Result{}, err
 	}
 
 	// If a Job is already running/pending, poll it to observe completion and release locks promptly.
@@ -277,6 +295,7 @@ func (m *Manager) executeAndProcessBackup(
 			}
 			opslifecycle.AddHeldAuditFields(fields, err)
 			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
+			m.emitWarningEvent(cluster, ReasonOperationLockBlocked, "Backup blocked by operation lock: %v", err)
 			logger.Info("Backup blocked by operation lock", "error", err.Error())
 			return recon.Result{RequeueAfter: opslifecycle.RequeueDelay(opslifecycle.RetryClassStandard)}, nil
 		}
@@ -289,6 +308,7 @@ func (m *Manager) executeAndProcessBackup(
 			"operation":         string(openbaov1alpha1.ClusterOperationBackup),
 			"holder":            backupOperationLockHolder,
 		})
+		m.emitNormalEvent(cluster, ReasonBackupStarted, "Backup started for schedule %s", scheduledTime.UTC().Format(time.RFC3339))
 	}
 
 	// Create or check backup Job
