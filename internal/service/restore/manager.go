@@ -109,6 +109,47 @@ func restoreLockMessage(restore *openbaov1alpha1.OpenBaoRestore) string {
 	return fmt.Sprintf("restore %s/%s", restore.Namespace, restore.Name)
 }
 
+func restoreWaitingForOperationLockStatusMessage(err error) string {
+	if held, ok := opslifecycle.HeldError(err); ok {
+		return fmt.Sprintf(
+			"Waiting for cluster operation lock held by operation=%s holder=%s. Restore will retry automatically; use overrideOperationLock with force=true only for disaster recovery.",
+			held.Operation,
+			held.Holder,
+		)
+	}
+
+	return "Waiting for cluster operation lock. Restore will retry automatically."
+}
+
+func restoreJobRunningStatusMessage(jobName string) string {
+	return fmt.Sprintf("Restore Job %s is running; waiting for completion.", jobName)
+}
+
+func restoreJobFailedStatusMessage(job *batchv1.Job) string {
+	if job == nil {
+		return "Restore Job failed. Check the restore Job logs and create a new OpenBaoRestore to retry."
+	}
+
+	for _, cond := range job.Status.Conditions {
+		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue && cond.Message != "" {
+			return fmt.Sprintf(
+				"Restore Job %s failed: %s. Check kubectl logs job/%s -n %s and create a new OpenBaoRestore to retry.",
+				job.Name,
+				cond.Message,
+				job.Name,
+				job.Namespace,
+			)
+		}
+	}
+
+	return fmt.Sprintf(
+		"Restore Job %s failed. Check kubectl logs job/%s -n %s and create a new OpenBaoRestore to retry.",
+		job.Name,
+		job.Name,
+		job.Namespace,
+	)
+}
+
 func (m *Manager) ensureTerminalLockReleased(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to release cluster operation lock for terminal restore %s/%s: %w", restore.Namespace, restore.Name, err)
@@ -270,11 +311,7 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
 			m.emitWarningEvent(restore, ReasonOperationLockBlocked, "Restore is waiting for the cluster operation lock: %v", err)
 			original := restore.DeepCopy()
-			if held, ok := opslifecycle.HeldError(err); ok {
-				restore.Status.Message = fmt.Sprintf("Waiting for cluster operation lock: operation=%s holder=%s", held.Operation, held.Holder)
-			} else {
-				restore.Status.Message = "Waiting for cluster operation lock"
-			}
+			restore.Status.Message = restoreWaitingForOperationLockStatusMessage(err)
 			if statusErr := m.patchStatus(ctx, restore, original); statusErr != nil {
 				return nil, false, nil, fmt.Errorf("failed to patch restore status after lock contention: %w", statusErr)
 			}
@@ -395,7 +432,12 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 				"restore_name":      restore.Name,
 			})
 			m.emitWarningEvent(restore, ReasonOperationLockLost, "Restore lost the cluster operation lock while running")
-			return m.failRestore(ctx, logger, restore, "cluster operation lock was taken by another operation while restore was running")
+			return m.failRestore(
+				ctx,
+				logger,
+				restore,
+				"Restore stopped because another operation took the cluster operation lock while the restore Job was running. Check concurrent backup or upgrade activity, then create a new OpenBaoRestore to retry.",
+			)
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to renew cluster operation lock: %w", err)
 	}
@@ -432,22 +474,12 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 	}
 
 	if job.Status.Failed > 0 {
-		// Get failure message from job conditions
-		message := "Restore job failed"
-		for _, cond := range job.Status.Conditions {
-			if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
-				if cond.Message != "" {
-					message = fmt.Sprintf("Restore job failed: %s", cond.Message)
-				}
-				break
-			}
-		}
-		return m.failRestore(ctx, logger, restore, message)
+		return m.failRestore(ctx, logger, restore, restoreJobFailedStatusMessage(job))
 	}
 
 	// Job still running
 	original := restore.DeepCopy()
-	restore.Status.Message = "Restore job in progress"
+	restore.Status.Message = restoreJobRunningStatusMessage(jobName)
 	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status while job is running: %w", err)
 	}
@@ -484,13 +516,18 @@ func (m *Manager) createRestoreJob(
 			if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
 				if operatorerrors.IsTransient(err) {
 					original := restore.DeepCopy()
-					restore.Status.Message = fmt.Sprintf("Waiting for restore executor image verification: %v", err)
+					restore.Status.Message = fmt.Sprintf("Waiting for restore executor image verification before creating the restore Job: %v", err)
 					if statusErr := m.patchStatus(ctx, restore, original); statusErr != nil {
 						return ctrl.Result{}, fmt.Errorf("failed to patch restore status after transient image verification failure: %w", statusErr)
 					}
 					return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 				}
-				return m.failRestore(ctx, logger, restore, fmt.Sprintf("restore executor image verification failed: %v", err))
+				return m.failRestore(
+					ctx,
+					logger,
+					restore,
+					fmt.Sprintf("Restore executor image verification failed: %v. Check image verification configuration or use failurePolicy=Warn if that is intended, then create a new OpenBaoRestore to retry.", err),
+				)
 			}
 			logger.Error(err, "Restore executor image verification failed but proceeding due to Warn policy", "image", executorImage)
 		} else {
@@ -526,7 +563,7 @@ func (m *Manager) createRestoreJob(
 	})
 	m.emitNormalEvent(restore, ReasonRestoreJobCreated, "Created restore Job %s", jobName)
 	original := restore.DeepCopy()
-	restore.Status.Message = "Restore job running"
+	restore.Status.Message = restoreJobRunningStatusMessage(jobName)
 	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status after job creation: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,6 +39,31 @@ const (
 	backupTokenMountPath         = "/etc/bao/backup/token" // #nosec G101 -- This is a mount path constant, not a credential
 	backupTLSCAVolumeName        = "tls-ca"
 )
+
+func backupJobFailureReason(job *batchv1.Job) string {
+	if job == nil {
+		return "Backup Job failed."
+	}
+
+	for _, cond := range job.Status.Conditions {
+		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue && cond.Message != "" {
+			return fmt.Sprintf(
+				"Backup Job %s failed: %s. Check kubectl logs job/%s -n %s.",
+				job.Name,
+				cond.Message,
+				job.Name,
+				job.Namespace,
+			)
+		}
+	}
+
+	return fmt.Sprintf(
+		"Backup Job %s failed. Check kubectl logs job/%s -n %s.",
+		job.Name,
+		job.Name,
+		job.Namespace,
+	)
+}
 
 // ensureBackupJob creates or updates a Kubernetes Job for executing the backup.
 // Returns true if a Job was created or is already running, false if backup should not proceed.
@@ -242,7 +268,7 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 	if kube.JobFailed(job) {
 		// Job failed - check if we've already processed this specific job failure
 		// to avoid incrementing ConsecutiveFailures on every reconcile
-		expectedFailureReason := fmt.Sprintf("Backup Job %s failed", jobName)
+		expectedFailureReason := backupJobFailureReason(job)
 		if cluster.Status.Backup.LastFailureReason == expectedFailureReason {
 			// Already processed this job failure, don't update status again
 			logger.V(1).Info("Backup Job failure already processed", "job", jobName)
