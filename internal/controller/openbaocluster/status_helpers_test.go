@@ -10,7 +10,6 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func TestBuildAvailableCondition(t *testing.T) {
@@ -119,7 +118,7 @@ func TestBuildDegradedCondition(t *testing.T) {
 			upgradeFailed: true,
 			wantStatus:    metav1.ConditionTrue,
 			wantReason:    "PodNotReady",
-			wantInMessage: constants.AnnotationRetryRollingUpgrade,
+			wantInMessage: upgradeRequestRetryFieldPath,
 		},
 	}
 
@@ -177,7 +176,7 @@ func TestBuildUpgradingCondition(t *testing.T) {
 				},
 			},
 			wantStatus: metav1.ConditionFalse, // Failed upgrade shows as not upgrading
-			wantInMsg:  constants.AnnotationRetryRollingUpgrade,
+			wantInMsg:  upgradeRequestRetryFieldPath,
 		},
 		{
 			name: "blue green syncing with manual approval",
@@ -194,13 +193,14 @@ func TestBuildUpgradingCondition(t *testing.T) {
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					CurrentVersion: "2.0.0",
 					BlueGreen: &openbaov1alpha1.BlueGreenStatus{
-						Phase:         openbaov1alpha1.PhaseSyncing,
-						GreenRevision: "green-abc",
+						Phase:                   openbaov1alpha1.PhaseSyncing,
+						GreenRevision:           "green-abc",
+						ManualPromotionRequired: true,
 					},
 				},
 			},
 			wantStatus: metav1.ConditionTrue,
-			wantInMsg:  "spec.upgrade.blueGreen.autoPromote=true",
+			wantInMsg:  upgradeRequestPromoteFieldPath,
 		},
 		{
 			name: "blue green rollback includes rollback reason",

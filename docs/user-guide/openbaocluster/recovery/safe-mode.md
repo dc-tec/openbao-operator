@@ -63,6 +63,16 @@ Use these checks first:
   kubectl -n security exec -it prod-cluster-0 -- bao operator raft list-peers
   ```
 
+If manual repair requires deleting or restarting managed Pods, enable maintenance mode first when your admission policies require the `openbao.org/maintenance=true` signal:
+
+```yaml
+spec:
+  maintenance:
+    enabled: true
+```
+
+See the [Cluster Maintenance Guide](../operations/maintenance.md) for the broader maintenance workflow.
+
 If you need a deeper recovery workflow, continue with [Failed Rollback Recovery](failed-rollback.md).
 
 ## 3. Acknowledge and Resume

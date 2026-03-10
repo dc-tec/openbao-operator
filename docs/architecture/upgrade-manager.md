@@ -154,12 +154,15 @@ If the Operator crashes, it reads the Status on startup and **resumes** exactly 
 ### Rolling failure recovery
 
 - Failed rolling upgrades persist `status.upgrade.lastErrorReason` and `status.upgrade.lastErrorMessage`.
-- Recovery is explicit: the operator waits for the `openbao.org/retry-rolling-upgrade` annotation before clearing the failed state and retrying.
+- Recovery is explicit: the operator waits for `spec.upgrade.requests.retry` to change before clearing the failed state and retrying.
 - If the desired target changes while a rolling upgrade is in progress, the controller clears rolling state and re-evaluates the new target from the live cluster state.
 
 ### Blue/Green holds and rollback safety
 
 - `Syncing` can intentionally hold when `spec.upgrade.blueGreen.autoPromote=false`.
+- Manual promotion for a held upgrade is requested via `spec.upgrade.requests.promote`.
+- Changing `spec.upgrade.blueGreen.autoPromote` during an in-flight upgrade does not approve that upgrade; it only affects future upgrades.
+- Manual abort or rollback of an active blue/green upgrade is requested via `spec.upgrade.requests.rollback`.
 - A failing `verification.prePromotionHook` either holds in `Syncing` or triggers automatic abort/rollback, depending on `blueGreen.autoRollback.onValidationFailure`.
 - If late rollback consensus repair fails, the operator enters `status.breakGlass` and halts risky rollback automation until `spec.breakGlassAck` matches the issued nonce.
 

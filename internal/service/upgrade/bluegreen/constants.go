@@ -32,11 +32,6 @@ const (
 	// ReasonBreakGlassAcknowledged indicates break-glass mode was acknowledged by an operator.
 	ReasonBreakGlassAcknowledged = "BreakGlassAcknowledged"
 
-	// AnnotationForceRollback is a manual escape hatch annotation that
-	// forces a rollback of the current blue/green upgrade when set to "true".
-	// This allows operators to break glass if the state machine becomes stuck.
-	AnnotationForceRollback = "openbao.org/force-rollback"
-
 	// AnnotationSnapshotPhase labels snapshot Jobs with their role (e.g. pre-upgrade).
 	AnnotationSnapshotPhase = "openbao.org/snapshot-phase"
 

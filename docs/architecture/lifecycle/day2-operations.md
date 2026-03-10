@@ -25,7 +25,7 @@ Day 2 operations cover the ongoing management of the cluster, including version 
        - Iterates pods in reverse ordinal order.
        - Runs an upgrade Job to perform leader step-down before updating the leader pod.
        - Waits for pod Ready, OpenBao health, and Raft sync after each update.
-    5. If a rolling step fails, progress remains in `status.upgrade` and the operator waits for the `openbao.org/retry-rolling-upgrade` annotation before retrying.
+    5. If a rolling step fails, progress remains in `status.upgrade` and the operator waits for `spec.upgrade.requests.retry` to change before retrying.
     6. On completion, `status.currentVersion` is updated and `status.upgrade` is cleared (rolling), or `status.blueGreen.phase` returns to `Idle` (blue/green).
 
     !!! note "Upgrade Policy"
@@ -67,7 +67,7 @@ Day 2 operations cover the ongoing management of the cluster, including version 
     3. **Green Creation:** The operator creates a new Green StatefulSet with the new version.
     4. **Join as Non-Voters:** Green pods start and join the existing Blue Raft cluster as non-voters.
     5. **Sync and Validate:** The operator waits for Green replication to converge, honors optional `verification.minSyncDuration`, and runs `verification.prePromotionHook` when configured.
-    6. **Manual Hold or Promotion:** If `autoPromote=false`, the upgrade holds in `Syncing` until the user enables promotion. Otherwise, the operator promotes Green pods to voters.
+    6. **Manual Hold or Promotion:** If `autoPromote=false` when the upgrade starts, the upgrade holds in `Syncing` until the user sets `spec.upgrade.requests.promote`. Changing `autoPromote` mid-upgrade affects only future upgrades. Otherwise, the operator promotes Green pods to voters.
     7. **Demote Blue and Verify Leader:** The operator demotes Blue voters, forces leadership transfer when needed, and waits until a Green leader is observed.
     8. **Cutover During Cleanup:** The operator switches the Service selector to Green, removes Blue peers, and deletes the Blue StatefulSet. Rollback remains possible until irreversible cleanup completes.
     9. **Break Glass:** If rollback consensus repair fails, the operator sets `status.breakGlass` and halts risky rollback automation until `spec.breakGlassAck` matches the issued nonce.

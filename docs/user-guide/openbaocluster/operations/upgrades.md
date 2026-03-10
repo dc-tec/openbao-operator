@@ -84,11 +84,13 @@ Patch `spec.version` to the target release. The strategy configured in `spec.upg
         You can see multiple step-down Jobs during one rolling upgrade when leadership moves between different target pods. This is expected.
 
     !!! warning "Manual Retry"
-        If a rolling upgrade fails, the operator preserves `status.upgrade.lastErrorReason` and waits for a retry signal. Add the `openbao.org/retry-rolling-upgrade` annotation after you fix the underlying issue:
+        If a rolling upgrade fails, the operator preserves `status.upgrade.lastErrorReason` and waits for a retry request. Set `spec.upgrade.requests.retry` to a new non-empty value after you fix the underlying issue:
 
-        ```sh
-        kubectl -n security annotate openbaocluster prod-cluster \
-          openbao.org/retry-rolling-upgrade="$(date +%s)" --overwrite
+        ```yaml
+        spec:
+          upgrade:
+            requests:
+              retry: "2026-03-10T12:00:00Z"
         ```
 
 === "Blue/Green (Zero Downtime)"
@@ -179,6 +181,7 @@ If the hook fails:
 ### Manual Promotion Hold
 
 Set `autoPromote=false` to keep the upgrade in `Syncing` after Green is healthy and fully replicated.
+Changing `autoPromote` during that in-flight upgrade does not approve it; use `spec.upgrade.requests.promote`.
 
 ```yaml
 spec:
@@ -188,7 +191,16 @@ spec:
       autoPromote: false
 ```
 
-When you are ready to continue, patch the cluster and set `spec.upgrade.blueGreen.autoPromote=true`.
+When you are ready to continue, patch the cluster and set `spec.upgrade.requests.promote` to a new non-empty value.
+
+```yaml
+spec:
+  upgrade:
+    blueGreen:
+      autoPromote: false
+    requests:
+      promote: "2026-03-10T12:10:00Z"
+```
 
 ### Auto-Rollback
 
@@ -207,6 +219,18 @@ spec:
         enabled: true
         onJobFailure: true
         onValidationFailure: true
+```
+
+### Manual Rollback
+
+To manually abort or roll back an active blue/green upgrade, set `spec.upgrade.requests.rollback`
+to a new non-empty value.
+
+```yaml
+spec:
+  upgrade:
+    requests:
+      rollback: "2026-03-10T12:20:00Z"
 ```
 
 ### Break Glass

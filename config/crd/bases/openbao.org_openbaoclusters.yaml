@@ -2685,9 +2685,12 @@ spec:
                       autoPromote:
                         default: true
                         description: |-
-                          AutoPromote controls whether the operator automatically switches traffic
-                          and deletes the old cluster after sync. If false, it stays in the Syncing
-                          phase waiting for the user to enable it (set autoPromote=true).
+                          AutoPromote controls whether newly started blue/green upgrades
+                          automatically switch traffic and delete the old cluster after sync.
+                          If false when an upgrade starts, that upgrade stays in the Syncing
+                          phase waiting for an explicit promotion request via spec.upgrade.requests.promote.
+                          Changing this field while an upgrade is already in progress affects only
+                          future upgrades.
                         type: boolean
                       autoRollback:
                         description: AutoRollback configures automatic rollback behavior.
@@ -2815,6 +2818,42 @@ spec:
                       Requires spec.backup to be configured with target, image, and
                       authentication (jwtAuthRole or tokenSecretRef).
                     type: boolean
+                  requests:
+                    description: |-
+                      Requests defines explicit one-shot operator requests for the current
+                      upgrade workflow. The operator acts only when a request value changes.
+                    properties:
+                      promote:
+                        description: |-
+                          Promote requests promotion of a held blue/green upgrade when changed to a
+                          new non-empty value while spec.upgrade.blueGreen.autoPromote=false.
+
+                          The operator compares this value against
+                          status.upgradeRequests.lastHandledPromote and acts only when the value
+                          changes. Recommended value is an RFC3339 timestamp string.
+                        minLength: 1
+                        type: string
+                      retry:
+                        description: |-
+                          Retry requests a retry of the current failed rolling upgrade when changed
+                          to a new non-empty value.
+
+                          The operator compares this value against status.upgradeRequests.lastHandledRetry
+                          and acts only when the value changes. Recommended value is an RFC3339
+                          timestamp string.
+                        minLength: 1
+                        type: string
+                      rollback:
+                        description: |-
+                          Rollback requests a manual abort or rollback of the current blue/green
+                          upgrade when changed to a new non-empty value.
+
+                          The operator compares this value against
+                          status.upgradeRequests.lastHandledRollback and acts only when the value
+                          changes. Recommended value is an RFC3339 timestamp string.
+                        minLength: 1
+                        type: string
+                    type: object
                   strategy:
                     default: RollingUpdate
                     description: Strategy defines the update strategy to use.
@@ -2827,11 +2866,9 @@ spec:
                       TokenSecretRef optionally references a Secret containing an OpenBao API
                       token for future non-JWT upgrade authentication flows.
 
-                      The Secret must exist in the same namespace as the OpenBaoCluster.
-                      Cross-namespace references are not allowed for security reasons.
-
-                      Built-in rolling and blue/green upgrade executor Jobs currently require
-                      JWT auth via JWTAuthRole and ignore this field.
+                      Built-in rolling and blue/green upgrade orchestration does not support
+                      token-based authentication. Configure spec.upgrade.jwtAuthRole or enable
+                      spec.selfInit.oidc.enabled instead.
                     properties:
                       name:
                         default: ""
@@ -2844,6 +2881,10 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                    - message: spec.upgrade.tokenSecretRef is not supported; configure
+                        spec.upgrade.jwtAuthRole or enable spec.selfInit.oidc.enabled
+                      rule: self == null
                 type: object
               version:
                 description: |-
@@ -2978,6 +3019,13 @@ spec:
                     description: LastJobFailure records the name of the last failed
                       job for debugging.
                     type: string
+                  manualPromotionRequired:
+                    description: |-
+                      ManualPromotionRequired snapshots whether the current in-flight blue/green
+                      upgrade requires an explicit spec.upgrade.requests.promote request before
+                      promotion can proceed. It is derived from spec.upgrade.blueGreen.autoPromote
+                      when the upgrade starts.
+                    type: boolean
                   phase:
                     description: Phase is the current phase of the blue/green upgrade.
                     enum:
@@ -3230,6 +3278,27 @@ spec:
                 - currentPartition
                 - fromVersion
                 - targetVersion
+                type: object
+              upgradeRequests:
+                description: |-
+                  UpgradeRequests tracks which explicit upgrade request values have already
+                  been handled so one-shot requests are edge-triggered instead of level-triggered.
+                properties:
+                  lastHandledPromote:
+                    description: |-
+                      LastHandledPromote is the last observed spec.upgrade.requests.promote
+                      value that the operator has handled.
+                    type: string
+                  lastHandledRetry:
+                    description: |-
+                      LastHandledRetry is the last observed spec.upgrade.requests.retry value
+                      that the operator has handled.
+                    type: string
+                  lastHandledRollback:
+                    description: |-
+                      LastHandledRollback is the last observed spec.upgrade.requests.rollback
+                      value that the operator has handled.
+                    type: string
                 type: object
               workload:
                 description: Workload holds signals owned by the workload controller

@@ -12,13 +12,23 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // detectUpgradeState determines whether an upgrade is needed or if we're resuming one.
 func (m *Manager) detectUpgradeState(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (upgradeNeeded bool, resumeUpgrade bool) {
+	if upgrade.RetryRequestPending(cluster) &&
+		(cluster.Status.Upgrade == nil ||
+			strings.TrimSpace(cluster.Status.Upgrade.LastErrorReason) == "" ||
+			cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion) {
+		retryRequest := upgrade.RetryRequestValue(cluster)
+		upgrade.MarkRetryRequestHandled(&cluster.Status, retryRequest)
+		logger.Info("Ignoring retry request because no failed rolling upgrade is waiting to resume",
+			"retryRequest", retryRequest,
+			"retryRequestField", upgrade.RequestRetryFieldPath)
+	}
+
 	// If upgrade is already in progress, we're resuming
 	if cluster.Status.Upgrade != nil {
 		if strings.TrimSpace(cluster.Status.Upgrade.LastErrorReason) != "" {
@@ -30,15 +40,16 @@ func (m *Manager) detectUpgradeState(logger logr.Logger, cluster *openbaov1alpha
 				return false, true
 			}
 
-			if !rollingRetryToken(cluster) {
-				logger.Info("Upgrade is in failed state; waiting for manual retry annotation",
+			if !upgrade.RetryRequestPending(cluster) {
+				logger.Info("Upgrade is in failed state; waiting for manual retry request",
 					"failureReason", cluster.Status.Upgrade.LastErrorReason,
 					"failureMessage", cluster.Status.Upgrade.LastErrorMessage,
-					"retryAnnotation", constants.AnnotationRetryRollingUpgrade)
+					"retryRequestField", upgrade.RequestRetryFieldPath)
 				return false, false
 			}
 
 			logger.Info("Manual retry requested for failed upgrade",
+				"retryRequest", upgrade.RetryRequestValue(cluster),
 				"targetVersion", cluster.Status.Upgrade.TargetVersion,
 				"currentPartition", cluster.Status.Upgrade.CurrentPartition)
 			return false, true

@@ -37,7 +37,7 @@ func TestHandlePhaseSyncing_EmitsManualHoldAndPromotionEvents(t *testing.T) {
 		scheme := newBlueGreenTestScheme(t)
 		cluster := newPhaseMachineCluster()
 		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
-		cluster.Spec.Upgrade.BlueGreen.AutoPromote = false
+		cluster.Status.BlueGreen.ManualPromotionRequired = true
 		job := succeededExecutorJob(cluster, ActionWaitGreenSynced)
 		recorder := events.NewFakeRecorder(10)
 		manager := &Manager{
@@ -63,7 +63,10 @@ func TestHandlePhaseSyncing_EmitsManualHoldAndPromotionEvents(t *testing.T) {
 		scheme := newBlueGreenTestScheme(t)
 		cluster := newPhaseMachineCluster()
 		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
-		cluster.Spec.Upgrade.BlueGreen.AutoPromote = true
+		cluster.Status.BlueGreen.ManualPromotionRequired = true
+		cluster.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{
+			Promote: "2026-03-10T12:00:00Z",
+		}
 		job := succeededExecutorJob(cluster, ActionWaitGreenSynced)
 		recorder := events.NewFakeRecorder(10)
 		manager := &Manager{
@@ -78,6 +81,9 @@ func TestHandlePhaseSyncing_EmitsManualHoldAndPromotionEvents(t *testing.T) {
 		}
 		if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhasePromoting {
 			t.Fatalf("handlePhaseSyncing() outcome = %+v, want advance to promoting", outcome)
+		}
+		if cluster.Status.UpgradeRequests == nil || cluster.Status.UpgradeRequests.LastHandledPromote != "2026-03-10T12:00:00Z" {
+			t.Fatalf("LastHandledPromote = %+v, want request to be recorded", cluster.Status.UpgradeRequests)
 		}
 
 		expectEventContains(t, recorder, "Normal", ReasonBlueGreenPromotionApproved)
@@ -101,6 +107,57 @@ func TestTriggerRollback_EmitsRollbackStartedEvent(t *testing.T) {
 	}
 
 	expectEventContains(t, recorder, "Warning", ReasonRollbackStarted)
+}
+
+func TestHandleManualRollbackRequest_EmitsRollbackStartedEvent(t *testing.T) {
+	t.Parallel()
+
+	cluster := newBlueGreenCluster()
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+	cluster.Status.BlueGreen.GreenRevision = DeploymentNameSuffix
+	cluster.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{
+		Rollback: "2026-03-10T12:05:00Z",
+	}
+	recorder := events.NewFakeRecorder(10)
+	manager := &Manager{recorder: recorder}
+
+	handled, result, err := manager.handleManualRollbackRequest(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("handleManualRollbackRequest() error = %v", err)
+	}
+	if !handled {
+		t.Fatal("handled = false, want true")
+	}
+	if result.RequeueAfter <= 0 {
+		t.Fatalf("result = %+v, want positive requeue", result)
+	}
+	if cluster.Status.UpgradeRequests == nil || cluster.Status.UpgradeRequests.LastHandledRollback != "2026-03-10T12:05:00Z" {
+		t.Fatalf("LastHandledRollback = %+v, want request to be recorded", cluster.Status.UpgradeRequests)
+	}
+
+	expectEventContains(t, recorder, "Warning", ReasonRollbackStarted)
+}
+
+func TestHandleManualRollbackRequest_IgnoresStaleRequestWhenIdle(t *testing.T) {
+	t.Parallel()
+
+	cluster := newBlueGreenCluster()
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
+	cluster.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{
+		Rollback: "2026-03-10T12:15:00Z",
+	}
+	manager := &Manager{}
+
+	handled, result, err := manager.handleManualRollbackRequest(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("handleManualRollbackRequest() error = %v", err)
+	}
+	if handled {
+		t.Fatalf("handled = true, want false with result %+v", result)
+	}
+	if cluster.Status.UpgradeRequests == nil || cluster.Status.UpgradeRequests.LastHandledRollback != "2026-03-10T12:15:00Z" {
+		t.Fatalf("LastHandledRollback = %+v, want request to be recorded", cluster.Status.UpgradeRequests)
+	}
 }
 
 func TestBreakGlassEvents(t *testing.T) {

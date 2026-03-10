@@ -37,6 +37,13 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 		"to_version":        cluster.Spec.Version,
 	})
 
+	if cluster.Status.BlueGreen != nil &&
+		cluster.Status.BlueGreen.GreenRevision == "" &&
+		cluster.Status.BlueGreen.PreUpgradeSnapshotJobName == "" {
+		cluster.Status.BlueGreen.ManualPromotionRequired = cluster.Spec.Upgrade.BlueGreen != nil &&
+			!cluster.Spec.Upgrade.BlueGreen.AutoPromote
+	}
+
 	// Pre-upgrade snapshot (if enabled)
 	preUpgradeSnapshotEnabled := cluster.Spec.Upgrade.PreUpgradeSnapshot ||
 		(cluster.Spec.Upgrade.BlueGreen != nil && cluster.Spec.Upgrade.BlueGreen.PreUpgradeSnapshot)
@@ -303,11 +310,21 @@ func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cl
 		logger.Info("Pre-promotion hook completed successfully", "job", hookResult.Name)
 	}
 
-	// Check if AutoPromote is disabled
-	if cluster.Spec.Upgrade.BlueGreen != nil && !cluster.Spec.Upgrade.BlueGreen.AutoPromote {
-		logger.Info("AutoPromote is disabled; waiting for manual approval")
+	// Check if this in-flight upgrade requires an explicit promote request.
+	if cluster.Status.BlueGreen.ManualPromotionRequired {
+		if upgrade.PromoteRequestPending(cluster) {
+			promoteRequest := upgrade.PromoteRequestValue(cluster)
+			upgrade.MarkPromoteRequestHandled(&cluster.Status, promoteRequest)
+			logger.Info("Promotion request accepted for held blue/green upgrade",
+				"promoteRequest", promoteRequest,
+				"promoteRequestField", upgrade.RequestPromoteFieldPath)
+			m.emitNormalEvent(cluster, ReasonBlueGreenPromotionApproved, "Promotion approved for Green revision %s", cluster.Status.BlueGreen.GreenRevision)
+			return advance(openbaov1alpha1.PhasePromoting), nil
+		}
+
+		logger.Info("Blue/green upgrade is waiting for manual approval",
+			"promoteRequestField", upgrade.RequestPromoteFieldPath)
 		m.emitNormalEvent(cluster, ReasonBlueGreenHoldEntered, "Blue/green upgrade is waiting for promotion approval for target version %s", cluster.Spec.Version)
-		// Stay in Syncing phase until manual approval (annotation or field update)
 		return hold(), nil
 	}
 

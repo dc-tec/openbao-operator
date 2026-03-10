@@ -38,6 +38,16 @@ kubectl -n security get pods -l openbao.org/cluster=prod-cluster -o wide
 kubectl -n security exec -it prod-cluster-0 -- bao operator raft list-peers
 ```
 
+If your recovery steps require deleting or restarting managed Pods, enable maintenance mode first when your admission policies require the maintenance annotation:
+
+```yaml
+spec:
+  maintenance:
+    enabled: true
+```
+
+See the [Cluster Maintenance Guide](../operations/maintenance.md) for the broader maintenance workflow.
+
 Check for these classes of failure:
 
 - Network isolation between Blue and Green pods.
