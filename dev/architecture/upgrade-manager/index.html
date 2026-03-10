@@ -2240,10 +2240,43 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#validation-and-policy-guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation and policy guardrails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#rolling-completion-semantics" class="md-nav__link">
     <span class="md-ellipsis">
       
         Rolling completion semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rolling-failure-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rolling failure recovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bluegreen-holds-and-rollback-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blue/Green holds and rollback safety
       
     </span>
   </a>
@@ -4400,10 +4433,43 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#validation-and-policy-guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation and policy guardrails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#rolling-completion-semantics" class="md-nav__link">
     <span class="md-ellipsis">
       
         Rolling completion semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rolling-failure-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rolling failure recovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bluegreen-holds-and-rollback-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blue/Green holds and rollback safety
       
     </span>
   </a>
@@ -4617,11 +4683,30 @@
 <li><strong>Blue/Green:</strong> Tracks <code>status.blueGreen.phase</code> and <code>status.blueGreen.jobFailureCount</code>.</li>
 </ul>
 <p>If the Operator crashes, it reads the Status on startup and <strong>resumes</strong> exactly where it left off.</p>
+<h3 id="validation-and-policy-guardrails">Validation and policy guardrails<a class="headerlink" href="#validation-and-policy-guardrails" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Shared version policy:</strong> Rolling and Blue/Green both validate the target version through the same version-policy helper. Invalid semantic versions are rejected and downgrades are blocked before orchestration begins.</li>
+<li><strong>Admission guardrails:</strong> The admission policy rejects downgrade requests before reconcile when the previous or in-flight target version makes the regression unambiguous.</li>
+<li><strong>Image/version alignment:</strong> The workload and upgrade reconcilers reject semver-tagged <code>spec.image</code> values that conflict with <code>spec.version</code>. Digest-pinned images and custom non-semver tags remain allowed, but <code>spec.version</code> remains authoritative.</li>
+<li><strong>Snapshot prerequisites:</strong> Pre-upgrade snapshots use <code>spec.backup</code> configuration and backup authentication. In the <code>Hardened</code> profile, explicit <code>spec.network.egressRules</code> are required so snapshot Jobs can reach object storage.</li>
+</ul>
 <h3 id="rolling-completion-semantics">Rolling completion semantics<a class="headerlink" href="#rolling-completion-semantics" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>status.upgrade</code> remains present until rollout convergence is verified.</li>
 <li>Finalization updates <code>status.upgrade</code> and <code>status.currentVersion</code> in a single status patch.</li>
 <li>The Status controller ignores observed pod-label version regressions, so transient stale observations do not restart a completed rolling upgrade.</li>
+</ul>
+<h3 id="rolling-failure-recovery">Rolling failure recovery<a class="headerlink" href="#rolling-failure-recovery" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Failed rolling upgrades persist <code>status.upgrade.lastErrorReason</code> and <code>status.upgrade.lastErrorMessage</code>.</li>
+<li>Recovery is explicit: the operator waits for the <code>openbao.org/retry-rolling-upgrade</code> annotation before clearing the failed state and retrying.</li>
+<li>If the desired target changes while a rolling upgrade is in progress, the controller clears rolling state and re-evaluates the new target from the live cluster state.</li>
+</ul>
+<h3 id="bluegreen-holds-and-rollback-safety">Blue/Green holds and rollback safety<a class="headerlink" href="#bluegreen-holds-and-rollback-safety" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Syncing</code> can intentionally hold when <code>spec.upgrade.blueGreen.autoPromote=false</code>.</li>
+<li>A failing <code>verification.prePromotionHook</code> either holds in <code>Syncing</code> or triggers automatic abort/rollback, depending on <code>blueGreen.autoRollback.onValidationFailure</code>.</li>
+<li>If late rollback consensus repair fails, the operator enters <code>status.breakGlass</code> and halts risky rollback automation until <code>spec.breakGlassAck</code> matches the issued nonce.</li>
 </ul>
 <h3 id="image-verification">Image Verification<a class="headerlink" href="#image-verification" title="Permanent link">&para;</a></h3>
 <ul>

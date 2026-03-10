@@ -110,7 +110,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#recovering-from-a-failed-rollback" class="md-skip">
+        <a href="#failed-rollback-recovery" class="md-skip">
           Skip to content
         </a>
       
@@ -4379,100 +4379,95 @@
   
 
 
-<h1 id="recovering-from-a-failed-rollback">Recovering From a Failed Rollback<a class="headerlink" href="#recovering-from-a-failed-rollback" title="Permanent link">&para;</a></h1>
-<p>This runbook addresses a <strong>Failed Blue/Green Rollback</strong>. This occurs when you attempt to rollback an upgrade (e.g., changing <code>spec.version</code> back to an older version), but the Operator halts the process to prevent data corruption.</p>
+<h1 id="failed-rollback-recovery">Failed Rollback Recovery<a class="headerlink" href="#failed-rollback-recovery" title="Permanent link">&para;</a></h1>
+<p>Use this runbook when a <strong>Blue/Green rollback</strong> enters break glass mode. This happens when rollback consensus repair fails and the operator stops automation to prevent data corruption or an unsafe Raft reconfiguration.</p>
 <div class="admonition failure">
 <p class="admonition-title">Split Brain Risk</p>
-<p>The Operator stops automation because it suspects a <strong>Split Brain</strong> scenario where both the Blue (Old) and Green (New) clusters might have accepted writes, or Raft consensus cannot be safely transferred back.</p>
+<p>Do not try to force a downgrade by patching <code>spec.version</code> back to an older release. Downgrades are blocked. Recover the cluster state first, then let the operator resume or restore from snapshot.</p>
 </div>
-<hr />
 <h2 id="1-assess-the-situation">1. Assess the Situation<a class="headerlink" href="#1-assess-the-situation" title="Permanent link">&para;</a></h2>
-<p>Check the <strong>Safe Mode / Break Glass</strong> status to understand why the Operator halted.</p>
+<p>Inspect the break-glass and Blue/Green status fields:</p>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.breakGlass}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.blueGreen.phase}{&quot;\n&quot;}{.status.blueGreen.lastJobFailure}{&quot;\n&quot;}&#39;</span>
 </span></code></pre></div>
-<p><strong>Common Reasons:</strong></p>
+<p>Expected signals:</p>
 <ul>
-<li><code>ConsensusFailure</code>: The Blue cluster could not rejoin the Raft quorum.</li>
-<li><code>DirtyWrite</code>: The Green cluster accepted writes that would be lost on rollback (if configured to check).</li>
-<li><code>Timeout</code>: The rollback job took too long.</li>
+<li><code>status.breakGlass.reason=RollbackConsensusRepairFailed</code></li>
+<li><code>status.blueGreen.phase=RollingBack</code></li>
+<li><code>status.blueGreen.lastJobFailure=&lt;rollback-job-name&gt;</code></li>
 </ul>
 <h2 id="2-inspect-the-rollback-job">2. Inspect the Rollback Job<a class="headerlink" href="#2-inspect-the-rollback-job" title="Permanent link">&para;</a></h2>
-<p>The logic for transferring leadership back to the Blue cluster runs in a Kubernetes Job named <code>inter-cluster-rev&lt;Revision&gt;</code>.</p>
-<p>Find and log the failed job:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Find the job</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>-l<span class="w"> </span>openbao.org/cluster<span class="o">=</span>prod-cluster
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># View logs</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>logs<span class="w"> </span>job/inter-cluster-rev4-rollback
+<p>Inspect the Job recorded in <code>status.blueGreen.lastJobFailure</code> first. If that field is empty, list upgrade Jobs for the cluster.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>-l<span class="w"> </span>openbao.org/cluster<span class="o">=</span>prod-cluster
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>logs<span class="w"> </span>job/&lt;job-from-status&gt;
 </span></code></pre></div>
-<p><strong>Log Analysis:</strong></p>
-<table>
-<thead>
-<tr>
-<th style="text-align: left;">Log Message</th>
-<th style="text-align: left;">Meaning</th>
-<th style="text-align: left;">Resolution</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><code>failed to join blue pilot to green leader</code></td>
-<td style="text-align: left;">Network connectivity issue between clusters.</td>
-<td style="text-align: left;">Check NetworkPolicies / DNS. Retry.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>raft log index mismatch</code></td>
-<td style="text-align: left;">The Blue cluster is too far behind (Green accepted too many writes).</td>
-<td style="text-align: left;"><strong>Cannot Rollback</strong>. You must proceed with Green or Restore from Snapshot.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>context deadline exceeded</code></td>
-<td style="text-align: left;">Operation timed out.</td>
-<td style="text-align: left;">Retry (Acknowledge Break Glass).</td>
-</tr>
-</tbody>
-</table>
+<p>Then inspect the OpenBao pods and Raft peers:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>openbao.org/cluster<span class="o">=</span>prod-cluster<span class="w"> </span>-o<span class="w"> </span>wide
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>prod-cluster-0<span class="w"> </span>--<span class="w"> </span>bao<span class="w"> </span>operator<span class="w"> </span>raft<span class="w"> </span>list-peers
+</span></code></pre></div>
+<p>Check for these classes of failure:</p>
+<ul>
+<li>Network isolation between Blue and Green pods.</li>
+<li>Pods that are not Ready or remain sealed.</li>
+<li>Raft quorum loss or peer membership that no longer matches the expected rollback topology.</li>
+<li>Image pull or executor Job failures that prevented rollback automation from completing.</li>
+</ul>
 <h2 id="3-resolution-paths">3. Resolution Paths<a class="headerlink" href="#3-resolution-paths" title="Permanent link">&para;</a></h2>
 <p>Choose the path that matches your diagnosis.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Path A: Retry (Transient)</label><label for="__tabbed_1_2">Path B: Abort (Stay Green)</label><label for="__tabbed_1_3">Path C: Restore (Data Loss)</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Path A: Retry (Transient)</label><label for="__tabbed_1_2">Path B: Pause and Repair</label><label for="__tabbed_1_3">Path C: Restore from Snapshot</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>If the failure was due to a network blip or timeout, and you believe the clusters are healthy:</p>
+<p>If the failure was transient and you restored healthy cluster conditions:</p>
 <ol>
+<li>Fix the underlying issue.</li>
 <li>
-<p><strong>Acknowledge</strong> the Break Glass nonce. This tells the Operator to "Try Again".</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>patch<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;breakGlassAck&quot;:&quot;&lt;NONCE_FROM_STEP_1&gt;&quot;}}&#39;</span>
+<p>Acknowledge the break-glass nonce. This tells the operator to retry rollback automation.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>patch<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;breakGlassAck&quot;:&quot;&lt;NONCE_FROM_STEP_1&gt;&quot;}}&#39;</span>
 </span></code></pre></div>
 </li>
 <li>
-<p>The Operator will spawn a <strong>new</strong> Rollback Job. Monitor it closely.</p>
+<p>Monitor the new rollback Job and <code>status.blueGreen.phase</code>.</p>
 </li>
 </ol>
 </div>
 <div class="tabbed-block">
-<p>If the rollback is impossible (e.g., data divergence), it may be safer to <strong>stay on the new version</strong> (Green) and fix the application issues forward, or perform a fresh restore.</p>
+<p>If the cluster needs manual repair before you allow any further automation:</p>
 <ol>
-<li><strong>Update Spec</strong>: Set <code>spec.version</code> back to the <strong>Green</strong> (New) version.</li>
-<li><strong>Acknowledge</strong>: Acknowledge the nonce.</li>
-<li>The Operator will reconcile the Green cluster as the primary.</li>
+<li>
+<p>Pause reconciliation:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>patch<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;paused&quot;:true}}&#39;</span>
+</span></code></pre></div>
+</li>
+<li>
+<p>Perform the required Raft or infrastructure repair.</p>
+</li>
+<li>
+<p>Resume reconciliation and acknowledge break glass when the cluster is stable:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>patch<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;paused&quot;:false,&quot;breakGlassAck&quot;:&quot;&lt;NONCE_FROM_STEP_1&gt;&quot;}}&#39;</span>
+</span></code></pre></div>
+</li>
 </ol>
 </div>
 <div class="tabbed-block">
 <p>If the cluster state is corrupted beyond repair:</p>
 <ol>
-<li><strong>Stop Operator</strong>: Scale down the operator deployment.</li>
-<li><strong>Delete PVCs</strong>: Clean up the corrupted data.</li>
-<li><strong>Restore</strong>: Follow the <a href="../../../openbaorestore/recovery-restore-after-upgrade/">Restore Guide</a> to bring back the cluster from the last known good snapshot (Pre-Upgrade).</li>
+<li>Stop further automation.</li>
+<li>Identify the last known good snapshot.</li>
+<li>Follow the <a href="../../../openbaorestore/recovery-restore-after-upgrade/">Emergency Restore Guide</a>.</li>
 </ol>
 </div>
 </div>
 </div>
-<hr />
 <h2 id="preventative-measures">Preventative Measures<a class="headerlink" href="#preventative-measures" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Always ensure <strong>Snapshots</strong> are taken before triggering a Rollback (The Operator does this automatically if <code>spec.backup.enabled</code> is true).</li>
-<li>Monitor <code>etcd</code> or <code>raft</code> metrics during upgrades.</li>
+<li>Enable pre-upgrade snapshots with <code>spec.upgrade.preUpgradeSnapshot=true</code> or <code>spec.upgrade.blueGreen.preUpgradeSnapshot=true</code>.</li>
+<li>Verify <code>spec.backup</code> target and backup authentication before starting a production upgrade.</li>
+<li>Monitor <code>status.blueGreen.phase</code>, <code>status.blueGreen.lastJobFailure</code>, and cluster health during the upgrade window.</li>
 </ul>
 
 

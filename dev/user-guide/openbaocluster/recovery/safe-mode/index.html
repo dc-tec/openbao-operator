@@ -4404,54 +4404,65 @@
 <h1 id="break-glass-safe-mode">Break Glass / Safe Mode<a class="headerlink" href="#break-glass-safe-mode" title="Permanent link">&para;</a></h1>
 <div class="admonition failure">
 <p class="admonition-title">Critical State: Automation Halted</p>
-<p>The Operator has entered <strong>Safe Mode</strong> because it detected a high-risk failure (e.g., loss of quorum during an upgrade). <strong>All automation is paused</strong> to prevent data loss.</p>
+<p>The OpenBao Operator has entered <strong>Break Glass / Safe Mode</strong> because automated rollback is no longer safe. The operator halts risky upgrade automation and waits for human intervention.</p>
 </div>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>Safe Mode (also known as "Break Glass") is a safety mechanism. When the Operator encounters a situation where continuing an automated workflow (like a rolling upgrade or rollback) could compromise data integrity or availability, it stops and waits for human operator intervention.</p>
-<p>Common triggers:</p>
-<ul>
-<li>Blue/Green rollback failure (risk of split-brain).</li>
-<li>Quorum loss during critical reconfiguration.</li>
-</ul>
+<p>Break Glass is a safety mechanism for high-risk upgrade recovery. Currently, the operator enters this mode when Blue/Green rollback consensus repair fails and continuing automatically could compromise availability or Raft safety.</p>
 <p>When active:</p>
 <ol>
-<li><strong>Automation Stops</strong>: The Operator stops reconciling the specific <code>OpenBaoCluster</code>.</li>
+<li><strong>Risky automation stops</strong>: The operator halts the affected upgrade or rollback flow.</li>
 <li><strong>Status Updates</strong>: The <code>status.breakGlass</code> field is populated with diagnostic info.</li>
 <li><strong>Manual Ack Required</strong>: You must explicitly "break the glass" to resume automation.</li>
 </ol>
-<hr />
 <h2 id="1-inspect-the-situation">1. Inspect the Situation<a class="headerlink" href="#1-inspect-the-situation" title="Permanent link">&para;</a></h2>
-<p>Check if your cluster is in Safe Mode by inspecting its status.</p>
+<p>Inspect the break-glass status on the <code>OpenBaoCluster</code>.</p>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.breakGlass}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
 </span></code></pre></div>
 <p><strong>Example Output:</strong></p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;active&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;reason&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;QuorumRisk&quot;</span><span class="p">,</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Detected split-brain potential during rollback. Manual intervention required.&quot;</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;reason&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;RollbackConsensusRepairFailed&quot;</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Rollback consensus repair Job upgrade-prod-cluster-rollback-retry-1 failed; manual intervention required.&quot;</span><span class="p">,</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">&quot;nonce&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;abc-123-def-456&quot;</span><span class="p">,</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">&quot;steps&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1. Verify network connectivity. 2. Restore quorum manually. 3. Acknowledge.&quot;</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">}</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">&quot;steps&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="s2">&quot;Inspect rollback Job logs: kubectl -n security logs job/upgrade-prod-cluster-rollback-retry-1&quot;</span><span class="p">,</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="s2">&quot;Inspect pod status: kubectl -n security get pods -l openbao.org/cluster=prod-cluster -o wide&quot;</span><span class="p">,</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="s2">&quot;Perform any required Raft recovery steps, then acknowledge the nonce.&quot;</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="p">]</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="p">}</span>
 </span></code></pre></div>
 <h2 id="2-fix-the-underlying-issue">2. Fix the Underlying Issue<a class="headerlink" href="#2-fix-the-underlying-issue" title="Permanent link">&para;</a></h2>
-<p>Follow the specific guidance provided in the <code>message</code> and <code>steps</code> fields.</p>
+<p>Follow the guidance in <code>status.breakGlass.message</code> and <code>status.breakGlass.steps</code>.</p>
+<p>Use these checks first:</p>
 <ul>
-<li><strong>If Quorum is lost:</strong> See <a href="../no-leader/">Recovering from No Leader</a>.</li>
-<li><strong>If Sealed:</strong> See <a href="../sealed-cluster/">Recovering from Sealed Cluster</a>.</li>
-<li><strong>If Network Partitioned:</strong> Verify CNI and network policies.</li>
+<li>Inspect the last failed rollback Job:</li>
 </ul>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.blueGreen.lastJobFailure}{&quot;\n&quot;}&#39;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>logs<span class="w"> </span>job/&lt;job-from-status&gt;
+</span></code></pre></div>
+<ul>
+<li>Inspect Blue and Green pod health:</li>
+</ul>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>openbao.org/cluster<span class="o">=</span>prod-cluster<span class="w"> </span>-o<span class="w"> </span>wide
+</span></code></pre></div>
+<ul>
+<li>Inspect current Raft membership:</li>
+</ul>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>prod-cluster-0<span class="w"> </span>--<span class="w"> </span>bao<span class="w"> </span>operator<span class="w"> </span>raft<span class="w"> </span>list-peers
+</span></code></pre></div>
+<p>If you need a deeper recovery workflow, continue with <a href="../failed-rollback/">Failed Rollback Recovery</a>.</p>
 <h2 id="3-acknowledge-and-resume">3. Acknowledge and Resume<a class="headerlink" href="#3-acknowledge-and-resume" title="Permanent link">&para;</a></h2>
-<p>Once you have performed the necessary manual repairs, you must tell the Operator it is safe to proceed. This is done by acknowledging the unique <strong>nonce</strong>.</p>
+<p>After you repair the underlying issue, acknowledge the unique nonce to allow the operator to retry rollback automation.</p>
 <div class="admonition warning">
 <p class="admonition-title">Action Required</p>
 <p>Copy the <code>nonce</code> from step 1 and use it in the command below.</p>
 </div>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Replace &#39;abc-123-def-456&#39; with your actual nonce</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>patch<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;breakGlassAck&quot;:&quot;abc-123-def-456&quot;}}&#39;</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Replace &#39;abc-123-def-456&#39; with your actual nonce</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>patch<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;breakGlassAck&quot;:&quot;abc-123-def-456&quot;}}&#39;</span>
 </span></code></pre></div>
-<p>If the issue persists, the Operator may re-enter Safe Mode with a <strong>new nonce</strong>, requiring you to repeat the diagnosis.</p>
-<hr />
+<p>If the issue persists, the operator can re-enter break glass with a <strong>new nonce</strong>, requiring you to repeat the diagnosis and acknowledgment flow.</p>
 <h2 id="related-runbooks">Related Runbooks<a class="headerlink" href="#related-runbooks" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
 <ul>

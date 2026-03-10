@@ -6814,7 +6814,7 @@ See: <a href="https://openbao.org/docs/configuration/audit/">https://openbao.org
 </tr>
 <tr>
 <td><code>onValidationFailure</code> <em>boolean</em></td>
-<td>OnValidationFailure triggers rollback if pre-promotion hook fails.</td>
+<td>OnValidationFailure triggers automatic abort/rollback if the pre-promotion<br />hook fails.</td>
 <td>true</td>
 <td></td>
 </tr>
@@ -8468,7 +8468,7 @@ Users must not override these via spec.configuration.</p>
 </tr>
 <tr>
 <td><code>upgrade</code> <em><a href="#upgradeconfig">UpgradeConfig</a></em></td>
-<td>Upgrade configures upgrade operations.<br />When spec.upgrade.preUpgradeSnapshot is true, if upgrade authentication is not<br />Upgrade authentication must be explicitly configured via spec.upgrade.jwtAuthRole<br />or spec.upgrade.tokenSecretRef. The operator automatically creates an upgrade ServiceAccount<br />(<cluster-name>-upgrade-serviceaccount) for JWT Auth authentication.</td>
+<td>Upgrade configures upgrade operations.<br />Built-in upgrade executor Jobs authenticate with JWT auth using the<br />upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount). If<br />spec.selfInit.oidc.enabled is true and spec.upgrade.jwtAuthRole is empty,<br />the operator assumes or bootstraps the default "openbao-operator-upgrade"<br />role.<br />Pre-upgrade snapshots use spec.backup configuration and backup<br />authentication rather than spec.upgrade credentials.</td>
 <td></td>
 <td>Optional: {} <br /></td>
 </tr>
@@ -8486,7 +8486,7 @@ Users must not override these via spec.configuration.</p>
 </tr>
 <tr>
 <td><code>operatorImageVerification</code> <em><a href="#imageverificationconfig">ImageVerificationConfig</a></em></td>
-<td>OperatorImageVerification configures supply chain security checks for operator-managed helper images<br />(init container, backup/upgrade/restore executors). These images are typically signed<br />by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.<br />If not specified, falls back to the main ImageVerification config.</td>
+<td>OperatorImageVerification configures supply chain security checks for operator-managed helper images<br />(init container, backup/upgrade/restore executors). These images are typically signed<br />by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.<br />If omitted, helper image verification does not fall back to ImageVerification.<br />In Development, omitted means disabled. In Hardened, omitted means enabled.</td>
 <td></td>
 <td>Optional: {} <br /></td>
 </tr>
@@ -10146,13 +10146,13 @@ If omitted, defaults to "static" mode managed by the operator.</p>
 </tr>
 <tr>
 <td><code>jwtAuthRole</code> <em>string</em></td>
-<td>JWTAuthRole is the name of the JWT Auth role configured in OpenBao<br />for upgrade operations. When set, the upgrade manager will use JWT Auth<br />(projected ServiceAccount token) instead of a static token. This is the preferred authentication<br />method as tokens are automatically rotated by Kubernetes.<br />The role must be configured in OpenBao and must grant:<br />- "read" capability on sys/health<br />- "update" capability on sys/step-down<br />- "read" capability on sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)<br />The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),<br />which is automatically created by the operator.<br />If OIDC is enabled in SelfInit and this field is empty, a default role<br />named "openbao-operator-upgrade" will be assumed/created.<br />Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.</td>
+<td>JWTAuthRole is the name of the JWT Auth role configured in OpenBao<br />for upgrade executor Jobs. The executor authenticates with a projected<br />ServiceAccount token from <cluster-name>-upgrade-serviceaccount.<br />The role must be configured in OpenBao and must grant the permissions<br />required by the selected upgrade strategy, including:<br />- "read" capability on sys/health<br />- "sudo" and "update" capability on sys/step-down<br />- "read" capability on sys/storage/raft/autopilot/state<br />- for Blue/Green, raft join/configuration/remove-peer/promote/demote operations<br />The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),<br />which is automatically created by the operator.<br />If OIDC is enabled in SelfInit and this field is empty, a default role<br />named "openbao-operator-upgrade" will be assumed/created.<br />This is the supported authentication mechanism for built-in upgrade orchestration.</td>
 <td></td>
 <td>Optional: {} <br /></td>
 </tr>
 <tr>
 <td><code>tokenSecretRef</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core">LocalObjectReference</a></em></td>
-<td>TokenSecretRef optionally references a Secret containing an OpenBao API<br />token to use for upgrade operations.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons.<br />The token must have permission to:<br />- read sys/health<br />- update sys/step-down<br />- read sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)<br />Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.<br />If JWTAuthRole is set, this field is ignored in favor of JWT Auth.</td>
+<td>TokenSecretRef optionally references a Secret containing an OpenBao API<br />token for future non-JWT upgrade authentication flows.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons.<br />Built-in rolling and blue/green upgrade executor Jobs currently require<br />JWT auth via JWTAuthRole and ignore this field.</td>
 <td></td>
 <td>Optional: {} <br /></td>
 </tr>
@@ -10302,7 +10302,7 @@ If omitted, defaults to "static" mode managed by the operator.</p>
 </tr>
 <tr>
 <td><code>prePromotionHook</code> <em><a href="#validationhookconfig">ValidationHookConfig</a></em></td>
-<td>PrePromotionHook specifies a Job template to run before promoting Green.<br />The job must complete successfully (exit 0) for promotion to proceed.<br />If the job fails, the upgrade enters a paused state until manually resolved.</td>
+<td>PrePromotionHook specifies a Job template to run before promoting Green.<br />The job must complete successfully (exit 0) for promotion to proceed.<br />If the job fails, the operator either aborts or rolls back automatically<br />when blueGreen.autoRollback.onValidationFailure is enabled; otherwise it<br />holds for manual resolution.</td>
 <td></td>
 <td>Optional: {} <br /></td>
 </tr>

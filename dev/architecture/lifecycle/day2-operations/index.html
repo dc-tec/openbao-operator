@@ -4424,25 +4424,28 @@
 <div class="tabbed-content">
 <div class="tabbed-block">
 <ol>
-<li>User configures upgrade executor:</li>
-<li>Set <code>spec.upgrade.image</code> (optional, can be inferred)</li>
-<li>Set <code>spec.upgrade.jwtAuthRole</code> (optional, inferred from <code>spec.selfInit.oidc.enabled</code>) or configure manual role</li>
-<li>User updates <code>spec.version</code> and/or <code>spec.image</code> (strategy is configured via <code>spec.upgrade.strategy</code>).</li>
+<li>User ensures upgrade prerequisites:</li>
+<li>Set <code>spec.version</code> to the target semantic version.</li>
+<li>Configure JWT auth for upgrade executor Jobs (<code>spec.upgrade.jwtAuthRole</code>), or enable <code>spec.selfInit.oidc.enabled=true</code> so the default role can be bootstrapped.</li>
+<li>If <code>spec.image</code> is set with a semver tag, keep it aligned with <code>spec.version</code>.</li>
+<li>If <code>spec.upgrade.preUpgradeSnapshot=true</code>, configure <code>spec.backup</code> and backup authentication.</li>
+<li>User updates <code>spec.version</code> and optionally <code>spec.image</code> (strategy is configured via <code>spec.upgrade.strategy</code>).</li>
 <li>Upgrade Manager (adminops controller) detects version drift and performs pre-upgrade validation:</li>
-<li>Validates semantic versioning (blocks downgrades by default).</li>
+<li>Validates semantic versioning and blocks downgrades.</li>
+<li>Rejects provable semver image/version mismatches.</li>
 <li>Verifies all pods are Ready and quorum is healthy.</li>
-<li>Optionally triggers a pre-upgrade backup if <code>spec.upgrade.preUpgradeSnapshot</code> is enabled.</li>
+<li>Optionally triggers a pre-upgrade snapshot using <code>spec.backup</code> if <code>spec.upgrade.preUpgradeSnapshot</code> is enabled.</li>
 <li>Upgrade Manager orchestrates Raft-aware rolling updates:</li>
 <li>Locks StatefulSet updates using partitioning.</li>
 <li>Iterates pods in reverse ordinal order.</li>
 <li>Runs an upgrade Job to perform leader step-down before updating the leader pod.</li>
 <li>Waits for pod Ready, OpenBao health, and Raft sync after each update.</li>
-<li>Upgrade progress is persisted in <code>status.upgrade</code> (rolling) or <code>status.blueGreen</code> (blue/green), allowing resumption after Operator restart.</li>
+<li>If a rolling step fails, progress remains in <code>status.upgrade</code> and the operator waits for the <code>openbao.org/retry-rolling-upgrade</code> annotation before retrying.</li>
 <li>On completion, <code>status.currentVersion</code> is updated and <code>status.upgrade</code> is cleared (rolling), or <code>status.blueGreen.phase</code> returns to <code>Idle</code> (blue/green).</li>
 </ol>
 <div class="admonition note">
 <p class="admonition-title">Upgrade Policy</p>
-<p>Upgrades are designed to be safe and resumable. Downgrades are blocked by default. Rolling upgrades halt on failure and require manual intervention; Blue/Green can perform automatic rollback when <code>spec.upgrade.blueGreen.autoRollback.enabled=true</code>. Root tokens are not used for upgrade operations.</p>
+<p>Upgrades are designed to be safe and resumable. Downgrades are blocked by default. Rolling upgrades wait for an explicit retry signal after failure. Blue/Green can abort or roll back automatically when <code>spec.upgrade.blueGreen.autoRollback.enabled=true</code>. Root tokens are not used for upgrade operations.</p>
 </div>
 <h3 id="sequence-diagram-rolling-updates">Sequence Diagram (Rolling Updates)<a class="headerlink" href="#sequence-diagram-rolling-updates" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>sequenceDiagram
@@ -4472,11 +4475,14 @@
 <p>Blue/Green upgrades provide zero-downtime updates by creating a parallel "Green" standby cluster and advancing it through explicit consensus phases.</p>
 <ol>
 <li><strong>Drift Detection:</strong> User updates <code>OpenBaoCluster</code> spec with a new version or image, using the Blue/Green strategy.</li>
-<li><strong>Green Creation:</strong> The operator creates a new "Green" StatefulSet with the new version.</li>
-<li><strong>Join as Non-Voters:</strong> Green pods start and join the existing "Blue" Raft cluster as non-voters.</li>
-<li><strong>Sync and Promote:</strong> The operator waits for Green replication to converge, then promotes Green pods to voters.</li>
+<li><strong>Optional Snapshot:</strong> If <code>spec.upgrade.preUpgradeSnapshot=true</code> or <code>spec.upgrade.blueGreen.preUpgradeSnapshot=true</code>, the operator blocks until a pre-upgrade snapshot succeeds.</li>
+<li><strong>Green Creation:</strong> The operator creates a new Green StatefulSet with the new version.</li>
+<li><strong>Join as Non-Voters:</strong> Green pods start and join the existing Blue Raft cluster as non-voters.</li>
+<li><strong>Sync and Validate:</strong> The operator waits for Green replication to converge, honors optional <code>verification.minSyncDuration</code>, and runs <code>verification.prePromotionHook</code> when configured.</li>
+<li><strong>Manual Hold or Promotion:</strong> If <code>autoPromote=false</code>, the upgrade holds in <code>Syncing</code> until the user enables promotion. Otherwise, the operator promotes Green pods to voters.</li>
 <li><strong>Demote Blue and Verify Leader:</strong> The operator demotes Blue voters, forces leadership transfer when needed, and waits until a Green leader is observed.</li>
 <li><strong>Cutover During Cleanup:</strong> The operator switches the Service selector to Green, removes Blue peers, and deletes the Blue StatefulSet. Rollback remains possible until irreversible cleanup completes.</li>
+<li><strong>Break Glass:</strong> If rollback consensus repair fails, the operator sets <code>status.breakGlass</code> and halts risky rollback automation until <code>spec.breakGlassAck</code> matches the issued nonce.</li>
 </ol>
 <h3 id="sequence-diagram-bluegreen">Sequence Diagram (Blue/Green)<a class="headerlink" href="#sequence-diagram-bluegreen" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>sequenceDiagram
@@ -4515,7 +4521,7 @@
 <ol>
 <li>User sets <code>spec.paused=true</code>.</li>
 <li>Reconcilers short-circuit and stop mutating resources, allowing manual actions (e.g., manual restore from snapshot).</li>
-<li>If an upgrade was in progress, it is paused but state is preserved in <code>status.upgrade</code>.</li>
+<li>If an upgrade was in progress, it is paused but state is preserved in <code>status.upgrade</code> or <code>status.blueGreen</code>.</li>
 <li>After maintenance, user sets <code>spec.paused=false</code> to resume normal reconciliation (including any paused upgrade).</li>
 </ol>
 <h2 id="official-openbao-documentation">Official OpenBao Documentation<a class="headerlink" href="#official-openbao-documentation" title="Permanent link">&para;</a></h2>
