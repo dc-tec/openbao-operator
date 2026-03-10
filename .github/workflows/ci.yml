@@ -620,6 +620,9 @@ jobs:
           docker pull "${{ needs.build-e2e-images.outputs.config_init_ref }}"
           docker pull "${{ needs.build-e2e-images.outputs.backup_executor_ref }}"
           docker pull "${{ needs.build-e2e-images.outputs.upgrade_executor_ref }}"
+          if [[ -n "${{ matrix.hardened_upgrade_executor_image }}" ]]; then
+            docker pull "${{ matrix.hardened_upgrade_executor_image }}"
+          fi
 
       - name: Create Kind Cluster
         if: env.SHOULD_RUN == 'true'
