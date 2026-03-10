@@ -237,12 +237,13 @@ spec:
                       credentialsSecretRef:
                         description: |-
                           CredentialsSecretRef optionally references a Secret containing credentials for the object store.
-                          The Secret must exist in the same namespace as the OpenBaoCluster.
+                          The Secret must exist in the same namespace as the owning OpenBao resource.
                           Cross-namespace references are not allowed for security reasons.
 
                           For S3: Expected keys are "accessKeyId" and "secretAccessKey" (optional: "sessionToken", "region", "caCert").
                           For GCS: Expected key is "credentials.json" containing a service account JSON key.
                           For Azure: Expected keys are "accountKey" or "connectionString".
+                          Omit this field when relying on ambient workload identity or another default credential chain.
                         properties:
                           name:
                             default: ""
@@ -311,8 +312,9 @@ spec:
                       roleArn:
                         description: |-
                           RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
-                          When set, the backup Job mounts a projected ServiceAccount token and relies on the
-                          cloud provider SDK default credential chain (for example, AWS IRSA).
+                          When set, backup and restore Jobs mount a projected ServiceAccount token and set the
+                          AWS Web Identity environment variables explicitly.
+                          Leave this empty when relying on ambient workload identity or provider-managed default credentials instead.
                           Only used when Provider is "s3".
                         type: string
                       usePathStyle:
@@ -324,6 +326,29 @@ spec:
                           Set to false for AWS S3 (default, as AWS is deprecating path-style).
                           Only used when Provider is "s3".
                         type: boolean
+                      workloadIdentity:
+                        description: |-
+                          WorkloadIdentity optionally applies provider-specific metadata required by cloud workload identity integrations.
+                          Use this for ambient identity setups such as EKS Pod Identity or IRSA, GKE Workload Identity, or Azure Workload Identity.
+                          When omitted, backup and restore workloads can still use any credentials exposed through the pod's default provider chain.
+                        properties:
+                          podLabels:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              PodLabels are merged into the generated backup or restore Job pod template.
+                              This is typically used for provider-specific selectors such as Azure Workload Identity.
+                              Operator-managed labels take precedence if the same key is specified here.
+                            type: object
+                          serviceAccountAnnotations:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              ServiceAccountAnnotations are merged into the generated backup or restore ServiceAccount.
+                              This is typically used for provider-specific bindings such as GKE Workload Identity
+                              or webhook-based AWS/Azure workload identity integrations.
+                            type: object
+                        type: object
                     required:
                     - bucket
                     type: object
@@ -1496,6 +1521,27 @@ spec:
                   - version
                   type: object
                 type: array
+              podMetadata:
+                description: |-
+                  PodMetadata configures additional labels and annotations for the OpenBao Pod template.
+                  This is useful for platform integrations that select Pods via metadata, such as
+                  Azure Workload Identity. Operator-managed Pod metadata takes precedence.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Annotations are merged into the generated OpenBao Pod template annotations.
+                      Operator-managed annotations take precedence if the same key is specified here.
+                    type: object
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Labels are merged into the generated OpenBao Pod template labels.
+                      Operator-managed labels take precedence if the same key is specified here.
+                    type: object
+                type: object
               profile:
                 allOf:
                 - enum:
@@ -3361,12 +3407,13 @@ spec:
                       credentialsSecretRef:
                         description: |-
                           CredentialsSecretRef optionally references a Secret containing credentials for the object store.
-                          The Secret must exist in the same namespace as the OpenBaoCluster.
+                          The Secret must exist in the same namespace as the owning OpenBao resource.
                           Cross-namespace references are not allowed for security reasons.
 
                           For S3: Expected keys are "accessKeyId" and "secretAccessKey" (optional: "sessionToken", "region", "caCert").
                           For GCS: Expected key is "credentials.json" containing a service account JSON key.
                           For Azure: Expected keys are "accountKey" or "connectionString".
+                          Omit this field when relying on ambient workload identity or another default credential chain.
                         properties:
                           name:
                             default: ""
@@ -3435,8 +3482,9 @@ spec:
                       roleArn:
                         description: |-
                           RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
-                          When set, the backup Job mounts a projected ServiceAccount token and relies on the
-                          cloud provider SDK default credential chain (for example, AWS IRSA).
+                          When set, backup and restore Jobs mount a projected ServiceAccount token and set the
+                          AWS Web Identity environment variables explicitly.
+                          Leave this empty when relying on ambient workload identity or provider-managed default credentials instead.
                           Only used when Provider is "s3".
                         type: string
                       usePathStyle:
@@ -3448,6 +3496,29 @@ spec:
                           Set to false for AWS S3 (default, as AWS is deprecating path-style).
                           Only used when Provider is "s3".
                         type: boolean
+                      workloadIdentity:
+                        description: |-
+                          WorkloadIdentity optionally applies provider-specific metadata required by cloud workload identity integrations.
+                          Use this for ambient identity setups such as EKS Pod Identity or IRSA, GKE Workload Identity, or Azure Workload Identity.
+                          When omitted, backup and restore workloads can still use any credentials exposed through the pod's default provider chain.
+                        properties:
+                          podLabels:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              PodLabels are merged into the generated backup or restore Job pod template.
+                              This is typically used for provider-specific selectors such as Azure Workload Identity.
+                              Operator-managed labels take precedence if the same key is specified here.
+                            type: object
+                          serviceAccountAnnotations:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              ServiceAccountAnnotations are merged into the generated backup or restore ServiceAccount.
+                              This is typically used for provider-specific bindings such as GKE Workload Identity
+                              or webhook-based AWS/Azure workload identity integrations.
+                            type: object
+                        type: object
                     required:
                     - bucket
                     type: object
@@ -4413,7 +4484,7 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:270bd69a9e1bcab0068d604e5e524aa61f8ee61a4505cf9d0fbfdcaa1e78dd6f
+        image: ghcr.io/dc-tec/openbao-operator@sha256:2da2783df21d9fd1c0b674dab40254c308bbea6204b85b48dee85859caa3914d
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4527,7 +4598,7 @@ spec:
           value: openbao-operator-controller
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:270bd69a9e1bcab0068d604e5e524aa61f8ee61a4505cf9d0fbfdcaa1e78dd6f
+        image: ghcr.io/dc-tec/openbao-operator@sha256:2da2783df21d9fd1c0b674dab40254c308bbea6204b85b48dee85859caa3914d
         livenessProbe:
           httpGet:
             path: /healthz
@@ -5651,12 +5722,11 @@ spec:
       !variables.has_backup || (object.spec.backup.schedule != "" &&
 
         ((has(object.spec.backup.jwtAuthRole) && object.spec.backup.jwtAuthRole != "") || has(object.spec.backup.tokenSecretRef) || ((!has(object.spec.backup.jwtAuthRole) || object.spec.backup.jwtAuthRole == "") && has(object.spec.selfInit) && has(object.spec.selfInit.oidc) && object.spec.selfInit.oidc.enabled == true)) &&
-        (object.spec.backup.target.roleArn != "" || has(object.spec.backup.target.credentialsSecretRef)) &&
         object.spec.backup.schedule.matches("^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$"))
     message: spec.backup requires schedule, OpenBao auth (jwtAuthRole or tokenSecretRef,
       or OIDC enabled when jwtAuthRole is empty/unset for auto-creation of "openbao-operator-backup"
-      role), storage auth (target.roleArn or target.credentialsSecretRef), and a 5-field
-      cron expression.
+      role), and a 5-field cron expression. Storage credentials may come from target.credentialsSecretRef,
+      target.roleArn, or the pod's ambient workload identity/default credential chain.
   - expression: |-
       !has(object.spec.profile) || object.spec.profile != "Hardened" || !(variables.has_backup || variables.has_pre_upgrade_snapshot || variables.has_bluegreen_pre_upgrade_snapshot) || (has(object.spec.network) &&
 
@@ -5698,9 +5768,11 @@ spec:
         !object.spec.upgrade.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
     message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
       are prohibited in backup/upgrade configurations to prevent confused deputy attacks.
-  - expression: oldObject == null || !has(oldObject.spec.storage.storageClassName)
-      || object.spec.storage.storageClassName == oldObject.spec.storage.storageClassName
-    message: spec.storage.storageClassName is immutable.
+  - expression: 'oldObject == null || (has(object.spec.storage.storageClassName) ?
+      object.spec.storage.storageClassName : "") == (has(oldObject.spec.storage.storageClassName)
+      ? oldObject.spec.storage.storageClassName : "")'
+    message: spec.storage.storageClassName is immutable after creation; set it explicitly
+      before PVCs are created.
   - expression: oldObject == null || !has(oldObject.spec.storage.size) || quantity(object.spec.storage.size).compareTo(quantity(oldObject.spec.storage.size))
       >= 0
     message: spec.storage.size cannot be decreased.
