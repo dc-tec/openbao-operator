@@ -523,7 +523,7 @@ func TestRestoreManager_RunningLockTaken_FailsDeterministically(t *testing.T) {
 	if latest.Status.Phase != openbaov1alpha1.RestorePhaseFailed {
 		t.Fatalf("expected restore to fail when lock is stolen, got phase %s", latest.Status.Phase)
 	}
-	expected := "cluster operation lock was taken by another operation while restore was running"
+	expected := "Restore stopped because another operation took the cluster operation lock while the restore Job was running. Check concurrent backup or upgrade activity, then create a new OpenBaoRestore to retry."
 	if latest.Status.Message != expected {
 		t.Fatalf("expected failure message %q, got %q", expected, latest.Status.Message)
 	}
@@ -596,8 +596,10 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 	if latest.Status.Phase != openbaov1alpha1.RestorePhaseFailed {
 		t.Fatalf("expected restore phase Failed after failed job, got %s", latest.Status.Phase)
 	}
-	if latest.Status.Message != "Restore job failed" {
-		t.Fatalf("expected default failed-job message, got %q", latest.Status.Message)
+	jobName := restore.RestoreJobNamePrefix + restoreObj.Name
+	expectedMessage := "Restore Job " + jobName + " failed. Check kubectl logs job/" + jobName + " -n " + namespace + " and create a new OpenBaoRestore to retry."
+	if latest.Status.Message != expectedMessage {
+		t.Fatalf("expected failed-job message %q, got %q", expectedMessage, latest.Status.Message)
 	}
 	if latest.Status.CompletionTime == nil {
 		t.Fatalf("expected completionTime to be set on terminal failure")

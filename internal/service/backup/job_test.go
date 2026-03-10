@@ -9,6 +9,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/go-logr/logr"
+	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -756,6 +757,13 @@ func TestEnsureBackupJob_JobFailed(t *testing.T) {
 		},
 		Status: batchv1.JobStatus{
 			Failed: 1,
+			Conditions: []batchv1.JobCondition{
+				{
+					Type:    batchv1.JobFailed,
+					Status:  corev1.ConditionTrue,
+					Message: "snapshot upload failed",
+				},
+			},
 		},
 	}
 
@@ -862,6 +870,9 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	if cluster.Status.Backup.LastFailureReason == "" {
 		t.Error("processBackupJobResult() should set LastFailureReason")
 	}
+	if !strings.Contains(cluster.Status.Backup.LastFailureReason, "kubectl logs job/") {
+		t.Fatalf("LastFailureReason = %q, want log guidance", cluster.Status.Backup.LastFailureReason)
+	}
 }
 
 func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
@@ -912,6 +923,28 @@ func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
 	if cluster.Status.Backup.ConsecutiveFailures != 1 {
 		t.Errorf("processBackupJobResult() second call ConsecutiveFailures = %v, want 1 (idempotent)", cluster.Status.Backup.ConsecutiveFailures)
 	}
+}
+
+func TestBackupJobFailureReason_UsesJobConditionMessage(t *testing.T) {
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "backup-test-cluster-20250115-030000",
+			Namespace: "default",
+		},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{
+				{
+					Type:    batchv1.JobFailed,
+					Status:  corev1.ConditionTrue,
+					Message: "snapshot upload failed",
+				},
+			},
+		},
+	}
+
+	message := backupJobFailureReason(job)
+	assert.Contains(t, message, "snapshot upload failed")
+	assert.Contains(t, message, "kubectl logs job/backup-test-cluster-20250115-030000 -n default")
 }
 
 func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
