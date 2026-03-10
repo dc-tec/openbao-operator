@@ -221,6 +221,19 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 		return res, err
 	}
 
+	if handled, res, err := m.maybeHandleTargetRevisionDrift(ctx, logger, cluster); handled || err != nil {
+		return res, err
+	}
+
+	if cluster.Status.BlueGreen == nil || cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle {
+		if err := upgrade.ValidateUpgradeTargetVersion(logger, cluster.Status.CurrentVersion, cluster.Spec.Version); err != nil {
+			return recon.Result{}, m.releaseUpgradeLockOnIdleValidationError(ctx, logger, cluster, err)
+		}
+		if err := upgrade.ValidateImageRefMatchesVersion(cluster.Spec.Version, cluster.Spec.Image); err != nil {
+			return recon.Result{}, m.releaseUpgradeLockOnIdleValidationError(ctx, logger, cluster, err)
+		}
+	}
+
 	logger.Info("Upgrade detected; CurrentVersion differs from Spec.Version",
 		"currentVersion", cluster.Status.CurrentVersion,
 		"specVersion", cluster.Spec.Version)
@@ -405,6 +418,19 @@ func (m *Manager) ensureIdleAndCleanupGreen(ctx context.Context, logger logr.Log
 	return nil
 }
 
+func (m *Manager) releaseUpgradeLockOnIdleValidationError(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, cause error) error {
+	if cause == nil || cluster == nil {
+		return cause
+	}
+	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
+		return cause
+	}
+	if err := m.releaseUpgradeLockIfHeld(ctx, logger, cluster); err != nil {
+		return errors.Join(cause, err)
+	}
+	return cause
+}
+
 func (m *Manager) releaseUpgradeLockIfHeld(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if !upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock) {
 		return nil
@@ -456,6 +482,46 @@ func resetBlueGreenTransientState(status *openbaov1alpha1.BlueGreenStatus) {
 	status.StartTime = nil
 	status.JobFailureCount = 0
 	status.LastJobFailure = ""
+}
+
+// maybeHandleTargetRevisionDrift unwinds an in-flight blue/green upgrade when
+// the desired Green revision changes mid-upgrade. This prevents the operator
+// from silently continuing an outdated target after spec.version/image/replicas
+// were changed by the user.
+func (m *Manager) maybeHandleTargetRevisionDrift(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, recon.Result, error) {
+	if cluster.Status.BlueGreen == nil {
+		return false, recon.Result{}, nil
+	}
+
+	switch cluster.Status.BlueGreen.Phase {
+	case openbaov1alpha1.PhaseIdle, openbaov1alpha1.PhaseRollingBack, openbaov1alpha1.PhaseRollbackCleanup:
+		return false, recon.Result{}, nil
+	}
+
+	if cluster.Status.BlueGreen.GreenRevision == "" {
+		return false, recon.Result{}, nil
+	}
+
+	desiredGreenRevision := m.calculateRevision(cluster)
+	if cluster.Status.BlueGreen.GreenRevision == desiredGreenRevision {
+		return false, recon.Result{}, nil
+	}
+
+	logger.Info("Spec drift detected during blue/green upgrade; unwinding current target before re-evaluating",
+		"phase", cluster.Status.BlueGreen.Phase,
+		"activeGreenRevision", cluster.Status.BlueGreen.GreenRevision,
+		"desiredGreenRevision", desiredGreenRevision,
+		"currentVersion", cluster.Status.CurrentVersion,
+		"targetVersion", cluster.Spec.Version)
+
+	result, err := m.triggerRollbackOrAbort(ctx, logger, cluster, upgrade.ReasonVersionMismatch)
+	if err != nil {
+		return true, recon.Result{}, err
+	}
+	if result == (recon.Result{}) {
+		return true, requeueShort(), nil
+	}
+	return true, result, nil
 }
 
 func (m *Manager) maybeAbortUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, recon.Result, error) {

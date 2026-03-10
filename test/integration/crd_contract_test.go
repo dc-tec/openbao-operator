@@ -178,47 +178,8 @@ func TestCRD_OpenBaoCluster_RequiresProfile(t *testing.T) {
 }
 
 func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
-	ensureDefaultAdmissionPoliciesApplied(t)
 	namespace := newTestNamespace(t)
-
-	// First ensure admission policies are active by waiting for a known denial.
-	for attempt := 0; attempt < 25; attempt++ {
-		invalid := &unstructured.Unstructured{
-			Object: map[string]any{
-				"apiVersion": "openbao.org/v1alpha1",
-				"kind":       "OpenBaoCluster",
-				"metadata": map[string]any{
-					"name":      fmt.Sprintf("cluster-policy-probe-%d", attempt),
-					"namespace": namespace,
-				},
-				"spec": map[string]any{
-					"version":  "2.4.4",
-					"image":    "openbao/openbao:2.4.4",
-					"replicas": int64(3),
-					"profile":  "Development",
-					"tls": map[string]any{
-						"enabled":        true,
-						"rotationPeriod": "720h",
-					},
-					"storage": map[string]any{
-						"size": "10Gi",
-					},
-					"initContainer": map[string]any{
-						"enabled": false,
-					},
-				},
-			},
-		}
-
-		err := k8sClient.Create(ctx, invalid)
-		if err == nil {
-			_ = k8sClient.Delete(ctx, invalid)
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		requireAdmissionDenied(t, err)
-		break
-	}
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
 
 	cluster := newMinimalClusterObj(namespace, "cluster-default-init")
 	cluster.Spec.Profile = openbaov1alpha1.ProfileDevelopment
@@ -276,6 +237,114 @@ func TestVAP_OpenBaoCluster_RejectsDisabledInitContainerOverride(t *testing.T) {
 	}
 
 	t.Fatalf("expected VAP to deny OpenBaoCluster create with disabled initContainer override after retries")
+}
+
+func TestVAP_OpenBaoCluster_RejectsDowngradeBelowCurrentVersion(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-downgrade-current-version")
+	cluster.Spec.Version = "2.5.0"
+	cluster.Spec.Image = "openbao/openbao:2.5.0"
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("create OpenBaoCluster: %v", err)
+	}
+
+	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+		status.Initialized = true
+		status.CurrentVersion = "2.5.0"
+	})
+
+	var latest openbaov1alpha1.OpenBaoCluster
+	key := types.NamespacedName{Namespace: namespace, Name: cluster.Name}
+	if err := k8sClient.Get(ctx, key, &latest); err != nil {
+		t.Fatalf("get OpenBaoCluster: %v", err)
+	}
+
+	original := latest.DeepCopy()
+	latest.Spec.Version = "2.4.4"
+	latest.Spec.Image = "openbao/openbao:2.4.4"
+
+	err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original))
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "spec.version cannot be downgraded below status.currentVersion.") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_RejectsRollingTargetRegressionAfterRolloutStarts(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-rolling-target-regression")
+	cluster.Spec.Version = "2.6.0"
+	cluster.Spec.Image = "openbao/openbao:2.6.0"
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("create OpenBaoCluster: %v", err)
+	}
+
+	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+		status.Initialized = true
+		status.CurrentVersion = "2.4.4"
+		status.Upgrade = &openbaov1alpha1.UpgradeProgress{
+			FromVersion:      "2.4.4",
+			TargetVersion:    "2.6.0",
+			CurrentPartition: 2,
+			CompletedPods:    []int32{2},
+		}
+	})
+
+	var latest openbaov1alpha1.OpenBaoCluster
+	key := types.NamespacedName{Namespace: namespace, Name: cluster.Name}
+	if err := k8sClient.Get(ctx, key, &latest); err != nil {
+		t.Fatalf("get OpenBaoCluster: %v", err)
+	}
+
+	original := latest.DeepCopy()
+	latest.Spec.Version = "2.5.0"
+	latest.Spec.Image = "openbao/openbao:2.5.0"
+
+	err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original))
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "spec.version cannot be reduced below status.upgrade.targetVersion after rolling progress has started.") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_AllowsRollingTargetCorrectionBeforeRolloutStarts(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-rolling-target-correction")
+	cluster.Spec.Version = "2.6.0"
+	cluster.Spec.Image = "openbao/openbao:2.6.0"
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("create OpenBaoCluster: %v", err)
+	}
+
+	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+		status.Initialized = true
+		status.CurrentVersion = "2.4.4"
+		status.Upgrade = &openbaov1alpha1.UpgradeProgress{
+			FromVersion:      "2.4.4",
+			TargetVersion:    "2.6.0",
+			CurrentPartition: cluster.Spec.Replicas,
+		}
+	})
+
+	var latest openbaov1alpha1.OpenBaoCluster
+	key := types.NamespacedName{Namespace: namespace, Name: cluster.Name}
+	if err := k8sClient.Get(ctx, key, &latest); err != nil {
+		t.Fatalf("get OpenBaoCluster: %v", err)
+	}
+
+	original := latest.DeepCopy()
+	latest.Spec.Version = "2.5.0"
+	latest.Spec.Image = "openbao/openbao:2.5.0"
+
+	if err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
+		t.Fatalf("expected retarget before rollout progress to succeed, got: %v", err)
+	}
 }
 
 func TestVAP_OpenBaoTenant_RejectsCrossNamespaceSelfService(t *testing.T) {

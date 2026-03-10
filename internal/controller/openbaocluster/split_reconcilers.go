@@ -197,6 +197,9 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 		RequeueSafetyNetBase:       constants.RequeueSafetyNetBase,
 		RequeueSafetyNetJitter:     constants.RequeueSafetyNetJitter,
 		PermanentConfigurationReason: map[string]struct{}{
+			ReasonInvalidVersion:                 {},
+			ReasonDowngradeBlocked:               {},
+			ReasonImageVersionMismatch:           {},
 			ReasonStorageInvalidSize:             {},
 			ReasonStorageShrinkNotSupported:      {},
 			ReasonStorageResizeNotSupported:      {},

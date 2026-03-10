@@ -2,17 +2,25 @@ package rolling
 
 import (
 	"context"
+	"errors"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -186,6 +194,248 @@ func TestDetectUpgradeState(t *testing.T) {
 				t.Errorf("detectUpgradeState() resumeUpgrade = %v, want %v", gotResumeUpgrade, tt.wantResumeUpgrade)
 			}
 		})
+	}
+}
+
+func TestValidateUpgrade_BlocksInvalidVersionSelection(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		cluster    *openbaov1alpha1.OpenBaoCluster
+		wantReason string
+	}{
+		{
+			name: "downgrade is rejected before health checks",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version: "2.4.4",
+					Image:   "openbao/openbao:2.4.4",
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					CurrentVersion: "2.5.0",
+				},
+			},
+			wantReason: upgrade.ReasonDowngradeBlocked,
+		},
+		{
+			name: "semver tag mismatch is rejected before health checks",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version: "2.5.0",
+					Image:   "openbao/openbao:2.4.4",
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					CurrentVersion: "2.4.4",
+				},
+			},
+			wantReason: upgrade.ReasonImageVersionMismatch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mgr := &Manager{}
+			err := mgr.validateUpgrade(context.Background(), testLogger(), tt.cluster)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+				t.Fatalf("expected permanent config error, got %v", err)
+			}
+			reason, ok := operatorerrors.Reason(err)
+			if !ok {
+				t.Fatalf("expected reasoned error, got %v", err)
+			}
+			if reason != tt.wantReason {
+				t.Fatalf("reason = %q, want %q", reason, tt.wantReason)
+			}
+		})
+	}
+}
+
+func TestValidateUpgrade_ResumeHealthAllowsOneUnavailableTarget(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.5.0",
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.4",
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				FromVersion:      "2.4.4",
+				TargetVersion:    "2.5.0",
+				CurrentPartition: 3,
+			},
+		},
+	}
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: cluster.Name, Namespace: cluster.Namespace},
+		Status: appsv1.StatefulSetStatus{
+			Replicas:      3,
+			ReadyReplicas: 2,
+		},
+	}
+
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + constants.SuffixTLSCA,
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{
+			"ca.crt": []byte("fake-ca"),
+		},
+	}
+
+	pod0 := readyRollingTestPod(cluster, 0, true)
+	pod1 := readyRollingTestPod(cluster, 1, false)
+	pod2 := pendingRollingTestPod(cluster, 2)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, caSecret, pod0, pod1, pod2).Build()
+	mgr := NewManagerWithClientFactory(
+		k8sClient,
+		scheme,
+		nil,
+		rollingTestClientFactory(),
+		portopenbao.ClientConfig{},
+		nil,
+		"",
+	)
+
+	if err := mgr.validateUpgrade(context.Background(), testLogger(), cluster); err != nil {
+		t.Fatalf("validateUpgrade() error = %v, want nil", err)
+	}
+}
+
+func TestValidateUpgrade_ResumeHealthBlocksQuorumLoss(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.5.0",
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.4",
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				FromVersion:      "2.4.4",
+				TargetVersion:    "2.5.0",
+				CurrentPartition: 3,
+			},
+		},
+	}
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: cluster.Name, Namespace: cluster.Namespace},
+		Status: appsv1.StatefulSetStatus{
+			Replicas:      3,
+			ReadyReplicas: 1,
+		},
+	}
+
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + constants.SuffixTLSCA,
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{
+			"ca.crt": []byte("fake-ca"),
+		},
+	}
+
+	pod0 := readyRollingTestPod(cluster, 0, true)
+	pod1 := pendingRollingTestPod(cluster, 1)
+	pod2 := pendingRollingTestPod(cluster, 2)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, caSecret, pod0, pod1, pod2).Build()
+	mgr := NewManagerWithClientFactory(
+		k8sClient,
+		scheme,
+		nil,
+		rollingTestClientFactory(),
+		portopenbao.ClientConfig{},
+		nil,
+		"",
+	)
+
+	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "quorum-ready replicas") {
+		t.Fatalf("validateUpgrade() error = %v, want quorum-ready replicas failure", err)
+	}
+}
+
+func TestValidateUpgrade_ResumeHealthBlocksNonTargetUnavailableReplica(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.5.0",
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.4",
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				FromVersion:      "2.4.4",
+				TargetVersion:    "2.5.0",
+				CurrentPartition: 2,
+				CompletedPods:    []int32{2},
+			},
+		},
+	}
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: cluster.Name, Namespace: cluster.Namespace},
+		Status: appsv1.StatefulSetStatus{
+			Replicas:      3,
+			ReadyReplicas: 2,
+		},
+	}
+
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + constants.SuffixTLSCA,
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{
+			"ca.crt": []byte("fake-ca"),
+		},
+	}
+
+	pod0 := pendingRollingTestPod(cluster, 0)
+	pod1 := readyRollingTestPod(cluster, 1, false)
+	pod2 := readyRollingTestPod(cluster, 2, true)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, caSecret, pod0, pod1, pod2).Build()
+	mgr := NewManagerWithClientFactory(
+		k8sClient,
+		scheme,
+		nil,
+		rollingTestClientFactory(),
+		portopenbao.ClientConfig{},
+		nil,
+		"",
+	)
+
+	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "non-target pod test-cluster-0 is not ready") {
+		t.Fatalf("validateUpgrade() error = %v, want non-target readiness failure", err)
 	}
 }
 
@@ -464,6 +714,76 @@ func TestReconcile_NoUpgradeNeeded(t *testing.T) {
 	// Should return nil without doing anything
 	if err != nil {
 		t.Errorf("Reconcile() error = %v, want nil", err)
+	}
+}
+
+func TestReconcile_ReleasesUpgradeLockOnValidationFailureBeforeStart(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		version       string
+		image         string
+		wantErrSubstr string
+	}{
+		{
+			name:          "invalid target version",
+			version:       "latest",
+			wantErrSubstr: "invalid target version",
+		},
+		{
+			name:          "semver image tag mismatch",
+			version:       "2.5.0",
+			image:         "openbao/openbao:2.4.4",
+			wantErrSubstr: "does not match spec.version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := newScheme()
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version:  tt.version,
+					Image:    tt.image,
+					Replicas: 3,
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					Initialized:    true,
+					CurrentVersion: "2.4.4",
+				},
+			}
+
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+				WithObjects(cluster).
+				Build()
+			mgr := NewManager(k8sClient, scheme, nil, portopenbao.ClientConfig{}, nil, "")
+
+			_, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErrSubstr) {
+				t.Fatalf("Reconcile() error = %v, want contains %q", err, tt.wantErrSubstr)
+			}
+			if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+				t.Fatalf("expected permanent config error, got %v", err)
+			}
+
+			latest := &openbaov1alpha1.OpenBaoCluster{}
+			if getErr := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), latest); getErr != nil {
+				t.Fatalf("failed to get cluster: %v", getErr)
+			}
+			if latest.Status.OperationLock != nil {
+				t.Fatalf("expected operation lock to be released, got %+v", latest.Status.OperationLock)
+			}
+			if cluster.Status.OperationLock != nil {
+				t.Fatalf("expected in-memory operation lock to be released, got %+v", cluster.Status.OperationLock)
+			}
+		})
 	}
 }
 
@@ -1035,6 +1355,77 @@ func contains(s, substr string) bool {
 func newScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	_ = openbaov1alpha1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
 	return scheme
+}
+
+func rollingTestClientFactory() upgrade.OpenBaoClientFactory {
+	return func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+		mock := &openbaoapi.MockClusterActions{
+			IsHealthyFunc: func(ctx context.Context) (bool, error) {
+				return true, nil
+			},
+		}
+		if strings.Contains(config.BaseURL, "-0.") {
+			mock.IsLeaderFunc = func(ctx context.Context) (bool, error) {
+				return true, nil
+			}
+		} else {
+			mock.IsLeaderFunc = func(ctx context.Context) (bool, error) {
+				return false, nil
+			}
+		}
+		return mock, nil
+	}
+}
+
+func readyRollingTestPod(cluster *openbaov1alpha1.OpenBaoCluster, ordinal int, leader bool) *corev1.Pod {
+	active := "false"
+	if leader {
+		active = "true"
+	}
+
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-" + strconv.Itoa(ordinal),
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelAppInstance:           cluster.Name,
+				constants.LabelAppName:               constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy:          constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:        cluster.Name,
+				portopenbao.LabelActive:              active,
+				appsv1.StatefulSetRevisionLabel:      "rev-a",
+				"statefulset.kubernetes.io/pod-name": cluster.Name + "-" + strconv.Itoa(ordinal),
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+}
+
+func pendingRollingTestPod(cluster *openbaov1alpha1.OpenBaoCluster, ordinal int) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-" + strconv.Itoa(ordinal),
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelAppInstance:    cluster.Name,
+				constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster: cluster.Name,
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending,
+		},
+	}
 }

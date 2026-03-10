@@ -20,6 +20,114 @@ spec:
       expression: has(object.spec.upgrade) && has(object.spec.upgrade.preUpgradeSnapshot) && object.spec.upgrade.preUpgradeSnapshot == true
     - name: has_bluegreen_pre_upgrade_snapshot
       expression: has(object.spec.upgrade) && has(object.spec.upgrade.blueGreen) && has(object.spec.upgrade.blueGreen.preUpgradeSnapshot) && object.spec.upgrade.blueGreen.preUpgradeSnapshot == true
+    - name: spec_version_normalized
+      expression: >-
+        object.spec.version.startsWith("v") ? object.spec.version.substring(1) : object.spec.version
+    - name: spec_version_build_stripped
+      expression: >-
+        variables.spec_version_normalized.contains("+") ? variables.spec_version_normalized.substring(0, variables.spec_version_normalized.indexOf("+")) : variables.spec_version_normalized
+    - name: spec_version_core
+      expression: >-
+        variables.spec_version_build_stripped.contains("-") ? variables.spec_version_build_stripped.substring(0, variables.spec_version_build_stripped.indexOf("-")) : variables.spec_version_build_stripped
+    - name: spec_version_prerelease
+      expression: >-
+        variables.spec_version_build_stripped.contains("-") ? variables.spec_version_build_stripped.substring(variables.spec_version_build_stripped.indexOf("-") + 1) : ""
+    - name: spec_version_valid
+      expression: >-
+        variables.spec_version_normalized.matches("^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$")
+    - name: spec_version_parts
+      expression: >-
+        variables.spec_version_core.split(".").map(part, int(part))
+    - name: current_version_normalized
+      expression: >-
+        oldObject != null && has(oldObject.status.currentVersion) && oldObject.status.currentVersion != "" ? (oldObject.status.currentVersion.startsWith("v") ? oldObject.status.currentVersion.substring(1) : oldObject.status.currentVersion) : ""
+    - name: current_version_build_stripped
+      expression: >-
+        variables.current_version_normalized.contains("+") ? variables.current_version_normalized.substring(0, variables.current_version_normalized.indexOf("+")) : variables.current_version_normalized
+    - name: current_version_core
+      expression: >-
+        variables.current_version_build_stripped.contains("-") ? variables.current_version_build_stripped.substring(0, variables.current_version_build_stripped.indexOf("-")) : variables.current_version_build_stripped
+    - name: current_version_prerelease
+      expression: >-
+        variables.current_version_build_stripped.contains("-") ? variables.current_version_build_stripped.substring(variables.current_version_build_stripped.indexOf("-") + 1) : ""
+    - name: current_version_valid
+      expression: >-
+        variables.current_version_normalized.matches("^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$")
+    - name: current_version_parts
+      expression: >-
+        variables.current_version_core.split(".").map(part, int(part))
+    - name: rolling_target_version_normalized
+      expression: >-
+        oldObject != null && has(oldObject.status.upgrade) && has(oldObject.status.upgrade.targetVersion) && oldObject.status.upgrade.targetVersion != "" ? (oldObject.status.upgrade.targetVersion.startsWith("v") ? oldObject.status.upgrade.targetVersion.substring(1) : oldObject.status.upgrade.targetVersion) : ""
+    - name: rolling_target_version_build_stripped
+      expression: >-
+        variables.rolling_target_version_normalized.contains("+") ? variables.rolling_target_version_normalized.substring(0, variables.rolling_target_version_normalized.indexOf("+")) : variables.rolling_target_version_normalized
+    - name: rolling_target_version_core
+      expression: >-
+        variables.rolling_target_version_build_stripped.contains("-") ? variables.rolling_target_version_build_stripped.substring(0, variables.rolling_target_version_build_stripped.indexOf("-")) : variables.rolling_target_version_build_stripped
+    - name: rolling_target_version_prerelease
+      expression: >-
+        variables.rolling_target_version_build_stripped.contains("-") ? variables.rolling_target_version_build_stripped.substring(variables.rolling_target_version_build_stripped.indexOf("-") + 1) : ""
+    - name: rolling_target_version_valid
+      expression: >-
+        variables.rolling_target_version_normalized.matches("^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$")
+    - name: rolling_target_version_parts
+      expression: >-
+        variables.rolling_target_version_core.split(".").map(part, int(part))
+    - name: rolling_upgrade_progress_started
+      expression: >-
+        oldObject != null && has(oldObject.status.upgrade) && (oldObject.status.upgrade.currentPartition < oldObject.spec.replicas || (has(oldObject.status.upgrade.completedPods) && size(oldObject.status.upgrade.completedPods) > 0))
+    - name: requested_below_current_version
+      expression: >-
+        variables.current_version_valid &&
+        variables.spec_version_valid &&
+        (
+          variables.spec_version_parts[0] < variables.current_version_parts[0] ||
+          (variables.spec_version_parts[0] == variables.current_version_parts[0] &&
+            (
+              variables.spec_version_parts[1] < variables.current_version_parts[1] ||
+              (variables.spec_version_parts[1] == variables.current_version_parts[1] &&
+                (
+                  variables.spec_version_parts[2] < variables.current_version_parts[2] ||
+                  (variables.spec_version_parts[2] == variables.current_version_parts[2] &&
+                    (
+                      (variables.current_version_prerelease == "" && variables.spec_version_prerelease != "") ||
+                      (variables.current_version_prerelease != "" &&
+                        variables.spec_version_prerelease != "" &&
+                        variables.spec_version_prerelease < variables.current_version_prerelease)
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+    - name: requested_below_rolling_target
+      expression: >-
+        variables.rolling_upgrade_progress_started &&
+        variables.rolling_target_version_valid &&
+        variables.spec_version_valid &&
+        (
+          variables.spec_version_parts[0] < variables.rolling_target_version_parts[0] ||
+          (variables.spec_version_parts[0] == variables.rolling_target_version_parts[0] &&
+            (
+              variables.spec_version_parts[1] < variables.rolling_target_version_parts[1] ||
+              (variables.spec_version_parts[1] == variables.rolling_target_version_parts[1] &&
+                (
+                  variables.spec_version_parts[2] < variables.rolling_target_version_parts[2] ||
+                  (variables.spec_version_parts[2] == variables.rolling_target_version_parts[2] &&
+                    (
+                      (variables.rolling_target_version_prerelease == "" && variables.spec_version_prerelease != "") ||
+                      (variables.rolling_target_version_prerelease != "" &&
+                        variables.spec_version_prerelease != "" &&
+                        variables.spec_version_prerelease < variables.rolling_target_version_prerelease)
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
   validations:
     - expression: >-
         has(object.spec.profile)
@@ -223,6 +331,14 @@ spec:
         (has(object.spec.selfInit.oidc) && object.spec.selfInit.oidc.enabled == true) ||
         object.spec.selfInit.requests.filter(r, r.path == "sys/auth/jwt-operator").size() > 0
       message: "spec.selfInit.requests contains auth/jwt-operator/* paths but is missing sys/auth/jwt-operator (or spec.selfInit.oidc.enabled: true) to enable that auth mount."
+    # Upgrade Safety: prevent version regressions below the running cluster version.
+    - expression: >-
+        !variables.requested_below_current_version
+      message: "spec.version cannot be downgraded below status.currentVersion."
+    # Upgrade Safety: once rolling progress has started, do not allow lowering the target version.
+    - expression: >-
+        !variables.requested_below_rolling_target
+      message: "spec.version cannot be reduced below status.upgrade.targetVersion after rolling progress has started."
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

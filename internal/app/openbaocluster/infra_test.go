@@ -2,6 +2,7 @@ package openbaocluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -19,7 +20,9 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 func TestHandleScaleDownSafety(t *testing.T) {
@@ -264,4 +267,63 @@ func TestInfraReconciler_ResolveTargetMainImage_BlueGreenPrefersActivePods(t *te
 	got := r.resolveTargetMainImage(context.Background(), logr.Discard(), cluster)
 	assert.Equal(t, "openbao/openbao:2.4.3", got)
 	assert.Equal(t, "openbao/openbao:2.4.3", cluster.Status.BlueGreen.BlueImage)
+}
+
+func TestInfraReconciler_Reconcile_BlocksInvalidVersionSelection(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		cluster    *openbaov1alpha1.OpenBaoCluster
+		wantReason string
+	}{
+		{
+			name: "downgrade is rejected",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version: "2.4.4",
+					Image:   "openbao/openbao:2.4.4",
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					CurrentVersion: "2.5.0",
+				},
+			},
+			wantReason: upgrade.ReasonDowngradeBlocked,
+		},
+		{
+			name: "image version mismatch is rejected",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version: "2.5.0",
+					Image:   "openbao/openbao:2.4.4",
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					CurrentVersion: "2.4.4",
+				},
+			},
+			wantReason: upgrade.ReasonImageVersionMismatch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := &infraReconciler{}
+			_, err := r.Reconcile(context.Background(), logr.Discard(), tt.cluster)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+				t.Fatalf("expected permanent config error, got %v", err)
+			}
+			reason, ok := operatorerrors.Reason(err)
+			if !ok {
+				t.Fatalf("expected reasoned error, got %v", err)
+			}
+			if reason != tt.wantReason {
+				t.Fatalf("reason = %q, want %q", reason, tt.wantReason)
+			}
+		})
+	}
 }

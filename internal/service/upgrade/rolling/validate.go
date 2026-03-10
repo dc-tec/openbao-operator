@@ -75,37 +75,23 @@ func (m *Manager) detectUpgradeState(logger logr.Logger, cluster *openbaov1alpha
 
 // validateUpgrade performs pre-upgrade validation checks.
 func (m *Manager) validateUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	// Validate target version format
-	if err := upgrade.ValidateVersion(cluster.Spec.Version); err != nil {
-		return fmt.Errorf("invalid target version: %w", err)
+	if err := upgrade.ValidateUpgradeTargetVersion(logger, cluster.Status.CurrentVersion, cluster.Spec.Version); err != nil {
+		return err
+	}
+	if err := upgrade.ValidateImageRefMatchesVersion(cluster.Spec.Version, cluster.Spec.Image); err != nil {
+		return err
 	}
 
-	// Skip version comparison if this is resuming an upgrade or if no current version
-	if cluster.Status.Upgrade == nil && cluster.Status.CurrentVersion != "" {
-		// Check for downgrade
-		if upgrade.IsDowngrade(cluster.Status.CurrentVersion, cluster.Spec.Version) {
-			logger.Info("Downgrade detected and blocked",
-				"from", cluster.Status.CurrentVersion,
-				"to", cluster.Spec.Version)
-			return fmt.Errorf("downgrade from %s to %s is not allowed",
-				cluster.Status.CurrentVersion, cluster.Spec.Version)
+	// New upgrades require a fully healthy cluster. In-progress upgrades use a
+	// narrower gate so the target pod can be temporarily unavailable while the
+	// controller waits for it to recover or time out.
+	if cluster.Status.Upgrade != nil {
+		if err := m.verifyResumeClusterHealth(ctx, logger, cluster); err != nil {
+			return err
 		}
-
-		// Log warning for minor version skips or major upgrades
-		change, _ := upgrade.CompareVersions(cluster.Status.CurrentVersion, cluster.Spec.Version)
-		if change == upgrade.VersionChangeMajor {
-			logger.Info("Major version upgrade detected; proceed with caution",
-				"from", cluster.Status.CurrentVersion,
-				"to", cluster.Spec.Version)
-		}
-		if upgrade.IsSkipMinorUpgrade(cluster.Status.CurrentVersion, cluster.Spec.Version) {
-			logger.Info("Minor version skip detected; some intermediate versions may be skipped",
-				"from", cluster.Status.CurrentVersion,
-				"to", cluster.Spec.Version)
-		}
+		return nil
 	}
 
-	// Verify cluster health
 	if err := m.verifyClusterHealth(ctx, logger, cluster); err != nil {
 		return err
 	}
@@ -169,6 +155,123 @@ func (m *Manager) verifyClusterHealth(ctx context.Context, logger logr.Logger, c
 		"healthyPods", healthyCount,
 		"totalPods", cluster.Spec.Replicas,
 		"leaderCount", leaderCount)
+
+	return nil
+}
+
+// verifyResumeClusterHealth checks the minimum cluster safety required to
+// continue an in-progress rolling upgrade. Unlike verifyClusterHealth, it does
+// not require every replica to be ready because the currently updating pod may
+// legitimately be unavailable while the rollout is in flight.
+func (m *Manager) verifyResumeClusterHealth(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	sts := &appsv1.StatefulSet{}
+	stsName := types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cluster.Name,
+	}
+	if err := m.client.Get(ctx, stsName, sts); err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("StatefulSet not found; cluster may not be fully initialized")
+		}
+		return fmt.Errorf("failed to get StatefulSet: %w", err)
+	}
+
+	quorumRequired := (cluster.Spec.Replicas / 2) + 1
+	if sts.Status.ReadyReplicas < quorumRequired {
+		return fmt.Errorf("rolling upgrade cannot continue without quorum-ready replicas (%d/%d ready, need %d)",
+			sts.Status.ReadyReplicas, cluster.Spec.Replicas, quorumRequired)
+	}
+
+	targetPodName := ""
+	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.CurrentPartition > 0 {
+		targetPodName = fmt.Sprintf("%s-%d", cluster.Name, cluster.Status.Upgrade.CurrentPartition-1)
+	}
+
+	podList, err := m.getClusterPods(ctx, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to list cluster pods: %w", err)
+	}
+	if len(podList) < int(quorumRequired) {
+		return fmt.Errorf("rolling upgrade cannot continue with too few cluster pods (%d/%d, need at least %d)",
+			len(podList), cluster.Spec.Replicas, quorumRequired)
+	}
+
+	if err := m.verifyNonTargetPodsReadyAndHealthy(ctx, logger, cluster, podList, targetPodName); err != nil {
+		return err
+	}
+
+	healthyCount, leaderCount, err := m.checkPodHealth(ctx, logger, cluster, podList)
+	if err != nil {
+		return fmt.Errorf("failed to check pod health: %w", err)
+	}
+	if healthyCount < int(quorumRequired) {
+		return fmt.Errorf("cluster has lost quorum (%d/%d healthy, need %d)",
+			healthyCount, cluster.Spec.Replicas, quorumRequired)
+	}
+
+	if leaderCount == 0 {
+		return fmt.Errorf("no leader found in cluster")
+	}
+	if leaderCount > 1 {
+		return fmt.Errorf("multiple leaders detected (%d); possible split-brain", leaderCount)
+	}
+
+	logger.Info("Rolling upgrade resume health verified",
+		"healthyPods", healthyCount,
+		"readyReplicas", sts.Status.ReadyReplicas,
+		"totalPods", cluster.Spec.Replicas,
+		"targetPod", targetPodName,
+		"leaderCount", leaderCount)
+
+	return nil
+}
+
+func (m *Manager) verifyNonTargetPodsReadyAndHealthy(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	pods []corev1.Pod,
+	targetPodName string,
+) error {
+	podsByName := make(map[string]*corev1.Pod, len(pods))
+	for i := range pods {
+		pod := &pods[i]
+		podsByName[pod.Name] = pod
+	}
+
+	caCert, err := m.getClusterCACert(ctx, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to get CA certificate: %w", err)
+	}
+
+	for ordinal := int32(0); ordinal < cluster.Spec.Replicas; ordinal++ {
+		podName := fmt.Sprintf("%s-%d", cluster.Name, ordinal)
+		if podName == targetPodName {
+			continue
+		}
+
+		pod := podsByName[podName]
+		if pod == nil {
+			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is missing; current target is %s", podName, targetPodName)
+		}
+		if !isPodReady(pod) {
+			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is not ready; current target is %s", podName, targetPodName)
+		}
+
+		apiClient, err := m.newPodClient(cluster, podName, caCert)
+		if err != nil {
+			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is unavailable: %w", podName, err)
+		}
+
+		healthy, err := apiClient.IsHealthy(ctx)
+		if err != nil {
+			logger.V(1).Info("Non-target pod health check failed during rolling resume validation", "pod", podName, "error", err)
+			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is unhealthy: %w", podName, err)
+		}
+		if !healthy {
+			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is unhealthy; current target is %s", podName, targetPodName)
+		}
+	}
 
 	return nil
 }
