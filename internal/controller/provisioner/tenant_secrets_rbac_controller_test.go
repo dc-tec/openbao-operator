@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -17,6 +19,21 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
+
+func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...string) {
+	t.Helper()
+
+	select {
+	case event := <-recorder.Events:
+		for _, part := range parts {
+			if !strings.Contains(event, part) {
+				t.Fatalf("event %q does not contain %q", event, part)
+			}
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected event, got none")
+	}
+}
 
 func newProvisionerManager(t *testing.T, ctx context.Context, k8sClient client.Client) *provisioner.Manager {
 	t.Helper()
@@ -133,10 +150,12 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 		},
 	}
 	k8sClient := newTestClient(t, provisionedBinding, cluster)
+	recorder := events.NewFakeRecorder(10)
 	reconciler := &TenantSecretsRBACReconciler{
 		Client:      k8sClient,
 		APIReader:   k8sClient,
 		Scheme:      testScheme,
+		Recorder:    recorder,
 		Provisioner: newProvisionerManager(t, ctx, k8sClient),
 	}
 
@@ -206,6 +225,8 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 	}, readerBinding); err != nil {
 		t.Fatalf("expected reader rolebinding: %v", err)
 	}
+
+	expectEventContains(t, recorder, "Normal", ReasonTenantSecretRBACSynchronized)
 }
 
 func TestTenantSecretsRBACReconcile_RemovesStaleSecretRBAC(t *testing.T) {

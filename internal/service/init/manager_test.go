@@ -3,7 +3,9 @@ package init
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +17,7 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	clienttesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/events"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
@@ -22,6 +25,21 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
+
+func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...string) {
+	t.Helper()
+
+	select {
+	case event := <-recorder.Events:
+		for _, part := range parts {
+			if !strings.Contains(event, part) {
+				t.Fatalf("event %q does not contain %q", event, part)
+			}
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected event, got none")
+	}
+}
 
 func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 	tests := []struct {
@@ -112,6 +130,113 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReconcileSelfInitReady_EmitsInitEvents(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+			},
+		},
+	}
+
+	started := true
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-0",
+			Namespace: "default",
+			Labels: map[string]string{
+				constants.LabelAppInstance:  "cluster",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{{
+				Name: constants.ContainerBao,
+				State: corev1.ContainerState{
+					Running: &corev1.ContainerStateRunning{
+						StartedAt: metav1.Now(),
+					},
+				},
+				Started: &started,
+			}},
+			Conditions: []corev1.PodCondition{{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			}},
+		},
+	}
+
+	recorder := events.NewFakeRecorder(10)
+	clientset := kubernetesfake.NewClientset(pod)
+	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
+	manager := NewManager(&rest.Config{}, clientset, clientMgr, recorder)
+
+	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	expectEventContains(t, recorder, "Normal", ReasonInitStarted)
+	expectEventContains(t, recorder, "Normal", ReasonInitCompleted)
+}
+
+func TestReconcileOperatorInitFailure_EmitsInitFailedEvent(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster",
+			Namespace: "default",
+		},
+	}
+
+	started := true
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-0",
+			Namespace: "default",
+			Labels: map[string]string{
+				constants.LabelAppInstance:  "cluster",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{{
+				Name: constants.ContainerBao,
+				State: corev1.ContainerState{
+					Running: &corev1.ContainerStateRunning{
+						StartedAt: metav1.Now(),
+					},
+				},
+				Started: &started,
+			}},
+		},
+	}
+	tlsServerSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + constants.SuffixTLSServer,
+			Namespace: cluster.Namespace,
+		},
+	}
+
+	recorder := events.NewFakeRecorder(10)
+	clientset := kubernetesfake.NewClientset(pod, tlsServerSecret)
+	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
+	manager := NewManager(&rest.Config{}, clientset, clientMgr, recorder)
+
+	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err == nil {
+		t.Fatal("expected reconcile to fail when TLS CA Secret is missing")
+	}
+
+	expectEventContains(t, recorder, "Normal", ReasonInitStarted)
+	expectEventContains(t, recorder, "Warning", ReasonInitFailed)
 }
 
 func ptrTo(v bool) *bool {

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,6 +27,7 @@ type TenantSecretsRBACReconciler struct {
 	client.Client
 	APIReader   client.Reader
 	Scheme      *runtime.Scheme
+	Recorder    events.EventRecorder
 	Provisioner *provisioner.Manager
 }
 
@@ -35,6 +38,14 @@ func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	if r.Provisioner == nil {
 		return ctrl.Result{}, fmt.Errorf("provisioner manager is required")
+	}
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	if err := r.Get(ctx, req.NamespacedName, cluster); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+		cluster = nil
 	}
 
 	// SECURITY: If admission policies are not ready, do not create/update tenant Secret RBAC allowlists.
@@ -82,8 +93,26 @@ func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
+	reader := r.APIReader
+	if reader == nil {
+		reader = r.Client
+	}
+
+	before, err := loadSecretRBACSnapshot(ctx, reader, req.Namespace)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if err := r.Provisioner.EnsureTenantSecretRBAC(ctx, req.Namespace); err != nil {
 		return ctrl.Result{}, err
+	}
+
+	after, err := loadSecretRBACSnapshot(ctx, reader, req.Namespace)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if cluster != nil && !before.equal(after) {
+		emitClusterNormalEvent(r.Recorder, cluster, ReasonTenantSecretRBACSynchronized, fmt.Sprintf("Synchronized tenant Secret RBAC allowlists for namespace %s", req.Namespace))
 	}
 
 	logger.V(1).Info("Synced tenant Secret RBAC allowlists")
@@ -97,6 +126,6 @@ func (r *TenantSecretsRBACReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: 3,
 			RateLimiter:             workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
 		}).
-		Named(controllerNameNamespaceProvisioner + "-tenant-secrets").
+		Named(controllerNameTenantSecretsRBAC).
 		Complete(r)
 }

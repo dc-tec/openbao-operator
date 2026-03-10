@@ -274,6 +274,7 @@ func Run(args []string) {
 		Client:            mgr.GetClient(),
 		APIReader:         mgr.GetAPIReader(),
 		Scheme:            mgr.GetScheme(),
+		Recorder:          mgr.GetEventRecorder("namespace-provisioner"),
 		Provisioner:       provisionerMgr,
 		OperatorNamespace: operatorNS,
 	}).SetupWithManager(mgr); err != nil {
@@ -288,6 +289,7 @@ func Run(args []string) {
 		Client:      mgr.GetClient(),
 		APIReader:   mgr.GetAPIReader(),
 		Scheme:      mgr.GetScheme(),
+		Recorder:    mgr.GetEventRecorder("namespace-provisioner-tenant-secrets"),
 		Provisioner: provisionerMgr,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TenantSecretsRBAC")

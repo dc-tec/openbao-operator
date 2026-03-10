@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,6 +54,7 @@ type NamespaceProvisionerReconciler struct {
 	client.Client
 	APIReader         client.Reader
 	Scheme            *runtime.Scheme
+	Recorder          events.EventRecorder
 	Provisioner       *provisioner.Manager
 	OperatorNamespace string
 }
@@ -90,6 +92,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	appResult, appErr := appprovisioner.ReconcileOpenBaoTenant(ctx, req.NamespacedName, logger, appprovisioner.TenantRuntime{
 		Client:                   r.Client,
 		APIReader:                r.APIReader,
+		Recorder:                 r.Recorder,
 		Provisioner:              r.Provisioner,
 		OperatorNamespace:        r.OperatorNamespace,
 		ConditionTypeProvisioned: conditionTypeProvisioned,
