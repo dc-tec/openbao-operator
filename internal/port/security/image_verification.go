@@ -75,7 +75,8 @@ func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier ima
 // VerifyOperatorImageForCluster verifies an operator-managed helper image (init container,
 // backup/upgrade/restore executors) using the cluster's OperatorImageVerification config.
 // Unlike VerifyImageForCluster, this function does NOT fall back to ImageVerification.
-// If OperatorImageVerification is not configured, verification is skipped for helper images.
+// If OperatorImageVerification is omitted, helper verification is disabled in Development
+// and implicitly enabled in Hardened.
 func VerifyOperatorImageForCluster(ctx context.Context, logger logr.Logger, verifier imageverify.Verifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 	if cluster == nil {
 		return "", fmt.Errorf("cluster is required")

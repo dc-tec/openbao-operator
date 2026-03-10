@@ -26,6 +26,9 @@ To bypass the safety check, you must perform a "Break Glass" procedure by settin
     2.  **Overwrite** the cluster data with the snapshot.
     3.  **Reset** the cluster status to match the snapshot.
 
+!!! note "Different from OpenBaoCluster break glass"
+    This restore override is separate from `OpenBaoCluster.status.breakGlass`. If the cluster is in upgrade break glass mode, you may still need to acknowledge `spec.breakGlassAck` after the restore completes.
+
 ```yaml
 apiVersion: openbao.org/v1alpha1
 kind: OpenBaoRestore

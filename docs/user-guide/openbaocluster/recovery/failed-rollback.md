@@ -1,47 +1,49 @@
-# Recovering From a Failed Rollback
+# Failed Rollback Recovery
 
-This runbook addresses a **Failed Blue/Green Rollback**. This occurs when you attempt to rollback an upgrade (e.g., changing `spec.version` back to an older version), but the Operator halts the process to prevent data corruption.
+Use this runbook when a **Blue/Green rollback** enters break glass mode. This happens when rollback consensus repair fails and the operator stops automation to prevent data corruption or an unsafe Raft reconfiguration.
 
 !!! failure "Split Brain Risk"
-    The Operator stops automation because it suspects a **Split Brain** scenario where both the Blue (Old) and Green (New) clusters might have accepted writes, or Raft consensus cannot be safely transferred back.
-
----
+    Do not try to force a downgrade by patching `spec.version` back to an older release. Downgrades are blocked. Recover the cluster state first, then let the operator resume or restore from snapshot.
 
 ## 1. Assess the Situation
 
-Check the **Safe Mode / Break Glass** status to understand why the Operator halted.
+Inspect the break-glass and Blue/Green status fields:
 
 ```sh
 kubectl -n security get openbaocluster prod-cluster -o jsonpath='{.status.breakGlass}' | jq
+kubectl -n security get openbaocluster prod-cluster \
+  -o jsonpath='{.status.blueGreen.phase}{"\n"}{.status.blueGreen.lastJobFailure}{"\n"}'
 ```
 
-**Common Reasons:**
+Expected signals:
 
-- `ConsensusFailure`: The Blue cluster could not rejoin the Raft quorum.
-- `DirtyWrite`: The Green cluster accepted writes that would be lost on rollback (if configured to check).
-- `Timeout`: The rollback job took too long.
+- `status.breakGlass.reason=RollbackConsensusRepairFailed`
+- `status.blueGreen.phase=RollingBack`
+- `status.blueGreen.lastJobFailure=<rollback-job-name>`
 
 ## 2. Inspect the Rollback Job
 
-The logic for transferring leadership back to the Blue cluster runs in a Kubernetes Job named `inter-cluster-rev<Revision>`.
-
-Find and log the failed job:
+Inspect the Job recorded in `status.blueGreen.lastJobFailure` first. If that field is empty, list upgrade Jobs for the cluster.
 
 ```sh
-# Find the job
 kubectl -n security get jobs -l openbao.org/cluster=prod-cluster
 
-# View logs
-kubectl -n security logs job/inter-cluster-rev4-rollback
+kubectl -n security logs job/<job-from-status>
 ```
 
-**Log Analysis:**
+Then inspect the OpenBao pods and Raft peers:
 
-| Log Message | Meaning | Resolution |
-| :--- | :--- | :--- |
-| `failed to join blue pilot to green leader` | Network connectivity issue between clusters. | Check NetworkPolicies / DNS. Retry. |
-| `raft log index mismatch` | The Blue cluster is too far behind (Green accepted too many writes). | **Cannot Rollback**. You must proceed with Green or Restore from Snapshot. |
-| `context deadline exceeded` | Operation timed out. | Retry (Acknowledge Break Glass). |
+```sh
+kubectl -n security get pods -l openbao.org/cluster=prod-cluster -o wide
+kubectl -n security exec -it prod-cluster-0 -- bao operator raft list-peers
+```
+
+Check for these classes of failure:
+
+- Network isolation between Blue and Green pods.
+- Pods that are not Ready or remain sealed.
+- Raft quorum loss or peer membership that no longer matches the expected rollback topology.
+- Image pull or executor Job failures that prevented rollback automation from completing.
 
 ## 3. Resolution Paths
 
@@ -49,36 +51,47 @@ Choose the path that matches your diagnosis.
 
 === "Path A: Retry (Transient)"
 
-    If the failure was due to a network blip or timeout, and you believe the clusters are healthy:
+    If the failure was transient and you restored healthy cluster conditions:
 
-    1. **Acknowledge** the Break Glass nonce. This tells the Operator to "Try Again".
+    1. Fix the underlying issue.
+    2. Acknowledge the break-glass nonce. This tells the operator to retry rollback automation.
 
         ```sh
         kubectl -n security patch openbaocluster prod-cluster --type merge \
           -p '{"spec":{"breakGlassAck":"<NONCE_FROM_STEP_1>"}}'
         ```
 
-    2. The Operator will spawn a **new** Rollback Job. Monitor it closely.
+    3. Monitor the new rollback Job and `status.blueGreen.phase`.
 
-=== "Path B: Abort (Stay Green)"
+=== "Path B: Pause and Repair"
 
-    If the rollback is impossible (e.g., data divergence), it may be safer to **stay on the new version** (Green) and fix the application issues forward, or perform a fresh restore.
+    If the cluster needs manual repair before you allow any further automation:
 
-    1. **Update Spec**: Set `spec.version` back to the **Green** (New) version.
-    2. **Acknowledge**: Acknowledge the nonce.
-    3. The Operator will reconcile the Green cluster as the primary.
+    1. Pause reconciliation:
 
-=== "Path C: Restore (Data Loss)"
+        ```sh
+        kubectl -n security patch openbaocluster prod-cluster --type merge \
+          -p '{"spec":{"paused":true}}'
+        ```
+
+    2. Perform the required Raft or infrastructure repair.
+    3. Resume reconciliation and acknowledge break glass when the cluster is stable:
+
+        ```sh
+        kubectl -n security patch openbaocluster prod-cluster --type merge \
+          -p '{"spec":{"paused":false,"breakGlassAck":"<NONCE_FROM_STEP_1>"}}'
+        ```
+
+=== "Path C: Restore from Snapshot"
 
     If the cluster state is corrupted beyond repair:
 
-    1. **Stop Operator**: Scale down the operator deployment.
-    2. **Delete PVCs**: Clean up the corrupted data.
-    3. **Restore**: Follow the [Restore Guide](../../openbaorestore/recovery-restore-after-upgrade.md) to bring back the cluster from the last known good snapshot (Pre-Upgrade).
-
----
+    1. Stop further automation.
+    2. Identify the last known good snapshot.
+    3. Follow the [Emergency Restore Guide](../../openbaorestore/recovery-restore-after-upgrade.md).
 
 ## Preventative Measures
 
-- Always ensure **Snapshots** are taken before triggering a Rollback (The Operator does this automatically if `spec.backup.enabled` is true).
-- Monitor `etcd` or `raft` metrics during upgrades.
+- Enable pre-upgrade snapshots with `spec.upgrade.preUpgradeSnapshot=true` or `spec.upgrade.blueGreen.preUpgradeSnapshot=true`.
+- Verify `spec.backup` target and backup authentication before starting a production upgrade.
+- Monitor `status.blueGreen.phase`, `status.blueGreen.lastJobFailure`, and cluster health during the upgrade window.

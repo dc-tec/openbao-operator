@@ -1,39 +1,65 @@
 # Cluster Upgrades
 
-The Operator supports two powerful upgrade strategies: **Rolling Update** (default) for efficiency, and **Blue/Green** for zero-downtime safety.
+Use cluster upgrades to move OpenBao to a newer semantic version while preserving Raft safety. The OpenBao Operator supports two strategies:
 
-## One-Time Setup
+- **Rolling Update** for lower resource usage and a smaller steady-state footprint.
+- **Blue/Green** for controlled cutover and rollback boundaries.
 
-To perform upgrades safely, the Operator uses a temporary "Upgrade Executor" job that requires permissions to talk to OpenBao.
+## Prerequisites
 
-### Prerequisite: Enable OIDC
+Before you patch `spec.version`, verify the following:
 
-The Upgrade Executor uses JWT Auth to authenticate. Ensure OIDC is enabled in your cluster:
+- The cluster is initialized and healthy.
+- `spec.version` is set to the target semantic version. The operator validates semantic versioning and blocks downgrades.
+- If you override `spec.image`, keep it aligned with `spec.version`:
+  - A semver-style tag such as `:2.5.0` or `:v2.5.0` must match `spec.version`.
+  - Digest-pinned images are allowed, but `spec.version` remains required and authoritative.
+- Upgrade executor Jobs can authenticate with JWT auth:
+  - If `spec.selfInit.oidc.enabled=true`, the operator can bootstrap and infer the default `openbao-operator-upgrade` role.
+  - Otherwise, set `spec.upgrade.jwtAuthRole` to a role bound to `<cluster>-upgrade-serviceaccount`.
+- If you enable pre-upgrade snapshots, configure `spec.backup` with a target and backup authentication.
+- In the `Hardened` profile, set explicit `spec.network.egressRules` when snapshot Jobs must reach object storage.
 
-```yaml
-spec:
-  selfInit:
-    enabled: true
-    oidc:
-      enabled: true
-```
+!!! note "Upgrade authentication"
+    Upgrade executor Jobs use JWT auth. Pre-upgrade snapshots use the backup configuration and backup authentication, not the upgrade executor credentials.
 
-The Operator automatically creates the necessary `sys/step-down` policies and JWT roles (`openbao-operator-upgrade`).
+## Configuration
 
-### Configure Executor
+=== "JWT via SelfInit OIDC"
 
-When OIDC is enabled, you can simply enable the upgrade strategy.
+    ```yaml
+    spec:
+      selfInit:
+        enabled: true
+        oidc:
+          enabled: true
+      upgrade:
+        strategy: RollingUpdate
+    ```
 
-```yaml
-spec:
-  upgrade:
-    # image: inferred from operator version
-    # jwtAuthRole: inferred (openbao-operator-upgrade)
-```
+=== "Explicit upgrade role"
+
+    ```yaml
+    spec:
+      upgrade:
+        strategy: RollingUpdate
+        jwtAuthRole: platform-upgrade
+    ```
+
+=== "Upgrade with private registry image"
+
+    ```yaml
+    spec:
+      version: "2.5.0"
+      image: "registry.example.com/openbao/openbao:2.5.0"
+      upgrade:
+        strategy: RollingUpdate
+        jwtAuthRole: platform-upgrade
+    ```
 
 ## Executing Upgrades
 
-To upgrade, update `spec.version`. The strategy configured in `spec.upgrade.strategy` determines how this change is applied.
+Patch `spec.version` to the target release. The strategy configured in `spec.upgrade.strategy` determines how the operator applies the change.
 
 === "Rolling Update (Default)"
     **Best for:** Standard upgrades, Dev/Test environments, Minimizing resource usage.
@@ -48,14 +74,22 @@ To upgrade, update `spec.version`. The strategy configured in `spec.upgrade.stra
     ```
 
     **How it works:**
-    1.  **Validation**: Checks if the new version is valid.
-    2.  **Snapshot** (Optional): Takes a pre-upgrade backup.
-    3.  **Partitioned Rollout**: Locks StatefulSet partition, then updates pods in reverse ordinal order (for example, `2 -> 1 -> 0`).
-    4.  **Leader Handling**: If the target pod is leader, runs a `sys/step-down` executor job before restart.
-    5.  **Convergence Gate**: Finalizes only after all pods are updated, Ready, and healthy.
+    1. **Validation**: Validates the target version, blocks downgrades, and rejects provable semver image/version mismatches.
+    2. **Snapshot** (Optional): Creates a pre-upgrade snapshot using `spec.backup`.
+    3. **Partitioned Rollout**: Locks StatefulSet partition, then updates pods in reverse ordinal order (for example, `2 -> 1 -> 0`).
+    4. **Leader Handling**: If the target pod is leader, runs a `sys/step-down` executor Job before restart.
+    5. **Convergence Gate**: Finalizes only after all pods are updated, Ready, and healthy.
 
     !!! note
         You can see multiple step-down Jobs during one rolling upgrade when leadership moves between different target pods. This is expected.
+
+    !!! warning "Manual Retry"
+        If a rolling upgrade fails, the operator preserves `status.upgrade.lastErrorReason` and waits for a retry signal. Add the `openbao.org/retry-rolling-upgrade` annotation after you fix the underlying issue:
+
+        ```sh
+        kubectl -n security annotate openbaocluster prod-cluster \
+          openbao.org/retry-rolling-upgrade="$(date +%s)" --overwrite
+        ```
 
 === "Blue/Green (Zero Downtime)"
     **Best for:** Production-critical paths and major version upgrades where controlled cutover is required.
@@ -101,6 +135,8 @@ To upgrade, update `spec.version`. The strategy configured in `spec.upgrade.stra
     4. `Promoting`
     5. `DemotingBlue`
     6. `Cleanup`
+    7. `RollingBack`
+    8. `RollbackCleanup`
 
     **Configuration:**
 
@@ -113,14 +149,16 @@ To upgrade, update `spec.version`. The strategy configured in `spec.upgrade.stra
         blueGreen:
           autoPromote: true  # Automatically switch traffic if healthy
           autoRollback:
-            enabled: true  # Abort early failures, rollback late failures
+            enabled: true
+            onJobFailure: true
+            onValidationFailure: true
     ```
 
 ## Advanced Upgrade Options
 
 ### Verification Hooks
 
-Run a custom container to "smoke test" the Green cluster before cutover.
+Run a custom container to smoke-test the Green cluster before promotion.
 
 ```yaml
 spec:
@@ -132,6 +170,25 @@ spec:
           image: curlimages/curl
           command: ["curl", "-f", "https://green-cluster:8200/v1/sys/health"]
 ```
+
+If the hook fails:
+
+- With `blueGreen.autoRollback.onValidationFailure=true`, the operator aborts or rolls back automatically, depending on the current phase.
+- With `blueGreen.autoRollback.onValidationFailure=false`, the operator holds in `Syncing` until you fix the issue and reconcile again.
+
+### Manual Promotion Hold
+
+Set `autoPromote=false` to keep the upgrade in `Syncing` after Green is healthy and fully replicated.
+
+```yaml
+spec:
+  upgrade:
+    strategy: BlueGreen
+    blueGreen:
+      autoPromote: false
+```
+
+When you are ready to continue, patch the cluster and set `spec.upgrade.blueGreen.autoPromote=true`.
 
 ### Auto-Rollback
 
@@ -151,6 +208,21 @@ spec:
         onJobFailure: true
         onValidationFailure: true
 ```
+
+### Break Glass
+
+If rollback consensus repair fails, the operator enters break glass mode and writes recovery guidance to `status.breakGlass`. Upgrade automation halts until you acknowledge the nonce in `spec.breakGlassAck`.
+
+```sh
+kubectl -n security get openbaocluster prod-cluster -o jsonpath='{.status.breakGlass}{"\n"}' | jq
+kubectl -n security patch openbaocluster prod-cluster --type merge \
+  -p '{"spec":{"breakGlassAck":"<nonce>"}}'
+```
+
+Use the recovery runbooks for that workflow:
+
+- [Break Glass / Safe Mode](../recovery/safe-mode.md)
+- [Failed Rollback Recovery](../recovery/failed-rollback.md)
 
 ### Gateway API and Blue/Green upgrades
 
@@ -182,7 +254,7 @@ Track upgrade status directly on the CR:
 === "Blue/Green"
 
     ```sh
-    kubectl get openbaocluster my-cluster -o jsonpath='{.status.blueGreen.phase}{"\n"}{.status.blueGreen.jobFailureCount}{"\n"}{.status.blueGreen.lastJobFailure}{"\n"}'
+    kubectl get openbaocluster my-cluster -o jsonpath='{.status.blueGreen.phase}{"\n"}{.status.blueGreen.jobFailureCount}{"\n"}{.status.blueGreen.lastJobFailure}{"\n"}{.status.breakGlass.reason}{"\n"}'
     ```
 
 ## Official OpenBao Documentation
