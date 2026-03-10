@@ -1,14 +1,14 @@
 ---
-description: Reference for OpenBao Operator status conditions and common Kubernetes/audit events used for troubleshooting and automation.
+description: Reference for OpenBao Operator status conditions, Kubernetes Events, and audit events for OpenBaoCluster, OpenBaoRestore, and OpenBaoTenant resources.
 ---
 
-# Status Conditions & Events Reference
+# Status Conditions and Events
 
-Use this document to interpret CRD status and controller-emitted events.
+Use this reference to interpret status conditions and lifecycle events emitted by the OpenBao Operator.
 
-## 1. Inspect Status and Events
+## Inspect Resources
 
-Check CRD conditions:
+Run these commands to inspect CRD conditions:
 
 ```bash
 kubectl -n <ns> get openbaocluster <name> -o jsonpath='{.status.conditions}' | jq
@@ -16,13 +16,16 @@ kubectl -n <ns> get openbaorestore <name> -o jsonpath='{.status.conditions}' | j
 kubectl -n <ns> get openbaotenant <name> -o jsonpath='{.status.conditions}' | jq
 ```
 
-Check recent events:
+!!! tip "Fastest Timeline View"
+    Run `kubectl -n <ns> describe openbaocluster <name>`, `kubectl -n <ns> describe openbaorestore <name>`, or `kubectl -n <ns> describe openbaotenant <name>` to view status and recent events together.
+
+Run this command to inspect recent namespace events:
 
 ```bash
 kubectl -n <ns> get events --sort-by=.lastTimestamp
 ```
 
-## 2. OpenBaoCluster Conditions
+## OpenBaoCluster Conditions
 
 Condition types defined in `api/v1alpha1`:
 
@@ -42,40 +45,112 @@ Condition types defined in `api/v1alpha1`:
 | `OpenBaoLeader` | Leader discovery from registration labels | `LeaderFound`, `LeaderUnknown`, `MultipleLeaders` |
 | `NodeSecurityCapabilityMismatch` | Node capability mismatch for enabled hardening | `Ready`, `AppArmorUnsupported` |
 
-## 3. OpenBaoRestore Conditions
+## OpenBaoRestore Conditions
 
 | Type | Meaning | Typical Reasons |
 | :--- | :--- | :--- |
 | `RestoreComplete` | Restore terminal state | `RestoreSucceeded`, `RestoreFailed`, `AuthenticationRequired` |
 | `OperationLockOverride` | Break-glass lock override occurred | `OperationLockOverridden` |
 
-## 4. OpenBaoTenant Conditions
+## OpenBaoTenant Conditions
 
 | Type | Meaning | Typical Reasons |
 | :--- | :--- | :--- |
 | `Provisioned` | Tenant RBAC provisioning state | `SecurityViolation` (guardrail block) and provisioning outcomes |
 
-## 5. Common Kubernetes Events
+## Kubernetes Events
 
-The operator emits Kubernetes Events for selected actions:
+!!! note "Event Scope"
+    The operator emits lifecycle events on parent custom resources only. `OpenBaoCluster` receives cluster lifecycle, init/bootstrap, upgrade, backup, and tenant Secret RBAC sync events. `OpenBaoRestore` receives restore lifecycle events. `OpenBaoTenant` receives tenant provisioning lifecycle events. Jobs do not receive the lifecycle events listed here.
 
-| Resource | Type | Reason | Notes |
-| :--- | :--- | :--- | :--- |
-| `OpenBaoCluster` | `Warning` | `ProfileNotSet` | `spec.profile` missing; reconciliation blocked. |
-| `OpenBaoCluster` | `Warning` | `DevelopmentProfile` | Development profile warning for production. |
-| `OpenBaoCluster` | `Warning` | `StaticUnsealInUse` | Static unseal warning. |
-| `OpenBaoCluster` | `Warning` | `RootTokenStored` | SelfInit disabled; root token secret warning. |
-| `OpenBaoCluster` | `Warning` | Image verification reasons | For warn-policy image verification failures (for example `ImageVerificationFailed`). |
-| `OpenBaoCluster` | `Normal` | `PVCResize` | PVC expansion started. |
-| `OpenBaoCluster` | `Normal` | `PVCResizeLeaderStepDown` | Leader step-down for resize restart path. |
-| `OpenBaoCluster` | `Normal` | `PVCResizePodRestart` | Pod restart to complete filesystem resize. |
-| `OpenBaoRestore` | `Warning` | `OperationLockOverride` | Lock override requested with break-glass restore. |
+!!! tip "Event Types"
+    Expect `Normal` events for routine progression and accepted operator input. Expect `Warning` events for failures, contention, overrides, and other states that need attention.
 
-## 6. Structured Audit Events (Controller Logs)
+### OpenBaoCluster Safety and Maintenance Events
 
-In addition to Kubernetes Events, controllers emit structured audit events to logs (for example `UpgradeStarted`, `UpgradeFailed`, `BackupJobCreated`, `RestoreCompleted`, `TenantRBACProvisioned`).
+| Type | Reason | Notes |
+| :--- | :--- | :--- |
+| `Warning` | `ProfileNotSet` | `spec.profile` missing; reconciliation blocked. |
+| `Warning` | `DevelopmentProfile` | Development profile warning for production. |
+| `Warning` | `StaticUnsealInUse` | Static unseal warning. |
+| `Warning` | `RootTokenStored` | Self-init is disabled and the operator stored the root token Secret. |
+| `Warning` | `ImageVerificationFailed` and related reasons | Warn-policy image verification failures. |
+| `Normal` | `PVCResize` | PVC expansion started. |
+| `Normal` | `PVCResizeLeaderStepDown` | Leader step-down for resize restart path. |
+| `Normal` | `PVCResizePodRestart` | Pod restart to complete filesystem resize. |
 
-Use centralized logs to query these high-signal lifecycle events.
+### OpenBaoCluster Init and Bootstrap Events
+
+| Type | Reason | Notes |
+| :--- | :--- | :--- |
+| `Normal` | `InitStarted` | Self-init or operator-driven initialization started or is still in progress. |
+| `Normal` | `InitCompleted` | Cluster initialization completed successfully. |
+| `Warning` | `InitFailed` | Operator-driven initialization failed. |
+
+### OpenBaoCluster Tenant Secret RBAC Events
+
+| Type | Reason | Notes |
+| :--- | :--- | :--- |
+| `Normal` | `TenantSecretRBACSynchronized` | Tenant Secret RBAC allowlists were synchronized for the namespace. |
+
+### OpenBaoCluster Upgrade Events
+
+| Type | Reason | Notes |
+| :--- | :--- | :--- |
+| `Normal` | `UpgradeStarted` | Upgrade orchestration started. |
+| `Normal` | `PreUpgradeSnapshotJobCreated` | Pre-upgrade snapshot Job created. |
+| `Normal` | `PreUpgradeSnapshotCompleted` | Pre-upgrade snapshot completed successfully. |
+| `Warning` | `PreUpgradeSnapshotFailed` | Pre-upgrade snapshot failed and upgrade is blocked. |
+| `Normal` | `RollingRetryRequested` | Manual retry requested for a failed rolling upgrade. |
+| `Normal` | `RollingRetryAccepted` | Failed rolling upgrade state cleared and retry resumed. |
+| `Normal` | `BlueGreenHoldEntered` | Blue/green upgrade is waiting for manual promotion approval. |
+| `Normal` | `BlueGreenPromotionApproved` | Promotion approval observed and promotion started. |
+| `Normal` | `UpgradeComplete` | Upgrade finished successfully. |
+| `Warning` | `UpgradeFailed` | Upgrade failed and operator marked the upgrade as failed. |
+| `Warning` | `RollbackStarted` | Blue/green rollback started. |
+| `Warning` | `BreakGlassEntered` | Blue/green rollback entered break-glass mode. |
+| `Normal` | `BreakGlassAcknowledged` | Break-glass mode was acknowledged and automation may resume. |
+| `Warning` | `OperationLockBlocked` | Upgrade is waiting for another cluster operation to release the lock. |
+
+### OpenBaoCluster Backup Events
+
+| Type | Reason | Notes |
+| :--- | :--- | :--- |
+| `Normal` | `BackupManualTriggerAccepted` | Manual backup trigger accepted. |
+| `Normal` | `BackupSkipped` | Due or manually requested backup intentionally skipped. |
+| `Normal` | `BackupStarted` | Backup attempt started after lock acquisition. |
+| `Normal` | `BackupJobCreated` | Backup Job created. |
+| `Normal` | `BackupCompleted` | Backup completed successfully. |
+| `Warning` | `BackupFailed` | Backup Job failed. |
+| `Warning` | `OperationLockBlocked` | Backup is waiting for another cluster operation to release the lock. |
+
+### OpenBaoRestore Events
+
+| Type | Reason | Notes |
+| :--- | :--- | :--- |
+| `Normal` | `RestoreValidationStarted` | Restore validation started. |
+| `Normal` | `RestoreStarted` | Restore execution started after validation. |
+| `Normal` | `RestoreJobCreated` | Restore Job created. |
+| `Normal` | `RestoreCompleted` | Restore completed successfully. |
+| `Warning` | `RestoreFailed` | Restore failed. |
+| `Warning` | `OperationLockBlocked` | Restore is waiting for another cluster operation to release the lock. |
+| `Warning` | `OperationLockLost` | Restore lost the cluster operation lock while running. |
+| `Warning` | `OperationLockOverride` | Lock override requested with break-glass restore. |
+
+### OpenBaoTenant Provisioning Events
+
+| Type | Reason | Notes |
+| :--- | :--- | :--- |
+| `Normal` | `TenantProvisioned` | Tenant namespace RBAC was provisioned successfully. |
+| `Normal` | `TenantRBACCleaned` | Tenant namespace RBAC was cleaned up during deletion. |
+| `Warning` | `TenantProvisioningBlocked` | Provisioning is blocked by guardrails, missing prerequisites, or dependency readiness checks. |
+| `Warning` | `TenantProvisioningFailed` | Provisioning failed while applying tenant RBAC. |
+
+## Structured Audit Events
+
+In addition to Kubernetes Events, controllers emit structured audit events to logs, for example `UpgradeStarted`, `UpgradeFailed`, `BackupJobCreated`, `RestoreCompleted`, and `TenantRBACProvisioned`.
+
+Query centralized logs for these high-signal lifecycle events.
 
 !!! note "Stability"
     Condition **types** are part of the API surface. Reason and event values may expand over time as new scenarios are added.
