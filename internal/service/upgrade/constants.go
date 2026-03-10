@@ -83,6 +83,9 @@ const (
 	// ReasonDowngradeBlocked indicates a downgrade was attempted but blocked.
 	ReasonDowngradeBlocked = "DowngradeBlocked"
 
+	// ReasonImageVersionMismatch indicates spec.image conflicts with spec.version.
+	ReasonImageVersionMismatch = "ImageVersionMismatch"
+
 	// ReasonClusterNotReady indicates the cluster is not in a healthy state for upgrade.
 	ReasonClusterNotReady = "ClusterNotReady"
 )
@@ -100,8 +103,10 @@ const (
 	MessageHealthCheckFailed        = "OpenBao health check failed for pod %s: %s"
 	MessagePreUpgradeBackupStarted  = "Pre-upgrade backup started"
 	MessagePreUpgradeBackupComplete = "Pre-upgrade backup finished successfully"
-	MessageDowngradeBlocked         = "Downgrade from %s to %s is not supported"
-	MessageInvalidVersion           = "Invalid target version %q: %v"
+	MessageDowngradeBlocked         = "downgrade from %s to %s is not supported"
+	MessageInvalidVersion           = "invalid target version %q"
+	MessageInvalidImageReference    = "invalid spec.image %q"
+	MessageImageVersionMismatch     = "spec.image tag %q does not match spec.version %q"
 	MessageClusterNotReady          = "Cluster is not ready for upgrade: %s"
 )
 

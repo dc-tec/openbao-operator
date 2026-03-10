@@ -1,7 +1,12 @@
 package upgrade
 
 import (
+	"errors"
 	"testing"
+
+	"github.com/go-logr/logr"
+
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
 func TestParseVersion(t *testing.T) {
@@ -161,6 +166,65 @@ func TestValidateVersion(t *testing.T) {
 			err := ValidateVersion(tt.version)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateVersion(%q) error = %v, wantErr %v", tt.version, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateUpgradeTargetVersion(t *testing.T) {
+	tests := []struct {
+		name           string
+		currentVersion string
+		targetVersion  string
+		wantErr        bool
+		wantReason     string
+	}{
+		{
+			name:           "valid upgrade",
+			currentVersion: "2.4.4",
+			targetVersion:  "2.5.0",
+			wantErr:        false,
+		},
+		{
+			name:           "blocks downgrade",
+			currentVersion: "2.5.0",
+			targetVersion:  "2.4.4",
+			wantErr:        true,
+			wantReason:     ReasonDowngradeBlocked,
+		},
+		{
+			name:           "blocks invalid target version",
+			currentVersion: "2.4.4",
+			targetVersion:  "latest",
+			wantErr:        true,
+			wantReason:     ReasonInvalidVersion,
+		},
+		{
+			name:           "allows initial target with empty current version",
+			currentVersion: "",
+			targetVersion:  "2.5.0",
+			wantErr:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateUpgradeTargetVersion(logr.Discard(), tt.currentVersion, tt.targetVersion)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateUpgradeTargetVersion(%q, %q) error = %v, wantErr %v", tt.currentVersion, tt.targetVersion, err, tt.wantErr)
+			}
+			if !tt.wantErr {
+				return
+			}
+			if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+				t.Fatalf("expected permanent config error, got %v", err)
+			}
+			reason, ok := operatorerrors.Reason(err)
+			if !ok {
+				t.Fatalf("expected reasoned error, got %v", err)
+			}
+			if reason != tt.wantReason {
+				t.Fatalf("reason = %q, want %q", reason, tt.wantReason)
 			}
 		})
 	}

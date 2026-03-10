@@ -334,6 +334,36 @@ bao kv get -field=%s %s
 	return strings.TrimSpace(logs), nil
 }
 
+// RunCommandViaJWT performs a K8s JWT login and executes an arbitrary bao CLI command.
+func RunCommandViaJWT(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	namespace string,
+	clientImage string,
+	baoAddr string,
+	serviceAccountName string,
+	roleName string,
+	labels map[string]string,
+	command string,
+) (string, error) {
+	cmd := fmt.Sprintf(`
+set -e
+export BAO_ADDR=%s
+export BAO_SKIP_VERIFY=true
+TOKEN=$(bao write -field=token auth/jwt-operator/login role=%s jwt=@/var/run/secrets/openbao/token)
+export BAO_TOKEN=$TOKEN
+%s
+`, baoAddr, roleName, command)
+
+	logs, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd)
+	if err != nil {
+		return "", fmt.Errorf("failed to run command via JWT: %w", err)
+	}
+
+	return strings.TrimSpace(logs), nil
+}
+
 var letters = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
 //nolint:unparam
@@ -379,6 +409,39 @@ path "secret/metadata/*" { capabilities = ["read", "list", "delete"] }`},
 				"bound_audiences": []string{"openbao-internal"},
 				"bound_subject":   fmt.Sprintf("system:serviceaccount:%s:default", namespace),
 				"token_policies":  []string{"e2e-test"},
+				"ttl":             "1h",
+			}),
+		},
+	}
+}
+
+// CreateJWTPolicyRoleRequests creates a policy and JWT role bound to a ServiceAccount.
+func CreateJWTPolicyRoleRequests(
+	namespace,
+	serviceAccountName,
+	policyName,
+	roleName,
+	policy string,
+) []openbaov1alpha1.SelfInitRequest {
+	return []openbaov1alpha1.SelfInitRequest{
+		{
+			Name:      "create-" + policyName + "-policy",
+			Operation: openbaov1alpha1.SelfInitOperationUpdate,
+			Path:      "sys/policies/acl/" + policyName,
+			Policy: &openbaov1alpha1.SelfInitPolicy{
+				Policy: policy,
+			},
+		},
+		{
+			Name:      "create-" + roleName + "-role",
+			Operation: openbaov1alpha1.SelfInitOperationUpdate,
+			Path:      "auth/jwt-operator/role/" + roleName,
+			Data: MustJSON(map[string]interface{}{
+				"role_type":       "jwt",
+				"user_claim":      "sub",
+				"bound_audiences": []string{"openbao-internal"},
+				"bound_subject":   fmt.Sprintf("system:serviceaccount:%s:%s", namespace, serviceAccountName),
+				"token_policies":  []string{policyName},
 				"ttl":             "1h",
 			}),
 		},

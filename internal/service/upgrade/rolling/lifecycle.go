@@ -2,6 +2,7 @@ package rolling
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -95,6 +96,29 @@ func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, clust
 		"duration", upgradeDuration)
 
 	return nil
+}
+
+func (m *Manager) releaseUpgradeLockOnPreStartError(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, cause error) error {
+	if cause == nil || cluster == nil || cluster.Status.Upgrade != nil {
+		return cause
+	}
+	if !upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock) {
+		return cause
+	}
+	if err := upgrade.ReleaseUpgradeOperationLock(ctx, m.client, cluster); err != nil {
+		if upgrade.IsOperationLockHeld(err) {
+			logger.V(1).Info("Upgrade operation lock changed ownership before release")
+			return cause
+		}
+		return errors.Join(cause, fmt.Errorf("failed to release upgrade operation lock after pre-start failure: %w", err))
+	}
+	logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
+		"cluster_namespace": cluster.Namespace,
+		"cluster_name":      cluster.Name,
+		"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
+		"holder":            upgrade.UpgradeOperationLockHolder,
+	})
+	return cause
 }
 
 func (m *Manager) patchFinalizedUpgradeStatus(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {

@@ -1,28 +1,21 @@
 # Break Glass / Safe Mode
 
 !!! failure "Critical State: Automation Halted"
-    The Operator has entered **Safe Mode** because it detected a high-risk failure (e.g., loss of quorum during an upgrade). **All automation is paused** to prevent data loss.
+    The OpenBao Operator has entered **Break Glass / Safe Mode** because automated rollback is no longer safe. The operator halts risky upgrade automation and waits for human intervention.
 
 ## Overview
 
-Safe Mode (also known as "Break Glass") is a safety mechanism. When the Operator encounters a situation where continuing an automated workflow (like a rolling upgrade or rollback) could compromise data integrity or availability, it stops and waits for human operator intervention.
-
-Common triggers:
-
-* Blue/Green rollback failure (risk of split-brain).
-* Quorum loss during critical reconfiguration.
+Break Glass is a safety mechanism for high-risk upgrade recovery. Currently, the operator enters this mode when Blue/Green rollback consensus repair fails and continuing automatically could compromise availability or Raft safety.
 
 When active:
 
-1. **Automation Stops**: The Operator stops reconciling the specific `OpenBaoCluster`.
+1. **Risky automation stops**: The operator halts the affected upgrade or rollback flow.
 2. **Status Updates**: The `status.breakGlass` field is populated with diagnostic info.
 3. **Manual Ack Required**: You must explicitly "break the glass" to resume automation.
 
----
-
 ## 1. Inspect the Situation
 
-Check if your cluster is in Safe Mode by inspecting its status.
+Inspect the break-glass status on the `OpenBaoCluster`.
 
 ```sh
 kubectl -n security get openbaocluster prod-cluster -o jsonpath='{.status.breakGlass}' | jq
@@ -33,24 +26,48 @@ kubectl -n security get openbaocluster prod-cluster -o jsonpath='{.status.breakG
 ```json
 {
   "active": true,
-  "reason": "QuorumRisk",
-  "message": "Detected split-brain potential during rollback. Manual intervention required.",
+  "reason": "RollbackConsensusRepairFailed",
+  "message": "Rollback consensus repair Job upgrade-prod-cluster-rollback-retry-1 failed; manual intervention required.",
   "nonce": "abc-123-def-456",
-  "steps": "1. Verify network connectivity. 2. Restore quorum manually. 3. Acknowledge."
+  "steps": [
+    "Inspect rollback Job logs: kubectl -n security logs job/upgrade-prod-cluster-rollback-retry-1",
+    "Inspect pod status: kubectl -n security get pods -l openbao.org/cluster=prod-cluster -o wide",
+    "Perform any required Raft recovery steps, then acknowledge the nonce."
+  ]
 }
 ```
 
 ## 2. Fix the Underlying Issue
 
-Follow the specific guidance provided in the `message` and `steps` fields.
+Follow the guidance in `status.breakGlass.message` and `status.breakGlass.steps`.
 
-* **If Quorum is lost:** See [Recovering from No Leader](no-leader.md).
-* **If Sealed:** See [Recovering from Sealed Cluster](sealed-cluster.md).
-* **If Network Partitioned:** Verify CNI and network policies.
+Use these checks first:
+
+- Inspect the last failed rollback Job:
+
+  ```sh
+  kubectl -n security get openbaocluster prod-cluster \
+    -o jsonpath='{.status.blueGreen.lastJobFailure}{"\n"}'
+  kubectl -n security logs job/<job-from-status>
+  ```
+
+- Inspect Blue and Green pod health:
+
+  ```sh
+  kubectl -n security get pods -l openbao.org/cluster=prod-cluster -o wide
+  ```
+
+- Inspect current Raft membership:
+
+  ```sh
+  kubectl -n security exec -it prod-cluster-0 -- bao operator raft list-peers
+  ```
+
+If you need a deeper recovery workflow, continue with [Failed Rollback Recovery](failed-rollback.md).
 
 ## 3. Acknowledge and Resume
 
-Once you have performed the necessary manual repairs, you must tell the Operator it is safe to proceed. This is done by acknowledging the unique **nonce**.
+After you repair the underlying issue, acknowledge the unique nonce to allow the operator to retry rollback automation.
 
 !!! warning "Action Required"
     Copy the `nonce` from step 1 and use it in the command below.
@@ -61,9 +78,7 @@ kubectl -n security patch openbaocluster prod-cluster --type merge \
   -p '{"spec":{"breakGlassAck":"abc-123-def-456"}}'
 ```
 
-If the issue persists, the Operator may re-enter Safe Mode with a **new nonce**, requiring you to repeat the diagnosis.
-
----
+If the issue persists, the operator can re-enter break glass with a **new nonce**, requiring you to repeat the diagnosis and acknowledgment flow.
 
 ## Related Runbooks
 

@@ -474,30 +474,35 @@ jobs:
             hardened_signed: "false"
             openbao_image: ""
             hardened_init_image: ""
+            hardened_upgrade_executor_image: ""
           - name: "Backup & Restore"
             focus: "Backup & Restore"
             slow: "true"
             hardened_signed: "false"
             openbao_image: ""
             hardened_init_image: ""
+            hardened_upgrade_executor_image: ""
           - name: "Upgrades & Chaos"
             focus: "Upgrade|Chaos"
             slow: "true"
             hardened_signed: "false"
             openbao_image: ""
             hardened_init_image: ""
+            hardened_upgrade_executor_image: ""
           - name: "Security & Tenants"
             focus: "Security|TLS|Tenant Isolation|Hardened|Platform"
             slow: "false"
             hardened_signed: "false"
             openbao_image: ""
             hardened_init_image: ""
+            hardened_upgrade_executor_image: ""
           - name: "Hardened (Signed)"
             focus: "Hardened profile|GitOps contract"
             slow: "true"
             hardened_signed: "true"
             openbao_image: "ghcr.io/openbao/openbao:2.5.0"
             hardened_init_image: "ghcr.io/dc-tec/openbao-init:edge"
+            hardened_upgrade_executor_image: "ghcr.io/dc-tec/openbao-upgrade:edge"
     env:
       KIND_NODE_IMAGE: kindest/node:v1.34.3
     steps:
@@ -615,6 +620,9 @@ jobs:
           docker pull "${{ needs.build-e2e-images.outputs.config_init_ref }}"
           docker pull "${{ needs.build-e2e-images.outputs.backup_executor_ref }}"
           docker pull "${{ needs.build-e2e-images.outputs.upgrade_executor_ref }}"
+          if [[ -n "${{ matrix.hardened_upgrade_executor_image }}" ]]; then
+            docker pull "${{ matrix.hardened_upgrade_executor_image }}"
+          fi
 
       - name: Create Kind Cluster
         if: env.SHOULD_RUN == 'true'
@@ -639,7 +647,7 @@ jobs:
           E2E_CONFIG_INIT_IMAGE: ${{ needs.build-e2e-images.outputs.config_init_ref }}
           E2E_HARDENED_CONFIG_INIT_IMAGE: ${{ matrix.hardened_init_image }}
           E2E_BACKUP_EXECUTOR_IMAGE: ${{ needs.build-e2e-images.outputs.backup_executor_ref }}
-          E2E_UPGRADE_EXECUTOR_IMAGE: ${{ needs.build-e2e-images.outputs.upgrade_executor_ref }}
+          E2E_UPGRADE_EXECUTOR_IMAGE: ${{ matrix.hardened_upgrade_executor_image != '' && matrix.hardened_upgrade_executor_image || needs.build-e2e-images.outputs.upgrade_executor_ref }}
           KIND_CLUSTER: kind
         run: make test-e2e-ci
 

@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/go-logr/logr"
+
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
 // VersionChange represents the type of version change detected.
@@ -115,6 +119,53 @@ func ParseVersion(version string) (*SemVer, error) {
 func ValidateVersion(version string) error {
 	_, err := ParseVersion(version)
 	return err
+}
+
+// ValidateUpgradeTargetVersion enforces version-policy rules for a requested
+// target version while logging non-blocking warnings for higher-risk upgrades.
+func ValidateUpgradeTargetVersion(logger logr.Logger, currentVersion, targetVersion string) error {
+	if err := ValidateVersion(targetVersion); err != nil {
+		return operatorerrors.WithReason(
+			ReasonInvalidVersion,
+			operatorerrors.WrapPermanentConfig(fmt.Errorf(MessageInvalidVersion+": %w", targetVersion, err)),
+		)
+	}
+
+	if currentVersion == "" {
+		return nil
+	}
+
+	if IsDowngrade(currentVersion, targetVersion) {
+		logger.Info("Downgrade detected and blocked",
+			"from", currentVersion,
+			"to", targetVersion)
+		return operatorerrors.WithReason(
+			ReasonDowngradeBlocked,
+			operatorerrors.WrapPermanentConfig(fmt.Errorf(MessageDowngradeBlocked, currentVersion, targetVersion)),
+		)
+	}
+
+	change, err := CompareVersions(currentVersion, targetVersion)
+	if err != nil {
+		logger.V(1).Info("Skipping version-change classification due to unparsable current version",
+			"currentVersion", currentVersion,
+			"targetVersion", targetVersion,
+			"error", err)
+		return nil
+	}
+
+	if change == VersionChangeMajor {
+		logger.Info("Major version upgrade detected; proceed with caution",
+			"from", currentVersion,
+			"to", targetVersion)
+	}
+	if IsSkipMinorUpgrade(currentVersion, targetVersion) {
+		logger.Info("Minor version skip detected; some intermediate versions may be skipped",
+			"from", currentVersion,
+			"to", targetVersion)
+	}
+
+	return nil
 }
 
 // CompareVersions compares two version strings and returns the type of change.

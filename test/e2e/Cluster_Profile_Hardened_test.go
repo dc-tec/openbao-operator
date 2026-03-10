@@ -53,6 +53,61 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 	var infraBaoRootToken string
 
+	waitForTenantProvisioned := func() {
+		Eventually(func(g Gomega) {
+			updated := &openbaov1alpha1.OpenBaoTenant{}
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: f.TenantName, Namespace: operatorNamespace}, updated)).To(Succeed())
+			_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoTenant status: Provisioned=%v, LastError=%q\n", updated.Status.Provisioned, updated.Status.LastError)
+			g.Expect(updated.Status.Provisioned).To(BeTrue())
+			g.Expect(updated.Status.LastError).To(BeEmpty())
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+	}
+
+	ensureTransitTokenSecret := func() {
+		By("creating transit token secret with CA certificate for TLS verification")
+		infraBaoCASecret := &corev1.Secret{}
+		Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoName + "-tls-ca", Namespace: f.Namespace}, infraBaoCASecret)).To(Succeed())
+		infraBaoCACert := infraBaoCASecret.Data["ca.crt"]
+		Expect(infraBaoCACert).NotTo(BeEmpty(), "Infra-bao CA certificate should exist")
+
+		tokenValue := strings.TrimSpace(infraBaoRootToken)
+		secretKey := types.NamespacedName{Name: infraBaoTokenSecretName, Namespace: f.Namespace}
+		existing := &corev1.Secret{}
+		err := c.Get(ctx, secretKey, existing)
+		switch {
+		case apierrors.IsNotFound(err):
+			tokenSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      infraBaoTokenSecretName,
+					Namespace: f.Namespace,
+				},
+				Type: corev1.SecretTypeOpaque,
+				Data: map[string][]byte{
+					"token":  []byte(tokenValue),
+					"ca.crt": infraBaoCACert,
+				},
+			}
+			Expect(c.Create(ctx, tokenSecret)).To(Succeed())
+		default:
+			Expect(err).NotTo(HaveOccurred())
+			original := existing.DeepCopy()
+			if existing.Data == nil {
+				existing.Data = map[string][]byte{}
+			}
+			existing.Data["token"] = []byte(tokenValue)
+			existing.Data["ca.crt"] = infraBaoCACert
+			Expect(c.Patch(ctx, existing, client.MergeFrom(original))).To(Succeed())
+		}
+
+		Eventually(func(g Gomega) {
+			created := &corev1.Secret{}
+			g.Expect(c.Get(ctx, secretKey, created)).To(Succeed())
+			g.Expect(strings.TrimSpace(string(created.Data["token"]))).To(Equal(tokenValue))
+			g.Expect(created.Data["ca.crt"]).To(Equal(infraBaoCACert))
+		}, 10*time.Second, 1*time.Second).Should(Succeed())
+		_, _ = fmt.Fprintf(GinkgoWriter, "Verified transit token secret %q\n", infraBaoTokenSecretName)
+	}
+
 	BeforeAll(func() {
 		var err error
 
@@ -175,13 +230,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 	It("provisions tenant RBAC via OpenBaoTenant", func() {
 		By("verifying OpenBaoTenant is provisioned")
-		Eventually(func(g Gomega) {
-			updated := &openbaov1alpha1.OpenBaoTenant{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: f.TenantName, Namespace: operatorNamespace}, updated)).To(Succeed())
-			_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoTenant status: Provisioned=%v, LastError=%q\n", updated.Status.Provisioned, updated.Status.LastError)
-			g.Expect(updated.Status.Provisioned).To(BeTrue())
-			g.Expect(updated.Status.LastError).To(BeEmpty())
-		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		waitForTenantProvisioned()
 		_, _ = fmt.Fprintf(GinkgoWriter, "Tenant %q successfully provisioned\n", f.TenantName)
 	})
 
@@ -190,41 +239,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		Expect(e2ehelpers.EnsureExternalTLSSecrets(ctx, c, f.Namespace, clusterName, 1)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created external TLS secrets for cluster %q\n", clusterName)
 
-		By("creating transit token secret with CA certificate for TLS verification")
-		// Get infra-bao CA certificate for TLS verification
-		infraBaoCASecret := &corev1.Secret{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoName + "-tls-ca", Namespace: f.Namespace}, infraBaoCASecret)).To(Succeed())
-		infraBaoCACert := infraBaoCASecret.Data["ca.crt"]
-		Expect(infraBaoCACert).NotTo(BeEmpty(), "Infra-bao CA certificate should exist")
-
-		// Ensure token has no trailing whitespace/newlines that could cause issues
-		// when OpenBao reads it from the token_file
-		tokenValue := strings.TrimSpace(infraBaoRootToken)
-		tokenSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      infraBaoTokenSecretName,
-				Namespace: f.Namespace,
-			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{
-				"token":  []byte(tokenValue),
-				"ca.crt": infraBaoCACert, // Include CA cert for TLS verification
-			},
-		}
-		err := c.Create(ctx, tokenSecret)
-		if err != nil && !apierrors.IsAlreadyExists(err) {
-			Expect(err).NotTo(HaveOccurred())
-		}
-		_, _ = fmt.Fprintf(GinkgoWriter, "Created transit token secret %q with root token %q\n", infraBaoTokenSecretName, infraBaoRootToken)
-
-		// Verify the token secret was created correctly
-		Eventually(func(g Gomega) {
-			created := &corev1.Secret{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoTokenSecretName, Namespace: f.Namespace}, created)).To(Succeed())
-			tokenValue := string(created.Data["token"])
-			g.Expect(tokenValue).To(Equal(infraBaoRootToken), "Token secret should contain the root token")
-			_, _ = fmt.Fprintf(GinkgoWriter, "Verified token secret contains root token\n")
-		}, 10*time.Second, 1*time.Second).Should(Succeed())
+		ensureTransitTokenSecret()
 
 		By("verifying transit token secret can be read from file and access infra-bao transit key")
 		// Infra-bao always runs with TLS in production mode
@@ -606,6 +621,504 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 			g.Expect(sts.Status.ReadyReplicas).To(Equal(clusterObj.Spec.Replicas))
 		}, 8*time.Minute, 5*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Pods restarted and became Ready (Transit auto-unseal working)\n")
+	})
+
+	Context("Hardened Rolling Upgrade", Label("upgrade", "rolling", "hardened"), func() {
+		const hardenedUpgradeClusterName = "hardened-upgrade-cluster"
+
+		var upgradeCluster *openbaov1alpha1.OpenBaoCluster
+
+		AfterEach(func() {
+			if !CurrentSpecReport().Failed() || upgradeCluster == nil {
+				return
+			}
+
+			By("Collecting hardened rolling upgrade diagnostics")
+			dumpRollingUpgradeDiagnostics(ctx, c, f.Namespace, upgradeCluster.Name)
+		})
+
+		It("performs a hardened rolling upgrade", func() {
+			initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+			targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialImage := fmt.Sprintf("openbao/openbao:%s", initialVersion)
+			targetImage := fmt.Sprintf("openbao/openbao:%s", targetVersion)
+			upgradeImage := hardenedSignedUpgradeExecutorImage()
+
+			if initialVersion == targetVersion {
+				Skip(fmt.Sprintf("Hardened upgrade test skipped: versions identical (%s)", initialVersion))
+			}
+
+			By("verifying the tenant is provisioned for the hardened upgrade cluster")
+			waitForTenantProvisioned()
+
+			By("ensuring the transit credentials secret exists for hardened cluster unseal")
+			ensureTransitTokenSecret()
+
+			By("creating external TLS secrets for the hardened upgrade cluster")
+			Expect(e2ehelpers.EnsureExternalTLSSecrets(ctx, c, f.Namespace, hardenedUpgradeClusterName, 3)).To(Succeed())
+
+			By("creating a hardened cluster configured for rolling upgrades")
+			infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
+			tcpProto := corev1.ProtocolTCP
+			port8200 := intstr.FromInt(8200)
+			upgradeCluster = &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hardenedUpgradeClusterName,
+					Namespace: f.Namespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileHardened,
+					Version:  initialVersion,
+					Image:    initialImage,
+					Replicas: 3,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   hardenedConfigInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: append(
+							e2ehelpers.CreateHardenedProfileRequests(f.Namespace),
+							e2ehelpers.CreateE2ERequests(f.Namespace)...,
+						),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled: true,
+						Mode:    openbaov1alpha1.TLSModeExternal,
+					},
+					Service: &openbaov1alpha1.ServiceConfig{
+						Type: corev1.ServiceTypeClusterIP,
+					},
+					Unseal: &openbaov1alpha1.UnsealConfig{
+						Type: "transit",
+						Transit: &openbaov1alpha1.TransitSealConfig{
+							Address:   infraAddr,
+							MountPath: "transit",
+							KeyName:   infraBaoKeyName,
+							Token:     "",
+							TLSCACert: "/etc/bao/seal-creds/ca.crt",
+						},
+						CredentialsSecretRef: &corev1.LocalObjectReference{
+							Name: infraBaoTokenSecretName,
+						},
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+						EgressRules: []networkingv1.NetworkPolicyEgressRule{
+							{
+								To: []networkingv1.NetworkPolicyPeer{
+									{
+										PodSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"app": infraBaoName,
+											},
+										},
+									},
+								},
+								Ports: []networkingv1.NetworkPolicyPort{
+									{
+										Protocol: &tcpProto,
+										Port:     &port8200,
+									},
+								},
+							},
+						},
+						IngressRules: []networkingv1.NetworkPolicyIngressRule{
+							{
+								From: []networkingv1.NetworkPolicyPeer{
+									{
+										PodSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"role": "test-verifier",
+											},
+										},
+									},
+								},
+								Ports: []networkingv1.NetworkPolicyPort{
+									{
+										Protocol: &tcpProto,
+										Port:     &port8200,
+									},
+								},
+							},
+						},
+					},
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Image:    upgradeImage,
+						Strategy: openbaov1alpha1.UpdateStrategyRollingUpdate,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(c.Create(ctx, upgradeCluster)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: f.Namespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Initialized).To(BeTrue())
+				g.Expect(updated.Status.SelfInitialized).To(BeTrue())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				available := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
+				g.Expect(available).NotTo(BeNil())
+				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
+			}, 12*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+			f.WaitForStatefulSetReady(ctx, upgradeCluster.Name, 3, 12*time.Minute, framework.DefaultPollInterval)
+
+			By("writing a secret before the hardened upgrade")
+			secretPath := "secret/hardened-rolling-upgrade-test"
+			secretData := map[string]string{"foo": "bar", "version": initialVersion}
+			verifierLabels := map[string]string{"role": "test-verifier"}
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, c, f.Namespace, upgradeCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				err = e2ehelpers.WriteSecretViaJWT(
+					ctx,
+					cfg,
+					c,
+					f.Namespace,
+					initialImage,
+					baoAddr,
+					"default",
+					"e2e-test",
+					secretPath,
+					verifierLabels,
+					secretData,
+				)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed(), "Failed to write pre-upgrade secret")
+
+			By("triggering the hardened rolling upgrade")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: f.Namespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = targetImage
+				g.Expect(c.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			Expect(f.TriggerReconcile(ctx, upgradeCluster.Name)).To(Succeed())
+
+			By("verifying the hardened rolling upgrade starts")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: f.Namespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
+				g.Expect(updated.Status.Upgrade.TargetVersion).To(Equal(targetVersion))
+				g.Expect(updated.Status.Upgrade.FromVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("waiting for the hardened rolling upgrade to complete")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: f.Namespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
+				g.Expect(updated.Status.Upgrade).To(BeNil())
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.ClusterPhaseRunning))
+
+				pods := &corev1.PodList{}
+				g.Expect(c.List(ctx, pods,
+					client.InNamespace(f.Namespace),
+					client.MatchingLabels{
+						constants.LabelOpenBaoCluster:   upgradeCluster.Name,
+						constants.LabelOpenBaoComponent: constants.ComponentOpenBaoCluster,
+					},
+				)).To(Succeed())
+				g.Expect(pods.Items).NotTo(BeEmpty())
+				for _, pod := range pods.Items {
+					e2ehelpers.ExpectOpenBaoPodVersion(g, pod, targetVersion)
+				}
+			}, 30*time.Minute, 10*time.Second).Should(Succeed())
+
+			By("verifying the test secret persists after the hardened upgrade")
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, c, f.Namespace, upgradeCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				val, err := e2ehelpers.ReadSecretViaJWT(
+					ctx,
+					cfg,
+					c,
+					f.Namespace,
+					targetImage,
+					baoAddr,
+					"default",
+					"e2e-test",
+					secretPath,
+					verifierLabels,
+					"foo",
+				)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(val).To(Equal("bar"))
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
+		})
+	})
+
+	Context("Hardened Blue/Green Upgrade", Label("upgrade", "bluegreen", "hardened"), func() {
+		const hardenedBlueGreenClusterName = "hardened-bluegreen-cluster"
+
+		var upgradeCluster *openbaov1alpha1.OpenBaoCluster
+
+		AfterEach(func() {
+			if !CurrentSpecReport().Failed() || upgradeCluster == nil {
+				return
+			}
+
+			By("Collecting hardened blue/green upgrade diagnostics")
+			dumpBlueGreenUpgradeDiagnostics(f.Namespace, upgradeCluster.Name)
+		})
+
+		It("performs a hardened blue/green upgrade", func() {
+			initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+			targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialImage := fmt.Sprintf("openbao/openbao:%s", initialVersion)
+			targetImage := fmt.Sprintf("openbao/openbao:%s", targetVersion)
+			upgradeImage := hardenedSignedUpgradeExecutorImage()
+
+			if initialVersion == targetVersion {
+				Skip(fmt.Sprintf("Hardened blue/green upgrade test skipped: versions identical (%s)", initialVersion))
+			}
+
+			By("verifying the tenant is provisioned for the hardened blue/green cluster")
+			waitForTenantProvisioned()
+
+			By("ensuring the transit credentials secret exists for hardened blue/green unseal")
+			ensureTransitTokenSecret()
+
+			By("creating external TLS secrets for the hardened blue/green cluster")
+			Expect(e2ehelpers.EnsureExternalTLSSecrets(ctx, c, f.Namespace, hardenedBlueGreenClusterName, 3)).To(Succeed())
+
+			By("creating a hardened cluster configured for blue/green upgrades")
+			infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
+			tcpProto := corev1.ProtocolTCP
+			port8200 := intstr.FromInt(8200)
+			upgradeCluster = &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hardenedBlueGreenClusterName,
+					Namespace: f.Namespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileHardened,
+					Version:  initialVersion,
+					Image:    initialImage,
+					Replicas: 3,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   hardenedConfigInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: append(
+							e2ehelpers.CreateHardenedProfileRequests(f.Namespace),
+							e2ehelpers.CreateE2ERequests(f.Namespace)...,
+						),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled: true,
+						Mode:    openbaov1alpha1.TLSModeExternal,
+					},
+					Service: &openbaov1alpha1.ServiceConfig{
+						Type: corev1.ServiceTypeClusterIP,
+					},
+					Unseal: &openbaov1alpha1.UnsealConfig{
+						Type: "transit",
+						Transit: &openbaov1alpha1.TransitSealConfig{
+							Address:   infraAddr,
+							MountPath: "transit",
+							KeyName:   infraBaoKeyName,
+							Token:     "",
+							TLSCACert: "/etc/bao/seal-creds/ca.crt",
+						},
+						CredentialsSecretRef: &corev1.LocalObjectReference{
+							Name: infraBaoTokenSecretName,
+						},
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+						EgressRules: []networkingv1.NetworkPolicyEgressRule{
+							{
+								To: []networkingv1.NetworkPolicyPeer{
+									{
+										PodSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"app": infraBaoName,
+											},
+										},
+									},
+								},
+								Ports: []networkingv1.NetworkPolicyPort{
+									{
+										Protocol: &tcpProto,
+										Port:     &port8200,
+									},
+								},
+							},
+						},
+						IngressRules: []networkingv1.NetworkPolicyIngressRule{
+							{
+								From: []networkingv1.NetworkPolicyPeer{
+									{
+										PodSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"role": "test-verifier",
+											},
+										},
+									},
+								},
+								Ports: []networkingv1.NetworkPolicyPort{
+									{
+										Protocol: &tcpProto,
+										Port:     &port8200,
+									},
+								},
+							},
+						},
+					},
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Image:    upgradeImage,
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+							AutoPromote: true,
+							Verification: &openbaov1alpha1.VerificationConfig{
+								MinSyncDuration: "10s",
+							},
+						},
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(c.Create(ctx, upgradeCluster)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: f.Namespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Initialized).To(BeTrue())
+				g.Expect(updated.Status.SelfInitialized).To(BeTrue())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+				available := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
+				g.Expect(available).NotTo(BeNil())
+				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
+			}, 12*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				stsList := &appsv1.StatefulSetList{}
+				g.Expect(c.List(ctx, stsList,
+					client.InNamespace(f.Namespace),
+					client.MatchingLabels{
+						constants.LabelOpenBaoCluster: upgradeCluster.Name,
+					},
+				)).To(Succeed())
+				g.Expect(stsList.Items).NotTo(BeEmpty(), "expected at least one StatefulSet for hardened blue/green cluster")
+
+				var totalReady int32
+				for _, sts := range stsList.Items {
+					totalReady += sts.Status.ReadyReplicas
+				}
+				g.Expect(totalReady).To(Equal(upgradeCluster.Spec.Replicas),
+					"expected total ready replicas across StatefulSets to match desired cluster replicas")
+			}, 12*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("writing a secret before the hardened blue/green upgrade")
+			secretPath := "secret/hardened-bluegreen-upgrade-test"
+			secretData := map[string]string{"foo": "bar", "version": initialVersion}
+			verifierLabels := map[string]string{"role": "test-verifier"}
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, c, f.Namespace, upgradeCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				err = e2ehelpers.WriteSecretViaJWT(
+					ctx,
+					cfg,
+					c,
+					f.Namespace,
+					initialImage,
+					baoAddr,
+					"default",
+					"e2e-test",
+					secretPath,
+					verifierLabels,
+					secretData,
+				)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed(), "Failed to write pre-upgrade secret")
+
+			By("triggering the hardened blue/green upgrade")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: f.Namespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = targetImage
+				g.Expect(c.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			Expect(f.TriggerReconcile(ctx, upgradeCluster.Name)).To(Succeed())
+
+			By("verifying the hardened blue/green upgrade starts")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: f.Namespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).NotTo(Equal(openbaov1alpha1.PhaseIdle))
+				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("waiting for the hardened blue/green upgrade to complete")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: f.Namespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+				g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.ClusterPhaseRunning))
+
+				pods := &corev1.PodList{}
+				g.Expect(c.List(ctx, pods,
+					client.InNamespace(f.Namespace),
+					client.MatchingLabels{
+						constants.LabelOpenBaoCluster:   upgradeCluster.Name,
+						constants.LabelOpenBaoComponent: constants.ComponentOpenBaoCluster,
+					},
+				)).To(Succeed())
+				g.Expect(pods.Items).NotTo(BeEmpty())
+				for _, pod := range pods.Items {
+					e2ehelpers.ExpectOpenBaoPodVersion(g, pod, targetVersion)
+				}
+			}, 30*time.Minute, 10*time.Second).Should(Succeed())
+
+			By("verifying the test secret persists after the hardened blue/green upgrade")
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, c, f.Namespace, upgradeCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				val, err := e2ehelpers.ReadSecretViaJWT(
+					ctx,
+					cfg,
+					c,
+					f.Namespace,
+					targetImage,
+					baoAddr,
+					"default",
+					"e2e-test",
+					secretPath,
+					verifierLabels,
+					"foo",
+				)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(val).To(Equal("bar"))
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
+		})
 	})
 
 	It("verifies Raft Autopilot is configured with cleanup_dead_servers enabled", func() {

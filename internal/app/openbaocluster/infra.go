@@ -23,6 +23,7 @@ import (
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 const (
@@ -457,6 +458,13 @@ func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger log
 // nolint:gocyclo
 func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	logger.Info("Reconciling infrastructure for OpenBaoCluster")
+
+	if err := upgrade.ValidateUpgradeTargetVersion(logger, cluster.Status.CurrentVersion, cluster.Spec.Version); err != nil {
+		return recon.Result{}, err
+	}
+	if err := upgrade.ValidateImageRefMatchesVersion(cluster.Spec.Version, cluster.Spec.Image); err != nil {
+		return recon.Result{}, err
+	}
 
 	targetImage := r.resolveTargetMainImage(ctx, logger, cluster)
 

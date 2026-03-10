@@ -9,24 +9,27 @@ Day 2 operations cover the ongoing management of the cluster, including version 
 
 === "Rolling Update (Default)"
 
-    1. User configures upgrade executor:
-       - Set `spec.upgrade.image` (optional, can be inferred)
-       - Set `spec.upgrade.jwtAuthRole` (optional, inferred from `spec.selfInit.oidc.enabled`) or configure manual role
-    2. User updates `spec.version` and/or `spec.image` (strategy is configured via `spec.upgrade.strategy`).
+    1. User ensures upgrade prerequisites:
+       - Set `spec.version` to the target semantic version.
+       - Configure JWT auth for upgrade executor Jobs (`spec.upgrade.jwtAuthRole`), or enable `spec.selfInit.oidc.enabled=true` so the default role can be bootstrapped.
+       - If `spec.image` is set with a semver tag, keep it aligned with `spec.version`.
+       - If `spec.upgrade.preUpgradeSnapshot=true`, configure `spec.backup` and backup authentication.
+    2. User updates `spec.version` and optionally `spec.image` (strategy is configured via `spec.upgrade.strategy`).
     3. Upgrade Manager (adminops controller) detects version drift and performs pre-upgrade validation:
-       - Validates semantic versioning (blocks downgrades by default).
+       - Validates semantic versioning and blocks downgrades.
+       - Rejects provable semver image/version mismatches.
        - Verifies all pods are Ready and quorum is healthy.
-       - Optionally triggers a pre-upgrade backup if `spec.upgrade.preUpgradeSnapshot` is enabled.
+       - Optionally triggers a pre-upgrade snapshot using `spec.backup` if `spec.upgrade.preUpgradeSnapshot` is enabled.
     4. Upgrade Manager orchestrates Raft-aware rolling updates:
        - Locks StatefulSet updates using partitioning.
        - Iterates pods in reverse ordinal order.
        - Runs an upgrade Job to perform leader step-down before updating the leader pod.
        - Waits for pod Ready, OpenBao health, and Raft sync after each update.
-    5. Upgrade progress is persisted in `status.upgrade` (rolling) or `status.blueGreen` (blue/green), allowing resumption after Operator restart.
+    5. If a rolling step fails, progress remains in `status.upgrade` and the operator waits for the `openbao.org/retry-rolling-upgrade` annotation before retrying.
     6. On completion, `status.currentVersion` is updated and `status.upgrade` is cleared (rolling), or `status.blueGreen.phase` returns to `Idle` (blue/green).
 
     !!! note "Upgrade Policy"
-        Upgrades are designed to be safe and resumable. Downgrades are blocked by default. Rolling upgrades halt on failure and require manual intervention; Blue/Green can perform automatic rollback when `spec.upgrade.blueGreen.autoRollback.enabled=true`. Root tokens are not used for upgrade operations.
+        Upgrades are designed to be safe and resumable. Downgrades are blocked by default. Rolling upgrades wait for an explicit retry signal after failure. Blue/Green can abort or roll back automatically when `spec.upgrade.blueGreen.autoRollback.enabled=true`. Root tokens are not used for upgrade operations.
 
     ### Sequence Diagram (Rolling Updates)
 
@@ -59,12 +62,15 @@ Day 2 operations cover the ongoing management of the cluster, including version 
 
     Blue/Green upgrades provide zero-downtime updates by creating a parallel "Green" standby cluster and advancing it through explicit consensus phases.
 
-    1.  **Drift Detection:** User updates `OpenBaoCluster` spec with a new version or image, using the Blue/Green strategy.
-    2.  **Green Creation:** The operator creates a new "Green" StatefulSet with the new version.
-    3.  **Join as Non-Voters:** Green pods start and join the existing "Blue" Raft cluster as non-voters.
-    4.  **Sync and Promote:** The operator waits for Green replication to converge, then promotes Green pods to voters.
-    5.  **Demote Blue and Verify Leader:** The operator demotes Blue voters, forces leadership transfer when needed, and waits until a Green leader is observed.
-    6.  **Cutover During Cleanup:** The operator switches the Service selector to Green, removes Blue peers, and deletes the Blue StatefulSet. Rollback remains possible until irreversible cleanup completes.
+    1. **Drift Detection:** User updates `OpenBaoCluster` spec with a new version or image, using the Blue/Green strategy.
+    2. **Optional Snapshot:** If `spec.upgrade.preUpgradeSnapshot=true` or `spec.upgrade.blueGreen.preUpgradeSnapshot=true`, the operator blocks until a pre-upgrade snapshot succeeds.
+    3. **Green Creation:** The operator creates a new Green StatefulSet with the new version.
+    4. **Join as Non-Voters:** Green pods start and join the existing Blue Raft cluster as non-voters.
+    5. **Sync and Validate:** The operator waits for Green replication to converge, honors optional `verification.minSyncDuration`, and runs `verification.prePromotionHook` when configured.
+    6. **Manual Hold or Promotion:** If `autoPromote=false`, the upgrade holds in `Syncing` until the user enables promotion. Otherwise, the operator promotes Green pods to voters.
+    7. **Demote Blue and Verify Leader:** The operator demotes Blue voters, forces leadership transfer when needed, and waits until a Green leader is observed.
+    8. **Cutover During Cleanup:** The operator switches the Service selector to Green, removes Blue peers, and deletes the Blue StatefulSet. Rollback remains possible until irreversible cleanup completes.
+    9. **Break Glass:** If rollback consensus repair fails, the operator sets `status.breakGlass` and halts risky rollback automation until `spec.breakGlassAck` matches the issued nonce.
 
     ### Sequence Diagram (Blue/Green)
 
@@ -105,7 +111,7 @@ For manual recovery:
 
 1. User sets `spec.paused=true`.
 2. Reconcilers short-circuit and stop mutating resources, allowing manual actions (e.g., manual restore from snapshot).
-3. If an upgrade was in progress, it is paused but state is preserved in `status.upgrade`.
+3. If an upgrade was in progress, it is paused but state is preserved in `status.upgrade` or `status.blueGreen`.
 4. After maintenance, user sets `spec.paused=false` to resume normal reconciliation (including any paused upgrade).
 
 ## Official OpenBao Documentation

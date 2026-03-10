@@ -3,6 +3,7 @@ package rolling
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -75,11 +76,12 @@ func (m *Manager) waitForPodRevisionUpdated(ctx context.Context, logger logr.Log
 		return false, fmt.Errorf("failed to get StatefulSet while checking pod revision: %w", err)
 	}
 
-	targetRevision := sts.Status.UpdateRevision
+	targetRevision := strings.TrimSpace(sts.Status.UpdateRevision)
 	if targetRevision == "" {
 		logger.V(1).Info("StatefulSet update revision not set yet; waiting")
 		return false, nil
 	}
+	desiredImage := strings.TrimSpace(baoContainerImage(sts.Spec.Template.Spec.Containers))
 
 	pod := &corev1.Pod{}
 	if err := m.client.Get(ctx, types.NamespacedName{
@@ -93,8 +95,25 @@ func (m *Manager) waitForPodRevisionUpdated(ctx context.Context, logger logr.Log
 		return false, fmt.Errorf("failed to get pod %s while checking revision: %w", podName, err)
 	}
 
-	podRevision := pod.Labels[appsv1.StatefulSetRevisionLabel]
+	podRevision := strings.TrimSpace(pod.Labels[appsv1.StatefulSetRevisionLabel])
+	podImage := strings.TrimSpace(baoContainerImage(pod.Spec.Containers))
 	if podRevision != targetRevision {
+		// If the pod no longer matches the StatefulSet template, waiting alone can stall
+		// forever after a failed retry because the StatefulSet controller does not replace
+		// an already-existing stale pod on its own. Force a fresh recreate instead.
+		if desiredImage != "" && podImage != desiredImage {
+			if err := m.client.Delete(ctx, pod); err != nil && !apierrors.IsNotFound(err) {
+				return false, fmt.Errorf("failed to delete stale pod %s while waiting for revision update: %w", podName, err)
+			}
+			logger.Info("Deleted stale pod while waiting for revision update",
+				"pod", podName,
+				"currentRevision", podRevision,
+				"targetRevision", targetRevision,
+				"podImage", podImage,
+				"desiredImage", desiredImage)
+			return false, nil
+		}
+
 		logger.V(1).Info("Waiting for pod revision update",
 			"pod", podName,
 			"currentRevision", podRevision,

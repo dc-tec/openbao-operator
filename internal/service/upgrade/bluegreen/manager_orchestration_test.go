@@ -8,10 +8,14 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
@@ -207,6 +211,165 @@ func TestManager_HandleNoUpgradeNeeded(t *testing.T) {
 		}
 		if result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero", result)
+		}
+	})
+}
+
+func TestManager_ReconcileBlueGreen_BlocksUnsupportedTargetVersion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		current       string
+		target        string
+		image         string
+		wantErrSubstr string
+		wantReason    string
+	}{
+		{
+			name:          "invalid target version",
+			current:       "2.4.4",
+			target:        "latest",
+			wantErrSubstr: "invalid target version",
+			wantReason:    upgrade.ReasonInvalidVersion,
+		},
+		{
+			name:          "downgrade target version",
+			current:       "2.5.0",
+			target:        "2.4.4",
+			wantErrSubstr: "downgrade from 2.5.0 to 2.4.4 is not supported",
+			wantReason:    upgrade.ReasonDowngradeBlocked,
+		},
+		{
+			name:          "semver image tag mismatch",
+			current:       "2.4.4",
+			target:        "2.5.0",
+			image:         "openbao/openbao:2.4.4",
+			wantErrSubstr: "spec.image tag \"2.4.4\" does not match spec.version \"2.5.0\"",
+			wantReason:    upgrade.ReasonImageVersionMismatch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := newBlueGreenTestScheme(t)
+			cluster := newBlueGreenCluster()
+			cluster.Spec.Version = tt.target
+			cluster.Spec.Image = tt.image
+			if cluster.Spec.Image == "" {
+				cluster.Spec.Image = "openbao/openbao:" + tt.target
+			}
+			cluster.Status.CurrentVersion = tt.current
+			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
+
+			client := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+				WithObjects(cluster).
+				Build()
+			mgr := &Manager{client: client, scheme: scheme}
+
+			_, err := mgr.reconcileBlueGreen(context.Background(), logr.Discard(), cluster, "")
+			if err == nil || !strings.Contains(err.Error(), tt.wantErrSubstr) {
+				t.Fatalf("reconcileBlueGreen() error = %v, want contains %q", err, tt.wantErrSubstr)
+			}
+			if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+				t.Fatalf("expected permanent config error, got %v", err)
+			}
+			reason, ok := operatorerrors.Reason(err)
+			if !ok {
+				t.Fatalf("expected reasoned error, got %v", err)
+			}
+			if reason != tt.wantReason {
+				t.Fatalf("reason = %q, want %q", reason, tt.wantReason)
+			}
+			latest := &openbaov1alpha1.OpenBaoCluster{}
+			if getErr := client.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, latest); getErr != nil {
+				t.Fatalf("failed to get cluster: %v", getErr)
+			}
+			if latest.Status.OperationLock != nil {
+				t.Fatalf("expected operation lock to be released, got %+v", latest.Status.OperationLock)
+			}
+			if cluster.Status.OperationLock != nil {
+				t.Fatalf("expected in-memory operation lock to be released, got %+v", cluster.Status.OperationLock)
+			}
+		})
+	}
+}
+
+func TestManager_MaybeHandleTargetRevisionDrift(t *testing.T) {
+	t.Parallel()
+
+	t.Run("early phase aborts and requeues when desired revision changes", func(t *testing.T) {
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newBlueGreenCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
+		cluster.Status.BlueGreen.GreenRevision = "green-old"
+		cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+			Operation: openbaov1alpha1.ClusterOperationUpgrade,
+			Holder:    upgrade.UpgradeOperationLockHolder,
+			Message:   "blue/green upgrade phase Syncing",
+		}
+
+		greenWorkload := &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cluster.Name + "-green-old",
+				Namespace: cluster.Namespace,
+			},
+		}
+
+		client := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+			WithObjects(cluster, greenWorkload).
+			Build()
+		mgr := &Manager{client: client, scheme: scheme}
+
+		handled, result, err := mgr.maybeHandleTargetRevisionDrift(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !handled {
+			t.Fatal("expected handled=true")
+		}
+		if result.RequeueAfter != constants.RequeueShort {
+			t.Fatalf("requeueAfter=%v, want %v", result.RequeueAfter, constants.RequeueShort)
+		}
+		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
+			t.Fatalf("phase = %s, want Idle", cluster.Status.BlueGreen.Phase)
+		}
+		if cluster.Status.BlueGreen.GreenRevision != "" {
+			t.Fatalf("green revision = %q, want empty", cluster.Status.BlueGreen.GreenRevision)
+		}
+		if cluster.Status.OperationLock != nil {
+			t.Fatalf("expected operation lock to be released, got %+v", cluster.Status.OperationLock)
+		}
+	})
+
+	t.Run("late phase triggers rollback when desired revision changes", func(t *testing.T) {
+		cluster := newBlueGreenCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+		cluster.Status.BlueGreen.GreenRevision = "green-old"
+
+		mgr := &Manager{}
+		handled, result, err := mgr.maybeHandleTargetRevisionDrift(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !handled {
+			t.Fatal("expected handled=true")
+		}
+		if result.RequeueAfter != constants.RequeueShort {
+			t.Fatalf("requeueAfter=%v, want %v", result.RequeueAfter, constants.RequeueShort)
+		}
+		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseRollingBack {
+			t.Fatalf("phase = %s, want RollingBack", cluster.Status.BlueGreen.Phase)
+		}
+		if cluster.Status.BlueGreen.RollbackStartTime == nil {
+			t.Fatal("expected rollback to be started")
+		}
+		if cluster.Status.BlueGreen.RollbackReason != upgrade.ReasonVersionMismatch {
+			t.Fatalf("rollback reason = %q, want %q", cluster.Status.BlueGreen.RollbackReason, upgrade.ReasonVersionMismatch)
 		}
 	})
 }

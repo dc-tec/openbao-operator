@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -73,6 +74,53 @@ func newTestNamespace(t *testing.T) string {
 	})
 
 	return ns.Name
+}
+
+func waitForOpenBaoClusterAdmissionPolicies(t *testing.T, namespace string) {
+	t.Helper()
+
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	for attempt := 0; attempt < 25; attempt++ {
+		invalid := &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "openbao.org/v1alpha1",
+				"kind":       "OpenBaoCluster",
+				"metadata": map[string]any{
+					"name":      fmt.Sprintf("cluster-policy-probe-%d", attempt),
+					"namespace": namespace,
+				},
+				"spec": map[string]any{
+					"version":  "2.4.4",
+					"image":    "openbao/openbao:2.4.4",
+					"replicas": int64(3),
+					"profile":  "Development",
+					"tls": map[string]any{
+						"enabled":        true,
+						"rotationPeriod": "720h",
+					},
+					"storage": map[string]any{
+						"size": "10Gi",
+					},
+					"initContainer": map[string]any{
+						"enabled": false,
+					},
+				},
+			},
+		}
+
+		err := k8sClient.Create(ctx, invalid)
+		if err == nil {
+			_ = k8sClient.Delete(ctx, invalid)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		return
+	}
+
+	t.Fatalf("expected OpenBaoCluster admission policies to become active after retries")
 }
 
 func createTLSSecret(t *testing.T, namespace, clusterName string) {

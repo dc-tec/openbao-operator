@@ -17,6 +17,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	openbaotest "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/adapter/revision"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
@@ -39,25 +40,28 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	}
 	createTLSSecret(t, namespace, cluster.Name)
 
+	targetGreenRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+	currentBlueRevision := revision.OpenBaoClusterRevision("2.4.3", constants.GetOpenBaoImage("2.4.3"), cluster.Spec.Replicas)
+
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 		status.Initialized = true
 		status.CurrentVersion = "2.4.3"
 		status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
 			Phase:         openbaov1alpha1.PhaseJoiningMesh,
-			BlueRevision:  "blue123",
-			GreenRevision: "green456",
+			BlueRevision:  currentBlueRevision,
+			GreenRevision: targetGreenRevision,
 			StartTime:     &metav1.Time{Time: time.Now().Add(-2 * time.Minute)},
 		}
 	})
 
 	greenLeaderPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "bluegreen-green456-0",
+			Name:      cluster.Name + "-" + targetGreenRevision + "-0",
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelAppInstance:     cluster.Name,
 				constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
-				constants.LabelOpenBaoRevision: "green456",
+				constants.LabelOpenBaoRevision: targetGreenRevision,
 				portopenbao.LabelActive:        "true",
 			},
 		},
@@ -192,24 +196,27 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 	}
 	createTLSSecret(t, namespace, cluster.Name)
 
+	targetGreenRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
+	currentBlueRevision := revision.OpenBaoClusterRevision("2.4.3", constants.GetOpenBaoImage("2.4.3"), cluster.Spec.Replicas)
+
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 		status.Initialized = true
 		status.CurrentVersion = "2.4.3"
 		status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
 			Phase:         openbaov1alpha1.PhaseDemotingBlue,
-			BlueRevision:  "blue123",
-			GreenRevision: "green456",
+			BlueRevision:  currentBlueRevision,
+			GreenRevision: targetGreenRevision,
 		}
 	})
 
 	greenPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name + "-green456-0",
+			Name:      cluster.Name + "-" + targetGreenRevision + "-0",
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelAppInstance:     cluster.Name,
 				constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
-				constants.LabelOpenBaoRevision: "green456",
+				constants.LabelOpenBaoRevision: targetGreenRevision,
 				portopenbao.LabelSealed:        "false",
 			},
 		},

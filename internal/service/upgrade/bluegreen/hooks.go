@@ -56,6 +56,17 @@ func (m *Manager) ensureValidationHookJob(
 		}
 		security.AddManagedWorkloadSecurityLabels(podTemplateLabels, cluster)
 
+		podSecurityContext := &corev1.PodSecurityContext{
+			RunAsNonRoot: ptr.To(true),
+			SeccompProfile: &corev1.SeccompProfile{
+				Type: corev1.SeccompProfileTypeRuntimeDefault,
+			},
+		}
+		if m.Platform != constants.PlatformOpenShift {
+			podSecurityContext.RunAsUser = ptr.To(constants.UserNonRoot)
+			podSecurityContext.RunAsGroup = ptr.To(constants.UserNonRoot)
+		}
+
 		return &batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      jobName,
@@ -71,13 +82,22 @@ func (m *Manager) ensureValidationHookJob(
 						Labels: podTemplateLabels,
 					},
 					Spec: corev1.PodSpec{
-						RestartPolicy: corev1.RestartPolicyNever,
+						AutomountServiceAccountToken: ptr.To(false),
+						RestartPolicy:                corev1.RestartPolicyNever,
+						SecurityContext:              podSecurityContext,
 						Containers: []corev1.Container{
 							{
 								Name:    "validation",
 								Image:   hook.Image,
 								Command: hook.Command,
 								Args:    hook.Args,
+								SecurityContext: &corev1.SecurityContext{
+									AllowPrivilegeEscalation: ptr.To(false),
+									Capabilities: &corev1.Capabilities{
+										Drop: []corev1.Capability{"ALL"},
+									},
+									RunAsNonRoot: ptr.To(true),
+								},
 							},
 						},
 					},

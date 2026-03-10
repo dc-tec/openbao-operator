@@ -138,11 +138,30 @@ Upgrades are designed to survive Operator restarts. All state is stored in `Stat
 
 If the Operator crashes, it reads the Status on startup and **resumes** exactly where it left off.
 
+### Validation and policy guardrails
+
+- **Shared version policy:** Rolling and Blue/Green both validate the target version through the same version-policy helper. Invalid semantic versions are rejected and downgrades are blocked before orchestration begins.
+- **Admission guardrails:** The admission policy rejects downgrade requests before reconcile when the previous or in-flight target version makes the regression unambiguous.
+- **Image/version alignment:** The workload and upgrade reconcilers reject semver-tagged `spec.image` values that conflict with `spec.version`. Digest-pinned images and custom non-semver tags remain allowed, but `spec.version` remains authoritative.
+- **Snapshot prerequisites:** Pre-upgrade snapshots use `spec.backup` configuration and backup authentication. In the `Hardened` profile, explicit `spec.network.egressRules` are required so snapshot Jobs can reach object storage.
+
 ### Rolling completion semantics
 
 - `status.upgrade` remains present until rollout convergence is verified.
 - Finalization updates `status.upgrade` and `status.currentVersion` in a single status patch.
 - The Status controller ignores observed pod-label version regressions, so transient stale observations do not restart a completed rolling upgrade.
+
+### Rolling failure recovery
+
+- Failed rolling upgrades persist `status.upgrade.lastErrorReason` and `status.upgrade.lastErrorMessage`.
+- Recovery is explicit: the operator waits for the `openbao.org/retry-rolling-upgrade` annotation before clearing the failed state and retrying.
+- If the desired target changes while a rolling upgrade is in progress, the controller clears rolling state and re-evaluates the new target from the live cluster state.
+
+### Blue/Green holds and rollback safety
+
+- `Syncing` can intentionally hold when `spec.upgrade.blueGreen.autoPromote=false`.
+- A failing `verification.prePromotionHook` either holds in `Syncing` or triggers automatic abort/rollback, depending on `blueGreen.autoRollback.onValidationFailure`.
+- If late rollback consensus repair fails, the operator enters `status.breakGlass` and halts risky rollback automation until `spec.breakGlassAck` matches the issued nonce.
 
 ### Image Verification
 

@@ -295,7 +295,9 @@ type VerificationConfig struct {
 
 	// PrePromotionHook specifies a Job template to run before promoting Green.
 	// The job must complete successfully (exit 0) for promotion to proceed.
-	// If the job fails, the upgrade enters a paused state until manually resolved.
+	// If the job fails, the operator either aborts or rolls back automatically
+	// when blueGreen.autoRollback.onValidationFailure is enabled; otherwise it
+	// holds for manual resolution.
 	// +optional
 	PrePromotionHook *ValidationHookConfig `json:"prePromotionHook,omitempty"`
 }
@@ -326,7 +328,8 @@ type AutoRollbackConfig struct {
 	// Only applies during early phases (before demoting Blue).
 	// +kubebuilder:default=true
 	OnJobFailure bool `json:"onJobFailure,omitempty"`
-	// OnValidationFailure triggers rollback if pre-promotion hook fails.
+	// OnValidationFailure triggers automatic abort/rollback if the pre-promotion
+	// hook fails.
 	// +kubebuilder:default=true
 	OnValidationFailure bool `json:"onValidationFailure,omitempty"`
 }
@@ -387,36 +390,32 @@ type UpgradeConfig struct {
 	// +optional
 	PreUpgradeSnapshot bool `json:"preUpgradeSnapshot,omitempty"`
 	// JWTAuthRole is the name of the JWT Auth role configured in OpenBao
-	// for upgrade operations. When set, the upgrade manager will use JWT Auth
-	// (projected ServiceAccount token) instead of a static token. This is the preferred authentication
-	// method as tokens are automatically rotated by Kubernetes.
+	// for upgrade executor Jobs. The executor authenticates with a projected
+	// ServiceAccount token from <cluster-name>-upgrade-serviceaccount.
 	//
-	// The role must be configured in OpenBao and must grant:
+	// The role must be configured in OpenBao and must grant the permissions
+	// required by the selected upgrade strategy, including:
 	// - "read" capability on sys/health
-	// - "update" capability on sys/step-down
-	// - "read" capability on sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
+	// - "sudo" and "update" capability on sys/step-down
+	// - "read" capability on sys/storage/raft/autopilot/state
+	// - for Blue/Green, raft join/configuration/remove-peer/promote/demote operations
 	// The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),
 	// which is automatically created by the operator.
 	//
 	// If OIDC is enabled in SelfInit and this field is empty, a default role
 	// named "openbao-operator-upgrade" will be assumed/created.
 	//
-	// Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
+	// This is the supported authentication mechanism for built-in upgrade orchestration.
 	// +optional
 	JWTAuthRole string `json:"jwtAuthRole,omitempty"`
 	// TokenSecretRef optionally references a Secret containing an OpenBao API
-	// token to use for upgrade operations.
+	// token for future non-JWT upgrade authentication flows.
 	//
 	// The Secret must exist in the same namespace as the OpenBaoCluster.
 	// Cross-namespace references are not allowed for security reasons.
 	//
-	// The token must have permission to:
-	// - read sys/health
-	// - update sys/step-down
-	// - read sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
-	//
-	// Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
-	// If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
+	// Built-in rolling and blue/green upgrade executor Jobs currently require
+	// JWT auth via JWTAuthRole and ignore this field.
 	// +optional
 	TokenSecretRef *corev1.LocalObjectReference `json:"tokenSecretRef,omitempty"`
 
@@ -1620,10 +1619,14 @@ type OpenBaoClusterSpec struct {
 	Telemetry *TelemetryConfig `json:"telemetry,omitempty"`
 	// Upgrade configures upgrade operations.
 	//
-	// When spec.upgrade.preUpgradeSnapshot is true, if upgrade authentication is not
-	// Upgrade authentication must be explicitly configured via spec.upgrade.jwtAuthRole
-	// or spec.upgrade.tokenSecretRef. The operator automatically creates an upgrade ServiceAccount
-	// (<cluster-name>-upgrade-serviceaccount) for JWT Auth authentication.
+	// Built-in upgrade executor Jobs authenticate with JWT auth using the
+	// upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount). If
+	// spec.selfInit.oidc.enabled is true and spec.upgrade.jwtAuthRole is empty,
+	// the operator assumes or bootstraps the default "openbao-operator-upgrade"
+	// role.
+	//
+	// Pre-upgrade snapshots use spec.backup configuration and backup
+	// authentication rather than spec.upgrade credentials.
 	// +optional
 	Upgrade *UpgradeConfig `json:"upgrade,omitempty"`
 	// Unseal defines the auto-unseal configuration.
@@ -1636,7 +1639,8 @@ type OpenBaoClusterSpec struct {
 	// OperatorImageVerification configures supply chain security checks for operator-managed helper images
 	// (init container, backup/upgrade/restore executors). These images are typically signed
 	// by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.
-	// If not specified, falls back to the main ImageVerification config.
+	// If omitted, helper image verification does not fall back to ImageVerification.
+	// In Development, omitted means disabled. In Hardened, omitted means enabled.
 	// +optional
 	OperatorImageVerification *ImageVerificationConfig `json:"operatorImageVerification,omitempty"`
 	// WorkloadHardening configures opt-in workload hardening features.

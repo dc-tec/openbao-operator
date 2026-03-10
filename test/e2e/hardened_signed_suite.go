@@ -15,6 +15,9 @@ const (
 	envEnableHardenedSignedSuite = "E2E_ENABLE_HARDENED_SIGNED_SUITE"
 	envOpenBaoImage              = "E2E_OPENBAO_IMAGE"
 	envHardenedConfigInitImage   = "E2E_HARDENED_CONFIG_INIT_IMAGE"
+	envUpgradeExecutorImage      = "E2E_UPGRADE_EXECUTOR_IMAGE"
+
+	defaultSignedUpgradeExecutorImage = "ghcr.io/dc-tec/openbao-upgrade:edge"
 )
 
 func requireHardenedSignedSuite() {
@@ -35,4 +38,8 @@ func requireHardenedSignedSuite() {
 			envHardenedConfigInitImage,
 		))
 	}
+}
+
+func hardenedSignedUpgradeExecutorImage() string {
+	return envOrDefault(envUpgradeExecutorImage, defaultSignedUpgradeExecutorImage)
 }

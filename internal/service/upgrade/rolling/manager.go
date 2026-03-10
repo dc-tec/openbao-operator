@@ -219,7 +219,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	// Phase 2: Pre-upgrade Validation
 	if err := m.validateUpgrade(ctx, logger, cluster); err != nil {
-		return recon.Result{}, err
+		return recon.Result{}, m.releaseUpgradeLockOnPreStartError(ctx, logger, cluster, err)
 	}
 
 	// Phase 3: Pre-upgrade Snapshot (if enabled)

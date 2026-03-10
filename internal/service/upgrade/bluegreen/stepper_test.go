@@ -144,6 +144,117 @@ func TestExecutorJobDecision(t *testing.T) {
 	}
 }
 
+func TestValidationHookDecision(t *testing.T) {
+	tests := []struct {
+		name            string
+		rollbackOnError bool
+		result          *JobResult
+		expectedHandled bool
+		expectedKind    phaseOutcomeKind
+		wantErr         bool
+	}{
+		{
+			name:            "nil hook result is not handled",
+			rollbackOnError: true,
+			result:          nil,
+			expectedHandled: false,
+			expectedKind:    "",
+		},
+		{
+			name:            "running hook requeues",
+			rollbackOnError: true,
+			result:          &JobResult{Name: "hook", Exists: true, Running: true},
+			expectedHandled: true,
+			expectedKind:    phaseOutcomeRequeueAfter,
+		},
+		{
+			name:            "failed hook rolls back when enabled",
+			rollbackOnError: true,
+			result:          &JobResult{Name: "hook", Exists: true, Failed: true},
+			expectedHandled: true,
+			expectedKind:    phaseOutcomeRollback,
+		},
+		{
+			name:            "failed hook holds when rollback disabled",
+			rollbackOnError: false,
+			result:          &JobResult{Name: "hook", Exists: true, Failed: true},
+			expectedHandled: true,
+			expectedKind:    phaseOutcomeHold,
+		},
+		{
+			name:            "succeeded hook continues state machine",
+			rollbackOnError: true,
+			result:          &JobResult{Name: "hook", Exists: true, Succeeded: true},
+			expectedHandled: false,
+			expectedKind:    "",
+		},
+		{
+			name:            "invalid hook result returns error",
+			rollbackOnError: true,
+			result:          &JobResult{Name: "hook", Exists: true},
+			wantErr:         true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := validationHookDecision(tt.rollbackOnError, tt.result, "validation hook failed")
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("validationHookDecision() error: %v", err)
+			}
+			if got.Handled != tt.expectedHandled {
+				t.Fatalf("Handled=%v, expected %v", got.Handled, tt.expectedHandled)
+			}
+			if got.Outcome.kind != tt.expectedKind {
+				t.Fatalf("Outcome.kind=%s, expected %s", got.Outcome.kind, tt.expectedKind)
+			}
+		})
+	}
+}
+
+func TestPrePromotionHookDecision(t *testing.T) {
+	tests := []struct {
+		name         string
+		autoRollback autoRollbackConfig
+		result       *JobResult
+		expectedKind phaseOutcomeKind
+	}{
+		{
+			name:         "validation failure follows auto rollback setting",
+			autoRollback: autoRollbackConfig{Enabled: true, OnValidationFailure: true},
+			result:       &JobResult{Name: "hook", Exists: true, Failed: true},
+			expectedKind: phaseOutcomeRollback,
+		},
+		{
+			name:         "validation failure holds when validation rollback disabled",
+			autoRollback: autoRollbackConfig{Enabled: true, OnValidationFailure: false},
+			result:       &JobResult{Name: "hook", Exists: true, Failed: true},
+			expectedKind: phaseOutcomeHold,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := prePromotionHookDecision(tt.autoRollback, tt.result, "validation hook failed")
+			if err != nil {
+				t.Fatalf("prePromotionHookDecision() error: %v", err)
+			}
+			if !got.Handled {
+				t.Fatal("expected hook decision to be handled")
+			}
+			if got.Outcome.kind != tt.expectedKind {
+				t.Fatalf("Outcome.kind=%s, expected %s", got.Outcome.kind, tt.expectedKind)
+			}
+		})
+	}
+}
+
 func TestDemotionPreconditionsSatisfied(t *testing.T) {
 	tests := []struct {
 		name        string
