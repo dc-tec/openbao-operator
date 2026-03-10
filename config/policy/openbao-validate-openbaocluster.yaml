@@ -37,7 +37,7 @@ spec:
         variables.spec_version_core.split(".").map(part, int(part))
     - name: current_version_normalized
       expression: >-
-        oldObject != null && has(oldObject.status.currentVersion) && oldObject.status.currentVersion != "" ? (oldObject.status.currentVersion.startsWith("v") ? oldObject.status.currentVersion.substring(1) : oldObject.status.currentVersion) : ""
+        oldObject != null && has(oldObject.status) && has(oldObject.status.currentVersion) && oldObject.status.currentVersion != "" ? (oldObject.status.currentVersion.startsWith("v") ? oldObject.status.currentVersion.substring(1) : oldObject.status.currentVersion) : ""
     - name: current_version_build_stripped
       expression: >-
         variables.current_version_normalized.contains("+") ? variables.current_version_normalized.substring(0, variables.current_version_normalized.indexOf("+")) : variables.current_version_normalized
@@ -55,7 +55,7 @@ spec:
         variables.current_version_core.split(".").map(part, int(part))
     - name: rolling_target_version_normalized
       expression: >-
-        oldObject != null && has(oldObject.status.upgrade) && has(oldObject.status.upgrade.targetVersion) && oldObject.status.upgrade.targetVersion != "" ? (oldObject.status.upgrade.targetVersion.startsWith("v") ? oldObject.status.upgrade.targetVersion.substring(1) : oldObject.status.upgrade.targetVersion) : ""
+        oldObject != null && has(oldObject.status) && has(oldObject.status.upgrade) && has(oldObject.status.upgrade.targetVersion) && oldObject.status.upgrade.targetVersion != "" ? (oldObject.status.upgrade.targetVersion.startsWith("v") ? oldObject.status.upgrade.targetVersion.substring(1) : oldObject.status.upgrade.targetVersion) : ""
     - name: rolling_target_version_build_stripped
       expression: >-
         variables.rolling_target_version_normalized.contains("+") ? variables.rolling_target_version_normalized.substring(0, variables.rolling_target_version_normalized.indexOf("+")) : variables.rolling_target_version_normalized
@@ -73,7 +73,7 @@ spec:
         variables.rolling_target_version_core.split(".").map(part, int(part))
     - name: rolling_upgrade_progress_started
       expression: >-
-        oldObject != null && has(oldObject.status.upgrade) && (oldObject.status.upgrade.currentPartition < oldObject.spec.replicas || (has(oldObject.status.upgrade.completedPods) && size(oldObject.status.upgrade.completedPods) > 0))
+        oldObject != null && has(oldObject.status) && has(oldObject.status.upgrade) && (oldObject.status.upgrade.currentPartition < oldObject.spec.replicas || (has(oldObject.status.upgrade.completedPods) && size(oldObject.status.upgrade.completedPods) > 0))
     - name: requested_below_current_version
       expression: >-
         variables.current_version_valid &&
