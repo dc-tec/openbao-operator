@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Reference for OpenBao Operator status conditions and common Kubernetes/audit events used for troubleshooting and automation.">
+        <meta name="description" content="Reference for OpenBao Operator status conditions, Kubernetes Events, and audit events for OpenBaoCluster, OpenBaoRestore, and OpenBaoTenant resources.">
       
       
       
@@ -73,7 +73,7 @@
   <meta property="og:type" content="website">
   <meta property="og:title" content="Status Conditions &amp; Events">
   
-    <meta property="og:description" content="Reference for OpenBao Operator status conditions and common Kubernetes/audit events used for troubleshooting and automation.">
+    <meta property="og:description" content="Reference for OpenBao Operator status conditions, Kubernetes Events, and audit events for OpenBaoCluster, OpenBaoRestore, and OpenBaoTenant resources.">
   
   <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/reference/status-and-events/">
   
@@ -83,7 +83,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Status Conditions &amp; Events">
   
-    <meta name="twitter:description" content="Reference for OpenBao Operator status conditions and common Kubernetes/audit events used for troubleshooting and automation.">
+    <meta name="twitter:description" content="Reference for OpenBao Operator status conditions, Kubernetes Events, and audit events for OpenBaoCluster, OpenBaoRestore, and OpenBaoTenant resources.">
   
   
     <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
@@ -110,7 +110,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#status-conditions-events-reference" class="md-skip">
+        <a href="#status-conditions-and-events" class="md-skip">
           Skip to content
         </a>
       
@@ -4202,10 +4202,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-inspect-status-and-events" class="md-nav__link">
+  <a href="#inspect-resources" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Inspect Status and Events
+        Inspect Resources
       
     </span>
   </a>
@@ -4213,10 +4213,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-openbaocluster-conditions" class="md-nav__link">
+  <a href="#openbaocluster-conditions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. OpenBaoCluster Conditions
+        OpenBaoCluster Conditions
       
     </span>
   </a>
@@ -4224,10 +4224,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-openbaorestore-conditions" class="md-nav__link">
+  <a href="#openbaorestore-conditions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. OpenBaoRestore Conditions
+        OpenBaoRestore Conditions
       
     </span>
   </a>
@@ -4235,10 +4235,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-openbaotenant-conditions" class="md-nav__link">
+  <a href="#openbaotenant-conditions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. OpenBaoTenant Conditions
+        OpenBaoTenant Conditions
       
     </span>
   </a>
@@ -4246,21 +4246,104 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-common-kubernetes-events" class="md-nav__link">
+  <a href="#kubernetes-events" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Common Kubernetes Events
+        Kubernetes Events
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Kubernetes Events">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#openbaocluster-safety-and-maintenance-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoCluster Safety and Maintenance Events
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#6-structured-audit-events-controller-logs" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#openbaocluster-init-and-bootstrap-events" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Structured Audit Events (Controller Logs)
+        OpenBaoCluster Init and Bootstrap Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openbaocluster-tenant-secret-rbac-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoCluster Tenant Secret RBAC Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openbaocluster-upgrade-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoCluster Upgrade Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openbaocluster-backup-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoCluster Backup Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openbaorestore-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoRestore Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openbaotenant-provisioning-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoTenant Provisioning Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structured-audit-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structured Audit Events
       
     </span>
   </a>
@@ -4338,10 +4421,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-inspect-status-and-events" class="md-nav__link">
+  <a href="#inspect-resources" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Inspect Status and Events
+        Inspect Resources
       
     </span>
   </a>
@@ -4349,10 +4432,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-openbaocluster-conditions" class="md-nav__link">
+  <a href="#openbaocluster-conditions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. OpenBaoCluster Conditions
+        OpenBaoCluster Conditions
       
     </span>
   </a>
@@ -4360,10 +4443,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-openbaorestore-conditions" class="md-nav__link">
+  <a href="#openbaorestore-conditions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. OpenBaoRestore Conditions
+        OpenBaoRestore Conditions
       
     </span>
   </a>
@@ -4371,10 +4454,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-openbaotenant-conditions" class="md-nav__link">
+  <a href="#openbaotenant-conditions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. OpenBaoTenant Conditions
+        OpenBaoTenant Conditions
       
     </span>
   </a>
@@ -4382,21 +4465,104 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-common-kubernetes-events" class="md-nav__link">
+  <a href="#kubernetes-events" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Common Kubernetes Events
+        Kubernetes Events
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Kubernetes Events">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#openbaocluster-safety-and-maintenance-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoCluster Safety and Maintenance Events
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#6-structured-audit-events-controller-logs" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#openbaocluster-init-and-bootstrap-events" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Structured Audit Events (Controller Logs)
+        OpenBaoCluster Init and Bootstrap Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openbaocluster-tenant-secret-rbac-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoCluster Tenant Secret RBAC Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openbaocluster-upgrade-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoCluster Upgrade Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openbaocluster-backup-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoCluster Backup Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openbaorestore-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoRestore Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openbaotenant-provisioning-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenBaoTenant Provisioning Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structured-audit-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structured Audit Events
       
     </span>
   </a>
@@ -4423,18 +4589,22 @@
   
 
 
-<h1 id="status-conditions-events-reference">Status Conditions &amp; Events Reference<a class="headerlink" href="#status-conditions-events-reference" title="Permanent link">&para;</a></h1>
-<p>Use this document to interpret CRD status and controller-emitted events.</p>
-<h2 id="1-inspect-status-and-events">1. Inspect Status and Events<a class="headerlink" href="#1-inspect-status-and-events" title="Permanent link">&para;</a></h2>
-<p>Check CRD conditions:</p>
+<h1 id="status-conditions-and-events">Status Conditions and Events<a class="headerlink" href="#status-conditions-and-events" title="Permanent link">&para;</a></h1>
+<p>Use this reference to interpret status conditions and lifecycle events emitted by the OpenBao Operator.</p>
+<h2 id="inspect-resources">Inspect Resources<a class="headerlink" href="#inspect-resources" title="Permanent link">&para;</a></h2>
+<p>Run these commands to inspect CRD conditions:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>get<span class="w"> </span>openbaorestore<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>get<span class="w"> </span>openbaotenant<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
 </span></code></pre></div>
-<p>Check recent events:</p>
+<div class="admonition tip">
+<p class="admonition-title">Fastest Timeline View</p>
+<p>Run <code>kubectl -n &lt;ns&gt; describe openbaocluster &lt;name&gt;</code>, <code>kubectl -n &lt;ns&gt; describe openbaorestore &lt;name&gt;</code>, or <code>kubectl -n &lt;ns&gt; describe openbaotenant &lt;name&gt;</code> to view status and recent events together.</p>
+</div>
+<p>Run this command to inspect recent namespace events:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>--sort-by<span class="o">=</span>.lastTimestamp
 </span></code></pre></div>
-<h2 id="2-openbaocluster-conditions">2. OpenBaoCluster Conditions<a class="headerlink" href="#2-openbaocluster-conditions" title="Permanent link">&para;</a></h2>
+<h2 id="openbaocluster-conditions">OpenBaoCluster Conditions<a class="headerlink" href="#openbaocluster-conditions" title="Permanent link">&para;</a></h2>
 <p>Condition types defined in <code>api/v1alpha1</code>:</p>
 <table>
 <thead>
@@ -4512,7 +4682,7 @@
 </tr>
 </tbody>
 </table>
-<h2 id="3-openbaorestore-conditions">3. OpenBaoRestore Conditions<a class="headerlink" href="#3-openbaorestore-conditions" title="Permanent link">&para;</a></h2>
+<h2 id="openbaorestore-conditions">OpenBaoRestore Conditions<a class="headerlink" href="#openbaorestore-conditions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -4534,7 +4704,7 @@
 </tr>
 </tbody>
 </table>
-<h2 id="4-openbaotenant-conditions">4. OpenBaoTenant Conditions<a class="headerlink" href="#4-openbaotenant-conditions" title="Permanent link">&para;</a></h2>
+<h2 id="openbaotenant-conditions">OpenBaoTenant Conditions<a class="headerlink" href="#openbaotenant-conditions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -4551,12 +4721,19 @@
 </tr>
 </tbody>
 </table>
-<h2 id="5-common-kubernetes-events">5. Common Kubernetes Events<a class="headerlink" href="#5-common-kubernetes-events" title="Permanent link">&para;</a></h2>
-<p>The operator emits Kubernetes Events for selected actions:</p>
+<h2 id="kubernetes-events">Kubernetes Events<a class="headerlink" href="#kubernetes-events" title="Permanent link">&para;</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Event Scope</p>
+<p>The operator emits lifecycle events on parent custom resources only. <code>OpenBaoCluster</code> receives cluster lifecycle, init/bootstrap, upgrade, backup, and tenant Secret RBAC sync events. <code>OpenBaoRestore</code> receives restore lifecycle events. <code>OpenBaoTenant</code> receives tenant provisioning lifecycle events. Jobs do not receive the lifecycle events listed here.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Event Types</p>
+<p>Expect <code>Normal</code> events for routine progression and accepted operator input. Expect <code>Warning</code> events for failures, contention, overrides, and other states that need attention.</p>
+</div>
+<h3 id="openbaocluster-safety-and-maintenance-events">OpenBaoCluster Safety and Maintenance Events<a class="headerlink" href="#openbaocluster-safety-and-maintenance-events" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
-<th style="text-align: left;">Resource</th>
 <th style="text-align: left;">Type</th>
 <th style="text-align: left;">Reason</th>
 <th style="text-align: left;">Notes</th>
@@ -4564,64 +4741,307 @@
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><code>OpenBaoCluster</code></td>
 <td style="text-align: left;"><code>Warning</code></td>
 <td style="text-align: left;"><code>ProfileNotSet</code></td>
 <td style="text-align: left;"><code>spec.profile</code> missing; reconciliation blocked.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>OpenBaoCluster</code></td>
 <td style="text-align: left;"><code>Warning</code></td>
 <td style="text-align: left;"><code>DevelopmentProfile</code></td>
 <td style="text-align: left;">Development profile warning for production.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>OpenBaoCluster</code></td>
 <td style="text-align: left;"><code>Warning</code></td>
 <td style="text-align: left;"><code>StaticUnsealInUse</code></td>
 <td style="text-align: left;">Static unseal warning.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>OpenBaoCluster</code></td>
 <td style="text-align: left;"><code>Warning</code></td>
 <td style="text-align: left;"><code>RootTokenStored</code></td>
-<td style="text-align: left;">SelfInit disabled; root token secret warning.</td>
+<td style="text-align: left;">Self-init is disabled and the operator stored the root token Secret.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>OpenBaoCluster</code></td>
 <td style="text-align: left;"><code>Warning</code></td>
-<td style="text-align: left;">Image verification reasons</td>
-<td style="text-align: left;">For warn-policy image verification failures (for example <code>ImageVerificationFailed</code>).</td>
+<td style="text-align: left;"><code>ImageVerificationFailed</code> and related reasons</td>
+<td style="text-align: left;">Warn-policy image verification failures.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>OpenBaoCluster</code></td>
 <td style="text-align: left;"><code>Normal</code></td>
 <td style="text-align: left;"><code>PVCResize</code></td>
 <td style="text-align: left;">PVC expansion started.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>OpenBaoCluster</code></td>
 <td style="text-align: left;"><code>Normal</code></td>
 <td style="text-align: left;"><code>PVCResizeLeaderStepDown</code></td>
 <td style="text-align: left;">Leader step-down for resize restart path.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>OpenBaoCluster</code></td>
 <td style="text-align: left;"><code>Normal</code></td>
 <td style="text-align: left;"><code>PVCResizePodRestart</code></td>
 <td style="text-align: left;">Pod restart to complete filesystem resize.</td>
 </tr>
+</tbody>
+</table>
+<h3 id="openbaocluster-init-and-bootstrap-events">OpenBaoCluster Init and Bootstrap Events<a class="headerlink" href="#openbaocluster-init-and-bootstrap-events" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
 <tr>
-<td style="text-align: left;"><code>OpenBaoRestore</code></td>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Reason</th>
+<th style="text-align: left;">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>InitStarted</code></td>
+<td style="text-align: left;">Self-init or operator-driven initialization started or is still in progress.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>InitCompleted</code></td>
+<td style="text-align: left;">Cluster initialization completed successfully.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>InitFailed</code></td>
+<td style="text-align: left;">Operator-driven initialization failed.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="openbaocluster-tenant-secret-rbac-events">OpenBaoCluster Tenant Secret RBAC Events<a class="headerlink" href="#openbaocluster-tenant-secret-rbac-events" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Reason</th>
+<th style="text-align: left;">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>TenantSecretRBACSynchronized</code></td>
+<td style="text-align: left;">Tenant Secret RBAC allowlists were synchronized for the namespace.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="openbaocluster-upgrade-events">OpenBaoCluster Upgrade Events<a class="headerlink" href="#openbaocluster-upgrade-events" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Reason</th>
+<th style="text-align: left;">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>UpgradeStarted</code></td>
+<td style="text-align: left;">Upgrade orchestration started.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>PreUpgradeSnapshotJobCreated</code></td>
+<td style="text-align: left;">Pre-upgrade snapshot Job created.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>PreUpgradeSnapshotCompleted</code></td>
+<td style="text-align: left;">Pre-upgrade snapshot completed successfully.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>PreUpgradeSnapshotFailed</code></td>
+<td style="text-align: left;">Pre-upgrade snapshot failed and upgrade is blocked.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>RollingRetryRequested</code></td>
+<td style="text-align: left;">Manual retry requested for a failed rolling upgrade.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>RollingRetryAccepted</code></td>
+<td style="text-align: left;">Failed rolling upgrade state cleared and retry resumed.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>BlueGreenHoldEntered</code></td>
+<td style="text-align: left;">Blue/green upgrade is waiting for manual promotion approval.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>BlueGreenPromotionApproved</code></td>
+<td style="text-align: left;">Promotion approval observed and promotion started.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>UpgradeComplete</code></td>
+<td style="text-align: left;">Upgrade finished successfully.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>UpgradeFailed</code></td>
+<td style="text-align: left;">Upgrade failed and operator marked the upgrade as failed.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>RollbackStarted</code></td>
+<td style="text-align: left;">Blue/green rollback started.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>BreakGlassEntered</code></td>
+<td style="text-align: left;">Blue/green rollback entered break-glass mode.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>BreakGlassAcknowledged</code></td>
+<td style="text-align: left;">Break-glass mode was acknowledged and automation may resume.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>OperationLockBlocked</code></td>
+<td style="text-align: left;">Upgrade is waiting for another cluster operation to release the lock.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="openbaocluster-backup-events">OpenBaoCluster Backup Events<a class="headerlink" href="#openbaocluster-backup-events" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Reason</th>
+<th style="text-align: left;">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>BackupManualTriggerAccepted</code></td>
+<td style="text-align: left;">Manual backup trigger accepted.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>BackupSkipped</code></td>
+<td style="text-align: left;">Due or manually requested backup intentionally skipped.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>BackupStarted</code></td>
+<td style="text-align: left;">Backup attempt started after lock acquisition.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>BackupJobCreated</code></td>
+<td style="text-align: left;">Backup Job created.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>BackupCompleted</code></td>
+<td style="text-align: left;">Backup completed successfully.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>BackupFailed</code></td>
+<td style="text-align: left;">Backup Job failed.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>OperationLockBlocked</code></td>
+<td style="text-align: left;">Backup is waiting for another cluster operation to release the lock.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="openbaorestore-events">OpenBaoRestore Events<a class="headerlink" href="#openbaorestore-events" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Reason</th>
+<th style="text-align: left;">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>RestoreValidationStarted</code></td>
+<td style="text-align: left;">Restore validation started.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>RestoreStarted</code></td>
+<td style="text-align: left;">Restore execution started after validation.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>RestoreJobCreated</code></td>
+<td style="text-align: left;">Restore Job created.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>RestoreCompleted</code></td>
+<td style="text-align: left;">Restore completed successfully.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>RestoreFailed</code></td>
+<td style="text-align: left;">Restore failed.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>OperationLockBlocked</code></td>
+<td style="text-align: left;">Restore is waiting for another cluster operation to release the lock.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>OperationLockLost</code></td>
+<td style="text-align: left;">Restore lost the cluster operation lock while running.</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>Warning</code></td>
 <td style="text-align: left;"><code>OperationLockOverride</code></td>
 <td style="text-align: left;">Lock override requested with break-glass restore.</td>
 </tr>
 </tbody>
 </table>
-<h2 id="6-structured-audit-events-controller-logs">6. Structured Audit Events (Controller Logs)<a class="headerlink" href="#6-structured-audit-events-controller-logs" title="Permanent link">&para;</a></h2>
-<p>In addition to Kubernetes Events, controllers emit structured audit events to logs (for example <code>UpgradeStarted</code>, <code>UpgradeFailed</code>, <code>BackupJobCreated</code>, <code>RestoreCompleted</code>, <code>TenantRBACProvisioned</code>).</p>
-<p>Use centralized logs to query these high-signal lifecycle events.</p>
+<h3 id="openbaotenant-provisioning-events">OpenBaoTenant Provisioning Events<a class="headerlink" href="#openbaotenant-provisioning-events" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Reason</th>
+<th style="text-align: left;">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>TenantProvisioned</code></td>
+<td style="text-align: left;">Tenant namespace RBAC was provisioned successfully.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Normal</code></td>
+<td style="text-align: left;"><code>TenantRBACCleaned</code></td>
+<td style="text-align: left;">Tenant namespace RBAC was cleaned up during deletion.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>TenantProvisioningBlocked</code></td>
+<td style="text-align: left;">Provisioning is blocked by guardrails, missing prerequisites, or dependency readiness checks.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Warning</code></td>
+<td style="text-align: left;"><code>TenantProvisioningFailed</code></td>
+<td style="text-align: left;">Provisioning failed while applying tenant RBAC.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="structured-audit-events">Structured Audit Events<a class="headerlink" href="#structured-audit-events" title="Permanent link">&para;</a></h2>
+<p>In addition to Kubernetes Events, controllers emit structured audit events to logs, for example <code>UpgradeStarted</code>, <code>UpgradeFailed</code>, <code>BackupJobCreated</code>, <code>RestoreCompleted</code>, and <code>TenantRBACProvisioned</code>.</p>
+<p>Query centralized logs for these high-signal lifecycle events.</p>
 <div class="admonition note">
 <p class="admonition-title">Stability</p>
 <p>Condition <strong>types</strong> are part of the API surface. Reason and event values may expand over time as new scenarios are added.</p>
