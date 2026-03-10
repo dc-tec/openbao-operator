@@ -65,6 +65,25 @@ func TestDetectUpgradeState(t *testing.T) {
 			wantResumeUpgrade: false,
 		},
 		{
+			name: "stale retry request is ignored when no failed upgrade is waiting",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version: "2.5.0",
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Requests: &openbaov1alpha1.UpgradeRequestConfig{
+							Retry: "retry-1",
+						},
+					},
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					CurrentVersion: "2.4.0",
+					Initialized:    true,
+				},
+			},
+			wantUpgradeNeeded: true,
+			wantResumeUpgrade: false,
+		},
+		{
 			name: "resume upgrade - in progress",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -105,15 +124,15 @@ func TestDetectUpgradeState(t *testing.T) {
 			wantResumeUpgrade: false,
 		},
 		{
-			name: "failed upgrade resumes when retry annotation is set",
+			name: "failed upgrade resumes when retry request is set",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						constants.AnnotationRetryRollingUpgrade: "retry-1",
-					},
-				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Version: "2.5.0",
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Requests: &openbaov1alpha1.UpgradeRequestConfig{
+							Retry: "retry-1",
+						},
+					},
 				},
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					CurrentVersion: "2.4.0",
@@ -192,6 +211,11 @@ func TestDetectUpgradeState(t *testing.T) {
 			}
 			if gotResumeUpgrade != tt.wantResumeUpgrade {
 				t.Errorf("detectUpgradeState() resumeUpgrade = %v, want %v", gotResumeUpgrade, tt.wantResumeUpgrade)
+			}
+			if tt.name == "stale retry request is ignored when no failed upgrade is waiting" {
+				if tt.cluster.Status.UpgradeRequests == nil || tt.cluster.Status.UpgradeRequests.LastHandledRetry != "retry-1" {
+					t.Fatalf("LastHandledRetry = %+v, want retry-1 to be recorded as handled", tt.cluster.Status.UpgradeRequests)
+				}
 			}
 		})
 	}

@@ -83,6 +83,7 @@ func PatchAdminOpsOwnedFields(
 	}
 
 	if reflect.DeepEqual(original.Status.BlueGreen, cluster.Status.BlueGreen) &&
+		reflect.DeepEqual(original.Status.UpgradeRequests, cluster.Status.UpgradeRequests) &&
 		reflect.DeepEqual(original.Status.Backup, cluster.Status.Backup) &&
 		reflect.DeepEqual(original.Status.BreakGlass, cluster.Status.BreakGlass) &&
 		reflect.DeepEqual(original.Status.AdminOps, cluster.Status.AdminOps) {
@@ -104,10 +105,11 @@ func PatchAdminOpsOwnedFields(
 			Namespace: cluster.Namespace,
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			BlueGreen:  cluster.Status.BlueGreen,
-			Backup:     cluster.Status.Backup,
-			BreakGlass: cluster.Status.BreakGlass,
-			AdminOps:   adminOps,
+			BlueGreen:       cluster.Status.BlueGreen,
+			UpgradeRequests: cluster.Status.UpgradeRequests,
+			Backup:          cluster.Status.Backup,
+			BreakGlass:      cluster.Status.BreakGlass,
+			AdminOps:        adminOps,
 		},
 	}
 

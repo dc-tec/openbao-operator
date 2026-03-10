@@ -20,7 +20,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
-func TestRollingRetryToken_TableDriven(t *testing.T) {
+func TestRetryRequestPending_TableDriven(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -34,40 +34,69 @@ func TestRollingRetryToken_TableDriven(t *testing.T) {
 			want:    false,
 		},
 		{
-			name: "missing annotations",
+			name: "missing upgrade request config",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{},
 			},
 			want: false,
 		},
 		{
-			name: "empty annotation value",
+			name: "empty request value",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						constants.AnnotationRetryRollingUpgrade: "",
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Requests: &openbaov1alpha1.UpgradeRequestConfig{
+							Retry: "",
+						},
 					},
 				},
 			},
 			want: false,
 		},
 		{
-			name: "whitespace annotation value",
+			name: "whitespace request value",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						constants.AnnotationRetryRollingUpgrade: "   ",
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Requests: &openbaov1alpha1.UpgradeRequestConfig{
+							Retry: "   ",
+						},
 					},
 				},
 			},
 			want: false,
 		},
 		{
-			name: "non-empty annotation value",
+			name: "already handled request value",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						constants.AnnotationRetryRollingUpgrade: "retry-1",
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Requests: &openbaov1alpha1.UpgradeRequestConfig{
+							Retry: "retry-1",
+						},
+					},
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					UpgradeRequests: &openbaov1alpha1.UpgradeRequestStatus{
+						LastHandledRetry: "retry-1",
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "new request value",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Requests: &openbaov1alpha1.UpgradeRequestConfig{
+							Retry: "retry-2",
+						},
+					},
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					UpgradeRequests: &openbaov1alpha1.UpgradeRequestStatus{
+						LastHandledRetry: "retry-1",
 					},
 				},
 			},
@@ -78,8 +107,8 @@ func TestRollingRetryToken_TableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := rollingRetryToken(tt.cluster); got != tt.want {
-				t.Fatalf("rollingRetryToken()=%v, want %v", got, tt.want)
+			if got := upgrade.RetryRequestPending(tt.cluster); got != tt.want {
+				t.Fatalf("RetryRequestPending()=%v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -222,7 +251,7 @@ func TestPrepareFailedUpgradeRetry_GuardConditions(t *testing.T) {
 			},
 		},
 		{
-			name: "missing retry token",
+			name: "missing retry request",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{Version: "2.5.0"},
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
@@ -302,12 +331,14 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
 					Namespace: "default",
-					Annotations: map[string]string{
-						constants.AnnotationRetryRollingUpgrade: "retry-now",
-					},
 				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Version: "2.5.0",
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Requests: &openbaov1alpha1.UpgradeRequestConfig{
+							Retry: "retry-now",
+						},
+					},
 				},
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					Upgrade: &openbaov1alpha1.UpgradeProgress{
@@ -425,21 +456,17 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 			if cluster.Status.Upgrade.CurrentPartition != 2 {
 				t.Fatalf("CurrentPartition=%d, want 2", cluster.Status.Upgrade.CurrentPartition)
 			}
-
-			if cluster.Annotations != nil {
-				if _, exists := cluster.Annotations[constants.AnnotationRetryRollingUpgrade]; exists {
-					t.Fatalf("retry annotation still present on in-memory cluster")
-				}
+			gotHandledRetry := ""
+			if cluster.Status.UpgradeRequests != nil {
+				gotHandledRetry = cluster.Status.UpgradeRequests.LastHandledRetry
+			}
+			if gotHandledRetry != "retry-now" {
+				t.Fatalf("LastHandledRetry=%q, want retry-now", gotHandledRetry)
 			}
 
 			storedCluster := &openbaov1alpha1.OpenBaoCluster{}
 			if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, storedCluster); err != nil {
 				t.Fatalf("Get(cluster) error: %v", err)
-			}
-			if storedCluster.Annotations != nil {
-				if _, exists := storedCluster.Annotations[constants.AnnotationRetryRollingUpgrade]; exists {
-					t.Fatalf("retry annotation still present on stored cluster")
-				}
 			}
 			if storedCluster.Status.Upgrade == nil {
 				t.Fatalf("stored Upgrade=nil, want non-nil")
@@ -452,6 +479,13 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 			}
 			if !storedCluster.Status.Upgrade.StartedAt.After(startedAt.Time) {
 				t.Fatalf("stored StartedAt=%v, want time after %v", storedCluster.Status.Upgrade.StartedAt, startedAt)
+			}
+			storedHandledRetry := ""
+			if storedCluster.Status.UpgradeRequests != nil {
+				storedHandledRetry = storedCluster.Status.UpgradeRequests.LastHandledRetry
+			}
+			if storedHandledRetry != "retry-now" {
+				t.Fatalf("stored LastHandledRetry=%q, want retry-now", storedHandledRetry)
 			}
 
 			deletedJob := &batchv1.Job{}

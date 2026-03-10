@@ -138,44 +138,16 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 			return string(cluster.Status.BlueGreen.Phase)
 		}())
 
-	// Break-glass escape hatch: allow operators to force a rollback of the
-	// current blue/green upgrade via annotation. This is evaluated early so
-	// that a stuck state machine can be unwound deterministically.
-	if cluster.Annotations != nil {
-		if value, ok := cluster.Annotations[AnnotationForceRollback]; ok && value == "true" {
-			if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
-				// If rollback is already in progress, do not re-trigger rollback on every reconcile.
-				// Allow the normal state machine to continue creating/observing rollback Jobs.
-				if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollingBack ||
-					cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollbackCleanup {
-					logger.Info("Force rollback annotation detected during rollback; continuing rollback state machine",
-						"annotation", AnnotationForceRollback,
-						"phase", cluster.Status.BlueGreen.Phase)
-				} else {
-					logger.Info("Force rollback annotation detected, initiating rollback",
-						"annotation", AnnotationForceRollback,
-						"phase", cluster.Status.BlueGreen.Phase)
-
-					// If there is no Green revision yet, abort behaves more safely than rollback.
-					if cluster.Status.BlueGreen.GreenRevision == "" {
-						if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
-							return recon.Result{}, fmt.Errorf("failed to abort upgrade via force-rollback annotation: %w", err)
-						}
-						return recon.Result{}, nil
-					}
-
-					return m.triggerRollback(logger, cluster, "manual force-rollback annotation")
-				}
-			}
-		}
-	}
-
 	// Use spec image (infra reconciler handles verification)
 	verifiedImageDigest := cluster.Spec.Image
 
 	handled, result := m.handleBreakGlassAck(logger, cluster)
 	if handled {
 		return result, nil
+	}
+
+	if handled, result, err := m.handleManualRollbackRequest(ctx, logger, cluster); handled || err != nil {
+		return result, err
 	}
 
 	return m.reconcileBlueGreen(ctx, logger, cluster, verifiedImageDigest)
@@ -219,6 +191,17 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 		return requeueStandard(), nil
 	}
 
+	if upgrade.PromoteRequestPending(cluster) &&
+		(cluster.Status.BlueGreen == nil ||
+			cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseSyncing ||
+			!cluster.Status.BlueGreen.ManualPromotionRequired) {
+		promoteRequest := upgrade.PromoteRequestValue(cluster)
+		upgrade.MarkPromoteRequestHandled(&cluster.Status, promoteRequest)
+		logger.Info("Ignoring promote request because no held blue/green upgrade is waiting for approval",
+			"promoteRequest", promoteRequest,
+			"promoteRequestField", upgrade.RequestPromoteFieldPath)
+	}
+
 	upgradeActive := cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle
 	upgradeNeeded := cluster.Status.CurrentVersion != "" && cluster.Spec.Version != cluster.Status.CurrentVersion
 
@@ -253,6 +236,51 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 
 	result, err = m.executeStateMachine(ctx, logger, cluster, verifiedImageDigest)
 	return result, err
+}
+
+func (m *Manager) handleManualRollbackRequest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, recon.Result, error) {
+	if !upgrade.RollbackRequestPending(cluster) {
+		return false, recon.Result{}, nil
+	}
+
+	rollbackRequest := upgrade.RollbackRequestValue(cluster)
+
+	if cluster.Status.BlueGreen == nil || cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle {
+		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
+		logger.Info("Ignoring rollback request because no blue/green upgrade is active",
+			"rollbackRequest", rollbackRequest,
+			"rollbackRequestField", upgrade.RequestRollbackFieldPath)
+		return false, recon.Result{}, nil
+	}
+
+	if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollingBack ||
+		cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollbackCleanup {
+		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
+		logger.Info("Ignoring rollback request because rollback is already in progress",
+			"rollbackRequest", rollbackRequest,
+			"phase", cluster.Status.BlueGreen.Phase,
+			"rollbackRequestField", upgrade.RequestRollbackFieldPath)
+		return false, recon.Result{}, nil
+	}
+
+	logger.Info("Manual rollback requested",
+		"rollbackRequest", rollbackRequest,
+		"phase", cluster.Status.BlueGreen.Phase,
+		"rollbackRequestField", upgrade.RequestRollbackFieldPath)
+
+	if cluster.Status.BlueGreen.GreenRevision == "" {
+		if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
+			return false, recon.Result{}, fmt.Errorf("failed to abort upgrade via %s: %w", upgrade.RequestRollbackFieldPath, err)
+		}
+		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
+		return true, recon.Result{}, nil
+	}
+
+	result, err := m.triggerRollback(logger, cluster, fmt.Sprintf("manual rollback request via %s", upgrade.RequestRollbackFieldPath))
+	if err == nil {
+		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
+	}
+	return true, result, err
 }
 
 func (m *Manager) finalizeBlueGreenMetrics(metrics *upgrade.Metrics, strategy string, cluster *openbaov1alpha1.OpenBaoCluster, initialPhase openbaov1alpha1.BlueGreenPhase, initialRollbackSet bool) {
@@ -489,6 +517,7 @@ func resetBlueGreenTransientState(status *openbaov1alpha1.BlueGreenStatus) {
 	}
 	status.Phase = openbaov1alpha1.PhaseIdle
 	status.GreenRevision = ""
+	status.ManualPromotionRequired = false
 	status.StartTime = nil
 	status.JobFailureCount = 0
 	status.LastJobFailure = ""

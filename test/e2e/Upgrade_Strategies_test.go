@@ -1055,7 +1055,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			dumpRollingUpgradeDiagnostics(ctx, admin, tenantNamespace, recoveryCluster.Name)
 		})
 
-		It("recovers a failed rolling upgrade after the retry annotation clears stale state", func() {
+		It("recovers a failed rolling upgrade after a retry request clears stale state", func() {
 			By("Triggering a rolling upgrade with a bad non-semver image tag")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
@@ -1109,24 +1109,25 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 				original := updated.DeepCopy()
 				updated.Spec.Image = targetImage
-				if updated.Annotations == nil {
-					updated.Annotations = map[string]string{}
+				if updated.Spec.Upgrade == nil {
+					updated.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{}
 				}
-				updated.Annotations[constants.AnnotationRetryRollingUpgrade] = retryToken
+				if updated.Spec.Upgrade.Requests == nil {
+					updated.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{}
+				}
+				updated.Spec.Upgrade.Requests.Retry = retryToken
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 			Expect(tenantFW.TriggerReconcile(ctx, recoveryCluster.Name)).To(Succeed())
 
-			By("Verifying retry preparation clears failed status, clears the annotation, and removes the stale step-down job")
+			By("Verifying retry preparation clears failed status, records the handled request, and removes the stale step-down job")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
 				g.Expect(updated.Status.Upgrade.LastErrorReason).To(BeEmpty())
-				if updated.Annotations != nil {
-					_, exists := updated.Annotations[constants.AnnotationRetryRollingUpgrade]
-					g.Expect(exists).To(BeFalse(), "retry annotation should be cleared after preparation")
-				}
+				g.Expect(updated.Status.UpgradeRequests).NotTo(BeNil())
+				g.Expect(updated.Status.UpgradeRequests.LastHandledRetry).To(Equal(retryToken))
 
 				job := &batchv1.Job{}
 				err := admin.Get(ctx, types.NamespacedName{Name: staleJob.Name, Namespace: tenantNamespace}, job)
@@ -1972,7 +1973,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(jobSucceeded(hookJob)).To(BeTrue(), "pre-promotion hook should succeed before promotion is approved")
 			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
-			By("Consistently holding in Syncing while autoPromote remains disabled")
+			By("Consistently holding in Syncing while no promote request is set")
 			Consistently(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: gatedCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
@@ -1981,12 +1982,20 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
 			}, time.Minute, 10*time.Second).Should(Succeed())
 
-			By("Approving promotion by enabling autoPromote")
+			promoteToken := time.Now().UTC().Format(time.RFC3339Nano)
+
+			By("Approving promotion via spec.upgrade.requests.promote")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: gatedCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 				original := updated.DeepCopy()
-				updated.Spec.Upgrade.BlueGreen.AutoPromote = true
+				if updated.Spec.Upgrade == nil {
+					updated.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{}
+				}
+				if updated.Spec.Upgrade.Requests == nil {
+					updated.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{}
+				}
+				updated.Spec.Upgrade.Requests.Promote = promoteToken
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
@@ -1998,6 +2007,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
 				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
 				g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
+				g.Expect(updated.Status.UpgradeRequests).NotTo(BeNil())
+				g.Expect(updated.Status.UpgradeRequests.LastHandledPromote).To(Equal(promoteToken))
 			}, 30*time.Minute, 10*time.Second).Should(Succeed())
 		})
 	})
@@ -2490,7 +2501,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			By("Waiting for Syncing hold (autoPromote=false)")
+			By("Waiting for Syncing hold before sending a promote request")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
@@ -2515,15 +2526,28 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(jobSucceeded(waitSyncedJob)).To(BeTrue(), "wait-green-synced job should succeed before promoting")
 			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
-			By("Introducing a realistic temporary auth misconfiguration right before promotion")
+			promoteToken := time.Now().UTC().Format(time.RFC3339Nano)
+
+			By("Introducing a realistic temporary auth misconfiguration and sending a promote request")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 				original := updated.DeepCopy()
 				updated.Spec.Upgrade.JWTAuthRole = invalidUpgradeJWTAuthRole
-				updated.Spec.Upgrade.BlueGreen.AutoPromote = true
+				if updated.Spec.Upgrade.Requests == nil {
+					updated.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{}
+				}
+				updated.Spec.Upgrade.Requests.Promote = promoteToken
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the promote request is recorded before promotion starts")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.UpgradeRequests).NotTo(BeNil())
+				g.Expect(updated.Status.UpgradeRequests.LastHandledPromote).To(Equal(promoteToken))
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
 			By("Verifying promotion executor job fails")
 			Eventually(func(g Gomega) {
@@ -2781,10 +2805,13 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 
 				original := updated.DeepCopy()
-				if updated.Annotations == nil {
-					updated.Annotations = make(map[string]string)
+				if updated.Spec.Upgrade == nil {
+					updated.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{}
 				}
-				updated.Annotations[constants.AnnotationForceRollback] = "true"
+				if updated.Spec.Upgrade.Requests == nil {
+					updated.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{}
+				}
+				updated.Spec.Upgrade.Requests.Rollback = time.Now().UTC().Format(time.RFC3339Nano)
 
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
@@ -2796,22 +2823,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
 				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseRollingBack))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-
-			By("Clearing force-rollback annotation (one-shot trigger)")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-
-				original := updated.DeepCopy()
-				annotations := updated.GetAnnotations()
-				if annotations == nil {
-					return
-				}
-				delete(annotations, constants.AnnotationForceRollback)
-				updated.SetAnnotations(annotations)
-
-				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			var rollbackRepairJobName string
 			By("Finding the rollback consensus repair job")

@@ -10,7 +10,11 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+)
+
+const (
+	upgradeRequestRetryFieldPath   = "spec.upgrade.requests.retry"
+	upgradeRequestPromoteFieldPath = "spec.upgrade.requests.promote"
 )
 
 func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionReady bool, admissionSummary string) (metav1.ConditionStatus, string, string) {
@@ -232,11 +236,11 @@ func buildRollingUpgradeFailedMessage(cluster *openbaov1alpha1.OpenBaoCluster) s
 	}
 
 	return fmt.Sprintf(
-		"Rolling upgrade from %s to %s is paused. %s Next step: set annotation %s to a non-empty value on this OpenBaoCluster to retry.",
+		"Rolling upgrade from %s to %s is paused. %s Next step: set %s to a new non-empty value on this OpenBaoCluster to retry.",
 		from,
 		to,
 		detail,
-		constants.AnnotationRetryRollingUpgrade,
+		upgradeRequestRetryFieldPath,
 	)
 }
 
@@ -267,10 +271,11 @@ func buildBlueGreenUpgradeMessage(cluster *openbaov1alpha1.OpenBaoCluster) strin
 	case openbaov1alpha1.PhaseSyncing:
 		if manualApprovalRequired(cluster) {
 			return fmt.Sprintf(
-				"Blue/green upgrade from %s to %s is syncing Green revision %s. Manual promotion is required because spec.upgrade.blueGreen.autoPromote=false. Next step: set spec.upgrade.blueGreen.autoPromote=true when you want the operator to promote Green.",
+				"Blue/green upgrade from %s to %s is syncing Green revision %s. Manual promotion is required for this upgrade. Next step: set %s to a new non-empty value when you want the operator to promote Green.",
 				from,
 				to,
 				greenRevision,
+				upgradeRequestPromoteFieldPath,
 			)
 		}
 		return fmt.Sprintf("Blue/green upgrade from %s to %s is verifying Green revision %s before promotion.", from, to, greenRevision)
@@ -319,9 +324,8 @@ func blueGreenVersionRange(cluster *openbaov1alpha1.OpenBaoCluster) (string, str
 
 func manualApprovalRequired(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 	return cluster != nil &&
-		cluster.Spec.Upgrade != nil &&
-		cluster.Spec.Upgrade.BlueGreen != nil &&
-		!cluster.Spec.Upgrade.BlueGreen.AutoPromote
+		cluster.Status.BlueGreen != nil &&
+		cluster.Status.BlueGreen.ManualPromotionRequired
 }
 
 func rollbackReasonSentence(reason string) string {

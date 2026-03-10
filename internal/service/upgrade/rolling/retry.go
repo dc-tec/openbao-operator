@@ -19,15 +19,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
-func rollingRetryToken(cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	if cluster == nil || cluster.Annotations == nil {
-		return false
-	}
-
-	value := strings.TrimSpace(cluster.Annotations[constants.AnnotationRetryRollingUpgrade])
-	return value != ""
-}
-
 func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
 	if cluster == nil || cluster.Status.Upgrade == nil {
 		return false, nil
@@ -41,11 +32,13 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 		return false, nil
 	}
 
-	if !rollingRetryToken(cluster) {
+	retryRequest := upgrade.RetryRequestValue(cluster)
+	if !upgrade.RetryRequestPending(cluster) {
 		return false, nil
 	}
 
 	logger.Info("Preparing retry for failed rolling upgrade",
+		"retryRequest", retryRequest,
 		"targetVersion", cluster.Status.Upgrade.TargetVersion,
 		"currentPartition", cluster.Status.Upgrade.CurrentPartition)
 	m.emitNormalEvent(cluster, upgrade.ReasonRollingRetryRequested, "Rolling upgrade retry requested for target version %s", cluster.Status.Upgrade.TargetVersion)
@@ -56,12 +49,7 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 	if err := m.resetTargetPodForRetry(ctx, logger, cluster); err != nil {
 		return false, err
 	}
-	if err := m.clearRollingRetryAnnotation(ctx, cluster); err != nil {
-		return false, err
-	}
 
-	// Re-read cluster after metadata patch to avoid stale-resource conflicts
-	// when persisting status updates in a concurrent reconcile environment.
 	latest := &openbaov1alpha1.OpenBaoCluster{}
 	if err := m.client.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, latest); err != nil {
 		return false, fmt.Errorf("failed to refresh cluster before retry status patch: %w", err)
@@ -70,18 +58,18 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 		return false, nil
 	}
 
-	if err := m.patchRetryStatusMerge(ctx, latest); err != nil {
+	if err := m.patchRetryStatusMerge(ctx, latest, retryRequest); err != nil {
 		return false, fmt.Errorf("failed to clear failed upgrade state for retry: %w", err)
 	}
 	cluster.Status.Upgrade = latest.Status.Upgrade
-	cluster.Annotations = latest.Annotations
+	upgrade.MarkRetryRequestHandled(&cluster.Status, retryRequest)
 
 	logger.Info("Cleared failed rolling upgrade state and resumed upgrade")
 	m.emitNormalEvent(cluster, upgrade.ReasonRollingRetryAccepted, "Rolling upgrade retry accepted for target version %s", latest.Status.Upgrade.TargetVersion)
 	return true, nil
 }
 
-func (m *Manager) patchRetryStatusMerge(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) patchRetryStatusMerge(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, retryRequest string) error {
 	current := &openbaov1alpha1.OpenBaoCluster{}
 	key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
 	if err := m.client.Get(ctx, key, current); err != nil {
@@ -94,32 +82,13 @@ func (m *Manager) patchRetryStatusMerge(ctx context.Context, cluster *openbaov1a
 
 	desired := current.DeepCopy()
 	clearUpgradeFailureForRetry(desired)
+	upgrade.MarkRetryRequestHandled(&desired.Status, retryRequest)
 	if err := m.client.Status().Patch(ctx, desired, client.MergeFrom(current)); err != nil {
 		return fmt.Errorf("failed to patch cleared retry status: %w", err)
 	}
 
 	cluster.Status.Upgrade = desired.Status.Upgrade
-	return nil
-}
-
-func (m *Manager) clearRollingRetryAnnotation(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	if cluster == nil || cluster.Annotations == nil {
-		return nil
-	}
-	if _, exists := cluster.Annotations[constants.AnnotationRetryRollingUpgrade]; !exists {
-		return nil
-	}
-
-	original := cluster.DeepCopy()
-	delete(cluster.Annotations, constants.AnnotationRetryRollingUpgrade)
-	if len(cluster.Annotations) == 0 {
-		cluster.Annotations = nil
-	}
-
-	if err := m.client.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
-		return fmt.Errorf("failed to clear %s annotation: %w", constants.AnnotationRetryRollingUpgrade, err)
-	}
-
+	cluster.Status.UpgradeRequests = desired.Status.UpgradeRequests
 	return nil
 }
 

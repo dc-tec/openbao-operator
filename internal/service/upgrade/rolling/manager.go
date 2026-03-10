@@ -27,8 +27,8 @@ const (
 )
 
 var (
-	// ErrNoUpgradeToken indicates that no suitable upgrade token is configured.
-	ErrNoUpgradeToken = errors.New("no upgrade token configured: either spec.upgrade.jwtAuthRole or spec.upgrade.tokenSecretRef must be set")
+	// ErrNoUpgradeToken indicates that no suitable upgrade JWT role is configured.
+	ErrNoUpgradeToken = errors.New("no upgrade JWT role configured: set spec.upgrade.jwtAuthRole or enable spec.selfInit.oidc.enabled")
 )
 
 // Manager reconciles version and Raft-aware upgrade behavior for an OpenBaoCluster.

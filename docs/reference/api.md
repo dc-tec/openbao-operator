@@ -287,7 +287,7 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
 
     | Field | Description | Default | Validation |
     | --- | --- | --- | --- |
-    | `autoPromote` _boolean_ | AutoPromote controls whether the operator automatically switches traffic<br />and deletes the old cluster after sync. If false, it stays in the Syncing<br />phase waiting for the user to enable it (set autoPromote=true). | true |  |
+    | `autoPromote` _boolean_ | AutoPromote controls whether newly started blue/green upgrades<br />automatically switch traffic and delete the old cluster after sync.<br />If false when an upgrade starts, that upgrade stays in the Syncing<br />phase waiting for an explicit promotion request via spec.upgrade.requests.promote.<br />Changing this field while an upgrade is already in progress affects only<br />future upgrades. | true |  |
     | `verification` _[VerificationConfig](#verificationconfig)_ | VerificationConfig allows defining custom health checks before promotion. |  | Optional: \{\} <br /> |
     | `maxJobFailures` _integer_ | MaxJobFailures is the maximum consecutive job failures before aborting/rolling back.<br />Defaults to 5 if not specified. | 5 | Minimum: 1 <br />Optional: \{\} <br /> |
     | `preUpgradeSnapshot` _boolean_ | PreUpgradeSnapshot triggers a backup at the start of an upgrade.<br />Creates a recovery point before any changes are made.<br />Requires spec.backup to be configured. |  | Optional: \{\} <br /> |
@@ -336,6 +336,7 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | `blueRevision` _string_ | BlueRevision is the hash/name of the currently active cluster. |  |  |
     | `blueImage` _string_ | BlueImage is the container image used by the Blue cluster.<br />This ensures the Blue cluster is not actively upgraded when spec.image changes. |  |  |
     | `greenRevision` _string_ | GreenRevision is the hash/name of the next cluster (if upgrade in progress). |  |  |
+    | `manualPromotionRequired` _boolean_ | ManualPromotionRequired snapshots whether the current in-flight blue/green<br />upgrade requires an explicit spec.upgrade.requests.promote request before<br />promotion can proceed. It is derived from spec.upgrade.blueGreen.autoPromote<br />when the upgrade starts. |  | Optional: \{\} <br /> |
     | `startTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | StartTime is when the current phase began. |  |  |
     | `jobFailureCount` _integer_ | JobFailureCount tracks consecutive job failures in the current phase.<br />Reset to 0 on phase transition or successful job completion. |  | Optional: \{\} <br /> |
     | `lastJobFailure` _string_ | LastJobFailure records the name of the last failed job for debugging. |  | Optional: \{\} <br /> |
@@ -893,6 +894,7 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | `selfInitialized` _boolean_ | SelfInitialized indicates whether the cluster was initialized using<br />OpenBao's self-initialization feature. When true, no root token Secret<br />exists for this cluster (the root token was auto-revoked). |  | Optional: \{\} <br /> |
     | `lastBackupTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastBackupTime is the timestamp of the last successful backup, if configured.<br />Deprecated: Use Backup.LastBackupTime instead. |  | Optional: \{\} <br /> |
     | `upgrade` _[UpgradeProgress](#upgradeprogress)_ | Upgrade tracks the state of an in-progress upgrade (if any).<br />When non-nil, an upgrade is in progress and the UpgradeManager is orchestrating<br />the pod-by-pod rolling update with leader step-down. |  | Optional: \{\} <br /> |
+    | `upgradeRequests` _[UpgradeRequestStatus](#upgraderequeststatus)_ | UpgradeRequests tracks which explicit upgrade request values have already<br />been handled so one-shot requests are edge-triggered instead of level-triggered. |  | Optional: \{\} <br /> |
     | `backup` _[BackupStatus](#backupstatus)_ | Backup tracks the state of backups for this cluster. |  | Optional: \{\} <br /> |
     | `blueGreen` _[BlueGreenStatus](#bluegreenstatus)_ | BlueGreen tracks the state of blue/green upgrades (if enabled). |  | Optional: \{\} <br /> |
     | `operationLock` _[OperationLockStatus](#operationlockstatus)_ | OperationLock prevents concurrent long-running operations (upgrade/backup/restore)<br />from acting on the same cluster at the same time. |  | Optional: \{\} <br /> |
@@ -1580,8 +1582,9 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | `image` _string_ | Image is the container image to use for upgrade operations.<br />This image is used by Kubernetes Jobs created during upgrades (for example, blue/green<br />cluster orchestration actions). The executor runs inside the tenant namespace and<br />authenticates to OpenBao using a projected ServiceAccount token (JWT auth).<br />If not specified, defaults to "<repo>:X.Y.Z" where <repo> is derived from OPERATOR_UPGRADE_IMAGE_REPOSITORY<br />(default: "ghcr.io/dc-tec/openbao-upgrade") and the tag matches OPERATOR_VERSION. |  | Optional: \{\} <br /> |
     | `preUpgradeSnapshot` _boolean_ | PreUpgradeSnapshot, when true, triggers a backup before any upgrade.<br />When enabled, the upgrade manager will create a backup using the backup<br />configuration (spec.backup.target, spec.backup.image, etc.) and<br />wait for it to complete before proceeding with the upgrade.<br />If the backup fails, the upgrade will be blocked and a Degraded condition<br />will be set with Reason=PreUpgradeBackupFailed.<br />Requires spec.backup to be configured with target, image, and<br />authentication (jwtAuthRole or tokenSecretRef). |  | Optional: \{\} <br /> |
     | `jwtAuthRole` _string_ | JWTAuthRole is the name of the JWT Auth role configured in OpenBao<br />for upgrade executor Jobs. The executor authenticates with a projected<br />ServiceAccount token from <cluster-name>-upgrade-serviceaccount.<br />The role must be configured in OpenBao and must grant the permissions<br />required by the selected upgrade strategy, including:<br />- "read" capability on sys/health<br />- "sudo" and "update" capability on sys/step-down<br />- "read" capability on sys/storage/raft/autopilot/state<br />- for Blue/Green, raft join/configuration/remove-peer/promote/demote operations<br />The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),<br />which is automatically created by the operator.<br />If OIDC is enabled in SelfInit and this field is empty, a default role<br />named "openbao-operator-upgrade" will be assumed/created.<br />This is the supported authentication mechanism for built-in upgrade orchestration. |  | Optional: \{\} <br /> |
-    | `tokenSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | TokenSecretRef optionally references a Secret containing an OpenBao API<br />token for future non-JWT upgrade authentication flows.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons.<br />Built-in rolling and blue/green upgrade executor Jobs currently require<br />JWT auth via JWTAuthRole and ignore this field. |  | Optional: \{\} <br /> |
+    | `tokenSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | TokenSecretRef optionally references a Secret containing an OpenBao API<br />token for future non-JWT upgrade authentication flows.<br />Built-in rolling and blue/green upgrade orchestration does not support<br />token-based authentication. Configure spec.upgrade.jwtAuthRole or enable<br />spec.selfInit.oidc.enabled instead. |  | Optional: \{\} <br /> |
     | `strategy` _[UpdateStrategyType](#updatestrategytype)_ | Strategy defines the update strategy to use. | RollingUpdate | Enum: [RollingUpdate BlueGreen] <br /> |
+    | `requests` _[UpgradeRequestConfig](#upgraderequestconfig)_ | Requests defines explicit one-shot operator requests for the current<br />upgrade workflow. The operator acts only when a request value changes. |  | Optional: \{\} <br /> |
     | `blueGreen` _[BlueGreenConfig](#bluegreenconfig)_ | BlueGreen configures the behavior when Strategy is BlueGreen. |  | Optional: \{\} <br /> |
 
 
@@ -1607,6 +1610,42 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | `lastErrorReason` _string_ | LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).<br />When set, the status controller should consider the cluster Degraded. |  | Optional: \{\} <br /> |
     | `lastErrorMessage` _string_ | LastErrorMessage is a human-readable failure message (best-effort). |  | Optional: \{\} <br /> |
     | `lastErrorAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastErrorAt is when the last upgrade error was recorded (best-effort). |  | Optional: \{\} <br /> |
+
+
+    #### UpgradeRequestConfig
+
+
+
+    UpgradeRequestConfig defines one-shot operator requests for upgrade workflows.
+
+
+
+    _Appears in:_
+    - [UpgradeConfig](#upgradeconfig)
+
+    | Field | Description | Default | Validation |
+    | --- | --- | --- | --- |
+    | `retry` _string_ | Retry requests a retry of the current failed rolling upgrade when changed<br />to a new non-empty value.<br />The operator compares this value against status.upgradeRequests.lastHandledRetry<br />and acts only when the value changes. Recommended value is an RFC3339<br />timestamp string. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+    | `promote` _string_ | Promote requests promotion of a held blue/green upgrade when changed to a<br />new non-empty value while spec.upgrade.blueGreen.autoPromote=false.<br />The operator compares this value against<br />status.upgradeRequests.lastHandledPromote and acts only when the value<br />changes. Recommended value is an RFC3339 timestamp string. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+    | `rollback` _string_ | Rollback requests a manual abort or rollback of the current blue/green<br />upgrade when changed to a new non-empty value.<br />The operator compares this value against<br />status.upgradeRequests.lastHandledRollback and acts only when the value<br />changes. Recommended value is an RFC3339 timestamp string. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+
+
+    #### UpgradeRequestStatus
+
+
+
+    UpgradeRequestStatus tracks which explicit upgrade request values have already been handled.
+
+
+
+    _Appears in:_
+    - [OpenBaoClusterStatus](#openbaoclusterstatus)
+
+    | Field | Description | Default | Validation |
+    | --- | --- | --- | --- |
+    | `lastHandledRetry` _string_ | LastHandledRetry is the last observed spec.upgrade.requests.retry value<br />that the operator has handled. |  | Optional: \{\} <br /> |
+    | `lastHandledPromote` _string_ | LastHandledPromote is the last observed spec.upgrade.requests.promote<br />value that the operator has handled. |  | Optional: \{\} <br /> |
+    | `lastHandledRollback` _string_ | LastHandledRollback is the last observed spec.upgrade.requests.rollback<br />value that the operator has handled. |  | Optional: \{\} <br /> |
 
 
     #### ValidationHookConfig

@@ -346,6 +346,27 @@ func TestPhaseHandlers_ExecutorDrivenTransitions(t *testing.T) {
 func TestHandlePhaseSyncing_Branches(t *testing.T) {
 	t.Parallel()
 
+	t.Run("snapshots manual promotion requirement when upgrade starts", func(t *testing.T) {
+		t.Parallel()
+
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
+		cluster.Status.BlueGreen.GreenRevision = ""
+		cluster.Spec.Upgrade.BlueGreen.AutoPromote = false
+
+		manager := &Manager{}
+		outcome, err := manager.handlePhaseIdle(context.Background(), logr.Discard(), cluster, "")
+		if err != nil {
+			t.Fatalf("handlePhaseIdle() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhaseDeployingGreen {
+			t.Fatalf("handlePhaseIdle() outcome = %+v, want advance to DeployingGreen", outcome)
+		}
+		if !cluster.Status.BlueGreen.ManualPromotionRequired {
+			t.Fatal("ManualPromotionRequired = false, want true")
+		}
+	})
+
 	t.Run("waits for minimum sync duration", func(t *testing.T) {
 		t.Parallel()
 
@@ -398,13 +419,14 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 		}
 	})
 
-	t.Run("holds when auto promote is disabled after sync completes", func(t *testing.T) {
+	t.Run("holds when current upgrade requires manual approval even if auto promote is later enabled", func(t *testing.T) {
 		t.Parallel()
 
 		scheme := newBlueGreenTestScheme(t)
 		cluster := newPhaseMachineCluster()
 		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
-		cluster.Spec.Upgrade.BlueGreen.AutoPromote = false
+		cluster.Status.BlueGreen.ManualPromotionRequired = true
+		cluster.Spec.Upgrade.BlueGreen.AutoPromote = true
 		job := succeededExecutorJob(cluster, ActionWaitGreenSynced)
 		manager := &Manager{
 			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build(),
@@ -420,13 +442,14 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 		}
 	})
 
-	t.Run("advances to promoting after sync completes", func(t *testing.T) {
+	t.Run("advances to promoting when current upgrade was snapshotted for auto promotion", func(t *testing.T) {
 		t.Parallel()
 
 		scheme := newBlueGreenTestScheme(t)
 		cluster := newPhaseMachineCluster()
 		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
-		cluster.Spec.Upgrade.BlueGreen.AutoPromote = true
+		cluster.Status.BlueGreen.ManualPromotionRequired = false
+		cluster.Spec.Upgrade.BlueGreen.AutoPromote = false
 		job := succeededExecutorJob(cluster, ActionWaitGreenSynced)
 		manager := &Manager{
 			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build(),
@@ -439,6 +462,34 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 		}
 		if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhasePromoting {
 			t.Fatalf("handlePhaseSyncing() outcome = %+v, want advance to Promoting", outcome)
+		}
+	})
+
+	t.Run("advances to promoting after sync completes when promote request is set", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
+		cluster.Status.BlueGreen.ManualPromotionRequired = true
+		cluster.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{
+			Promote: "2026-03-10T12:00:00Z",
+		}
+		job := succeededExecutorJob(cluster, ActionWaitGreenSynced)
+		manager := &Manager{
+			client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build(),
+			scheme: scheme,
+		}
+
+		outcome, err := manager.handlePhaseSyncing(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("handlePhaseSyncing() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhasePromoting {
+			t.Fatalf("handlePhaseSyncing() outcome = %+v, want advance to Promoting", outcome)
+		}
+		if cluster.Status.UpgradeRequests == nil || cluster.Status.UpgradeRequests.LastHandledPromote != "2026-03-10T12:00:00Z" {
+			t.Fatalf("LastHandledPromote = %+v, want request to be recorded", cluster.Status.UpgradeRequests)
 		}
 	})
 }

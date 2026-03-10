@@ -276,10 +276,8 @@ spec:
         (!has(object.spec.backup) || !has(object.spec.backup.target.credentialsSecretRef) ||
           !object.spec.backup.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
         (!has(object.spec.backup) || !has(object.spec.backup.tokenSecretRef) ||
-          !object.spec.backup.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
-        (!has(object.spec.upgrade) || !has(object.spec.upgrade.tokenSecretRef) ||
-          !object.spec.upgrade.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
-      message: "References to system secrets (unseal-key, root-token, tls-ca, tls-server) are prohibited in backup/upgrade configurations to prevent confused deputy attacks."
+          !object.spec.backup.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
+      message: "References to system secrets (unseal-key, root-token, tls-ca, tls-server) are prohibited in backup configurations to prevent confused deputy attacks."
     # Storage Immutability: Prevent storage class changes (immutable in StatefulSet)
     - expression: >-
         oldObject == null ||

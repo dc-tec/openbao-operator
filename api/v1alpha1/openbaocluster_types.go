@@ -336,9 +336,12 @@ type AutoRollbackConfig struct {
 
 // BlueGreenConfig configures the behavior when Type is BlueGreen.
 type BlueGreenConfig struct {
-	// AutoPromote controls whether the operator automatically switches traffic
-	// and deletes the old cluster after sync. If false, it stays in the Syncing
-	// phase waiting for the user to enable it (set autoPromote=true).
+	// AutoPromote controls whether newly started blue/green upgrades
+	// automatically switch traffic and delete the old cluster after sync.
+	// If false when an upgrade starts, that upgrade stays in the Syncing
+	// phase waiting for an explicit promotion request via spec.upgrade.requests.promote.
+	// Changing this field while an upgrade is already in progress affects only
+	// future upgrades.
 	// +kubebuilder:default=true
 	AutoPromote bool `json:"autoPromote"`
 
@@ -362,6 +365,37 @@ type BlueGreenConfig struct {
 	// AutoRollback configures automatic rollback behavior.
 	// +optional
 	AutoRollback *AutoRollbackConfig `json:"autoRollback,omitempty"`
+}
+
+// UpgradeRequestConfig defines one-shot operator requests for upgrade workflows.
+type UpgradeRequestConfig struct {
+	// Retry requests a retry of the current failed rolling upgrade when changed
+	// to a new non-empty value.
+	//
+	// The operator compares this value against status.upgradeRequests.lastHandledRetry
+	// and acts only when the value changes. Recommended value is an RFC3339
+	// timestamp string.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Retry string `json:"retry,omitempty"`
+	// Promote requests promotion of a held blue/green upgrade when changed to a
+	// new non-empty value while spec.upgrade.blueGreen.autoPromote=false.
+	//
+	// The operator compares this value against
+	// status.upgradeRequests.lastHandledPromote and acts only when the value
+	// changes. Recommended value is an RFC3339 timestamp string.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Promote string `json:"promote,omitempty"`
+	// Rollback requests a manual abort or rollback of the current blue/green
+	// upgrade when changed to a new non-empty value.
+	//
+	// The operator compares this value against
+	// status.upgradeRequests.lastHandledRollback and acts only when the value
+	// changes. Recommended value is an RFC3339 timestamp string.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Rollback string `json:"rollback,omitempty"`
 }
 
 // UpgradeConfig defines configuration for upgrade operations.
@@ -411,17 +445,21 @@ type UpgradeConfig struct {
 	// TokenSecretRef optionally references a Secret containing an OpenBao API
 	// token for future non-JWT upgrade authentication flows.
 	//
-	// The Secret must exist in the same namespace as the OpenBaoCluster.
-	// Cross-namespace references are not allowed for security reasons.
-	//
-	// Built-in rolling and blue/green upgrade executor Jobs currently require
-	// JWT auth via JWTAuthRole and ignore this field.
+	// Built-in rolling and blue/green upgrade orchestration does not support
+	// token-based authentication. Configure spec.upgrade.jwtAuthRole or enable
+	// spec.selfInit.oidc.enabled instead.
+	// +kubebuilder:validation:XValidation:rule="self == null",message="spec.upgrade.tokenSecretRef is not supported; configure spec.upgrade.jwtAuthRole or enable spec.selfInit.oidc.enabled"
 	// +optional
 	TokenSecretRef *corev1.LocalObjectReference `json:"tokenSecretRef,omitempty"`
 
 	// Strategy defines the update strategy to use.
 	// +kubebuilder:default="RollingUpdate"
 	Strategy UpdateStrategyType `json:"strategy,omitempty"`
+
+	// Requests defines explicit one-shot operator requests for the current
+	// upgrade workflow. The operator acts only when a request value changes.
+	// +optional
+	Requests *UpgradeRequestConfig `json:"requests,omitempty"`
 
 	// BlueGreen configures the behavior when Strategy is BlueGreen.
 	// +optional
@@ -1757,6 +1795,12 @@ type BlueGreenStatus struct {
 	BlueImage string `json:"blueImage,omitempty"`
 	// GreenRevision is the hash/name of the next cluster (if upgrade in progress).
 	GreenRevision string `json:"greenRevision,omitempty"`
+	// ManualPromotionRequired snapshots whether the current in-flight blue/green
+	// upgrade requires an explicit spec.upgrade.requests.promote request before
+	// promotion can proceed. It is derived from spec.upgrade.blueGreen.autoPromote
+	// when the upgrade starts.
+	// +optional
+	ManualPromotionRequired bool `json:"manualPromotionRequired,omitempty"`
 	// StartTime is when the current phase began.
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 	// JobFailureCount tracks consecutive job failures in the current phase.
@@ -1779,6 +1823,22 @@ type BlueGreenStatus struct {
 	// It is used to produce stable, deterministic Job names per attempt.
 	// +optional
 	RollbackAttempt int32 `json:"rollbackAttempt,omitempty"`
+}
+
+// UpgradeRequestStatus tracks which explicit upgrade request values have already been handled.
+type UpgradeRequestStatus struct {
+	// LastHandledRetry is the last observed spec.upgrade.requests.retry value
+	// that the operator has handled.
+	// +optional
+	LastHandledRetry string `json:"lastHandledRetry,omitempty"`
+	// LastHandledPromote is the last observed spec.upgrade.requests.promote
+	// value that the operator has handled.
+	// +optional
+	LastHandledPromote string `json:"lastHandledPromote,omitempty"`
+	// LastHandledRollback is the last observed spec.upgrade.requests.rollback
+	// value that the operator has handled.
+	// +optional
+	LastHandledRollback string `json:"lastHandledRollback,omitempty"`
 }
 
 // BackupStatus tracks the state of backups for a cluster.
@@ -1851,6 +1911,11 @@ type OpenBaoClusterStatus struct {
 	// +optional
 	// +kubebuilder:validation:Nullable
 	Upgrade *UpgradeProgress `json:"upgrade,omitempty"`
+	// UpgradeRequests tracks which explicit upgrade request values have already
+	// been handled so one-shot requests are edge-triggered instead of level-triggered.
+	// +optional
+	// +kubebuilder:validation:Nullable
+	UpgradeRequests *UpgradeRequestStatus `json:"upgradeRequests,omitempty"`
 	// Backup tracks the state of backups for this cluster.
 	// +optional
 	// +kubebuilder:validation:Nullable

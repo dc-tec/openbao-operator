@@ -117,12 +117,14 @@ func TestPrepareFailedUpgradeRetry_EmitsRetryEvents(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
-			Annotations: map[string]string{
-				constants.AnnotationRetryRollingUpgrade: "retry-now",
-			},
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version: "2.5.0",
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Requests: &openbaov1alpha1.UpgradeRequestConfig{
+					Retry: "retry-now",
+				},
+			},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Upgrade: &openbaov1alpha1.UpgradeProgress{
