@@ -10,6 +10,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func TestBuildAvailableCondition(t *testing.T) {
@@ -68,6 +69,7 @@ func TestBuildDegradedCondition(t *testing.T) {
 		upgradeFailed   bool
 		wantStatus      metav1.ConditionStatus
 		wantReason      string
+		wantInMessage   string
 	}{
 		{
 			name: "no degradation with selfInit enabled",
@@ -96,7 +98,28 @@ func TestBuildDegradedCondition(t *testing.T) {
 					BreakGlass: &openbaov1alpha1.BreakGlassStatus{Active: true},
 				},
 			},
-			wantStatus: metav1.ConditionTrue,
+			wantStatus:    metav1.ConditionTrue,
+			wantInMessage: "spec.breakGlassAck",
+		},
+		{
+			name: "degraded when rolling upgrade is paused",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true},
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					Upgrade: &openbaov1alpha1.UpgradeProgress{
+						FromVersion:      "2.0.0",
+						TargetVersion:    "2.1.0",
+						LastErrorReason:  "PodNotReady",
+						LastErrorMessage: "Pod test-1 failed to become ready",
+					},
+				},
+			},
+			upgradeFailed: true,
+			wantStatus:    metav1.ConditionTrue,
+			wantReason:    "PodNotReady",
+			wantInMessage: constants.AnnotationRetryRollingUpgrade,
 		},
 	}
 
@@ -109,6 +132,9 @@ func TestBuildDegradedCondition(t *testing.T) {
 			if tt.wantReason != "" {
 				assert.Equal(t, tt.wantReason, cond.Reason)
 			}
+			if tt.wantInMessage != "" {
+				assert.Contains(t, cond.Message, tt.wantInMessage)
+			}
 		})
 	}
 }
@@ -118,6 +144,7 @@ func TestBuildUpgradingCondition(t *testing.T) {
 		name       string
 		cluster    *openbaov1alpha1.OpenBaoCluster
 		wantStatus metav1.ConditionStatus
+		wantInMsg  string
 	}{
 		{
 			name:       "no upgrade in progress",
@@ -135,18 +162,66 @@ func TestBuildUpgradingCondition(t *testing.T) {
 				},
 			},
 			wantStatus: metav1.ConditionTrue,
+			wantInMsg:  "Rolling upgrade from 2.0.0 to 2.1.0",
 		},
 		{
 			name: "upgrade failed",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					Upgrade: &openbaov1alpha1.UpgradeProgress{
+						FromVersion:      "2.0.0",
+						TargetVersion:    "2.1.0",
 						LastErrorReason:  "PodNotReady",
 						LastErrorMessage: "Pod failed to become ready",
 					},
 				},
 			},
 			wantStatus: metav1.ConditionFalse, // Failed upgrade shows as not upgrading
+			wantInMsg:  constants.AnnotationRetryRollingUpgrade,
+		},
+		{
+			name: "blue green syncing with manual approval",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version: "2.1.0",
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+							AutoPromote: false,
+						},
+					},
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					CurrentVersion: "2.0.0",
+					BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+						Phase:         openbaov1alpha1.PhaseSyncing,
+						GreenRevision: "green-abc",
+					},
+				},
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantInMsg:  "spec.upgrade.blueGreen.autoPromote=true",
+		},
+		{
+			name: "blue green rollback includes rollback reason",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version: "2.1.0",
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+					},
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					CurrentVersion: "2.0.0",
+					BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+						Phase:          openbaov1alpha1.PhaseRollingBack,
+						BlueRevision:   "blue-123",
+						RollbackReason: "quorum lost",
+					},
+				},
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantInMsg:  "Rollback reason: quorum lost.",
 		},
 	}
 
@@ -156,6 +231,9 @@ func TestBuildUpgradingCondition(t *testing.T) {
 
 			assert.Equal(t, string(openbaov1alpha1.ConditionUpgrading), cond.Type)
 			assert.Equal(t, tt.wantStatus, cond.Status)
+			if tt.wantInMsg != "" {
+				assert.Contains(t, cond.Message, tt.wantInMsg)
+			}
 		})
 	}
 }
