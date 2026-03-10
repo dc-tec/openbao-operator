@@ -167,10 +167,10 @@ func EnsureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, cf
 				},
 				Spec: corev1.PodSpec{
 					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: ptr.To(true),
-						RunAsUser:    ptr.To(int64(1000)),
-						RunAsGroup:   ptr.To(int64(1000)),
-						FSGroup:      ptr.To(int64(1000)),
+						RunAsNonRoot: ptr.To(false),
+						RunAsUser:    ptr.To(int64(0)),
+						RunAsGroup:   ptr.To(int64(0)),
+						FSGroup:      ptr.To(int64(0)),
 						SeccompProfile: &corev1.SeccompProfile{
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
@@ -228,6 +228,10 @@ func EnsureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, cf
 									Name:      "data",
 									MountPath: "/data",
 								},
+								{
+									Name:      "logs",
+									MountPath: "/logs",
+								},
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -258,7 +262,7 @@ func EnsureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, cf
 								Capabilities: &corev1.Capabilities{
 									Drop: []corev1.Capability{"ALL"},
 								},
-								RunAsNonRoot: ptr.To(true),
+								RunAsNonRoot: ptr.To(false),
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
@@ -275,6 +279,12 @@ func EnsureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, cf
 					Volumes: []corev1.Volume{
 						{
 							Name: "data",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: "logs",
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},

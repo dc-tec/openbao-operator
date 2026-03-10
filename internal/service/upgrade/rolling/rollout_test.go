@@ -476,3 +476,83 @@ func TestWaitForPodRevisionUpdated_SucceedsWhenRevisionMatches(t *testing.T) {
 		t.Fatalf("expected revision check to succeed when revisions match")
 	}
 }
+
+func TestWaitForPodRevisionUpdated_DeletesStalePodWhenImageMismatchesTemplate(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = appsv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	ns := testNamespace
+	name := "c1"
+	podName := name + "-0"
+	startedAt := metav1.Now()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				StartedAt: &startedAt,
+			},
+		},
+	}
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  constants.ContainerBao,
+							Image: "openbao/openbao:2.5.0",
+						},
+					},
+				},
+			},
+		},
+		Status: appsv1.StatefulSetStatus{
+			UpdateRevision: "rev-new",
+		},
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns,
+			Labels: map[string]string{
+				appsv1.StatefulSetRevisionLabel: "rev-bad",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  constants.ContainerBao,
+					Image: "openbao/openbao:retry-image-does-not-exist",
+				},
+			},
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod).Build()
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+		return &openbaoapi.MockClusterActions{}, nil
+	}, portopenbao.ClientConfig{}, nil, "")
+
+	ok, err := mgr.waitForPodRevisionUpdated(context.Background(), testr.New(t), cluster, podName)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if ok {
+		t.Fatalf("expected revision check to wait after deleting stale pod")
+	}
+
+	deletedPod := &corev1.Pod{}
+	getErr := c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: podName}, deletedPod)
+	if !apierrors.IsNotFound(getErr) {
+		t.Fatalf("expected stale pod to be deleted, got err=%v", getErr)
+	}
+}

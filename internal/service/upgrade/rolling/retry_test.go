@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -87,6 +89,7 @@ func TestClearUpgradeFailureForRetry_TableDriven(t *testing.T) {
 	t.Parallel()
 
 	now := metav1.NewTime(time.Now())
+	startedAt := metav1.NewTime(time.Now().Add(-10 * time.Minute))
 
 	tests := []struct {
 		name    string
@@ -124,6 +127,7 @@ func TestClearUpgradeFailureForRetry_TableDriven(t *testing.T) {
 						FromVersion:      "2.4.0",
 						CurrentPartition: 2,
 						CompletedPods:    []int32{2},
+						StartedAt:        &startedAt,
 						LastErrorReason:  upgrade.ReasonStepDownTimeout,
 						LastErrorMessage: "leader step down timed out",
 						LastErrorAt:      &now,
@@ -147,6 +151,12 @@ func TestClearUpgradeFailureForRetry_TableDriven(t *testing.T) {
 				}
 				if cluster.Status.Upgrade.LastStepDownTime != nil {
 					t.Fatalf("LastStepDownTime=%v, want nil", cluster.Status.Upgrade.LastStepDownTime)
+				}
+				if cluster.Status.Upgrade.StartedAt == nil {
+					t.Fatalf("StartedAt=nil, want refreshed timestamp")
+				}
+				if !cluster.Status.Upgrade.StartedAt.After(startedAt.Time) {
+					t.Fatalf("StartedAt=%v, want time after %v", cluster.Status.Upgrade.StartedAt, startedAt)
 				}
 				if cluster.Status.Upgrade.TargetVersion != "2.5.0" {
 					t.Fatalf("TargetVersion=%q, want %q", cluster.Status.Upgrade.TargetVersion, "2.5.0")
@@ -276,11 +286,18 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 			if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
 				t.Fatalf("add openbao scheme: %v", err)
 			}
+			if err := appsv1.AddToScheme(scheme); err != nil {
+				t.Fatalf("add appsv1 scheme: %v", err)
+			}
 			if err := batchv1.AddToScheme(scheme); err != nil {
 				t.Fatalf("add batchv1 scheme: %v", err)
 			}
+			if err := corev1.AddToScheme(scheme); err != nil {
+				t.Fatalf("add corev1 scheme: %v", err)
+			}
 
 			now := metav1.Now()
+			startedAt := metav1.NewTime(time.Now().Add(-10 * time.Minute))
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -298,6 +315,7 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 						FromVersion:      "2.4.0",
 						CurrentPartition: 2,
 						CompletedPods:    []int32{2},
+						StartedAt:        &startedAt,
 						LastErrorReason:  upgrade.ReasonUpgradeFailed,
 						LastErrorMessage: "step-down timed out",
 						LastErrorAt:      &now,
@@ -319,11 +337,52 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 					Namespace: cluster.Namespace,
 				},
 			}
+			sts := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cluster.Name,
+					Namespace: cluster.Namespace,
+				},
+				Status: appsv1.StatefulSetStatus{
+					UpdateRevision: "rev-good",
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  constants.ContainerBao,
+									Image: "openbao/openbao:2.5.0",
+								},
+							},
+						},
+					},
+				},
+			}
+			staleTargetPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      targetPod,
+					Namespace: cluster.Namespace,
+					Labels: map[string]string{
+						appsv1.StatefulSetRevisionLabel: "rev-bad",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  constants.ContainerBao,
+							Image: "openbao/openbao:retry-image-does-not-exist",
+						},
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodPending,
+				},
+			}
 
 			builder := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
-				WithObjects(cluster, staleJob)
+				WithObjects(cluster, staleJob, sts, staleTargetPod)
 			if tt.withManagedFields {
 				builder = builder.WithReturnManagedFields()
 			}
@@ -354,6 +413,12 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 			if cluster.Status.Upgrade.LastStepDownTime != nil {
 				t.Fatalf("LastStepDownTime=%v, want nil", cluster.Status.Upgrade.LastStepDownTime)
 			}
+			if cluster.Status.Upgrade.StartedAt == nil {
+				t.Fatalf("StartedAt=nil, want refreshed timestamp")
+			}
+			if !cluster.Status.Upgrade.StartedAt.After(startedAt.Time) {
+				t.Fatalf("StartedAt=%v, want time after %v", cluster.Status.Upgrade.StartedAt, startedAt)
+			}
 			if cluster.Status.Upgrade.TargetVersion != "2.5.0" {
 				t.Fatalf("TargetVersion=%q, want %q", cluster.Status.Upgrade.TargetVersion, "2.5.0")
 			}
@@ -382,11 +447,23 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 			if storedCluster.Status.Upgrade.LastErrorReason != "" {
 				t.Fatalf("stored LastErrorReason=%q, want empty", storedCluster.Status.Upgrade.LastErrorReason)
 			}
+			if storedCluster.Status.Upgrade.StartedAt == nil {
+				t.Fatalf("stored StartedAt=nil, want refreshed timestamp")
+			}
+			if !storedCluster.Status.Upgrade.StartedAt.After(startedAt.Time) {
+				t.Fatalf("stored StartedAt=%v, want time after %v", storedCluster.Status.Upgrade.StartedAt, startedAt)
+			}
 
 			deletedJob := &batchv1.Job{}
 			err = k8sClient.Get(context.Background(), types.NamespacedName{Name: jobName, Namespace: cluster.Namespace}, deletedJob)
 			if !apierrors.IsNotFound(err) {
 				t.Fatalf("expected stale step-down job to be deleted, got err=%v", err)
+			}
+
+			deletedPod := &corev1.Pod{}
+			err = k8sClient.Get(context.Background(), types.NamespacedName{Name: targetPod, Namespace: cluster.Namespace}, deletedPod)
+			if !apierrors.IsNotFound(err) {
+				t.Fatalf("expected stale target pod to be deleted, got err=%v", err)
 			}
 		})
 	}

@@ -45,6 +45,8 @@ const (
 	upgradeRunIDAnnotationKey  = "openbao.org/upgrade-run-id"
 	rollbackRunID              = "rollback"
 	invalidUpgradeJWTAuthRole  = "invalid-upgrade-role"
+	e2eAdminPolicyName         = "e2e-admin"
+	e2eAdminRoleName           = "e2e-admin"
 )
 
 type serviceAvailabilityStats struct {
@@ -180,6 +182,44 @@ func ptrTo[T any](v T) *T {
 	return &v
 }
 
+func previousVersion(version string) (string, error) {
+	parsed, err := upgrade.ParseVersion(version)
+	if err != nil {
+		return "", err
+	}
+
+	parsed.Prerelease = ""
+	parsed.Build = ""
+
+	switch {
+	case parsed.Patch > 0:
+		parsed.Patch--
+	case parsed.Minor > 0:
+		parsed.Minor--
+		parsed.Patch = 0
+	case parsed.Major > 0:
+		parsed.Major--
+		parsed.Minor = 0
+		parsed.Patch = 0
+	default:
+		return "", fmt.Errorf("no lower semantic version exists for %q", version)
+	}
+
+	return parsed.String(), nil
+}
+
+func nextVersion(version string) (string, error) {
+	parsed, err := upgrade.ParseVersion(version)
+	if err != nil {
+		return "", err
+	}
+
+	parsed.Prerelease = ""
+	parsed.Build = ""
+	parsed.Patch++
+	return parsed.String(), nil
+}
+
 func dumpKubectlOutput(args ...string) {
 	cmd := exec.Command("kubectl", args...) // #nosec G204 -- E2E diagnostics command with fixed binary and controlled args.
 	output, err := utils.Run(cmd)
@@ -238,6 +278,65 @@ func dumpRollingUpgradeDiagnostics(ctx context.Context, admin client.Client, nam
 		dumpKubectlOutput("describe", "job", job.Name, "-n", namespace)
 		dumpKubectlOutput("get", "pods", "-n", namespace, "-l", fmt.Sprintf("job-name=%s", job.Name), "-o", "wide")
 		dumpKubectlOutput("logs", fmt.Sprintf("job/%s", job.Name), "-n", namespace, "--all-containers=true")
+	}
+}
+
+func dumpBlueGreenUpgradeDiagnostics(namespace, clusterName string) {
+	if namespace == "" || clusterName == "" {
+		return
+	}
+
+	_, _ = fmt.Fprintf(GinkgoWriter, "\n========== Blue/Green Upgrade Diagnostics (%s/%s) ==========\n", namespace, clusterName)
+	dumpKubectlOutput("get", "openbaocluster", clusterName, "-n", namespace, "-o", "yaml")
+	dumpKubectlOutput("get", "statefulset", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "yaml")
+	dumpKubectlOutput("get", "pods", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "wide")
+	dumpKubectlOutput("get", "jobs", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "yaml")
+	dumpKubectlOutput("get", "events", "-n", namespace, "--sort-by=.lastTimestamp")
+	dumpKubectlOutput("logs", "deployment/openbao-operator-controller", "-n", operatorNamespace, "--tail=400")
+}
+
+func rollingPreUpgradeBackupJobName(clusterName string, generation int64) string {
+	return fmt.Sprintf("pre-upgrade-backup-%s-gen%d", clusterName, generation)
+}
+
+func policyWriteCommand(policyName, policy string) string {
+	return fmt.Sprintf(`
+cat <<'EOF' >/tmp/policy.hcl
+%s
+EOF
+bao policy write %s /tmp/policy.hcl
+`, policy, policyName)
+}
+
+func newStaleRollingStepDownJob(namespace, clusterName, podName, image string) *batchv1.Job {
+	var backoffLimit int32
+
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      upgrade.ExecutorJobName(clusterName, upgrade.ExecutorActionRollingStepDownLeader, podName, "", ""),
+			Namespace: namespace,
+			Labels: map[string]string{
+				constants.LabelOpenBaoCluster:        clusterName,
+				constants.LabelOpenBaoComponent:      upgrade.ComponentUpgrade,
+				"e2e.openbao.org/stale-stepdown-job": "true",
+			},
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit: &backoffLimit,
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:    "stale-stepdown",
+							Image:   image,
+							Command: []string{"/bin/sh", "-ec"},
+							Args:    []string{"echo stale-stepdown-job"},
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -488,18 +587,13 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				// Strict verification: Check that all pods are running the target image
 				podList := &corev1.PodList{}
 				g.Expect(admin.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabels(map[string]string{
-					constants.LabelOpenBaoCluster: upgradeCluster.Name,
+					constants.LabelOpenBaoCluster:   upgradeCluster.Name,
+					constants.LabelOpenBaoComponent: constants.ComponentOpenBaoCluster,
 				}))).To(Succeed())
 				g.Expect(podList.Items).NotTo(BeEmpty())
 
-				expectedImage := fmt.Sprintf("openbao/openbao:%s", targetVersion)
 				for _, pod := range podList.Items {
-					// Check container image
-					for _, container := range pod.Spec.Containers {
-						if container.Name == "openbao" {
-							g.Expect(container.Image).To(Equal(expectedImage), "Pod %s not running expected image", pod.Name)
-						}
-					}
+					e2ehelpers.ExpectOpenBaoPodVersion(g, pod, targetVersion)
 				}
 			}, 20*time.Minute, 10*time.Second).Should(Succeed())
 
@@ -552,6 +646,677 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				"} 0",
 			)
 			Expect(metricErr).NotTo(HaveOccurred(), "Last metrics output:\n%s", metricsOutput)
+		})
+	})
+
+	Context("Rolling Snapshot Recovery", Label("rolling", "snapshot", "recovery"), func() {
+		var (
+			tenantNamespace string
+			tenantFW        *framework.Framework
+			recoveryCluster *openbaov1alpha1.OpenBaoCluster
+			initialVersion  string
+			targetVersion   string
+			initialImage    string
+			targetImage     string
+			admin           client.Client
+			cfg             *rest.Config
+		)
+
+		BeforeAll(func() {
+			var err error
+			tenantFW, err = framework.NewSetup(ctx, "tenant-rolling-snapshot", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+			admin = tenantFW.Client
+
+			cfg, err = ctrlconfig.GetConfig()
+			Expect(err).NotTo(HaveOccurred())
+
+			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialImage = fmt.Sprintf("openbao/openbao:%s", initialVersion)
+			targetImage = fmt.Sprintf("openbao/openbao:%s", targetVersion)
+
+			if initialVersion == targetVersion {
+				Skip(fmt.Sprintf("Rolling snapshot recovery test skipped: versions identical (%s)", initialVersion))
+			}
+
+			rustfsNamespace := "rustfs"
+			err = ensureRustFS(ctx, admin, cfg, rustfsNamespace)
+			if err != nil {
+				Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping rolling snapshot recovery test.", err))
+			}
+
+			credentialsSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "rustfs-secret",
+					Namespace: tenantNamespace,
+				},
+				Type: corev1.SecretTypeOpaque,
+				Data: map[string][]byte{
+					"accessKeyId":     []byte(rustfsAccessKey),
+					"secretAccessKey": []byte(rustfsSecretKey),
+				},
+			}
+			Expect(admin.Create(ctx, credentialsSecret)).To(Succeed())
+
+			brokenBackupPolicyRequest := openbaov1alpha1.SelfInitRequest{
+				Name:      "override-backup-policy-broken",
+				Operation: openbaov1alpha1.SelfInitOperationUpdate,
+				Path:      "sys/policies/acl/openbao-operator-backup",
+				Policy: &openbaov1alpha1.SelfInitPolicy{
+					Policy: `path "sys/health" {
+  capabilities = ["read"]
+}`,
+				},
+			}
+
+			adminRequests := e2ehelpers.CreateJWTPolicyRoleRequests(
+				tenantNamespace,
+				"default",
+				e2eAdminPolicyName,
+				e2eAdminRoleName,
+				`path "*" {
+  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+}`,
+			)
+
+			recoveryCluster = &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "rolling-snapshot-cluster",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  initialVersion,
+					Image:    initialImage,
+					Replicas: 3,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: append(append([]openbaov1alpha1.SelfInitRequest{}, adminRequests...), append([]openbaov1alpha1.SelfInitRequest{brokenBackupPolicyRequest}, e2ehelpers.CreateE2ERequests(tenantNamespace)...)...),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					Backup: &openbaov1alpha1.BackupSchedule{
+						Schedule: "*/5 * * * *",
+						Image:    backupExecutorImage,
+						Target: openbaov1alpha1.BackupTarget{
+							Provider:     constants.StorageProviderS3,
+							Endpoint:     rustfsEndpoint,
+							Bucket:       rustfsBucket,
+							PathPrefix:   "clusters",
+							UsePathStyle: true,
+							CredentialsSecretRef: &corev1.LocalObjectReference{
+								Name: credentialsSecret.Name,
+							},
+						},
+					},
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Image:              upgradeExecutorImage,
+						PreUpgradeSnapshot: true,
+						Strategy:           openbaov1alpha1.UpdateStrategyRollingUpdate,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, recoveryCluster)).To(Succeed())
+
+			snapshotNetworkPolicy := &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("%s-snapshot-network-policy", recoveryCluster.Name),
+					Namespace: tenantNamespace,
+				},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							constants.LabelOpenBaoCluster: recoveryCluster.Name,
+						},
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      constants.LabelOpenBaoComponent,
+								Operator: metav1.LabelSelectorOpIn,
+								Values:   []string{"backup"},
+							},
+						},
+					},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+					Egress: []networkingv1.NetworkPolicyEgressRule{
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"kubernetes.io/metadata.name": "kube-system",
+										},
+									},
+								},
+							},
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: func() *corev1.Protocol {
+										p := corev1.ProtocolUDP
+										return &p
+									}(),
+									Port: func() *intstr.IntOrString {
+										p := intstr.FromInt(53)
+										return &p
+									}(),
+								},
+							},
+						},
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"kubernetes.io/metadata.name": "rustfs",
+										},
+									},
+								},
+							},
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: func() *corev1.Protocol {
+										p := corev1.ProtocolTCP
+										return &p
+									}(),
+									Port: func() *intstr.IntOrString {
+										p := intstr.FromInt(9000)
+										return &p
+									}(),
+								},
+							},
+						},
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											constants.LabelOpenBaoCluster: recoveryCluster.Name,
+										},
+									},
+								},
+							},
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: func() *corev1.Protocol {
+										p := corev1.ProtocolTCP
+										return &p
+									}(),
+									Port: func() *intstr.IntOrString {
+										p := intstr.FromInt(8200)
+										return &p
+									}(),
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(admin.Create(ctx, snapshotNetworkPolicy)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Initialized).To(BeTrue())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.Upgrade).To(BeNil())
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			tenantFW.WaitForStatefulSetReady(ctx, recoveryCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+		})
+
+		AfterAll(func() {
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
+			}
+		})
+
+		It("retries a failed rolling pre-upgrade snapshot before starting rollout", func() {
+			By("Triggering a rolling upgrade with pre-upgrade snapshots enabled")
+			var upgradeGeneration int64
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = targetImage
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+				upgradeGeneration = original.Generation + 1
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			expectedJobName := rollingPreUpgradeBackupJobName(recoveryCluster.Name, upgradeGeneration)
+
+			By("Waiting for the first pre-upgrade snapshot job to fail while rollout stays blocked")
+			var failedJobUID types.UID
+			Eventually(func(g Gomega) {
+				job := &batchv1.Job{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: expectedJobName, Namespace: tenantNamespace}, job)).To(Succeed())
+				g.Expect(jobFailed(job)).To(BeTrue(), "expected first pre-upgrade backup job to fail")
+				failedJobUID = job.UID
+
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Upgrade).To(BeNil(), "rolling upgrade must stay blocked until snapshot succeeds")
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Repairing the backup policy in OpenBao without changing the cluster generation")
+			bypassLabels := map[string]string{
+				constants.LabelOpenBaoCluster:   recoveryCluster.Name,
+				constants.LabelOpenBaoComponent: "backup",
+			}
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, recoveryCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				_, err = e2ehelpers.RunCommandViaJWT(
+					ctx,
+					cfg,
+					admin,
+					tenantNamespace,
+					initialImage,
+					baoAddr,
+					"default",
+					e2eAdminRoleName,
+					bypassLabels,
+					policyWriteCommand("openbao-operator-backup", `path "sys/storage/raft/snapshot" { capabilities = ["read"] }`),
+				)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the failed snapshot job is recycled and a fresh attempt succeeds")
+			var successfulJobUID types.UID
+			Eventually(func(g Gomega) {
+				job := &batchv1.Job{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: expectedJobName, Namespace: tenantNamespace}, job)).To(Succeed())
+				g.Expect(job.UID).NotTo(Equal(failedJobUID), "snapshot retry should recreate the deterministic job after deleting the failed attempt")
+				g.Expect(jobSucceeded(job)).To(BeTrue(), "recreated snapshot job should succeed")
+				successfulJobUID = job.UID
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+			Expect(successfulJobUID).NotTo(BeZero())
+
+			By("Verifying the rolling upgrade proceeds only after the snapshot succeeds")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
+				g.Expect(updated.Status.Upgrade).To(BeNil())
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.ClusterPhaseRunning))
+			}, 30*time.Minute, 10*time.Second).Should(Succeed())
+		})
+	})
+
+	Context("Rolling Failure Recovery", Label("rolling", "recovery"), func() {
+		var (
+			tenantNamespace string
+			tenantFW        *framework.Framework
+			recoveryCluster *openbaov1alpha1.OpenBaoCluster
+			initialVersion  string
+			targetVersion   string
+			initialImage    string
+			targetImage     string
+			brokenTarget    string
+			admin           client.Client
+		)
+
+		BeforeAll(func() {
+			var err error
+			tenantFW, err = framework.NewSetup(ctx, "tenant-rolling-retry", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+			admin = tenantFW.Client
+
+			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialImage = fmt.Sprintf("openbao/openbao:%s", initialVersion)
+			targetImage = fmt.Sprintf("openbao/openbao:%s", targetVersion)
+			brokenTarget = "openbao/openbao:retry-image-does-not-exist"
+
+			if initialVersion == targetVersion {
+				Skip(fmt.Sprintf("Rolling retry recovery test skipped: versions identical (%s)", initialVersion))
+			}
+
+			recoveryCluster = &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "rolling-retry-cluster",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  initialVersion,
+					Image:    initialImage,
+					Replicas: 3,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Image: upgradeExecutorImage,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, recoveryCluster)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Initialized).To(BeTrue())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.Upgrade).To(BeNil())
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			tenantFW.WaitForStatefulSetReady(ctx, recoveryCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+		})
+
+		AfterAll(func() {
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
+			}
+		})
+
+		AfterEach(func() {
+			if !CurrentSpecReport().Failed() || recoveryCluster == nil {
+				return
+			}
+			By("Collecting rolling retry diagnostics")
+			dumpRollingUpgradeDiagnostics(ctx, admin, tenantNamespace, recoveryCluster.Name)
+		})
+
+		It("recovers a failed rolling upgrade after the retry annotation clears stale state", func() {
+			By("Triggering a rolling upgrade with a bad non-semver image tag")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = brokenTarget
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, recoveryCluster.Name)).To(Succeed())
+
+			By("Waiting for the rolling upgrade to initialize")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
+				g.Expect(updated.Status.Upgrade.TargetVersion).To(Equal(targetVersion))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Backdating upgrade start time to force the real timeout/retry path instead of waiting ten minutes")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
+
+				original := updated.DeepCopy()
+				updated.Status.Upgrade.StartedAt = ptrTo(metav1.NewTime(time.Now().Add(-(upgrade.DefaultPodReadyTimeout + time.Minute))))
+				g.Expect(admin.Status().Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, recoveryCluster.Name)).To(Succeed())
+
+			By("Waiting for the rolling upgrade to fail with a retryable status")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
+				g.Expect(updated.Status.Upgrade.LastErrorReason).To(Equal(upgrade.ReasonPodNotReady))
+				g.Expect(updated.Status.Upgrade.CurrentPartition).To(Equal(updated.Spec.Replicas))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Injecting a stale deterministic step-down job for the retry cleanup path")
+			targetPod := fmt.Sprintf("%s-%d", recoveryCluster.Name, recoveryCluster.Spec.Replicas-1)
+			staleJob := newStaleRollingStepDownJob(tenantNamespace, recoveryCluster.Name, targetPod, initialImage)
+			Expect(admin.Create(ctx, staleJob)).To(Succeed())
+			staleJobUID := staleJob.UID
+
+			By("Restoring the target image and requesting a rolling retry")
+			retryToken := time.Now().UTC().Format(time.RFC3339Nano)
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Image = targetImage
+				if updated.Annotations == nil {
+					updated.Annotations = map[string]string{}
+				}
+				updated.Annotations[constants.AnnotationRetryRollingUpgrade] = retryToken
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, recoveryCluster.Name)).To(Succeed())
+
+			By("Verifying retry preparation clears failed status, clears the annotation, and removes the stale step-down job")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
+				g.Expect(updated.Status.Upgrade.LastErrorReason).To(BeEmpty())
+				if updated.Annotations != nil {
+					_, exists := updated.Annotations[constants.AnnotationRetryRollingUpgrade]
+					g.Expect(exists).To(BeFalse(), "retry annotation should be cleared after preparation")
+				}
+
+				job := &batchv1.Job{}
+				err := admin.Get(ctx, types.NamespacedName{Name: staleJob.Name, Namespace: tenantNamespace}, job)
+				if err == nil {
+					g.Expect(job.UID).NotTo(Equal(staleJobUID), "stale step-down job should be deleted before any replacement job is observed")
+					return
+				}
+				g.Expect(client.IgnoreNotFound(err)).To(Succeed())
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the rolling upgrade resumes and completes successfully")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
+				g.Expect(updated.Status.Upgrade).To(BeNil())
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.ClusterPhaseRunning))
+			}, 30*time.Minute, 10*time.Second).Should(Succeed())
+		})
+	})
+
+	Context("Validation Guardrails", Label("guardrails", "validation"), func() {
+		var (
+			tenantNamespace  string
+			tenantFW         *framework.Framework
+			guardrailCluster *openbaov1alpha1.OpenBaoCluster
+			initialVersion   string
+			initialImage     string
+			downgradeVersion string
+			downgradeImage   string
+			mismatchedImage  string
+			admin            client.Client
+		)
+
+		BeforeAll(func() {
+			var err error
+			tenantFW, err = framework.NewSetup(ctx, "tenant-upgrade-guardrails", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+			admin = tenantFW.Client
+
+			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+			initialImage = fmt.Sprintf("openbao/openbao:%s", initialVersion)
+
+			downgradeVersion, err = previousVersion(initialVersion)
+			if err != nil {
+				Skip(fmt.Sprintf("Validation guardrail tests skipped: cannot derive downgrade version from %s: %v", initialVersion, err))
+			}
+			downgradeImage = fmt.Sprintf("openbao/openbao:%s", downgradeVersion)
+
+			mismatchedVersion, err := nextVersion(initialVersion)
+			if err != nil {
+				Skip(fmt.Sprintf("Validation guardrail tests skipped: cannot derive mismatched version from %s: %v", initialVersion, err))
+			}
+			mismatchedImage = fmt.Sprintf("openbao/openbao:%s", mismatchedVersion)
+
+			guardrailCluster = &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "guardrail-cluster",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  initialVersion,
+					Image:    initialImage,
+					Replicas: 3,
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+						Image:    upgradeExecutorImage,
+						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+							AutoPromote: true,
+						},
+					},
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, guardrailCluster)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Initialized).To(BeTrue())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+
+				available := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
+				g.Expect(available).NotTo(BeNil())
+				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		AfterAll(func() {
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
+			}
+		})
+
+		It("rejects downgrade requests at admission before any rollout begins", func() {
+			By("Attempting to patch the cluster to a lower semantic version")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Version = downgradeVersion
+				updated.Spec.Image = downgradeImage
+
+				err := admin.Patch(ctx, updated, client.MergeFrom(original))
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err.Error()).To(ContainSubstring("spec.version cannot be downgraded below status.currentVersion"))
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the persisted spec remains unchanged after the rejected patch")
+			Consistently(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Spec.Version).To(Equal(initialVersion))
+				g.Expect(updated.Spec.Image).To(Equal(initialImage))
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+			}, time.Minute, 10*time.Second).Should(Succeed())
+		})
+
+		It("surfaces image version mismatches as degraded without mutating running pods", func() {
+			By("Patching a semver-tagged image that conflicts with spec.version")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Image = mismatchedImage
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for the workload controller to report a permanent configuration error")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Workload).NotTo(BeNil())
+				g.Expect(updated.Status.Workload.LastError).NotTo(BeNil())
+				g.Expect(updated.Status.Workload.LastError.Reason).To(Equal(upgrade.ReasonImageVersionMismatch))
+
+				degraded := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
+				g.Expect(degraded).NotTo(BeNil())
+				g.Expect(degraded.Status).To(Equal(metav1.ConditionTrue))
+				g.Expect(degraded.Reason).To(Equal(upgrade.ReasonImageVersionMismatch))
+
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying existing OpenBao pods keep the original stable image")
+			Consistently(func(g Gomega) {
+				pods := &corev1.PodList{}
+				g.Expect(admin.List(ctx, pods,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelOpenBaoCluster:   guardrailCluster.Name,
+						constants.LabelOpenBaoComponent: constants.ComponentOpenBaoCluster,
+					},
+				)).To(Succeed())
+				g.Expect(pods.Items).NotTo(BeEmpty())
+
+				for _, pod := range pods.Items {
+					e2ehelpers.ExpectOpenBaoPodVersion(g, pod, initialVersion)
+				}
+			}, time.Minute, 10*time.Second).Should(Succeed())
 		})
 	})
 
@@ -998,12 +1763,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						client.MatchingLabels{constants.LabelOpenBaoRevision: blueRevision},
 					)).To(Succeed())
 					for _, pod := range bluePods.Items {
-						for _, container := range pod.Spec.Containers {
-							if container.Name == "openbao" {
-								g.Expect(container.Image).To(Equal(fmt.Sprintf("openbao/openbao:%s", initialVersion)),
-									"Blue pod %s should run initial version", pod.Name)
-							}
-						}
+						e2ehelpers.ExpectOpenBaoPodVersion(g, pod, initialVersion)
 					}
 				}
 
@@ -1014,12 +1774,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						client.MatchingLabels{constants.LabelOpenBaoRevision: greenRevision},
 					)).To(Succeed())
 					for _, pod := range greenPods.Items {
-						for _, container := range pod.Spec.Containers {
-							if container.Name == "openbao" {
-								g.Expect(container.Image).To(Equal(fmt.Sprintf("openbao/openbao:%s", targetVersion)),
-									"Green pod %s should run target version", pod.Name)
-							}
-						}
+						e2ehelpers.ExpectOpenBaoPodVersion(g, pod, targetVersion)
 					}
 				}
 
@@ -1080,6 +1835,363 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(err).NotTo(HaveOccurred())
 				val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
 				g.Expect(err).NotTo(HaveOccurred(), "Failed to read post-upgrade secret")
+				g.Expect(val).To(Equal("bar"))
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
+		})
+	})
+
+	Context("Blue/Green Syncing Gates", Label("bluegreen", "verification"), func() {
+		var (
+			tenantNamespace string
+			tenantFW        *framework.Framework
+			gatedCluster    *openbaov1alpha1.OpenBaoCluster
+			initialVersion  string
+			targetVersion   string
+			admin           client.Client
+		)
+
+		BeforeAll(func() {
+			var err error
+			tenantFW, err = framework.NewSetup(ctx, "tenant-bluegreen-gates", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+			admin = tenantFW.Client
+
+			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			if initialVersion == targetVersion {
+				Skip("Blue/green syncing gates test skipped")
+			}
+
+			gatedCluster = &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bluegreen-gates-cluster",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  initialVersion,
+					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
+					Replicas: 3,
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+						Image:    upgradeExecutorImage,
+						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+							AutoPromote: false,
+							Verification: &openbaov1alpha1.VerificationConfig{
+								MinSyncDuration: "10s",
+								PrePromotionHook: &openbaov1alpha1.ValidationHookConfig{
+									Image:   fmt.Sprintf("openbao/openbao:%s", initialVersion),
+									Command: []string{"/bin/sh", "-ec"},
+									Args:    []string{"echo pre-promotion-hook"},
+								},
+							},
+						},
+					},
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, gatedCluster)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: gatedCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Initialized).To(BeTrue())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		AfterAll(func() {
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
+			}
+		})
+
+		It("holds in Syncing until manual promotion after the pre-promotion hook succeeds", func() {
+			By("Triggering a blue/green upgrade with manual promotion")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: gatedCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", targetVersion)
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for Syncing hold with the hook completed successfully")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: gatedCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseSyncing))
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty())
+
+				waitSyncedJobs := &batchv1.JobList{}
+				g.Expect(admin.List(ctx, waitSyncedJobs,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelAppInstance:      gatedCluster.Name,
+						constants.LabelOpenBaoCluster:   gatedCluster.Name,
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+					},
+				)).To(Succeed())
+				waitSyncedJob := findUpgradeExecutorJob(waitSyncedJobs.Items, bluegreen.ActionWaitGreenSynced, "")
+				g.Expect(waitSyncedJob).NotTo(BeNil())
+				g.Expect(jobSucceeded(waitSyncedJob)).To(BeTrue(), "wait-green-synced should finish before the manual hold")
+
+				hookJob := &batchv1.Job{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      fmt.Sprintf("%s-validation-hook", gatedCluster.Name),
+					Namespace: tenantNamespace,
+				}, hookJob)).To(Succeed())
+				g.Expect(jobSucceeded(hookJob)).To(BeTrue(), "pre-promotion hook should succeed before promotion is approved")
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Consistently holding in Syncing while autoPromote remains disabled")
+			Consistently(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: gatedCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseSyncing))
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+			}, time.Minute, 10*time.Second).Should(Succeed())
+
+			By("Approving promotion by enabling autoPromote")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: gatedCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Upgrade.BlueGreen.AutoPromote = true
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the upgrade resumes and completes cleanly")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: gatedCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
+				g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
+			}, 30*time.Minute, 10*time.Second).Should(Succeed())
+		})
+	})
+
+	Context("Blue/Green Validation Hook Failure", Label("bluegreen", "verification", "failure"), func() {
+		var (
+			tenantNamespace string
+			tenantFW        *framework.Framework
+			hookFailCluster *openbaov1alpha1.OpenBaoCluster
+			initialVersion  string
+			targetVersion   string
+			initialImage    string
+			targetImage     string
+			admin           client.Client
+			cfg             *rest.Config
+		)
+
+		BeforeAll(func() {
+			var err error
+			tenantFW, err = framework.NewSetup(ctx, "tenant-bluegreen-hook-failure", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+			admin = tenantFW.Client
+
+			cfg, err = ctrlconfig.GetConfig()
+			Expect(err).NotTo(HaveOccurred())
+
+			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialImage = fmt.Sprintf("openbao/openbao:%s", initialVersion)
+			targetImage = fmt.Sprintf("openbao/openbao:%s", targetVersion)
+			if initialVersion == targetVersion {
+				Skip("Blue/green validation hook failure test skipped")
+			}
+
+			hookFailCluster = &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bluegreen-hook-failure-cluster",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  initialVersion,
+					Image:    initialImage,
+					Replicas: 3,
+					Upgrade: &openbaov1alpha1.UpgradeConfig{
+						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+						Image:    upgradeExecutorImage,
+						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+							AutoPromote: true,
+							AutoRollback: &openbaov1alpha1.AutoRollbackConfig{
+								Enabled:             true,
+								OnJobFailure:        true,
+								OnValidationFailure: true,
+							},
+							Verification: &openbaov1alpha1.VerificationConfig{
+								MinSyncDuration: "10s",
+								PrePromotionHook: &openbaov1alpha1.ValidationHookConfig{
+									Image:   initialImage,
+									Command: []string{"/bin/sh", "-ec"},
+									Args:    []string{"echo pre-promotion-hook-failed >&2; exit 1"},
+								},
+							},
+						},
+					},
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, hookFailCluster)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: hookFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Initialized).To(BeTrue())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			if CurrentSpecReport().Failed() && hookFailCluster != nil {
+				dumpBlueGreenUpgradeDiagnostics(tenantNamespace, hookFailCluster.Name)
+			}
+		})
+
+		AfterAll(func() {
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
+			}
+		})
+
+		It("aborts before promotion when the pre-promotion hook fails", func() {
+			By("Writing a secret before the failed validation hook upgrade")
+			secretPath := "secret/bluegreen-hook-failure-test"
+			secretData := map[string]string{"foo": "bar", "version": initialVersion}
+			bypassLabels := map[string]string{
+				constants.LabelOpenBaoCluster:   hookFailCluster.Name,
+				constants.LabelOpenBaoComponent: "backup",
+			}
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, hookFailCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				err = e2ehelpers.WriteSecretViaJWT(ctx, cfg, admin, tenantNamespace, initialImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, secretData)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
+
+			By("Triggering a blue/green upgrade guarded by a failing pre-promotion hook")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: hookFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = targetImage
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for the pre-promotion hook to fail after green finishes syncing")
+			Eventually(func(g Gomega) {
+				waitSyncedJobs := &batchv1.JobList{}
+				g.Expect(admin.List(ctx, waitSyncedJobs,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelAppInstance:      hookFailCluster.Name,
+						constants.LabelOpenBaoCluster:   hookFailCluster.Name,
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+					},
+				)).To(Succeed())
+				waitSyncedJob := findUpgradeExecutorJob(waitSyncedJobs.Items, bluegreen.ActionWaitGreenSynced, "")
+				g.Expect(waitSyncedJob).NotTo(BeNil(), "wait-green-synced job should exist before validation hook is evaluated")
+				g.Expect(jobSucceeded(waitSyncedJob)).To(BeTrue(), "wait-green-synced should complete before the validation hook failure path runs")
+
+				hookJob := &batchv1.Job{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      fmt.Sprintf("%s-validation-hook", hookFailCluster.Name),
+					Namespace: tenantNamespace,
+				}, hookJob)).To(Succeed())
+				g.Expect(jobFailed(hookJob)).To(BeTrue(), "pre-promotion hook should fail")
+			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the upgrade aborts safely before promotion")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: hookFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+				g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
+				g.Expect(updated.Status.BlueGreen.RollbackStartTime).To(BeNil(), "failed pre-promotion hook should abort before cutover, not trigger rollback")
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BreakGlass).To(BeNil())
+			}, 30*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying promotion never starts after the validation hook fails")
+			Consistently(func(g Gomega) {
+				jobs := &batchv1.JobList{}
+				g.Expect(admin.List(ctx, jobs,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelAppInstance:      hookFailCluster.Name,
+						constants.LabelOpenBaoCluster:   hookFailCluster.Name,
+						constants.LabelOpenBaoComponent: upgrade.ComponentUpgrade,
+					},
+				)).To(Succeed())
+				g.Expect(findUpgradeExecutorJob(jobs.Items, bluegreen.ActionPromoteGreenVoters, "")).To(BeNil(), "promotion job should never be created when the validation hook fails")
+			}, time.Minute, 10*time.Second).Should(Succeed())
+
+			By("Verifying the original cluster remains readable after the failed upgrade")
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, hookFailCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				val, err := e2ehelpers.ReadSecretViaJWT(ctx, cfg, admin, tenantNamespace, initialImage, baoAddr, "default", "e2e-test", secretPath, bypassLabels, "foo")
+				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(val).To(Equal("bar"))
 			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
 		})
@@ -1519,6 +2631,15 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 
 			e2eRequests := e2ehelpers.CreateE2ERequests(tenantNamespace)
+			adminRequests := e2ehelpers.CreateJWTPolicyRoleRequests(
+				tenantNamespace,
+				"default",
+				e2eAdminPolicyName,
+				e2eAdminRoleName,
+				`path "*" {
+  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+}`,
+			)
 
 			autoPromote := false
 			chaosCluster = &openbaov1alpha1.OpenBaoCluster{
@@ -1550,7 +2671,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
 							Enabled: true,
 						},
-						Requests: append([]openbaov1alpha1.SelfInitRequest{brokenPolicyRequest}, e2eRequests...),
+						Requests: append(append([]openbaov1alpha1.SelfInitRequest{}, adminRequests...), append([]openbaov1alpha1.SelfInitRequest{brokenPolicyRequest}, e2eRequests...)...),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -1639,12 +2760,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				)).To(Succeed())
 				g.Expect(bluePods.Items).NotTo(BeEmpty(), "Blue pods should exist")
 				for _, pod := range bluePods.Items {
-					for _, container := range pod.Spec.Containers {
-						if container.Name == "openbao" {
-							g.Expect(container.Image).To(Equal(fmt.Sprintf("openbao/openbao:%s", initialVersion)),
-								"Blue pod %s should run initial version", pod.Name)
-						}
-					}
+					e2ehelpers.ExpectOpenBaoPodVersion(g, pod, initialVersion)
 				}
 
 				// Verify Green Pods
@@ -1655,12 +2771,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				)).To(Succeed())
 				// Green pods might still be starting, but if they exist, they must be correct
 				for _, pod := range greenPods.Items {
-					for _, container := range pod.Spec.Containers {
-						if container.Name == "openbao" {
-							g.Expect(container.Image).To(Equal(fmt.Sprintf("openbao/openbao:%s", targetVersion)),
-								"Green pod %s should run target version", pod.Name)
-						}
-					}
+					e2ehelpers.ExpectOpenBaoPodVersion(g, pod, targetVersion)
 				}
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
@@ -1749,6 +2860,67 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.BreakGlass.Reason).To(Equal(openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed), "BreakGlass reason should match")
 				g.Expect(updated.Status.BreakGlass.Nonce).NotTo(BeEmpty(), "BreakGlass nonce should be set")
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		It("acknowledges break glass and resumes rollback after the upgrade policy is repaired", func() {
+			By("Repairing the broken upgrade policy inside OpenBao")
+			bypassLabels := map[string]string{
+				constants.LabelOpenBaoCluster:   chaosCluster.Name,
+				constants.LabelOpenBaoComponent: "backup",
+			}
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, chaosCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				_, err = e2ehelpers.RunCommandViaJWT(
+					ctx,
+					cfg,
+					admin,
+					tenantNamespace,
+					openBaoImage,
+					baoAddr,
+					"default",
+					e2eAdminRoleName,
+					bypassLabels,
+					policyWriteCommand("openbao-operator-upgrade", `path "*" { capabilities = ["create", "read", "update", "delete", "list", "sudo"] }`),
+				)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Acknowledging break glass with the current nonce")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BreakGlass).NotTo(BeNil())
+				g.Expect(updated.Status.BreakGlass.Active).To(BeTrue())
+				g.Expect(updated.Status.BreakGlass.Nonce).NotTo(BeEmpty())
+
+				original := updated.DeepCopy()
+				updated.Spec.BreakGlassAck = updated.Status.BreakGlass.Nonce
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying break glass deactivates and rollback resumes")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BreakGlass).NotTo(BeNil())
+				g.Expect(updated.Status.BreakGlass.Active).To(BeFalse())
+				g.Expect(updated.Status.BreakGlass.AcknowledgedAt).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.RollbackAttempt).To(BeNumerically(">=", 1))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying rollback completes and the cluster returns to the original version")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: chaosCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+				g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+				g.Expect(updated.Status.BreakGlass).NotTo(BeNil())
+				g.Expect(updated.Status.BreakGlass.Active).To(BeFalse())
+			}, 30*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 		})
 	})
 
