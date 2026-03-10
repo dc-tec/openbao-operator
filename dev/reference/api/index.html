@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
     
     
       
@@ -4922,6 +4922,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#upgraderequestconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UpgradeRequestConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upgraderequeststatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UpgradeRequestStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#validationhookconfig" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6279,6 +6301,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#upgraderequestconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UpgradeRequestConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upgraderequeststatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UpgradeRequestStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#validationhookconfig" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -7202,7 +7246,7 @@ See: <a href="https://openbao.org/docs/configuration/seal/azurekeyvault/">https:
 <tbody>
 <tr>
 <td><code>autoPromote</code> <em>boolean</em></td>
-<td>AutoPromote controls whether the operator automatically switches traffic<br />and deletes the old cluster after sync. If false, it stays in the Syncing<br />phase waiting for the user to enable it (set autoPromote=true).</td>
+<td>AutoPromote controls whether newly started blue/green upgrades<br />automatically switch traffic and delete the old cluster after sync.<br />If false when an upgrade starts, that upgrade stays in the Syncing<br />phase waiting for an explicit promotion request via spec.upgrade.requests.promote.<br />Changing this field while an upgrade is already in progress affects only<br />future upgrades.</td>
 <td>true</td>
 <td></td>
 </tr>
@@ -7322,6 +7366,12 @@ See: <a href="https://openbao.org/docs/configuration/seal/azurekeyvault/">https:
 <td>GreenRevision is the hash/name of the next cluster (if upgrade in progress).</td>
 <td></td>
 <td></td>
+</tr>
+<tr>
+<td><code>manualPromotionRequired</code> <em>boolean</em></td>
+<td>ManualPromotionRequired snapshots whether the current in-flight blue/green<br />upgrade requires an explicit spec.upgrade.requests.promote request before<br />promotion can proceed. It is derived from spec.upgrade.blueGreen.autoPromote<br />when the upgrade starts.</td>
+<td></td>
+<td>Optional: {} <br /></td>
 </tr>
 <tr>
 <td><code>startTime</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta">Time</a></em></td>
@@ -8570,6 +8620,12 @@ OpenBaoClusterStatus defines the observed state of an OpenBaoCluster.</p>
 <tr>
 <td><code>upgrade</code> <em><a href="#upgradeprogress">UpgradeProgress</a></em></td>
 <td>Upgrade tracks the state of an in-progress upgrade (if any).<br />When non-nil, an upgrade is in progress and the UpgradeManager is orchestrating<br />the pod-by-pod rolling update with leader step-down.</td>
+<td></td>
+<td>Optional: {} <br /></td>
+</tr>
+<tr>
+<td><code>upgradeRequests</code> <em><a href="#upgraderequeststatus">UpgradeRequestStatus</a></em></td>
+<td>UpgradeRequests tracks which explicit upgrade request values have already<br />been handled so one-shot requests are edge-triggered instead of level-triggered.</td>
 <td></td>
 <td>Optional: {} <br /></td>
 </tr>
@@ -10152,7 +10208,7 @@ If omitted, defaults to "static" mode managed by the operator.</p>
 </tr>
 <tr>
 <td><code>tokenSecretRef</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core">LocalObjectReference</a></em></td>
-<td>TokenSecretRef optionally references a Secret containing an OpenBao API<br />token for future non-JWT upgrade authentication flows.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons.<br />Built-in rolling and blue/green upgrade executor Jobs currently require<br />JWT auth via JWTAuthRole and ignore this field.</td>
+<td>TokenSecretRef optionally references a Secret containing an OpenBao API<br />token for future non-JWT upgrade authentication flows.<br />Built-in rolling and blue/green upgrade orchestration does not support<br />token-based authentication. Configure spec.upgrade.jwtAuthRole or enable<br />spec.selfInit.oidc.enabled instead.</td>
 <td></td>
 <td>Optional: {} <br /></td>
 </tr>
@@ -10161,6 +10217,12 @@ If omitted, defaults to "static" mode managed by the operator.</p>
 <td>Strategy defines the update strategy to use.</td>
 <td>RollingUpdate</td>
 <td>Enum: [RollingUpdate BlueGreen] <br /></td>
+</tr>
+<tr>
+<td><code>requests</code> <em><a href="#upgraderequestconfig">UpgradeRequestConfig</a></em></td>
+<td>Requests defines explicit one-shot operator requests for the current<br />upgrade workflow. The operator acts only when a request value changes.</td>
+<td></td>
+<td>Optional: {} <br /></td>
 </tr>
 <tr>
 <td><code>blueGreen</code> <em><a href="#bluegreenconfig">BlueGreenConfig</a></em></td>
@@ -10235,6 +10297,74 @@ If omitted, defaults to "static" mode managed by the operator.</p>
 <tr>
 <td><code>lastErrorAt</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta">Time</a></em></td>
 <td>LastErrorAt is when the last upgrade error was recorded (best-effort).</td>
+<td></td>
+<td>Optional: {} <br /></td>
+</tr>
+</tbody>
+</table>
+<h4 id="upgraderequestconfig">UpgradeRequestConfig<a class="headerlink" href="#upgraderequestconfig" title="Permanent link">&para;</a></h4>
+<p>UpgradeRequestConfig defines one-shot operator requests for upgrade workflows.</p>
+<p><em>Appears in:</em>
+- <a href="#upgradeconfig">UpgradeConfig</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>retry</code> <em>string</em></td>
+<td>Retry requests a retry of the current failed rolling upgrade when changed<br />to a new non-empty value.<br />The operator compares this value against status.upgradeRequests.lastHandledRetry<br />and acts only when the value changes. Recommended value is an RFC3339<br />timestamp string.</td>
+<td></td>
+<td>MinLength: 1 <br />Optional: {} <br /></td>
+</tr>
+<tr>
+<td><code>promote</code> <em>string</em></td>
+<td>Promote requests promotion of a held blue/green upgrade when changed to a<br />new non-empty value while spec.upgrade.blueGreen.autoPromote=false.<br />The operator compares this value against<br />status.upgradeRequests.lastHandledPromote and acts only when the value<br />changes. Recommended value is an RFC3339 timestamp string.</td>
+<td></td>
+<td>MinLength: 1 <br />Optional: {} <br /></td>
+</tr>
+<tr>
+<td><code>rollback</code> <em>string</em></td>
+<td>Rollback requests a manual abort or rollback of the current blue/green<br />upgrade when changed to a new non-empty value.<br />The operator compares this value against<br />status.upgradeRequests.lastHandledRollback and acts only when the value<br />changes. Recommended value is an RFC3339 timestamp string.</td>
+<td></td>
+<td>MinLength: 1 <br />Optional: {} <br /></td>
+</tr>
+</tbody>
+</table>
+<h4 id="upgraderequeststatus">UpgradeRequestStatus<a class="headerlink" href="#upgraderequeststatus" title="Permanent link">&para;</a></h4>
+<p>UpgradeRequestStatus tracks which explicit upgrade request values have already been handled.</p>
+<p><em>Appears in:</em>
+- <a href="#openbaoclusterstatus">OpenBaoClusterStatus</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lastHandledRetry</code> <em>string</em></td>
+<td>LastHandledRetry is the last observed spec.upgrade.requests.retry value<br />that the operator has handled.</td>
+<td></td>
+<td>Optional: {} <br /></td>
+</tr>
+<tr>
+<td><code>lastHandledPromote</code> <em>string</em></td>
+<td>LastHandledPromote is the last observed spec.upgrade.requests.promote<br />value that the operator has handled.</td>
+<td></td>
+<td>Optional: {} <br /></td>
+</tr>
+<tr>
+<td><code>lastHandledRollback</code> <em>string</em></td>
+<td>LastHandledRollback is the last observed spec.upgrade.requests.rollback<br />value that the operator has handled.</td>
 <td></td>
 <td>Optional: {} <br /></td>
 </tr>

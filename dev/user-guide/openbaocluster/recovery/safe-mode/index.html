@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
     
     
       
@@ -4451,6 +4451,12 @@
 </ul>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>prod-cluster-0<span class="w"> </span>--<span class="w"> </span>bao<span class="w"> </span>operator<span class="w"> </span>raft<span class="w"> </span>list-peers
 </span></code></pre></div>
+<p>If manual repair requires deleting or restarting managed Pods, enable maintenance mode first when your admission policies require the <code>openbao.org/maintenance=true</code> signal:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">maintenance</span><span class="p">:</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<p>See the <a href="../../operations/maintenance/">Cluster Maintenance Guide</a> for the broader maintenance workflow.</p>
 <p>If you need a deeper recovery workflow, continue with <a href="../failed-rollback/">Failed Rollback Recovery</a>.</p>
 <h2 id="3-acknowledge-and-resume">3. Acknowledge and Resume<a class="headerlink" href="#3-acknowledge-and-resume" title="Permanent link">&para;</a></h2>
 <p>After you repair the underlying issue, acknowledge the unique nonce to allow the operator to retry rollback automation.</p>
@@ -4458,9 +4464,9 @@
 <p class="admonition-title">Action Required</p>
 <p>Copy the <code>nonce</code> from step 1 and use it in the command below.</p>
 </div>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Replace &#39;abc-123-def-456&#39; with your actual nonce</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>patch<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;breakGlassAck&quot;:&quot;abc-123-def-456&quot;}}&#39;</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Replace &#39;abc-123-def-456&#39; with your actual nonce</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>security<span class="w"> </span>patch<span class="w"> </span>openbaocluster<span class="w"> </span>prod-cluster<span class="w"> </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;breakGlassAck&quot;:&quot;abc-123-def-456&quot;}}&#39;</span>
 </span></code></pre></div>
 <p>If the issue persists, the operator can re-enter break glass with a <strong>new nonce</strong>, requiring you to repeat the diagnosis and acknowledgment flow.</p>
 <h2 id="related-runbooks">Related Runbooks<a class="headerlink" href="#related-runbooks" title="Permanent link">&para;</a></h2>

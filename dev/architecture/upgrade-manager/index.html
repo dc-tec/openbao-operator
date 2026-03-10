@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
     
     
       
@@ -4699,12 +4699,15 @@
 <h3 id="rolling-failure-recovery">Rolling failure recovery<a class="headerlink" href="#rolling-failure-recovery" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Failed rolling upgrades persist <code>status.upgrade.lastErrorReason</code> and <code>status.upgrade.lastErrorMessage</code>.</li>
-<li>Recovery is explicit: the operator waits for the <code>openbao.org/retry-rolling-upgrade</code> annotation before clearing the failed state and retrying.</li>
+<li>Recovery is explicit: the operator waits for <code>spec.upgrade.requests.retry</code> to change before clearing the failed state and retrying.</li>
 <li>If the desired target changes while a rolling upgrade is in progress, the controller clears rolling state and re-evaluates the new target from the live cluster state.</li>
 </ul>
 <h3 id="bluegreen-holds-and-rollback-safety">Blue/Green holds and rollback safety<a class="headerlink" href="#bluegreen-holds-and-rollback-safety" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>Syncing</code> can intentionally hold when <code>spec.upgrade.blueGreen.autoPromote=false</code>.</li>
+<li>Manual promotion for a held upgrade is requested via <code>spec.upgrade.requests.promote</code>.</li>
+<li>Changing <code>spec.upgrade.blueGreen.autoPromote</code> during an in-flight upgrade does not approve that upgrade; it only affects future upgrades.</li>
+<li>Manual abort or rollback of an active blue/green upgrade is requested via <code>spec.upgrade.requests.rollback</code>.</li>
 <li>A failing <code>verification.prePromotionHook</code> either holds in <code>Syncing</code> or triggers automatic abort/rollback, depending on <code>blueGreen.autoRollback.onValidationFailure</code>.</li>
 <li>If late rollback consensus repair fails, the operator enters <code>status.breakGlass</code> and halts risky rollback automation until <code>spec.breakGlassAck</code> matches the issued nonce.</li>
 </ul>

@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
     
     
       
@@ -4440,7 +4440,7 @@
 <li>Iterates pods in reverse ordinal order.</li>
 <li>Runs an upgrade Job to perform leader step-down before updating the leader pod.</li>
 <li>Waits for pod Ready, OpenBao health, and Raft sync after each update.</li>
-<li>If a rolling step fails, progress remains in <code>status.upgrade</code> and the operator waits for the <code>openbao.org/retry-rolling-upgrade</code> annotation before retrying.</li>
+<li>If a rolling step fails, progress remains in <code>status.upgrade</code> and the operator waits for <code>spec.upgrade.requests.retry</code> to change before retrying.</li>
 <li>On completion, <code>status.currentVersion</code> is updated and <code>status.upgrade</code> is cleared (rolling), or <code>status.blueGreen.phase</code> returns to <code>Idle</code> (blue/green).</li>
 </ol>
 <div class="admonition note">
@@ -4479,7 +4479,7 @@
 <li><strong>Green Creation:</strong> The operator creates a new Green StatefulSet with the new version.</li>
 <li><strong>Join as Non-Voters:</strong> Green pods start and join the existing Blue Raft cluster as non-voters.</li>
 <li><strong>Sync and Validate:</strong> The operator waits for Green replication to converge, honors optional <code>verification.minSyncDuration</code>, and runs <code>verification.prePromotionHook</code> when configured.</li>
-<li><strong>Manual Hold or Promotion:</strong> If <code>autoPromote=false</code>, the upgrade holds in <code>Syncing</code> until the user enables promotion. Otherwise, the operator promotes Green pods to voters.</li>
+<li><strong>Manual Hold or Promotion:</strong> If <code>autoPromote=false</code> when the upgrade starts, the upgrade holds in <code>Syncing</code> until the user sets <code>spec.upgrade.requests.promote</code>. Changing <code>autoPromote</code> mid-upgrade affects only future upgrades. Otherwise, the operator promotes Green pods to voters.</li>
 <li><strong>Demote Blue and Verify Leader:</strong> The operator demotes Blue voters, forces leadership transfer when needed, and waits until a Green leader is observed.</li>
 <li><strong>Cutover During Cleanup:</strong> The operator switches the Service selector to Green, removes Blue peers, and deletes the Blue StatefulSet. Rollback remains possible until irreversible cleanup completes.</li>
 <li><strong>Break Glass:</strong> If rollback consensus repair fails, the operator sets <code>status.breakGlass</code> and halts risky rollback automation until <code>spec.breakGlassAck</code> matches the issued nonce.</li>
