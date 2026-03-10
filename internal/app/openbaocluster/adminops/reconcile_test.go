@@ -3,17 +3,24 @@ package adminops
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	backupmanager "github.com/dc-tec/openbao-operator/internal/service/backup"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
+	rollingupgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade/rolling"
 )
 
 type fakeSubReconciler struct {
@@ -230,4 +237,53 @@ func TestReconcile_InitializesAdminOpsStatus(t *testing.T) {
 	if cluster.Status.AdminOps == nil {
 		t.Fatalf("expected AdminOps status to be initialized")
 	}
+}
+
+func assertRecorderInjected(t *testing.T, value any) {
+	t.Helper()
+
+	field := reflect.ValueOf(value).Elem().FieldByName("recorder")
+	if !field.IsValid() {
+		t.Fatal("recorder field not found")
+	}
+	if field.IsNil() {
+		t.Fatal("recorder field is nil")
+	}
+}
+
+func TestBuildReconcilers_InjectsRecorderIntoManagers(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	recorder := events.NewFakeRecorder(10)
+
+	reconcilers := buildReconcilers(Dependencies{
+		Client:    k8sClient,
+		APIReader: k8sClient,
+		Scheme:    scheme,
+		Recorder:  recorder,
+	})
+
+	if len(reconcilers) != 3 {
+		t.Fatalf("len(reconcilers) = %d, want 3", len(reconcilers))
+	}
+
+	blueGreenMgr, ok := reconcilers[0].(*bluegreen.Manager)
+	if !ok {
+		t.Fatalf("reconcilers[0] = %T, want *bluegreen.Manager", reconcilers[0])
+	}
+	assertRecorderInjected(t, blueGreenMgr)
+
+	rollingMgr, ok := reconcilers[1].(*rollingupgrade.Manager)
+	if !ok {
+		t.Fatalf("reconcilers[1] = %T, want *rollingupgrade.Manager", reconcilers[1])
+	}
+	assertRecorderInjected(t, rollingMgr)
+
+	backupMgr, ok := reconcilers[2].(*backupmanager.Manager)
+	if !ok {
+		t.Fatalf("reconcilers[2] = %T, want *backup.Manager", reconcilers[2])
+	}
+	assertRecorderInjected(t, backupMgr)
 }

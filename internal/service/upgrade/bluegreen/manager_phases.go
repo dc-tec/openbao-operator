@@ -26,6 +26,9 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 	logger.Info("Starting blue/green upgrade",
 		"fromVersion", cluster.Status.CurrentVersion,
 		"targetVersion", cluster.Spec.Version)
+	if cluster.Status.BlueGreen == nil || cluster.Status.BlueGreen.PreUpgradeSnapshotJobName == "" {
+		m.emitNormalEvent(cluster, ReasonUpgradeStarted, "Blue/green upgrade started from %s to %s", cluster.Status.CurrentVersion, cluster.Spec.Version)
+	}
 	logging.LogAuditEvent(logger, logging.EventUpgradeStarted, map[string]string{
 		"cluster_namespace": cluster.Namespace,
 		"cluster_name":      cluster.Name,
@@ -46,6 +49,7 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 				return phaseOutcome{}, err // Block upgrade on snapshot failure
 			}
 			cluster.Status.BlueGreen.PreUpgradeSnapshotJobName = jobName
+			m.emitNormalEvent(cluster, upgrade.ReasonPreUpgradeSnapshotJobCreated, "Created pre-upgrade snapshot Job %s", jobName)
 			logger.Info("Pre-upgrade snapshot job created", "job", jobName)
 			return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait for snapshot
 		} else {
@@ -57,9 +61,11 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 				logger.Info("Waiting for pre-upgrade snapshot to complete", "job", jobName)
 				return requeueAfterOutcome(constants.RequeueShort), nil // Requeue to wait
 			} else if jobStatus.Exists && jobStatus.Failed {
+				m.emitWarningEvent(cluster, upgrade.ReasonPreUpgradeSnapshotFailed, "Pre-upgrade snapshot Job %s failed", jobName)
 				logger.Info("Pre-upgrade snapshot failed", "job", jobName)
 				return phaseOutcome{}, fmt.Errorf("pre-upgrade snapshot job failed: %s", jobName) // Block
 			}
+			m.emitNormalEvent(cluster, upgrade.ReasonPreUpgradeSnapshotCompleted, "Pre-upgrade snapshot completed successfully with Job %s", jobName)
 			logger.Info("Pre-upgrade snapshot completed",
 				"job", jobName)
 		}
@@ -300,11 +306,13 @@ func (m *Manager) handlePhaseSyncing(ctx context.Context, logger logr.Logger, cl
 	// Check if AutoPromote is disabled
 	if cluster.Spec.Upgrade.BlueGreen != nil && !cluster.Spec.Upgrade.BlueGreen.AutoPromote {
 		logger.Info("AutoPromote is disabled; waiting for manual approval")
+		m.emitNormalEvent(cluster, ReasonBlueGreenHoldEntered, "Blue/green upgrade is waiting for promotion approval for target version %s", cluster.Spec.Version)
 		// Stay in Syncing phase until manual approval (annotation or field update)
 		return hold(), nil
 	}
 
 	// All nodes synced, transition to Promoting
+	m.emitNormalEvent(cluster, ReasonBlueGreenPromotionApproved, "Promotion approved for Green revision %s", cluster.Status.BlueGreen.GreenRevision)
 	return advance(openbaov1alpha1.PhasePromoting), nil
 }
 
@@ -506,6 +514,7 @@ func (m *Manager) handlePhaseCleanup(ctx context.Context, logger logr.Logger, cl
 		"strategy":          string(openbaov1alpha1.UpdateStrategyBlueGreen),
 		"version":           cluster.Spec.Version,
 	})
+	m.emitNormalEvent(cluster, ReasonUpgradeComplete, "Blue/green upgrade completed for target version %s", cluster.Spec.Version)
 
 	// Return a requeue to trigger another reconcile cycle so dependent reconcilers
 	// can observe the new steady-state and clean up any upgrade-time resources.
@@ -614,6 +623,7 @@ func (m *Manager) triggerRollbackOrAbort(ctx context.Context, logger logr.Logger
 		"strategy":          string(openbaov1alpha1.UpdateStrategyBlueGreen),
 		"reason":            reason,
 	})
+	m.emitWarningEvent(cluster, ReasonUpgradeFailed, "Blue/green upgrade failed: %s", reason)
 
 	if isEarlyPhase(phase) {
 		// Early phase: simple abort (delete Green, reset to Idle)
@@ -642,6 +652,7 @@ func (m *Manager) triggerRollback(logger logr.Logger, cluster *openbaov1alpha1.O
 		"cluster_name":      cluster.Name,
 		"reason":            reason,
 	})
+	m.emitWarningEvent(cluster, ReasonRollbackStarted, "Blue/green rollback started: %s", reason)
 
 	return requeueShort(), nil // Requeue to process rollback
 }

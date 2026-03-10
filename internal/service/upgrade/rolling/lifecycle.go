@@ -50,6 +50,7 @@ func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, clu
 		"from_version":      fromVersion,
 		"to_version":        toVersion,
 	})
+	m.emitNormalEvent(cluster, upgrade.ReasonUpgradeStarted, upgrade.MessageUpgradeStarted, fromVersion, toVersion)
 
 	logger.Info("Upgrade initialized; StatefulSet partition locked",
 		"partition", cluster.Spec.Replicas)
@@ -90,6 +91,7 @@ func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, clust
 		"strategy":          strategy,
 		"version":           cluster.Spec.Version,
 	})
+	m.emitNormalEvent(cluster, upgrade.ReasonUpgradeComplete, upgrade.MessageUpgradeComplete, fromVersion, cluster.Spec.Version)
 
 	logger.Info("Upgrade completed successfully",
 		"version", cluster.Spec.Version,

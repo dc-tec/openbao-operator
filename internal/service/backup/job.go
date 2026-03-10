@@ -151,6 +151,7 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 			"cluster_name":      cluster.Name,
 			"job":               jobName,
 		})
+		m.emitNormalEvent(cluster, ReasonBackupJobCreated, "Created backup Job %s", jobName)
 		return true, nil
 	}
 
@@ -234,6 +235,7 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 			"cluster_name":      cluster.Name,
 			"job":               jobName,
 		})
+		m.emitNormalEvent(cluster, ReasonBackupCompleted, "Backup completed successfully from Job %s", jobName)
 		return true, nil // Status was updated - request requeue to persist
 	}
 
@@ -270,6 +272,7 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 			"job":                  jobName,
 			"consecutive_failures": fmt.Sprintf("%d", cluster.Status.Backup.ConsecutiveFailures),
 		})
+		m.emitWarningEvent(cluster, ReasonBackupFailed, "Backup Job %s failed", jobName)
 		return true, nil // Status was updated - request requeue to persist
 	}
 

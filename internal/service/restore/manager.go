@@ -136,6 +136,7 @@ func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore
 		"cluster_name":      restore.Spec.Cluster,
 		"restore_name":      restore.Name,
 	})
+	m.emitNormalEvent(restore, ReasonRestoreValidationStarted, "Restore validation started for cluster %s", restore.Spec.Cluster)
 
 	observability.NewRestoreMetrics(restore.Namespace, restore.Spec.Cluster).RecordStarted()
 
@@ -205,6 +206,7 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 		"cluster_name":      restore.Spec.Cluster,
 		"restore_name":      restore.Name,
 	})
+	m.emitNormalEvent(restore, ReasonRestoreStarted, "Restore started for cluster %s", restore.Spec.Cluster)
 
 	logger.Info("Restore validation passed, transitioning to Running phase")
 	return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
@@ -266,6 +268,7 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 			}
 			opslifecycle.AddHeldAuditFields(fields, err)
 			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
+			m.emitWarningEvent(restore, ReasonOperationLockBlocked, "Restore is waiting for the cluster operation lock: %v", err)
 			original := restore.DeepCopy()
 			if held, ok := opslifecycle.HeldError(err); ok {
 				restore.Status.Message = fmt.Sprintf("Waiting for cluster operation lock: operation=%s holder=%s", held.Operation, held.Holder)
@@ -391,6 +394,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 				"cluster_name":      restore.Spec.Cluster,
 				"restore_name":      restore.Name,
 			})
+			m.emitWarningEvent(restore, ReasonOperationLockLost, "Restore lost the cluster operation lock while running")
 			return m.failRestore(ctx, logger, restore, "cluster operation lock was taken by another operation while restore was running")
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to renew cluster operation lock: %w", err)
@@ -520,6 +524,7 @@ func (m *Manager) createRestoreJob(
 		"restore_name":      restore.Name,
 		"job":               jobName,
 	})
+	m.emitNormalEvent(restore, ReasonRestoreJobCreated, "Created restore Job %s", jobName)
 	original := restore.DeepCopy()
 	restore.Status.Message = "Restore job running"
 	if err := m.patchStatus(ctx, restore, original); err != nil {
@@ -557,6 +562,7 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 		"cluster_name":      restore.Spec.Cluster,
 		"restore_name":      restore.Name,
 	})
+	m.emitWarningEvent(restore, ReasonRestoreFailed, "%s", message)
 
 	durationSeconds := 0.0
 	if restore.Status.StartTime != nil {
@@ -596,6 +602,7 @@ func (m *Manager) completeRestore(ctx context.Context, logger logr.Logger, resto
 		"cluster_name":      restore.Spec.Cluster,
 		"restore_name":      restore.Name,
 	})
+	m.emitNormalEvent(restore, ReasonRestoreCompleted, "%s", message)
 
 	durationSeconds := 0.0
 	if restore.Status.StartTime != nil {

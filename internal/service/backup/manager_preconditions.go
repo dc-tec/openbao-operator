@@ -14,6 +14,35 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+type backupPreconditionError struct {
+	reason    string
+	message   string
+	eventType string
+}
+
+func (e *backupPreconditionError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.message
+}
+
+func newBackupSkipError(message string) error {
+	return &backupPreconditionError{
+		reason:    ReasonBackupSkipped,
+		message:   message,
+		eventType: corev1.EventTypeNormal,
+	}
+}
+
+func newBackupWarningError(reason, message string) error {
+	return &backupPreconditionError{
+		reason:    reason,
+		message:   message,
+		eventType: corev1.EventTypeWarning,
+	}
+}
+
 func (m *Manager) hasInProgressRestore(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
 	restoreList := &openbaov1alpha1.OpenBaoRestoreList{}
 	if err := m.client.List(ctx, restoreList, client.InNamespace(cluster.Namespace)); err != nil {
@@ -48,12 +77,12 @@ func (m *Manager) hasInProgressRestore(ctx context.Context, logger logr.Logger, 
 func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	// Check cluster is initialized.
 	if !cluster.Status.Initialized {
-		return fmt.Errorf("cluster is not initialized")
+		return newBackupSkipError("cluster is not initialized")
 	}
 
 	// Check cluster phase - don't backup during initialization.
 	if cluster.Status.Phase == openbaov1alpha1.ClusterPhaseInitializing {
-		return fmt.Errorf("cluster is initializing")
+		return newBackupSkipError("cluster is initializing")
 	}
 
 	// Check if an upgrade is about to start or in progress.
@@ -70,10 +99,10 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 				if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.PreUpgradeSnapshot {
 					// Pre-upgrade snapshot is enabled - skip regular backups.
 					// The upgrade manager will handle the pre-upgrade backup.
-					return fmt.Errorf("upgrade pending with pre-upgrade snapshot enabled")
+					return newBackupSkipError("upgrade pending with pre-upgrade snapshot enabled")
 				}
 				// Upgrade is about to start but no pre-upgrade snapshot - still skip regular backups.
-				return fmt.Errorf("upgrade pending")
+				return newBackupSkipError("upgrade pending")
 			}
 		}
 		// If CurrentVersion is empty but cluster is initialized, this is the first reconcile after init.
@@ -83,7 +112,7 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 	// Check if upgrade is in progress - skip scheduled backups during upgrades.
 	// Exception: Pre-upgrade backups are triggered by the upgrade manager, not here.
 	if cluster.Status.Upgrade != nil {
-		return fmt.Errorf("upgrade in progress")
+		return newBackupSkipError("upgrade in progress")
 	}
 
 	// Check if a pre-upgrade backup job exists or is in progress.
@@ -94,16 +123,7 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 		return fmt.Errorf("failed to check for pre-upgrade backup job: %w", err)
 	}
 	if hasPreUpgradeJob {
-		return fmt.Errorf("pre-upgrade backup in progress")
-	}
-
-	// Check if another backup is in progress.
-	hasBackupJob, err := m.hasActiveBackupJob(ctx, cluster)
-	if err != nil {
-		return fmt.Errorf("failed to check for active backup job: %w", err)
-	}
-	if hasBackupJob {
-		return fmt.Errorf("backup already in progress")
+		return newBackupSkipError("pre-upgrade backup in progress")
 	}
 
 	// Check we have a token for backup.
@@ -111,7 +131,7 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 	// or a backup token Secret. Root tokens are not used for security reasons.
 	backupCfg := cluster.Spec.Backup
 	if backupCfg == nil {
-		return ErrNoBackupToken
+		return newBackupWarningError(ReasonNoBackupToken, ErrNoBackupToken.Error())
 	}
 
 	// Check if JWT Auth is configured (preferred method).
@@ -127,7 +147,7 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 
 	// At least one authentication method must be configured.
 	if !hasJWTAuth && !hasTokenSecret {
-		return ErrNoBackupToken
+		return newBackupWarningError(ReasonNoBackupToken, ErrNoBackupToken.Error())
 	}
 
 	// If using token secret, verify it exists.
@@ -144,7 +164,7 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 		secret := &corev1.Secret{}
 		if err := m.client.Get(ctx, secretName, secret); err != nil {
 			if apierrors.IsNotFound(err) {
-				return fmt.Errorf("backup token Secret %s/%s not found: %w", secretNamespace, backupCfg.TokenSecretRef.Name, ErrNoBackupToken)
+				return newBackupWarningError(ReasonNoBackupToken, fmt.Sprintf("backup token Secret %s/%s not found: %v", secretNamespace, backupCfg.TokenSecretRef.Name, ErrNoBackupToken))
 			}
 			return fmt.Errorf("failed to get backup token Secret %s/%s: %w", secretNamespace, backupCfg.TokenSecretRef.Name, err)
 		}

@@ -48,6 +48,7 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 	logger.Info("Preparing retry for failed rolling upgrade",
 		"targetVersion", cluster.Status.Upgrade.TargetVersion,
 		"currentPartition", cluster.Status.Upgrade.CurrentPartition)
+	m.emitNormalEvent(cluster, upgrade.ReasonRollingRetryRequested, "Rolling upgrade retry requested for target version %s", cluster.Status.Upgrade.TargetVersion)
 
 	if err := m.cleanupStepDownJobForRetry(ctx, logger, cluster); err != nil {
 		return false, err
@@ -76,6 +77,7 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 	cluster.Annotations = latest.Annotations
 
 	logger.Info("Cleared failed rolling upgrade state and resumed upgrade")
+	m.emitNormalEvent(cluster, upgrade.ReasonRollingRetryAccepted, "Rolling upgrade retry accepted for target version %s", latest.Status.Upgrade.TargetVersion)
 	return true, nil
 }
 

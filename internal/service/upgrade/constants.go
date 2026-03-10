@@ -71,6 +71,15 @@ const (
 	// ReasonPreUpgradeBackupFailed indicates the pre-upgrade backup failed.
 	ReasonPreUpgradeBackupFailed = "PreUpgradeBackupFailed"
 
+	// ReasonPreUpgradeSnapshotJobCreated indicates the pre-upgrade snapshot Job was created.
+	ReasonPreUpgradeSnapshotJobCreated = "PreUpgradeSnapshotJobCreated"
+
+	// ReasonPreUpgradeSnapshotCompleted indicates the pre-upgrade snapshot completed successfully.
+	ReasonPreUpgradeSnapshotCompleted = "PreUpgradeSnapshotCompleted"
+
+	// ReasonPreUpgradeSnapshotFailed indicates the pre-upgrade snapshot failed.
+	ReasonPreUpgradeSnapshotFailed = "PreUpgradeSnapshotFailed"
+
 	// ReasonNoUpgradeNeeded indicates spec.version matches status.currentVersion.
 	ReasonNoUpgradeNeeded = "NoUpgradeNeeded"
 
@@ -88,6 +97,15 @@ const (
 
 	// ReasonClusterNotReady indicates the cluster is not in a healthy state for upgrade.
 	ReasonClusterNotReady = "ClusterNotReady"
+
+	// ReasonOperationLockBlocked indicates an upgrade could not acquire the cluster operation lock.
+	ReasonOperationLockBlocked = "OperationLockBlocked"
+
+	// ReasonRollingRetryRequested indicates a failed rolling upgrade retry was requested.
+	ReasonRollingRetryRequested = "RollingRetryRequested"
+
+	// ReasonRollingRetryAccepted indicates a failed rolling upgrade retry was accepted.
+	ReasonRollingRetryAccepted = "RollingRetryAccepted"
 )
 
 // Message constants for condition updates.

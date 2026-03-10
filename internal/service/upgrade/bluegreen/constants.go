@@ -17,6 +17,21 @@ const (
 	// ReasonRollbackFailed indicates a blue/green rollback operation failed.
 	ReasonRollbackFailed = "RollbackFailed"
 
+	// ReasonBlueGreenHoldEntered indicates the upgrade is waiting for manual promotion approval.
+	ReasonBlueGreenHoldEntered = "BlueGreenHoldEntered"
+
+	// ReasonBlueGreenPromotionApproved indicates manual promotion approval was observed.
+	ReasonBlueGreenPromotionApproved = "BlueGreenPromotionApproved"
+
+	// ReasonRollbackStarted indicates rollback has started.
+	ReasonRollbackStarted = "RollbackStarted"
+
+	// ReasonBreakGlassEntered indicates automation entered break-glass mode.
+	ReasonBreakGlassEntered = "BreakGlassEntered"
+
+	// ReasonBreakGlassAcknowledged indicates break-glass mode was acknowledged by an operator.
+	ReasonBreakGlassAcknowledged = "BreakGlassAcknowledged"
+
 	// AnnotationForceRollback is a manual escape hatch annotation that
 	// forces a rollback of the current blue/green upgrade when set to "true".
 	// This allows operators to break glass if the state machine becomes stuck.

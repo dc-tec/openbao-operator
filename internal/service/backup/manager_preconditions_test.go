@@ -154,11 +154,11 @@ func TestCheckPreconditions(t *testing.T) {
 			wantErr: "pre-upgrade backup in progress",
 		},
 		{
-			name: "fails when regular backup job is active",
+			name: "passes when regular backup job is active",
 			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) []client.Object {
 				return []client.Object{backupJobForCluster(cluster, "backup-job", false)}
 			},
-			wantErr: "backup already in progress",
+			expectNil: true,
 		},
 		{
 			name: "fails when backup auth is not configured",

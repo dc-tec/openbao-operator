@@ -47,6 +47,7 @@ func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alph
 		"cluster_name":      cluster.Name,
 		"reason":            string(cluster.Status.BreakGlass.Reason),
 	})
+	m.emitNormalEvent(cluster, ReasonBreakGlassAcknowledged, "Break glass acknowledged for reason %s", cluster.Status.BreakGlass.Reason)
 
 	if cluster.Status.BlueGreen != nil &&
 		cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollingBack &&
@@ -101,6 +102,7 @@ func (m *Manager) enterBreakGlassRollbackConsensusRepairFailed(logger logr.Logge
 		"reason":            string(openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed),
 		"job":               jobName,
 	})
+	m.emitWarningEvent(cluster, ReasonBreakGlassEntered, "Break glass entered after rollback consensus repair Job %s failed", jobName)
 }
 
 func newBreakGlassNonce() string {

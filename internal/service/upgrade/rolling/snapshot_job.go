@@ -79,6 +79,7 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 					"job":               jobName,
 					"attempts":          fmt.Sprintf("%d", failedCount),
 				})
+				m.emitWarningEvent(cluster, upgrade.ReasonPreUpgradeSnapshotFailed, "Pre-upgrade snapshot failed after %d attempts; last Job was %s", failedCount, jobName)
 				return false, operatorerrors.WithReason(
 					upgrade.ReasonPreUpgradeBackupFailed,
 					fmt.Errorf("pre-upgrade backup failed after %d attempts (max retries exceeded); manual intervention required", failedCount),
@@ -113,6 +114,9 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 				"cluster_name":      cluster.Name,
 				"job":               jobName,
 			})
+			if cluster.Status.Upgrade == nil {
+				m.emitNormalEvent(cluster, upgrade.ReasonPreUpgradeSnapshotCompleted, "Pre-upgrade snapshot completed successfully with Job %s", jobName)
+			}
 			return true, nil
 		}
 
@@ -196,6 +200,7 @@ func (m *Manager) handlePreUpgradeSnapshot(ctx context.Context, logger logr.Logg
 		"cluster_name":      cluster.Name,
 		"job":               jobName,
 	})
+	m.emitNormalEvent(cluster, upgrade.ReasonPreUpgradeSnapshotJobCreated, "Created pre-upgrade snapshot Job %s", jobName)
 	// Return false to indicate snapshot is not yet complete (it was just created)
 	return false, nil
 }

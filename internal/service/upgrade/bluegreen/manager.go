@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -37,6 +38,7 @@ type Manager struct {
 	scheme                *runtime.Scheme
 	infraRuntime          portinfra.BlueGreenRuntime
 	backupRuntime         portbackup.PreUpgradeSnapshotRuntime
+	recorder              events.EventRecorder
 	clientFactory         upgrade.OpenBaoClientFactory
 	clusterOps            ClusterOps
 	clientConfig          portopenbao.ClientConfig
@@ -55,12 +57,18 @@ func NewManager(
 	imageVerifier imageverify.Verifier,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
+	recorder ...events.EventRecorder,
 ) *Manager {
+	var eventRecorder events.EventRecorder
+	if len(recorder) > 0 {
+		eventRecorder = recorder[0]
+	}
 	mgr := &Manager{
 		client:                c,
 		scheme:                scheme,
 		infraRuntime:          infraRuntime,
 		backupRuntime:         backupRuntime,
+		recorder:              eventRecorder,
 		clientFactory:         upgrade.DefaultOpenBaoClientFactory,
 		clientConfig:          clientConfig,
 		imageVerifier:         imageVerifier,
@@ -81,8 +89,9 @@ func NewManagerWithClientFactory(
 	imageVerifier imageverify.Verifier,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
+	recorder ...events.EventRecorder,
 ) *Manager {
-	mgr := NewManager(c, scheme, infraRuntime, backupRuntime, clientConfig, imageVerifier, operatorImageVerifier, platform)
+	mgr := NewManager(c, scheme, infraRuntime, backupRuntime, clientConfig, imageVerifier, operatorImageVerifier, platform, recorder...)
 	if clientFactory != nil {
 		mgr.clientFactory = clientFactory
 	}
@@ -353,6 +362,7 @@ func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logge
 			}
 			opslifecycle.AddHeldAuditFields(fields, err)
 			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
+			m.emitWarningEvent(cluster, upgrade.ReasonOperationLockBlocked, "Blue/green upgrade blocked by operation lock: %v", err)
 			if upgradeActive {
 				return true, recon.Result{}, fmt.Errorf("blue/green upgrade in progress but operation lock is held by another operation: %w", err)
 			}

@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -26,6 +27,7 @@ type Dependencies struct {
 	Client                client.Client
 	APIReader             client.Reader
 	Scheme                *runtime.Scheme
+	Recorder              events.EventRecorder
 	OperatorNamespace     string
 	OIDCIssuer            string
 	OIDCJWTKeys           []string
@@ -149,6 +151,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 			deps.ImageVerifier,
 			deps.OperatorImageVerifier,
 			deps.Platform,
+			deps.Recorder,
 		),
 		rollingupgrade.NewManager(
 			deps.Client,
@@ -157,6 +160,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 			deps.SmartClientConfig,
 			deps.OperatorImageVerifier,
 			deps.Platform,
+			deps.Recorder,
 		),
 		backupmanager.NewManager(
 			deps.Client,
@@ -164,6 +168,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 			deps.SmartClientConfig,
 			deps.OperatorImageVerifier,
 			deps.Platform,
+			deps.Recorder,
 		),
 	}
 }
