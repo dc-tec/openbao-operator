@@ -11,14 +11,16 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
-func TestImageVerificationFailurePolicy_TableDriven(t *testing.T) {
-	t.Parallel()
+type failurePolicyTestCase struct {
+	name     string
+	cluster  *openbaov1alpha1.OpenBaoCluster
+	expected string
+}
 
-	tests := []struct {
-		name     string
-		cluster  *openbaov1alpha1.OpenBaoCluster
-		expected string
-	}{
+func buildFailurePolicyCases(
+	assign func(*openbaov1alpha1.OpenBaoClusterSpec, *openbaov1alpha1.ImageVerificationConfig),
+) []failurePolicyTestCase {
+	return []failurePolicyTestCase{
 		{
 			name:     "defaults to block when config is nil",
 			cluster:  &openbaov1alpha1.OpenBaoCluster{},
@@ -26,87 +28,67 @@ func TestImageVerificationFailurePolicy_TableDriven(t *testing.T) {
 		},
 		{
 			name: "defaults to block when policy is empty",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
-						Enabled:       true,
-						FailurePolicy: "",
-					},
-				},
-			},
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := &openbaov1alpha1.OpenBaoCluster{}
+				assign(&cluster.Spec, &openbaov1alpha1.ImageVerificationConfig{
+					Enabled:       true,
+					FailurePolicy: "",
+				})
+				return cluster
+			}(),
 			expected: constants.ImageVerificationFailurePolicyBlock,
 		},
 		{
 			name: "returns configured policy",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
-						Enabled:       true,
-						FailurePolicy: constants.ImageVerificationFailurePolicyWarn,
-					},
-				},
-			},
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := &openbaov1alpha1.OpenBaoCluster{}
+				assign(&cluster.Spec, &openbaov1alpha1.ImageVerificationConfig{
+					Enabled:       true,
+					FailurePolicy: constants.ImageVerificationFailurePolicyWarn,
+				})
+				return cluster
+			}(),
 			expected: constants.ImageVerificationFailurePolicyWarn,
 		},
 	}
+}
+
+func runFailurePolicyTests(
+	t *testing.T,
+	name string,
+	policy func(*openbaov1alpha1.OpenBaoCluster) string,
+	tests []failurePolicyTestCase,
+) {
+	t.Helper()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := imageVerificationFailurePolicy(tt.cluster); got != tt.expected {
-				t.Fatalf("imageVerificationFailurePolicy() = %q, want %q", got, tt.expected)
+			if got := policy(tt.cluster); got != tt.expected {
+				t.Fatalf("%s() = %q, want %q", name, got, tt.expected)
 			}
 		})
 	}
 }
 
+func TestImageVerificationFailurePolicy_TableDriven(t *testing.T) {
+	t.Parallel()
+
+	runFailurePolicyTests(t, "imageVerificationFailurePolicy", imageVerificationFailurePolicy, buildFailurePolicyCases(
+		func(spec *openbaov1alpha1.OpenBaoClusterSpec, cfg *openbaov1alpha1.ImageVerificationConfig) {
+			spec.ImageVerification = cfg
+		},
+	))
+}
+
 func TestOperatorImageVerificationFailurePolicy_TableDriven(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		cluster  *openbaov1alpha1.OpenBaoCluster
-		expected string
-	}{
-		{
-			name:     "defaults to block when config is nil",
-			cluster:  &openbaov1alpha1.OpenBaoCluster{},
-			expected: constants.ImageVerificationFailurePolicyBlock,
+	runFailurePolicyTests(t, "operatorImageVerificationFailurePolicy", operatorImageVerificationFailurePolicy, buildFailurePolicyCases(
+		func(spec *openbaov1alpha1.OpenBaoClusterSpec, cfg *openbaov1alpha1.ImageVerificationConfig) {
+			spec.OperatorImageVerification = cfg
 		},
-		{
-			name: "defaults to block when policy is empty",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
-						Enabled:       true,
-						FailurePolicy: "",
-					},
-				},
-			},
-			expected: constants.ImageVerificationFailurePolicyBlock,
-		},
-		{
-			name: "returns configured policy",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
-						Enabled:       true,
-						FailurePolicy: constants.ImageVerificationFailurePolicyWarn,
-					},
-				},
-			},
-			expected: constants.ImageVerificationFailurePolicyWarn,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := operatorImageVerificationFailurePolicy(tt.cluster); got != tt.expected {
-				t.Fatalf("operatorImageVerificationFailurePolicy() = %q, want %q", got, tt.expected)
-			}
-		})
-	}
+	))
 }
 
 func TestInitContainerImage_TableDriven(t *testing.T) {

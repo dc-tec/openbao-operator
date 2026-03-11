@@ -14,6 +14,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+func newGatewayOptionalResourceOptions(degradeOnCRDMissing bool, applyErr error) optionalResourceOptions {
+	return optionalResourceOptions{
+		kind:                "HTTPRoute",
+		apiVersion:          "gateway.networking.k8s.io/v1",
+		enabled:             true,
+		name:                types.NamespacedName{Namespace: "default", Name: "x"},
+		logger:              logr.Discard(),
+		degradeOnCRDMissing: degradeOnCRDMissing,
+		newEmpty: func() client.Object {
+			return &corev1.ConfigMap{}
+		},
+		buildDesired: func() (client.Object, bool, error) {
+			return &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "default"},
+			}, true, nil
+		},
+		get:    func(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error { return nil },
+		delete: func(_ context.Context, _ client.Object) error { return nil },
+		apply:  func(_ context.Context, _ client.Object) error { return applyErr },
+	}
+}
+
 func TestReconcileOptionalResource_Disabled_NoopsWhenNotFound(t *testing.T) {
 	t.Parallel()
 
@@ -232,28 +254,7 @@ func TestReconcileOptionalResource_CRDMissingOnApply_DegradesWhenConfigured(t *t
 	t.Parallel()
 
 	crdMissingErr := errors.New("no matches for kind \"HTTPRoute\" in version \"gateway.networking.k8s.io/v1\"")
-
-	opts := optionalResourceOptions{
-		kind:                "HTTPRoute",
-		apiVersion:          "gateway.networking.k8s.io/v1",
-		enabled:             true,
-		name:                types.NamespacedName{Namespace: "default", Name: "x"},
-		logger:              logr.Discard(),
-		degradeOnCRDMissing: true,
-		newEmpty: func() client.Object {
-			return &corev1.ConfigMap{}
-		},
-		buildDesired: func() (client.Object, bool, error) {
-			return &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "default"},
-			}, true, nil
-		},
-		get:    func(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error { return nil },
-		delete: func(_ context.Context, _ client.Object) error { return nil },
-		apply:  func(_ context.Context, _ client.Object) error { return crdMissingErr },
-	}
-
-	err := reconcileOptionalResource(context.Background(), opts)
+	err := reconcileOptionalResource(context.Background(), newGatewayOptionalResourceOptions(true, crdMissingErr))
 	if !errors.Is(err, ErrGatewayAPIMissing) {
 		t.Fatalf("expected ErrGatewayAPIMissing, got %T: %v", err, err)
 	}
@@ -336,28 +337,7 @@ func TestReconcileOptionalResource_NotFoundOnApply_DegradesWhenConfigured(t *tes
 	t.Parallel()
 
 	notFoundErr := apierrors.NewNotFound(schema.GroupResource{Group: "gateway.networking.k8s.io", Resource: "httproutes"}, "x")
-
-	opts := optionalResourceOptions{
-		kind:                "HTTPRoute",
-		apiVersion:          "gateway.networking.k8s.io/v1",
-		enabled:             true,
-		name:                types.NamespacedName{Namespace: "default", Name: "x"},
-		logger:              logr.Discard(),
-		degradeOnCRDMissing: true,
-		newEmpty: func() client.Object {
-			return &corev1.ConfigMap{}
-		},
-		buildDesired: func() (client.Object, bool, error) {
-			return &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "default"},
-			}, true, nil
-		},
-		get:    func(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error { return nil },
-		delete: func(_ context.Context, _ client.Object) error { return nil },
-		apply:  func(_ context.Context, _ client.Object) error { return notFoundErr },
-	}
-
-	err := reconcileOptionalResource(context.Background(), opts)
+	err := reconcileOptionalResource(context.Background(), newGatewayOptionalResourceOptions(true, notFoundErr))
 	if !errors.Is(err, ErrGatewayAPIMissing) {
 		t.Fatalf("expected ErrGatewayAPIMissing, got %T: %v", err, err)
 	}

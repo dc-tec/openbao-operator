@@ -11,6 +11,45 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
+type ordinalNumber interface {
+	~int | ~int32
+}
+
+type ordinalTestCase[N ordinalNumber] struct {
+	name  string
+	input N
+	want  []N
+}
+
+func ordinalCases[N ordinalNumber]() []ordinalTestCase[N] {
+	return []ordinalTestCase[N]{
+		{name: "negative input", input: -1, want: nil},
+		{name: "zero input", input: 0, want: nil},
+		{name: "single value", input: 1, want: []N{0}},
+		{name: "three values", input: 3, want: []N{0, 1, 2}},
+	}
+}
+
+func runOrdinalTests[N ordinalNumber](t *testing.T, name string, fn func(N) []N, tests []ordinalTestCase[N]) {
+	t.Helper()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := fn(tt.input)
+			if len(got) != len(tt.want) {
+				t.Fatalf("len(%s(%d))=%d, want %d", name, tt.input, len(got), len(tt.want))
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Fatalf("%s(%d)[%d]=%d, want %d", name, tt.input, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestReasonCodeFromContextError(t *testing.T) {
 	t.Parallel()
 
@@ -239,95 +278,13 @@ func TestMaxLeaderSearchAttempts(t *testing.T) {
 func TestReplicaOrdinals(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		replicas int32
-		want     []int32
-	}{
-		{
-			name:     "negative replicas",
-			replicas: -1,
-			want:     nil,
-		},
-		{
-			name:     "zero replicas",
-			replicas: 0,
-			want:     nil,
-		},
-		{
-			name:     "single replica",
-			replicas: 1,
-			want:     []int32{0},
-		},
-		{
-			name:     "three replicas",
-			replicas: 3,
-			want:     []int32{0, 1, 2},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := replicaOrdinals(tt.replicas)
-			if len(got) != len(tt.want) {
-				t.Fatalf("len(replicaOrdinals(%d))=%d, want %d", tt.replicas, len(got), len(tt.want))
-			}
-			for i := range tt.want {
-				if got[i] != tt.want[i] {
-					t.Fatalf("replicaOrdinals(%d)[%d]=%d, want %d", tt.replicas, i, got[i], tt.want[i])
-				}
-			}
-		})
-	}
+	runOrdinalTests(t, "replicaOrdinals", replicaOrdinals, ordinalCases[int32]())
 }
 
 func TestAttemptOrdinals(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name        string
-		maxAttempts int
-		want        []int
-	}{
-		{
-			name:        "negative attempts",
-			maxAttempts: -1,
-			want:        nil,
-		},
-		{
-			name:        "zero attempts",
-			maxAttempts: 0,
-			want:        nil,
-		},
-		{
-			name:        "one attempt",
-			maxAttempts: 1,
-			want:        []int{0},
-		},
-		{
-			name:        "three attempts",
-			maxAttempts: 3,
-			want:        []int{0, 1, 2},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := attemptOrdinals(tt.maxAttempts)
-			if len(got) != len(tt.want) {
-				t.Fatalf("len(attemptOrdinals(%d))=%d, want %d", tt.maxAttempts, len(got), len(tt.want))
-			}
-			for i := range tt.want {
-				if got[i] != tt.want[i] {
-					t.Fatalf("attemptOrdinals(%d)[%d]=%d, want %d", tt.maxAttempts, i, got[i], tt.want[i])
-				}
-			}
-		})
-	}
+	runOrdinalTests(t, "attemptOrdinals", attemptOrdinals, ordinalCases[int]())
 }
 
 func TestRevisionPodName(t *testing.T) {

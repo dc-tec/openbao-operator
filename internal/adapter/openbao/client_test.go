@@ -14,6 +14,56 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+type healthBoolTestCase struct {
+	name     string
+	response HealthResponse
+	want     bool
+	wantErr  bool
+}
+
+func newHealthResponseClient(t *testing.T, response HealthResponse) *Client {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatal(err)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := NewClient(ClientConfig{BaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	return client
+}
+
+func runHealthBoolTests(
+	t *testing.T,
+	tests []healthBoolTestCase,
+	methodName string,
+	call func(context.Context, *Client) (bool, error),
+) {
+	t.Helper()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newHealthResponseClient(t, tt.response)
+
+			got, err := call(context.Background(), client)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("%s() error = %v, wantErr %v", methodName, err, tt.wantErr)
+				return
+			}
+
+			if got != tt.want {
+				t.Errorf("%s() = %v, want %v", methodName, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNewClient(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -206,12 +256,7 @@ func TestClient_Health(t *testing.T) {
 }
 
 func TestClient_IsLeader(t *testing.T) {
-	tests := []struct {
-		name       string
-		response   HealthResponse
-		wantLeader bool
-		wantErr    bool
-	}{
+	tests := []healthBoolTestCase{
 		{
 			name: "active leader",
 			response: HealthResponse{
@@ -219,8 +264,8 @@ func TestClient_IsLeader(t *testing.T) {
 				Sealed:      false,
 				Standby:     false,
 			},
-			wantLeader: true,
-			wantErr:    false,
+			want:    true,
+			wantErr: false,
 		},
 		{
 			name: "standby",
@@ -229,8 +274,8 @@ func TestClient_IsLeader(t *testing.T) {
 				Sealed:      false,
 				Standby:     true,
 			},
-			wantLeader: false,
-			wantErr:    false,
+			want:    false,
+			wantErr: false,
 		},
 		{
 			name: "sealed",
@@ -239,8 +284,8 @@ func TestClient_IsLeader(t *testing.T) {
 				Sealed:      true,
 				Standby:     false,
 			},
-			wantLeader: false,
-			wantErr:    false,
+			want:    false,
+			wantErr: false,
 		},
 		{
 			name: "not initialized",
@@ -249,8 +294,8 @@ func TestClient_IsLeader(t *testing.T) {
 				Sealed:      true,
 				Standby:     false,
 			},
-			wantLeader: false,
-			wantErr:    false,
+			want:    false,
+			wantErr: false,
 		},
 		{
 			name: "performance standby",
@@ -260,36 +305,14 @@ func TestClient_IsLeader(t *testing.T) {
 				Standby:            false,
 				PerformanceStandby: true,
 			},
-			wantLeader: false,
-			wantErr:    false,
+			want:    false,
+			wantErr: false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if err := json.NewEncoder(w).Encode(tt.response); err != nil {
-					t.Fatal(err)
-				}
-			}))
-			defer server.Close()
-
-			client, err := NewClient(ClientConfig{BaseURL: server.URL})
-			if err != nil {
-				t.Fatalf("failed to create client: %v", err)
-			}
-
-			isLeader, err := client.IsLeader(context.Background())
-			if (err != nil) != tt.wantErr {
-				t.Errorf("IsLeader() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if isLeader != tt.wantLeader {
-				t.Errorf("IsLeader() = %v, want %v", isLeader, tt.wantLeader)
-			}
-		})
-	}
+	runHealthBoolTests(t, tests, "IsLeader", func(ctx context.Context, client *Client) (bool, error) {
+		return client.IsLeader(ctx)
+	})
 }
 
 func TestClient_StepDown(t *testing.T) {
@@ -368,20 +391,15 @@ func TestClient_StepDown(t *testing.T) {
 }
 
 func TestClient_IsHealthy(t *testing.T) {
-	tests := []struct {
-		name        string
-		response    HealthResponse
-		wantHealthy bool
-		wantErr     bool
-	}{
+	tests := []healthBoolTestCase{
 		{
 			name: "healthy - initialized and unsealed",
 			response: HealthResponse{
 				Initialized: true,
 				Sealed:      false,
 			},
-			wantHealthy: true,
-			wantErr:     false,
+			want:    true,
+			wantErr: false,
 		},
 		{
 			name: "unhealthy - sealed",
@@ -389,8 +407,8 @@ func TestClient_IsHealthy(t *testing.T) {
 				Initialized: true,
 				Sealed:      true,
 			},
-			wantHealthy: false,
-			wantErr:     false,
+			want:    false,
+			wantErr: false,
 		},
 		{
 			name: "unhealthy - not initialized",
@@ -398,36 +416,14 @@ func TestClient_IsHealthy(t *testing.T) {
 				Initialized: false,
 				Sealed:      true,
 			},
-			wantHealthy: false,
-			wantErr:     false,
+			want:    false,
+			wantErr: false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if err := json.NewEncoder(w).Encode(tt.response); err != nil {
-					t.Fatal(err)
-				}
-			}))
-			defer server.Close()
-
-			client, err := NewClient(ClientConfig{BaseURL: server.URL})
-			if err != nil {
-				t.Fatalf("failed to create client: %v", err)
-			}
-
-			healthy, err := client.IsHealthy(context.Background())
-			if (err != nil) != tt.wantErr {
-				t.Errorf("IsHealthy() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if healthy != tt.wantHealthy {
-				t.Errorf("IsHealthy() = %v, want %v", healthy, tt.wantHealthy)
-			}
-		})
-	}
+	runHealthBoolTests(t, tests, "IsHealthy", func(ctx context.Context, client *Client) (bool, error) {
+		return client.IsHealthy(ctx)
+	})
 }
 
 func TestClient_ContextCancellation(t *testing.T) {

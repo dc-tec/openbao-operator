@@ -9,6 +9,46 @@ import (
 	"time"
 )
 
+type transientWrapTestCase struct {
+	name            string
+	err             error
+	wantWrapped     bool
+	wantIsTransient bool
+}
+
+func runTransientWrapTests(
+	t *testing.T,
+	name string,
+	sentinel error,
+	wrap func(error) error,
+	isTransient func(error) bool,
+	tests []transientWrapTestCase,
+) {
+	t.Helper()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wrap(tt.err)
+			if tt.err == nil {
+				if got != nil {
+					t.Errorf("%s(nil) = %v, want nil", name, got)
+				}
+				return
+			}
+			if got == nil {
+				t.Errorf("%s() = nil, want error", name)
+				return
+			}
+			if isTransient(got) != tt.wantIsTransient {
+				t.Errorf("%s() transient = %v, want %v", name, isTransient(got), tt.wantIsTransient)
+			}
+			if tt.wantWrapped && !errors.Is(got, sentinel) {
+				t.Errorf("%s() should wrap error with %v", name, sentinel)
+			}
+		})
+	}
+}
+
 func TestIsTransientConnection(t *testing.T) {
 	tests := []struct {
 		name string
@@ -277,12 +317,7 @@ func TestIsCRDMissingError(t *testing.T) {
 }
 
 func TestWrapTransientConnection(t *testing.T) {
-	tests := []struct {
-		name            string
-		err             error
-		wantWrapped     bool // Whether error should be wrapped with ErrTransientConnection
-		wantIsTransient bool // Whether result should be detected as transient
-	}{
+	tests := []transientWrapTestCase{
 		{
 			name:            "nil error",
 			err:             nil,
@@ -309,31 +344,14 @@ func TestWrapTransientConnection(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := WrapTransientConnection(tt.err)
-			if tt.err == nil {
-				if got != nil {
-					t.Errorf("WrapTransientConnection(nil) = %v, want nil", got)
-				}
-				return
-			}
-			if got == nil {
-				t.Errorf("WrapTransientConnection() = nil, want error")
-				return
-			}
-			// Check if error is detected as transient
-			if IsTransientConnection(got) != tt.wantIsTransient {
-				t.Errorf("WrapTransientConnection() result IsTransientConnection() = %v, want %v", IsTransientConnection(got), tt.wantIsTransient)
-			}
-			// If error should be wrapped, check that it's wrapped with ErrTransientConnection
-			if tt.wantWrapped {
-				if !errors.Is(got, ErrTransientConnection) {
-					t.Errorf("WrapTransientConnection() should wrap error with ErrTransientConnection")
-				}
-			}
-		})
-	}
+	runTransientWrapTests(
+		t,
+		"WrapTransientConnection",
+		ErrTransientConnection,
+		WrapTransientConnection,
+		IsTransientConnection,
+		tests,
+	)
 }
 
 func TestWrapTransientRemoteOverloaded(t *testing.T) {
@@ -386,12 +404,7 @@ func TestWrapTransientRemoteOverloaded(t *testing.T) {
 }
 
 func TestWrapTransientKubernetesAPI(t *testing.T) {
-	tests := []struct {
-		name            string
-		err             error
-		wantWrapped     bool // Whether error should be wrapped with ErrTransientKubernetesAPI
-		wantIsTransient bool // Whether result should be detected as transient
-	}{
+	tests := []transientWrapTestCase{
 		{
 			name:            "nil error",
 			err:             nil,
@@ -418,31 +431,14 @@ func TestWrapTransientKubernetesAPI(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := WrapTransientKubernetesAPI(tt.err)
-			if tt.err == nil {
-				if got != nil {
-					t.Errorf("WrapTransientKubernetesAPI(nil) = %v, want nil", got)
-				}
-				return
-			}
-			if got == nil {
-				t.Errorf("WrapTransientKubernetesAPI() = nil, want error")
-				return
-			}
-			// Check if error is detected as transient
-			if IsTransientKubernetesAPI(got) != tt.wantIsTransient {
-				t.Errorf("WrapTransientKubernetesAPI() result IsTransientKubernetesAPI() = %v, want %v", IsTransientKubernetesAPI(got), tt.wantIsTransient)
-			}
-			// If error should be wrapped, check that it's wrapped with ErrTransientKubernetesAPI
-			if tt.wantWrapped {
-				if !errors.Is(got, ErrTransientKubernetesAPI) {
-					t.Errorf("WrapTransientKubernetesAPI() should wrap error with ErrTransientKubernetesAPI")
-				}
-			}
-		})
-	}
+	runTransientWrapTests(
+		t,
+		"WrapTransientKubernetesAPI",
+		ErrTransientKubernetesAPI,
+		WrapTransientKubernetesAPI,
+		IsTransientKubernetesAPI,
+		tests,
+	)
 }
 
 func TestWrapPermanentConfig(t *testing.T) {

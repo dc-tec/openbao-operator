@@ -29,6 +29,76 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
+func newPreUpgradeSnapshotCluster() *openbaov1alpha1.OpenBaoCluster {
+	return &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-ns",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				PreUpgradeSnapshot: true,
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Image:       "test-image:latest",
+				JWTAuthRole: "backup",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "http://test-endpoint",
+					Bucket:   "test-bucket",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.3",
+			Initialized:    true,
+		},
+	}
+}
+
+func newPreUpgradeSnapshotJob(status batchv1.JobStatus) *batchv1.Job {
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pre-upgrade-backup-test-cluster-gen0",
+			Namespace: "test-ns",
+			Labels: map[string]string{
+				constants.LabelAppInstance:  "test-cluster",
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+				"openbao.org/cluster":       "test-cluster",
+				"openbao.org/component":     "backup",
+				"openbao.org/backup-type":   "pre-upgrade",
+			},
+		},
+		Status: status,
+	}
+}
+
+func newPreUpgradeSnapshotManager(cluster *openbaov1alpha1.OpenBaoCluster, objects ...client.Object) *Manager {
+	scheme := runtime.NewScheme()
+	_ = batchv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	allObjects := append([]client.Object{cluster}, objects...)
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(allObjects...).
+		WithReturnManagedFields().
+		Build()
+
+	return NewManager(
+		k8sClient,
+		scheme,
+		backup.NewUpgradeStrategyRuntime(k8sClient, scheme),
+		portopenbao.ClientConfig{},
+		security.NewImageVerifier(testLogger(), k8sClient, nil),
+		"",
+	)
+}
+
 func TestHandlePreUpgradeSnapshot_NotEnabled(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -334,136 +404,42 @@ func TestHandlePreUpgradeSnapshot_HardenedRequiresEgressRules(t *testing.T) {
 	assert.Contains(t, err.Error(), "spec.network.egressRules")
 }
 
-func TestHandlePreUpgradeSnapshot_WaitsForRunningJob(t *testing.T) {
-	cluster := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "test-ns",
-		},
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version:  "2.4.4",
-			Replicas: 3,
-			Upgrade: &openbaov1alpha1.UpgradeConfig{
-				PreUpgradeSnapshot: true,
+func TestHandlePreUpgradeSnapshot_ExistingJobStatus(t *testing.T) {
+	tests := []struct {
+		name         string
+		jobStatus    batchv1.JobStatus
+		wantComplete bool
+	}{
+		{
+			name: "waits for running job",
+			jobStatus: batchv1.JobStatus{
+				Active:    1,
+				Succeeded: 0,
+				Failed:    0,
 			},
-			Backup: &openbaov1alpha1.BackupSchedule{
-				Image:       "test-image:latest",
-				JWTAuthRole: "backup",
-				Target: openbaov1alpha1.BackupTarget{
-					Endpoint: "http://test-endpoint",
-					Bucket:   "test-bucket",
-				},
-			},
+			wantComplete: false,
 		},
-		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			CurrentVersion: "2.4.3",
-			Initialized:    true,
+		{
+			name: "completes when job is done",
+			jobStatus: batchv1.JobStatus{
+				Active:    0,
+				Succeeded: 1,
+				Failed:    0,
+			},
+			wantComplete: true,
 		},
 	}
 
-	// Create a running backup job
-	runningJob := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pre-upgrade-backup-test-cluster-gen0",
-			Namespace: "test-ns",
-			Labels: map[string]string{
-				constants.LabelAppInstance:  "test-cluster",
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-				"openbao.org/cluster":       "test-cluster",
-				"openbao.org/component":     "backup",
-				"openbao.org/backup-type":   "pre-upgrade",
-			},
-		},
-		Status: batchv1.JobStatus{
-			Active:    1,
-			Succeeded: 0,
-			Failed:    0,
-		},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newPreUpgradeSnapshotCluster()
+			manager := newPreUpgradeSnapshotManager(cluster, newPreUpgradeSnapshotJob(tt.jobStatus))
+
+			complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantComplete, complete)
+		})
 	}
-
-	scheme := runtime.NewScheme()
-	_ = batchv1.AddToScheme(scheme)
-	_ = corev1.AddToScheme(scheme)
-	_ = rbacv1.AddToScheme(scheme)
-	_ = openbaov1alpha1.AddToScheme(scheme)
-
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
-		WithObjects(cluster, runningJob).
-		WithReturnManagedFields().
-		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
-
-	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
-	assert.NoError(t, err, "should return nil when job is running (requeue)")
-	assert.False(t, complete, "should return complete=false when job is running")
-}
-
-func TestHandlePreUpgradeSnapshot_JobCompleted(t *testing.T) {
-	cluster := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "test-ns",
-		},
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version:  "2.4.4",
-			Replicas: 3,
-			Upgrade: &openbaov1alpha1.UpgradeConfig{
-				PreUpgradeSnapshot: true,
-			},
-			Backup: &openbaov1alpha1.BackupSchedule{
-				Image:       "test-image:latest",
-				JWTAuthRole: "backup",
-				Target: openbaov1alpha1.BackupTarget{
-					Endpoint: "http://test-endpoint",
-					Bucket:   "test-bucket",
-				},
-			},
-		},
-		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			CurrentVersion: "2.4.3",
-			Initialized:    true,
-		},
-	}
-
-	// Create a completed backup job
-	completedJob := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pre-upgrade-backup-test-cluster-gen0",
-			Namespace: "test-ns",
-			Labels: map[string]string{
-				constants.LabelAppInstance:  "test-cluster",
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
-				"openbao.org/cluster":       "test-cluster",
-				"openbao.org/component":     "backup",
-				"openbao.org/backup-type":   "pre-upgrade",
-			},
-		},
-		Status: batchv1.JobStatus{
-			Active:    0,
-			Succeeded: 1,
-			Failed:    0,
-		},
-	}
-
-	scheme := runtime.NewScheme()
-	_ = batchv1.AddToScheme(scheme)
-	_ = corev1.AddToScheme(scheme)
-	_ = rbacv1.AddToScheme(scheme)
-	_ = openbaov1alpha1.AddToScheme(scheme)
-
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
-		WithObjects(cluster, completedJob).
-		WithReturnManagedFields().
-		Build()
-	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
-
-	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
-	assert.NoError(t, err, "should return nil when job is completed")
-	assert.True(t, complete, "should return complete=true when job is completed")
 }
 
 func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
