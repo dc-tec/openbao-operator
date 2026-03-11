@@ -222,19 +222,19 @@ var _ = Describe("Cluster TLS Lifecycle", Label("tls", "cluster", "lifecycle"), 
 		initialLeafCert, err := parseLeafCertificate(initialServerSecret)
 		Expect(err).NotTo(HaveOccurred())
 
-			initialPod := &corev1.Pod{}
-			Eventually(func(g Gomega) {
-				g.Expect(c.Get(ctx, podKey, initialPod)).To(Succeed())
-				g.Expect(isPodReady(initialPod)).To(BeTrue())
-				g.Expect(openBaoRestartCount(initialPod)).To(BeNumerically(">=", 0))
-			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		initialPod := &corev1.Pod{}
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, podKey, initialPod)).To(Succeed())
+			g.Expect(isPodReady(initialPod)).To(BeTrue())
+			g.Expect(openBaoRestartCount(initialPod)).To(BeNumerically(">=", 0))
+		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			initialPodUID := initialPod.UID
-			initialRestartCount := openBaoRestartCount(initialPod)
-			initialCertHash := ""
-			if initialPod.Annotations != nil {
-				initialCertHash = initialPod.Annotations[tlsCertHashAnnotation]
-			}
+		initialPodUID := initialPod.UID
+		initialRestartCount := openBaoRestartCount(initialPod)
+		initialCertHash := ""
+		if initialPod.Annotations != nil {
+			initialCertHash = initialPod.Annotations[tlsCertHashAnnotation]
+		}
 
 		serverSecret := &corev1.Secret{}
 		Expect(c.Get(ctx, tlsServerKey, serverSecret)).To(Succeed())
