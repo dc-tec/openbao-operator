@@ -835,10 +835,42 @@ func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config portopenbao.
 	return nil
 }
 
-// RemoveRaftPeerRequest represents the payload sent to POST /v1/sys/storage/raft/remove-peer.
-type RemoveRaftPeerRequest struct {
-	// ServerID is the node ID of the peer to remove.
+type raftPeerActionRequest struct {
 	ServerID string `json:"server_id"`
+}
+
+func (c *Client) executeRaftPeerAction(ctx context.Context, serverID string, path, action string) error {
+	if c.token == "" {
+		return fmt.Errorf("authentication token required for raft %s operation", action)
+	}
+
+	if serverID == "" {
+		return fmt.Errorf("serverID is required")
+	}
+
+	bodyBytes, err := json.Marshal(raftPeerActionRequest{ServerID: serverID})
+	if err != nil {
+		return fmt.Errorf("failed to marshal raft %s request: %w", action, err)
+	}
+
+	httpReq, err := c.newRequest(ctx, http.MethodPost, path, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create raft %s request: %w", action, err)
+	}
+
+	httpReq.Header.Set("X-Vault-Token", c.token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, body, err := c.doAndReadAll(httpReq, nil, fmt.Sprintf("failed to execute raft %s request", action))
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("raft %s request failed with status %d: %s", action, resp.StatusCode, string(body))
+	}
+
+	return nil
 }
 
 // RemoveRaftPeer removes a peer from the Raft cluster.
@@ -848,47 +880,7 @@ type RemoveRaftPeerRequest struct {
 // This is used during blue/green upgrades to eject Blue nodes
 // after the cutover to Green is complete.
 func (c *Client) RemoveRaftPeer(ctx context.Context, serverID string) error {
-	if c.token == "" {
-		return fmt.Errorf("authentication token required for raft remove-peer operation")
-	}
-
-	if serverID == "" {
-		return fmt.Errorf("serverID is required")
-	}
-
-	reqBody := RemoveRaftPeerRequest{
-		ServerID: serverID,
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal raft remove-peer request: %w", err)
-	}
-
-	httpReq, err := c.newRequest(ctx, http.MethodPost, apiPathRaftRemovePeer, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return fmt.Errorf("failed to create raft remove-peer request: %w", err)
-	}
-
-	httpReq.Header.Set("X-Vault-Token", c.token)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft remove-peer request")
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("raft remove-peer request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// PromoteRaftPeerRequest represents the payload sent to POST /v1/sys/storage/raft/promote.
-type PromoteRaftPeerRequest struct {
-	// ServerID is the node ID of the peer to promote to voter.
-	ServerID string `json:"server_id"`
+	return c.executeRaftPeerAction(ctx, serverID, apiPathRaftRemovePeer, "remove-peer")
 }
 
 // PromoteRaftPeer promotes a non-voter peer to a voter in the Raft cluster.
@@ -898,47 +890,7 @@ type PromoteRaftPeerRequest struct {
 // This is used during blue/green upgrades to promote Green nodes from
 // non-voters to voters after they have synchronized with the leader.
 func (c *Client) PromoteRaftPeer(ctx context.Context, serverID string) error {
-	if c.token == "" {
-		return fmt.Errorf("authentication token required for raft promote operation")
-	}
-
-	if serverID == "" {
-		return fmt.Errorf("serverID is required")
-	}
-
-	reqBody := PromoteRaftPeerRequest{
-		ServerID: serverID,
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal raft promote request: %w", err)
-	}
-
-	httpReq, err := c.newRequest(ctx, http.MethodPost, apiPathRaftPromotePeer, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return fmt.Errorf("failed to create raft promote request: %w", err)
-	}
-
-	httpReq.Header.Set("X-Vault-Token", c.token)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft promote request")
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("raft promote request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// DemoteRaftPeerRequest represents the payload sent to POST /v1/sys/storage/raft/demote.
-type DemoteRaftPeerRequest struct {
-	// ServerID is the node ID of the peer to demote to non-voter.
-	ServerID string `json:"server_id"`
+	return c.executeRaftPeerAction(ctx, serverID, apiPathRaftPromotePeer, "promote")
 }
 
 // DemoteRaftPeer demotes a voter peer to a non-voter in the Raft cluster.
@@ -948,41 +900,7 @@ type DemoteRaftPeerRequest struct {
 // This is used during blue/green upgrades to demote Blue nodes from
 // voters to non-voters before removal, preventing them from becoming leader.
 func (c *Client) DemoteRaftPeer(ctx context.Context, serverID string) error {
-	if c.token == "" {
-		return fmt.Errorf("authentication token required for raft demote operation")
-	}
-
-	if serverID == "" {
-		return fmt.Errorf("serverID is required")
-	}
-
-	reqBody := DemoteRaftPeerRequest{
-		ServerID: serverID,
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal raft demote request: %w", err)
-	}
-
-	httpReq, err := c.newRequest(ctx, http.MethodPost, apiPathRaftDemotePeer, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return fmt.Errorf("failed to create raft demote request: %w", err)
-	}
-
-	httpReq.Header.Set("X-Vault-Token", c.token)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft demote request")
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("raft demote request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	return c.executeRaftPeerAction(ctx, serverID, apiPathRaftDemotePeer, "demote")
 }
 
 // UpdateRaftConfigurationRequest represents the payload sent to PUT /v1/sys/storage/raft/configuration.
