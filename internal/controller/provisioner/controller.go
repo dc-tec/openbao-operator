@@ -30,7 +30,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
 	operatorpredicates "github.com/dc-tec/openbao-operator/internal/platform/predicates"
@@ -89,16 +88,7 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 		"tenant", req.NamespacedName,
 	)
 
-	appResult, appErr := appprovisioner.ReconcileOpenBaoTenant(ctx, req.NamespacedName, logger, appprovisioner.TenantRuntime{
-		Client:                   r.Client,
-		APIReader:                r.APIReader,
-		Recorder:                 r.Recorder,
-		Provisioner:              r.Provisioner,
-		OperatorNamespace:        r.OperatorNamespace,
-		ConditionTypeProvisioned: conditionTypeProvisioned,
-		RequeueShort:             constants.RequeueShort,
-		RequeueStandard:          constants.RequeueStandard,
-	})
+	appResult, appErr := appprovisioner.ReconcileOpenBaoTenant(ctx, req.NamespacedName, logger, r.tenantRuntime())
 	result = controllerResult(appResult)
 	err = appErr
 	if err != nil {

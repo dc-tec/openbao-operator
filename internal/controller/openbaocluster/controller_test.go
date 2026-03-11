@@ -69,10 +69,14 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 
 		newReconciler := func() *testCompositeReconciler {
 			parent := &OpenBaoClusterReconciler{
-				Client:        k8sClient,
-				APIReader:     k8sClient,
-				Scheme:        k8sClient.Scheme(),
-				ImageVerifier: security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+				Client: k8sClient,
+				ControllerRuntime: ControllerRuntime{
+					APIReader: k8sClient,
+					Scheme:    k8sClient.Scheme(),
+				},
+				ImageVerificationRuntime: ImageVerificationRuntime{
+					ImageVerifier: security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+				},
 			}
 			return &testCompositeReconciler{parent: parent}
 		}
@@ -562,9 +566,13 @@ var _ = Describe("OpenBaoCluster Controller", func() {
 			reloader := &tlsReloadRecorder{}
 
 			parent := &OpenBaoClusterReconciler{
-				Client:    k8sClient,
-				Scheme:    k8sClient.Scheme(),
-				TLSReload: reloader,
+				Client: k8sClient,
+				ControllerRuntime: ControllerRuntime{
+					Scheme: k8sClient.Scheme(),
+				},
+				OpenBaoRuntime: OpenBaoRuntime{
+					TLSReload: reloader,
+				},
 			}
 			controllerReconciler := &testCompositeReconciler{parent: parent}
 
@@ -736,9 +744,11 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 
 		newReconciler := func() *testCompositeReconciler {
 			parent := &OpenBaoClusterReconciler{
-				Client:    k8sClient,
-				APIReader: k8sClient,
-				Scheme:    k8sClient.Scheme(),
+				Client: k8sClient,
+				ControllerRuntime: ControllerRuntime{
+					APIReader: k8sClient,
+					Scheme:    k8sClient.Scheme(),
+				},
 			}
 			return &testCompositeReconciler{parent: parent}
 		}

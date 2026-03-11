@@ -148,10 +148,16 @@ func TestHandleScaleDownSafety(t *testing.T) {
 			}
 
 			r := &infraReconciler{deps: InfraDependencies{
-				Client:           k8sClient,
-				Scheme:           scheme,
-				Recorder:         nil, // not needed for this test part
-				ClientForPodFunc: clientFunc,
+				Kubernetes: InfraKubernetesRuntime{
+					Client: k8sClient,
+					Scheme: scheme,
+				},
+				Events: InfraEventRuntime{
+					Recorder: nil, // not needed for this test part
+				},
+				Pods: InfraPodRuntime{
+					ClientForPodFunc: clientFunc,
+				},
 			}}
 
 			err := r.handleScaleDownSafety(context.Background(), cluster, tt.desiredReplicas, sts)
@@ -179,15 +185,17 @@ func TestInfraReconciler_ResolveOIDC_LazyDiscoveryForSelfInit(t *testing.T) {
 
 	var called int
 	r := &infraReconciler{deps: InfraDependencies{
-		RestConfig:  &rest.Config{Host: "https://kubernetes.default.svc"},
-		OIDCIssuer:  "",
-		OIDCJWTKeys: nil,
-		DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
-			called++
-			return &OIDCConfig{
-				IssuerURL: "https://issuer.example",
-				JWKSKeys:  []string{"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw==\n-----END PUBLIC KEY-----\n"},
-			}, nil
+		OIDC: InfraOIDCRuntime{
+			RestConfig:  &rest.Config{Host: "https://kubernetes.default.svc"},
+			OIDCIssuer:  "",
+			OIDCJWTKeys: nil,
+			DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
+				called++
+				return &OIDCConfig{
+					IssuerURL: "https://issuer.example",
+					JWKSKeys:  []string{"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw==\n-----END PUBLIC KEY-----\n"},
+				}, nil
+			},
 		},
 	}}
 
@@ -260,8 +268,10 @@ func TestInfraReconciler_ResolveTargetMainImage_BlueGreenPrefersActivePods(t *te
 		Build()
 
 	r := &infraReconciler{deps: InfraDependencies{
-		Client: k8sClient,
-		Scheme: scheme,
+		Kubernetes: InfraKubernetesRuntime{
+			Client: k8sClient,
+			Scheme: scheme,
+		},
 	}}
 
 	got := r.resolveTargetMainImage(context.Background(), logr.Discard(), cluster)

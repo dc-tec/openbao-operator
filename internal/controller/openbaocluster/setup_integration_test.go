@@ -63,9 +63,11 @@ func TestSetupWithManager_SingleTenantMode(t *testing.T) {
 	t.Run("reconciler in single-tenant mode uses Owns watches", func(t *testing.T) {
 		// The SingleTenantMode flag controls which setup path is used
 		r := &openbaocluster.OpenBaoClusterReconciler{
-			Client:           k8sClient,
-			Scheme:           scheme,
-			SingleTenantMode: true,
+			Client: k8sClient,
+			ControllerRuntime: openbaocluster.ControllerRuntime{
+				Scheme:           scheme,
+				SingleTenantMode: true,
+			},
 		}
 
 		// Verify the flag is set
@@ -77,9 +79,11 @@ func TestSetupWithManager_SingleTenantMode(t *testing.T) {
 
 	t.Run("reconciler in multi-tenant mode does not use Owns watches", func(t *testing.T) {
 		r := &openbaocluster.OpenBaoClusterReconciler{
-			Client:           k8sClient,
-			Scheme:           scheme,
-			SingleTenantMode: false,
+			Client: k8sClient,
+			ControllerRuntime: openbaocluster.ControllerRuntime{
+				Scheme:           scheme,
+				SingleTenantMode: false,
+			},
 		}
 
 		require.False(t, r.SingleTenantMode)

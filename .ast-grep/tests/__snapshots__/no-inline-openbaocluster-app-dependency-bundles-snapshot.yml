@@ -1,0 +1,52 @@
+id: no-inline-openbaocluster-app-dependency-bundles
+snapshots:
+  ? |
+    package p
+    func f() {
+      _ = appopenbaocluster.DeletionDependencies{}
+    }
+  : labels:
+    - source: appopenbaocluster.DeletionDependencies{}
+      style: primary
+      start: 27
+      end: 67
+  ? |
+    package p
+    func f() {
+      _ = appopenbaocluster.FutureDependencies{}
+    }
+  : labels:
+    - source: appopenbaocluster.FutureDependencies{}
+      style: primary
+      start: 27
+      end: 65
+  ? |
+    package p
+    func f() {
+      _ = appopenbaocluster.InfraDependencies{}
+    }
+  : labels:
+    - source: appopenbaocluster.InfraDependencies{}
+      style: primary
+      start: 27
+      end: 64
+  ? |
+    package p
+    func f() {
+      _ = appopenbaocluster.StatusDependencies{}
+    }
+  : labels:
+    - source: appopenbaocluster.StatusDependencies{}
+      style: primary
+      start: 27
+      end: 65
+  ? |
+    package p
+    func f() {
+      _ = appopenbaocluster.StorageDependencies{}
+    }
+  : labels:
+    - source: appopenbaocluster.StorageDependencies{}
+      style: primary
+      start: 27
+      end: 66

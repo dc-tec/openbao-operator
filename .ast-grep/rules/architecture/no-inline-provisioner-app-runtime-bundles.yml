@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-inline-provisioner-app-runtime-bundles
+message: Construct Provisioner app runtime bundles via dedicated helper builders in dependencies.go.
+severity: warning
+language: Go
+files:
+  - internal/controller/provisioner/**/*.go
+ignores:
+  - '**/*_test.go'
+  - internal/controller/provisioner/dependencies.go
+rule:
+  pattern: $APP.$TYPE{$$$FIELDS}
+constraints:
+  APP:
+    regex: '^appprovisioner$'
+  TYPE:
+    regex: '^[A-Za-z0-9]+Runtime$'
+note: Keep provisioner reconcile methods thin and centralize app-runtime assembly so future module growth does not spread composition roots through controller logic.

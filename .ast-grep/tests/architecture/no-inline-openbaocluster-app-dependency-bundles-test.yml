@@ -1,0 +1,45 @@
+id: no-inline-openbaocluster-app-dependency-bundles
+valid:
+  - |
+    package p
+    type Reconciler struct{}
+    func (r *Reconciler) infraDependencies() any { return nil }
+    func f(r *Reconciler) {
+      _ = r.infraDependencies()
+    }
+  - |
+    package p
+    func f() {
+      _ = appopenbaocluster.InfraEventRuntime{}
+    }
+  - |
+    package p
+    func f() {
+      _ = otherpkg.FutureDependencies{}
+    }
+invalid:
+  - |
+    package p
+    func f() {
+      _ = appopenbaocluster.InfraDependencies{}
+    }
+  - |
+    package p
+    func f() {
+      _ = appopenbaocluster.StorageDependencies{}
+    }
+  - |
+    package p
+    func f() {
+      _ = appopenbaocluster.StatusDependencies{}
+    }
+  - |
+    package p
+    func f() {
+      _ = appopenbaocluster.DeletionDependencies{}
+    }
+  - |
+    package p
+    func f() {
+      _ = appopenbaocluster.FutureDependencies{}
+    }

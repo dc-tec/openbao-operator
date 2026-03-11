@@ -13,7 +13,11 @@ func TestSingleTenantModeField(t *testing.T) {
 	})
 
 	t.Run("SingleTenantMode can be set to true", func(t *testing.T) {
-		r := &OpenBaoClusterReconciler{SingleTenantMode: true}
+		r := &OpenBaoClusterReconciler{
+			ControllerRuntime: ControllerRuntime{
+				SingleTenantMode: true,
+			},
+		}
 		assert.True(t, r.SingleTenantMode, "SingleTenantMode should be settable to true")
 	})
 }

@@ -58,9 +58,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	r.setTLSReadyCondition(ctx, cluster)
 
 	// 1. Gather all observed state (API calls).
-	state, err := appopenbaocluster.GatherStatusState(ctx, logger, appopenbaocluster.StatusDependencies{
-		Reader: r.Client,
-	}, cluster)
+	state, err := appopenbaocluster.GatherStatusState(ctx, logger, r.statusDependencies(), cluster)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

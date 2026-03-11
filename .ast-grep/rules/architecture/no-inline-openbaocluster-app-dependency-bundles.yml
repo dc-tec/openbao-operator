@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-inline-openbaocluster-app-dependency-bundles
+message: Construct OpenBaoCluster app dependency bundles via dedicated helper builders in dependencies.go.
+severity: warning
+language: Go
+files:
+  - internal/controller/openbaocluster/**/*.go
+ignores:
+  - '**/*_test.go'
+  - internal/controller/openbaocluster/dependencies.go
+rule:
+  pattern: $APP.$TYPE{$$$FIELDS}
+constraints:
+  APP:
+    regex: '^appopenbaocluster$'
+  TYPE:
+    regex: '^[A-Za-z0-9]+Dependencies$'
+note: Keep controller wiring thin and centralize app dependency assembly so reconcile flows do not grow new inline composition roots.

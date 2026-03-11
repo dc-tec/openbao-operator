@@ -76,10 +76,21 @@ func (p StorageReasonPolicy) restartRequiredReason() string {
 	return defaultReasonStorageRestartRequired
 }
 
+// StorageResourceRuntime groups Kubernetes clients used by storage reconciliation.
+type StorageResourceRuntime struct {
+	Client    client.Client
+	APIReader client.Reader
+}
+
+// StorageEventRuntime groups event emission dependencies for storage workflows.
+type StorageEventRuntime struct {
+	Recorder events.EventRecorder
+}
+
 // StorageDependencies provides external dependencies for storage reconciliation.
 type StorageDependencies struct {
-	Client   client.Client
-	Recorder events.EventRecorder
+	Resources StorageResourceRuntime
+	Events    StorageEventRuntime
 }
 
 type storageReconciler struct {
@@ -110,7 +121,7 @@ func ReconcileStorage(
 	if cluster == nil {
 		return recon.Result{}, nil
 	}
-	if deps.Client == nil {
+	if deps.Resources.Client == nil {
 		return recon.Result{}, fmt.Errorf("storage client is required")
 	}
 
@@ -119,7 +130,7 @@ func ReconcileStorage(
 		return recon.Result{}, err
 	}
 
-	pvcs, err := listClusterPVCs(ctx, deps.Client, cluster)
+	pvcs, err := listClusterPVCs(ctx, deps.Resources.Client, cluster)
 	if err != nil {
 		return recon.Result{}, err
 	}
@@ -131,7 +142,7 @@ func ReconcileStorage(
 		return recon.Result{}, err
 	}
 
-	patched, err := expandPVCs(ctx, deps.Client, deps.Recorder, cluster, logger, desiredQty, pvcs, reasons)
+	patched, err := expandPVCs(ctx, deps.Resources.Client, deps.Events.Recorder, cluster, logger, desiredQty, pvcs, reasons)
 	if err != nil {
 		return recon.Result{}, err
 	}
@@ -273,12 +284,16 @@ type StoragePodClient interface {
 // StoragePodClientFactory constructs pod-targeted OpenBao API clients.
 type StoragePodClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (StoragePodClient, error)
 
+// StoragePodRuntime groups pod-targeted OpenBao client construction.
+type StoragePodRuntime struct {
+	ClientForPodFunc StoragePodClientFactory
+}
+
 // StorageResizeRestartDependencies provides dependencies for filesystem resize restarts.
 type StorageResizeRestartDependencies struct {
-	Client           client.Client
-	APIReader        client.Reader
-	Recorder         events.EventRecorder
-	ClientForPodFunc StoragePodClientFactory
+	Resources StorageResourceRuntime
+	Events    StorageEventRuntime
+	Pods      StoragePodRuntime
 }
 
 type storageResizeRestartReconciler struct {
@@ -309,13 +324,13 @@ func ReconcileStorageResizeRestart(
 	if cluster == nil || !cluster.Status.Initialized {
 		return recon.Result{}, nil
 	}
-	if deps.Client == nil {
+	if deps.Resources.Client == nil {
 		return recon.Result{}, fmt.Errorf("storage restart client is required")
 	}
 
-	apiReader := deps.APIReader
+	apiReader := deps.Resources.APIReader
 	if apiReader == nil {
-		apiReader = deps.Client
+		apiReader = deps.Resources.Client
 	}
 
 	var pvcList corev1.PersistentVolumeClaimList
@@ -346,7 +361,7 @@ func ReconcileStorageResizeRestart(
 		return recon.Result{RequeueAfter: storageRequeueShort}, nil
 	}
 
-	targetPod, err := nextPodNeedingFSResizeRestart(ctx, deps.Client, cluster, pvcList.Items)
+	targetPod, err := nextPodNeedingFSResizeRestart(ctx, deps.Resources.Client, cluster, pvcList.Items)
 	if err != nil {
 		return recon.Result{}, err
 	}
@@ -358,7 +373,7 @@ func ReconcileStorageResizeRestart(
 		return recon.Result{RequeueAfter: storageRequeueShort}, nil
 	}
 
-	actions, err := clientForPod(cluster, targetPod.Name, deps.ClientForPodFunc)
+	actions, err := clientForPod(cluster, targetPod.Name, deps.Pods.ClientForPodFunc)
 	if err != nil {
 		return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client for pod %s: %w", targetPod.Name, err))
 	}
@@ -374,8 +389,8 @@ func ReconcileStorageResizeRestart(
 			if err := actions.StepDownLeader(ctx); err != nil {
 				return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to step down leader %s before restart: %w", targetPod.Name, err))
 			}
-			if deps.Recorder != nil {
-				deps.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "PVCResizeLeaderStepDown", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
+			if deps.Events.Recorder != nil {
+				deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "PVCResizeLeaderStepDown", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
 			}
 			return recon.Result{RequeueAfter: storageRequeueShort}, nil
 		}
@@ -383,15 +398,15 @@ func ReconcileStorageResizeRestart(
 	}
 
 	logger.Info("Restarting pod to complete filesystem resize", "pod", targetPod.Name)
-	if err := deps.Client.Delete(ctx, targetPod); err != nil && !apierrors.IsNotFound(err) {
+	if err := deps.Resources.Client.Delete(ctx, targetPod); err != nil && !apierrors.IsNotFound(err) {
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
 			return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to delete pod %s/%s for filesystem resize restart: %w", targetPod.Namespace, targetPod.Name, err))
 		}
 		return recon.Result{}, fmt.Errorf("failed to delete pod %s/%s for filesystem resize restart: %w", targetPod.Namespace, targetPod.Name, err)
 	}
 
-	if deps.Recorder != nil {
-		deps.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizePodRestart", "PVCResizePodRestart", "Restarted pod %s to complete filesystem resize", targetPod.Name)
+	if deps.Events.Recorder != nil {
+		deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizePodRestart", "PVCResizePodRestart", "Restarted pod %s to complete filesystem resize", targetPod.Name)
 	}
 
 	return recon.Result{RequeueAfter: storageRequeueShort}, nil

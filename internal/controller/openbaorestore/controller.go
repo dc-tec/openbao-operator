@@ -18,6 +18,7 @@ package openbaorestore
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -86,9 +87,8 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	logger := log.FromContext(ctx).WithName("openbaorestore")
 
-	// Create restore manager if not set
 	if r.RestoreManager == nil {
-		r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder, r.OperatorImageVerifier, r.Platform)
+		return ctrl.Result{}, fmt.Errorf("restore manager is not configured")
 	}
 
 	appResult, appErr := appopenbaorestore.ReconcileOpenBaoRestore(
@@ -118,7 +118,9 @@ func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Recorder == nil {
 		r.Recorder = mgr.GetEventRecorder("openbaorestore")
 	}
-	r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder, r.OperatorImageVerifier, r.Platform)
+	if r.RestoreManager == nil {
+		r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder, r.OperatorImageVerifier, r.Platform)
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoRestore{}).
