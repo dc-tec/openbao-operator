@@ -23,7 +23,7 @@ import (
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 )
 
-var _ = Describe("Chaos", Label("chaos", "security", "cluster", "slow"), Ordered, func() {
+var _ = Describe("Security: Anti-Tamper Policy", Label("security", "tamper", "cluster", "slow"), Ordered, func() {
 	ctx := context.Background()
 
 	var (
@@ -46,23 +46,23 @@ var _ = Describe("Chaos", Label("chaos", "security", "cluster", "slow"), Ordered
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Context("Controller resilience (chaos)", func() {
+	Context("managed-resource mutation guardrails", func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
-			chaos           *openbaov1alpha1.OpenBaoCluster
+			cluster         *openbaov1alpha1.OpenBaoCluster
 		)
 
 		BeforeAll(func() {
 			var err error
 
-			tenantFW, err = framework.New(ctx, admin, "tenant-chaos", operatorNamespace)
+			tenantFW, err = framework.New(ctx, admin, "tenant-tamper", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
 			tenantNamespace = tenantFW.Namespace
 
-			chaos = &openbaov1alpha1.OpenBaoCluster{
+			cluster = &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "chaos-cluster",
+					Name:      "tamper-cluster",
 					Namespace: tenantNamespace,
 				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -92,10 +92,10 @@ var _ = Describe("Chaos", Label("chaos", "security", "cluster", "slow"), Ordered
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
 			}
-			Expect(admin.Create(ctx, chaos)).To(Succeed())
+			Expect(admin.Create(ctx, cluster)).To(Succeed())
 
 			Eventually(func() error {
-				return admin.Get(ctx, types.NamespacedName{Name: chaos.Name + "-config", Namespace: tenantNamespace}, &corev1.ConfigMap{})
+				return admin.Get(ctx, types.NamespacedName{Name: cluster.Name + "-config", Namespace: tenantNamespace}, &corev1.ConfigMap{})
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
@@ -109,39 +109,42 @@ var _ = Describe("Chaos", Label("chaos", "security", "cluster", "slow"), Ordered
 			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
-		It("prevents deletion of managed ConfigMap (policy enforcement)", func() {
+		It("prevents deletion of the managed ConfigMap", Label(
+			"case:anti-tamper-configmap-delete-blocked",
+			"covers:anti-tamper",
+			"covers:configmap-protection",
+		), func() {
 			cm := &corev1.ConfigMap{}
-			err := admin.Get(ctx, types.NamespacedName{Name: chaos.Name + "-config", Namespace: tenantNamespace}, cm)
+			err := admin.Get(ctx, types.NamespacedName{Name: cluster.Name + "-config", Namespace: tenantNamespace}, cm)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Attempt to delete the ConfigMap - this should be blocked by the ValidatingAdmissionPolicy
 			err = admin.Delete(ctx, cm)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
 			Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy"))
 
-			// Verify the ConfigMap still exists
 			Eventually(func() error {
-				return admin.Get(ctx, types.NamespacedName{Name: chaos.Name + "-config", Namespace: tenantNamespace}, &corev1.ConfigMap{})
+				return admin.Get(ctx, types.NamespacedName{Name: cluster.Name + "-config", Namespace: tenantNamespace}, &corev1.ConfigMap{})
 			}, 5*time.Second, 1*time.Second).Should(Succeed())
 		})
 
-		It("prevents deletion of managed StatefulSet (policy enforcement)", func() {
-			// Wait for StatefulSet to be created by the operator
+		It("prevents deletion of the managed StatefulSet", Label(
+			"case:anti-tamper-statefulset-delete-blocked",
+			"covers:anti-tamper",
+			"covers:statefulset-protection",
+		), func() {
 			sts := &appsv1.StatefulSet{}
 			Eventually(func() error {
-				return admin.Get(ctx, types.NamespacedName{Name: chaos.Name, Namespace: tenantNamespace}, sts)
+				return admin.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: tenantNamespace}, sts)
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			// Attempt to delete the StatefulSet - this should be blocked by the ValidatingAdmissionPolicy
 			err := admin.Delete(ctx, sts)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
 			Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy"))
 
-			// Verify the StatefulSet still exists
 			Eventually(func() error {
-				return admin.Get(ctx, types.NamespacedName{Name: chaos.Name, Namespace: tenantNamespace}, &appsv1.StatefulSet{})
+				return admin.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: tenantNamespace}, &appsv1.StatefulSet{})
 			}, 5*time.Second, 1*time.Second).Should(Succeed())
 		})
 	})

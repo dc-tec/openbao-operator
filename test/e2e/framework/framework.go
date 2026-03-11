@@ -63,12 +63,13 @@ type Framework struct {
 
 // DevelopmentClusterConfig defines the inputs for creating a basic Development profile cluster.
 type DevelopmentClusterConfig struct {
-	Name          string
-	Replicas      int32
-	Version       string
-	Image         string
-	ConfigInitImg string
-	APIServerCIDR string
+	Name           string
+	Replicas       int32
+	Version        string
+	Image          string
+	ConfigInitImg  string
+	APIServerCIDR  string
+	DeletionPolicy openbaov1alpha1.DeletionPolicy
 }
 
 // DefaultAdminSelfInitRequests returns a standard set of SelfInit requests that:
@@ -357,6 +358,10 @@ func (f *Framework) CreateDevelopmentCluster(ctx context.Context, cfg Developmen
 			},
 			DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 		},
+	}
+
+	if cfg.DeletionPolicy != "" {
+		cluster.Spec.DeletionPolicy = cfg.DeletionPolicy
 	}
 
 	if sc := strings.TrimSpace(os.Getenv("E2E_STORAGE_CLASS")); sc != "" {

@@ -22,6 +22,10 @@ import (
 const (
 	jwtAutopilotVerifyAttempts    = 30
 	jwtAutopilotVerifySleepSecond = 3
+	jwtCASecretMountPath          = "/var/run/secrets/openbao-ca"
+	jwtCommandAttempts            = 15
+	jwtCommandSleepSecond         = 3
+	jwtClientTimeout              = "5s"
 )
 
 // executePod creates a pod to execute a command with standard environment variables.
@@ -283,20 +287,11 @@ func WriteSecretViaJWT(
 	}
 	dataStr := strings.Join(kvPairs, " ")
 
-	// Command sequence:
-	// 1. Login with JWT using the projected ServiceAccount token (with openbao-internal audience)
-	// 2. Set BAO_TOKEN from the response
-	// 3. Write the secret
-	cmd := fmt.Sprintf(`
-set -e
-export BAO_ADDR=%s
-export BAO_SKIP_VERIFY=true
-TOKEN=$(bao write -field=token auth/jwt-operator/login role=%s jwt=@/var/run/secrets/openbao/token)
-export BAO_TOKEN=$TOKEN
-bao kv put %s %s
-`, baoAddr, roleName, path, dataStr)
+	cmd := fmt.Sprintf("bao kv put %s %s", path, dataStr)
 
-	if _, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd); err != nil {
+	if _, err := executeJWTPodForRole(
+		ctx, restCfg, c, namespace, clientImage, baoAddr, serviceAccountName, roleName, labels, cmd,
+	); err != nil {
 		return fmt.Errorf("failed to write secret via JWT: %w", err)
 	}
 
@@ -317,18 +312,45 @@ func ReadSecretViaJWT(
 	labels map[string]string,
 	key string,
 ) (string, error) {
-	cmd := fmt.Sprintf(`
-set -e
-export BAO_ADDR=%s
-export BAO_SKIP_VERIFY=true
-TOKEN=$(bao write -field=token auth/jwt-operator/login role=%s jwt=@/var/run/secrets/openbao/token)
-export BAO_TOKEN=$TOKEN
-bao kv get -field=%s %s
-`, baoAddr, roleName, key, path)
+	cmd := fmt.Sprintf("bao kv get -field=%s %s", key, path)
 
-	logs, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd)
+	logs, err := executeJWTPodForRole(
+		ctx, restCfg, c, namespace, clientImage, baoAddr, serviceAccountName, roleName, labels, cmd,
+	)
 	if err != nil {
 		return "", fmt.Errorf("failed to read secret via JWT: %w", err)
+	}
+
+	return strings.TrimSpace(logs), nil
+}
+
+// ReadSecretViaJWTWithCA performs a K8s JWT login and reads a secret while
+// validating the OpenBao server certificate against the provided CA Secret.
+func ReadSecretViaJWTWithCA(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	namespace string,
+	clientImage string,
+	baoAddr string,
+	serviceAccountName string,
+	roleName string,
+	path string,
+	labels map[string]string,
+	key string,
+	caSecretName string,
+) (string, error) {
+	if strings.TrimSpace(caSecretName) == "" {
+		return "", fmt.Errorf("ca secret name is required")
+	}
+
+	cmd := fmt.Sprintf("bao kv get -field=%s %s", key, path)
+
+	logs, err := executeJWTPodWithCASecretForRole(
+		ctx, restCfg, c, namespace, clientImage, baoAddr, serviceAccountName, roleName, labels, caSecretName, cmd,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to read secret via JWT with CA validation: %w", err)
 	}
 
 	return strings.TrimSpace(logs), nil
@@ -347,16 +369,9 @@ func RunCommandViaJWT(
 	labels map[string]string,
 	command string,
 ) (string, error) {
-	cmd := fmt.Sprintf(`
-set -e
-export BAO_ADDR=%s
-export BAO_SKIP_VERIFY=true
-TOKEN=$(bao write -field=token auth/jwt-operator/login role=%s jwt=@/var/run/secrets/openbao/token)
-export BAO_TOKEN=$TOKEN
-%s
-`, baoAddr, roleName, command)
-
-	logs, err := executeJWTPod(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, cmd)
+	logs, err := executeJWTPodForRole(
+		ctx, restCfg, c, namespace, clientImage, baoAddr, serviceAccountName, roleName, labels, command,
+	)
 	if err != nil {
 		return "", fmt.Errorf("failed to run command via JWT: %w", err)
 	}
@@ -496,7 +511,108 @@ func executeJWTPod(
 	labels map[string]string,
 	cmd string,
 ) (string, error) {
+	return executeJWTPodWithCASecret(ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, "", cmd)
+}
+
+func executeJWTPodForRole(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	namespace string,
+	clientImage string,
+	baoAddr string,
+	serviceAccountName string,
+	roleName string,
+	labels map[string]string,
+	cmd string,
+) (string, error) {
+	return executeJWTPodWithCASecretForRole(
+		ctx, restCfg, c, namespace, clientImage, baoAddr, serviceAccountName, roleName, labels, "", cmd,
+	)
+}
+
+func executeJWTPodWithCASecretForRole(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	namespace string,
+	clientImage string,
+	baoAddr string,
+	serviceAccountName string,
+	roleName string,
+	labels map[string]string,
+	caSecretName string,
+	cmd string,
+) (string, error) {
+	wrappedCmd := buildJWTCommandScript(baoAddr, roleName, jwtTLSValidationExport(caSecretName), cmd)
+	logs, err := executeJWTPodWithCASecret(
+		ctx, restCfg, c, namespace, clientImage, serviceAccountName, labels, caSecretName, wrappedCmd,
+	)
+	if err != nil {
+		return "", err
+	}
+	return extractJWTCommandOutput(logs), nil
+}
+
+func executeJWTPodWithCASecret(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	namespace string,
+	clientImage string,
+	serviceAccountName string,
+	labels map[string]string,
+	caSecretName string,
+	cmd string,
+) (string, error) {
 	expirationSeconds := int64(3600)
+	volumes := []corev1.Volume{
+		{
+			Name: "openbao-token",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{
+						{
+							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+								Audience:          "openbao-internal",
+								ExpirationSeconds: &expirationSeconds,
+								Path:              "token",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "openbao-token",
+			MountPath: "/var/run/secrets/openbao",
+			ReadOnly:  true,
+		},
+	}
+	if strings.TrimSpace(caSecretName) != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "openbao-ca",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: caSecretName,
+					Items: []corev1.KeyToPath{
+						{
+							Key:  "ca.crt",
+							Path: "ca.crt",
+						},
+					},
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "openbao-ca",
+			MountPath: jwtCASecretMountPath,
+			ReadOnly:  true,
+		})
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "jwt-exec-" + randString(5),
@@ -515,37 +631,14 @@ func executeJWTPod(
 					Type: corev1.SeccompProfileTypeRuntimeDefault,
 				},
 			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "openbao-token",
-					VolumeSource: corev1.VolumeSource{
-						Projected: &corev1.ProjectedVolumeSource{
-							Sources: []corev1.VolumeProjection{
-								{
-									ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-										Audience:          "openbao-internal",
-										ExpirationSeconds: &expirationSeconds,
-										Path:              "token",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			Volumes: volumes,
 			Containers: []corev1.Container{
 				{
-					Name:    "bao",
-					Image:   clientImage,
-					Command: []string{"/bin/sh", "-c"},
-					Args:    []string{cmd},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "openbao-token",
-							MountPath: "/var/run/secrets/openbao",
-							ReadOnly:  true,
-						},
-					},
+					Name:         "bao",
+					Image:        clientImage,
+					Command:      []string{"/bin/sh", "-ec"},
+					Args:         []string{cmd},
+					VolumeMounts: volumeMounts,
 					SecurityContext: &corev1.SecurityContext{
 						AllowPrivilegeEscalation: ptr.To(false),
 						Capabilities: &corev1.Capabilities{
@@ -568,6 +661,101 @@ func executeJWTPod(
 		return "", fmt.Errorf("pod failed, logs:\n%s", result.Logs)
 	}
 	return result.Logs, nil
+}
+
+func buildJWTCommandScript(baoAddr string, roleName string, tlsValidationExport string, command string) string {
+	return fmt.Sprintf(`
+set -eu
+export BAO_ADDR=%q
+export BAO_CLIENT_TIMEOUT=%q
+%s
+cat <<'__JWT_COMMAND_EOF__' >/tmp/jwt-command.sh
+%s
+__JWT_COMMAND_EOF__
+chmod 700 /tmp/jwt-command.sh
+
+for i in $(seq 1 %d); do
+	echo "Attempt $i/%d..."
+	set +e
+	TOKEN=$(bao write -field=token auth/jwt-operator/login role=%q jwt=@/var/run/secrets/openbao/token 2>&1)
+	LOGIN_EXIT=$?
+	set -e
+	if [ $LOGIN_EXIT -ne 0 ] || [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+		echo "JWT login not ready yet"
+		if [ -n "$TOKEN" ]; then
+			printf '%%s\n' "$TOKEN"
+		fi
+		sleep %d
+		continue
+	fi
+	export BAO_TOKEN=$TOKEN
+
+	if ! bao status >/dev/null 2>&1; then
+		echo "OpenBao not ready yet"
+		sleep %d
+		continue
+	fi
+
+	set +e
+	COMMAND_OUTPUT=$(/bin/sh -eu /tmp/jwt-command.sh 2>&1)
+	COMMAND_EXIT=$?
+	set -e
+	if [ $COMMAND_EXIT -eq 0 ]; then
+		if [ -n "$COMMAND_OUTPUT" ]; then
+			printf '%%s\n' "$COMMAND_OUTPUT"
+		fi
+		exit 0
+	fi
+
+	echo "JWT command failed"
+	if [ -n "$COMMAND_OUTPUT" ]; then
+		printf '%%s\n' "$COMMAND_OUTPUT"
+	fi
+	sleep %d
+done
+
+echo "timed out waiting for JWT command to succeed after %d attempts"
+exit 1
+	`,
+		baoAddr,
+		jwtClientTimeout,
+		tlsValidationExport,
+		strings.TrimSpace(command),
+		jwtCommandAttempts,
+		jwtCommandAttempts,
+		roleName,
+		jwtCommandSleepSecond,
+		jwtCommandSleepSecond,
+		jwtCommandSleepSecond,
+		jwtCommandAttempts,
+	)
+}
+
+func jwtTLSValidationExport(caSecretName string) string {
+	if strings.TrimSpace(caSecretName) == "" {
+		return "export BAO_SKIP_VERIFY=true"
+	}
+	return fmt.Sprintf("export BAO_CACERT=%s/ca.crt", jwtCASecretMountPath)
+}
+
+func extractJWTCommandOutput(logs string) string {
+	trimmed := strings.TrimSpace(logs)
+	if trimmed == "" {
+		return ""
+	}
+
+	lines := strings.Split(trimmed, "\n")
+	lastAttemptIdx := -1
+	for i, line := range lines {
+		if strings.HasPrefix(line, "Attempt ") && strings.HasSuffix(line, "...") {
+			lastAttemptIdx = i
+		}
+	}
+	if lastAttemptIdx == -1 {
+		return trimmed
+	}
+
+	return strings.TrimSpace(strings.Join(lines[lastAttemptIdx+1:], "\n"))
 }
 
 // VerifyRaftAutopilotViaJWT performs a K8s JWT login and verifies Raft Autopilot configuration.
