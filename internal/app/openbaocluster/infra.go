@@ -112,25 +112,50 @@ type ScaleDownPodClient interface {
 type ScaleDownPodClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error)
 type discoverOIDCConfigFunc func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error)
 
-// InfraDependencies provides external dependencies for infrastructure reconciliation.
-type InfraDependencies struct {
-	Client                             client.Client
-	APIReader                          client.Reader
-	Scheme                             *runtime.Scheme
-	RestConfig                         *rest.Config
-	OperatorNamespace                  string
-	OIDCIssuer                         string
-	OIDCJWTKeys                        []string
+// InfraKubernetesRuntime groups Kubernetes-facing collaborators used by infra reconciliation.
+type InfraKubernetesRuntime struct {
+	Client            client.Client
+	APIReader         client.Reader
+	Scheme            *runtime.Scheme
+	OperatorNamespace string
+	Platform          string
+}
+
+// InfraOIDCRuntime groups OIDC discovery inputs and warmup state.
+type InfraOIDCRuntime struct {
+	RestConfig          *rest.Config
+	OIDCIssuer          string
+	OIDCJWTKeys         []string
+	DiscoverOIDCConfig  discoverOIDCConfigFunc
+	DiscoveryStatusCode oidcDiscoveryStatusCodeFunc
+}
+
+// InfraImageVerificationRuntime groups image verification collaborators.
+type InfraImageVerificationRuntime struct {
 	OperatorImageVerifier              imageverify.Verifier
 	VerifyImageFunc                    verifyImageFunc
 	VerifyOperatorImage                verifyOperatorImageFunc
 	IsMainImageVerificationEnabled     imageVerificationEnabledFunc
 	IsOperatorImageVerificationEnabled imageVerificationEnabledFunc
-	Recorder                           events.EventRecorder
-	Platform                           string
-	ClientForPodFunc                   ScaleDownPodClientFactory
-	DiscoverOIDCConfig                 discoverOIDCConfigFunc
-	OIDCDiscoveryStatusCode            oidcDiscoveryStatusCodeFunc
+}
+
+// InfraEventRuntime groups event emission dependencies.
+type InfraEventRuntime struct {
+	Recorder events.EventRecorder
+}
+
+// InfraPodRuntime groups pod-targeted OpenBao client construction.
+type InfraPodRuntime struct {
+	ClientForPodFunc ScaleDownPodClientFactory
+}
+
+// InfraDependencies provides external dependencies for infrastructure reconciliation.
+type InfraDependencies struct {
+	Kubernetes        InfraKubernetesRuntime
+	OIDC              InfraOIDCRuntime
+	ImageVerification InfraImageVerificationRuntime
+	Events            InfraEventRuntime
+	Pods              InfraPodRuntime
 }
 
 type infraReconciler struct {
@@ -151,10 +176,10 @@ func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 }
 
 func (r *infraReconciler) oidcDiscoveryStatusCode(err error) (int, bool) {
-	if r == nil || r.deps.OIDCDiscoveryStatusCode == nil {
+	if r == nil || r.deps.OIDC.DiscoveryStatusCode == nil {
 		return 0, false
 	}
-	return r.deps.OIDCDiscoveryStatusCode(err)
+	return r.deps.OIDC.DiscoveryStatusCode(err)
 }
 
 func (r *infraReconciler) oidcDiscoveryError(err error) error {
@@ -189,18 +214,18 @@ func (r *infraReconciler) oidcDiscoveryError(err error) error {
 }
 
 func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, []string, error) {
-	effectiveIssuer := r.deps.OIDCIssuer
-	effectiveKeys := r.deps.OIDCJWTKeys
+	effectiveIssuer := r.deps.OIDC.OIDCIssuer
+	effectiveKeys := r.deps.OIDC.OIDCJWTKeys
 
 	if !shouldBootstrapJWTAuth(cluster) || (strings.TrimSpace(effectiveIssuer) != "" && len(effectiveKeys) > 0) {
 		return effectiveIssuer, effectiveKeys, nil
 	}
 
-	if r.deps.RestConfig == nil {
+	if r.deps.OIDC.RestConfig == nil {
 		return "", nil, operatorerrors.WrapPermanentConfig(fmt.Errorf("OIDC discovery required but controller rest.Config is not available"))
 	}
 
-	discover := r.deps.DiscoverOIDCConfig
+	discover := r.deps.OIDC.DiscoverOIDCConfig
 	if discover == nil {
 		return "", nil, operatorerrors.WrapPermanentConfig(fmt.Errorf("OIDC discovery function is not configured"))
 	}
@@ -208,7 +233,7 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	discovered, err := discover(discoveryCtx, r.deps.RestConfig)
+	discovered, err := discover(discoveryCtx, r.deps.OIDC.RestConfig)
 	if err != nil {
 		return "", nil, r.oidcDiscoveryError(err)
 	}
@@ -311,14 +336,14 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 	}
 
 	logger.Error(err, opts.failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
-	if opts.emitEventOnWarn && r.deps.Recorder != nil {
-		r.deps.Recorder.Eventf(cluster, nil, corev1.EventTypeWarning, opts.failureReason, opts.failureReason, "%s but proceeding due to Warn policy: %v", opts.failureMessagePrefix, err)
+	if opts.emitEventOnWarn && r.deps.Events.Recorder != nil {
+		r.deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeWarning, opts.failureReason, opts.failureReason, "%s but proceeding due to Warn policy: %v", opts.failureMessagePrefix, err)
 	}
 	return "", nil
 }
 
 func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
-	isMainImageVerificationEnabled := r.deps.IsMainImageVerificationEnabled
+	isMainImageVerificationEnabled := r.deps.ImageVerification.IsMainImageVerificationEnabled
 	if isMainImageVerificationEnabled == nil {
 		isMainImageVerificationEnabled = defaultIsMainImageVerificationEnabled
 	}
@@ -334,15 +359,15 @@ func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr
 	}
 
 	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
-		if r.deps.VerifyImageFunc == nil {
+		if r.deps.ImageVerification.VerifyImageFunc == nil {
 			return "", fmt.Errorf("verifyImageFunc is required")
 		}
-		return r.deps.VerifyImageFunc(ctx, logger, cluster, imageRef)
+		return r.deps.ImageVerification.VerifyImageFunc(ctx, logger, cluster, imageRef)
 	})
 }
 
 func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
-	isOperatorImageVerificationEnabled := r.deps.IsOperatorImageVerificationEnabled
+	isOperatorImageVerificationEnabled := r.deps.ImageVerification.IsOperatorImageVerificationEnabled
 	if isOperatorImageVerificationEnabled == nil {
 		isOperatorImageVerificationEnabled = defaultIsOperatorImageVerificationEnabled
 	}
@@ -360,13 +385,13 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 		emitEventOnWarn:      true,
 	}
 
-	verifyFunc := r.deps.VerifyOperatorImage
+	verifyFunc := r.deps.ImageVerification.VerifyOperatorImage
 	if verifyFunc == nil {
 		return "", fmt.Errorf("verifyOperatorImage is required")
 	}
 
 	return r.verifyImageDigestWithPolicy(ctx, logger, cluster, opts, func(ctx context.Context) (string, error) {
-		return verifyFunc(ctx, logger, r.deps.OperatorImageVerifier, cluster, strings.TrimSpace(imageRef))
+		return verifyFunc(ctx, logger, r.deps.ImageVerification.OperatorImageVerifier, cluster, strings.TrimSpace(imageRef))
 	})
 }
 
@@ -441,9 +466,9 @@ func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger log
 		return targetImage
 	}
 
-	podReader := client.Reader(r.deps.Client)
-	if r.deps.APIReader != nil {
-		podReader = r.deps.APIReader
+	podReader := client.Reader(r.deps.Kubernetes.Client)
+	if r.deps.Kubernetes.APIReader != nil {
+		podReader = r.deps.Kubernetes.APIReader
 	}
 
 	inframanager.EnsureBlueGreenStatus(ctx, logger, podReader, cluster)
@@ -487,7 +512,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	spec := r.computeStatefulSetSpec(logger, cluster, verifiedImageDigest, verifiedInitContainerDigest)
 
 	currentSTS := &appsv1.StatefulSet{}
-	if err := r.deps.Client.Get(ctx, client.ObjectKey{Name: spec.Name, Namespace: cluster.Namespace}, currentSTS); err == nil {
+	if err := r.deps.Kubernetes.Client.Get(ctx, client.ObjectKey{Name: spec.Name, Namespace: cluster.Namespace}, currentSTS); err == nil {
 		if err := r.handleScaleDownSafety(ctx, cluster, spec.Replicas, currentSTS); err != nil {
 			logger.Info("Scale down safety check blocked reconciliation", "reason", err.Error())
 			return recon.Result{RequeueAfter: infraRequeueShort}, nil
@@ -499,9 +524,24 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		return recon.Result{}, err
 	}
 
-	manager := inframanager.NewManager(r.deps.Client, r.deps.Scheme, r.deps.OperatorNamespace, effectiveIssuer, effectiveKeys, r.deps.Platform)
-	if r.deps.APIReader != nil {
-		manager = inframanager.NewManagerWithReader(r.deps.Client, r.deps.APIReader, r.deps.Scheme, r.deps.OperatorNamespace, effectiveIssuer, effectiveKeys, r.deps.Platform)
+	manager := inframanager.NewManager(
+		r.deps.Kubernetes.Client,
+		r.deps.Kubernetes.Scheme,
+		r.deps.Kubernetes.OperatorNamespace,
+		effectiveIssuer,
+		effectiveKeys,
+		r.deps.Kubernetes.Platform,
+	)
+	if r.deps.Kubernetes.APIReader != nil {
+		manager = inframanager.NewManagerWithReader(
+			r.deps.Kubernetes.Client,
+			r.deps.Kubernetes.APIReader,
+			r.deps.Kubernetes.Scheme,
+			r.deps.Kubernetes.OperatorNamespace,
+			effectiveIssuer,
+			effectiveKeys,
+			r.deps.Kubernetes.Platform,
+		)
 	}
 	if err := manager.Reconcile(ctx, logger, cluster, spec); err != nil {
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
@@ -562,8 +602,8 @@ func (r *infraReconciler) handleScaleDownSafety(ctx context.Context, cluster *op
 }
 
 func (r *infraReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error) {
-	if r.deps.ClientForPodFunc != nil {
-		return r.deps.ClientForPodFunc(cluster, podName)
+	if r.deps.Pods.ClientForPodFunc != nil {
+		return r.deps.Pods.ClientForPodFunc(cluster, podName)
 	}
 	return nil, fmt.Errorf("OpenBao pod client factory is not configured")
 }

@@ -54,8 +54,10 @@ func TestEmitSecurityWarningEvents_RecordsAndPersistsTimestamps(t *testing.T) {
 		WithObjects(cluster).
 		Build()
 	reconciler := &OpenBaoClusterReconciler{
-		Client:   k8sClient,
-		Recorder: recorder,
+		Client: k8sClient,
+		ControllerRuntime: ControllerRuntime{
+			Recorder: recorder,
+		},
 	}
 
 	if err := reconciler.emitSecurityWarningEvents(context.Background(), logr.Discard(), cluster); err != nil {

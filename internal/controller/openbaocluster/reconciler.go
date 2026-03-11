@@ -17,30 +17,52 @@ import (
 	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
 )
 
-// OpenBaoClusterReconciler reconciles a OpenBaoCluster object.
-type OpenBaoClusterReconciler struct {
-	client.Client
+// ControllerRuntime groups the controller-runtime and operator process
+// dependencies shared across workload, adminops, and status reconciliation.
+type ControllerRuntime struct {
 	APIReader         client.Reader
 	Scheme            *runtime.Scheme
 	RestConfig        *rest.Config
-	TLSReload         certmanager.ReloadSignaler
-	InitManager       initmanagerport.Manager
 	OperatorNamespace string
-	OIDCIssuer        string // OIDC issuer URL discovered at startup (best-effort warmup)
-	OIDCJWTKeys       []string
 	AdmissionStatus   *admission.Status
 	Recorder          events.EventRecorder
+	Platform          string
 	// SingleTenantMode indicates the controller is running in single-tenant mode.
 	// When true, the controller uses Owns() watches for event-driven reconciliation
 	// and caching is enabled for the watched namespace.
-	SingleTenantMode      bool
-	SmartClientConfig     portopenbao.ClientConfig
-	OpenBaoClientFactory  portopenbao.ClientFactory
-	DiscoverOIDCConfig    portauth.DiscoverConfigFunc
-	OIDCStatusCode        portauth.DiscoveryStatusCodeFunc
+	SingleTenantMode bool
+}
+
+// OIDCRuntime groups OIDC discovery configuration and warmup state.
+type OIDCRuntime struct {
+	OIDCIssuer         string // OIDC issuer URL discovered at startup (best-effort warmup)
+	OIDCJWTKeys        []string
+	DiscoverOIDCConfig portauth.DiscoverConfigFunc
+	OIDCStatusCode     portauth.DiscoveryStatusCodeFunc
+}
+
+// OpenBaoRuntime groups OpenBao-specific collaborators used by the controller.
+type OpenBaoRuntime struct {
+	TLSReload            certmanager.ReloadSignaler
+	InitManager          initmanagerport.Manager
+	SmartClientConfig    portopenbao.ClientConfig
+	OpenBaoClientFactory portopenbao.ClientFactory
+}
+
+// ImageVerificationRuntime groups the image verifiers used by cluster and
+// operator-managed executor workflows.
+type ImageVerificationRuntime struct {
 	ImageVerifier         imageverify.Verifier
 	OperatorImageVerifier imageverify.Verifier
-	Platform              string
+}
+
+// OpenBaoClusterReconciler reconciles a OpenBaoCluster object.
+type OpenBaoClusterReconciler struct {
+	client.Client
+	ControllerRuntime
+	OIDCRuntime
+	OpenBaoRuntime
+	ImageVerificationRuntime
 }
 
 func (r *OpenBaoClusterReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (portopenbao.ClusterActions, error) {

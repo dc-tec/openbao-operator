@@ -8,7 +8,6 @@ files:
   - internal/controller/**/*.go
 ignores:
   - '**/*_test.go'
-  - internal/controller/openbaorestore/controller.go
 rule:
   all:
     - kind: call_expression

@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -16,7 +15,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
-	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
 )
 
@@ -98,89 +96,12 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 	}
 
 	original := cluster.DeepCopy()
+	storageReasons := storageReasonPolicy()
 	reconcilers := []appopenbaocluster.SubReconciler{
-		certmanager.NewManagerWithReloader(r.parent.Client, r.parent.Scheme, r.parent.TLSReload),
-		appopenbaocluster.NewInfraReconciler(
-			appopenbaocluster.InfraDependencies{
-				Client:                             r.parent.Client,
-				APIReader:                          r.parent.APIReader,
-				Scheme:                             r.parent.Scheme,
-				RestConfig:                         r.parent.RestConfig,
-				OperatorNamespace:                  r.parent.OperatorNamespace,
-				OIDCIssuer:                         r.parent.OIDCIssuer,
-				OIDCJWTKeys:                        r.parent.OIDCJWTKeys,
-				OperatorImageVerifier:              r.parent.OperatorImageVerifier,
-				VerifyImageFunc:                    r.parent.verifyImageRef,
-				VerifyOperatorImage:                portsecurity.VerifyOperatorImageForCluster,
-				IsMainImageVerificationEnabled:     portsecurity.IsMainImageVerificationEnabled,
-				IsOperatorImageVerificationEnabled: portsecurity.IsOperatorImageVerificationEnabled,
-				DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*appopenbaocluster.OIDCConfig, error) {
-					if r.parent.DiscoverOIDCConfig == nil {
-						return nil, fmt.Errorf("OIDC discovery is not configured")
-					}
-					discovered, err := r.parent.DiscoverOIDCConfig(ctx, cfg, "")
-					if err != nil {
-						return nil, err
-					}
-					if discovered == nil {
-						return nil, nil
-					}
-					return &appopenbaocluster.OIDCConfig{
-						IssuerURL: discovered.IssuerURL,
-						JWKSKeys:  discovered.JWKSKeys,
-					}, nil
-				},
-				OIDCDiscoveryStatusCode: func(err error) (int, bool) {
-					if r.parent.OIDCStatusCode == nil {
-						return 0, false
-					}
-					return r.parent.OIDCStatusCode(err)
-				},
-				Recorder: r.parent.Recorder,
-				Platform: r.parent.Platform,
-				ClientForPodFunc: func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (appopenbaocluster.ScaleDownPodClient, error) {
-					return r.parent.clientForPod(cluster, podName)
-				},
-			},
-			appopenbaocluster.InfraReasonPolicy{
-				GatewayAPIMissing:                   ReasonGatewayAPIMissing,
-				PrerequisitesMissing:                ReasonPrerequisitesMissing,
-				ACMEDomainNotResolvable:             ReasonACMEDomainNotResolvable,
-				ACMEGatewayNotConfiguredPassthrough: ReasonACMEGatewayNotConfiguredForPassthrough,
-				ImageVerificationFailed:             constants.ReasonImageVerificationFailed,
-				InitContainerImageVerification:      constants.ReasonInitContainerImageVerificationFailed,
-			},
-		),
-		appopenbaocluster.NewStorageReconciler(
-			appopenbaocluster.StorageDependencies{
-				Client:   r.parent.Client,
-				Recorder: r.parent.Recorder,
-			},
-			appopenbaocluster.StorageReasonPolicy{
-				InvalidSize:             ReasonStorageInvalidSize,
-				ShrinkNotSupported:      ReasonStorageShrinkNotSupported,
-				ResizeNotSupported:      ReasonStorageResizeNotSupported,
-				StorageClassChangeError: ReasonStorageClassChangeNotSupported,
-				RestartRequired:         ReasonStorageRestartRequired,
-			},
-		),
-		appopenbaocluster.NewStorageResizeRestartReconciler(
-			appopenbaocluster.StorageResizeRestartDependencies{
-				Client:    r.parent.Client,
-				APIReader: r.parent.APIReader,
-				Recorder:  r.parent.Recorder,
-				ClientForPodFunc: func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (appopenbaocluster.StoragePodClient, error) {
-					return r.parent.clientForPod(cluster, podName)
-				},
-			},
-			appopenbaocluster.StorageReasonPolicy{
-				InvalidSize:             ReasonStorageInvalidSize,
-				ShrinkNotSupported:      ReasonStorageShrinkNotSupported,
-				ResizeNotSupported:      ReasonStorageResizeNotSupported,
-				StorageClassChangeError: ReasonStorageClassChangeNotSupported,
-				RestartRequired:         ReasonStorageRestartRequired,
-			},
-		),
+		certmanager.NewManagerWithReloader(r.parent.Client, r.parent.ControllerRuntime.Scheme, r.parent.TLSReload),
+		appopenbaocluster.NewInfraReconciler(r.parent.infraDependencies(), r.parent.infraReasonPolicy()),
+		appopenbaocluster.NewStorageReconciler(r.parent.storageDependencies(), storageReasons),
+		appopenbaocluster.NewStorageResizeRestartReconciler(r.parent.storageResizeRestartDependencies(), storageReasons),
 	}
 	reconcilers = appopenbaocluster.AppendInitAndAutopilotReconcilers(
 		reconcilers,
@@ -255,20 +176,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	original := cluster.DeepCopy()
-	appResult, appErr := appopenbaocluster.ReconcileAdminOps(ctx, logger, appopenbaocluster.AdminOpsDependencies{
-		Client:                r.parent.Client,
-		APIReader:             r.parent.APIReader,
-		Scheme:                r.parent.Scheme,
-		Recorder:              r.parent.Recorder,
-		OperatorNamespace:     r.parent.OperatorNamespace,
-		OIDCIssuer:            r.parent.OIDCIssuer,
-		OIDCJWTKeys:           r.parent.OIDCJWTKeys,
-		SmartClientConfig:     r.parent.SmartClientConfig,
-		ImageVerifier:         r.parent.ImageVerifier,
-		OperatorImageVerifier: r.parent.OperatorImageVerifier,
-		RequeueShort:          constants.RequeueShort,
-		Platform:              r.parent.Platform,
-	}, original, cluster, recordError)
+	appResult, appErr := appopenbaocluster.ReconcileAdminOps(ctx, logger, r.parent.adminOpsDependencies(), original, cluster, recordError)
 	return ctrl.Result{RequeueAfter: appResult.RequeueAfter}, appErr
 }
 
@@ -304,15 +212,7 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 	if !cluster.DeletionTimestamp.IsZero() {
 		logger.Info("OpenBaoCluster is marked for deletion")
 		if containsFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer) {
-			if err := appopenbaocluster.HandleDeletion(ctx, logger, appopenbaocluster.DeletionDependencies{
-				Client:            r.parent.Client,
-				APIReader:         r.parent.APIReader,
-				Scheme:            r.parent.Scheme,
-				OperatorNamespace: r.parent.OperatorNamespace,
-				OIDCIssuer:        r.parent.OIDCIssuer,
-				OIDCJWTKeys:       r.parent.OIDCJWTKeys,
-				Platform:          r.parent.Platform,
-			}, cluster); err != nil {
+			if err := appopenbaocluster.HandleDeletion(ctx, logger, r.parent.deletionDependencies(), cluster); err != nil {
 				return ctrl.Result{}, err
 			}
 			cluster.Finalizers = removeFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer)

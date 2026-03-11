@@ -1,0 +1,25 @@
+id: no-inline-provisioner-app-runtime-bundles
+valid:
+  - |
+    package p
+    type Reconciler struct{}
+    func (r *Reconciler) tenantRuntime() any { return nil }
+    func f(r *Reconciler) {
+      _ = r.tenantRuntime()
+    }
+  - |
+    package p
+    func f() {
+      _ = otherpkg.FutureRuntime{}
+    }
+invalid:
+  - |
+    package p
+    func f() {
+      _ = appprovisioner.TenantRuntime{}
+    }
+  - |
+    package p
+    func f() {
+      _ = appprovisioner.FutureRuntime{}
+    }

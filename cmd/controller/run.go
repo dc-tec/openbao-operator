@@ -59,6 +59,7 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
 	initmanager "github.com/dc-tec/openbao-operator/internal/service/init"
+	"github.com/dc-tec/openbao-operator/internal/service/restore"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
@@ -464,27 +465,35 @@ func Run(args []string) {
 
 	// Pass these values into the Reconciler struct
 	if err := (&openbaoclustercontroller.OpenBaoClusterReconciler{
-		Client:            mgr.GetClient(),
-		APIReader:         mgr.GetAPIReader(),
-		Scheme:            mgr.GetScheme(),
-		RestConfig:        mgr.GetConfig(),
-		TLSReload:         reloadSignaler,
-		InitManager:       initMgr,
-		OperatorNamespace: operatorNamespace,
-		OIDCIssuer:        oidcConfig.IssuerURL,
-		OIDCJWTKeys:       oidcConfig.JWKSKeys,
-		AdmissionStatus:   &admissionStatus,
-		Recorder:          mgr.GetEventRecorder(controllerNameOpenBaoCluster),
-		SingleTenantMode:  singleTenantMode,
-		SmartClientConfig: smartClientConfig,
-		OpenBaoClientFactory: func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
-			return openbao.NewClient(config)
+		Client: mgr.GetClient(),
+		ControllerRuntime: openbaoclustercontroller.ControllerRuntime{
+			APIReader:         mgr.GetAPIReader(),
+			Scheme:            mgr.GetScheme(),
+			RestConfig:        mgr.GetConfig(),
+			OperatorNamespace: operatorNamespace,
+			AdmissionStatus:   &admissionStatus,
+			Recorder:          mgr.GetEventRecorder(controllerNameOpenBaoCluster),
+			Platform:          platform,
+			SingleTenantMode:  singleTenantMode,
 		},
-		DiscoverOIDCConfig:    auth.DiscoverConfig,
-		OIDCStatusCode:        portauth.DiscoveryStatusCode,
-		ImageVerifier:         imageVerifier,
-		OperatorImageVerifier: operatorImageVerifier,
-		Platform:              platform,
+		OIDCRuntime: openbaoclustercontroller.OIDCRuntime{
+			OIDCIssuer:         oidcConfig.IssuerURL,
+			OIDCJWTKeys:        oidcConfig.JWKSKeys,
+			DiscoverOIDCConfig: auth.DiscoverConfig,
+			OIDCStatusCode:     portauth.DiscoveryStatusCode,
+		},
+		OpenBaoRuntime: openbaoclustercontroller.OpenBaoRuntime{
+			TLSReload:         reloadSignaler,
+			InitManager:       initMgr,
+			SmartClientConfig: smartClientConfig,
+			OpenBaoClientFactory: func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+				return openbao.NewClient(config)
+			},
+		},
+		ImageVerificationRuntime: openbaoclustercontroller.ImageVerificationRuntime{
+			ImageVerifier:         imageVerifier,
+			OperatorImageVerifier: operatorImageVerifier,
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
 		os.Exit(1)
@@ -492,9 +501,16 @@ func Run(args []string) {
 
 	// Set up OpenBaoRestore controller
 	if err := (&openbaorestorecontroller.OpenBaoRestoreReconciler{
-		Client:                mgr.GetClient(),
-		Scheme:                mgr.GetScheme(),
-		Recorder:              mgr.GetEventRecorder(controllerNameOpenBaoRestore),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorder(controllerNameOpenBaoRestore),
+		RestoreManager: restore.NewManager(
+			mgr.GetClient(),
+			mgr.GetScheme(),
+			mgr.GetEventRecorder(controllerNameOpenBaoRestore),
+			operatorImageVerifier,
+			platform,
+		),
 		OperatorImageVerifier: operatorImageVerifier,
 		Platform:              platform,
 	}).SetupWithManager(mgr); err != nil {

@@ -1,0 +1,22 @@
+id: no-inline-provisioner-app-runtime-bundles
+snapshots:
+  ? |
+    package p
+    func f() {
+      _ = appprovisioner.FutureRuntime{}
+    }
+  : labels:
+    - source: appprovisioner.FutureRuntime{}
+      style: primary
+      start: 27
+      end: 57
+  ? |
+    package p
+    func f() {
+      _ = appprovisioner.TenantRuntime{}
+    }
+  : labels:
+    - source: appprovisioner.TenantRuntime{}
+      style: primary
+      start: 27
+      end: 57

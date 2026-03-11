@@ -56,7 +56,10 @@ func TestStorageReconciler_ExpandsPVCs(t *testing.T) {
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
 	r := NewStorageReconciler(
-		StorageDependencies{Client: c, Recorder: events.NewFakeRecorder(10)},
+		StorageDependencies{
+			Resources: StorageResourceRuntime{Client: c},
+			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
+		},
 		StorageReasonPolicy{},
 	)
 
@@ -104,7 +107,10 @@ func TestStorageReconciler_RejectsShrink(t *testing.T) {
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
 	r := NewStorageReconciler(
-		StorageDependencies{Client: c, Recorder: events.NewFakeRecorder(10)},
+		StorageDependencies{
+			Resources: StorageResourceRuntime{Client: c},
+			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
+		},
 		StorageReasonPolicy{},
 	)
 
@@ -151,7 +157,10 @@ func TestStorageReconciler_RejectsStorageClassChangeWhenPVCClassIsUnset(t *testi
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
 	r := NewStorageReconciler(
-		StorageDependencies{Client: c, Recorder: events.NewFakeRecorder(10)},
+		StorageDependencies{
+			Resources: StorageResourceRuntime{Client: c},
+			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
+		},
 		StorageReasonPolicy{},
 	)
 
@@ -206,13 +215,14 @@ func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 
 	r := NewStorageResizeRestartReconciler(
 		StorageResizeRestartDependencies{
-			Client:    c,
-			APIReader: c,
-			Recorder:  events.NewFakeRecorder(10),
-			ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (StoragePodClient, error) {
-				return &openbao.MockClusterActions{
-					IsLeaderFunc: func(ctx context.Context) (bool, error) { return false, nil },
-				}, nil
+			Resources: StorageResourceRuntime{Client: c, APIReader: c},
+			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
+			Pods: StoragePodRuntime{
+				ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (StoragePodClient, error) {
+					return &openbao.MockClusterActions{
+						IsLeaderFunc: func(ctx context.Context) (bool, error) { return false, nil },
+					}, nil
+				},
 			},
 		},
 		StorageReasonPolicy{},
@@ -278,17 +288,18 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 	stepDownCalled := 0
 	r := NewStorageResizeRestartReconciler(
 		StorageResizeRestartDependencies{
-			Client:    c,
-			APIReader: c,
-			Recorder:  events.NewFakeRecorder(10),
-			ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (StoragePodClient, error) {
-				return &openbao.MockClusterActions{
-					IsLeaderFunc: func(ctx context.Context) (bool, error) { return true, nil },
-					StepDownLeaderFunc: func(ctx context.Context) error {
-						stepDownCalled++
-						return nil
-					},
-				}, nil
+			Resources: StorageResourceRuntime{Client: c, APIReader: c},
+			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
+			Pods: StoragePodRuntime{
+				ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (StoragePodClient, error) {
+					return &openbao.MockClusterActions{
+						IsLeaderFunc: func(ctx context.Context) (bool, error) { return true, nil },
+						StepDownLeaderFunc: func(ctx context.Context) error {
+							stepDownCalled++
+							return nil
+						},
+					}, nil
+				},
 			},
 		},
 		StorageReasonPolicy{},
@@ -333,7 +344,10 @@ func TestStorageResizeRestartReconciler_RequiresMaintenance(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, pvc).Build()
 
 	r := NewStorageResizeRestartReconciler(
-		StorageResizeRestartDependencies{Client: c, APIReader: c, Recorder: events.NewFakeRecorder(10)},
+		StorageResizeRestartDependencies{
+			Resources: StorageResourceRuntime{Client: c, APIReader: c},
+			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
+		},
 		StorageReasonPolicy{},
 	)
 
