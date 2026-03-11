@@ -4677,7 +4677,10 @@
 </div>
 <h2 id="1-pipeline-overview">1. Pipeline Overview<a class="headerlink" href="#1-pipeline-overview" title="Permanent link">&para;</a></h2>
 <h3 id="11-pull-request-and-main-ci">1.1 Pull Request and <code>main</code> CI<a class="headerlink" href="#11-pull-request-and-main-ci" title="Permanent link">&para;</a></h3>
-<p>The <code>CI</code> workflow runs on every pull request update and every push to <code>main</code>.</p>
+<p>The <code>CI</code> workflow runs on every pull request update and every push to <code>main</code>.
+On pull requests, the <code>Detect Changes</code> job narrows which jobs actually execute so
+workflow-only, docs-only, chart-only, and targeted E2E changes do not all pay
+for the full pipeline. Pushes to <code>main</code> still run the full gate.</p>
 <pre class="mermaid"><code>graph TD
     A[Pull request] --&gt; B[Detect Changes]
     C[Push to main] --&gt; B
@@ -4766,6 +4769,11 @@
 <td style="text-align: left;">GolangCI-Lint config + lint run, plus ast-grep policy verification, rule tests, and strict scan</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>Workflow Lint</code></td>
+<td style="text-align: left;"><code>GOFLAGS=-mod=mod GOBIN="$PWD/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.11 &amp;&amp; ./bin/actionlint .github/workflows/*.yml</code></td>
+<td style="text-align: left;">Runs only when workflow files change on PRs; always runs on <code>main</code></td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>Verify Formatting</code></td>
 <td style="text-align: left;"><code>make verify-fmt</code></td>
 <td style="text-align: left;">Checks <code>gofmt</code> compliance</td>
@@ -4827,10 +4835,13 @@
 <h2 id="4-end-to-end-testing">4. End-to-End Testing<a class="headerlink" href="#4-end-to-end-testing" title="Permanent link">&para;</a></h2>
 <p>We run E2E tests on Kind and route scope based on changed files and labels.</p>
 <ul>
-<li>Default routing runs targeted shards.</li>
+<li>PRs that only touch workflow files do not trigger E2E by default.</li>
+<li>PRs that only touch docs do not trigger E2E by default.</li>
+<li>Default PR routing runs two fast label-based shards: <code>Core Lifecycle &amp; Manager</code> and <code>Security &amp; Tenants</code>.</li>
+<li>Specialized shards are routed separately for <code>Backup &amp; Restore</code>, <code>Upgrade Rolling</code>, <code>Upgrade Blue/Green</code>, and <code>Hardened (Signed)</code>.</li>
 <li>Label <code>ci:full-e2e</code> enables broader suite coverage.</li>
-<li>Labels <code>backup</code> and <code>upgrades</code> expand slow-lane coverage.</li>
-<li>Hardened signed lane runs for relevant security/controller change scope.</li>
+<li>Labels <code>backup</code>, <code>upgrades</code>, <code>security</code>, <code>provisioner</code>, <code>admission</code>, and <code>controller</code> can expand targeted PR coverage.</li>
+<li>Routing uses Ginkgo label filters instead of suite-title regexes, so new suites must carry the right labels.</li>
 <li>Prebuilt E2E images are reused across shards for speed.</li>
 </ul>
 <div class="admonition warning">
@@ -4843,7 +4854,7 @@
 <div class="tabbed-block">
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>test-e2e-ci<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nv">KIND_NODE_IMAGE</span><span class="o">=</span>kindest/node:v1.34.3<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;!slow &amp;&amp; !nightly &amp;&amp; !openshift &amp;&amp; !pentest&#39;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;(((lifecycle &amp;&amp; !tls) || manager) &amp;&amp; !openshift)&#39;</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nv">E2E_PARALLEL_NODES</span><span class="o">=</span><span class="m">1</span>
 </span></code></pre></div>
 </div>

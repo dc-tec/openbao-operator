@@ -4605,23 +4605,62 @@
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Run only upgrade scenarios</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>make<span class="w"> </span>test-e2e<span class="w"> </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;upgrade&#39;</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Run a single top-level suite by Describe regex</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>make<span class="w"> </span>test-e2e<span class="w"> </span><span class="nv">E2E_FOCUS</span><span class="o">=</span><span class="s1">&#39;Manager Resilience&#39;</span>
 </span></code></pre></div>
+<p><strong>Cataloging Test Cases</strong>:</p>
+<p>Generate a machine-readable and Markdown inventory of the current E2E cases, including suite/spec paths,
+inherited labels, and any recorded <code>By(...)</code> checkpoints:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>e2e-catalog
+</span></code></pre></div>
+<p>Output is written under <code>test/e2e/catalog/</code>:</p>
+<ul>
+<li><code>test/e2e/catalog/README.md</code>: summary index with one row per suite file</li>
+<li><code>test/e2e/catalog/cases.json</code>: machine-readable case inventory</li>
+<li><code>test/e2e/catalog/suites/*.md</code>: per-suite case tables plus any recorded checkpoints</li>
+</ul>
+<p><code>case:</code> and <code>covers:</code> labels are the stable audit fields in the catalog. Recorded checkpoints are best-effort:</p>
+<ul>
+<li>they only come from literal <code>By(...)</code> text visible to <code>ginkgo outline</code></li>
+<li>they are optional and supplementary</li>
+<li>missing checkpoints do not imply missing coverage</li>
+</ul>
+<p><strong>Explicit Case Tracking</strong>:</p>
+<p>For specs that need stable audit coverage, add a <code>case:</code> identifier and one or more <code>covers:</code> tags with a literal <code>Label(...)</code> call:</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">It</span><span class="p">(</span><span class="s">&quot;retains PVCs and recoverability secrets when policy is Retain&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">Label</span><span class="p">(</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="s">&quot;case:deletion-policy-retain&quot;</span><span class="p">,</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="s">&quot;covers:deletion-policy&quot;</span><span class="p">,</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="s">&quot;covers:pvc-retention&quot;</span><span class="p">,</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="s">&quot;covers:recoverability-secret-retention&quot;</span><span class="p">,</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">),</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="c1">// ...</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">})</span>
+</span></code></pre></div>
+<p>Use a literal <code>Label(...)</code> call rather than a helper that returns labels. The catalog generator relies on <code>ginkgo outline</code>, which only sees labels that are present in the test source.</p>
+<p>Guidelines:</p>
+<ul>
+<li>Use exactly one stable <code>case:</code> ID per spec.</li>
+<li>Keep <code>case:</code> IDs short and durable; treat them like API names.</li>
+<li>Use <code>covers:</code> tags for the behavior or risk area the spec exercises.</li>
+<li>Prefer explicit <code>case:</code> / <code>covers:</code> labels on high-risk or audit-relevant specs first.</li>
+</ul>
 <h3 id="performance-baseline-regression-gate">Performance Baseline + Regression Gate<a class="headerlink" href="#performance-baseline-regression-gate" title="Permanent link">&para;</a></h3>
 <p>Performance baselines run on Kind and reuse existing E2E flows and controller metrics.</p>
 <ul>
 <li>Baseline capture (default: 5 runs per scenario):</li>
 </ul>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>perf-baseline
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>perf-baseline
 </span></code></pre></div>
 <ul>
 <li>Regression verification against committed thresholds:</li>
 </ul>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>verify-perf
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>verify-perf
 </span></code></pre></div>
 <ul>
 <li>Optional local smoke verification (lifecycle-only):</li>
 </ul>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>verify-perf-smoke
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>verify-perf-smoke
 </span></code></pre></div>
 <p>Baseline/threshold artifacts:</p>
 <ul>
@@ -4656,17 +4695,17 @@
 <h3 id="openshift-local-existing-cluster">OpenShift Local / Existing Cluster<a class="headerlink" href="#openshift-local-existing-cluster" title="Permanent link">&para;</a></h3>
 <p>To validate OpenShift compatibility, run a focused subset of E2E tests against an existing cluster
 (for example OpenShift Local / CRC).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">KUBECONFIG</span><span class="o">=</span>/path/to/your/kubeconfig
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Operator image must be pullable by the cluster (push it to a registry accessible from CRC).</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nb">export</span><span class="w"> </span><span class="nv">E2E_OPERATOR_IMAGE</span><span class="o">=</span>quay.io/your-org/openbao-operator:dev
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># For non-kind clusters, configure the API server CIDR used in NetworkPolicies.</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># A permissive value works for smoke testing if you don&#39;t know the exact CIDR:</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="nb">export</span><span class="w"> </span><span class="nv">E2E_API_SERVER_CIDR</span><span class="o">=</span><span class="m">0</span>.0.0.0/0
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Run only OpenShift platform checks</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>make<span class="w"> </span>test-e2e-existing<span class="w"> </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;openshift&#39;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">KUBECONFIG</span><span class="o">=</span>/path/to/your/kubeconfig
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Operator image must be pullable by the cluster (push it to a registry accessible from CRC).</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nb">export</span><span class="w"> </span><span class="nv">E2E_OPERATOR_IMAGE</span><span class="o">=</span>quay.io/your-org/openbao-operator:dev
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># For non-kind clusters, configure the API server CIDR used in NetworkPolicies.</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># A permissive value works for smoke testing if you don&#39;t know the exact CIDR:</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="nb">export</span><span class="w"> </span><span class="nv">E2E_API_SERVER_CIDR</span><span class="o">=</span><span class="m">0</span>.0.0.0/0
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Run only OpenShift platform checks</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>make<span class="w"> </span>test-e2e-existing<span class="w"> </span><span class="nv">E2E_LABEL_FILTER</span><span class="o">=</span><span class="s1">&#39;openshift&#39;</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Cleanup behavior</p>
@@ -4735,10 +4774,10 @@ set <code>E2E_STORAGE_CLASS=&lt;name&gt;</code> to a class with <code>allowVolum
 <li>
 <p><strong>Ast-Grep Guardrails</strong></p>
 <p>Policy- and rule-driven checks for architecture and runtime safety.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>generate-ast-rules
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>make<span class="w"> </span>verify-arch-policy
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>make<span class="w"> </span>test-ast
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>make<span class="w"> </span>lint-ast
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>generate-ast-rules
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>make<span class="w"> </span>verify-arch-policy
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>make<span class="w"> </span>test-ast
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>make<span class="w"> </span>lint-ast
 </span></code></pre></div>
 <p>Full lint gate (CI-equivalent):</p>
 <p><code>make lint-ci</code></p>
