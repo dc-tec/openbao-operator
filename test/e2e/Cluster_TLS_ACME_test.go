@@ -318,6 +318,8 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 							// The ACME server (infra-bao) needs to connect for both:
 							// - HTTP-01 challenge: service port 80 -> pod port 8200
 							// - TLS-ALPN-01 challenge: service port 443 -> pod port 8200
+							// The test verifier pod also needs access so the suite can prove the issued
+							// certificate is trusted over the Service hostname.
 							// NetworkPolicy is evaluated at the pod level, so we need to allow port 8200.
 							// Since infra-bao is in the same namespace, we can use a pod selector or allow all in namespace.
 							From: []networkingv1.NetworkPolicyPeer{
@@ -325,6 +327,13 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"app": infraBaoName,
+										},
+									},
+								},
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"role": "test-verifier",
 										},
 									},
 								},
@@ -468,6 +477,9 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "verify-acme-cert",
 				Namespace: f.Namespace,
+				Labels: map[string]string{
+					"role": "test-verifier",
+				},
 			},
 			Spec: corev1.PodSpec{
 				RestartPolicy: corev1.RestartPolicyNever,
@@ -507,7 +519,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 						},
 						Command: []string{"/bin/sh", "-ec"},
 						Args: []string{
-							"bao status >/tmp/status.txt 2>&1 && cat /tmp/status.txt",
+							"rc=0; bao status >/tmp/status.txt 2>&1 || rc=$?; cat /tmp/status.txt; exit $rc",
 						},
 						VolumeMounts: []corev1.VolumeMount{
 							{
