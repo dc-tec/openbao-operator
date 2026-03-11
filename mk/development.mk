@@ -390,7 +390,7 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests. Expected an isolated environment using Kind. Use E2E_PARALLEL_NODES=N to run tests in parallel (default: 1). Use E2E_FOCUS="Backup" to run only specific tests. See Makefile for additional E2E_* variables.
 	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
-		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=$(E2E_FOCUS)"; \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=\"$(E2E_FOCUS)\""; \
 	fi; \
 	if [ -n "$(E2E_LABEL_FILTER)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --label-filter=\"$(E2E_LABEL_FILTER)\""; \
@@ -429,7 +429,7 @@ test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests agains
 	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
 		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
 	fi; \
-	eval E2E_USE_EXISTING_CLUSTER=true go test $$GO_TEST_FLAGS ./test/e2e/
+	eval E2E_USE_EXISTING_CLUSTER=true go test ./test/e2e/ $$GO_TEST_FLAGS
 
 .PHONY: test-e2e-ci
 test-e2e-ci: ginkgo ## Run the e2e tests in CI mode (does not modify files).
@@ -458,6 +458,13 @@ test-e2e-ci: ginkgo ## Run the e2e tests in CI mode (does not modify files).
 	else \
 		echo "E2E_SKIP_CLEANUP=true: Keeping Kind cluster $(KIND_CLUSTER) for debugging"; \
 	fi
+
+.PHONY: e2e-catalog
+e2e-catalog: ginkgo ## Generate a catalog of E2E suites, specs, labels, and By-steps under test/e2e/catalog/.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_catalog \
+		--ginkgo "$(GINKGO)" \
+		--input-dir test/e2e \
+		--output-dir test/e2e/catalog
 
 .PHONY: perf-baseline
 perf-baseline: ## Capture performance baseline (5 runs/scenario by default) and regenerate thresholds.

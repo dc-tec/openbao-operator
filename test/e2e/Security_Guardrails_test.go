@@ -156,6 +156,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 		It("uses projected Kubernetes API token with explicit audience and TTL", func() {
 			expectedKubeAudience := os.Getenv("OPENBAO_KUBE_API_AUDIENCE")
 
+			By("inspecting the controller projected service account tokens")
 			ctrl, err := getDeployment(controllerDeployment)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -189,7 +190,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			Expect(*openBaoToken.ExpirationSeconds).To(Equal(int64(3600)))
 			Expect(openBaoToken.Audience).To(Equal("openbao-internal"))
 
-			// Also verify the provisioner token settings when present.
+			By("inspecting the provisioner projected Kubernetes API token when present")
 			prov, err := getDeployment(provisionerDeployment)
 			if apierrors.IsNotFound(err) {
 				Skip("Provisioner Deployment not found; likely running in single-tenant mode")
@@ -1096,6 +1097,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 
 		It("scopes Secret access via allowlist Roles", func() {
 			clusterName := "rbac-cluster"
+			By("creating a cluster to trigger tenant RBAC provisioning")
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
@@ -1138,6 +1140,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				Namespace: tenantNamespace,
 			}
 
+			By("verifying the tenant role does not grant broad Secret access")
 			Eventually(func(g Gomega) {
 				role := &rbacv1.Role{}
 				g.Expect(admin.Get(ctx, roleKey, role)).To(Succeed())
@@ -1158,6 +1161,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				Namespace: tenantNamespace,
 			}
 
+			By("verifying the dedicated Secrets writer role only grants the expected allowlisted access")
 			Eventually(func(g Gomega) {
 				role := &rbacv1.Role{}
 				g.Expect(admin.Get(ctx, writerRoleKey, role)).To(Succeed())
@@ -1195,7 +1199,10 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				for _, name := range expected {
 					g.Expect(containsString(namedRule.ResourceNames, name)).To(BeTrue(), fmt.Sprintf("expected Secrets allowlist to include %q", name))
 				}
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+			By("verifying the Secrets writer RoleBinding points at the allowlist role")
+			Eventually(func(g Gomega) {
 				rb := &rbacv1.RoleBinding{}
 				g.Expect(admin.Get(ctx, writerRBKey, rb)).To(Succeed())
 				g.Expect(rb.RoleRef.Name).To(Equal(provisioner.TenantSecretsWriterRoleName))

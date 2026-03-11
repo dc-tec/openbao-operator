@@ -170,7 +170,55 @@ graph BT
     
     # Run only upgrade scenarios
     make test-e2e E2E_LABEL_FILTER='upgrade'
+
+    # Run a single top-level suite by Describe regex
+    make test-e2e E2E_FOCUS='Manager Resilience'
     ```
+
+    **Cataloging Test Cases**:
+
+    Generate a machine-readable and Markdown inventory of the current E2E cases, including suite/spec paths,
+    inherited labels, and any recorded `By(...)` checkpoints:
+
+    ```bash
+    make e2e-catalog
+    ```
+
+    Output is written under `test/e2e/catalog/`:
+
+    - `test/e2e/catalog/README.md`: summary index with one row per suite file
+    - `test/e2e/catalog/cases.json`: machine-readable case inventory
+    - `test/e2e/catalog/suites/*.md`: per-suite case tables plus any recorded checkpoints
+
+    `case:` and `covers:` labels are the stable audit fields in the catalog. Recorded checkpoints are best-effort:
+
+    - they only come from literal `By(...)` text visible to `ginkgo outline`
+    - they are optional and supplementary
+    - missing checkpoints do not imply missing coverage
+
+    **Explicit Case Tracking**:
+
+    For specs that need stable audit coverage, add a `case:` identifier and one or more `covers:` tags with a literal `Label(...)` call:
+
+    ```go
+    It("retains PVCs and recoverability secrets when policy is Retain", Label(
+        "case:deletion-policy-retain",
+        "covers:deletion-policy",
+        "covers:pvc-retention",
+        "covers:recoverability-secret-retention",
+    ), func() {
+        // ...
+    })
+    ```
+
+    Use a literal `Label(...)` call rather than a helper that returns labels. The catalog generator relies on `ginkgo outline`, which only sees labels that are present in the test source.
+
+    Guidelines:
+
+    - Use exactly one stable `case:` ID per spec.
+    - Keep `case:` IDs short and durable; treat them like API names.
+    - Use `covers:` tags for the behavior or risk area the spec exercises.
+    - Prefer explicit `case:` / `covers:` labels on high-risk or audit-relevant specs first.
 
     ### Performance Baseline + Regression Gate
 

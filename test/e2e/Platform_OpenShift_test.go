@@ -79,6 +79,7 @@ var _ = Describe("OpenShift Platform", Label("openshift", "platform"), Ordered, 
 		Expect(err).NotTo(HaveOccurred())
 
 		clusterName := "cluster"
+		By("creating a development cluster on OpenShift")
 		_, err = f.CreateDevelopmentCluster(ctx, framework.DevelopmentClusterConfig{
 			Name:          clusterName,
 			Replicas:      1,
@@ -89,6 +90,7 @@ var _ = Describe("OpenShift Platform", Label("openshift", "platform"), Ordered, 
 		})
 		Expect(err).NotTo(HaveOccurred())
 
+		By("verifying the StatefulSet pod template leaves UID, GID, and FSGroup unpinned")
 		Eventually(func(g Gomega) {
 			sts := &appsv1.StatefulSet{}
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)
